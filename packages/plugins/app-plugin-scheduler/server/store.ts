@@ -6,6 +6,7 @@ import type {
   QueryAdapter,
   Row,
 } from '@nocobase/db';
+import type { NocoBaseQueueScheduleStore } from '@nocobase/queue';
 import { CronExpressionParser } from 'cron-parser';
 
 import {
@@ -17,14 +18,12 @@ import type { JsonObject } from './schedules/define.js';
 import type { ScheduleOccurrenceStatus } from './occurrences.js';
 
 export interface ScheduleManifestEntry {
-  readonly owner: string;
   readonly definition: NormalizedScheduleDefinition;
 }
 
 export interface ScheduleRecord {
   readonly id: string;
   readonly appName: string;
-  readonly owner: string;
   readonly key: string;
   readonly title: string;
   readonly description?: string;
@@ -68,7 +67,6 @@ export interface ScheduleOccurrenceRecord {
 interface DefinitionRow extends Row {
   id: string;
   appName: string;
-  owner: string;
   key: string;
   sourceType: string;
   title: string;
@@ -92,27 +90,19 @@ interface DefinitionRow extends Row {
   updatedAt: Date | string | number;
 }
 
-interface QueueScheduleRow extends Row {
-  id: string;
-  status: 'active' | 'paused';
-  name: string;
-  payload: string;
-  cronExpression?: string | null;
-  everyMs?: number | null;
-  timezone: string;
-  fromDate?: Date | string | number | null;
-  toDate?: Date | string | number | null;
-  runLimit?: number | null;
-  runCount: number;
-  nextRunAt?: Date | string | number | null;
-  lastRunAt?: Date | string | number | null;
-  createdAt: Date | string | number;
+interface ScheduleMaterialization {
+  readonly id: string;
+  readonly definition: NormalizedScheduleDefinition;
+  readonly payload: ScheduleDispatchPayload;
+  readonly recalculate: boolean;
+  readonly enabled: boolean;
 }
 
 export class ScheduleStore {
   public constructor(
     private readonly database: DatabaseManager,
     private readonly appName: string,
+    private readonly schedules: NocoBaseQueueScheduleStore,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -120,16 +110,39 @@ export class ScheduleStore {
     manifest: readonly ScheduleManifestEntry[],
     finalize: boolean = false,
   ): Promise<void> {
-    await this.database.transaction(async (connection): Promise<void> => {
+    const plan = await this.database.transaction(async (connection) => {
       await this.lockManifestOwners(connection, manifest, finalize);
       const seen = new Set<string>();
+      const materializations: ScheduleMaterialization[] = [];
       for (const entry of manifest) {
-        const id = scheduleId(this.appName, entry.owner, entry.definition.key);
+        const id = scheduleId(this.appName, entry.definition.key);
         seen.add(id);
-        await this.upsertDefinition(connection.query, id, entry);
+        materializations.push(
+          await this.upsertDefinition(connection.query, id, entry),
+        );
       }
-      if (finalize) await this.deactivateMissing(connection.query, seen);
+      const deactivate = finalize
+        ? await this.findMissing(connection.query, seen)
+        : [];
+      return { materializations, deactivate };
     });
+    for (const materialization of plan.materializations) {
+      try {
+        await this.materialize(materialization);
+        await this.recordSyncResult(materialization.id, 'synced');
+      } catch (error) {
+        await this.recordSyncResult(
+          materialization.id,
+          'failed',
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      }
+    }
+    for (const id of plan.deactivate) {
+      await this.schedules.update(id, { status: 'paused' });
+      await this.deactivate(id);
+    }
   }
 
   public async list(): Promise<readonly ScheduleRecord[]> {
@@ -140,11 +153,7 @@ export class ScheduleStore {
       .where('appName', '=', this.appName)
       .orderBy('title', 'asc')
       .execute<DefinitionRow>();
-    const schedules = await this.database
-      .query()
-      .selectFrom<QueueScheduleRow>('queue_schedules')
-      .selectAll()
-      .execute<QueueScheduleRow>();
+    const schedules = await this.schedules.list();
     const byId = new Map(schedules.map((schedule) => [schedule.id, schedule]));
     const completedByScheduleId = await this.countCompleted(
       definitions.map((definition) => definition.id),
@@ -154,7 +163,6 @@ export class ScheduleStore {
       return {
         id: definition.id,
         appName: definition.appName,
-        owner: definition.owner,
         key: definition.key,
         title: definition.title,
         ...(definition.description
@@ -183,26 +191,23 @@ export class ScheduleStore {
   }
 
   public async setEnabled(id: string, enabled: boolean): Promise<void> {
-    await this.database.transaction(async (connection) => {
-      const query = connection.query;
-      const definition = await query
-        .selectFrom<DefinitionRow>('schedule_definitions')
-        .select('id')
-        .where('id', '=', id)
-        .where('appName', '=', this.appName)
-        .executeTakeFirst();
-      if (!definition) throw new Error('Schedule not found.');
-      await query
-        .updateTable<DefinitionRow>('schedule_definitions')
-        .set({ enabled, updatedAt: this.now() })
-        .where('id', '=', id)
-        .execute();
-      await query
-        .updateTable<QueueScheduleRow>('queue_schedules')
-        .set({ status: enabled ? 'active' : 'paused' })
-        .where('id', '=', id)
-        .execute();
+    const definition = await this.database
+      .query()
+      .selectFrom<DefinitionRow>('schedule_definitions')
+      .select('id')
+      .where('id', '=', id)
+      .where('appName', '=', this.appName)
+      .executeTakeFirst();
+    if (!definition) throw new Error('Schedule not found.');
+    await this.schedules.update(id, {
+      status: enabled ? 'active' : 'paused',
     });
+    await this.database
+      .query()
+      .updateTable<DefinitionRow>('schedule_definitions')
+      .set({ enabled, updatedAt: this.now() })
+      .where('id', '=', id)
+      .execute();
   }
 
   /**
@@ -310,7 +315,7 @@ export class ScheduleStore {
     query: QueryAdapter,
     id: string,
     entry: ScheduleManifestEntry,
-  ): Promise<void> {
+  ): Promise<ScheduleMaterialization> {
     const existing = await query
       .selectFrom<DefinitionRow>('schedule_definitions')
       .selectAll()
@@ -330,7 +335,6 @@ export class ScheduleStore {
         .values({
           id,
           appName: this.appName,
-          owner: entry.owner,
           key: definition.key,
           sourceType: 'code',
           title: definition.title,
@@ -347,15 +351,14 @@ export class ScheduleStore {
           lifecycleState: 'active',
           inactiveReason: null,
           deactivatedAt: null,
-          syncStatus: 'synced',
+          syncStatus: 'pending',
           syncError: null,
           lastSeenManifest: definition.definitionHash,
           createdAt: now,
           updatedAt: now,
         })
         .execute();
-      await this.materialize(query, id, definition, payload, true, true);
-      return;
+      return { id, definition, payload, recalculate: true, enabled: true };
     }
     const scheduleChanged =
       existing.cron !== definition.schedule.cron ||
@@ -380,74 +383,50 @@ export class ScheduleStore {
         lifecycleState: 'active',
         inactiveReason: null,
         deactivatedAt: null,
-        syncStatus: 'synced',
+        syncStatus: 'pending',
         syncError: null,
         lastSeenManifest: definition.definitionHash,
         updatedAt: now,
       })
       .where('id', '=', id)
       .execute();
-    await this.materialize(
-      query,
+    return {
       id,
       definition,
       payload,
-      scheduleChanged || reactivated,
-      Boolean(existing.enabled),
-    );
-  }
-
-  private async materialize(
-    query: QueryAdapter,
-    id: string,
-    definition: NormalizedScheduleDefinition,
-    payload: ScheduleDispatchPayload,
-    recalculate: boolean,
-    enabled: boolean,
-  ): Promise<void> {
-    const current = await query
-      .selectFrom<QueueScheduleRow>('queue_schedules')
-      .selectAll()
-      .where('id', '=', id)
-      .executeTakeFirst<QueueScheduleRow>();
-    const values = {
-      status: enabled ? ('active' as const) : ('paused' as const),
-      name: ScheduleDispatchJob.options.name ?? ScheduleDispatchJob.name,
-      payload: JSON.stringify(payload),
-      cronExpression: definition.schedule.cron,
-      everyMs: null,
-      timezone: definition.schedule.timezone,
-      fromDate: definition.schedule.from ?? null,
-      toDate: definition.schedule.to ?? null,
-      runLimit: definition.schedule.limit ?? null,
-      ...(recalculate || !current
-        ? { nextRunAt: calculateNextRunAt(definition, this.now()) }
-        : {}),
+      recalculate: scheduleChanged || reactivated,
+      enabled: Boolean(existing.enabled),
     };
-    if (current) {
-      await query
-        .updateTable<QueueScheduleRow>('queue_schedules')
-        .set(values)
-        .where('id', '=', id)
-        .execute();
-    } else {
-      await query
-        .insertInto<QueueScheduleRow>('queue_schedules')
-        .values({
-          id,
-          ...values,
-          runCount: 0,
-          lastRunAt: null,
-          createdAt: this.now(),
-        })
-        .execute();
-    }
   }
 
-  private async deactivateMissing(
+  private async materialize(plan: ScheduleMaterialization): Promise<void> {
+    const { id, definition, payload, recalculate, enabled } = plan;
+    const current = await this.schedules.get(id);
+    await this.schedules.upsert({
+      id,
+      name: ScheduleDispatchJob.options.name ?? ScheduleDispatchJob.name,
+      payload,
+      cronExpression: definition.schedule.cron,
+      timezone: definition.schedule.timezone,
+      ...(definition.schedule.from ? { from: definition.schedule.from } : {}),
+      ...(definition.schedule.to ? { to: definition.schedule.to } : {}),
+      ...(definition.schedule.limit !== undefined
+        ? { limit: definition.schedule.limit }
+        : {}),
+    });
+    await this.schedules.update(id, {
+      status: enabled ? 'active' : 'paused',
+      nextRunAt:
+        recalculate || !current
+          ? calculateNextRunAt(definition, this.now())
+          : current.nextRunAt,
+    });
+  }
+
+  private async findMissing(
     query: QueryAdapter,
     seen: ReadonlySet<string>,
-  ): Promise<void> {
+  ): Promise<string[]> {
     const rows = await query
       .selectFrom<DefinitionRow>('schedule_definitions')
       .selectAll()
@@ -455,25 +434,41 @@ export class ScheduleStore {
       .where('sourceType', '=', 'code')
       .where('lifecycleState', '=', 'active')
       .execute<DefinitionRow>();
+    return rows.filter((row) => !seen.has(row.id)).map((row) => row.id);
+  }
+
+  private async deactivate(id: string): Promise<void> {
     const now = this.now();
-    for (const row of rows) {
-      if (seen.has(row.id)) continue;
-      await query
-        .updateTable<DefinitionRow>('schedule_definitions')
-        .set({
-          lifecycleState: 'inactive',
-          inactiveReason: 'definition_removed',
-          deactivatedAt: now,
-          updatedAt: now,
-        })
-        .where('id', '=', row.id)
-        .execute();
-      await query
-        .updateTable<QueueScheduleRow>('queue_schedules')
-        .set({ status: 'paused' })
-        .where('id', '=', row.id)
-        .execute();
-    }
+    await this.database
+      .query()
+      .updateTable<DefinitionRow>('schedule_definitions')
+      .set({
+        lifecycleState: 'inactive',
+        inactiveReason: 'definition_removed',
+        deactivatedAt: now,
+        updatedAt: now,
+      })
+      .where('id', '=', id)
+      .where('appName', '=', this.appName)
+      .execute();
+  }
+
+  private async recordSyncResult(
+    id: string,
+    status: 'synced' | 'failed',
+    error?: string,
+  ): Promise<void> {
+    await this.database
+      .query()
+      .updateTable<DefinitionRow>('schedule_definitions')
+      .set({
+        syncStatus: status,
+        syncError: error ?? null,
+        updatedAt: this.now(),
+      })
+      .where('id', '=', id)
+      .where('appName', '=', this.appName)
+      .execute();
   }
 
   private async lockManifestOwners(
@@ -506,14 +501,8 @@ export class ScheduleStore {
   }
 }
 
-export function scheduleId(
-  appName: string,
-  owner: string,
-  key: string,
-): string {
-  return createHash('sha256')
-    .update(`${appName}\0${owner}\0${key}`)
-    .digest('hex');
+export function scheduleId(appName: string, key: string): string {
+  return createHash('sha256').update(`${appName}\0${key}`).digest('hex');
 }
 
 function dateValue(

@@ -2,6 +2,7 @@ import type { DatabaseManager, Row } from '@nocobase/db';
 import type { WorkflowServiceContract } from './tokens.js';
 import type {
   JsonObject,
+  ScheduleExecutionCompletion,
   ScheduleExecutionContext,
   ScheduleTargetStartResult,
   ScheduleTargetSummary,
@@ -10,6 +11,27 @@ import type {
   TargetValidationResult,
 } from '@nocobase/app-plugin-scheduler/server';
 import { EXECUTION_STATUS } from './engine/constants.js';
+
+/**
+ * Maps a finished workflow run onto the scheduler's completion contract. Both
+ * paths that report a run share it: the terminal observer, which notifies as
+ * soon as the run ends, and `inspect()`, which recovers a notification that
+ * was lost. They must agree, or the same run reads differently depending on
+ * which one got there first.
+ */
+export function workflowCompletion(
+  status: number,
+  reason: string | null | undefined,
+  finishedAt?: Date,
+): ScheduleExecutionCompletion {
+  if (status === EXECUTION_STATUS.RESOLVED)
+    return { status: 'succeeded', finishedAt };
+  if (status === EXECUTION_STATUS.ABORTED)
+    return reason === 'timeout'
+      ? { status: 'timed_out', reason: 'execution-timeout', finishedAt }
+      : { status: 'cancelled', reason: 'execution-cancelled', finishedAt };
+  return { status: 'failed', reason: 'execution-failed', finishedAt };
+}
 
 export type WorkflowScheduleTargetConfig = JsonObject & {
   readonly workflowKey: string;
@@ -129,35 +151,13 @@ export class WorkflowScheduleTarget implements ScheduleTargetType<WorkflowSchedu
     if (run.status == null) return { state: 'pending' as const };
     if (run.status === EXECUTION_STATUS.STARTED)
       return { state: 'running' as const };
-    const finishedAt = run.finishedAt ? new Date(run.finishedAt) : undefined;
-    if (run.status === EXECUTION_STATUS.RESOLVED)
-      return {
-        state: 'completed' as const,
-        completion: { status: 'succeeded' as const, finishedAt },
-      };
-    if (run.status === EXECUTION_STATUS.ABORTED)
-      return {
-        state: 'completed' as const,
-        completion:
-          run.reason === 'timeout'
-            ? {
-                status: 'timed_out' as const,
-                reason: 'execution-timeout',
-                finishedAt,
-              }
-            : {
-                status: 'cancelled' as const,
-                reason: 'execution-cancelled',
-                finishedAt,
-              },
-      };
     return {
       state: 'completed' as const,
-      completion: {
-        status: 'failed' as const,
-        reason: 'execution-failed',
-        finishedAt,
-      },
+      completion: workflowCompletion(
+        run.status,
+        run.reason,
+        run.finishedAt ? new Date(run.finishedAt) : undefined,
+      ),
     };
   }
 

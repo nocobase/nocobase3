@@ -84,7 +84,7 @@ function EmptyState({
 /** The list names an execution target by kind; its own name belongs on the detail page. */
 function TypeTag({ label }: { readonly label: string }): ReactElement {
   return (
-    <span className='inline-flex max-w-full whitespace-normal break-words rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground'>
+    <span className='inline-flex max-w-full truncate whitespace-nowrap rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground'>
       {label}
     </span>
   );
@@ -240,7 +240,7 @@ export default function SchedulesPage(): ReactElement {
   return (
     <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
       <header className='border-b bg-background px-6 py-7'>
-        <div className='mx-auto w-full max-w-7xl'>
+        <div className='w-full'>
           <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
             {t('nav.automation')}
           </p>
@@ -250,7 +250,7 @@ export default function SchedulesPage(): ReactElement {
         </div>
       </header>
 
-      <div className='mx-auto w-full max-w-7xl space-y-5 px-6 py-6'>
+      <div className='w-full space-y-5 px-6 py-6'>
         {listError ? (
           <div className='flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive'>
             <CircleAlert className='size-5 shrink-0' />
@@ -322,12 +322,12 @@ export default function SchedulesPage(): ReactElement {
               <div className='overflow-hidden'>
                 <table className='w-full table-fixed text-left text-sm'>
                   <colgroup>
-                    <col className='w-[34%]' />
-                    <col className='w-[9%]' />
-                    <col className='w-[9%]' />
-                    <col className='w-[17%]' />
-                    <col className='w-[11%]' />
-                    <col className='w-[20%]' />
+                    <col className='w-[31%]' />
+                    <col className='w-[16%]' />
+                    <col className='w-[6%]' />
+                    <col className='w-[16%]' />
+                    <col className='w-[10%]' />
+                    <col className='w-[21%]' />
                   </colgroup>
                   <thead className='bg-muted/40 text-xs text-muted-foreground'>
                     <tr>
@@ -360,7 +360,7 @@ export default function SchedulesPage(): ReactElement {
                               {item.title}
                             </Link>
                           </td>
-                          <td className='break-words px-3 py-4'>
+                          <td className='px-3 py-4'>
                             <TypeTag label={targetTypeLabel(item.targetType)} />
                             {item.targetState !== 'ready' ? (
                               <div className='mt-1'>

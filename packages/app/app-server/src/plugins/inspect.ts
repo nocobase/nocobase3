@@ -4,8 +4,7 @@ export interface AppServerInspectionIssue {
   readonly code:
     | 'SERVER_MIGRATIONS_DIRECTORY_MISSING'
     | 'SERVER_SEEDS_DIRECTORY_MISSING'
-    | 'SERVER_JOB_LOCATION_MISSING'
-    | 'SERVER_SCHEDULE_DEFINITIONS_MISSING';
+    | 'SERVER_JOB_LOCATION_MISSING';
   readonly message: string;
   readonly packageName: string;
   readonly severity: 'error';
@@ -50,12 +49,6 @@ export interface AppServerJobsSnapshot {
   readonly resolvedLocations: readonly string[];
 }
 
-export interface AppServerSchedulesSnapshot {
-  readonly packageName: string;
-  readonly configured: string;
-  readonly resolved?: string;
-}
-
 export interface AppServerPluginSnapshot {
   readonly order: number;
   readonly packageName: string;
@@ -67,7 +60,6 @@ export interface AppServerPluginSnapshot {
     readonly migrations: boolean;
     readonly seeds: boolean;
     readonly jobLocations: number;
-    readonly scheduleDefinitions: boolean;
   };
 }
 
@@ -79,7 +71,6 @@ export interface AppServerInspectionSnapshot {
   readonly locales: readonly AppServerLocalesSnapshot[];
   readonly database: readonly AppServerDatabaseSnapshot[];
   readonly jobs: readonly AppServerJobsSnapshot[];
-  readonly schedules: readonly AppServerSchedulesSnapshot[];
   readonly consistent: boolean;
   readonly issues: readonly AppServerInspectionIssue[];
   readonly suggestions: readonly string[];
@@ -98,7 +89,6 @@ export function inspectResolvedAppServerPlugins(
   const locales: AppServerLocalesSnapshot[] = [];
   const database: AppServerDatabaseSnapshot[] = [];
   const jobs: AppServerJobsSnapshot[] = [];
-  const schedules: AppServerSchedulesSnapshot[] = [];
   const issues: AppServerInspectionIssue[] = [];
 
   let providerOrder = 0;
@@ -192,25 +182,6 @@ export function inspectResolvedAppServerPlugins(
         });
       }
     }
-    const configuredSchedules = plugin.definition.schedules?.definitions;
-    if (configuredSchedules) {
-      schedules.push({
-        packageName: plugin.metadata.packageName,
-        configured: configuredSchedules,
-        ...(plugin.metadata.scheduleDefinitionsLocation
-          ? { resolved: plugin.metadata.scheduleDefinitionsLocation }
-          : {}),
-      });
-      if (!plugin.metadata.scheduleDefinitionsLocation) {
-        issues.push({
-          code: 'SERVER_SCHEDULE_DEFINITIONS_MISSING',
-          severity: 'error',
-          packageName: plugin.metadata.packageName,
-          message: `${plugin.metadata.packageName} declares Schedule definitions at ${configuredSchedules}, but the module could not be resolved.`,
-        });
-      }
-    }
-
     return {
       order: pluginOrder,
       packageName: plugin.metadata.packageName,
@@ -222,7 +193,6 @@ export function inspectResolvedAppServerPlugins(
         migrations: configuredMigrations !== undefined,
         seeds: configuredSeeds !== undefined,
         jobLocations: configuredJobs.length,
-        scheduleDefinitions: configuredSchedules !== undefined,
       },
     };
   });
@@ -235,7 +205,6 @@ export function inspectResolvedAppServerPlugins(
     locales,
     database,
     jobs,
-    schedules,
     consistent: issues.length === 0,
     issues,
     suggestions: suggestionsForIssues(issues),
@@ -257,10 +226,6 @@ function suggestionsForIssues(
     } else if (issue.code === 'SERVER_JOB_LOCATION_MISSING') {
       suggestions.add(
         'Check the plugin Queue Job declaration, package files, and resolved installation contents.',
-      );
-    } else if (issue.code === 'SERVER_SCHEDULE_DEFINITIONS_MISSING') {
-      suggestions.add(
-        'Check the plugin Schedule declaration, package files, and resolved installation contents.',
       );
     }
   }

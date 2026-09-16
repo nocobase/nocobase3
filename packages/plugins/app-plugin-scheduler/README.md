@@ -2,14 +2,16 @@
 
 Code-defined scheduling for NocoBase applications.
 
-Schedules are declared with `defineSchedule()` in a plugin-owned module and
-exposed through that plugin's Server declaration:
+A plugin or application registers a schedule by resolving `schedulerServiceToken`
+and calling `defineSchedule(definition)` during `register()` or `boot()`,
+the same way it calls `registerTarget()`:
 
 ```ts
-import { defineSchedule } from '@nocobase/app-plugin-scheduler/server';
+import { schedulerServiceToken } from '@nocobase/app-plugin-scheduler/server/tokens';
 
-export default [
-  defineSchedule({
+public override async boot(): Promise<void> {
+  if (!this.app.container.has(schedulerServiceToken)) return;
+  this.app.container.resolve(schedulerServiceToken).defineSchedule({
     key: 'daily-sync',
     title: 'Daily sync',
     schedule: { cron: '0 0 2 * * *', timezone: 'UTC' },
@@ -17,23 +19,13 @@ export default [
       type: 'workflow',
       config: { workflowKey: 'daily-sync', input: {} },
     },
-  }),
-];
+  });
+}
 ```
 
-```ts
-defineServerPlugin({
-  packageName,
-  schedules: { definitions: './server/schedules' },
-});
-```
+The plugin reconciles declarations into `schedule_definitions` and the schedule projection owned by the application's configured `schedule` Queue. The App selects the Queue connection and driver; Scheduler does not force a Database Queue connection. The selected driver must support scheduled jobs, so the `sync` driver is not valid for this queue. Scheduler dispatches targets through a fixed `ScheduleDispatchJob`, records idempotent occurrences through their final target outcome, and provides an authenticated, authorized, read-only Settings page and API. Raw target config is never returned by the API.
 
-The plugin reconciles declarations into `schedule_definitions` and the
-Database Queue schedule projection. It dispatches targets through a fixed
-`ScheduleDispatchJob`, records idempotent occurrences through their final
-target outcome, and provides an
-authenticated, authorized, read-only Settings page and API. Raw target config
-is never returned by the API.
+`schedulerServiceToken` is the plugin's whole extension surface, with two methods. `registerTarget()` declares what a schedule can point at: how a config is validated, how a firing starts, and how a run that finishes later is inspected, and it returns the handle that reports a terminal outcome. `defineSchedule(definition)` registers a schedule itself; `key` must be unique within the application and forms the schedule's stable identity. Both are read once when the App syncs during startup, so call them from `register()` or `boot()`. Reading and changing schedules afterward is reachable through the HTTP API and the `schedule sync` command rather than through the service.
 
 Run a non-destructive synchronization with `pnpm nocobase schedule sync`. A deployment
 may run `pnpm nocobase schedule sync --finalize` once per App to deactivate declarations

@@ -4,6 +4,7 @@ import {
   type Row,
 } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
+import { createQueueManager, type NocoBaseQueueManager } from '@nocobase/queue';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202609020001_scheduler_create_definitions.js';
@@ -17,6 +18,7 @@ const NOW = new Date('2026-03-08T06:30:00.000Z');
 
 describe('ScheduleStore reconciliation', () => {
   let database: DatabaseManager;
+  let queue: NocoBaseQueueManager;
   let store: ScheduleStore;
 
   beforeEach(async () => {
@@ -30,41 +32,60 @@ describe('ScheduleStore reconciliation', () => {
       query: connection.query,
       connection,
     });
-    store = new ScheduleStore(database, 'main', () => new Date(NOW));
+    queue = createQueueManager(
+      {
+        default: 'database',
+        connections: {
+          database: {
+            driver: 'database',
+            table: 'queue_jobs',
+            schedulesTable: 'queue_schedules',
+          },
+        },
+        queues: { schedule: { connection: 'database' } },
+        jobs: { autoLoad: false, locations: [] },
+      },
+      { database },
+    );
+    await queue.init();
+    store = new ScheduleStore(
+      database,
+      'main',
+      queue.schedules('schedule'),
+      () => new Date(NOW),
+    );
   });
 
-  afterEach(async () => database.destroy());
+  afterEach(async () => {
+    await queue.close();
+    await database.destroy();
+  });
 
   it('creates stable one-to-one product and Queue projections', async () => {
     await store.reconcile([entry(baseDefinition())]);
     await store.reconcile([entry(baseDefinition())]);
-    const id = scheduleId('main', 'plugin-a', 'daily');
+    const id = scheduleId('main', 'daily');
     await expect(rows('schedule_definitions')).resolves.toHaveLength(1);
-    await expect(rows('queue_schedules')).resolves.toMatchObject([
+    await expect(queue.schedules('schedule').list()).resolves.toMatchObject([
       {
         id,
         name: 'ScheduleDispatchJob',
         status: 'active',
         runCount: 0,
         lastRunAt: null,
-        nextRunAt: String(Date.parse('2026-03-09T00:00:00.000Z')) + '.0',
+        nextRunAt: new Date('2026-03-09T00:00:00.000Z'),
       },
     ]);
   });
 
   it('preserves Queue counters, next time, and the enabled state for unchanged and content-only updates', async () => {
     await store.reconcile([entry(baseDefinition())]);
-    const id = scheduleId('main', 'plugin-a', 'daily');
-    await database
-      .query()
-      .updateTable('queue_schedules')
-      .set({
-        runCount: 9,
-        lastRunAt: '2026-03-07T00:00:00.000Z',
-        nextRunAt: '2026-03-10T00:00:00.000Z',
-      })
-      .where('id', '=', id)
-      .execute();
+    const id = scheduleId('main', 'daily');
+    await queue.schedules('schedule').update(id, {
+      runCount: 9,
+      lastRunAt: new Date('2026-03-07T00:00:00.000Z'),
+      nextRunAt: new Date('2026-03-10T00:00:00.000Z'),
+    });
     // `enabled` is owned by the database rather than by the code definition, so
     // reconciling a redeployed manifest must not undo an administrator's pause.
     await store.setEnabled(id, false);
@@ -73,14 +94,14 @@ describe('ScheduleStore reconciliation', () => {
     await expect(queueRow(id)).resolves.toMatchObject({
       status: 'paused',
       runCount: 9,
-      lastRunAt: '2026-03-07T00:00:00.000Z',
-      nextRunAt: '2026-03-10T00:00:00.000Z',
+      lastRunAt: new Date('2026-03-07T00:00:00.000Z'),
+      nextRunAt: new Date('2026-03-10T00:00:00.000Z'),
     });
   });
 
   it('recalculates schedule fields without resetting history counters', async () => {
     await store.reconcile([entry(baseDefinition())]);
-    const id = scheduleId('main', 'plugin-a', 'daily');
+    const id = scheduleId('main', 'daily');
     await database
       .query()
       .updateTable('queue_schedules')
@@ -95,13 +116,13 @@ describe('ScheduleStore reconciliation', () => {
     ]);
     await expect(queueRow(id)).resolves.toMatchObject({
       runCount: 4,
-      nextRunAt: String(Date.parse('2026-03-08T12:00:00.000Z')) + '.0',
+      nextRunAt: new Date('2026-03-08T12:00:00.000Z'),
     });
   });
 
   it('only finalize deactivates missing code definitions and reactivation preserves identity and history', async () => {
     await store.reconcile([entry(baseDefinition())]);
-    const id = scheduleId('main', 'plugin-a', 'daily');
+    const id = scheduleId('main', 'daily');
     await database
       .query()
       .updateTable('queue_schedules')
@@ -134,8 +155,8 @@ describe('ScheduleStore reconciliation', () => {
       entry(baseDefinition()),
       entry(baseDefinition({ key: 'weekly', title: 'Weekly' })),
     ]);
-    const daily = scheduleId('main', 'plugin-a', 'daily');
-    const weekly = scheduleId('main', 'plugin-a', 'weekly');
+    const daily = scheduleId('main', 'daily');
+    const weekly = scheduleId('main', 'weekly');
     await insertOccurrences(daily, [
       'succeeded',
       'succeeded',
@@ -163,14 +184,13 @@ describe('ScheduleStore reconciliation', () => {
     const otherStore = new ScheduleStore(
       database,
       'other',
+      queue.schedules('schedule'),
       () => new Date(NOW),
     );
     await store.reconcile([entry(baseDefinition())]);
     await otherStore.reconcile([entry(baseDefinition())]);
-    await insertOccurrences(scheduleId('main', 'plugin-a', 'daily'), [
-      'succeeded',
-    ]);
-    await insertOccurrences(scheduleId('other', 'plugin-a', 'daily'), [
+    await insertOccurrences(scheduleId('main', 'daily'), ['succeeded']);
+    await insertOccurrences(scheduleId('other', 'daily'), [
       'succeeded',
       'succeeded',
     ]);
@@ -179,7 +199,7 @@ describe('ScheduleStore reconciliation', () => {
     expect((await otherStore.list())[0]?.completedCount).toBe(2);
   });
 
-  it('rolls back the complete reconciliation when a projection write fails', async () => {
+  it('records a retryable synchronization failure when a projection write fails', async () => {
     const client = await database.connection().client();
     await client.raw(`
       CREATE TRIGGER reject_queue_schedule
@@ -192,9 +212,47 @@ describe('ScheduleStore reconciliation', () => {
     await expect(
       store.reconcile([entry(baseDefinition())], true),
     ).rejects.toThrow('projection rejected');
-    await expect(rows('schedule_definitions')).resolves.toEqual([]);
+    await expect(rows('schedule_definitions')).resolves.toMatchObject([
+      {
+        syncStatus: 'failed',
+        syncError: expect.stringContaining('projection rejected'),
+      },
+    ]);
     await expect(rows('queue_schedules')).resolves.toEqual([]);
-    await expect(rows('schedule_sync_locks')).resolves.toEqual([]);
+    await expect(rows('schedule_sync_locks')).resolves.toHaveLength(1);
+
+    await client.raw('DROP TRIGGER reject_queue_schedule');
+    await store.reconcile([entry(baseDefinition())], true);
+    await expect(rows('schedule_definitions')).resolves.toMatchObject([
+      { syncStatus: 'synced', syncError: null },
+    ]);
+    await expect(rows('queue_schedules')).resolves.toHaveLength(1);
+  });
+
+  it('projects schedules through a non-database queue connection', async () => {
+    await queue.close();
+    queue = createQueueManager({
+      default: 'sync',
+      connections: {
+        sync: { driver: 'sync' },
+        memory: { driver: 'fake' },
+      },
+      queues: { schedule: { connection: 'memory' } },
+      jobs: { autoLoad: false, locations: [] },
+    });
+    await queue.init();
+    const schedules = queue.schedules('schedule');
+    store = new ScheduleStore(database, 'main', schedules, () => new Date(NOW));
+
+    await store.reconcile([entry(baseDefinition())]);
+
+    await expect(rows('queue_schedules')).resolves.toEqual([]);
+    await expect(
+      schedules.get(scheduleId('main', 'daily')),
+    ).resolves.toMatchObject({
+      name: 'ScheduleDispatchJob',
+      status: 'active',
+    });
   });
 
   it('supports five/six fields, inclusive bounds, UTC, and an IANA DST transition', async () => {
@@ -247,7 +305,7 @@ describe('ScheduleStore reconciliation', () => {
           scheduleId: schedule,
           definitionHash: 'definition-hash',
           status,
-          targetType: 'job',
+          targetType: 'report',
           executionCount: 1,
           startedAt: new Date('2026-03-08T00:00:00.000Z'),
           lastStartedAt: new Date('2026-03-08T00:00:00.000Z'),
@@ -257,18 +315,14 @@ describe('ScheduleStore reconciliation', () => {
         .execute();
     }
   }
-  function queueRow(id: string): Promise<Row | undefined> {
-    return database
-      .query()
-      .selectFrom('queue_schedules')
-      .selectAll()
-      .where('id', '=', id)
-      .executeTakeFirst();
+  async function queueRow(id: string): Promise<Row | undefined> {
+    const row = await queue.schedules('schedule').get(id);
+    return row ? { ...row } : undefined;
   }
 });
 
 function entry(definition: ScheduleDefinition) {
-  return { owner: 'plugin-a', definition: defineSchedule(definition) };
+  return { definition: defineSchedule(definition) };
 }
 
 function baseDefinition(
@@ -278,7 +332,7 @@ function baseDefinition(
     key: 'daily',
     title: 'Daily',
     schedule: { cron: '0 0 * * *', timezone: 'UTC' },
-    target: { type: 'job', config: { jobName: 'test', payload: {} } },
+    target: { type: 'report', config: { reportKey: 'test' } },
     ...overrides,
   };
 }

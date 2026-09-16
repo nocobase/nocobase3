@@ -48,7 +48,6 @@ describe('Server plugin inspection', () => {
         seeds: './database/seeds',
       },
       queue: { jobs: ['./server/jobs'] },
-      schedules: { definitions: './server/schedules' },
       locales: async () => {
         localeLoaderCalls += 1;
         return { default: {} };
@@ -66,8 +65,6 @@ describe('Server plugin inspection', () => {
             migrationsDirectory: '/plugins/example/database/migrations',
             seedsDirectory: '/plugins/example/database/seeds',
             jobLocations: ['/plugins/example/server/jobs/**/*.{ts,js,mts,mjs}'],
-            scheduleDefinitionsLocation:
-              '/plugins/example/server/schedules/index.ts',
           },
         },
       ],
@@ -89,7 +86,6 @@ describe('Server plugin inspection', () => {
           migrations: true,
           seeds: true,
           jobLocations: 1,
-          scheduleDefinitions: true,
         },
       }),
     ]);
@@ -149,7 +145,6 @@ describe('Server plugin inspection', () => {
       migrations: false,
       seeds: false,
       jobLocations: 0,
-      scheduleDefinitions: false,
     });
     expect(inspection.locales).toHaveLength(1);
   });

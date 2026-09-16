@@ -1,12 +1,12 @@
-import { QueueSchemaService } from '@boringnode/queue';
 import type { DatabaseManager } from '@nocobase/db';
 import {
   createQueueManager,
   type AppQueueConfig,
   type NocoBaseQueueManager,
 } from '@nocobase/queue';
-import type { Knex } from 'knex';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import schedulerMigration from '../../app-plugin-scheduler/database/migrations/202609020001_scheduler_create_definitions.js';
 
 import {
   EXECUTION_REASON,
@@ -112,10 +112,11 @@ describe('workflow runtime', () => {
 
   async function createQueue(): Promise<NocoBaseQueueManager> {
     const connection = await database.connect();
-    const client = await connection.client<Knex>();
-    const schema = new QueueSchemaService(client);
-    await schema.createJobsTable(QUEUE_TABLE);
-    await schema.createSchedulesTable(SCHEDULES_TABLE);
+    await schedulerMigration.up({
+      connection,
+      builder: connection.builder,
+      query: connection.query,
+    });
     queueManager = createQueueManager(databaseQueueConfig(), { database });
     return queueManager;
   }

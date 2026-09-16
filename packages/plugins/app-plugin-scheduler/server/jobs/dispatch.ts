@@ -14,7 +14,6 @@ export class ScheduleDispatchJob extends Job<ScheduleDispatchPayload> {
   public static options: JobOptions = {
     name: 'ScheduleDispatchJob',
     queue: 'schedule',
-    adapter: 'database',
     maxRetries: 0,
   };
   public constructor(

@@ -28,7 +28,6 @@ const enUS = {
       status: 'Status',
     },
     targets: {
-      job: 'Job',
       workflow: 'Workflow',
     },
     targetStates: {

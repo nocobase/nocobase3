@@ -36,7 +36,6 @@ interface OccurrenceRow extends Row {
   acceptedAt?: Date | null;
   lastStartedAt: Date;
   lastObservedAt?: Date | null;
-  observationDeadlineAt?: Date | null;
   finishedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -51,7 +50,6 @@ const TERMINAL = new Set<ScheduleOccurrenceStatus>([
   'triggered',
 ]);
 const MAX_SUMMARY_BYTES = 16_384;
-const OBSERVATION_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
 export class ScheduleOccurrenceError extends Error {
   public constructor(
@@ -119,7 +117,6 @@ export class ScheduleOccurrenceStore implements ScheduleExecutionReporter {
         acceptedAt: null,
         lastStartedAt: now,
         lastObservedAt: null,
-        observationDeadlineAt: new Date(now.getTime() + OBSERVATION_WINDOW_MS),
         finishedAt: null,
         createdAt: now,
         updatedAt: now,
@@ -157,7 +154,6 @@ export class ScheduleOccurrenceStore implements ScheduleExecutionReporter {
         targetReferenceId: reference.id,
         targetReceipt: serializedReceipt,
         acceptedAt: now,
-        observationDeadlineAt: new Date(now.getTime() + OBSERVATION_WINDOW_MS),
         updatedAt: now,
       })
       .where('id', '=', occurrenceId)
@@ -191,9 +187,17 @@ export class ScheduleOccurrenceStore implements ScheduleExecutionReporter {
     occurrenceId: string,
     reference: ScheduleTargetReference,
     completion: ScheduleExecutionCompletion,
+    // Set when the caller holds a handle for one target type, so that
+    // registering a target grants no power over another target's occurrences.
+    expectedTargetType?: string,
   ): Promise<void> {
     assertReference(reference);
     const existing = await this.required(occurrenceId);
+    if (expectedTargetType && existing.targetType !== expectedTargetType)
+      throw new ScheduleOccurrenceError(
+        'REFERENCE_MISMATCH',
+        `Occurrence "${occurrenceId}" does not belong to target type "${expectedTargetType}"`,
+      );
     // A workflow may finish between target.start() returning its run id and
     // wait() persisting that id on the occurrence. The terminal observer is
     // best-effort in that small window; dispatch performs an immediate inspect
@@ -241,27 +245,6 @@ export class ScheduleOccurrenceStore implements ScheduleExecutionReporter {
     let completed = 0;
     for (const row of rows) {
       const now = new Date();
-      if (
-        row.observationDeadlineAt &&
-        new Date(row.observationDeadlineAt).getTime() <= now.getTime() &&
-        (!row.targetReferenceType || !row.targetReferenceId)
-      ) {
-        const changed = await this.database
-          .query()
-          .updateTable<OccurrenceRow>('schedule_occurrences')
-          .set({
-            status: 'timed_out',
-            reason: 'observation-timeout',
-            finishedAt: now,
-            lastObservedAt: now,
-            updatedAt: now,
-          })
-          .where('id', '=', row.id)
-          .where('status', 'in', ['pending', 'running'])
-          .execute();
-        if ((changed.updatedCount ?? 0) > 0) completed += 1;
-        continue;
-      }
       if (!row.targetReferenceType || !row.targetReferenceId) continue;
       const reference = {
         type: row.targetReferenceType,
@@ -292,25 +275,6 @@ export class ScheduleOccurrenceStore implements ScheduleExecutionReporter {
           completed += 1;
         } catch (error) {
           console.error('Schedule occurrence completion failed', {
-            occurrenceId: row.id,
-            reference,
-            error,
-          });
-        }
-      } else if (
-        ['pending', 'running', 'unknown'].includes(observation.state) &&
-        row.observationDeadlineAt &&
-        new Date(row.observationDeadlineAt).getTime() <= now.getTime()
-      ) {
-        try {
-          await this.complete(row.id, reference, {
-            status: 'timed_out',
-            reason: 'observation-timeout',
-            finishedAt: now,
-          });
-          completed += 1;
-        } catch (error) {
-          console.error('Schedule occurrence timeout completion failed', {
             occurrenceId: row.id,
             reference,
             error,

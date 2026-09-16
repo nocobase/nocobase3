@@ -2,8 +2,12 @@ import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { describe, expect, it, vi } from 'vitest';
 
+import { EXECUTION_STATUS } from '../server/engine/constants.js';
 import { WorkflowInvocationError } from '../server/engine/invocation.js';
-import { WorkflowScheduleTarget } from '../server/schedule-target.js';
+import {
+  WorkflowScheduleTarget,
+  workflowCompletion,
+} from '../server/schedule-target.js';
 import type { WorkflowServiceContract } from '../server/tokens.js';
 
 const context = {
@@ -160,6 +164,72 @@ describe('WorkflowScheduleTarget', () => {
     });
   });
 });
+
+describe('workflowCompletion', () => {
+  it('maps every terminal run status the same way for both report paths', () => {
+    const finishedAt = new Date('2026-03-08T00:00:00.000Z');
+
+    expect(
+      workflowCompletion(EXECUTION_STATUS.RESOLVED, null, finishedAt),
+    ).toEqual({ status: 'succeeded', finishedAt });
+    expect(
+      workflowCompletion(EXECUTION_STATUS.ABORTED, 'timeout', finishedAt),
+    ).toEqual({
+      status: 'timed_out',
+      reason: 'execution-timeout',
+      finishedAt,
+    });
+    expect(
+      workflowCompletion(EXECUTION_STATUS.ABORTED, 'cancelled', finishedAt),
+    ).toEqual({
+      status: 'cancelled',
+      reason: 'execution-cancelled',
+      finishedAt,
+    });
+    expect(
+      workflowCompletion(EXECUTION_STATUS.FAILED, null, finishedAt),
+    ).toEqual({ status: 'failed', reason: 'execution-failed', finishedAt });
+  });
+
+  it('agrees with what inspect() reports for the same run', async () => {
+    const finishedAt = new Date('2026-03-08T00:00:00.000Z');
+    const database = runDatabase({
+      id: 7,
+      status: EXECUTION_STATUS.ABORTED,
+      reason: 'timeout',
+      finishedAt,
+    });
+    const target = new WorkflowScheduleTarget(database, {
+      registerInstruction: () => {},
+      trigger: async () => {
+        throw new Error('not used');
+      },
+    });
+
+    await expect(
+      target.inspect({ type: 'workflow-run', id: '7' }),
+    ).resolves.toEqual({
+      state: 'completed',
+      completion: workflowCompletion(
+        EXECUTION_STATUS.ABORTED,
+        'timeout',
+        finishedAt,
+      ),
+    });
+  });
+});
+
+function runDatabase(run: Record<string, unknown>): DatabaseManager {
+  return {
+    query: () => ({
+      selectFrom: () => ({
+        select: () => ({
+          where: () => ({ executeTakeFirst: async () => run }),
+        }),
+      }),
+    }),
+  } as unknown as DatabaseManager;
+}
 
 function createTarget(
   trigger: WorkflowServiceContract['trigger'],

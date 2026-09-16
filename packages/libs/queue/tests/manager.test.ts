@@ -1,3 +1,4 @@
+import { createSchedules } from './schedule-fixture.js';
 import { Job, QueueSchemaService } from '@boringnode/queue';
 import { createDatabaseManager } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
@@ -92,7 +93,7 @@ describe('createQueueManager', () => {
     const client = await connection.client<Knex>();
     const schema = new QueueSchemaService(client);
     await schema.createJobsTable('queue_jobs');
-    await schema.createSchedulesTable('queue_schedules');
+    await createSchedules(database.connection());
     const dueAt = new Date(Date.now() - 1_000);
     let captured:
       InstanceType<typeof ScheduleContextJob>['context'] | undefined;
@@ -116,28 +117,21 @@ describe('createQueueManager', () => {
       { database },
     );
     queueManager.registerJob(ScheduleContextJob);
-    // Staged through the same Knex client `@boringnode/queue` polls with. The
-    // Repository writes a temporal column as a naive ISO-8601 string, which the
-    // transport's own `next_run_at <= ?` comparison against a bound Date never
-    // matches, so the schedule would simply never come due.
-    await client('queue_schedules').insert({
+    await queueManager.init();
+    const schedules = queueManager.schedules('schedule');
+    await schedules.upsert({
       id: 'schedule-context',
-      status: 'active',
       name: 'QueueManagerScheduleContext',
-      payload: JSON.stringify({}),
-      cron_expression: '* * * * * *',
-      every_ms: null,
+      payload: {},
+      cronExpression: '* * * * * *',
       timezone: 'UTC',
-      from_date: null,
-      to_date: null,
-      run_limit: 10,
-      run_count: 4,
-      next_run_at: dueAt,
-      last_run_at: null,
-      created_at: new Date(),
+      limit: 10,
+    });
+    await schedules.update('schedule-context', {
+      runCount: 4,
+      nextRunAt: dueAt,
     });
     const worker = queueManager.createWorker({
-      connection: 'database',
       queues: ['schedule'],
       concurrency: 1,
     });
@@ -160,6 +154,83 @@ describe('createQueueManager', () => {
       ScheduleContextJob.capture = undefined;
     }
   });
+
+  it.each(['start', 'options', 'global', 'override'] as const)(
+    'consumes jobs using the %s connection selection',
+    async (selection) => {
+      executedPayloads.length = 0;
+      const database = createDatabaseManager({
+        drivers: { sqlite },
+        connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+      });
+      const client = await (await database.connect()).client<Knex>();
+      const schema = new QueueSchemaService(client);
+      await schema.createJobsTable('queue_jobs');
+      await createSchedules(database.connection());
+      const queueManager = createQueueManager(
+        {
+          default: 'sync',
+          connections: {
+            sync: { driver: 'sync' },
+            database: { driver: 'database' },
+          },
+          queues: {
+            demo: {
+              connection:
+                selection === 'global' || selection === 'override'
+                  ? 'sync'
+                  : 'database',
+            },
+            transport: { connection: 'database' },
+          },
+          worker: {
+            idleDelay: '10ms',
+            connection:
+              selection === 'global'
+                ? 'database'
+                : selection === 'override'
+                  ? 'sync'
+                  : undefined,
+          },
+          jobs: { autoLoad: false, locations: [] },
+        },
+        { database },
+      );
+      try {
+        await queueManager.dispatch(
+          DemoJob,
+          { id: selection },
+          { connection: 'database' },
+        );
+        expect(executedPayloads).toEqual([]);
+        const worker = queueManager.createWorker({
+          queues: selection === 'start' ? undefined : ['demo'],
+          connection: selection === 'override' ? 'database' : undefined,
+        });
+        const completion = worker.start(
+          selection === 'start' ? ['demo'] : undefined,
+        );
+        try {
+          await Promise.race([
+            waitFor(() => executedPayloads.length === 1),
+            completion,
+          ]);
+          expect(executedPayloads).toEqual([{ id: selection }]);
+          if (selection === 'start') {
+            await expect(worker.start(['default'])).rejects.toThrow(
+              'cannot consume queues',
+            );
+          }
+        } finally {
+          await worker.stop();
+          await completion;
+        }
+      } finally {
+        await queueManager.close();
+        await database.destroy();
+      }
+    },
+  );
 
   it('requires a DatabaseManager for active database connections', async () => {
     const queueManager = createQueueManager({
@@ -190,13 +261,45 @@ describe('createQueueManager', () => {
       },
     });
   });
+
+  it('rejects scheduled jobs on the sync connection', () => {
+    const queueManager = createQueueManager(createSyncQueueConfig());
+    expect(() => queueManager.schedules()).toThrow(
+      'sync connection, which does not support scheduled jobs',
+    );
+  });
+
+  it('uses the connection selected by a logical queue for schedules', async () => {
+    const queueManager = createQueueManager({
+      default: 'sync',
+      connections: {
+        sync: { driver: 'sync' },
+        memory: { driver: 'fake' },
+      },
+      queues: { schedule: { connection: 'memory' } },
+      jobs: { autoLoad: false, locations: [] },
+    });
+    await queueManager.init();
+    const schedules = queueManager.schedules('schedule');
+    await schedules.upsert({
+      id: 'environment-selected',
+      name: 'QueueManagerTestDemo',
+      payload: { id: 'scheduled' },
+      cronExpression: '0 0 * * *',
+      timezone: 'UTC',
+    });
+    expect(await schedules.get('environment-selected')).toMatchObject({
+      id: 'environment-selected',
+      name: 'QueueManagerTestDemo',
+    });
+    await queueManager.close();
+  });
 });
 
 class ScheduleContextJob extends Job<Record<string, never>> {
   static options = {
     name: 'QueueManagerScheduleContext',
     queue: 'schedule',
-    adapter: 'database',
   };
   static capture:
     | ((context: InstanceType<typeof ScheduleContextJob>['context']) => void)

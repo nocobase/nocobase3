@@ -3,8 +3,11 @@ import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
 import { ServiceProvider } from '@nocobase/service-provider';
-import { WorkflowScheduleTarget } from './schedule-target.js';
-import { EXECUTION_STATUS } from './engine/constants.js';
+import type { ScheduleTargetHandle } from '@nocobase/app-plugin-scheduler/server';
+import {
+  WorkflowScheduleTarget,
+  workflowCompletion,
+} from './schedule-target.js';
 
 import { type WorkflowRuntimeConfig } from './config.js';
 import { WorkflowService } from './service.js';
@@ -34,8 +37,10 @@ export class WorkflowProvider<
     WorkflowProviderApplication,
 > extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-plugin-workflow';
-  private schedulerIntegration:
-    typeof import('@nocobase/app-plugin-scheduler/server/tokens') | undefined;
+  // Held from boot() rather than re-derived: reporting a completion is a
+  // capability the scheduler grants to whoever registered the target, and it
+  // is absent when the scheduler plugin is not installed at all.
+  private scheduleTarget: ScheduleTargetHandle | undefined;
 
   public override register(): void {
     if (!this.app.container.has(databaseManagerToken)) return;
@@ -55,41 +60,27 @@ export class WorkflowProvider<
           artifactDisk: resolveWorkflowArtifactDisk(workflow, drive),
           production: workflow.production,
           terminalObserver: async (event) => {
-            const reporterToken =
-              this.schedulerIntegration?.scheduleExecutionReporterToken;
+            const scheduleTarget = this.scheduleTarget;
             if (
               event.sourceType !== 'schedule' ||
               !event.sourceId ||
-              !reporterToken ||
-              !this.app.container.has(reporterToken)
+              !scheduleTarget
             )
               return;
             const reference = {
               type: 'workflow-run',
               id: String(event.runId),
             };
-            const status =
-              event.status === EXECUTION_STATUS.RESOLVED
-                ? 'succeeded'
-                : event.status === EXECUTION_STATUS.ABORTED &&
-                    event.reason === 'timeout'
-                  ? 'timed_out'
-                  : event.status === EXECUTION_STATUS.ABORTED
-                    ? 'cancelled'
-                    : 'failed';
-            await this.app.container
-              .resolve(reporterToken)
-              .complete(event.sourceId, reference, {
-                status,
-                ...(status === 'failed' ? { reason: 'execution-failed' } : {}),
-                ...(status === 'cancelled'
-                  ? { reason: 'execution-cancelled' }
-                  : {}),
-                ...(status === 'timed_out'
-                  ? { reason: 'execution-timeout' }
-                  : {}),
-                finishedAt: new Date(event.finishedAt),
-              })
+            await scheduleTarget
+              .reportCompletion(
+                event.sourceId,
+                reference,
+                workflowCompletion(
+                  event.status,
+                  event.reason,
+                  new Date(event.finishedAt),
+                ),
+              )
               .catch((error: unknown) => {
                 console.error(
                   'Workflow schedule completion notification failed',
@@ -110,20 +101,21 @@ export class WorkflowProvider<
   }
 
   public override async boot(): Promise<void> {
+    let schedulerTokens: typeof import('@nocobase/app-plugin-scheduler/server/tokens');
     try {
-      this.schedulerIntegration =
+      schedulerTokens =
         await import('@nocobase/app-plugin-scheduler/server/tokens');
     } catch (error) {
       if (isMissingSchedulerPackage(error)) return;
       throw error;
     }
-    const { scheduleTargetRegistryToken } = this.schedulerIntegration;
-    // The scheduler registry is created during register; only resolve it when
-    // the scheduler plugin is actually present.
-    if (!this.app.container.has(scheduleTargetRegistryToken)) return;
-    this.app.container
-      .resolve(scheduleTargetRegistryToken)
-      .register(
+    const { schedulerServiceToken } = schedulerTokens;
+    // The scheduler registers its service during register; only resolve it
+    // when the scheduler plugin is actually present.
+    if (!this.app.container.has(schedulerServiceToken)) return;
+    this.scheduleTarget = this.app.container
+      .resolve(schedulerServiceToken)
+      .registerTarget(
         new WorkflowScheduleTarget(
           this.app.container.resolve(databaseManagerToken),
           this.app.container.resolve(workflowServiceToken),

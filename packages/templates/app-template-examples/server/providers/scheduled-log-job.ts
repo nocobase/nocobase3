@@ -1,44 +1,83 @@
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { Application } from '@nocobase/app-server/application';
 import type { JsonObject } from '@nocobase/app-plugin-scheduler/server';
-import { jobDispatchRegistryToken } from '@nocobase/app-plugin-scheduler/server/tokens';
+import { schedulerServiceToken } from '@nocobase/app-plugin-scheduler/server/tokens';
 import { ServiceProvider } from '@nocobase/service-provider';
 
-interface Payload extends JsonObject {
+interface Config extends JsonObject {
   readonly message: string;
 }
 
 export default class ScheduledLogJobProvider extends ServiceProvider<Application> {
   public readonly name = 'app/examples-scheduled-log-job';
   public override async boot(): Promise<void> {
-    if (!this.app.container.has(jobDispatchRegistryToken)) return;
-    const registry = this.app.container.resolve(jobDispatchRegistryToken);
+    if (!this.app.container.has(schedulerServiceToken)) return;
+    const scheduler = this.app.container.resolve(schedulerServiceToken);
+    scheduler.defineSchedule({
+      key: 'analytics.daily-report-every-10-minutes',
+      title: 'Analytics daily report (every 10 minutes)',
+      description:
+        'Refresh the previous calendar day report in Asia/Singapore.',
+      schedule: { cron: '*/10 * * * *', timezone: 'Asia/Singapore' },
+      target: {
+        type: 'workflow',
+        config: {
+          workflowKey: 'example-analytics-report',
+          input: { date: 'previous-day' },
+        },
+      },
+    });
     const logger = this.app.container.resolve(loggingToken).getLogger();
-    registry.register({
-      name: 'app.scheduled-log',
+    scheduler.registerTarget<Config>({
+      type: 'app.scheduled-log',
       title: '报时（服务端日志）',
-      validate: (payload) =>
-        payload !== null &&
-        typeof payload === 'object' &&
-        typeof (payload as { message?: unknown }).message === 'string'
+      validate: (config) =>
+        config !== null &&
+        typeof config === 'object' &&
+        typeof (config as { message?: unknown }).message === 'string'
           ? { valid: true }
           : { valid: false, reason: 'message-must-be-a-string' },
-      async dispatch(payload: Payload, context) {
+      async start(config, context) {
         const executedAt = new Date().toISOString();
         logger.info(
           {
             occurrenceId: context.occurrenceId,
             scheduleId: context.scheduleId,
-            message: payload.message,
+            message: config.message,
             executedAt,
           },
-          'Scheduled log Job executed',
+          'Scheduled log target executed',
         );
         return {
           state: 'completed',
           outcome: 'succeeded',
-          result: { message: payload.message, executedAt },
+          result: { message: config.message, executedAt },
         };
+      },
+    });
+    scheduler.defineSchedule({
+      key: 'example-test-job-every-5-minutes',
+      title: '报时（服务端日志）',
+      description:
+        'Writes the current server time to the server log every five minutes.',
+      schedule: { cron: '*/5 * * * *', timezone: 'Asia/Singapore' },
+      target: {
+        type: 'app.scheduled-log',
+        config: { message: '报时' },
+      },
+    });
+    scheduler.defineSchedule({
+      key: 'example-test-workflow-every-5-minutes',
+      title: '测试工作流（每五分钟）',
+      description:
+        'Invokes the scheduled test workflow every five minutes; the workflow waits five seconds before completing.',
+      schedule: { cron: '*/5 * * * *', timezone: 'Asia/Singapore' },
+      target: {
+        type: 'workflow',
+        config: {
+          workflowKey: 'scheduled-test-workflow',
+          input: {},
+        },
       },
     });
   }

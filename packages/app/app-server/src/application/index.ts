@@ -23,8 +23,6 @@ import {
 } from '../realtime/websocket.js';
 import { RealtimeProvider } from '../realtime/provider.js';
 import {
-  AppScheduleDefinitionContributions,
-  appScheduleDefinitionContributionsToken,
   createAppDatabaseTaskContributions,
   type AppServerPluginLocalesLoader,
   type ResolvedAppServerPlugins,
@@ -123,10 +121,6 @@ export class Application<
     this.mode = options.mode ?? 'embedded';
     this.paths = options.paths;
     this.container = new ServiceContainer();
-    this.container.instance(
-      appScheduleDefinitionContributionsToken,
-      new AppScheduleDefinitionContributions(),
-    );
     this.usesDefaultWebSocket = options.websocket === undefined;
     this.websocketFactory = options.websocket ?? createRealtimeWebSocketHandler;
     this.websocket = async (request, env) => {
@@ -187,12 +181,6 @@ export class Application<
         this.localeContributions.push({
           packageName: plugin.definition.packageName,
           load: plugin.definition.locales,
-        });
-      }
-      if (plugin.metadata.scheduleDefinitionsLocation) {
-        this.container.resolve(appScheduleDefinitionContributionsToken).add({
-          packageName: plugin.definition.packageName,
-          location: plugin.metadata.scheduleDefinitionsLocation,
         });
       }
     }

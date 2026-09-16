@@ -10,7 +10,7 @@ import {
 } from '@nocobase/app-server/router';
 import { Hono } from 'hono';
 
-import { schedulerServiceToken } from '../tokens.js';
+import { schedulerServiceToken } from '../services/scheduler.js';
 
 export const SCHEDULER_ACCESS_RESOURCE: string = 'scheduler.schedules';
 

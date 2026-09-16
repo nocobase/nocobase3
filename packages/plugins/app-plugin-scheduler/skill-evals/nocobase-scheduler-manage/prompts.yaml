@@ -1,0 +1,227 @@
+version: 1
+skill: nocobase-app-plugin-scheduler
+notes:
+  - Give the tested agent only the prompt and neutral fixture context; keep grading rubrics private.
+  - Evaluate observable behavior and evidence, never exact wording.
+  - See README.md for isolation, manual execution, scoring, and runner limitations.
+cases:
+  - id: implicit-admin-visible-report
+    action: 'explain'
+    risk: 'read-only'
+    prompt: '每天北京时间早上九点生成销售日报，业务管理员需要在应用里查看计划和每次执行结果。这只是一个短服务调用。请判断实现方式，不改代码。'
+    expected:
+      - 'Selects Scheduler for administrator visibility and an application-owned target for the short Service call.'
+      - 'Includes Client registration, page access, explicit Asia/Shanghai timezone and actual business completion.'
+    forbidden:
+      - 'Introducing Workflow solely because the task repeats.'
+      - 'Treating server dispatch logs as sufficient UI observability.'
+    skillMode: 'implicit'
+  - id: implicit-internal-maintenance
+    action: 'explain'
+    risk: 'read-only'
+    prompt: '内部缓存需要每小时刷新，不需要业务管理员查看，也不需要应用管理页面。只建议实现方式，不改代码。'
+    expected:
+      - 'Uses an existing background scheduling mechanism or Queue capability appropriate to the installed application.'
+      - 'Explains why Scheduler UI management is unnecessary.'
+    forbidden:
+      - 'Introducing Scheduler or Workflow merely for periodicity.'
+      - 'Inventing an unsupported Queue API.'
+    skillMode: 'implicit'
+  - id: implicit-delayed-job
+    action: 'explain'
+    risk: 'read-only'
+    prompt: '用户提交导出后延迟十分钟执行一次，没有周期任务管理需求。只判断技术方案，不改代码。'
+    expected:
+      - 'Chooses a one-time delayed Queue Job and checks installed Queue capabilities.'
+    forbidden:
+      - 'Creating a recurring Cron schedule.'
+    skillMode: 'implicit'
+  - id: implicit-staged-reconciliation
+    action: 'explain'
+    risk: 'read-only'
+    prompt: '每天凌晨三点对账，需要按阶段处理、差异分支、节点状态和失败诊断；管理员也要看到定时执行历史。请设计边界，不改代码。'
+    expected:
+      - 'Selects Scheduler for timing and Workflow for supported orchestration, with typed business Services.'
+      - 'Checks installed Workflow Instruction contracts and uses its skill when authoring becomes necessary.'
+      - 'Keeps target.type workflow and separate workflow readiness checks.'
+    forbidden:
+      - 'Adding an extra Queue Job solely to wrap a workflow trigger.'
+      - 'Promising exactly-once external effects.'
+    skillMode: 'implicit'
+  - id: define-short-target
+    action: 'define'
+    risk: 'isolated-source-mutation'
+    prompt: '在测试应用里实现管理员可见的定时日志任务：key 为 demo.clock，标题 Clock report，每十秒记录一条固定日志，时区 UTC。请注册 target app.clock 和 Provider，接入现有 Server、Client、CLI 注册及页面权限，保留已有配置。只改源码并 lint、typecheck、test、build，不启动应用或同步。'
+    expected:
+      - 'Uses public exports and defineSchedule from Provider register/boot; registers the target in boot and wires the Provider.'
+      - 'Uses six-field */10 * * * * * and validates the target config.'
+      - 'Returns completed/succeeded only after logging; config contains no credentials.'
+      - 'Preserves existing registrations and reports actual validation evidence.'
+    forbidden:
+      - 'Adding schedules to defineServerPlugin or assuming server/schedules.ts is auto-discovered.'
+      - 'Inventing built-in job target or replacing ScheduleDispatchJob.'
+      - 'Starting a worker or synchronizing despite source-only scope.'
+    preconditions:
+      - 'Disposable complete application with Scheduler dependencies, existing registrations and local test logging; no external credentials.'
+  - id: review-definition-contract
+    action: 'validate'
+    risk: 'read-only'
+    prompt: '只审查这个方案：key 为 daily report，cron 为 */5 * * * *，目标是每五秒执行，timezone 为 Beijing，from/to 用不带时区的字符串，limit 为 3 表示成功三次后停；另外加 enabled、retry、overlap 字段。逐项指出问题，不改文件。'
+    expected:
+      - 'Identifies invalid key and timezone, five-minute versus five-second Cron, Date boundaries with explicit offsets, and inclusive ordered bounds.'
+      - 'Explains limit counts claims rather than successful executions and declaration has no enabled/retry/overlap fields.'
+    forbidden:
+      - 'Accepting unsupported fields or silently substituting execution guarantees.'
+  - id: review-secret-config
+    action: 'validate'
+    risk: 'read-only'
+    prompt: '目标配置准备放 { client: { apiKey: "FAKE_TEST_ONLY" }, modulePath: "./any-job.js" }，方便定时器动态加载任意任务。只评审，不执行。'
+    expected:
+      - 'Rejects nested sensitive config and moves credentials into secure business Service configuration.'
+      - 'Requires JSON data validated by a registered target; disallows arbitrary module/job selection.'
+    forbidden:
+      - 'Persisting secrets in config, receipts, results or diagnostics.'
+  - id: diagnose-missing-definition
+    action: 'inspect'
+    risk: 'read-only'
+    prompt: 'Provider 文件里定义了定时任务，但列表没有它。我们只是新增文件，未改 Provider 数组，defineSchedule 在 start 里调用。只给排查和修复建议。'
+    expected:
+      - 'Checks actual Provider registration and whether an optional Scheduler guard skipped registration.'
+      - 'Moves defineSchedule to register/boot before Scheduler start consumes the manifest.'
+      - 'Checks the actual application and list identity without writing private tables.'
+    forbidden:
+      - 'Claiming a conventional filename is automatically discovered.'
+      - 'Resolving private store or registry tokens as public APIs.'
+  - id: diagnose-sync-driver
+    action: 'inspect'
+    risk: 'read-only'
+    prompt: '应用启动报 schedule 队列不支持调度；queue.default 是 sync，业务队列用 database。只分析原因和配置方向，不执行。'
+    expected:
+      - 'Resolves queue.queues.schedule.connection with queue.default fallback and requires scheduling support.'
+      - 'Explains Scheduler starts its own schedule worker, not all business workers.'
+    forbidden:
+      - 'Claiming the business queue configuration automatically selects the schedule connection.'
+      - 'Requiring only a database driver when another capable driver is supported.'
+  - id: review-async-adapter
+    action: 'validate'
+    risk: 'read-only'
+    prompt: '长任务的 target.start 把工作入队就返回 completed/succeeded。Job 重试第一次失败就上报 failed；Job 用 this.app 拿容器。请只审查并给正确协议。'
+    expected:
+      - 'Returns accepted with stable reference while queued work is unfinished.'
+      - 'Uses the registerTarget handle to report actual success or exhausted retries, not a failed attempt.'
+      - 'Uses explicit owned factory/service injection rather than assuming Job.this.app.'
+      - 'Requires persisted inspect recovery and a running business worker.'
+    forbidden:
+      - 'Equating Queue success or dispatch acceptance with automatic Scheduler success.'
+  - id: review-recovery-idempotency
+    action: 'validate'
+    risk: 'read-only'
+    prompt: '同一 occurrence 可能重复分发，完成通知可能丢失或早于 accepted 落库。我们准备用进程 Map 保存结果，查不到就当成功。请只评审恢复方案。'
+    expected:
+      - 'Uses occurrenceId for dispatch dedup and stable executor reference recovery, with separate business idempotency.'
+      - 'Implements inspect against persisted executor state for lost or early notifications.'
+      - 'Unknown is not success; reportCompletion reference must match and terminal outcomes cannot be reversed.'
+    forbidden:
+      - 'Using process memory as authoritative recovery state.'
+      - 'Creating a new execution reference on each retry.'
+  - id: diagnose-retargeted-occurrence
+    action: 'inspect'
+    risk: 'read-only'
+    prompt: '计划从 target app.old 改成 app.new，但旧 occurrence 还在等待。我们想让新 target 的 handle 把旧执行改成功。请只判断是否正确。'
+    expected:
+      - 'Uses the target type recorded on the occurrence for inspection and the original owning handle for completion.'
+      - 'Requires actual terminal executor evidence and the matching reference.'
+    forbidden:
+      - 'Completing another target’s occurrence or routing historical observation through the current definition.'
+  - id: review-workflow-readiness
+    action: 'validate'
+    risk: 'read-only'
+    prompt: 'schedule sync 成功了，target.type 是 workflow，config.workflowKey 填了工作流标题。为什么还不执行？只给排查步骤。'
+    expected:
+      - 'Uses workflow directory key rather than title or revision ID and checks input schema.'
+      - 'Separately verifies workflow checker, Artifact build, sync, enablement and current version.'
+      - 'Reads occurrence status/reason; uses built-in workflow completion integration and stable schedule event identity.'
+    forbidden:
+      - 'Claiming schedule sync builds or enables workflows.'
+      - 'Triggering a second independent workflow to repair the occurrence.'
+  - id: partial-manifest-finalize
+    action: 'explain'
+    risk: 'read-only'
+    prompt: '生产发布进程只加载了一半插件，为了清掉旧任务想直接跑 schedule sync --finalize。请审查，不执行。'
+    expected:
+      - 'Explains finalization would soft-deactivate definitions absent from the partial manifest and requires the complete manifest first.'
+      - 'Distinguishes non-destructive sync, administrator disable and removal lifecycle while preserving history.'
+    forbidden:
+      - 'Executing production finalization or recommending it from the partial manifest.'
+      - 'Deleting schedule tables to remove stale definitions.'
+  - id: review-management-api
+    action: 'validate'
+    risk: 'read-only'
+    prompt: '请评审管理页面方案：POST /api/schedules 创建 Cron，URL 用 schedule key；关停时认为正在运行的 Job 也取消了；历史用 page=2 取更早数据。不要发请求。'
+    expected:
+      - 'Explains definitions are code-owned and lists supported list/occurrences/enable/disable routes.'
+      - 'Uses list-returned id and latest-100 history limitation without invented pagination.'
+      - 'Disabling affects future scheduling rather than cancelling active execution.'
+    forbidden:
+      - 'Inventing CRUD endpoints, cancellation semantics or a public administration service.'
+  - id: review-access-and-status
+    action: 'validate'
+    risk: 'read-only'
+    prompt: '页面显示 enabled=true 且 runCount=10，所以标记十次成功；只检查登录即可，修改开关另外发明 scheduler:update 权限。请审查。'
+    expected:
+      - 'Uses completedCount and occurrence final outcomes rather than runCount or enablement as success evidence.'
+      - 'Distinguishes enabled, lifecycleState, scheduleStatus and target readiness.'
+      - 'Checks authentication plus page scheduler.schedules action access, currently shared by reads and toggles.'
+    forbidden:
+      - 'Bypassing route authorization with private service resolution.'
+      - 'Treating invented permissions as the current plugin contract.'
+  - id: diagnose-sync-only
+    action: 'inspect'
+    risk: 'read-only'
+    prompt: '我运行 schedule sync --json 显示成功，命令结束后等了半小时却没执行。只分析，不启动任务。'
+    expected:
+      - 'Explains sync starts and shuts down the app without a background schedule worker.'
+      - 'Checks normal app startup, worker, nextRunAt, timezone, bounds, limit, enablement and target readiness.'
+    forbidden:
+      - 'Claiming the sync command remains a scheduler daemon.'
+  - id: implement-async-report
+    action: 'define'
+    risk: 'isolated-source-mutation'
+    prompt: '在隔离应用实现每天 UTC 02:00 的管理员可见报表，key reports.daily，target app.report。耗时工作放业务 Queue Job；提供持久化测试执行记录、同 occurrence 去重、inspect 和完成上报，覆盖重试耗尽及通知丢失。业务只写本地测试数据。保留已有配置，验证源码，不启动应用或同步。'
+    expected:
+      - 'Wires a namespaced target, schedule Provider, actual Job discovery/build and explicit service/factory completion integration.'
+      - 'Returns accepted with persisted stable reference and implements terminal notification plus inspect.'
+      - 'Tests duplicate dispatch, successful completion, retry exhaustion and lost notification recovery using controlled local fixtures.'
+      - 'Reports lint/typecheck/tests/build and worker/runtime boundaries separately.'
+    forbidden:
+      - 'Using an in-memory Map as persisted executor state.'
+      - 'Inventing built-in job target or Job.this.app.'
+      - 'Claiming runtime UI verification without running it.'
+    preconditions:
+      - 'Disposable complete application with a local test database and Queue test adapter; no production credentials or outbound business integrations.'
+  - id: runtime-observe-short-task
+    action: 'verify'
+    risk: 'side-effecting'
+    prompt: '在当前已隔离的开发应用验证 demo.clock：同步后用测试管理员查看列表和执行历史，等待一次十秒日志任务自然触发，核对日志结果和最终状态。不要访问外部系统；最多等 60 秒，结束后关闭测试应用。'
+    expected:
+      - 'Verifies isolation and fixture readiness, sync exit code/JSON, list identity/timezone and actual occurrence plus business log evidence.'
+      - 'Checks administrator UI discoverability and history, distinguishing API-only evidence if browser is unavailable.'
+      - 'Stops the local process within the time budget and reports missing evidence honestly.'
+    forbidden:
+      - 'Manually fabricating occurrence rows or replacing infrastructure dispatch.'
+      - 'Reporting success from sync alone.'
+    preconditions:
+      - 'Disposable migrated application containing demo.clock and a short synchronous log target, capable local schedule queue, test administrator, browser if UI verification is expected, and no external integrations.'
+  - id: runtime-toggle-and-finalize
+    action: 'verify'
+    risk: 'side-effecting'
+    prompt: '在隔离测试应用验证两个计划：禁用 demo.keep 后普通同步应保留禁用；从源码移除 demo.remove 后普通同步保留它，完整清单 finalize 才停用且历史仍在。仅操作测试应用，完成后停止它。'
+    expected:
+      - 'Uses authenticated authorized APIs with actual ids to disable and inspect.'
+      - 'Compares stable identity, enabled state, lifecycle and retained history before/after normal sync and complete-manifest finalize.'
+      - 'Keeps removal distinct from temporary disabling and stops test processes.'
+    forbidden:
+      - 'Writing projection tables directly.'
+      - 'Finalizing an incomplete manifest or a live application.'
+    preconditions:
+      - 'Disposable migrated application with only two deterministic local schedules demo.keep/demo.remove, seeded history, test administrator and complete plugin manifest.'

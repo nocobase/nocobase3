@@ -61,39 +61,48 @@ asynchronous target is being observed, then becomes `succeeded`, `failed`,
 ### 1. Declare the schedule
 
 Install `@nocobase/app-plugin-scheduler` as a peer and development dependency.
-Create a module owned by your plugin that default-exports an array of
-`defineSchedule()` results, then expose it from the Server plugin declaration:
+There is no Server plugin declaration field for schedules. Instead, resolve
+`schedulerServiceToken` and call `defineSchedule(definition)` from your
+Provider's `register()` or `boot()`, guarded the same way a target
+registration is guarded, since the scheduler plugin might not be installed:
 
 ```ts
-// server/schedules.ts
-import { defineSchedule } from '@nocobase/app-plugin-scheduler/server';
+// server/providers/customer-sync.ts
+import { schedulerServiceToken } from '@nocobase/app-plugin-scheduler/server/tokens';
+import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 
-export default [
-  defineSchedule({
-    key: 'daily-customer-sync', // stable identifier; do not change casually
-    title: 'Daily customer sync',
-    description: 'Starts the customer synchronization workflow.',
-    schedule: {
-      cron: '0 2 * * *',
-      timezone: 'UTC',
-      // Optional: from, to, and limit are inclusive / positive respectively.
-    },
-    enabled: true,
-    target: {
-      type: 'workflow',
-      config: { workflowKey: 'customer-sync', input: {} },
-    },
-  }),
-];
+export class CustomerSyncScheduleProvider {
+  public readonly name = '@acme/customer-sync';
+
+  constructor(private readonly app: AppPluginApplication) {}
+
+  async boot() {
+    if (!this.app.container.has(schedulerServiceToken)) return;
+    this.app.container.resolve(schedulerServiceToken).defineSchedule({
+      key: 'daily-customer-sync', // stable identifier; do not change casually
+      title: 'Daily customer sync',
+      description: 'Starts the customer synchronization workflow.',
+      schedule: {
+        cron: '0 2 * * *',
+        timezone: 'UTC',
+        // Optional: from, to, and limit are inclusive / positive respectively.
+      },
+      target: {
+        type: 'workflow',
+        config: { workflowKey: 'customer-sync', input: {} },
+      },
+    });
+  }
+}
 ```
 
-```ts
-// server/plugin.ts
-defineServerPlugin({
-  packageName: '@acme/customer-sync',
-  schedules: { definitions: './server/schedules' },
-});
-```
+`key` is an application-wide stable identifier and forms the schedule's
+persistent identity together with the application name. Use a namespaced key
+such as `sales.daily-report` when the application contains multiple business
+modules. Both `register()` and `boot()` run, across every plugin, before the
+scheduler reads what was registered during its own `start()`, so it does not
+matter which plugin's Provider runs first — only that `defineSchedule()` is
+called before `start()`.
 
 Keys must be stable identifiers. Cron expressions contain five or six fields
 and use an IANA timezone (for example `Asia/Singapore`) or `UTC`. `from` and
@@ -117,31 +126,32 @@ JSON object as `input`. The Workflow plugin validates the key and starts a
 workflow run with the schedule occurrence as its idempotency key. A disabled or
 missing workflow is shown as a target issue and will not run successfully.
 
-#### Code Job target
+#### Code target
 
-Use a Job only when the operation belongs in server code. The owning plugin
-must explicitly register an allowlisted Job with the Scheduler registry during
-its Provider `boot()` lifecycle. The registration validates the payload and
-returns either a synchronous completion or an accepted queue reference:
+Register your own target when the operation belongs in server code. The owning
+plugin registers it with the Scheduler service during its Provider `boot()`
+lifecycle, under a namespaced type of its own. The registration validates the
+config and returns either a synchronous completion or an accepted queue
+reference:
 
 ```ts
-import { jobDispatchRegistryToken } from '@nocobase/app-plugin-scheduler/server/tokens';
+import { schedulerServiceToken } from '@nocobase/app-plugin-scheduler/server/tokens';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 
 export class CustomerSyncProvider {
   constructor(private readonly app: AppPluginApplication) {}
 
   async boot() {
-    const jobs = this.app.container.resolve(jobDispatchRegistryToken);
-    jobs.register({
-      name: 'customer-sync',
+    const scheduler = this.app.container.resolve(schedulerServiceToken);
+    scheduler.registerTarget({
+      type: 'customer-sync',
       title: 'Customer sync',
-      validate: (payload) =>
-        payload && typeof payload === 'object'
+      validate: (config) =>
+        config && typeof config === 'object'
           ? { valid: true }
-          : { valid: false, reason: 'invalid-payload' },
-      async dispatch(payload, context) {
-        await runCustomerSync(payload, {
+          : { valid: false, reason: 'invalid-config' },
+      async start(config, context) {
+        await runCustomerSync(config, {
           idempotencyKey: context.occurrenceId,
         });
         return { state: 'completed', outcome: 'succeeded' };
@@ -151,19 +161,20 @@ export class CustomerSyncProvider {
 }
 ```
 
-The schedule then names the registered Job and its JSON payload:
+The schedule then names the registered target and its JSON config:
 
 ```ts
 target: {
-  type: 'job',
-  config: { jobName: 'customer-sync', payload: { full: false } },
+  type: 'customer-sync',
+  config: { full: false },
 }
 ```
 
-Do not expose arbitrary queue Job names. Queue-backed Jobs should use
-`context.occurrenceId` as their deduplication key and register one observer for
-the `queue-job` reference type so Scheduler can recover a missed completion
-notification after a worker failure.
+Do not let config select arbitrary queue Job names. A target that dispatches to
+a queue should use `context.occurrenceId` as its deduplication key and
+implement `inspect(reference)` so Scheduler can recover a missed completion
+notification after a worker failure. `registerTarget()` returns a handle whose
+`reportCompletion()` is how work that finishes later is reported back.
 
 ### 3. Verify a deployment
 
@@ -182,7 +193,7 @@ an overall status:
 - **Active** — enabled schedule with a usable target;
 - **Paused** — disabled schedule or paused queue projection;
 - **Inactive** — removed from the complete code manifest after `--finalize`;
-- **Target issue** — the workflow or Job is missing, disabled, or invalid.
+- **Target issue** — the target is missing, disabled, or invalid.
 
 Use search and the status/target filters to find a task. Select a task to open
 its details. The detail page shows the schedule definition, target summary,

@@ -152,7 +152,7 @@ const schedules = [
     scheduleStatus: 'paused',
     runCount: 2,
     completedCount: 0,
-    targetType: 'job',
+    targetType: 'cleanup',
     targetState: 'ready',
     targetSummary: { targetLabel: 'Cleanup job', state: 'ready' },
   },
@@ -294,7 +294,7 @@ describe('SchedulesPage', () => {
     expect(within(syncRow!).queryByText('Customer sync')).toBeNull();
     const cleanupRow = screen.getByText('Archive cleanup').closest('tr');
     expect(cleanupRow).not.toBeNull();
-    expect(within(cleanupRow!).getByText('Job')).toBeTruthy();
+    expect(within(cleanupRow!).getByText('cleanup')).toBeTruthy();
     expect(within(cleanupRow!).queryByText('Cleanup job')).toBeNull();
     expect(screen.queryByText('Synchronize active customers')).toBeNull();
 
@@ -325,10 +325,30 @@ describe('SchedulesPage', () => {
     );
     fireEvent.change(
       screen.getByRole('combobox', { name: 'Filter by target type' }),
-      { target: { value: 'job' } },
+      { target: { value: 'cleanup' } },
     );
     expect(screen.getByText('Archive cleanup')).toBeTruthy();
     expect(screen.queryByText('Daily customer sync')).toBeNull();
+  });
+
+  it('keeps long target type tags on one line in the list', async () => {
+    const longTargetSchedule = {
+      ...schedules[0],
+      id: 'schedule-long-target',
+      title: 'Server log report',
+      targetType: 'app.scheduled-log',
+    };
+    mocks.request.mockResolvedValueOnce({ data: [longTargetSchedule] });
+    const { container } = renderList();
+
+    const row = (await screen.findByText('Server log report')).closest('tr');
+    expect(row).not.toBeNull();
+    const tag = within(row!).getByText('app.scheduled-log');
+    expect(tag.className).toContain('whitespace-nowrap');
+    expect(tag.className).toContain('truncate');
+    expect(
+      container.querySelector('colgroup col:nth-child(2)')?.className,
+    ).toBe('w-[16%]');
   });
 
   it('links the task title to its dedicated detail page', async () => {

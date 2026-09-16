@@ -8,7 +8,6 @@ export {
   type AppServerPluginSnapshot,
   type AppServerProviderSnapshot,
   type AppServerRouteSnapshot,
-  type AppServerSchedulesSnapshot,
 } from './inspect.js';
 export {
   createAppDatabaseTaskContributions,
@@ -19,7 +18,6 @@ export {
   type ResolveAppServerPluginsOptions,
 } from './resolve.js';
 export type * from './types.js';
-export * from './schedules.js';
 
 import type { Hono } from 'hono';
 import type { ConfigPaths } from '../config/types.js';

@@ -26,9 +26,6 @@ export function defineServerPlugin<TConfig = object>(
             : undefined,
         })
       : undefined,
-    schedules: definition.schedules
-      ? Object.freeze({ ...definition.schedules })
-      : undefined,
     locales: definition.locales,
   });
 }

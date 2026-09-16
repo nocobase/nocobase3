@@ -28,7 +28,6 @@ const zhCN: SchedulerResource = {
       status: '状态',
     },
     targets: {
-      job: '作业',
       workflow: '工作流',
     },
     targetStates: {

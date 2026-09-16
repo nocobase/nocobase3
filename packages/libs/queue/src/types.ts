@@ -7,6 +7,9 @@ import type {
   JobOptions,
   QueueConfig,
   RetryConfig,
+  ScheduleConfig,
+  ScheduleData,
+  ScheduleListOptions,
   WorkerConfig,
 } from '@boringnode/queue/types';
 
@@ -138,6 +141,19 @@ export interface NocoBaseQueueWorker {
   stop(): Promise<void>;
 }
 
+export interface NocoBaseQueueScheduleStore {
+  upsert(config: ScheduleConfig): Promise<string>;
+  get(id: string): Promise<ScheduleData | null>;
+  list(options?: ScheduleListOptions): Promise<ScheduleData[]>;
+  update(
+    id: string,
+    updates: Partial<
+      Pick<ScheduleData, 'status' | 'nextRunAt' | 'lastRunAt' | 'runCount'>
+    >,
+  ): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 export interface NocoBaseQueueManager {
   init(): Promise<void>;
   use(name?: string): unknown;
@@ -152,6 +168,7 @@ export interface NocoBaseQueueManager {
     payloads: Array<T extends Job<infer P> ? P : never>,
     options?: Omit<QueueDispatchOptions, 'delay' | 'dedup'>,
   ): Promise<DispatchManyResult>;
+  schedules(queue?: string): NocoBaseQueueScheduleStore;
   createWorker(options?: AppQueueWorkerConfig): NocoBaseQueueWorker;
   close(): Promise<void>;
 }

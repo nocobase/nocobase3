@@ -11,7 +11,6 @@ import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import migration from '../database/migrations/202609020001_scheduler_create_definitions.js';
-import observationMigration from '../database/migrations/202609100001_scheduler_execution_observation.js';
 
 interface SqliteClient {
   readonly schema: { hasTable(name: string): Promise<boolean> };
@@ -42,7 +41,7 @@ describe('@nocobase/app-plugin-scheduler database', () => {
 
   afterEach(async () => database.destroy());
 
-  it('provides execution-observation migrations and no seeds', async () => {
+  it('provides the scheduler schema migration and no seeds', async () => {
     const migrationsDirectory = fileURLToPath(
       new URL('../database/migrations', import.meta.url),
     );
@@ -54,9 +53,6 @@ describe('@nocobase/app-plugin-scheduler database', () => {
       expect.arrayContaining([
         expect.objectContaining({
           name: '202609020001_scheduler_create_definitions',
-        }),
-        expect.objectContaining({
-          name: '202609100001_scheduler_execution_observation',
         }),
       ]),
     );
@@ -78,6 +74,70 @@ describe('@nocobase/app-plugin-scheduler database', () => {
     await expect(
       client.raw('PRAGMA index_list(queue_schedules)'),
     ).resolves.toEqual(expect.arrayContaining([expect.objectContaining({})]));
+    await expect(
+      client.raw('PRAGMA table_info(queue_schedules)'),
+    ).resolves.toEqual(
+      expect.arrayContaining(
+        [
+          'from_date',
+          'to_date',
+          'next_run_at',
+          'last_run_at',
+          'created_at',
+        ].map((name) => expect.objectContaining({ name, type: 'float' })),
+      ),
+    );
+    await expect(metadataStore.get('queueSchedules')).resolves.toMatchObject({
+      document: {
+        fields: {
+          nextRunAt: { type: 'double' },
+          lastRunAt: { type: 'double' },
+        },
+      },
+    });
+    for (const [name, fields] of Object.entries({
+      scheduleSyncLocks: ['createdAt', 'updatedAt'],
+      scheduleDefinitions: [
+        'fromDate',
+        'toDate',
+        'deactivatedAt',
+        'createdAt',
+        'updatedAt',
+      ],
+      scheduleOccurrences: [
+        'startedAt',
+        'lastStartedAt',
+        'acceptedAt',
+        'lastObservedAt',
+        'observationDeadlineAt',
+        'finishedAt',
+        'createdAt',
+        'updatedAt',
+      ],
+    })) {
+      await expect(metadataStore.get(name)).resolves.toMatchObject({
+        document: {
+          fields: Object.fromEntries(
+            fields.map((field) => [field, { type: 'datetimeTz' }]),
+          ),
+        },
+      });
+    }
+    const instant = '2026-09-17T08:00:00.123+08:00';
+    const locks = database.connection().repository('scheduleSyncLocks');
+    await locks.createOne({
+      values: {
+        appName: 'timezone-test',
+        createdAt: instant,
+        updatedAt: instant,
+      },
+    });
+    await expect(
+      locks.findOne({ filter: { appName: 'timezone-test' } }),
+    ).resolves.toMatchObject({
+      createdAt: '2026-09-17T00:00:00.123Z',
+      updatedAt: '2026-09-17T00:00:00.123Z',
+    });
     await expect(client.raw('PRAGMA table_info(queue_jobs)')).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'id', notnull: 1, pk: 1 }),
@@ -158,20 +218,10 @@ async function migrateUp(database: DatabaseManager): Promise<void> {
     query: connection.query,
     connection,
   });
-  await observationMigration.up({
-    builder: connection.builder,
-    query: connection.query,
-    connection,
-  });
 }
 
 async function migrateDown(database: DatabaseManager): Promise<void> {
   const connection = database.connection();
-  await observationMigration.down?.({
-    builder: connection.builder,
-    query: connection.query,
-    connection,
-  });
   await migration.down?.({
     builder: connection.builder,
     query: connection.query,

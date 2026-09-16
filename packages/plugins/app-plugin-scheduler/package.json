@@ -121,6 +121,7 @@
     "@types/react": "catalog:",
     "eslint": "catalog:",
     "jsdom": "catalog:",
+    "knex": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
     "react-router": "catalog:",

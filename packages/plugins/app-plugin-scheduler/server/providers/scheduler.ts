@@ -1,105 +1,73 @@
-import { pathToFileURL } from 'node:url';
-
+import { type AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
-  appScheduleDefinitionContributionsToken,
-  type AppPluginApplication,
-  type AppScheduleDefinitionContribution,
-} from '@nocobase/app-server/plugins';
-import {
-  type AppQueueConfig,
   queueJobFactoryRegistryToken,
   queueManagerToken,
 } from '@nocobase/app-server/queue';
 import { databaseManagerToken } from '@nocobase/db';
 import type { NocoBaseQueueWorker } from '@nocobase/queue';
-import { ServiceProvider } from '@nocobase/service-provider';
+import {
+  createServiceToken,
+  ServiceProvider,
+  type ServiceToken,
+} from '@nocobase/service-provider';
 
 import { ScheduleDispatchJob } from '../jobs/dispatch.js';
 import { ScheduleOccurrenceStore } from '../occurrences.js';
-import { DefaultSchedulerService } from '../services/scheduler.js';
-import type { NormalizedScheduleDefinition } from '../schedules/define.js';
-import {
-  JobDispatchRegistry,
-  createJobTarget,
-} from '../schedules/job-target.js';
 import { ScheduleTargetRegistry } from '../schedules/registry.js';
-import { ScheduleStore, type ScheduleManifestEntry } from '../store.js';
 import {
-  jobDispatchRegistryToken,
-  scheduleExecutionReporterToken,
-  scheduleOccurrenceStoreToken,
-  scheduleStoreToken,
-  scheduleTargetRegistryToken,
+  DefaultSchedulerService,
   schedulerServiceToken,
-  schedulerStartupModeToken,
-} from '../tokens.js';
+} from '../services/scheduler.js';
+import { ScheduleStore } from '../store.js';
+
+export interface SchedulerStartupMode {
+  readonly kind: 'sync-only';
+  readonly finalize: boolean;
+}
+
+/**
+ * Injected by `nb3 schedule:sync` before the application starts, so the CLI
+ * synchronizes the manifest without leaving a worker behind. It carries a
+ * startup switch rather than a service, and stays internal to this package.
+ */
+export const schedulerStartupModeToken: ServiceToken<SchedulerStartupMode> =
+  createServiceToken<SchedulerStartupMode>(
+    '@nocobase/app-plugin-scheduler/startup-mode',
+  );
+
+const DISPATCH_JOB_NAME: string =
+  ScheduleDispatchJob.options.name ?? ScheduleDispatchJob.name;
+
+interface SchedulerInternals {
+  readonly targets: ScheduleTargetRegistry;
+  readonly occurrences: ScheduleOccurrenceStore;
+  readonly service: DefaultSchedulerService;
+}
 
 export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-plugin-scheduler';
   private worker: NocoBaseQueueWorker | undefined;
   private workerCompletion: Promise<void> | undefined;
   private reconcileTimer: ReturnType<typeof setInterval> | undefined;
+  private internals: SchedulerInternals | undefined;
 
   public override register(): void {
-    this.app.container.singleton(
-      jobDispatchRegistryToken,
-      () => new JobDispatchRegistry(),
-    );
-    this.app.container.singleton(scheduleTargetRegistryToken, () => {
-      const registry = new ScheduleTargetRegistry();
-      registry.register(
-        createJobTarget(this.app.container.resolve(jobDispatchRegistryToken)),
-      );
-      return registry;
-    });
-    this.app.container.singleton(
-      scheduleOccurrenceStoreToken,
-      (container) =>
-        new ScheduleOccurrenceStore(container.resolve(databaseManagerToken)),
-    );
-    this.app.container
-      .resolve(jobDispatchRegistryToken)
-      .setCompletionReporter(() =>
-        this.app.container.resolve(scheduleOccurrenceStoreToken),
-      );
-    this.app.container.singleton(scheduleExecutionReporterToken, (container) =>
-      container.resolve(scheduleOccurrenceStoreToken),
-    );
-    this.app.container.singleton(
-      scheduleStoreToken,
-      (container) =>
-        new ScheduleStore(
-          container.resolve(databaseManagerToken),
-          this.app.appName,
-        ),
-    );
+    // One service reaches the container. The target registry, the job dispatch
+    // table and both stores are this provider's own parts, handed to whatever
+    // needs them instead of being resolvable by anyone holding the container.
     this.app.container.singleton(
       schedulerServiceToken,
-      (container) =>
-        new DefaultSchedulerService(
-          container.resolve(scheduleStoreToken),
-          container.resolve(scheduleTargetRegistryToken),
-          () => this.loadManifest(),
-        ),
+      () => this.compose().service,
     );
   }
 
   public override async boot(): Promise<void> {
-    const config = this.app.config.get<AppQueueConfig>('queue')!;
-    if (config.connections.database?.driver !== 'database')
-      throw new Error(
-        'Scheduler requires a Database Queue connection named "database".',
-      );
     this.app.container
       .resolve(queueJobFactoryRegistryToken)
-      .register(
-        ScheduleDispatchJob.options.name ?? ScheduleDispatchJob.name,
-        () =>
-          new ScheduleDispatchJob(
-            this.app.container.resolve(scheduleTargetRegistryToken),
-            this.app.container.resolve(scheduleOccurrenceStoreToken),
-          ),
-      );
+      .register(DISPATCH_JOB_NAME, () => {
+        const { targets, occurrences } = this.compose();
+        return new ScheduleDispatchJob(targets, occurrences);
+      });
     this.app.container
       .resolve(queueManagerToken)
       .registerJob(ScheduleDispatchJob);
@@ -111,23 +79,18 @@ export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
     const startupMode = this.app.container.resolveIfCreated(
       schedulerStartupModeToken,
     );
-    await this.app.container
-      .resolve(schedulerServiceToken)
-      .sync(startupMode?.finalize ?? false);
+    const scheduler = this.app.container.resolve(schedulerServiceToken);
+    await scheduler.sync(startupMode?.finalize ?? false);
     if (startupMode?.kind === 'sync-only') return;
     this.worker = queue.createWorker({
-      connection: 'database',
       queues: ['schedule'],
       concurrency: 1,
     });
     this.workerCompletion = this.worker.start();
     this.reconcileTimer = setInterval(() => {
-      void this.app.container
-        .resolve(scheduleOccurrenceStoreToken)
-        .reconcile(this.app.container.resolve(scheduleTargetRegistryToken))
-        .catch((error: unknown) => {
-          console.error('Scheduler occurrence reconciliation failed', error);
-        });
+      void scheduler.reconcileOccurrences().catch((error: unknown) => {
+        console.error('Scheduler occurrence reconciliation failed', error);
+      });
     }, 60_000);
     this.reconcileTimer.unref?.();
   }
@@ -140,47 +103,25 @@ export class SchedulerProvider extends ServiceProvider<AppPluginApplication> {
     this.workerCompletion = undefined;
     this.app.container
       .resolveIfCreated(queueJobFactoryRegistryToken)
-      ?.unregister(
-        ScheduleDispatchJob.options.name ?? ScheduleDispatchJob.name,
-      );
+      ?.unregister(DISPATCH_JOB_NAME);
   }
 
-  private async loadManifest(): Promise<readonly ScheduleManifestEntry[]> {
-    const contributions = this.app.container
-      .resolve(appScheduleDefinitionContributionsToken)
-      .list();
-    const entries: ScheduleManifestEntry[] = [];
-    for (const contribution of contributions)
-      entries.push(...(await loadContribution(contribution)));
-    return entries;
-  }
-}
-
-async function loadContribution(
-  contribution: AppScheduleDefinitionContribution,
-): Promise<readonly ScheduleManifestEntry[]> {
-  const module = (await import(pathToFileURL(contribution.location).href)) as {
-    default?: unknown;
-  };
-  if (!Array.isArray(module.default))
-    throw new Error(
-      `Schedule definitions from ${contribution.packageName} must default export an array.`,
+  private compose(): SchedulerInternals {
+    if (this.internals) return this.internals;
+    const container = this.app.container;
+    const database = container.resolve(databaseManagerToken);
+    const targets = new ScheduleTargetRegistry();
+    const occurrences = new ScheduleOccurrenceStore(database);
+    const store = new ScheduleStore(
+      database,
+      this.app.appName,
+      container.resolve(queueManagerToken).schedules('schedule'),
     );
-  return module.default.map((definition: unknown): ScheduleManifestEntry => {
-    if (!isNormalizedDefinition(definition))
-      throw new Error(
-        `Schedule definitions from ${contribution.packageName} must use defineSchedule().`,
-      );
-    return { owner: contribution.packageName, definition };
-  });
-}
-
-function isNormalizedDefinition(
-  value: unknown,
-): value is NormalizedScheduleDefinition {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { definitionHash?: unknown }).definitionHash === 'string'
-  );
+    this.internals = {
+      targets,
+      occurrences,
+      service: new DefaultSchedulerService(store, occurrences, targets),
+    };
+    return this.internals;
+  }
 }

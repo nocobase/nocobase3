@@ -5,13 +5,12 @@ const migration: MigrationDefinition = defineMigration({
   async up({ builder, connection }) {
     await builder.createCollection('scheduleSyncLocks', (collection) => {
       collection.string('appName', { primaryKey: true, nullable: false });
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
     });
     await builder.createCollection('scheduleDefinitions', (collection) => {
       collection.string('id', { primaryKey: true, nullable: false });
       collection.string('appName', { nullable: false });
-      collection.string('owner', { nullable: false });
       collection.string('key', { nullable: false });
       collection.string('sourceType', { nullable: false });
       collection.string('title', { nullable: false });
@@ -19,8 +18,8 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('definitionHash', { nullable: false });
       collection.string('cron', { nullable: false });
       collection.string('timezone', { nullable: false });
-      collection.datetime('fromDate');
-      collection.datetime('toDate');
+      collection.datetimeTz('fromDate');
+      collection.datetimeTz('toDate');
       collection.integer('runLimit');
       collection.boolean('enabled', { nullable: false, defaultValue: true });
       collection.string('targetType', { nullable: false });
@@ -30,16 +29,16 @@ const migration: MigrationDefinition = defineMigration({
         defaultValue: 'active',
       });
       collection.string('inactiveReason');
-      collection.datetime('deactivatedAt');
+      collection.datetimeTz('deactivatedAt');
       collection.string('syncStatus', {
         nullable: false,
         defaultValue: 'synced',
       });
       collection.text('syncError');
       collection.text('lastSeenManifest');
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
-      collection.unique(['appName', 'owner', 'key'], { mode: 'index' });
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
+      collection.unique(['appName', 'key'], { mode: 'index' });
     });
     await builder.createCollection('queueJobs', (collection) => {
       collection.string('id', { length: 255, nullable: false });
@@ -88,13 +87,25 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('cronExpression');
       collection.bigInt('everyMs');
       collection.string('timezone').notNull().defaultTo('UTC');
-      collection.datetime('fromDate');
-      collection.datetime('toDate');
+      // Knex binds SQLite Dates as epoch milliseconds. Numeric columns preserve
+      // that representation; TEXT would turn them into unparseable date strings.
+      // Use doubles because the driver reads bigint as text to preserve precision.
+      // Every valid Date millisecond value is an exactly representable integer.
+      if (connection.dialect === 'sqlite') {
+        collection.double('fromDate');
+        collection.double('toDate');
+        collection.double('nextRunAt');
+        collection.double('lastRunAt');
+        collection.double('createdAt').notNull();
+      } else {
+        collection.native('fromDate', 'timestamp');
+        collection.native('toDate', 'timestamp');
+        collection.native('nextRunAt', 'timestamp');
+        collection.native('lastRunAt', 'timestamp');
+        collection.native('createdAt', 'timestamp').notNull();
+      }
       collection.integer('runLimit');
       collection.integer('runCount').notNull().defaultTo(0);
-      collection.datetime('nextRunAt');
-      collection.datetime('lastRunAt');
-      collection.datetime('createdAt').notNull();
       collection.index(['status', 'nextRunAt']);
     });
     await builder.createCollection('scheduleOccurrences', (collection) => {
@@ -112,15 +123,24 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('reason');
       collection.string('targetType', { nullable: false });
       collection.json('targetReceipt');
+      collection.string('targetReferenceType');
+      collection.string('targetReferenceId');
+      collection.json('resultSummary');
       collection.integer('executionCount', {
         nullable: false,
         defaultValue: 1,
       });
-      collection.datetime('startedAt', { nullable: false });
-      collection.datetime('lastStartedAt', { nullable: false });
-      collection.datetime('finishedAt');
-      collection.datetime('createdAt', { nullable: false });
-      collection.datetime('updatedAt', { nullable: false });
+      collection.datetimeTz('startedAt', { nullable: false });
+      collection.datetimeTz('lastStartedAt', { nullable: false });
+      collection.datetimeTz('acceptedAt');
+      collection.datetimeTz('lastObservedAt');
+      collection.datetimeTz('observationDeadlineAt');
+      collection.datetimeTz('finishedAt');
+      collection.datetimeTz('createdAt', { nullable: false });
+      collection.datetimeTz('updatedAt', { nullable: false });
+      collection.index(['targetReferenceType', 'targetReferenceId'], {
+        name: 'schedule_occurrences_target_reference_idx',
+      });
     });
   },
   async down({ builder }) {

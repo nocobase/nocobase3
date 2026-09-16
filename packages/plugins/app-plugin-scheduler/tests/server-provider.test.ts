@@ -1,9 +1,5 @@
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
-  AppScheduleDefinitionContributions,
-  appScheduleDefinitionContributionsToken,
-} from '@nocobase/app-server/plugins';
-import {
   queueJobFactoryRegistryToken,
   queueManagerToken,
 } from '@nocobase/app-server/queue';
@@ -17,22 +13,28 @@ import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ScheduleDispatchJob } from '../server/jobs/dispatch.js';
-import { SchedulerProvider } from '../server/providers/scheduler.js';
-import { DefaultSchedulerService } from '../server/services/scheduler.js';
-import { ScheduleTargetRegistry } from '../server/schedules/registry.js';
 import {
-  jobDispatchRegistryToken,
-  scheduleOccurrenceStoreToken,
-  scheduleStoreToken,
-  scheduleTargetRegistryToken,
-  schedulerServiceToken,
+  SchedulerProvider,
   schedulerStartupModeToken,
-} from '../server/tokens.js';
+} from '../server/providers/scheduler.js';
+import {
+  DefaultSchedulerService,
+  schedulerServiceToken,
+} from '../server/services/scheduler.js';
 
 describe('@nocobase/app-plugin-scheduler', () => {
-  it('registers its service as a lazy singleton', () => {
+  it('registers exactly one service, as a lazy singleton', () => {
     const container = new ServiceContainer();
     container.instance(databaseManagerToken, {} as DatabaseManager);
+    container.instance(queueManagerToken, {
+      schedules: () => ({
+        upsert: vi.fn(),
+        get: vi.fn(),
+        list: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn(),
+      }),
+    } as NocoBaseQueueManager);
     const provider = new SchedulerProvider({
       appName: 'test',
       publicBasePath: '',
@@ -50,25 +52,12 @@ describe('@nocobase/app-plugin-scheduler', () => {
     const service = container.resolve(schedulerServiceToken);
     expect(service).toBeInstanceOf(DefaultSchedulerService);
     expect(container.resolve(schedulerServiceToken)).toBe(service);
-    expect(container.resolve(scheduleTargetRegistryToken)).toBeInstanceOf(
-      ScheduleTargetRegistry,
-    );
-    expect(
-      container.resolve(scheduleTargetRegistryToken).get('job'),
-    ).toBeDefined();
-    expect(container.resolve(jobDispatchRegistryToken)).toBeDefined();
-    expect(container.resolve(scheduleStoreToken)).toBeDefined();
-    expect(container.resolve(scheduleOccurrenceStoreToken)).toBeDefined();
-  });
-
-  it('fails boot without the required Database Queue connection', async () => {
-    const { provider } = lifecycleProvider({
-      connections: { database: { driver: 'redis' } },
-    });
-
-    await expect(provider.boot()).rejects.toThrow(
-      'requires a Database Queue connection named "database"',
-    );
+    // The registries and stores behind the service are the provider's own
+    // parts. Nothing else may be resolvable, or the plugin would be handing
+    // out more than the one service it means to expose.
+    expect(schedulerTokenNames(container)).toEqual([
+      '@nocobase/app-plugin-scheduler/service',
+    ]);
   });
 
   it('registers the bridge Job and syncs before starting its worker', async () => {
@@ -86,6 +75,10 @@ describe('@nocobase/app-plugin-scheduler', () => {
       'worker:start',
     ]);
     expect(service.sync).toHaveBeenCalledWith(false);
+    expect(queue.createWorker).toHaveBeenCalledWith({
+      queues: ['schedule'],
+      concurrency: 1,
+    });
   });
 
   it('runs finalize synchronization without creating a worker in sync-only mode', async () => {
@@ -108,12 +101,7 @@ describe('@nocobase/app-plugin-scheduler', () => {
   });
 });
 
-function lifecycleProvider(
-  queueConfigValue = {
-    connections: { database: { driver: 'database' } },
-  },
-  events: string[] = [],
-) {
+function lifecycleProvider(queueConfigValue = {}, events: string[] = []) {
   const container = new ServiceContainer();
   const worker = {
     id: 'scheduler-worker',
@@ -130,6 +118,13 @@ function lifecycleProvider(
     registerJob: vi.fn(),
     dispatch: vi.fn(),
     dispatchMany: vi.fn(),
+    schedules: vi.fn(() => ({
+      upsert: vi.fn(),
+      get: vi.fn(),
+      list: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    })),
     createWorker: vi.fn(() => {
       events.push('queue:create-worker');
       return worker;
@@ -142,16 +137,16 @@ function lifecycleProvider(
     sync: vi.fn(async (finalize = false) => {
       events.push(`scheduler:sync:${finalize}`);
     }),
+    reconcileOccurrences: vi.fn(async () => 0),
   };
   container.instance(
     queueJobFactoryRegistryToken,
     createQueueJobFactoryRegistry((JobClass) => new JobClass()),
   );
   container.instance(queueManagerToken, queue);
-  container.instance(schedulerServiceToken, service);
   container.instance(
-    appScheduleDefinitionContributionsToken,
-    new AppScheduleDefinitionContributions(),
+    schedulerServiceToken,
+    service as unknown as DefaultSchedulerService,
   );
   const provider = new SchedulerProvider({
     appName: 'test',
@@ -162,4 +157,17 @@ function lifecycleProvider(
     container,
   } satisfies AppPluginApplication);
   return { provider, container, queue, service, worker };
+}
+
+function schedulerTokenNames(container: ServiceContainer): string[] {
+  // ServiceContainer keys its bindings by the token object itself, so what the
+  // provider registered is read back from that map rather than probed token by
+  // token: the assertion is about what is *not* there.
+  const bindings = (
+    container as unknown as { bindings: Map<{ name: string }, unknown> }
+  ).bindings;
+  return [...bindings.keys()]
+    .map((token) => token.name)
+    .filter((name) => name.startsWith('@nocobase/app-plugin-scheduler/'))
+    .sort();
 }

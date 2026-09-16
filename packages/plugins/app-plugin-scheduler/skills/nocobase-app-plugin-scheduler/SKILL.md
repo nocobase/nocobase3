@@ -1,6 +1,6 @@
 ---
 name: nocobase-app-plugin-scheduler
-description: Develop scheduled tasks in NocoBase 3 that business administrators need to view and track through the application UI. Define schedules in code, choose ordinary Jobs or Workflow Jobs, integrate execution status, and extend target types. Do not use Scheduler to manage tasks that do not need UI visibility.
+description: Develop scheduled tasks in NocoBase 3 that business administrators need to view and track through the application UI. Define schedules in code, register the target a schedule points at, integrate execution status, and report completion. Do not use Scheduler to manage tasks that do not need UI visibility.
 metadata:
   short-description: Define scheduled tasks with administrator-facing execution history
 ---
@@ -19,29 +19,30 @@ Tasks that do not need to be viewed and tracked through the UI must not be manag
 
 After deciding to use Scheduler, choose according to business complexity:
 
-| Scenario                                                                                  | Choice             | Implementation boundary                                                                                    |
-| ----------------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| Periodic cleanup, cache refresh, a single report, or one business Service call            | Ordinary `job`     | Short operations may complete directly; dispatch lengthy, batch, or retryable work to a business Queue Job |
-| Staged processing, branches, persisted node state, or node-level diagnostics              | `workflow`         | Scheduler determines when to trigger; Workflow orchestrates the process and nodes call typed business code |
-| A simple operation that happens hourly                                                    | Ordinary `job`     | Cron alone is not a reason to introduce Workflow                                                           |
-| Immediate asynchronous execution or a one-time delay                                      | Queue              | No Cron Schedule is needed                                                                                 |
-| Another execution system with its own references, status queries, and completion protocol | Custom target type | Extend `ScheduleTargetRegistry`; a new business Job does not require a new target type                     |
+| Scenario                                                                                  | Choice          | Implementation boundary                                                                                    |
+| ----------------------------------------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------- |
+| Periodic cleanup, cache refresh, a single report, or one business Service call            | Own target type | Short operations may complete directly; dispatch lengthy, batch, or retryable work to a business Queue Job |
+| Staged processing, branches, persisted node state, or node-level diagnostics              | `workflow`      | Scheduler determines when to trigger; Workflow orchestrates the process and nodes call typed business code |
+| A simple operation that happens hourly                                                    | Own target type | Cron alone is not a reason to introduce Workflow                                                           |
+| Immediate asynchronous execution or a one-time delay                                      | Queue           | No Cron Schedule is needed                                                                                 |
+| Another execution system with its own references, status queries, and completion protocol | Own target type | The same `registerTarget()` call, with `inspect()` and completion reporting for work that finishes later   |
 
-Here, “Workflow Job” means `target.type: 'workflow'`, not an additional Queue Job wrapping a workflow. Ordinary Jobs do not depend on the Workflow plugin. Neither approach guarantees exactly-once external business effects; design business idempotency for both.
+Every schedule points at a registered target; `registerTarget()` is the target extension surface, and there is no built-in target type. `workflow` means `target.type: 'workflow'`, registered by the Workflow plugin, not an additional Queue Job wrapping a workflow. An application's own targets do not depend on the Workflow plugin. Neither approach guarantees exactly-once external business effects; design business idempotency for both.
 
 ## Read by Task
 
-- To create or change a schedule, read [Definitions, Registration, and Synchronization](references/definitions.md), including ordinary Job and Workflow declarations.
-- To add a business Job, integrate Queue, or extend target types, read [Target Extensions and Execution Protocol](references/targets.md).
-- To integrate the UI/API, verify behavior, or diagnose failures, read [Operations and Verification](references/operations.md).
+- To create or change a schedule, read [Definitions, Registration, and Synchronization](references/definitions.md), including application-owned and Workflow declarations.
+- To register or review a target, integrate Queue, report completion, or diagnose a historical occurrence after retargeting, read [Target Extensions and Execution Protocol](references/targets.md).
+- To integrate or review the UI/API and permissions, interpret status, or diagnose missing definitions, read [Operations and Verification](references/operations.md), including the complete management route table, separate status dimensions, and application identity checks.
+- To review Workflow readiness or recover a scheduled Workflow execution, read the Workflow integration section in [Definitions, Registration, and Synchronization](references/definitions.md); it covers built-in completion reporting and stable event identity.
 - To author the workflow itself, use the installed Workflow plugin's `nocobase-app-plugin-workflow` skill. Confirm supported Instructions instead of inventing nodes from business terminology.
 
 ## Development Loop
 
-1. Establish which tasks and execution records administrators need to see. Check Server/Client/CLI registration, page permissions, Database Queue configuration, and target availability, then choose `job` or `workflow`.
-2. Implement business logic and Providers in application source, declare a `defineSchedule()` array with stable keys, and register its module as a Server contribution.
-3. Validate payload/input, timezone, idempotency, and asynchronous completion reporting. Obtain credentials through secure business Service configuration, never `target.config`.
+1. Establish which tasks and execution records administrators need to see. Check Server/Client/CLI registration, page permissions, the application's `schedule` Queue connection, and target availability, then choose an application-owned target type or `workflow`.
+2. Implement business logic and Providers in application source, and call `schedulerServiceToken.defineSchedule(definition)` with an application-wide stable key from that Provider's `register()`/`boot()`.
+3. Validate payload/input, timezone, idempotency, and the full asynchronous chain: dispatch, actual business worker consumption, terminal notification, and recovery from persisted execution state. Obtain credentials through secure business Service configuration, never `target.config`.
 4. Run application type checks, relevant tests, and build. Synchronize definitions and, in development, use an administrator account to find the task in the UI and track a real execution to its final state. Confirm the business result.
 5. Report the schedule key, execution model, timezone, validation evidence, and unverified runtime boundaries. Use `--finalize` in production only when the complete manifest is visible.
 
-Schedules are defined in code. There is no management API for creating or editing Cron definitions, but the UI and API support enabling and disabling tasks. Do not modify `schedule_definitions`, `queue_schedules`, or `schedule_occurrences` directly, or replace the infrastructure `ScheduleDispatchJob`.
+Schedules are defined in code. There is no management API for creating or editing Cron definitions, but the UI and API support enabling and disabling tasks. Do not modify `schedule_definitions`, `schedule_occurrences`, or the Queue driver's schedule projection directly, or replace the infrastructure `ScheduleDispatchJob`.

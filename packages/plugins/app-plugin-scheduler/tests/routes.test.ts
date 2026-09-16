@@ -14,8 +14,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { apiRoutes } from '../server/routes/index.js';
 import {
   schedulerServiceToken,
-  type SchedulerService,
-} from '../server/tokens.js';
+  type DefaultSchedulerService,
+} from '../server/services/scheduler.js';
 
 describe('@nocobase/app-plugin-scheduler', () => {
   it('denies anonymous requests through its own authentication middleware', async () => {
@@ -94,7 +94,6 @@ async function createRouter(options: {
       {
         id: 'schedule-1',
         appName: 'test',
-        owner: 'owner',
         key: 'key',
         title: 'Schedule',
         cron: '* * * * *',
@@ -119,7 +118,7 @@ async function createRouter(options: {
       },
     ],
     sync: async () => {},
-  } satisfies SchedulerService);
+  } as unknown as DefaultSchedulerService);
   const router = await apiRoutes.createRouter({
     appName: 'test',
     publicBasePath: '',

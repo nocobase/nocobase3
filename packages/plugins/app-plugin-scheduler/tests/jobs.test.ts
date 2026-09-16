@@ -3,7 +3,6 @@ import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import migration from '../database/migrations/202609020001_scheduler_create_definitions.js';
-import observationMigration from '../database/migrations/202609100001_scheduler_execution_observation.js';
 import {
   ScheduleDispatchJob,
   type ScheduleDispatchPayload,
@@ -11,6 +10,8 @@ import {
 import { ScheduleOccurrenceStore } from '../server/occurrences.js';
 import { ScheduleOccurrenceError } from '../server/occurrences.js';
 import { ScheduleTargetRegistry } from '../server/schedules/registry.js';
+import { DefaultSchedulerService } from '../server/services/scheduler.js';
+import type { ScheduleStore } from '../server/store.js';
 
 describe('@nocobase/app-plugin-scheduler', () => {
   let database: DatabaseManager;
@@ -26,18 +27,12 @@ describe('@nocobase/app-plugin-scheduler', () => {
       query: connection.query,
       connection,
     });
-    await observationMigration.up({
-      builder: connection.builder,
-      query: connection.query,
-      connection,
-    });
     await database
       .query()
       .insertInto('schedule_definitions')
       .values({
         id: 'schedule-1',
         app_name: 'test',
-        owner: 'owner',
         key: 'key',
         source_type: 'code',
         title: 'Schedule',
@@ -57,11 +52,69 @@ describe('@nocobase/app-plugin-scheduler', () => {
 
   afterEach(async () => database.destroy());
 
-  it('declares the fixed Database bridge contract', () => {
+  it.each(['pending', 'running', 'unknown'] as const)(
+    'keeps observing %s targets beyond a legacy deadline and accepts later success',
+    async (state) => {
+      const occurrences = new ScheduleOccurrenceStore(database);
+      const registry = new ScheduleTargetRegistry();
+      const inspect = vi.fn(async () => ({
+        state,
+        reason: 'temporarily-unavailable',
+      }));
+      registry.register({
+        type: 'test',
+        title: 'Test',
+        validate: () => ({ valid: true }),
+        start: async () => ({ state: 'completed', outcome: 'succeeded' }),
+        inspect,
+      });
+      const reference = { type: 'workflow-run', id: 'run-1' };
+      await occurrences.start(
+        { scheduleId: 'schedule-1', occurrenceId: 'long-run' },
+        'hash',
+        'test',
+      );
+      await occurrences.wait('long-run', reference);
+      await database
+        .query()
+        .updateTable('schedule_occurrences')
+        .set({
+          observationDeadlineAt: new Date(Date.now() - 48 * 60 * 60 * 1000),
+        })
+        .where('id', '=', 'long-run')
+        .execute();
+      expect(await occurrences.reconcile(registry)).toBe(0);
+      await expect(
+        database
+          .query()
+          .selectFrom('schedule_occurrences')
+          .selectAll()
+          .where('id', '=', 'long-run')
+          .executeTakeFirst(),
+      ).resolves.toMatchObject({
+        status: 'waiting',
+        finishedAt: null,
+      });
+      await occurrences.complete('long-run', reference, {
+        status: 'succeeded',
+      });
+      await expect(
+        database
+          .query()
+          .selectFrom('schedule_occurrences')
+          .selectAll()
+          .where('id', '=', 'long-run')
+          .executeTakeFirst(),
+      ).resolves.toMatchObject({
+        status: 'succeeded',
+      });
+    },
+  );
+
+  it('declares a transport-independent schedule queue contract', () => {
     expect(ScheduleDispatchJob.options).toEqual({
       name: 'ScheduleDispatchJob',
       queue: 'schedule',
-      adapter: 'database',
       maxRetries: 0,
     });
   });
@@ -119,6 +172,58 @@ describe('@nocobase/app-plugin-scheduler', () => {
       targetReferenceId: 'job-2',
     });
     expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it('scopes a target handle to occurrences its own target started', async () => {
+    const occurrences = new ScheduleOccurrenceStore(database);
+    const scheduler = new DefaultSchedulerService(
+      // Reporting a completion never reads the schedule store.
+      {} as ScheduleStore,
+      occurrences,
+      new ScheduleTargetRegistry(),
+    );
+    const workflow = scheduler.registerTarget({
+      type: 'workflow',
+      title: 'Workflow',
+      validate: () => ({ valid: true }),
+      start: async () => ({ state: 'accepted', reference }),
+    });
+    const report = scheduler.registerTarget({
+      type: 'report',
+      title: 'Report',
+      validate: () => ({ valid: true }),
+      start: async () => ({ state: 'completed', outcome: 'succeeded' }),
+    });
+    const reference = { type: 'workflow-run', id: '7' };
+    await occurrences.start(
+      { scheduleId: 'schedule-1', occurrenceId: 'occurrence-scoped' },
+      'hash',
+      'workflow',
+    );
+    await occurrences.wait('occurrence-scoped', reference);
+
+    // Registering any target must not grant the power to complete another
+    // target's runs, even with a reference that otherwise matches the row.
+    await expect(
+      report.reportCompletion('occurrence-scoped', reference, {
+        status: 'succeeded',
+      }),
+    ).rejects.toMatchObject<Partial<ScheduleOccurrenceError>>({
+      code: 'REFERENCE_MISMATCH',
+    });
+    await expect(
+      workflow.reportCompletion('occurrence-scoped', reference, {
+        status: 'succeeded',
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      database
+        .query()
+        .selectFrom('schedule_occurrences')
+        .selectAll()
+        .where('id', '=', 'occurrence-scoped')
+        .executeTakeFirst(),
+    ).resolves.toMatchObject({ status: 'succeeded' });
   });
 
   it('requires Queue-provided occurrence context before writing history', async () => {

@@ -26,7 +26,7 @@ export default class ScheduleSync extends Command {
     const [{ resolveStandaloneAppRuntime }, { schedulerStartupModeToken }] =
       await Promise.all([
         import('@nocobase/app-server/node'),
-        import('../server/tokens.js'),
+        import('../server/providers/scheduler.js'),
       ]);
     const runtimeModule = await import(
       pathToFileURL(path.join(rootDir, 'server/runtime.js')).href

@@ -62,23 +62,44 @@ export interface ScheduleTargetType<TConfig extends JsonObject = JsonObject> {
   readonly type: string;
   readonly title: string;
   validate(config: unknown): TargetValidationResult;
-  describe(config: TConfig): Promise<ScheduleTargetSummary>;
   start(
     config: TConfig,
     context: ScheduleExecutionContext,
   ): Promise<ScheduleTargetStartResult>;
+  /** Defaults to the target's own title, in the ready state. */
+  describe?: (config: TConfig) => Promise<ScheduleTargetSummary>;
+  /** Required for asynchronous execution, so a lost notification recovers. */
   inspect?: ScheduleTargetObserver['inspect'];
   referenceHref?: (reference: ScheduleTargetReference) => string | undefined;
 }
 
+/**
+ * Returned by `SchedulerService.registerTarget()`. Reporting a terminal
+ * outcome is the one thing a target does *to* the scheduler rather than for
+ * it, so the capability is handed to whoever registered the target instead of
+ * being reachable by anything holding the service.
+ */
+export interface ScheduleTargetHandle {
+  readonly type: string;
+  reportCompletion(
+    occurrenceId: string,
+    reference: ScheduleTargetReference,
+    completion: ScheduleExecutionCompletion,
+  ): Promise<void>;
+}
+
 export class ScheduleTargetRegistry {
   private readonly targets = new Map<string, ScheduleTargetType>();
-  public register(target: ScheduleTargetType): void {
+  public register<TConfig extends JsonObject>(
+    target: ScheduleTargetType<TConfig>,
+  ): void {
     if (this.targets.has(target.type))
       throw new Error(
         `Schedule target type already registered: ${target.type}`,
       );
-    this.targets.set(target.type, target);
+    // The registry is heterogeneous: each target parses its own config out of
+    // the JSON a definition declared, which `validate()` is there to check.
+    this.targets.set(target.type, target as ScheduleTargetType);
   }
   public get(type: string): ScheduleTargetType | undefined {
     return this.targets.get(type);
@@ -96,9 +117,10 @@ export class ScheduleTargetRegistry {
     config: JsonObject,
   ): Promise<ScheduleTargetSummary> {
     const target = this.get(type);
-    return target
+    if (!target) return { targetLabel: type, state: 'missing' };
+    return target.describe
       ? target.describe(config)
-      : { targetLabel: type, state: 'missing' };
+      : { targetLabel: target.title, state: 'ready' };
   }
   public async start(
     type: string,

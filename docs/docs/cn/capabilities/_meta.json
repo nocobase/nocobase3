@@ -26,6 +26,11 @@
   },
   {
     "type": "file",
+    "name": "scheduler",
+    "label": "定时任务"
+  },
+  {
+    "type": "file",
     "name": "notification",
     "label": "通知"
   },
