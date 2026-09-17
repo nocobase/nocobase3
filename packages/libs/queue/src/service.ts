@@ -570,7 +570,13 @@ export function createQueueService(
         producersOpen = false;
         const timeout = new Error('Queue setup deadline exceeded');
         const cleanupDeadline = performance.now() + 5000;
-        const cleanup = closeEntries();
+        const cleanup = closeEntries().catch((error: unknown) => {
+          throw new AggregateError(
+            [timeout, error],
+            'Queue setup and cleanup failed',
+            { cause: timeout },
+          );
+        });
         if (!(await settlesWithin(cleanup, 5000))) {
           dependencies.logger?.error(
             { error: timeout },
