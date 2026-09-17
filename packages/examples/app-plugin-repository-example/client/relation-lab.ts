@@ -1,8 +1,5 @@
-import type {
-  ApiClient,
-  JsonValue,
-  RemoteSelectAst,
-} from '@nocobase/api-client';
+import type { ApiClient } from '@nocobase/app-client';
+import type { JsonValue, RemoteSelectAst } from '@nocobase/api-client';
 import {
   loadRelationProjectState,
   relationRepositories,
