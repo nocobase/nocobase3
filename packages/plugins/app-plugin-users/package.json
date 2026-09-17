@@ -84,7 +84,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/authorization": "workspace:^",
     "hono": "catalog:"
   },
   "peerDependencies": {
@@ -100,7 +99,8 @@
     "clsx": "catalog:",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@nocobase/authorization": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",

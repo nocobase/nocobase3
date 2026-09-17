@@ -73,7 +73,7 @@ Use `pnpm dev` during development. `pnpm build` followed by `pnpm start` runs a 
 ## Troubleshooting
 
 - **The directory already exists:** choose another name or continue inside the existing project. Do not delete an existing application just to retry.
-- **Dependency installation did not finish:** inspect the terminal error. If the project was generated, fix the issue inside it, rerun `pnpm install`, then run `pnpm plugin:skills:sync`.
+- **Dependency installation did not finish:** inspect the terminal error. If the project was generated, fix the issue inside it, rerun `pnpm install`, then run `pnpm skills:sync`.
 - **The URL does not open:** check that the terminal is still running and use its printed address. A browser on another machine requires appropriate port access.
 - **Type checking reports two versions of the same package:** check the dependency tree for multiple versions of the package. Run `pnpm dedupe` to merge compatible duplicate dependencies, then run type checking again.
 

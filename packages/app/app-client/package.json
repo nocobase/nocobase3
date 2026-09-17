@@ -60,12 +60,12 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^17.0.0",
-    "react-router": "^7.0.0"
+    "react-router": "^7.0.0",
+    "@nocobase/service-provider": "workspace:^"
   },
   "dependencies": {
     "@nocobase/api-client": "workspace:^",
-    "@nocobase/realtime": "workspace:^",
-    "@nocobase/service-provider": "workspace:^"
+    "@nocobase/realtime": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

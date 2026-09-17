@@ -40,7 +40,6 @@
   },
   "dependencies": {
     "@boringnode/queue": "catalog:",
-    "@nocobase/db": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "ioredis": "catalog:",
     "knex": "catalog:"
@@ -52,5 +51,8 @@
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/db": "workspace:^"
   }
 }
