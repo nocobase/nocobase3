@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat, readFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
+import { finished } from 'node:stream/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parseEnv } from 'node:util';
@@ -225,6 +226,12 @@ export async function publishToHub(
           })(),
         )
       : stream;
+    // Observe errors before fetch starts, including on an unconsumed config body.
+    const streamsFinished = Promise.allSettled(
+      [...new Set([stream, body])].map((uploadStream) =>
+        finished(uploadStream, { cleanup: true }),
+      ),
+    );
     let data: Record<string, unknown>;
     try {
       const init: RequestInit & { duplex: 'half' } = {
@@ -249,6 +256,9 @@ export async function publishToHub(
     } finally {
       body.destroy();
       stream.destroy();
+      // destroy() can return before the pending file open and close complete.
+      // Cleanup errors must not replace the classified Hub request result.
+      await streamsFinished;
     }
     if (!isIdentifier(data.releaseId))
       throw new PublishingError(
