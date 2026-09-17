@@ -69,6 +69,8 @@ export function DialogHeader({
  * so the primary action could only be reached by scrolling the whole dialog. Header and footer stay put and this
  * is what moves, which is also why it needs `min-h-0` — a flex child refuses to shrink below its content without
  * it, and the overflow would move back out to the popup.
+ *
+ * Padding and matching negative margins leave room for focus rings without shifting the content.
  */
 export function DialogBody({
   className,
@@ -77,7 +79,7 @@ export function DialogBody({
   return (
     <div
       data-slot='dialog-body'
-      className={cn('min-h-0 flex-1 overflow-y-auto', className)}
+      className={cn('-m-1 min-h-0 flex-1 overflow-y-auto p-1', className)}
       {...props}
     />
   );
