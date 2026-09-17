@@ -23,6 +23,49 @@ function fixture() {
 }
 
 describe('memory worker backend claim and wake protocol', () => {
+  it('runs a real rate-limited Worker again after its shared window expires', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('limited-worker', { connection: {} }, factory);
+    const times: number[] = [];
+    const worker = new Worker(
+      'limited-worker',
+      async () => {
+        times.push(Date.now());
+      },
+      { connection: {}, autorun: false },
+      factory,
+    );
+    worker.on('error', () => {});
+    let running: Promise<void> | undefined;
+    try {
+      await queue.setGlobalRateLimit(1, 150);
+      await queue.addBulk(['a', 'b'].map((name) => ({ name, data: {} })));
+      running = worker.run();
+      await expect.poll(() => times.length).toBe(2);
+      expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(140);
+    } finally {
+      await worker.close(true);
+      await running;
+      await queue.close();
+    }
+  });
+  it('enforces a shared rate window across two backend instances', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('limited', { connection: {} }, factory);
+    const options = { connection: {}, limiter: { max: 1, duration: 1000 } };
+    const first = factory('limited', options);
+    const second = factory('limited', options);
+    try {
+      await queue.addBulk(['a', 'b'].map((name) => ({ name, data: {} })));
+      expect((await first.moveToActive('first'))[1]).not.toBeNull();
+      const blocked = await second.moveToActive('second');
+      expect(blocked[0]).toBeNull();
+      expect(blocked[2]).toBeGreaterThan(0);
+      expect(blocked[2]).toBeLessThanOrEqual(1000);
+    } finally {
+      await Promise.all([queue.close(), first.close(), second.close()]);
+    }
+  });
   it('preserves active state on invalid delayed moves and supports skipAttempt plus fetchNext', async () => {
     const { queue, backend } = fixture();
     try {

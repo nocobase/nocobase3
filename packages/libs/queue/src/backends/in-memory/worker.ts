@@ -10,6 +10,8 @@ export class MemoryWorkerState {
   readonly stalled: Set<string> = new Set();
   readonly due: Map<string, number> = new Map();
   nextStalledCheck: number = 0;
+  rateCount: number = 0;
+  rateExpires: number = 0;
 
   notify(): void {
     for (const listener of [...this.listeners]) listener();
