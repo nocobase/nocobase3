@@ -19,6 +19,7 @@ import { requireDate } from '../../server/workflows/example-analytics-report/ser
 
 const root = path.resolve(import.meta.dirname, '../..');
 const temporary = mkdtempSync(path.join(tmpdir(), 'workflow-examples-'));
+const artifactRoot = path.join(temporary, 'artifacts');
 let server: StandaloneServer;
 let cookie = '';
 const ids = new Map<string, string>();
@@ -77,12 +78,16 @@ async function invoke(
   return run!;
 }
 
-beforeAll(async () => {
-  const artifactRoot = path.join(temporary, 'artifacts');
+// Each workflow builds a TypeScript program; CI runs this alongside other template suites.
+// Keep compilation separate so it cannot consume the server startup timeout.
+beforeAll(async function buildExampleArtifacts() {
   await buildApplicationWorkflows({
     sourceRoot: path.join(root, 'server/workflows'),
     distRoot: artifactRoot,
   });
+}, 120000);
+
+beforeAll(async function startExampleServer() {
   const configPath = path.join(temporary, 'config.yml');
   writeFileSync(
     configPath,
