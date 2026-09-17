@@ -488,7 +488,7 @@ export function createQueueService(
             >(
               physicalName,
               async (job, token, signal): Promise<void> => {
-                if (current.handlers.size() === 0) {
+                if (stopped || current.handlers.size() === 0) {
                   await job.moveToWait(token);
                   throw new WaitingError();
                 }
@@ -645,6 +645,11 @@ export function createQueueService(
       if (shutdownPromise) return shutdownPromise;
       stopped = true;
       shutdownPromise = (async (): Promise<void> => {
+        const paused = Promise.allSettled(
+          [...entries.values()].flatMap((current) =>
+            current.worker ? [current.worker.pause(true)] : [],
+          ),
+        );
         const drainDeadline = performance.now() + timeouts.shutdownTimeoutMs;
         const preparation = (async (): Promise<void> => {
           if (setupPromise) await setupPromise.catch(() => {});
@@ -667,6 +672,15 @@ export function createQueueService(
           timeouts.shutdownTimeoutMs,
         );
         const errors: unknown[] = [];
+        if (
+          await settlesWithin(
+            paused,
+            Math.max(0, drainDeadline - performance.now()),
+          )
+        ) {
+          for (const result of await paused)
+            if (result.status === 'rejected') errors.push(result.reason);
+        } else errors.push(new Error('Queue consumer pause deadline exceeded'));
         if (!prepared)
           errors.push(
             new Error('Queue shutdown preparation deadline exceeded'),

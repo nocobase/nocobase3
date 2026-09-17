@@ -346,3 +346,52 @@ it('reports late settlement of initialization left unresolved by shutdown', asyn
     vi.useRealTimers();
   }
 });
+
+it('stops fetching immediately even while shutdown waits for configuration', async () => {
+  const { vi } = await import('vitest');
+  const { createInMemoryBackendFactory } =
+    await import('../src/backends/in-memory/index.js');
+  const factory = createInMemoryBackendFactory();
+  const service = createQueueService({
+    namespace: 'stop-fetch',
+    queueBackend: 'test',
+  });
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered = false;
+  let stateOf: ((id: string) => Promise<string>) | undefined;
+  service.registerBackend('test', (...args) => {
+    const backend = factory(...args);
+    stateOf ??= backend.getState.bind(backend);
+    const setMeta = backend.setQueueMeta.bind(backend);
+    backend.setQueueMeta = async (values) => {
+      if (values.max !== undefined) {
+        entered = true;
+        await gate;
+      }
+      return setMeta(values);
+    };
+    return backend;
+  });
+  const handler = vi.fn();
+  service.consumer('jobs').consume(handler);
+  const producer = service.producer('jobs');
+  await service.setup();
+  const configuring = service
+    .manager('jobs')
+    .configure({ rateLimit: { max: 1, duration: 100 } });
+  await expect.poll(() => entered).toBe(true);
+  const closing = service.shutdown();
+  try {
+    const receipt = await producer.publish('later', {});
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(handler).not.toHaveBeenCalled();
+    await expect(stateOf?.(receipt.jobId)).resolves.toBe('waiting');
+  } finally {
+    release();
+    await configuring;
+    await closing;
+  }
+});
