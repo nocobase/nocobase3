@@ -122,6 +122,12 @@ function includeTemplateFile(
   if (relativePath.startsWith('server/locales/')) {
     return capabilities.server.locales;
   }
+  if (relativePath === 'server/providers/__NOCOBASE_SHORT_NAME__-jobs.ts') {
+    return capabilities.server.jobs;
+  }
+  if (relativePath === 'server/providers/index.ts') {
+    return capabilities.server.serviceProviders || capabilities.server.jobs;
+  }
   if (
     relativePath.startsWith('server/providers/') ||
     relativePath.startsWith('server/services/') ||
@@ -411,12 +417,8 @@ async function renderManifest(
     vitest: 'catalog:',
   };
 
-  // A plugin is loaded into an application that already provides the runtime, so anything carrying process-wide state
-  // — service tokens, React contexts, the queue's job registry — is declared as a peer and never installed by the
-  // plugin itself. The matching devDependency pins this repository's copy for development and tests, which the wide
-  // peer range deliberately does not. See AGENTS.md, "Depending on Identity-Sensitive Packages".
-  // Declared once. pnpm resolves a `workspace:` peer to this repository's copy without a devDependency, so the
-  // second declaration would only be another line to keep in step.
+  // The application supplies the shared runtime. Keep runtime peers declared once: pnpm resolves a `workspace:`
+  // peer to this repository's copy without a duplicate devDependency. See AGENTS.md, "Depending on Identity-Sensitive Packages".
   const addRuntimePeer = (packageName: string): void => {
     peerDependencies[packageName] = 'workspace:^';
   };
@@ -427,6 +429,7 @@ async function renderManifest(
   if (capabilities.database) addRuntimePeer('@nocobase/db');
   if (
     capabilities.server.serviceProviders ||
+    capabilities.server.jobs ||
     capabilities.client.serviceProviders
   )
     addRuntimePeer('@nocobase/service-provider');
@@ -580,7 +583,7 @@ function renderServerPlugin(
   capabilities: PluginCapabilities,
 ): string {
   const imports = [
-    capabilities.server.serviceProviders
+    capabilities.server.serviceProviders || capabilities.server.jobs
       ? "import serviceProviders from './providers/index.js';"
       : undefined,
     capabilities.server.routes
@@ -593,18 +596,40 @@ function renderServerPlugin(
     capabilities.server.locales
       ? "  locales: () => import('./locales/index.js'),"
       : undefined,
-    capabilities.server.serviceProviders ? '  serviceProviders,' : undefined,
+    capabilities.server.serviceProviders || capabilities.server.jobs
+      ? '  serviceProviders,'
+      : undefined,
     capabilities.server.routes ? '  routes,' : undefined,
     capabilities.database
       ? "  database: {\n    migrations: './database/migrations',\n    seeds: './database/seeds',\n  },"
-      : undefined,
-    capabilities.server.jobs
-      ? "  queue: { jobs: ['./server/jobs'] },"
       : undefined,
   ]
     .filter(Boolean)
     .join('\n');
   return `import { defineServerPlugin, type AppServerPlugin } from '@nocobase/app-server/plugins';\n${imports ? `\n${imports}\n` : ''}\nconst ${context.moduleName}Plugin: AppServerPlugin = defineServerPlugin({\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName}Plugin;\n`;
+}
+
+function renderServerProviders(
+  context: PluginTemplateContext,
+  capabilities: PluginCapabilities,
+): string {
+  const imports = [
+    capabilities.server.serviceProviders
+      ? `import { ${context.symbolName}Provider } from './${context.shortName}.js';`
+      : undefined,
+    capabilities.server.jobs
+      ? `import { ${context.symbolName}JobsProvider } from './${context.shortName}-jobs.js';`
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const providers = [
+    capabilities.server.serviceProviders && `${context.symbolName}Provider`,
+    capabilities.server.jobs && `${context.symbolName}JobsProvider`,
+  ]
+    .filter(Boolean)
+    .join(',\n');
+  return `import type { AppPluginProviderConstructor } from '@nocobase/app-server/plugins';\n\n${imports}\n\nexport const serviceProviders: readonly AppPluginProviderConstructor[] = [\n${providers}\n];\n\nexport default serviceProviders;\n`;
 }
 
 function renderPluginTest(
@@ -615,20 +640,23 @@ function renderPluginTest(
     capabilities.server.locales
       ? '      locales: expect.any(Function),'
       : undefined,
-    capabilities.server.serviceProviders
+    capabilities.server.serviceProviders || capabilities.server.jobs
       ? '      serviceProviders: expect.any(Array),'
       : undefined,
     capabilities.server.routes ? '      routes: expect.any(Array),' : undefined,
     capabilities.database
       ? "      database: { migrations: './database/migrations', seeds: './database/seeds' },"
       : undefined,
-    capabilities.server.jobs
-      ? "      queue: { jobs: ['./server/jobs'] },"
-      : undefined,
   ]
     .filter(Boolean)
     .join('\n');
-  return `import { describe, expect, it } from 'vitest';\n\nimport plugin from '../server/index.js';\n\ndescribe(${literal(context.packageName)}, () => {\n  it('declares only its selected Server capabilities', () => {\n    expect(plugin).toMatchObject({\n      packageName: ${literal(context.packageName)},\n${checks}\n    });\n  });\n});\n`;
+  const jobsImport = capabilities.server.jobs
+    ? `import { ${context.symbolName}JobsProvider } from '../server/providers/${context.shortName}-jobs.js';\n`
+    : '';
+  const jobsCheck = capabilities.server.jobs
+    ? `    expect(plugin.serviceProviders).toContain(${context.symbolName}JobsProvider);\n`
+    : '';
+  return `import { describe, expect, it } from 'vitest';\n\nimport plugin from '../server/index.js';\n${jobsImport}\ndescribe(${literal(context.packageName)}, () => {\n  it('declares only its selected Server capabilities', () => {\n    expect(plugin).toMatchObject({\n      packageName: ${literal(context.packageName)},\n${checks}\n    });\n    expect(plugin).not.toHaveProperty('queue.jobs');\n${jobsCheck}  });\n});\n`;
 }
 
 function renderReadme(
@@ -654,7 +682,10 @@ function renderReadme(
     selected.length > 0
       ? selected.map((value) => `- \`${value}\``).join('\n')
       : '- Package foundation only';
-  return `# ${context.packageName}\n\n${context.description}\n\n## Generated capabilities\n\n${list}\n\nImplement only the public behavior this plugin owns. Keep declarations, exports, dependencies, tests, README, and Plugin Skills aligned when capabilities change. Every concrete Server Route must own and test its authentication and authorization boundary.\n\n## Verification\n\n\`\`\`bash\npnpm --filter ${context.packageName} lint\npnpm --filter ${context.packageName} typecheck\npnpm --filter ${context.packageName} test\npnpm --filter ${context.packageName} build\n\`\`\`\n`;
+  const jobsGuide = capabilities.server.jobs
+    ? `\n## Background jobs\n\nThe App must register its core \`QueueServiceProvider\` before this plugin's Providers. The core Provider owns setup in \`start()\` and shared queue shutdown. This plugin registers its instance handler in \`boot()\` and awaits unregister in \`shutdown()\` before releasing handler dependencies. There is no Job class or directory discovery.\n\n\`server/jobs/${context.shortName}.ts\` owns the stable queue/channel names, serializable payload, channel filtering, cancellation check, and \`publish${context.symbolName}(container, payload)\` producer. Call the producer only after App startup; it resolves the original \`queueServiceToken\` and returns a receipt, not a completed business result. The generated handler validates the message but intentionally has no domain side effect yet. Add an idempotent domain operation and honor its abort signal before exposing it. HTTP callers must enforce their own authentication and authorization.\n\nNo queue configuration means app-scoped in-memory storage, which loses messages on restart. Configure a durable backend in the App when required. Tests use a real in-memory QueueService, await setup and observable handler settlement, then unregister before shutdown; publishing is never assumed to execute synchronously.\n`
+    : '';
+  return `# ${context.packageName}\n\n${context.description}\n\n## Generated capabilities\n\n${list}\n\nImplement only the public behavior this plugin owns. Keep declarations, exports, dependencies, tests, README, and Plugin Skills aligned when capabilities change. Every concrete Server Route must own and test its authentication and authorization boundary.\n\n${jobsGuide}\n## Verification\n\n\`\`\`bash\npnpm --filter ${context.packageName} lint\npnpm --filter ${context.packageName} typecheck\npnpm --filter ${context.packageName} test\npnpm --filter ${context.packageName} build\n\`\`\`\n`;
 }
 
 function renderSkill(
@@ -675,7 +706,7 @@ function renderSkill(
     capabilities.server.routes &&
       '- Server routes: document every implemented method and path, plus its authentication and authorization boundary.',
     capabilities.server.jobs &&
-      '- Server jobs: document how each job is triggered, required payloads, retry behavior, and observable results.',
+      '- Server jobs: document the App-owned QueueServiceProvider prerequisite, stable queue/channel names, producer entry, serializable payloads, retry/idempotency behavior, awaited handler unregistration, and observable asynchronous results.',
     capabilities.database &&
       '- Database: document only App-visible schema prerequisites and lifecycle constraints; do not copy migration implementation details.',
     capabilities.registry &&
@@ -747,14 +778,19 @@ export async function renderTemplate(options: {
                 ? renderClientPlugin(options.context, options.capabilities)
                 : file.outputPath === 'server/plugin.ts'
                   ? renderServerPlugin(options.context, options.capabilities)
-                  : file.outputPath === 'tests/plugin.test.ts'
-                    ? renderPluginTest(options.context, options.capabilities)
-                    : file.outputPath.startsWith('skills/')
-                      ? renderSkill(options.context, options.capabilities)
-                      : renderTemplateValue(
-                          await readFile(file.sourcePath, 'utf8'),
-                          options.context,
-                        );
+                  : file.outputPath === 'server/providers/index.ts'
+                    ? renderServerProviders(
+                        options.context,
+                        options.capabilities,
+                      )
+                    : file.outputPath === 'tests/plugin.test.ts'
+                      ? renderPluginTest(options.context, options.capabilities)
+                      : file.outputPath.startsWith('skills/')
+                        ? renderSkill(options.context, options.capabilities)
+                        : renderTemplateValue(
+                            await readFile(file.sourcePath, 'utf8'),
+                            options.context,
+                          );
     const contents = await formatRenderedSource(renderedContents, outputPath);
 
     await mkdir(path.dirname(targetPath), { recursive: true });

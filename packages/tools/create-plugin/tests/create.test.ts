@@ -17,6 +17,36 @@ afterEach(async () => {
 });
 
 describe('runCreatePluginCli', () => {
+  it('attributes jobs-only Provider files to the selected capability', async () => {
+    const repoRoot = await mkdtemp(
+      path.join(os.tmpdir(), 'create-plugin-cli-'),
+    );
+    created.push(repoRoot);
+    await mkdir(path.join(repoRoot, 'packages/plugins'), { recursive: true });
+    const output: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk): boolean => {
+      output.push(String(chunk));
+      return true;
+    });
+    expect(
+      await runCreatePluginCli({
+        argv: ['audit-log', '--with', 'server.jobs', '--dry-run', '--json'],
+        binary: 'pnpm plugin:create',
+        repoRoot,
+        version: '0.0.1',
+      }),
+    ).toBe(0);
+    const result = JSON.parse(output.join('')) as {
+      files: Array<{ path: string; reason: string }>;
+    };
+    expect(result.files).toEqual(
+      expect.arrayContaining([
+        { path: 'server/providers/index.ts', reason: 'server.jobs' },
+        { path: 'server/providers/audit-log-jobs.ts', reason: 'server.jobs' },
+      ]),
+    );
+  });
+
   it('prints a stable, read-only JSON generation plan', async () => {
     const repoRoot = await mkdtemp(
       path.join(os.tmpdir(), 'create-plugin-cli-'),

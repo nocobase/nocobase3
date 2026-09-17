@@ -37,9 +37,17 @@ Before adding a client package, check whether `packages/templates/app-template-d
 
 ### Runtime packages are peers, never dependencies
 
-`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
+`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, and every other `@nocobase/app-plugin-*` carry identity-sensitive state — service tokens compared by object identity or React contexts. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
 
 Declare each as a `peerDependency` — the published contract: "provide this, and provide exactly one". One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces this. The generator already emits this shape for the capabilities you selected.
+
+## Background jobs
+
+The `server.jobs` capability uses the App's shared `QueueService`, resolved through the original `queueServiceToken` from `@nocobase/app-server/queue`. `@nocobase/queue` no longer has a global Job locator or an identity-keyed token; its application-provided peer aligns the host queue contract rather than preventing module identity splitting. The token belongs to the identity-sensitive `@nocobase/app-server` package. Do not create a private queue service or a second token inside the plugin.
+
+Register the core `QueueServiceProvider` before plugin Providers. Register an instance consumer handler during the plugin Provider's `boot()`, save its unregister function, and await it in `shutdown()` before releasing handler dependencies. Only the core Provider calls queue setup during `start()` and shuts down the shared service. Do not contribute `queue.jobs`, extend `Job`, or scan directories for handlers.
+
+Publish serializable messages through `queue.producer(queueName).publish(channel, payload)` after startup. Keep queue/channel names stable, filter channels explicitly, validate messages, honor cancellation, and make domain side effects idempotent for retries. A publish receipt is not proof of completed work. Tests must use real in-memory QueueService setup, await an observable handler result, and unregister before closing the service. The default in-memory backend loses messages on restart; durable configuration belongs to the App.
 
 ## Contributing CLI commands
 

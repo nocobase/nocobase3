@@ -1,5 +1,6 @@
 import { formatHelp, parseCreatePluginArgs } from './lib/flags.ts';
 import { createPlugin } from './lib/scaffold.ts';
+import type { PluginCapabilities } from './lib/capabilities.ts';
 
 export { parseCreatePluginArgs } from './lib/flags.ts';
 export { createPlugin } from './lib/scaffold.ts';
@@ -73,7 +74,19 @@ function classifyCreatePluginError(error: unknown): JsonCliError {
   };
 }
 
-function capabilityReason(file: string): string {
+function capabilityReason(
+  file: string,
+  capabilities: PluginCapabilities,
+  shortName: string,
+): string {
+  if (file.startsWith('server/providers/') && capabilities.server.jobs) {
+    if (
+      file === `server/providers/${shortName}-jobs.ts` ||
+      (file === 'server/providers/index.ts' &&
+        !capabilities.server.serviceProviders)
+    )
+      return 'server.jobs';
+  }
   if (file.startsWith('database/')) return 'database';
   if (file.startsWith('server/locales/')) return 'server.locales';
   if (
@@ -180,7 +193,11 @@ export async function runCreatePluginCli(
             },
             files: result.files.map((file) => ({
               path: file,
-              reason: capabilityReason(file),
+              reason: capabilityReason(
+                file,
+                result.capabilities,
+                result.shortName,
+              ),
             })),
             writes: input.flags.dryRun ? [] : result.files,
             commands:

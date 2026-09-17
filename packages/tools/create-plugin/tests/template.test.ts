@@ -54,7 +54,9 @@ const capabilityFiles: Readonly<Record<PluginCapability, readonly string[]>> = {
   'server.jobs': [
     'server/index.ts',
     'server/jobs/__NOCOBASE_SHORT_NAME__.ts',
+    'server/providers/__NOCOBASE_SHORT_NAME__-jobs.ts',
     'server/plugin.ts',
+    'server/providers/index.ts',
     'tests/jobs.test.ts',
     'tests/plugin.test.ts',
   ],
@@ -118,6 +120,29 @@ function expectExactFiles(
 }
 
 describe('bundled capability templates', () => {
+  it('keeps the static jobs templates aligned with explicit Provider composition', async () => {
+    const plugin = await readFile(
+      path.join(DEFAULT_TEMPLATE_DIRECTORY, 'server/plugin.ts'),
+      'utf8',
+    );
+    const job = await readFile(
+      path.join(
+        DEFAULT_TEMPLATE_DIRECTORY,
+        'server/jobs/__NOCOBASE_SHORT_NAME__.ts',
+      ),
+      'utf8',
+    );
+    const providers = await readFile(
+      path.join(DEFAULT_TEMPLATE_DIRECTORY, 'server/providers/index.ts'),
+      'utf8',
+    );
+    expect(plugin).not.toContain('queue:');
+    expect(plugin).toContain('serviceProviders,');
+    expect(job).not.toContain('extends Job');
+    expect(job).not.toContain('JobOptions');
+    expect(providers).toContain('__NOCOBASE_SYMBOL_NAME__JobsProvider,');
+  });
+
   it('selects only the package foundation for an empty plugin', async () => {
     await expect(
       listTemplateFiles(
@@ -220,6 +245,7 @@ describe('bundled capability templates', () => {
       'data-oriented',
       ['database', 'server.service-providers', 'server.routes'],
     ],
+    ['jobs and services', ['server.jobs', 'server.service-providers']],
     ['App Agent integration', ['server.routes', 'skills']],
     ['editable UI distribution', ['client.components', 'registry']],
   ] as const)('composes the exact %s file set', async (_name, capabilities) => {

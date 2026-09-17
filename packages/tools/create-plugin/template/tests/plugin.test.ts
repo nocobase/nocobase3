@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { __NOCOBASE_SYMBOL_NAME__JobsProvider } from '../server/providers/__NOCOBASE_SHORT_NAME__-jobs.js';
 import { __NOCOBASE_SYMBOL_NAME__Provider } from '../server/providers/__NOCOBASE_SHORT_NAME__.js';
 import serviceProviders from '../server/providers/index.js';
 import routes from '../server/routes/index.js';
@@ -18,8 +19,7 @@ describe(__NOCOBASE_PACKAGE_NAME_LITERAL__, () => {
       migrations: './database/migrations',
       seeds: './database/seeds',
     });
-    expect(__NOCOBASE_MODULE_NAME__Plugin.queue).toEqual({
-      jobs: ['./server/jobs'],
-    });
+    expect(serviceProviders).toContain(__NOCOBASE_SYMBOL_NAME__JobsProvider);
+    expect(__NOCOBASE_MODULE_NAME__Plugin).not.toHaveProperty('queue.jobs');
   });
 });

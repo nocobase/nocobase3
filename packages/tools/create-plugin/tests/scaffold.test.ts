@@ -113,7 +113,7 @@ describe('createPlugin', () => {
       'server.jobs',
       ['./package.json', './server'],
       [],
-      ['@nocobase/app-server', '@nocobase/queue'],
+      ['@nocobase/app-server', '@nocobase/queue', '@nocobase/service-provider'],
     ],
     [
       'server.locales',
@@ -431,7 +431,7 @@ describe('createPlugin', () => {
     expect(manifest.exports).not.toHaveProperty('./server/tokens');
   });
 
-  it('generates a stable package-scoped Queue Job identity', async () => {
+  it('generates an instance consumer Provider instead of legacy job scanning', async () => {
     const result = await createWith(['server.jobs']);
     const job = await readFile(
       path.join(result.targetDirectory, 'server/jobs/audit-log.ts'),
@@ -442,9 +442,29 @@ describe('createPlugin', () => {
       'utf8',
     );
 
-    expect(job).toContain("name: '@nocobase/app-plugin-audit-log/audit-log'");
-    expect(job).not.toContain('AuditLogJob.name');
-    expect(test).toContain("name: '@nocobase/app-plugin-audit-log/audit-log'");
+    const plugin = await readFile(
+      path.join(result.targetDirectory, 'server/plugin.ts'),
+      'utf8',
+    );
+    expect(plugin).not.toContain('queue:');
+    expect(plugin).toContain('serviceProviders,');
+    expect(job).not.toContain('extends Job');
+    expect(job).toContain("'@nocobase/app-plugin-audit-log/audit-log'");
+    expect(job).toContain('queue.producer(');
+    expect(job).toContain('.publish(');
+    expect(test).toContain('createQueueService');
+    expect(test).toContain('await queue.setup()');
+    expect(test).toContain('expect.poll');
+    expect(result.files).toContain('server/providers/audit-log-jobs.ts');
+    expect(result.files).not.toContain('server/tokens.ts');
+    const provider = await readFile(
+      path.join(result.targetDirectory, 'server/providers/audit-log-jobs.ts'),
+      'utf8',
+    );
+    expect(provider).toContain('queueServiceToken');
+    expect(provider).toContain('override async boot()');
+    expect(provider).toContain('await this.unregister?.()');
+    expect(provider).not.toContain('queue.shutdown()');
   });
 
   it('maps selected Client entries without inventing routes or providers', async () => {
