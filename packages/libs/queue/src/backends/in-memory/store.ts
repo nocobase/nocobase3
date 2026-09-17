@@ -41,7 +41,7 @@ export class InMemoryQueueStore {
       name: input.name,
       data,
       options,
-      state: 'waiting',
+      state: (options.delay ?? 0) > 0 ? 'delayed' : 'waiting',
       timestamp: Date.now(),
     };
     this.jobs.set(id, record);

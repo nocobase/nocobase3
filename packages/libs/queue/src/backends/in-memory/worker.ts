@@ -29,6 +29,7 @@ export class MemoryWaiter {
   wait(
     seconds: number,
     available: () => string | undefined,
+    nextDue: () => number | undefined = () => undefined,
   ): Promise<{ member: string; score: number } | null> {
     if (this.disconnected) return Promise.resolve(null);
     const ready = available();
@@ -41,15 +42,26 @@ export class MemoryWaiter {
         this.cancellations.delete(cancel);
         resolve(member === undefined ? null : { member, score: 0 });
       };
+      const deadline = Date.now() + seconds * 1000;
+      let timer: ReturnType<typeof setTimeout> | undefined;
       const wake = (): void => {
+        clearTimeout(timer);
         const member = available();
-        if (member !== undefined) finish(member);
+        if (member !== undefined) {
+          finish(member);
+          return;
+        }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          finish();
+          return;
+        }
+        const due = nextDue();
+        const delay =
+          due === undefined ? remaining : Math.min(remaining, due - Date.now());
+        timer = setTimeout(wake, Math.min(2147483647, Math.max(1, delay)));
       };
       const cancel = (): void => finish();
-      const timer = setTimeout(
-        cancel,
-        Math.min(2147483647, Math.max(1, seconds * 1000)),
-      );
       this.state.listeners.add(wake);
       this.cancellations.add(cancel);
       wake();
