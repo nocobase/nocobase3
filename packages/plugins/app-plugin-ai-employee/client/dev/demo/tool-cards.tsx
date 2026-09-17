@@ -229,7 +229,9 @@ export function ToolCardsPage() {
 
       <section className='space-y-5'>
         <SectionTitle
-          eyebrow='Specialized renderers'
+          eyebrow={translateDemo('demo.specializedRenderers', {
+            defaultValue: 'Specialized renderers',
+          })}
           title={translateDemo('demo.toolCardsTitle', {
             defaultValue:
               'Adapt NocoBase tool results to the job they represent',
@@ -281,7 +283,9 @@ export function ToolCardsPage() {
 
       <section className='space-y-5'>
         <SectionTitle
-          eyebrow='Default Tool Card'
+          eyebrow={translateDemo('demo.defaultToolCard', {
+            defaultValue: 'Default Tool Card',
+          })}
           title={translateDemo('demo.toolShellTitle', {
             defaultValue: 'One shared shell for every normal tool state',
           })}
@@ -334,7 +338,9 @@ export function ToolCardsPage() {
 
       <section className='space-y-5'>
         <SectionTitle
-          eyebrow='Code prompt'
+          eyebrow={translateDemo('demo.codePrompt', {
+            defaultValue: 'Code prompt',
+          })}
           title={translateDemo('demo.toolPromptTitle', {
             defaultValue:
               'Generate an implementation prompt for a specialized Tool Card',

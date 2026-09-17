@@ -302,7 +302,9 @@ function AIChatPageContent({
 
         <section className='space-y-5'>
           <SectionTitle
-            eyebrow='Container patterns'
+            eyebrow={translateDemo('demo.containerPatterns', {
+              defaultValue: 'Container patterns',
+            })}
             title={translateDemo('demo.containersTitle', {
               defaultValue:
                 'Use the same conversation window wherever the product needs it',
@@ -338,7 +340,9 @@ function AIChatPageContent({
 
         <section className='space-y-5'>
           <SectionTitle
-            eyebrow='Prompt generator'
+            eyebrow={translateDemo('demo.promptGenerator', {
+              defaultValue: 'Prompt generator',
+            })}
             title={translateDemo('demo.promptGeneratorTitle', {
               defaultValue:
                 'Describe where chat belongs, then copy an implementation prompt',
@@ -353,7 +357,9 @@ function AIChatPageContent({
 
         <section className='space-y-5'>
           <SectionTitle
-            eyebrow='Component API'
+            eyebrow={translateDemo('demo.componentApi', {
+              defaultValue: 'Component API',
+            })}
             title={translateDemo('demo.chatSurfaceProps', {
               defaultValue: 'ChatSurface props',
             })}
@@ -367,7 +373,9 @@ function AIChatPageContent({
 
         <section className='space-y-5'>
           <SectionTitle
-            eyebrow='Component API'
+            eyebrow={translateDemo('demo.componentApi', {
+              defaultValue: 'Component API',
+            })}
             title={translateDemo('demo.chatWindowProps', {
               defaultValue: 'AIChatWindow props',
             })}

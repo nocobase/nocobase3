@@ -71,7 +71,9 @@ function PageContextPageContent() {
       />
 
       <ContextSection
-        eyebrow='Manual context'
+        eyebrow={translateDemo('demo.manualContext', {
+          defaultValue: 'Manual context',
+        })}
         title={translateDemo('demo.contextPickerTitle', {
           defaultValue: 'Pick page context while composing a message',
         })}
@@ -84,7 +86,9 @@ function PageContextPageContent() {
       </ContextSection>
 
       <ContextSection
-        eyebrow='Task context · Shortcut'
+        eyebrow={translateDemo('demo.shortcutContext', {
+          defaultValue: 'Task context · Shortcut',
+        })}
         title={translateDemo('demo.shortcutContextTitle', {
           defaultValue: 'Reference page context from a Shortcut task',
         })}
@@ -97,7 +101,9 @@ function PageContextPageContent() {
       </ContextSection>
 
       <ContextSection
-        eyebrow='Task context · Conversation preset'
+        eyebrow={translateDemo('demo.presetContext', {
+          defaultValue: 'Task context · Conversation preset',
+        })}
         title={translateDemo('demo.presetContextTitle', {
           defaultValue:
             'Reference page context from a conversation preset task',
@@ -111,7 +117,9 @@ function PageContextPageContent() {
       </ContextSection>
 
       <ContextSection
-        eyebrow='Task context · Scope inheritance'
+        eyebrow={translateDemo('demo.scopeContext', {
+          defaultValue: 'Task context · Scope inheritance',
+        })}
         title={translateDemo('demo.scopeTitle', {
           defaultValue: 'Inherit the surrounding page context',
         })}
@@ -124,7 +132,9 @@ function PageContextPageContent() {
       </ContextSection>
 
       <ContextSection
-        eyebrow='Built-in frontend tool'
+        eyebrow={translateDemo('demo.builtinFrontendTool', {
+          defaultValue: 'Built-in frontend tool',
+        })}
         title={translateDemo('demo.formFillerTitle', {
           defaultValue: 'Fill a registered React form with Form filler',
         })}
@@ -137,7 +147,9 @@ function PageContextPageContent() {
       </ContextSection>
 
       <ContextSection
-        eyebrow='Custom frontend tool'
+        eyebrow={translateDemo('demo.customFrontendTool', {
+          defaultValue: 'Custom frontend tool',
+        })}
         title={translateDemo('demo.pageActionTitle', {
           defaultValue: 'Expose a page-specific action to the AI employee',
         })}
@@ -150,7 +162,9 @@ function PageContextPageContent() {
       </ContextSection>
 
       <ContextSection
-        eyebrow='Prompt generator'
+        eyebrow={translateDemo('demo.promptGenerator', {
+          defaultValue: 'Prompt generator',
+        })}
         title={translateDemo('demo.sceneGeneratorTitle', {
           defaultValue: 'Generate a complete page context scene',
         })}
