@@ -11,8 +11,12 @@ import type { ConversationExecution } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
 import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
-import type { DatabaseConnection } from '@nocobase/db';
-import type { DatabaseManager } from '@nocobase/db';
+import type {
+  DatabaseConnection,
+  DatabaseManager,
+  FilterConditionNode,
+  FilterShorthand,
+} from '@nocobase/db';
 import type { Caching } from '@nocobase/caching';
 import type { FileStorage } from '@nocobase/ai-employee';
 import type { AIFileEntity } from '../repository/ai-file.js';
@@ -22,6 +26,7 @@ import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { Actor, Translate } from '../types.js';
 import { ResourceActionError, sendStreamError } from '../types.js';
 import type {
+  AIConversationEntity,
   AIMessageEntity,
   AIToolMessageEntity,
 } from '../repository/index.js';
@@ -356,27 +361,44 @@ export class AIConversationService {
     actorId: string | number;
     scope?: string;
     options?: {
-      filter?: Record<string, unknown>;
+      filter?: FilterShorthand<AIConversationEntity>;
       scope?: string;
       keyword?: string;
     };
   }) {
     loginInCheck(actorId);
     const userId = String(actorId);
-    const filter = isRecord(options.filter) ? options.filter : {};
-    if (options.keyword) filter.title = { $includes: options.keyword };
-    const where: Record<string, any> = {
+    const filter = options.filter ?? {};
+    const where: FilterShorthand<AIConversationEntity> = {
       ...filter,
       userId,
       from: filter.from ?? 'main-agent',
       category: 'chat',
       ...(typeof scope === 'string' && scope ? { scope } : {}),
     };
-    const rows = await this.repositories.aiConversations.find({
-      filter: where,
-      sort: ['-updatedAt'],
-    });
-    return rows;
+    const conditions = Object.entries(where)
+      .filter(
+        ([field, value]) =>
+          value !== undefined && !(options.keyword && field === 'title'),
+      )
+      .map(([field, value]): FilterConditionNode => ({
+        kind: 'condition',
+        path: [field],
+        operator: '$eq',
+        value,
+      }));
+    return await this.database
+      .repository<AIConversationEntity>('aiConversations')
+      .findMany({
+        filter: (f) =>
+          f.and([
+            ...conditions,
+            ...(options.keyword
+              ? [f.string('title').includes(options.keyword)]
+              : []),
+          ]),
+        sort: (s) => s.field('updatedAt').desc(),
+      });
   }
 
   async unreadCount({ actorId }: { actorId: string | number }) {
