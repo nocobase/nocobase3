@@ -140,7 +140,7 @@ function jobOptions(
 
 export function resolveQueueConfiguration(
   options: unknown,
-  queue: string,
+  queue: string | undefined,
   manual: unknown = {},
 ): ResolvedQueueConfiguration {
   const global = record(options, 'options');
@@ -149,9 +149,10 @@ export function resolveQueueConfiguration(
     global.queues === undefined ? {} : record(global.queues, 'queues');
   for (const [name, override] of Object.entries(configured))
     keys(record(override, `queues.${name}`), defaultsKeys, `queues.${name}`);
-  const named = Object.hasOwn(configured, queue)
-    ? record(configured[queue], `queues.${queue}`)
-    : {};
+  const named =
+    queue !== undefined && Object.hasOwn(configured, queue)
+      ? record(configured[queue], `queues.${queue}`)
+      : {};
   const local = record(manual, 'configure');
   keys(local, runtimeKeys, 'configure');
   resolveQueueTimeouts(global);
