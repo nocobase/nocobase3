@@ -43,6 +43,7 @@
     "@nocobase/logging": "workspace:^",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/instrumentation": "^0.200.0",
+    "bullmq": "catalog:",
     "ioredis": "catalog:",
     "knex": "catalog:"
   },
@@ -50,12 +51,20 @@
     "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
+    "@types/pg": "8.23.1",
     "eslint": "catalog:",
+    "pg": "8.16.3",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "@nocobase/db": "workspace:^"
+    "@nocobase/db": "workspace:^",
+    "pg": ">=8.16.3 <9"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    }
   }
 }
