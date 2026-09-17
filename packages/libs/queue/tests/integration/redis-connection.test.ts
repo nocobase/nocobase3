@@ -27,3 +27,49 @@ it.skipIf(selectedBackend() !== 'redis')(
     }
   },
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'reconnects its owned Worker transports and releases them on shutdown',
+  async () => {
+    const { createTcpProxy } = await import('../helpers/tcp-proxy.js');
+    const proxy = await createTcpProxy(
+      Number(process.env.QUEUE_TEST_REDIS_PORT),
+    );
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-reconnect`,
+      queueBackend: 'redis',
+      connection: { host: '127.0.0.1', port: proxy.port },
+    });
+    const received: unknown[] = [];
+    service.consumer('jobs').consume(async (_channel, message) => {
+      received.push(message);
+    });
+    const producer = service.producer('jobs');
+    try {
+      await service.setup();
+      await producer.publish('before', 1);
+      await expect.poll(() => received).toEqual([1]);
+      const originalSockets = [...proxy.sockets];
+      expect(originalSockets.length).toBeGreaterThanOrEqual(6);
+      proxy.disconnect();
+      await expect
+        .poll(() =>
+          originalSockets.every((socket) => !proxy.sockets.has(socket)),
+        )
+        .toBe(true);
+      await expect
+        .poll(() => proxy.sockets.size, { timeout: 5000 })
+        .toBeGreaterThanOrEqual(6);
+      await producer.publish('after', 2);
+      await expect.poll(() => received, { timeout: 5000 }).toEqual([1, 2]);
+      await service.shutdown();
+      await expect.poll(() => proxy.sockets.size).toBe(0);
+    } finally {
+      try {
+        await service.shutdown();
+      } finally {
+        await proxy.close();
+      }
+    }
+  },
+);
