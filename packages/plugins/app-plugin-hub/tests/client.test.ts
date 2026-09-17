@@ -3,6 +3,7 @@ import { Boxes, ShieldCheck, KeyRound } from 'lucide-react';
 
 import hub from '../client/plugin.js';
 import {
+  defaultHubDetailTab,
   emptyHubCapabilities,
   visibleHubDetailTabs,
 } from '../client/permissions.js';
@@ -54,7 +55,7 @@ describe('@nocobase/app-plugin-hub', () => {
 
     expect(
       visibleHubDetailTabs({ hasReleases: true, deployed: true }, permissions),
-    ).toEqual(['deployments', 'releases']);
+    ).toEqual(['releases', 'deployments']);
   });
 
   it('shows Resources and settings only when their actions are granted', () => {
@@ -69,12 +70,48 @@ describe('@nocobase/app-plugin-hub', () => {
     expect(
       visibleHubDetailTabs({ hasReleases: true, deployed: true }, permissions),
     ).toEqual([
-      'deployments',
       'releases',
+      'deployments',
       'resources',
       'configuration',
       'settings',
     ]);
+  });
+
+  it('chooses lifecycle defaults independently of display order and respects access', () => {
+    const permissions = {
+      ...emptyHubCapabilities(),
+      'upload-release': true,
+      'read-release': true,
+      'read-deployment': true,
+    };
+    expect(
+      defaultHubDetailTab({ hasReleases: false, deployed: false }, permissions),
+    ).toBe('development');
+    expect(
+      defaultHubDetailTab({ hasReleases: true, deployed: false }, permissions),
+    ).toBe('releases');
+    expect(
+      defaultHubDetailTab({ hasReleases: true, deployed: true }, permissions),
+    ).toBe('deployments');
+    expect(
+      defaultHubDetailTab(
+        { hasReleases: true, deployed: true },
+        { ...permissions, 'read-deployment': false },
+      ),
+    ).toBe('releases');
+    expect(
+      defaultHubDetailTab(
+        { hasReleases: false, deployed: false },
+        { ...permissions, 'upload-release': false },
+      ),
+    ).toBe('releases');
+    expect(
+      defaultHubDetailTab(
+        { hasReleases: true, deployed: true },
+        emptyHubCapabilities(),
+      ),
+    ).toBeUndefined();
   });
 
   it('can expose a Hub console with applications and read-only roles', async () => {

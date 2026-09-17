@@ -439,15 +439,34 @@ const enUS = {
     remove: 'Remove application',
   },
   development: {
-    title: 'Develop this application',
+    buildTitle: 'Build the release',
+    projectSource: 'Project source',
+    prepareTitle: 'Prepare your project',
+    copyFailed: 'Could not copy. Select and copy the command manually.',
+    copied: 'Command copied',
+    title: 'Deploy your first release',
     description:
-      'Create a local NocoBase project using this application ID, then build and upload its release from the Deploy flow.',
-    createTitle: 'Create a new application',
-    createDescription:
-      'Run this command in the directory where you keep source projects.',
+      'Prepare your project locally, then upload and deploy it here.',
+    createTitle: 'New project',
+    createDescription: 'Run this command where you keep your source projects.',
     copyCommand: 'Copy create-app command',
     footer:
-      'The command creates the source project locally. When it is ready, return here and choose Deploy to upload the first release.',
+      'Open the generated directory and finish local setup and development before building.',
+    existingTitle: 'Existing project',
+    existingDescription:
+      'Open your NocoBase 3 project directory and continue with the build step. No new project is needed.',
+    publishTitle: 'Upload, then deploy',
+    buildDescription:
+      'Run in your project directory. The archive is saved to storage/dist.tar.gz.',
+    copyBuild: 'Copy build command',
+    buildTarget:
+      'Building for another machine? Match the Hub host with --target and --node-version. See pnpm build --help for options.',
+    uploadDescription:
+      'Upload storage/dist.tar.gz in Releases. Then choose Deploy in Deployments to select the release and review its configuration.',
+    openReleases: 'Go to Releases',
+    deployDescription:
+      'Uploading does not start the application. Visit it after deployment succeeds.',
+    openDeployments: 'Go to Deployments',
   },
   roles: {
     title: 'Roles & permissions',

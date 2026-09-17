@@ -1,6 +1,12 @@
 import { Toaster, toast } from 'sonner';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,6 +57,7 @@ vi.mock('@nocobase/i18n/client', () => ({
 }));
 
 import AppPage from '../client/pages/hub/app-page.js';
+import DevelopmentPage from '../client/pages/hub/tabs/development-page.js';
 import DeploymentsPage from '../client/pages/hub/tabs/deployments-page.js';
 import SettingsPage from '../client/pages/hub/tabs/settings-page.js';
 import { Detail } from '../client/pages/hub/detail.js';
@@ -132,6 +139,15 @@ const renderAppPage = (
   initialEntry: string,
   appDetail: AppOverview = detail(),
 ): void => {
+  function HistoryControls(): ReactElement {
+    const navigate = useNavigate();
+    return (
+      <>
+        <button onClick={() => void navigate(-1)}>History back</button>
+        <button onClick={() => void navigate(1)}>History forward</button>
+      </>
+    );
+  }
   function DeploymentsTab(): ReactElement {
     const location = useLocation();
     return (
@@ -148,6 +164,8 @@ const renderAppPage = (
     if (path === 'hub/apps/customer') {
       return Promise.resolve({ data: appDetail });
     }
+    if (path === 'hub/apps/customer/releases')
+      return Promise.resolve({ data: [] });
     if (path === 'hub/apps/customer/deployments') {
       return Promise.resolve({
         data: { items: [], page: 1, pageSize: 20, total: 0 },
@@ -157,12 +175,14 @@ const renderAppPage = (
   });
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
+      <HistoryControls />
       <Routes>
         <Route path='/apps'>
           <Route index element={<div>Applications catalog</div>} />
           <Route path=':appId' element={<AppPage />}>
             <Route path='deployments' element={<DeploymentsTab />} />
             <Route path='releases' element={<div>Releases tab</div>} />
+            <Route path='development' element={<DevelopmentPage />} />
             <Route path='settings' element={<SettingsPage />} />
             <Route path='*' element={<div>Unknown tab</div>} />
           </Route>
@@ -196,6 +216,7 @@ describe('Hub client pages', () => {
   afterEach(() => {
     toast.dismiss();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('requires confirmation before deleting an owned App and returns to the catalog', async () => {
@@ -588,7 +609,7 @@ describe('Hub client pages', () => {
     expect(screen.getByText('Show technical details')).toBeInTheDocument();
   });
 
-  it('replaces the detail parent URL with the first accessible Tab', async () => {
+  it('opens Deployments for a deployed app and preserves the parent query', async () => {
     renderAppPage('/apps/customer?filter=recent');
 
     await waitFor(() =>
@@ -597,6 +618,99 @@ describe('Hub client pages', () => {
     expect(screen.getByTestId('location')).toHaveTextContent(
       '/apps/customer/deployments?filter=recent',
     );
+  });
+
+  it('opens Releases before the first deployment', async () => {
+    renderAppPage(
+      '/apps/customer',
+      detail({ app: { ...detail().app, currentDeploymentId: null } }),
+    );
+    expect(await screen.findByText('Releases tab')).toBeInTheDocument();
+  });
+
+  it('keeps an explicit Releases URL for an already deployed application', async () => {
+    renderAppPage('/apps/customer/releases');
+    expect(await screen.findByText('Releases tab')).toBeInTheDocument();
+    expect(screen.queryByText('Deployments tab')).not.toBeInTheDocument();
+  });
+
+  it('guides new and existing projects and links to Releases with the query intact', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal(
+      'navigator',
+      Object.create(navigator, { clipboard: { value: { writeText } } }),
+    );
+    renderAppPage(
+      '/apps/customer?filter=recent',
+      detail({
+        hasReleases: false,
+        app: { ...detail().app, currentDeploymentId: null },
+      }),
+    );
+    expect(await screen.findByText('New project')).toBeInTheDocument();
+    expect(screen.getByText('Existing project')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Existing project' }));
+    expect(
+      screen.queryByRole('button', { name: 'Copy create-app command' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Prepare your project')).not.toBeInTheDocument();
+    expect(screen.getByText('Build the release')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    expect(
+      screen.getByRole('button', { name: 'Copy create-app command' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('pnpm build --tar')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy build command' }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('pnpm build --tar'),
+    );
+    expect(
+      screen.getByRole('link', { name: 'Go to Releases' }),
+    ).toHaveAttribute('href', '/apps/customer/releases?filter=recent');
+    fireEvent.click(screen.getByRole('link', { name: 'Go to Releases' }));
+    expect(await screen.findByText('Releases tab')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'History back' }));
+    expect(await screen.findByText('Existing project')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'History forward' }));
+    expect(await screen.findByText('Releases tab')).toBeInTheDocument();
+  });
+
+  it('reports clipboard failures and hides inaccessible onboarding destinations', async () => {
+    vi.stubGlobal(
+      'navigator',
+      Object.create(navigator, {
+        clipboard: {
+          value: { writeText: vi.fn().mockRejectedValue(new Error('Denied')) },
+        },
+      }),
+    );
+    mocks.authorization.can.mockImplementation(
+      (_resource: unknown, action: string) =>
+        Promise.resolve(
+          action !== 'read-release' && action !== 'read-deployment',
+        ),
+    );
+    renderAppPage(
+      '/apps/customer',
+      detail({
+        hasReleases: false,
+        app: { ...detail().app, currentDeploymentId: null },
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Copy build command' }),
+    );
+    expect(
+      await screen.findByText(
+        'Could not copy. Select and copy the command manually.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Go to Releases' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Go to Deployments' }),
+    ).not.toBeInTheDocument();
   });
 
   it('defaults the deploy dialog to the newest release rather than the running one', async () => {
