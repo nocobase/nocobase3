@@ -18,23 +18,62 @@ export interface MemoryJobRecord {
 }
 
 export class InMemoryQueueStore {
-  add(_input: MemoryJobInput): MemoryJobRecord {
-    throw new Error('Memory storage is not implemented');
+  private readonly jobs: Map<string, MemoryJobRecord> = new Map();
+  private sequence: bigint = 0n;
+
+  add(input: MemoryJobInput): MemoryJobRecord {
+    const data = JSON.stringify(input.data === undefined ? {} : input.data);
+    if (data === undefined)
+      throw new TypeError('Job data must serialize to JSON text');
+    const options = structuredClone(input.options ?? {});
+    if (input.id !== undefined) {
+      const existing = this.jobs.get(input.id);
+      if (existing) return structuredClone(existing);
+    }
+    let id = input.id;
+    if (id === undefined) {
+      do {
+        id = String(++this.sequence);
+      } while (this.jobs.has(id));
+    }
+    const record: MemoryJobRecord = {
+      id,
+      name: input.name,
+      data,
+      options,
+      state: 'waiting',
+      timestamp: Date.now(),
+    };
+    this.jobs.set(id, record);
+    return structuredClone(record);
   }
-  get(_id: string): MemoryJobRecord | undefined {
-    throw new Error('Memory storage is not implemented');
+
+  get(id: string): MemoryJobRecord | undefined {
+    const record = this.jobs.get(id);
+    return record === undefined ? undefined : structuredClone(record);
   }
+
   transition(
-    _id: string,
-    _expected: MemoryJobState,
-    _next: MemoryJobState,
+    id: string,
+    expected: MemoryJobState,
+    next: MemoryJobState,
   ): boolean {
-    throw new Error('Memory storage is not implemented');
+    const record = this.jobs.get(id);
+    if (!record || record.state !== expected) return false;
+    record.state = next;
+    return true;
   }
 }
 
 export function createInMemoryStoreRegistry(): (
   identity: string,
 ) => InMemoryQueueStore {
-  throw new Error('Memory storage registry is not implemented');
+  const stores = new Map<string, InMemoryQueueStore>();
+  return (identity): InMemoryQueueStore => {
+    const existing = stores.get(identity);
+    if (existing) return existing;
+    const store = new InMemoryQueueStore();
+    stores.set(identity, store);
+    return store;
+  };
 }
