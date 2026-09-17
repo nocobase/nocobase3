@@ -31,6 +31,8 @@ export function resolvePostgresConnection(value: unknown): PostgresPoolConfig {
       'database',
       'connectionString',
       'schema',
+      'options',
+      'application_name',
       'max',
       'connectionTimeoutMillis',
       'skipVersionCheck',
@@ -49,6 +51,8 @@ export function resolvePostgresConnection(value: unknown): PostgresPoolConfig {
     'database',
     'connectionString',
     'schema',
+    'options',
+    'application_name',
   ] as const) {
     const setting = input[key];
     if (setting === undefined) continue;
