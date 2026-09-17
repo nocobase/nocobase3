@@ -175,7 +175,7 @@ export default {
   'demo.launcherAction': '添加右下角 AI 悬浮入口',
   'demo.launcherDescription':
     '此提示词配置全局触发按钮及其可切换的侧栏和对话框界面。',
-  'demo.describeTheIntegration': '描述集成方式',
+  'demo.integrationTitle': '描述集成方式',
   'demo.integrationHint': '选择聊天的放置位置及目标页面需要的能力。',
   'demo.targetRegion': '目标页面或区域',
   'demo.targetPlaceholder': '例如：工单详情页',
@@ -218,7 +218,7 @@ export default {
   'demo.taskParameterSuffix':
     '参数适用于页面、嵌入式区域、侧栏、对话框及移动端容器。',
   'demo.employeeTasksPrompt': '员工任务提示词',
-  'demo.generateAnIntegrationPrompt': '生成集成提示词',
+  'demo.taskPromptTitle': '生成集成提示词',
   'demo.taskPromptDescription':
     '选择通过上下文快捷入口展示任务，或直接在聊天中按所选员工展示任务。两种模式共用任务、模型、网络搜索、技能和工具配置。',
   'demo.employeeTaskConfiguration': '员工任务配置',

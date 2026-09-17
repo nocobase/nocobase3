@@ -295,7 +295,7 @@ Implementation requirements:
       <Card className='gap-0 py-0'>
         <CardHeader className='border-b py-4'>
           <CardTitle className='text-base'>
-            {translateDemo('demo.describeTheIntegration', {
+            {translateDemo('demo.integrationTitle', {
               defaultValue: 'Describe the integration',
             })}
           </CardTitle>

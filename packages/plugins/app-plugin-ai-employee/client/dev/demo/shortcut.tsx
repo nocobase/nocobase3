@@ -734,7 +734,7 @@ Implementation requirements:
           })}
         </p>
         <h2 className='mt-2 text-xl font-semibold tracking-tight'>
-          {translateDemo('demo.generateAnIntegrationPrompt', {
+          {translateDemo('demo.taskPromptTitle', {
             defaultValue: 'Generate an integration prompt',
           })}
         </h2>

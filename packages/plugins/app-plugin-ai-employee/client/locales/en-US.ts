@@ -202,7 +202,7 @@ export default {
   'demo.launcherAction': 'Add a lower-right AI floating entry',
   'demo.launcherDescription':
     'This prompt configures the global trigger and its switchable side-panel/dialog surface.',
-  'demo.describeTheIntegration': 'Describe the integration',
+  'demo.integrationTitle': 'Describe the integration',
   'demo.integrationHint':
     'Choose where chat belongs and which capabilities the target page needs.',
   'demo.targetRegion': 'Target page or region',
@@ -250,7 +250,7 @@ export default {
   'demo.taskParameterSuffix':
     'parameter works in page, embedded, side-panel, dialog, and mobile containers.',
   'demo.employeeTasksPrompt': 'Employee tasks prompt',
-  'demo.generateAnIntegrationPrompt': 'Generate an integration prompt',
+  'demo.taskPromptTitle': 'Generate an integration prompt',
   'demo.taskPromptDescription':
     'Choose whether tasks are exposed through a contextual Shortcut or directly by the selected employee in a chat. Both modes share the same task, model, Web search, Skills, and Tools configuration.',
   'demo.employeeTaskConfiguration': 'Employee task configuration',
