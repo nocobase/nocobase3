@@ -4,6 +4,9 @@ import { createBackendRegistry } from './backends/registry.js';
 import { resolveQueueConfiguration } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
 import { createQueueProducer } from './producer.js';
+import { createQueueHandlerRegistry } from './consumer.js';
+import type { QueueHandlerRegistry } from './consumer.js';
+import { decodeQueueMessage } from './serialization.js';
 import { QueueResourceCache } from './resources.js';
 import type { BackendFactory } from 'bullmq';
 import type {
@@ -81,7 +84,7 @@ interface QueueEntry {
   manager: QueueServiceManager;
   producer: QueueProducer;
   consumer: QueueConsumer;
-  handlers: Set<ConsumeHandler<never>>;
+  handlers: QueueHandlerRegistry;
   manual: QueueRuntimeOptions;
   queue?: ServiceQueue;
   worker?: ServiceWorker;
@@ -104,7 +107,7 @@ export function createQueueService(
     if (stopped) throw new Error('Queue service is shutting down');
     const previous = entries.get(name);
     if (previous) return previous;
-    const handlers = new Set<ConsumeHandler<never>>();
+    const handlers = createQueueHandlerRegistry();
     const current: QueueEntry = {
       handlers,
       manual: {},
@@ -150,16 +153,7 @@ export function createQueueService(
       consumer: {
         consume(handler): UnregisterHandler {
           if (stopped) throw new Error('Queue service is shutting down');
-          // Each registration owns a distinct wrapper, even for the same function.
-          const registration: ConsumeHandler<never> = (
-            channel,
-            message,
-            signal,
-          ) => handler(channel, message, signal);
-          handlers.add(registration);
-          return async (): Promise<void> => {
-            handlers.delete(registration);
-          };
+          return handlers.consume(handler);
         },
       },
     };
@@ -217,6 +211,16 @@ export function createQueueService(
     }
     for (const [name, current] of entries) await initializeEntry(name, current);
     ready = true;
+    for (const [name, current] of entries) {
+      if (current.worker) {
+        void current.worker.run().catch((error: unknown) => {
+          dependencies.logger?.error(
+            { error, queue: name },
+            'Queue worker run failed',
+          );
+        });
+      }
+    }
   }
 
   function initializeEntry(name: string, current: QueueEntry): Promise<void> {
@@ -253,11 +257,17 @@ export function createQueueService(
           ),
         );
         await current.queue.waitUntilReady();
-        if (current.handlers.size) {
+        if (current.handlers.size()) {
           current.worker = new Worker<unknown, unknown, string, IQueueBackend>(
             physicalName,
-            async () => {
-              throw new Error('Queue dispatch is not implemented');
+            async (job, _token, signal): Promise<void> => {
+              if (!signal)
+                throw new Error('Queue Worker did not provide an abort signal');
+              await current.handlers.dispatch(
+                job.name,
+                decodeQueueMessage(job.data),
+                signal,
+              );
             },
             { ...base, autorun: false, concurrency: config.concurrency },
             factory,
