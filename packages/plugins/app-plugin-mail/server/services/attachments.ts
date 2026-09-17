@@ -5,17 +5,20 @@ import {
   type MailOperationContext,
   type MailOutboundAttachmentView,
   type MailUploadAttachmentInput,
-} from '../types.js';
-import { type DefaultMailServiceDependencies } from './dependencies.js';
+} from '../../shared/mail.js';
+import { type MailServiceDependencies } from './dependencies.js';
 import { isLocalDraftMessage } from './draft-content.js';
 import { assertProviderResult } from './errors.js';
 import { closeAdapter, finalizeStream } from './provider-lifecycle.js';
 
 export class MailAttachmentsService {
   public constructor(
-    private readonly dependencies: Pick<
-      DefaultMailServiceDependencies,
-      'outboundAttachments' | 'store' | 'adapters'
+    private readonly dependencies: MailServiceDependencies<
+      | 'getAccount'
+      | 'getMessage'
+      | 'getMessageForAccount'
+      | 'getOutboundAttachment',
+      'outboundAttachments' | 'adapters'
     >,
   ) {}
 

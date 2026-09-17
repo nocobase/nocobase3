@@ -1,4 +1,4 @@
-import type { MailSyncCursor } from '../../types.js';
+import type { MailSyncCursor } from '../../../shared/mail.js';
 
 import type {
   AttachmentLocator,

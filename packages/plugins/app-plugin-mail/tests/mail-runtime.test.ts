@@ -74,6 +74,124 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     await database.destroy();
   });
 
+  it.each(['personal', 'management'] as const)(
+    'deletes local drafts through %s without sending local IDs to a Provider',
+    async (scope) => {
+      const removeRemote = vi.fn<
+        NonNullable<MailProviderAdapter['deleteMessage']>
+      >(async () => ({
+        ok: false,
+        error: {
+          code: 'OFFLINE',
+          category: 'network',
+          message: 'offline',
+          retryable: true,
+        },
+      }));
+      const close = vi.fn(async () => undefined);
+      const adapter = resolver({
+        ...baseAdapter(),
+        deleteMessage: removeRemote,
+        close,
+      });
+      const resolve = vi.spyOn(adapter, 'resolve');
+      const service = new DefaultMailService({
+        store,
+        adapters: adapter,
+        outbox: { kick: vi.fn() },
+      });
+      for (const remote of [undefined, 'remote-draft']) {
+        const draft = await store.saveMessage('account-1', {
+          ...message(`local-draft:${remote ?? 'only-local'}`, 'Draft'),
+          draft: true,
+          providerDraftMessageId: remote,
+          providerFolderIds: [MAIL_LOCAL_DRAFT_FOLDER_ID],
+        });
+        if (scope === 'personal')
+          await service.deleteMessage(
+            { actorId: 'user-1' },
+            { accountId: 'account-1', messageId: draft.id },
+          );
+        else
+          expect(
+            await service.manageMessages(
+              { actorId: 'admin' },
+              {
+                action: 'delete',
+                items: [{ accountId: 'account-1', messageId: draft.id }],
+              },
+            ),
+          ).toMatchObject({ succeeded: 1, failed: 0 });
+        expect(
+          await store.getMessageForAccount('account-1', draft.id),
+        ).toBeUndefined();
+      }
+      expect(resolve).toHaveBeenCalledTimes(1);
+      expect(removeRemote).toHaveBeenCalledExactlyOnceWith(
+        'remote-draft',
+        true,
+        undefined,
+      );
+      expect(close).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(['persisting', 'activating'] as const)(
+    'drains push work while %s before closing the runtime',
+    async (phase) => {
+      queue = createQueueManager({
+        default: 'sync',
+        connections: { sync: { driver: 'sync' } },
+        jobs: { autoLoad: false, locations: [] },
+      });
+      runtime = createMailRuntime({
+        store,
+        adapters: resolver(baseAdapter()),
+        queue,
+        queueName: `mail:shutdown-${phase}`,
+      });
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      if (phase === 'persisting') {
+        const original = store.markPushSyncPendingBatch.bind(store);
+        vi.spyOn(store, 'markPushSyncPendingBatch').mockImplementationOnce(
+          async (...args) => {
+            entered.resolve();
+            await release.promise;
+            await original(...args);
+          },
+        );
+      } else {
+        const original = store.getAccount.bind(store);
+        vi.spyOn(store, 'getAccount').mockImplementationOnce(
+          async (...args) => {
+            entered.resolve();
+            await release.promise;
+            return original(...args);
+          },
+        );
+      }
+      const scheduled = runtime.schedulePushSyncBatch([account()]);
+      await entered.promise;
+      let closed = false;
+      const closing = runtime.close().then(() => {
+        closed = true;
+      });
+      await Promise.resolve();
+      expect(closed).toBe(false);
+      release.resolve();
+      await scheduled;
+      await closing;
+      expect(closed).toBe(true);
+      const getAccount = vi.spyOn(store, 'getAccount');
+      getAccount.mockClear();
+      expect(await runtime.schedulePushSync('account-1')).toBe(false);
+      expect(await runtime.createAutomaticSyncRuns()).toBe(0);
+      await runtime.publishPending();
+      expect(getAccount).not.toHaveBeenCalled();
+    },
+  );
+
   it('excludes suspended mail before pagination and counting while retaining management access', async () => {
     await store.saveAccount({
       ...account(),

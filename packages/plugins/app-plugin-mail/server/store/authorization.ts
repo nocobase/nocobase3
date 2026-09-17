@@ -1,5 +1,5 @@
 import { type DatabaseManager } from '@nocobase/db';
-import { type MailAuthorizationTransaction } from '../types.js';
+import { type MailAuthorizationTransaction } from '../contracts/persistence.js';
 import { type AuthorizationStateRow } from './rows.js';
 import { parseJson } from './serialization.js';
 

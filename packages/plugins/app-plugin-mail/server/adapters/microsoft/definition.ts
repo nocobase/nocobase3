@@ -1,7 +1,7 @@
 import type {
   MailProviderAdapter,
   MailProviderDefinition,
-} from '../../types.js';
+} from '../../contracts/provider.js';
 
 import type { MicrosoftMailProviderConfig } from './types.js';
 import { MICROSOFT_CAPABILITIES } from './constants.js';

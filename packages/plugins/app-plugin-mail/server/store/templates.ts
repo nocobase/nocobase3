@@ -1,5 +1,5 @@
 import { type DatabaseManager } from '@nocobase/db';
-import { type MailTemplate } from '../types.js';
+import { type MailTemplate } from '../../shared/mail.js';
 import { toMailTemplate } from './mappers.js';
 import { type TemplateRow } from './rows.js';
 

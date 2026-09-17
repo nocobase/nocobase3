@@ -1,6 +1,9 @@
 import { type AddressObject, type EmailAddress } from 'mailparser';
 
-import type { MailAddress, NormalizedMailAttachment } from '../../types.js';
+import type {
+  MailAddress,
+  NormalizedMailAttachment,
+} from '../../../shared/mail.js';
 
 import { encodeAttachmentLocator } from './locators.js';
 

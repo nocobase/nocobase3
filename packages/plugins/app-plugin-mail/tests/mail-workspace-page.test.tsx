@@ -39,6 +39,19 @@ const mail = vi.hoisted(() => ({
   uploadAttachment: vi.fn(),
 }));
 
+const realtime = vi.hoisted(() => ({
+  subscribe: vi.fn(() => () => undefined),
+  onOpen: vi.fn(() => () => undefined),
+}));
+vi.mock('@nocobase/app-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@nocobase/app-client')>();
+  return {
+    ...actual,
+    useService: (token: unknown) =>
+      token === actual.realtimeClientToken ? realtime : undefined,
+  };
+});
+
 vi.mock('../client/runtime.js', () => ({
   useMailClient: () => mail,
 }));
@@ -141,6 +154,34 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
       createdAt: '2026-09-06T00:00:00.000Z',
       updatedAt: '2026-09-06T00:00:00.000Z',
     });
+  });
+
+  it('refreshes provider changes without focus and keeps the current reader and composer', async () => {
+    const initial = { ...createUnreadMessage('current-mail'), read: true };
+    const incoming = { ...createUnreadMessage('new-mail'), read: true };
+    mail.listMessages.mockResolvedValue({ items: [initial] });
+    mail.getMessage.mockResolvedValue(initial);
+    render(<MailWorkspacePage />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: /current-mail/ }),
+    );
+    await screen.findByText('Body current-mail');
+    fireEvent.click(screen.getByRole('button', { name: 'Compose' }));
+    const composer = await screen.findByRole('dialog', { name: 'New message' });
+    fireEvent.change(within(composer).getByLabelText('TO'), {
+      target: { value: 'unfinished@example.com' },
+    });
+    mail.listMessages.mockResolvedValue({ items: [incoming, initial] });
+    const subscribe = realtime.subscribe as unknown as {
+      mock: { calls: [string, (event: { payload: unknown }) => void][] };
+    };
+    const listener = subscribe.mock.calls.at(-1)![1];
+    act(() => listener({ payload: { kind: 'mail.changed' } }));
+    await screen.findByRole('button', { name: /new-mail/ });
+    expect(screen.getByText('Body current-mail')).toBeInTheDocument();
+    expect(within(composer).getByLabelText('TO')).toHaveValue(
+      'unfinished@example.com',
+    );
   });
 
   it('links first-time users to mailbox setup in Dev tools', async () => {

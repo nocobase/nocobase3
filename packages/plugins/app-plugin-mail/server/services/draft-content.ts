@@ -3,9 +3,9 @@ import {
   type MailDraftConflict,
   type MailDraftRemoteVersion,
   type MailMessage,
-  type NormalizedMailMessage,
   MAIL_LOCAL_DRAFT_FOLDER_ID,
-} from '../types.js';
+} from '../../shared/mail.js';
+import { type NormalizedMailMessage } from '../contracts/provider.js';
 
 export function isLocalDraftMessage(
   message: Pick<MailMessage, 'providerMessageId'>,

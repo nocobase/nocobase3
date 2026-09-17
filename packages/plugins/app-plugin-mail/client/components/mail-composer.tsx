@@ -14,21 +14,16 @@ import {
   type MailComposerProps,
 } from '../hooks/use-mail-composer.js';
 import {
-  clearComposerRecovery,
-  composerFingerprint,
-  formatAddressList,
   formatBytes,
   formatIdentity,
   localDateTimeMinimum,
   replaceComposerSignature,
-  type ComposerState,
 } from '../lib/mail-composer-state.js';
 import { renderMailTemplate } from '../lib/mail-template.js';
 import { type MailDraftConflict } from '../mail-client.js';
 import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { MailRichTextEditor } from './mail-rich-text-editor.js';
 import { MailHtmlBody } from './mail-html-body.js';
-import { readDraftComposerBody } from '../lib/mail-forward-content.js';
 import { Button } from './ui/button.js';
 import {
   Dialog,
@@ -58,10 +53,11 @@ export function MailComposer(
     () => false,
   );
   const {
+    restoreDraft,
+    discardRecovery,
+    resolveRemoteDraft,
     t,
-    mail,
     error,
-    setError,
     confirmClose,
     setConfirmClose,
     composer,
@@ -79,12 +75,10 @@ export function MailComposer(
     signatureId,
     setSignatureId,
     sending,
-    setSending,
     autoSaving,
     draftSaveStatus,
     setDraftSaveStatus,
     recoveryOffer,
-    setRecoveryOffer,
     templates,
     uploading,
     composeAttachments,
@@ -92,10 +86,6 @@ export function MailComposer(
     retainedAttachments,
     setRetainedAttachments,
     attachmentInputRef,
-    draftMessageIdRef,
-    setLastSavedFingerprint,
-    composerSessionRef,
-    requestError,
     sendableComposerIdentities,
     composerCanSend,
     composerCanDraft,
@@ -103,7 +93,6 @@ export function MailComposer(
     sendComposer,
     saveComposerDraft,
     uploadComposerAttachments,
-    currentComposerFingerprint,
     composerHasRequiredContent,
     composerHasUnsavedChanges,
   } = useMailComposer(props);
@@ -194,40 +183,13 @@ export function MailComposer(
                     })}
                   </p>
                   <div className='mt-2 flex gap-2'>
-                    <Button
-                      onClick={() => {
-                        composerSessionRef.current += 1;
-                        draftMessageIdRef.current =
-                          recoveryOffer.composer.draftMessageId;
-                        setLastSavedFingerprint(recoveryOffer.savedFingerprint);
-                        setComposer(recoveryOffer.composer);
-                        setIdentityId(recoveryOffer.identityId);
-                        setSignatureId(recoveryOffer.signatureId ?? '');
-                        setCcVisible(Boolean(recoveryOffer.composer.cc.trim()));
-                        setBccVisible(
-                          Boolean(recoveryOffer.composer.bcc.trim()),
-                        );
-                        setScheduleEnabled(
-                          Boolean(recoveryOffer.composer.scheduledAt),
-                        );
-                        setComposeAttachments(recoveryOffer.composeAttachments);
-                        setRetainedAttachments(
-                          recoveryOffer.retainedAttachments,
-                        );
-                        setRecoveryOffer(undefined);
-                      }}
-                      type='button'
-                    >
+                    <Button onClick={restoreDraft} type='button'>
                       {t('workspace.restoreDraft', {
                         defaultValue: 'Restore',
                       })}
                     </Button>
                     <Button
-                      onClick={() => {
-                        clearComposerRecovery(composerAccountId);
-                        setLastSavedFingerprint(currentComposerFingerprint);
-                        setRecoveryOffer(undefined);
-                      }}
+                      onClick={discardRecovery}
                       type='button'
                       variant='outline'
                     >
@@ -241,49 +203,7 @@ export function MailComposer(
               {composer.draftConflict ? (
                 <DraftConflictNotice
                   conflict={composer.draftConflict}
-                  onUseRemote={() => {
-                    const draftMessageId = composer.draftMessageId;
-                    if (!draftMessageId || sending) return;
-                    setSending(true);
-                    setError(undefined);
-                    void mail
-                      .resolveDraftConflict({
-                        accountId: composerAccountId,
-                        action: 'useRemote',
-                        messageId: draftMessageId,
-                      })
-                      .then((resolved) => {
-                        const nextComposer: ComposerState = {
-                          ...composer,
-                          bcc: formatAddressList(resolved.bcc),
-                          cc: formatAddressList(resolved.cc),
-                          draftConflict: undefined,
-                          forwardQuote: undefined,
-                          ...readDraftComposerBody(resolved),
-                          subject: resolved.subject,
-                          to: formatAddressList(resolved.to),
-                        };
-                        draftMessageIdRef.current = resolved.id;
-                        setCcVisible(Boolean(nextComposer.cc.trim()));
-                        setBccVisible(Boolean(nextComposer.bcc.trim()));
-                        setScheduleEnabled(Boolean(nextComposer.scheduledAt));
-                        setComposer(nextComposer);
-                        setComposeAttachments([]);
-                        setRetainedAttachments(resolved.attachments);
-                        setDraftSaveStatus('saved');
-                        setLastSavedFingerprint(
-                          composerFingerprint(
-                            nextComposer,
-                            identityId,
-                            signatureId,
-                            [],
-                            resolved.attachments,
-                          ),
-                        );
-                      })
-                      .catch(requestError)
-                      .finally(() => setSending(false));
-                  }}
+                  onUseRemote={resolveRemoteDraft}
                 />
               ) : null}
               <div className='flex flex-wrap items-end gap-2'>

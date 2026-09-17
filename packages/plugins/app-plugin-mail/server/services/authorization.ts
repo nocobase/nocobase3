@@ -5,28 +5,31 @@ import {
   type MailAuthorizationStartResult,
   type MailCompleteAuthorizationInput,
   type MailConnectAccountInput,
-  type MailCredentialVault,
   type MailOperationContext,
   type MailProviderConfig,
-  type MailProviderContext,
-  type MailProviderRegistry,
-  type MailService,
   type MailSignature,
   type MailStartAuthorizationInput,
-} from '../types.js';
+} from '../../shared/mail.js';
+import {
+  type MailCredentialVault,
+  type MailProviderContext,
+  type MailProviderRegistry,
+} from '../contracts/provider.js';
+import { type MailService } from '../contracts/service.js';
 import { toMailAccountView } from '../views.js';
-import { type DefaultMailServiceDependencies } from './dependencies.js';
+import { type MailServiceDependencies } from './dependencies.js';
 import { hashState, normalizeAddress } from './input.js';
 
 export class MailAuthorizationService {
   public constructor(
-    private readonly dependencies: Pick<
-      DefaultMailServiceDependencies,
-      | 'store'
-      | 'registry'
-      | 'resolveProviderConfig'
-      | 'credentials'
-      | 'providerContext'
+    private readonly dependencies: MailServiceDependencies<
+      | 'consumeAuthorizationTransaction'
+      | 'createAuthorizationTransaction'
+      | 'findAccountByProviderIdentity'
+      | 'listIdentities'
+      | 'listSignatures'
+      | 'saveAuthorizedAccount',
+      'registry' | 'resolveProviderConfig' | 'credentials' | 'providerContext'
     >,
     private readonly sync: Pick<MailService, 'startSync'>,
     private readonly defaultAutomaticSyncIntervalMinutes: number,
@@ -168,7 +171,7 @@ export class MailAuthorizationService {
     readonly providerContext: MailProviderContext;
     readonly credentials: MailCredentialVault;
     readonly resolveProviderConfig: (
-      provider: import('../types.js').MailProviderIdentity,
+      provider: import('../../shared/mail.js').MailProviderIdentity,
     ) => MailProviderConfig;
   } {
     const { registry, providerContext, credentials, resolveProviderConfig } =
@@ -186,8 +189,8 @@ export class MailAuthorizationService {
 
   private async persistAuthorizedAccount(
     userId: string,
-    provider: import('../types.js').MailProviderIdentity,
-    authorized: import('../types.js').MailAuthorizedAccount,
+    provider: import('../../shared/mail.js').MailProviderIdentity,
+    authorized: import('../contracts/provider.js').MailAuthorizedAccount,
     initialSyncReceivedAfter?: string | null,
   ): Promise<MailAccountView> {
     const { credentials } = this.authorizationDependencies();

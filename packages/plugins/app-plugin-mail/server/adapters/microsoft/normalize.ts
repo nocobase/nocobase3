@@ -3,8 +3,8 @@ import type {
   MailFolderType,
   MailProviderResult,
   NormalizedMailAttachment,
-  NormalizedMailMessage,
-} from '../../types.js';
+} from '../../../shared/mail.js';
+import type { NormalizedMailMessage } from '../../contracts/provider.js';
 
 import type { GraphEmailAddress, GraphMessage, GraphProfile } from './types.js';
 import { failure } from './errors.js';

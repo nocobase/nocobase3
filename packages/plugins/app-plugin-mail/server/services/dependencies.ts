@@ -3,13 +3,15 @@ import type { UserAdministrationService } from '@nocobase/app-plugin-authenticat
 import { type MailMessageChangeNotifier } from '../realtime.js';
 import {
   type MailCredentialVault,
-  type MailOutboundAttachmentStorage,
   type MailProviderAdapterResolver,
-  type MailProviderConfig,
   type MailProviderContext,
   type MailProviderRegistry,
-  type MailStore,
-} from '../types.js';
+} from '../contracts/provider.js';
+import {
+  type MailOutboundAttachmentStorage,
+  type MailProviderConfig,
+} from '../../shared/mail.js';
+import { type MailStore } from '../contracts/persistence.js';
 
 export interface MailOutboxPublisher {
   kick(): void;
@@ -27,9 +29,17 @@ export interface DefaultMailServiceDependencies {
   readonly providerContext?: MailProviderContext;
   readonly credentials?: MailCredentialVault;
   readonly resolveProviderConfig?: (
-    provider: import('../types.js').MailProviderIdentity,
+    provider: import('../../shared/mail.js').MailProviderIdentity,
   ) => MailProviderConfig;
   readonly listProviderConfigs?: () => readonly MailProviderConfig[];
   readonly outboundAttachments?: MailOutboundAttachmentStorage;
   readonly messageChangeNotifier?: MailMessageChangeNotifier;
 }
+
+/** Internal services declare persistence capabilities rather than the entire facade. */
+export type MailServiceDependencies<
+  Methods extends keyof MailStore,
+  Extras extends Exclude<keyof DefaultMailServiceDependencies, 'store'>,
+> = Pick<DefaultMailServiceDependencies, Extras> & {
+  readonly store: Pick<MailStore, Methods>;
+};

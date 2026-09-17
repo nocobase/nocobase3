@@ -5,15 +5,20 @@ import {
   type MailOffsetPage,
   type MailSubmissionLogView,
   type MailSubmissionView,
-} from '../types.js';
+} from '../../shared/mail.js';
 import { toSubmissionLogView, toSubmissionView } from '../views.js';
-import { type DefaultMailServiceDependencies } from './dependencies.js';
+import { type MailServiceDependencies } from './dependencies.js';
 
 export class MailSubmissionsService {
   public constructor(
-    private readonly dependencies: Pick<
-      DefaultMailServiceDependencies,
-      'store' | 'outbox'
+    private readonly dependencies: MailServiceDependencies<
+      | 'countSubmissions'
+      | 'getAccount'
+      | 'getScheduledSubmission'
+      | 'getSubmissionByIdempotencyKey'
+      | 'listSubmissions'
+      | 'transitionSubmission',
+      'outbox'
     >,
     private readonly sendMail: SendMailOperation,
   ) {}
@@ -82,14 +87,14 @@ export class MailSubmissionsService {
 
   public async sendMessage(
     context: MailOperationContext,
-    input: import('../types.js').MailComposeInput,
+    input: import('../../shared/mail.js').MailComposeInput,
   ): Promise<MailSubmissionView> {
     return toSubmissionView(await this.sendMail.execute(context, input));
   }
 
   public async sendBulk(
     context: MailOperationContext,
-    input: import('../types.js').MailBulkComposeInput,
+    input: import('../../shared/mail.js').MailBulkComposeInput,
   ): Promise<readonly MailSubmissionView[]> {
     if (input.recipients.length === 0 || input.recipients.length > 100) {
       throw new TypeError('Bulk mail requires between 1 and 100 recipients.');

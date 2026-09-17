@@ -1,4 +1,7 @@
-import type { MailProviderError, MailProviderResult } from '../../types.js';
+import type {
+  MailProviderError,
+  MailProviderResult,
+} from '../../../shared/mail.js';
 
 export function failure<T>(
   code: string,

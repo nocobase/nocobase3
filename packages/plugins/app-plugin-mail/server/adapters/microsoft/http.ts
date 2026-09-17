@@ -1,8 +1,8 @@
 import type {
   MailProviderError,
   MailProviderResult,
-  MailProviderSendResult,
-} from '../../types.js';
+} from '../../../shared/mail.js';
+import type { MailProviderSendResult } from '../../contracts/provider.js';
 
 import type { MicrosoftMailProviderConfig } from './types.js';
 import { HTTP_TIMEOUT_MS, MAX_PROVIDER_JSON_BYTES } from './constants.js';

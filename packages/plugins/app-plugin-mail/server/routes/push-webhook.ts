@@ -14,12 +14,9 @@ import {
   mailRuntimeToken,
   mailStoreToken,
 } from '../tokens.js';
-import type {
-  MailAccount,
-  MailProviderIdentity,
-  MailProviderPushNotification,
-  MailStore,
-} from '../types.js';
+import type { MailAccount, MailProviderIdentity } from '../../shared/mail.js';
+import type { MailProviderPushNotification } from '../contracts/provider.js';
+import type { MailStore } from '../contracts/persistence.js';
 
 const MAX_WEBHOOK_BYTES = 1_000_000;
 const MAX_NOTIFICATIONS_PER_WEBHOOK = 100;

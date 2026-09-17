@@ -1,4 +1,4 @@
-import { notifyMailMessageChange } from '../realtime.js';
+import { MailMessageMutations } from '../operations/message-mutations.js';
 import {
   type MailFolder,
   type MailListMessagesInput,
@@ -10,31 +10,35 @@ import {
   type MailMessageSummary,
   type MailOperationContext,
   type MailPage,
-} from '../types.js';
+} from '../../shared/mail.js';
 import {
   toMailAccountView,
   toSubmissionLogView,
   toSyncRunView,
 } from '../views.js';
-import { type DefaultMailServiceDependencies } from './dependencies.js';
-import {
-  assertManagedProviderResult,
-  toManagementActionError,
-} from './errors.js';
-import { closeAdapter } from './provider-lifecycle.js';
+import { type MailServiceDependencies } from './dependencies.js';
+import { toManagementActionError } from './errors.js';
 
+/** Trusted management entry: callers must authorize mail.management access. */
 export class MailManagementService {
+  private readonly mutations: MailMessageMutations;
   public constructor(
-    private readonly dependencies: Pick<
-      DefaultMailServiceDependencies,
-      | 'store'
-      | 'adapters'
-      | 'messageChangeNotifier'
-      | 'logger'
-      | 'registry'
-      | 'users'
+    private readonly dependencies: MailServiceDependencies<
+      | 'deleteMessage'
+      | 'getAccount'
+      | 'getMessageForAccount'
+      | 'listAllAccounts'
+      | 'listAllMessages'
+      | 'listAllSubmissions'
+      | 'listAllSyncRuns'
+      | 'listFolders'
+      | 'moveMessage'
+      | 'updateMessageState',
+      'adapters' | 'messageChangeNotifier' | 'logger' | 'registry' | 'users'
     >,
-  ) {}
+  ) {
+    this.mutations = new MailMessageMutations(dependencies);
+  }
 
   public async listManagedAccounts(
     context: MailOperationContext,
@@ -65,7 +69,7 @@ export class MailManagementService {
 
   public async listManagedOperationLogs(
     context: MailOperationContext,
-  ): Promise<import('../types.js').MailManagedOperationLogsView> {
+  ): Promise<import('../../shared/mail.js').MailManagedOperationLogsView> {
     const [accounts, syncRuns, submissions] = await Promise.all([
       this.dependencies.store.listAllAccounts(),
       this.dependencies.store.listAllSyncRuns(),
@@ -144,150 +148,44 @@ export class MailManagementService {
       target.messageId,
     );
     if (!message) throw new Error('Mail message was not found.');
-    const adapter = await this.dependencies.adapters.resolve(
-      account,
-      context.signal,
-    );
-    try {
-      switch (input.action) {
-        case 'markRead':
-        case 'markUnread': {
-          if (!adapter.setRead) {
-            throw new Error(
-              'The selected Mail Provider cannot change read state.',
-            );
-          }
-          assertManagedProviderResult(
-            await adapter.setRead(
-              message.providerMessageId,
-              input.action === 'markRead',
-              context.signal,
-            ),
-          );
-          const updated = await this.dependencies.store.updateMessageState(
-            account.id,
-            message.id,
-            { read: input.action === 'markRead' },
-          );
-          if (!updated)
-            throw new Error('Mail message was not found after update.');
-          break;
-        }
-        case 'star':
-        case 'unstar': {
-          if (!adapter.setStarred) {
-            throw new Error(
-              'The selected Mail Provider cannot change starred state.',
-            );
-          }
-          assertManagedProviderResult(
-            await adapter.setStarred(
-              message.providerMessageId,
-              input.action === 'star',
-              context.signal,
-            ),
-          );
-          const updated = await this.dependencies.store.updateMessageState(
-            account.id,
-            message.id,
-            { starred: input.action === 'star' },
-          );
-          if (!updated)
-            throw new Error('Mail message was not found after update.');
-          break;
-        }
-        case 'archive':
-        case 'move': {
-          const destination =
-            input.action === 'archive'
-              ? (await this.dependencies.store.listFolders(account.id)).find(
-                  (folder) => folder.type === 'archive',
-                )
-              : input.providerFolderId
-                ? (await this.dependencies.store.listFolders(account.id)).find(
-                    (folder) =>
-                      folder.providerFolderId === input.providerFolderId,
-                  )
-                : undefined;
-          if (!destination) {
-            throw new Error('Mail destination folder was not found.');
-          }
-          if (!adapter.capabilities.moveMessage || !adapter.moveMessage) {
-            throw new Error('The selected Mail Provider cannot move messages.');
-          }
-          const moved = assertManagedProviderResult(
-            await adapter.moveMessage(
-              message.providerMessageId,
-              destination.providerFolderId,
-              context.signal,
-            ),
-          );
-          const updated = await this.dependencies.store.moveMessage(
-            account.id,
-            message.id,
-            moved.providerMessageId,
-            destination.providerFolderId,
-          );
-          if (!updated)
-            throw new Error('Mail message was not found after move.');
-          break;
-        }
-        case 'delete': {
-          if (
-            !input.permanently &&
-            adapter.capabilities.moveMessage &&
-            adapter.moveMessage
-          ) {
-            const trash = (
-              await this.dependencies.store.listFolders(account.id)
-            ).find((folder) => folder.type === 'trash');
-            if (trash) {
-              const moved = assertManagedProviderResult(
-                await adapter.moveMessage(
-                  message.providerMessageId,
-                  trash.providerFolderId,
-                  context.signal,
-                ),
-              );
-              const updated = await this.dependencies.store.moveMessage(
-                account.id,
-                message.id,
-                moved.providerMessageId,
-                trash.providerFolderId,
-              );
-              if (!updated)
-                throw new Error('Mail message was not found after delete.');
-              break;
-            }
-          }
-          if (!adapter.deleteMessage) {
-            throw new Error(
-              'The selected Mail Provider cannot delete messages.',
-            );
-          }
-          assertManagedProviderResult(
-            await adapter.deleteMessage(
-              message.providerMessageId,
-              input.permanently ?? false,
-              context.signal,
-            ),
-          );
-          const deleted = await this.dependencies.store.deleteMessage(
-            account.id,
-            message.id,
-          );
-          if (!deleted)
-            throw new Error('Mail message was not found after delete.');
-          break;
-        }
+    const targetInput = { accountId: account.id, messageId: message.id };
+    switch (input.action) {
+      case 'markRead':
+      case 'markUnread':
+        await this.mutations.updateMessage(context, account, message, {
+          ...targetInput,
+          read: input.action === 'markRead',
+        });
+        return;
+      case 'star':
+      case 'unstar':
+        await this.mutations.updateMessage(context, account, message, {
+          ...targetInput,
+          starred: input.action === 'star',
+        });
+        return;
+      case 'archive':
+      case 'move': {
+        const destination = (
+          await this.dependencies.store.listFolders(account.id)
+        ).find((folder) =>
+          input.action === 'archive'
+            ? folder.type === 'archive'
+            : folder.providerFolderId === input.providerFolderId,
+        );
+        if (!destination)
+          throw new Error('Mail destination folder was not found.');
+        await this.mutations.moveMessage(context, account, message, {
+          ...targetInput,
+          providerFolderId: destination.providerFolderId,
+        });
+        return;
       }
-      notifyMailMessageChange(
-        this.dependencies.messageChangeNotifier,
-        account.userId,
-        this.dependencies.logger,
-      );
-    } finally {
-      await closeAdapter(adapter);
+      case 'delete':
+        await this.mutations.deleteMessage(context, account, message, {
+          ...targetInput,
+          permanently: input.permanently,
+        });
     }
   }
 }

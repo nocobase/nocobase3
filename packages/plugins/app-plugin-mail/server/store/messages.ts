@@ -8,9 +8,9 @@ import {
   type MailMessage,
   type MailMessageSummary,
   type MailPage,
-  type MailStore,
-  type NormalizedMailMessage,
-} from '../types.js';
+} from '../../shared/mail.js';
+import { type MailStore } from '../contracts/persistence.js';
+import { type NormalizedMailMessage } from '../contracts/provider.js';
 import { encodeMessageCursor, parseMessageCursor } from './message-cursor.js';
 import {
   conversationGroupKey,

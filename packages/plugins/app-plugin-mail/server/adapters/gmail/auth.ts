@@ -1,8 +1,8 @@
 import type {
   MailAuthorizedAccount,
   MailProviderAuthorization,
-  MailProviderResult,
-} from '../../types.js';
+} from '../../contracts/provider.js';
+import type { MailProviderResult } from '../../../shared/mail.js';
 
 import type {
   GmailCredential,

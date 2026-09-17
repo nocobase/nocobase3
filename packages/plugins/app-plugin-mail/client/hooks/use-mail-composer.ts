@@ -1,8 +1,9 @@
+import { readDraftComposerBody } from '../lib/mail-forward-content.js';
 import type { Dispatch, SetStateAction, RefObject } from 'react';
-import type { MailClient } from '../mail-client.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  formatAddressList,
   buildComposerInput,
   buildDraftComposerInput,
   clearComposerRecovery,
@@ -705,8 +706,8 @@ export function useMailComposer({
     identityId,
     signatureId,
     lastSavedFingerprint,
-    mail,
     recoveryOffer,
+    mail,
     requestError,
     retainedAttachments,
     sending,
@@ -723,11 +724,85 @@ export function useMailComposer({
     return () => window.removeEventListener('beforeunload', warnBeforeUnload);
   }, [composer, composerHasUnsavedChanges]);
 
+  const restoreDraft = (): void => {
+    if (!recoveryOffer || sending || autoSaving || uploading) return;
+
+    composerSessionRef.current += 1;
+    draftMessageIdRef.current = recoveryOffer.composer.draftMessageId;
+    setLastSavedFingerprint(recoveryOffer.savedFingerprint);
+    setComposer(recoveryOffer.composer);
+    setIdentityId(recoveryOffer.identityId);
+    setSignatureId(recoveryOffer.signatureId ?? '');
+    setCcVisible(Boolean(recoveryOffer.composer.cc.trim()));
+    setBccVisible(Boolean(recoveryOffer.composer.bcc.trim()));
+    setScheduleEnabled(Boolean(recoveryOffer.composer.scheduledAt));
+    setComposeAttachments(recoveryOffer.composeAttachments);
+    setRetainedAttachments(recoveryOffer.retainedAttachments);
+    setRecoveryOffer(undefined);
+  };
+  const discardRecovery = (): void => {
+    clearComposerRecovery(composerAccountId);
+    setLastSavedFingerprint(currentComposerFingerprint);
+    setRecoveryOffer(undefined);
+  };
+  const resolveRemoteDraft = (): void => {
+    if (!composer) return;
+
+    const draftMessageId = composer.draftMessageId;
+    if (!draftMessageId || sending || autoSaving || uploading) return;
+    const session = composerSessionRef.current;
+    setSending(true);
+    setError(undefined);
+    void mail
+      .resolveDraftConflict({
+        accountId: composerAccountId,
+        action: 'useRemote',
+        messageId: draftMessageId,
+      })
+      .then((resolved) => {
+        if (session !== composerSessionRef.current) return;
+        const nextComposer: ComposerState = {
+          ...composer,
+          bcc: formatAddressList(resolved.bcc),
+          cc: formatAddressList(resolved.cc),
+          draftConflict: undefined,
+          forwardQuote: undefined,
+          ...readDraftComposerBody(resolved),
+          subject: resolved.subject,
+          to: formatAddressList(resolved.to),
+        };
+        draftMessageIdRef.current = resolved.id;
+        setCcVisible(Boolean(nextComposer.cc.trim()));
+        setBccVisible(Boolean(nextComposer.bcc.trim()));
+        setScheduleEnabled(Boolean(nextComposer.scheduledAt));
+        setComposer(nextComposer);
+        setComposeAttachments([]);
+        setRetainedAttachments(resolved.attachments);
+        setDraftSaveStatus('saved');
+        setLastSavedFingerprint(
+          composerFingerprint(
+            nextComposer,
+            identityId,
+            signatureId,
+            [],
+            resolved.attachments,
+          ),
+        );
+      })
+      .catch((cause: unknown) => {
+        if (session === composerSessionRef.current) requestError(cause);
+      })
+      .finally(() => {
+        if (session === composerSessionRef.current) setSending(false);
+      });
+  };
+
   return {
+    restoreDraft,
+    discardRecovery,
+    resolveRemoteDraft,
     t,
-    mail,
     error,
-    setError,
     confirmClose,
     setConfirmClose,
     composer,
@@ -745,12 +820,10 @@ export function useMailComposer({
     signatureId,
     setSignatureId,
     sending,
-    setSending,
     autoSaving,
     draftSaveStatus,
     setDraftSaveStatus,
     recoveryOffer,
-    setRecoveryOffer,
     templates,
     uploading,
     composeAttachments,
@@ -758,10 +831,6 @@ export function useMailComposer({
     retainedAttachments,
     setRetainedAttachments,
     attachmentInputRef,
-    draftMessageIdRef,
-    setLastSavedFingerprint,
-    composerSessionRef,
-    requestError,
     sendableComposerIdentities,
     composerCanSend,
     composerCanDraft,
@@ -769,17 +838,17 @@ export function useMailComposer({
     sendComposer,
     saveComposerDraft,
     uploadComposerAttachments,
-    currentComposerFingerprint,
     composerHasRequiredContent,
     composerHasUnsavedChanges,
   };
 }
 
 export interface MailComposerController {
+  readonly restoreDraft: () => void;
+  readonly discardRecovery: () => void;
+  readonly resolveRemoteDraft: () => void;
   readonly t: ReturnType<typeof useTranslation>['t'];
-  readonly mail: MailClient;
   readonly error: string | undefined;
-  readonly setError: Dispatch<SetStateAction<string | undefined>>;
   readonly confirmClose: boolean;
   readonly setConfirmClose: Dispatch<SetStateAction<boolean>>;
   readonly composer: ComposerState | undefined;
@@ -797,16 +866,12 @@ export interface MailComposerController {
   readonly signatureId: string;
   readonly setSignatureId: Dispatch<SetStateAction<string>>;
   readonly sending: boolean;
-  readonly setSending: Dispatch<SetStateAction<boolean>>;
   readonly autoSaving: boolean;
   readonly draftSaveStatus: 'idle' | 'saving' | 'saved' | 'failed';
   readonly setDraftSaveStatus: Dispatch<
     SetStateAction<'idle' | 'saving' | 'saved' | 'failed'>
   >;
   readonly recoveryOffer: ComposerRecoverySnapshot | undefined;
-  readonly setRecoveryOffer: Dispatch<
-    SetStateAction<ComposerRecoverySnapshot | undefined>
-  >;
   readonly templates: readonly MailTemplate[];
   readonly uploading: boolean;
   readonly composeAttachments: readonly MailOutboundAttachmentView[];
@@ -818,12 +883,6 @@ export interface MailComposerController {
     SetStateAction<MailMessage['attachments']>
   >;
   readonly attachmentInputRef: RefObject<HTMLInputElement | null>;
-  readonly draftMessageIdRef: RefObject<string | undefined>;
-  readonly setLastSavedFingerprint: Dispatch<
-    SetStateAction<string | undefined>
-  >;
-  readonly composerSessionRef: RefObject<number>;
-  readonly requestError: (cause: unknown) => void;
   readonly sendableComposerIdentities: MailIdentity[];
   readonly composerCanSend: boolean;
   readonly composerCanDraft: boolean;
@@ -831,7 +890,6 @@ export interface MailComposerController {
   readonly sendComposer: (mode?: 'normal' | 'bulk') => void;
   readonly saveComposerDraft: () => void;
   readonly uploadComposerAttachments: (files: FileList | null) => void;
-  readonly currentComposerFingerprint: string | undefined;
   readonly composerHasRequiredContent: boolean;
   readonly composerHasUnsavedChanges: boolean;
 }

@@ -7,7 +7,7 @@ import {
   type MailSubmissionView,
   type MailSyncRun,
   type MailSyncRunView,
-} from './types.js';
+} from '../shared/mail.js';
 
 export function toSyncRunView(run: MailSyncRun): MailSyncRunView {
   return {
@@ -43,7 +43,7 @@ export function toSubmissionView(
 }
 
 export function toSubmissionLogView(
-  submission: import('./types.js').MailStoredSubmission,
+  submission: import('./contracts/persistence.js').MailStoredSubmission,
 ): MailSubmissionLogView {
   return {
     ...toSubmissionView(submission),

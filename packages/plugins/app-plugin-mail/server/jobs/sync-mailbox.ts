@@ -1,6 +1,6 @@
 import { Job, type JobOptions } from '@nocobase/queue';
 
-import type { MailSyncMailboxTaskPayload } from '../types.js';
+import type { MailSyncMailboxTaskPayload } from '../contracts/persistence.js';
 
 export const MAIL_SYNC_JOB_NAME = '@nocobase/app-plugin-mail/sync-mailbox';
 

@@ -1,11 +1,10 @@
+import type { MailAccount, MailProviderConfig } from '../shared/mail.js';
 import type {
-  MailAccount,
   MailProviderAdapter,
   MailProviderAdapterResolver,
-  MailProviderConfig,
   MailProviderContext,
   MailProviderRegistry,
-} from './types.js';
+} from './contracts/provider.js';
 
 export interface DefaultMailProviderAdapterResolverOptions {
   readonly registry: MailProviderRegistry;

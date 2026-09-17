@@ -3,14 +3,16 @@ import { type DatabaseManager } from '@nocobase/db';
 import { randomUUID } from 'node:crypto';
 import {
   MAIL_LOCAL_DRAFT_FOLDER_ID,
-  type MailCreateSyncRunInput,
   type MailProviderError,
-  type MailStore,
-  type MailSyncBatch,
   type MailSyncCursor,
   type MailSyncRun,
+} from '../../shared/mail.js';
+import {
+  type MailCreateSyncRunInput,
+  type MailStore,
+  type MailSyncBatch,
   type MailSyncStepCommit,
-} from '../types.js';
+} from '../contracts/persistence.js';
 import { fromSyncRunRow, toSyncRunRow } from './mappers.js';
 import {
   deleteMessages,

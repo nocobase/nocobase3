@@ -1,6 +1,6 @@
 import type { ListResponse } from 'imapflow';
 
-import type { NormalizedMailFolder } from '../../types.js';
+import type { NormalizedMailFolder } from '../../contracts/provider.js';
 
 export function folderType(
   mailbox: ListResponse,

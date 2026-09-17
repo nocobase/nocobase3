@@ -2,17 +2,24 @@ import { notifyMailMessageChange } from '../realtime.js';
 import {
   type MailAccountView,
   type MailOperationContext,
-  type MailProviderAdapter,
-} from '../types.js';
+} from '../../shared/mail.js';
+import { type MailProviderAdapter } from '../contracts/provider.js';
 import { toMailAccountView } from '../views.js';
-import { type DefaultMailServiceDependencies } from './dependencies.js';
+import { type MailServiceDependencies } from './dependencies.js';
 import { closeAdapter } from './provider-lifecycle.js';
 
 export class MailAccountsService {
   public constructor(
-    private readonly dependencies: Pick<
-      DefaultMailServiceDependencies,
-      'store' | 'adapters' | 'messageChangeNotifier' | 'logger' | 'credentials'
+    private readonly dependencies: MailServiceDependencies<
+      | 'cancelSyncRun'
+      | 'deleteAccount'
+      | 'findActiveSyncRun'
+      | 'getAccount'
+      | 'getPushSubscription'
+      | 'listAccounts'
+      | 'markAccountRemoving'
+      | 'saveAccount',
+      'adapters' | 'messageChangeNotifier' | 'logger' | 'credentials'
     >,
   ) {}
 
@@ -26,7 +33,7 @@ export class MailAccountsService {
 
   public async updateAccount(
     context: MailOperationContext,
-    input: import('../types.js').MailUpdateAccountInput,
+    input: import('../../shared/mail.js').MailUpdateAccountInput,
   ): Promise<MailAccountView> {
     const account = await this.dependencies.store.getAccount(input.accountId);
     if (!account || account.userId !== context.actorId) {

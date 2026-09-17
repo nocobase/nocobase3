@@ -1,4 +1,4 @@
-import type { NormalizedMailMessage } from '../types.js';
+import type { NormalizedMailMessage } from '../contracts/provider.js';
 
 /** A durable, retryable message identity when provider content cannot be decoded. */
 export function incompleteMessage(

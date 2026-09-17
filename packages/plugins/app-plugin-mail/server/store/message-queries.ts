@@ -1,5 +1,8 @@
 import { type QueryAdapter } from '@nocobase/db';
-import { type MailMessage, type MailMessageSummary } from '../types.js';
+import {
+  type MailMessage,
+  type MailMessageSummary,
+} from '../../shared/mail.js';
 import { toMailMessage, toMailMessageSummary } from './mappers.js';
 import {
   type MessageFolderRow,

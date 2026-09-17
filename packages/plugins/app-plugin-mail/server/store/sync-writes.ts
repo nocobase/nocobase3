@@ -1,6 +1,6 @@
 import { type QueryAdapter } from '@nocobase/db';
 import { randomUUID } from 'node:crypto';
-import { type MailSyncCursor, type MailSyncRun } from '../types.js';
+import { type MailSyncCursor, type MailSyncRun } from '../../shared/mail.js';
 import { type OutboxRow, type SyncStateRow } from './rows.js';
 
 export async function upsertSyncState(

@@ -6,13 +6,15 @@ import {
   type MailIdentity,
   type MailMessage,
   type MailOperationContext,
-  type MailProviderAdapter,
   type MailResolveDraftConflictInput,
   type NormalizedMailAttachment,
+} from '../../shared/mail.js';
+import {
+  type MailProviderAdapter,
   type NormalizedMailMessage,
-} from '../types.js';
+} from '../contracts/provider.js';
 import { requireOwnedMessage } from './access.js';
-import { type DefaultMailServiceDependencies } from './dependencies.js';
+import { type MailServiceDependencies } from './dependencies.js';
 import {
   draftFingerprint,
   isLocalDraftMessage,
@@ -25,16 +27,20 @@ import { closeAdapter } from './provider-lifecycle.js';
 
 export class MailDraftsService {
   public constructor(
-    private readonly dependencies: Pick<
-      DefaultMailServiceDependencies,
-      'store' | 'adapters' | 'messageChangeNotifier' | 'logger'
+    private readonly dependencies: MailServiceDependencies<
+      | 'getAccount'
+      | 'getIdentity'
+      | 'getMessage'
+      | 'getOutboundAttachment'
+      | 'saveMessage',
+      'adapters' | 'messageChangeNotifier' | 'logger'
     >,
     private readonly sendMail: SendMailOperation,
   ) {}
 
   public async saveDraft(
     context: MailOperationContext,
-    input: import('../types.js').MailComposeInput,
+    input: import('../../shared/mail.js').MailComposeInput,
   ): Promise<MailMessage> {
     if (input.scheduledAt) {
       throw new TypeError('A draft cannot also be scheduled for delivery.');
@@ -226,7 +232,7 @@ export class MailDraftsService {
   private async createLocalDraftMessage(
     context: MailOperationContext,
     identity: MailIdentity,
-    input: import('../types.js').MailComposeInput,
+    input: import('../../shared/mail.js').MailComposeInput,
     existingDraft?: MailMessage,
   ): Promise<NormalizedMailMessage> {
     const attachments = await this.loadLocalDraftAttachments(
@@ -266,7 +272,7 @@ export class MailDraftsService {
 
   private async loadLocalDraftAttachments(
     context: MailOperationContext,
-    input: import('../types.js').MailComposeInput,
+    input: import('../../shared/mail.js').MailComposeInput,
     existingDraft?: MailMessage,
   ): Promise<readonly NormalizedMailAttachment[]> {
     const retained =

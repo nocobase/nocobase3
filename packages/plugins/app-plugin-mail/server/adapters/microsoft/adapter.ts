@@ -2,6 +2,11 @@ import { incompleteMessage } from '../incomplete-message.js';
 import type {
   MailAccount,
   MailAttachmentContent,
+  MailProviderResult,
+  MailSyncCursor,
+  NormalizedMailAttachment,
+} from '../../../shared/mail.js';
+import type {
   MailProviderAdapter,
   MailProviderChangePage,
   MailProviderContext,
@@ -10,15 +15,12 @@ import type {
   MailProviderListFoldersInput,
   MailProviderListMessagesInput,
   MailProviderMessagePage,
-  MailProviderResult,
   MailProviderSendInput,
   MailProviderSendResult,
   MailProviderUpsertPushSubscriptionInput,
   MailProviderUpsertPushSubscriptionResult,
-  MailSyncCursor,
-  NormalizedMailAttachment,
   NormalizedMailMessage,
-} from '../../types.js';
+} from '../../contracts/provider.js';
 
 import type {
   FolderCursor,

@@ -1,4 +1,7 @@
-import type { MailProviderDefinition, MailProviderRegistry } from './types.js';
+import type {
+  MailProviderDefinition,
+  MailProviderRegistry,
+} from './contracts/provider.js';
 
 /** Collects Provider definitions without creating accounts or external clients. */
 export class DefaultMailProviderRegistry implements MailProviderRegistry {

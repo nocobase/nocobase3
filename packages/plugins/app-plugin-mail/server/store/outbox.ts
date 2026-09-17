@@ -1,5 +1,5 @@
 import { type DatabaseManager } from '@nocobase/db';
-import { type MailOutboxRecord } from '../types.js';
+import { type MailOutboxRecord } from '../contracts/persistence.js';
 import { fromOutboxRow } from './mappers.js';
 import { type OutboxRow } from './rows.js';
 

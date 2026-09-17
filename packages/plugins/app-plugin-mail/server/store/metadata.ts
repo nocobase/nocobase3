@@ -6,8 +6,8 @@ import {
   type MailLabel,
   type MailLabelColor,
   type MailSignature,
-  type NormalizedMailFolder,
-} from '../types.js';
+} from '../../shared/mail.js';
+import { type NormalizedMailFolder } from '../contracts/provider.js';
 import { replaceAccountIdentities, saveSignature } from './account-writes.js';
 import {
   fromFolderRow,

@@ -1,3 +1,4 @@
+import { useMailWorkspaceData } from '../hooks/use-mail-workspace-data.js';
 import {
   createForwardQuote,
   readDraftComposerBody,
@@ -39,7 +40,6 @@ import {
   type MailFolder,
   type MailLabel,
   type MailMessage,
-  type MailMessageSummary,
   type MailProviderCapabilities,
   type MailProviderView,
   type MailSyncRunView,
@@ -72,19 +72,7 @@ export default function MailWorkspacePage({
   const [labelId, setLabelId] = useState<string>();
   const [smartView, setSmartView] = useState<MailboxSmartView>('all');
   const [query, setQuery] = useState('');
-  const [messages, setMessages] = useState<readonly MailMessageSummary[]>([]);
-  const [nextCursor, setNextCursor] = useState<string>();
-  const [pageCursors, setPageCursors] = useState<
-    readonly (string | undefined)[]
-  >([undefined]);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [listVersion, setListVersion] = useState(0);
-  const [selected, setSelected] = useState<MailMessageSummary>();
-  const [conversation, setConversation] = useState<readonly MailMessage[]>([]);
-  const [conversationCursor, setConversationCursor] = useState<string>();
   const [loadingAccounts, setLoadingAccounts] = useState(true);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  const [loadingConversation, setLoadingConversation] = useState(false);
   const [syncRuns, setSyncRuns] = useState<
     Readonly<Record<string, MailSyncRunView>>
   >({});
@@ -93,9 +81,6 @@ export default function MailWorkspacePage({
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [reloadVersion, setReloadVersion] = useState(0);
-  const conversationRequestIdRef = useRef(0);
-  const markingReadRef = useRef(new Set<string>());
-  const messageRequestIdRef = useRef(0);
   const accountIdRef = useRef('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [composeAccountId, setComposeAccountId] = useState('');
@@ -116,6 +101,46 @@ export default function MailWorkspacePage({
     },
     [t],
   );
+
+  const messageQuery = useMemo(
+    () => ({
+      accountId: accountId || undefined,
+      folderId,
+      labelId,
+      query: debouncedQuery.trim() || undefined,
+      unread: smartView === 'unread' ? true : undefined,
+      starred: smartView === 'starred' ? true : undefined,
+      limit: 50,
+    }),
+    [accountId, debouncedQuery, folderId, labelId, smartView],
+  );
+
+  const {
+    messages,
+    nextCursor,
+    pageIndex,
+    listVersion,
+    selected,
+    conversation,
+    conversationCursor,
+    loadingMessages,
+    loadingConversation,
+    selectMessage,
+    changeMessagePage,
+    loadMoreConversation,
+    updateVisibleMessage,
+    clearSelection,
+    resetMailbox,
+    cancelRequests,
+  } = useMailWorkspaceData({
+    mail,
+    accounts,
+    messageQuery,
+    reloadVersion,
+    requestError,
+    setError,
+    onFocus: () => loadAccounts(false),
+  });
 
   const currentAccount = accounts.find((account) => account.id === accountId);
   const currentProviderCapabilities = findProviderCapabilities(
@@ -212,33 +237,22 @@ export default function MailWorkspacePage({
             );
           });
           if (nextAccountId !== accountIdRef.current) {
-            messageRequestIdRef.current += 1;
-            conversationRequestIdRef.current += 1;
+            resetMailbox();
             accountIdRef.current = nextAccountId;
             setAccountId(nextAccountId);
             setFolders([]);
             setFolderId(undefined);
             setLabelId(undefined);
-            setMessages([]);
-            setNextCursor(undefined);
-            setSelected(undefined);
-            setConversation([]);
-            setConversationCursor(undefined);
-            setLoadingMessages(false);
-            setLoadingConversation(false);
           }
         })
         .catch(requestError)
         .finally(() => setLoadingAccounts(false));
     },
-    [mail, requestError],
+    [mail, requestError, resetMailbox],
   );
 
   useEffect(() => {
     void Promise.resolve().then(() => loadAccounts());
-    const refreshOnFocus = (): void => loadAccounts(false);
-    window.addEventListener('focus', refreshOnFocus);
-    return () => window.removeEventListener('focus', refreshOnFocus);
   }, [loadAccounts]);
 
   useEffect(() => {
@@ -317,24 +331,6 @@ export default function MailWorkspacePage({
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  const messageQuery = useMemo(
-    () => ({
-      accountId: accountId || undefined,
-      folderId,
-      labelId,
-      query: debouncedQuery.trim() || undefined,
-      unread: smartView === 'unread' ? true : undefined,
-      starred: smartView === 'starred' ? true : undefined,
-      limit: 50,
-    }),
-    [accountId, debouncedQuery, folderId, labelId, smartView],
-  );
-
-  const loadedMessageQueryRef = useRef<typeof messageQuery | undefined>(
-    undefined,
-  );
-  const messagePageRequestRef = useRef<number | undefined>(undefined);
-
   useEffect(() => {
     const requestedAccountIds = accountId
       ? [accountId]
@@ -387,209 +383,6 @@ export default function MailWorkspacePage({
       active = false;
     };
   }, [accountId, accounts, mail, reloadVersion, requestError, t]);
-
-  useEffect(() => {
-    const requestId = messageRequestIdRef.current + 1;
-    messageRequestIdRef.current = requestId;
-    conversationRequestIdRef.current += 1;
-    loadedMessageQueryRef.current = undefined;
-    void Promise.resolve()
-      .then(() => {
-        if (messageRequestIdRef.current !== requestId) return undefined;
-        setLoadingMessages(true);
-        setMessages([]);
-        setNextCursor(undefined);
-        setPageCursors([undefined]);
-        setPageIndex(0);
-        setListVersion((version) => version + 1);
-        setSelected(undefined);
-        setConversation([]);
-        setConversationCursor(undefined);
-        setLoadingConversation(false);
-        setError(undefined);
-        return accounts.length === 0
-          ? { items: [], nextCursor: undefined }
-          : mail.listMessages(messageQuery);
-      })
-      .then(
-        (page) => {
-          if (!page || messageRequestIdRef.current !== requestId) return;
-          loadedMessageQueryRef.current = messageQuery;
-          setMessages(page.items);
-          setNextCursor(page.nextCursor);
-          setSelected(undefined);
-          setConversation([]);
-          setConversationCursor(undefined);
-          conversationRequestIdRef.current += 1;
-          if (messageRequestIdRef.current === requestId)
-            setLoadingMessages(false);
-        },
-        (cause: unknown) => {
-          if (messageRequestIdRef.current !== requestId) return;
-          requestError(cause);
-          setLoadingMessages(false);
-        },
-      );
-  }, [accountId, accounts, mail, messageQuery, reloadVersion, requestError]);
-
-  const markOpenedMessagesRead = useCallback(
-    (openedMessages: readonly MailMessage[], requestId: number): void => {
-      for (const message of openedMessages) {
-        const key = `${message.accountId}:${message.id}`;
-        if (
-          message.read ||
-          message.draft ||
-          markingReadRef.current.has(key) ||
-          !accounts.some(
-            (account) =>
-              account.id === message.accountId && account.status === 'active',
-          )
-        )
-          continue;
-        markingReadRef.current.add(key);
-        void mail
-          .updateMessage({
-            accountId: message.accountId,
-            messageId: message.id,
-            read: true,
-          })
-          .then((updated) => {
-            const matches = (item: MailMessageSummary): boolean =>
-              item.accountId === updated.accountId && item.id === updated.id;
-            // Patch only read state so other edits made while this request ran survive.
-            setMessages((current) =>
-              current.map((item) =>
-                matches(item) ? { ...item, read: updated.read } : item,
-              ),
-            );
-            setConversation((current) =>
-              current.map((item) =>
-                matches(item) ? { ...item, read: updated.read } : item,
-              ),
-            );
-            setSelected((current) =>
-              current && matches(current)
-                ? { ...current, read: updated.read }
-                : current,
-            );
-            window.dispatchEvent(new Event(MAIL_UNREAD_COUNT_CHANGED_EVENT));
-          })
-          .catch((cause: unknown) => {
-            if (conversationRequestIdRef.current === requestId)
-              requestError(cause);
-          })
-          .finally(() => {
-            markingReadRef.current.delete(key);
-          });
-      }
-    },
-    [accounts, mail, requestError],
-  );
-
-  const selectMessage = useCallback(
-    (message: MailMessageSummary): void => {
-      const requestId = conversationRequestIdRef.current + 1;
-      conversationRequestIdRef.current = requestId;
-      setSelected(message);
-      setConversation([]);
-      setConversationCursor(undefined);
-      setLoadingConversation(true);
-      setError(undefined);
-      const request = message.conversationId
-        ? mail.listConversationMessages(
-            message.accountId,
-            message.conversationId,
-            { limit: 50 },
-          )
-        : mail
-            .getMessage(message.accountId, message.id)
-            .then((detail) => ({ items: [detail], nextCursor: undefined }));
-      void request
-        .then((page) => {
-          if (conversationRequestIdRef.current !== requestId) return;
-          setConversation(page.items);
-          setConversationCursor(page.nextCursor);
-          markOpenedMessagesRead(page.items, requestId);
-        })
-        .catch((cause: unknown) => {
-          if (conversationRequestIdRef.current === requestId)
-            requestError(cause);
-        })
-        .finally(() => {
-          if (conversationRequestIdRef.current === requestId)
-            setLoadingConversation(false);
-        });
-    },
-    [mail, markOpenedMessagesRead, requestError],
-  );
-
-  const changeMessagePage = (targetIndex: number): void => {
-    if (
-      loadingMessages ||
-      loadedMessageQueryRef.current !== messageQuery ||
-      messagePageRequestRef.current === messageRequestIdRef.current ||
-      targetIndex < 0 ||
-      targetIndex > pageIndex + 1 ||
-      (targetIndex > pageIndex && !nextCursor)
-    )
-      return;
-    const cursor =
-      targetIndex > pageIndex ? nextCursor : pageCursors[targetIndex];
-    const requestId = messageRequestIdRef.current;
-    messagePageRequestRef.current = requestId;
-    setLoadingMessages(true);
-    setError(undefined);
-    void mail
-      .listMessages({ ...messageQuery, cursor })
-      .then((page) => {
-        if (messageRequestIdRef.current !== requestId) return;
-        setMessages(page.items);
-        setNextCursor(page.nextCursor);
-        setPageCursors((current) => [...current.slice(0, targetIndex), cursor]);
-        setPageIndex(targetIndex);
-        setListVersion((version) => version + 1);
-        setSelected(undefined);
-        setConversation([]);
-        setConversationCursor(undefined);
-        setLoadingConversation(false);
-        conversationRequestIdRef.current += 1;
-      })
-      .catch((cause: unknown) => {
-        if (messageRequestIdRef.current === requestId) requestError(cause);
-      })
-      .finally(() => {
-        if (messagePageRequestRef.current === requestId)
-          messagePageRequestRef.current = undefined;
-        if (messageRequestIdRef.current === requestId)
-          setLoadingMessages(false);
-      });
-  };
-
-  const loadMoreConversation = (): void => {
-    if (!selected?.conversationId || !conversationCursor || loadingConversation)
-      return;
-    const requestId = conversationRequestIdRef.current;
-    const { accountId: selectedAccountId, conversationId } = selected;
-    setLoadingConversation(true);
-    void mail
-      .listConversationMessages(selectedAccountId, conversationId, {
-        cursor: conversationCursor,
-        limit: 50,
-      })
-      .then((page) => {
-        if (conversationRequestIdRef.current !== requestId) return;
-        setConversation((current) => [...page.items, ...current]);
-        setConversationCursor(page.nextCursor);
-        markOpenedMessagesRead(page.items, requestId);
-      })
-      .catch((cause: unknown) => {
-        if (conversationRequestIdRef.current === requestId) requestError(cause);
-      })
-      .finally(() => {
-        if (conversationRequestIdRef.current === requestId)
-          setLoadingConversation(false);
-      });
-  };
 
   const rememberComposeAccount = useCallback(
     (nextAccountId: string): void => {
@@ -648,20 +441,6 @@ export default function MailWorkspacePage({
     });
   };
 
-  const updateVisibleMessage = (updated: MailMessage): void => {
-    setConversation((current) =>
-      current.map((message) => (message.id === updated.id ? updated : message)),
-    );
-    setMessages((current) =>
-      current.map((message) =>
-        message.id === updated.id
-          ? { ...updated, subjectCount: message.subjectCount }
-          : message,
-      ),
-    );
-    setSelected((current) => (current?.id === updated.id ? updated : current));
-  };
-
   const mutateMessage = (
     operation: Promise<MailMessage | void>,
     removeMessage = false,
@@ -673,8 +452,7 @@ export default function MailWorkspacePage({
         window.dispatchEvent(new Event(MAIL_UNREAD_COUNT_CHANGED_EVENT));
       }
       if (removeMessage) {
-        setSelected(undefined);
-        setConversation([]);
+        clearSelection();
         setReloadVersion((version) => version + 1);
       }
     }, requestError);
@@ -743,8 +521,7 @@ export default function MailWorkspacePage({
       }}
       onAccountChange={(value) => {
         if (value === accountId) return;
-        messageRequestIdRef.current += 1;
-        conversationRequestIdRef.current += 1;
+        cancelRequests();
         accountIdRef.current = value;
         setAccountId(value);
         if (value) rememberComposeAccount(value);
@@ -755,20 +532,17 @@ export default function MailWorkspacePage({
       }}
       onFolderChange={(value) => {
         if (value === folderId) return;
-        messageRequestIdRef.current += 1;
-        conversationRequestIdRef.current += 1;
+        cancelRequests();
         setFolderId(value);
       }}
       onLabelChange={(value) => {
         if (value === labelId) return;
-        messageRequestIdRef.current += 1;
-        conversationRequestIdRef.current += 1;
+        cancelRequests();
         setLabelId(value);
       }}
       onSmartViewChange={(value) => {
         if (value === smartView) return;
-        messageRequestIdRef.current += 1;
-        conversationRequestIdRef.current += 1;
+        cancelRequests();
         setSmartView(value);
         setFolderId(undefined);
         setLabelId(undefined);

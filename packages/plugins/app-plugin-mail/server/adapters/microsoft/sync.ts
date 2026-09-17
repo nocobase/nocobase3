@@ -1,8 +1,8 @@
 import type {
   MailProviderResult,
   MailSyncCursor,
-  NormalizedMailMessage,
-} from '../../types.js';
+} from '../../../shared/mail.js';
+import type { NormalizedMailMessage } from '../../contracts/provider.js';
 
 import type { ChangeCursor, FolderCursor, InitialCursor } from './types.js';
 import { failure } from './errors.js';

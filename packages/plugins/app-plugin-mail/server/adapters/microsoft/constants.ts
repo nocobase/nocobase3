@@ -1,4 +1,4 @@
-import type { MailProviderDefinition } from '../../types.js';
+import type { MailProviderDefinition } from '../../contracts/provider.js';
 
 export const DEFAULT_SCOPES = [
   'openid',

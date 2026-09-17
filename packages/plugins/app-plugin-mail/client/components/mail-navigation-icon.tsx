@@ -9,8 +9,8 @@ import { MAIL_PLUGIN_NS } from '../namespace.js';
 import { subscribeToMailInvalidations } from '../subscription.js';
 
 const REFRESH_INTERVAL_MS = 60_000;
-export const MAIL_UNREAD_COUNT_CHANGED_EVENT =
-  'nocobase:mail-unread-count-changed';
+export { MAIL_UNREAD_COUNT_CHANGED_EVENT } from '../subscription.js';
+import { MAIL_UNREAD_COUNT_CHANGED_EVENT } from '../subscription.js';
 
 /** Mail center icon with a current-user unread badge. */
 export function MailNavigationIcon(): ReactElement {

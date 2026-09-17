@@ -13,22 +13,24 @@ import { simpleParser } from 'mailparser';
 import type {
   MailAccount,
   MailAttachmentContent,
+  MailProviderError,
+  MailProviderResult,
+  MailSyncCursor,
+  NormalizedMailAttachment,
+} from '../../../shared/mail.js';
+import type {
   MailProviderAdapter,
   MailProviderContext,
-  MailProviderError,
   MailProviderFolderPage,
   MailProviderListChangesInput,
   MailProviderListFoldersInput,
   MailProviderListMessagesInput,
   MailProviderMessagePage,
-  MailProviderResult,
   MailProviderSendInput,
   MailProviderSendResult,
-  MailSyncCursor,
   NormalizedMailFolder,
-  NormalizedMailAttachment,
   NormalizedMailMessage,
-} from '../../types.js';
+} from '../../contracts/provider.js';
 
 import type {
   ImapFolderCursor,

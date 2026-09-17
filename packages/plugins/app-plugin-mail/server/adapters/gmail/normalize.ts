@@ -2,9 +2,11 @@ import type {
   MailAddress,
   MailProviderResult,
   NormalizedMailAttachment,
+} from '../../../shared/mail.js';
+import type {
   NormalizedMailFolder,
   NormalizedMailMessage,
-} from '../../types.js';
+} from '../../contracts/provider.js';
 
 import type { GmailHeader, GmailMessageResource, GmailPart } from './types.js';
 import { failure } from './errors.js';

@@ -11,9 +11,7 @@ import { MailSyncStore } from './store/sync.js';
 import { MailTemplatesStore } from './store/templates.js';
 import {
   type MailAccount,
-  type MailAuthorizationTransaction,
   type MailComposeInput,
-  type MailCreateSyncRunInput,
   type MailFolder,
   type MailIdentity,
   type MailLabel,
@@ -23,24 +21,30 @@ import {
   type MailMessage,
   type MailMessageSummary,
   type MailOutboundAttachment,
-  type MailOutboxRecord,
   type MailPage,
   type MailProviderError,
   type MailProviderIdentity,
-  type MailProviderPushSubscription,
-  type MailScheduledSubmission,
   type MailSignature,
-  type MailStore,
-  type MailStoredSubmission,
   type MailSubmission,
-  type MailSyncBatch,
   type MailSyncCursor,
   type MailSyncRun,
-  type MailSyncStepCommit,
   type MailTemplate,
+} from '../shared/mail.js';
+import {
+  type MailAuthorizationTransaction,
+  type MailCreateSyncRunInput,
+  type MailOutboxRecord,
+  type MailScheduledSubmission,
+  type MailStore,
+  type MailStoredSubmission,
+  type MailSyncBatch,
+  type MailSyncStepCommit,
+} from './contracts/persistence.js';
+import {
+  type MailProviderPushSubscription,
   type NormalizedMailFolder,
   type NormalizedMailMessage,
-} from './types.js';
+} from './contracts/provider.js';
 
 /** Composes persistence modules; transaction ownership stays inside each operation. */
 export class DatabaseMailStore implements MailStore {
@@ -204,7 +208,8 @@ export class DatabaseMailStore implements MailStore {
     now: string,
     leaseExpiresAt: string,
   ): Promise<
-    import('./types.js').MailPushSubscriptionMaintenanceLease | undefined
+    | import('./contracts/provider.js').MailPushSubscriptionMaintenanceLease
+    | undefined
   > {
     return this.push.claimPushSubscriptionMaintenance(
       account,

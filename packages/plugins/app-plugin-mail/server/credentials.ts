@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { DatabaseManager, Row } from '@nocobase/db';
 
-import type { MailCredentialVault } from './types.js';
+import type { MailCredentialVault } from './contracts/provider.js';
 
 interface CredentialRow extends Row {
   reference: string;

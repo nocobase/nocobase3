@@ -3,7 +3,7 @@ import {
   type MailAccount,
   type MailIdentity,
   type MailSignature,
-} from '../types.js';
+} from '../../shared/mail.js';
 import { toAccountRow, toIdentityRow } from './mappers.js';
 import {
   type AccountRow,

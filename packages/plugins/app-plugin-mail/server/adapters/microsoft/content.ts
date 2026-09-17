@@ -1,4 +1,4 @@
-import type { MailProviderSendInput } from '../../types.js';
+import type { MailProviderSendInput } from '../../contracts/provider.js';
 
 import type { GraphFileAttachment, GraphMessage } from './types.js';
 import { htmlToText } from './normalize.js';

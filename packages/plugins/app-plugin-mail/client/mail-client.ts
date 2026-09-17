@@ -35,7 +35,7 @@ import type {
   MailTemplate,
   MailSaveTemplateInput,
   MailResolveDraftConflictInput,
-} from '../server/types.js';
+} from '../shared/mail.js';
 
 export type {
   MailAccountStatus,
@@ -79,7 +79,7 @@ export type {
   MailDraftConflict,
   MailDraftConflictAction,
   MailResolveDraftConflictInput,
-} from '../server/types.js';
+} from '../shared/mail.js';
 
 interface DataResponse<T> {
   readonly data: T;

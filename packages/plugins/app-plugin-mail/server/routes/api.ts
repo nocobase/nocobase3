@@ -24,7 +24,7 @@ import {
 } from '../config.js';
 import { mailServiceToken } from '../tokens.js';
 import { MailIdempotencyConflictError } from '../operations/send-mail.js';
-import { isMailLabelColor } from '../types.js';
+import { isMailLabelColor } from '../../shared/mail.js';
 import type {
   MailAddress,
   MailBulkComposeInput,
@@ -34,7 +34,7 @@ import type {
   MailManagementMessageActionInput,
   MailDraftConflictAction,
   MailStartSyncInput,
-} from '../types.js';
+} from '../../shared/mail.js';
 
 type MailRoutesEnv = {
   Variables: AuthEnv['Variables'] & AuthorizationEnv['Variables'];

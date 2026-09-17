@@ -36,7 +36,6 @@ import {
   type MailProviderView,
   type MailResolveDraftConflictInput,
   type MailSaveLabelInput,
-  type MailService,
   type MailSignature,
   type MailStartAuthorizationInput,
   type MailStartSyncInput,
@@ -44,7 +43,8 @@ import {
   type MailSubmissionView,
   type MailSyncRunView,
   type MailUploadAttachmentInput,
-} from './types.js';
+} from '../shared/mail.js';
+import { type MailService } from './contracts/service.js';
 
 /** Stable application-facing facade for the internal mail services. */
 export class DefaultMailService implements MailService {
@@ -117,7 +117,7 @@ export class DefaultMailService implements MailService {
 
   public async updateAccount(
     context: MailOperationContext,
-    input: import('./types.js').MailUpdateAccountInput,
+    input: import('../shared/mail.js').MailUpdateAccountInput,
   ): Promise<MailAccountView> {
     return this.accounts.updateAccount(context, input);
   }
@@ -137,7 +137,7 @@ export class DefaultMailService implements MailService {
 
   public async listManagedOperationLogs(
     context: MailOperationContext,
-  ): Promise<import('./types.js').MailManagedOperationLogsView> {
+  ): Promise<import('../shared/mail.js').MailManagedOperationLogsView> {
     return this.management.listManagedOperationLogs(context);
   }
 
@@ -200,14 +200,14 @@ export class DefaultMailService implements MailService {
   public async listIdentities(
     context: MailOperationContext,
     accountId: string,
-  ): Promise<readonly import('./types.js').MailIdentity[]> {
+  ): Promise<readonly import('../shared/mail.js').MailIdentity[]> {
     return this.preferences.listIdentities(context, accountId);
   }
 
   public async updateIdentity(
     context: MailOperationContext,
-    input: import('./types.js').MailUpdateIdentityInput,
-  ): Promise<import('./types.js').MailIdentity> {
+    input: import('../shared/mail.js').MailUpdateIdentityInput,
+  ): Promise<import('../shared/mail.js').MailIdentity> {
     return this.preferences.updateIdentity(context, input);
   }
 
@@ -220,7 +220,7 @@ export class DefaultMailService implements MailService {
 
   public async saveSignature(
     context: MailOperationContext,
-    input: import('./types.js').MailSaveSignatureInput,
+    input: import('../shared/mail.js').MailSaveSignatureInput,
   ): Promise<MailSignature> {
     return this.preferences.saveSignature(context, input);
   }
@@ -256,7 +256,7 @@ export class DefaultMailService implements MailService {
 
   public async updateMessageLabels(
     context: MailOperationContext,
-    input: import('./types.js').MailUpdateMessageLabelsInput,
+    input: import('../shared/mail.js').MailUpdateMessageLabelsInput,
   ): Promise<MailMessage> {
     return this.messages.updateMessageLabels(context, input);
   }
@@ -283,7 +283,7 @@ export class DefaultMailService implements MailService {
     context: MailOperationContext,
     offset = 0,
     limit = 20,
-  ): Promise<import('./types.js').MailOffsetPage<MailSyncRunView>> {
+  ): Promise<import('../shared/mail.js').MailOffsetPage<MailSyncRunView>> {
     return this.sync.listSyncRunsPage(context, offset, limit);
   }
 
@@ -337,7 +337,9 @@ export class DefaultMailService implements MailService {
     offset = 0,
     groupByBatch = false,
     limit = 20,
-  ): Promise<import('./types.js').MailOffsetPage<MailSubmissionLogView>> {
+  ): Promise<
+    import('../shared/mail.js').MailOffsetPage<MailSubmissionLogView>
+  > {
     return this.submissions.listSubmissionsPage(
       context,
       bulkOnly,
@@ -402,21 +404,21 @@ export class DefaultMailService implements MailService {
 
   public async sendMessage(
     context: MailOperationContext,
-    input: import('./types.js').MailComposeInput,
+    input: import('../shared/mail.js').MailComposeInput,
   ): Promise<MailSubmissionView> {
     return this.submissions.sendMessage(context, input);
   }
 
   public async sendBulk(
     context: MailOperationContext,
-    input: import('./types.js').MailBulkComposeInput,
+    input: import('../shared/mail.js').MailBulkComposeInput,
   ): Promise<readonly MailSubmissionView[]> {
     return this.submissions.sendBulk(context, input);
   }
 
   public async saveDraft(
     context: MailOperationContext,
-    input: import('./types.js').MailComposeInput,
+    input: import('../shared/mail.js').MailComposeInput,
   ): Promise<MailMessage> {
     return this.drafts.saveDraft(context, input);
   }
@@ -437,14 +439,14 @@ export class DefaultMailService implements MailService {
 
   public listTemplates(
     context: MailOperationContext,
-  ): Promise<readonly import('./types.js').MailTemplate[]> {
+  ): Promise<readonly import('../shared/mail.js').MailTemplate[]> {
     return this.preferences.listTemplates(context);
   }
 
   public async saveTemplate(
     context: MailOperationContext,
-    input: import('./types.js').MailSaveTemplateInput,
-  ): Promise<import('./types.js').MailTemplate> {
+    input: import('../shared/mail.js').MailSaveTemplateInput,
+  ): Promise<import('../shared/mail.js').MailTemplate> {
     return this.preferences.saveTemplate(context, input);
   }
 
@@ -457,21 +459,21 @@ export class DefaultMailService implements MailService {
 
   public async updateMessage(
     context: MailOperationContext,
-    input: import('./types.js').MailUpdateMessageInput,
+    input: import('../shared/mail.js').MailUpdateMessageInput,
   ): Promise<MailMessage> {
     return this.messages.updateMessage(context, input);
   }
 
   public async moveMessage(
     context: MailOperationContext,
-    input: import('./types.js').MailMoveMessageInput,
+    input: import('../shared/mail.js').MailMoveMessageInput,
   ): Promise<MailMessage> {
     return this.messages.moveMessage(context, input);
   }
 
   public async deleteMessage(
     context: MailOperationContext,
-    input: import('./types.js').MailDeleteMessageInput,
+    input: import('../shared/mail.js').MailDeleteMessageInput,
   ): Promise<void> {
     return this.messages.deleteMessage(context, input);
   }

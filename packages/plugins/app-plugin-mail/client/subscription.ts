@@ -11,6 +11,7 @@ export function subscribeToMailInvalidations(
   realtime: RealtimeClient,
   target: MailFocusTarget,
   refresh: () => void,
+  onFocus: () => void = refresh,
 ): () => void {
   const unsubscribeOpen = realtime.onOpen(refresh);
   const unsubscribeTopic = realtime.subscribe<unknown>(
@@ -19,10 +20,10 @@ export function subscribeToMailInvalidations(
       if (isMailChanged(event.payload)) refresh();
     },
   );
-  target.addEventListener('focus', refresh);
+  target.addEventListener('focus', onFocus);
 
   return (): void => {
-    target.removeEventListener('focus', refresh);
+    target.removeEventListener('focus', onFocus);
     unsubscribeTopic();
     unsubscribeOpen();
   };
@@ -36,3 +37,6 @@ function isMailChanged(payload: unknown): boolean {
     payload.kind === 'mail.changed'
   );
 }
+
+export const MAIL_UNREAD_COUNT_CHANGED_EVENT =
+  'nocobase:mail-unread-count-changed';

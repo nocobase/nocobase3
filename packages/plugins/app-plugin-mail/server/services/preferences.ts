@@ -4,31 +4,45 @@ import {
   type MailOperationContext,
   type MailSaveLabelInput,
   type MailSignature,
-} from '../types.js';
+} from '../../shared/mail.js';
 import { requireOwnedAccount } from './access.js';
-import { type DefaultMailServiceDependencies } from './dependencies.js';
+import { type MailServiceDependencies } from './dependencies.js';
 import { normalizeMailLabelColor } from './input.js';
 
 export class MailPreferencesService {
   public constructor(
-    private readonly dependencies: Pick<
-      DefaultMailServiceDependencies,
-      'store'
+    private readonly dependencies: MailServiceDependencies<
+      | 'createLabel'
+      | 'deleteLabel'
+      | 'deleteSignature'
+      | 'deleteTemplate'
+      | 'getAccount'
+      | 'getIdentity'
+      | 'getSignature'
+      | 'listIdentities'
+      | 'listLabels'
+      | 'listSignatures'
+      | 'listTemplates'
+      | 'saveSignature'
+      | 'saveTemplate'
+      | 'updateIdentity'
+      | 'updateLabel',
+      never
     >,
   ) {}
 
   public async listIdentities(
     context: MailOperationContext,
     accountId: string,
-  ): Promise<readonly import('../types.js').MailIdentity[]> {
+  ): Promise<readonly import('../../shared/mail.js').MailIdentity[]> {
     await requireOwnedAccount(this.dependencies.store, context, accountId);
     return this.dependencies.store.listIdentities(accountId);
   }
 
   public async updateIdentity(
     context: MailOperationContext,
-    input: import('../types.js').MailUpdateIdentityInput,
-  ): Promise<import('../types.js').MailIdentity> {
+    input: import('../../shared/mail.js').MailUpdateIdentityInput,
+  ): Promise<import('../../shared/mail.js').MailIdentity> {
     const account = await this.dependencies.store.getAccount(input.accountId);
     if (!account || account.userId !== context.actorId) {
       throw new Error('Mail account was not found.');
@@ -59,7 +73,7 @@ export class MailPreferencesService {
 
   public async saveSignature(
     context: MailOperationContext,
-    input: import('../types.js').MailSaveSignatureInput,
+    input: import('../../shared/mail.js').MailSaveSignatureInput,
   ): Promise<MailSignature> {
     await requireOwnedAccount(
       this.dependencies.store,
@@ -180,14 +194,14 @@ export class MailPreferencesService {
 
   public listTemplates(
     context: MailOperationContext,
-  ): Promise<readonly import('../types.js').MailTemplate[]> {
+  ): Promise<readonly import('../../shared/mail.js').MailTemplate[]> {
     return this.dependencies.store.listTemplates(context.actorId);
   }
 
   public async saveTemplate(
     context: MailOperationContext,
-    input: import('../types.js').MailSaveTemplateInput,
-  ): Promise<import('../types.js').MailTemplate> {
+    input: import('../../shared/mail.js').MailSaveTemplateInput,
+  ): Promise<import('../../shared/mail.js').MailTemplate> {
     const name = input.name.trim();
     if (!name) throw new TypeError('Mail template name is required.');
     if (input.id) {

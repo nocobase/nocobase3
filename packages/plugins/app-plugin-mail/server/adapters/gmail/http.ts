@@ -1,8 +1,8 @@
 import type {
   MailProviderError,
   MailProviderResult,
-  MailProviderSendResult,
-} from '../../types.js';
+} from '../../../shared/mail.js';
+import type { MailProviderSendResult } from '../../contracts/provider.js';
 
 import type { GmailMailProviderConfig } from './types.js';
 import { unknownError } from './errors.js';

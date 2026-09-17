@@ -153,15 +153,15 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
     return Promise.resolve();
   }
 
-  private listProviderConfigs(): readonly import('../types.js').MailProviderConfig[] {
+  private listProviderConfigs(): readonly import('../../shared/mail.js').MailProviderConfig[] {
     return Object.entries(
       this.app.config.get<MailConfig>('mail')!.providers,
     ).map(([name, config]) => ({ ...config, name }));
   }
 
   private resolveProviderConfig(
-    provider: import('../types.js').MailProviderIdentity,
-  ): import('../types.js').MailProviderConfig {
+    provider: import('../../shared/mail.js').MailProviderIdentity,
+  ): import('../../shared/mail.js').MailProviderConfig {
     const config =
       this.app.config.get<MailConfig>('mail')!.providers[provider.name];
     if (!config || config.type !== provider.type || config.enabled === false) {

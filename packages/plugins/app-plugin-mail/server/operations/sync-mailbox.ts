@@ -4,14 +4,18 @@ import { randomUUID } from 'node:crypto';
 import type {
   MailProviderAdapter,
   MailProviderAdapterResolver,
+} from '../contracts/provider.js';
+import type {
   MailProviderError,
   MailProviderResult,
-  MailStore,
   MailSyncCursor,
-  MailSyncMailboxTaskPayload,
   MailSyncRun,
+} from '../../shared/mail.js';
+import type {
+  MailStore,
+  MailSyncMailboxTaskPayload,
   MailSyncStepCommit,
-} from '../types.js';
+} from '../contracts/persistence.js';
 import {
   notifyMailMessageChange,
   type MailMessageChangeNotifier,

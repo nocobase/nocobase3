@@ -5,13 +5,13 @@ import {
   type MailComposeInput,
   type MailDraftConflict,
   type MailFolder,
-  type MailOutboxRecord,
   type MailProviderError,
   type MailSubmission,
   type MailSyncCursor,
   type MailSyncRun,
   type NormalizedMailAttachment,
-} from '../types.js';
+} from '../../shared/mail.js';
+import { type MailOutboxRecord } from '../contracts/persistence.js';
 
 export interface AuthorizationStateRow extends Row {
   stateHash: string;

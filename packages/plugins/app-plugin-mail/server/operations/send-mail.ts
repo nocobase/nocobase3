@@ -6,15 +6,17 @@ import type {
   MailAttachment,
   MailMessage,
   MailOperationContext,
-  MailProviderAdapterResolver,
-  MailProviderMessageInput,
   MailOutboundAttachmentStorage,
-  MailService,
-  MailStore,
   MailSubmission,
   MailIdentity,
   NormalizedMailAttachment,
-} from '../types.js';
+} from '../../shared/mail.js';
+import type {
+  MailProviderAdapterResolver,
+  MailProviderMessageInput,
+} from '../contracts/provider.js';
+import type { MailService } from '../contracts/service.js';
+import type { MailStore } from '../contracts/persistence.js';
 import {
   notifyMailMessageChange,
   type MailMessageChangeNotifier,

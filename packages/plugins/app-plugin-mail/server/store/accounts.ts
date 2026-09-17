@@ -4,7 +4,7 @@ import {
   type MailIdentity,
   type MailProviderIdentity,
   type MailSignature,
-} from '../types.js';
+} from '../../shared/mail.js';
 import {
   persistAccount,
   replaceAccountIdentities,

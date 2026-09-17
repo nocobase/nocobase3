@@ -1,4 +1,4 @@
-import { type MailProviderView } from '../types.js';
+import { type MailProviderView } from '../../shared/mail.js';
 import { type DefaultMailServiceDependencies } from './dependencies.js';
 
 export class MailProvidersService {

@@ -5,9 +5,9 @@ import type {
   MailOutboundAttachment,
   MailOutboundAttachmentStorage,
   MailOutboundAttachmentView,
-  MailStore,
   MailUploadAttachmentInput,
-} from './types.js';
+} from '../shared/mail.js';
+import type { MailStore } from './contracts/persistence.js';
 
 const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024;
 

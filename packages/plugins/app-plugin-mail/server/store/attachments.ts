@@ -2,7 +2,7 @@ import { type DatabaseManager } from '@nocobase/db';
 import {
   type MailOutboundAttachment,
   type NormalizedMailAttachment,
-} from '../types.js';
+} from '../../shared/mail.js';
 import { type MessageRow, type OutboundAttachmentRow } from './rows.js';
 import { parseJson } from './serialization.js';
 

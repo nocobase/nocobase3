@@ -4,11 +4,13 @@ import { randomUUID } from 'node:crypto';
 import {
   type MailComposeInput,
   type MailProviderError,
+  type MailSubmission,
+} from '../../shared/mail.js';
+import {
   type MailScheduledSubmission,
   type MailStore,
   type MailStoredSubmission,
-  type MailSubmission,
-} from '../types.js';
+} from '../contracts/persistence.js';
 import { fromSubmissionRow } from './mappers.js';
 import { type OutboxRow, type SubmissionRow } from './rows.js';
 import { jsonOrNull, parseJson } from './serialization.js';

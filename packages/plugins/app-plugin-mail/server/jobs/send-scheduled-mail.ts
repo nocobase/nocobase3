@@ -1,6 +1,6 @@
 import { Job, type JobOptions } from '@nocobase/queue';
 
-import type { MailScheduledSendTaskPayload } from '../types.js';
+import type { MailScheduledSendTaskPayload } from '../contracts/persistence.js';
 
 export const MAIL_SCHEDULED_SEND_JOB_NAME =
   '@nocobase/app-plugin-mail/send-scheduled-mail';

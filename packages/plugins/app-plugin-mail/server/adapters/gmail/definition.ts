@@ -1,9 +1,9 @@
+import type { MailAccount } from '../../../shared/mail.js';
 import type {
-  MailAccount,
   MailProviderAdapter,
   MailProviderContext,
   MailProviderDefinition,
-} from '../../types.js';
+} from '../../contracts/provider.js';
 
 import type { GmailMailProviderConfig } from './types.js';
 import { GmailMailProviderAdapter } from './adapter.js';

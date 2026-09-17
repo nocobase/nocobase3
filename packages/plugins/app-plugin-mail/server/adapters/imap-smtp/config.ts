@@ -1,4 +1,4 @@
-import type { MailProviderConfig } from '../../types.js';
+import type { MailProviderConfig } from '../../../shared/mail.js';
 
 export interface ImapSmtpEndpointConfig {
   readonly host: string;

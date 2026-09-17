@@ -1,9 +1,7 @@
 import { type QueryAdapter } from '@nocobase/db';
 import { randomUUID } from 'node:crypto';
-import {
-  MAIL_LOCAL_DRAFT_FOLDER_ID,
-  type NormalizedMailMessage,
-} from '../types.js';
+import { MAIL_LOCAL_DRAFT_FOLDER_ID } from '../../shared/mail.js';
+import { type NormalizedMailMessage } from '../contracts/provider.js';
 import { toMessageRow } from './mappers.js';
 import {
   type FolderRow,
@@ -160,7 +158,7 @@ export async function removeStaleMessageFolders(
 export async function upsertFolders(
   query: QueryAdapter,
   accountId: string,
-  folders: readonly import('../types.js').NormalizedMailFolder[],
+  folders: readonly import('../contracts/provider.js').NormalizedMailFolder[],
 ): Promise<void> {
   for (const folder of folders) {
     const existing = await query
@@ -226,7 +224,7 @@ export async function deleteMessages(
 export async function removeMessagesFromFolders(
   query: QueryAdapter,
   accountId: string,
-  removals: readonly import('../types.js').MailProviderFolderRemoval[],
+  removals: readonly import('../contracts/provider.js').MailProviderFolderRemoval[],
 ): Promise<void> {
   for (const removal of removals) {
     const row = await query

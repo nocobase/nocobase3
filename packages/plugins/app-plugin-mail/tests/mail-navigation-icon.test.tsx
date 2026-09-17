@@ -38,7 +38,8 @@ vi.mock('../client/runtime.js', () => {
   return { useMailClient: () => mail };
 });
 
-vi.mock('../client/subscription.js', () => ({
+vi.mock('../client/subscription.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../client/subscription.js')>()),
   subscribeToMailInvalidations: vi.fn(
     (_realtime: RealtimeClient, _target: Window, refresh: () => void) => {
       mocks.refresh = refresh;

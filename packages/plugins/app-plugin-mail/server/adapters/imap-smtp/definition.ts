@@ -1,10 +1,10 @@
+import type { MailAccount } from '../../../shared/mail.js';
 import type {
-  MailAccount,
   MailProviderAdapter,
   MailProviderConnection,
   MailProviderContext,
   MailProviderDefinition,
-} from '../../types.js';
+} from '../../contracts/provider.js';
 
 import type { ImapSmtpCredential } from './types.js';
 import type { ImapSmtpMailProviderConfig } from './config.js';

@@ -3,9 +3,9 @@ import { normalizeAddress } from './serialization.js';
 import {
   type MailAccount,
   type MailProviderIdentity,
-  type MailProviderPushSubscription,
-  type MailStore,
-} from '../types.js';
+} from '../../shared/mail.js';
+import { type MailProviderPushSubscription } from '../contracts/provider.js';
+import { type MailStore } from '../contracts/persistence.js';
 import {
   completePushSubscription,
   fromAccountRow,
@@ -147,7 +147,8 @@ export class MailPushStore {
     now: string,
     leaseExpiresAt: string,
   ): Promise<
-    import('../types.js').MailPushSubscriptionMaintenanceLease | undefined
+    | import('../contracts/provider.js').MailPushSubscriptionMaintenanceLease
+    | undefined
   > {
     try {
       await this.database

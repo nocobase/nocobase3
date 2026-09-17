@@ -1,23 +1,33 @@
-import { randomUUID } from 'node:crypto';
+import { MailSyncScheduler } from '../operations/schedule-sync.js';
 import {
   type MailOperationContext,
   type MailOffsetPage,
   type MailStartSyncInput,
   type MailSyncRun,
   type MailSyncRunView,
-} from '../types.js';
+} from '../../shared/mail.js';
 import { toSyncRunView } from '../views.js';
 import { requireActiveAccount, requireOwnedAccount } from './access.js';
-import { type DefaultMailServiceDependencies } from './dependencies.js';
+import { type MailServiceDependencies } from './dependencies.js';
 
 export class MailSyncService {
+  private readonly scheduler: MailSyncScheduler;
   public constructor(
-    private readonly dependencies: Pick<
-      DefaultMailServiceDependencies,
-      'store' | 'outbox'
+    private readonly dependencies: MailServiceDependencies<
+      | 'cancelSyncRun'
+      | 'countSyncRuns'
+      | 'createSyncRun'
+      | 'findActiveSyncRun'
+      | 'getAccount'
+      | 'getSyncCursor'
+      | 'getSyncRun'
+      | 'listSyncRuns',
+      'outbox'
     >,
-    private readonly syncBatchSize: number,
-  ) {}
+    syncBatchSize: number,
+  ) {
+    this.scheduler = new MailSyncScheduler(dependencies.store, syncBatchSize);
+  }
 
   public async startSync(
     context: MailOperationContext,
@@ -28,34 +38,11 @@ export class MailSyncService {
       context,
       input.accountId,
     );
-    if (
-      input.receivedAfter !== undefined &&
-      !Number.isFinite(Date.parse(input.receivedAfter))
-    )
-      throw new TypeError('Mail synchronization start date is invalid.');
-    const active = await this.dependencies.store.findActiveSyncRun(
-      input.accountId,
+    const { run } = await this.scheduler.request(
+      account,
+      context.actorId,
+      input,
     );
-    if (active) return toSyncRunView(active);
-    const cursor = await this.dependencies.store.getSyncCursor(input.accountId);
-    const mode = input.mode ?? (cursor ? 'incremental' : 'initial');
-    if (mode === 'incremental' && !cursor) {
-      throw new Error(
-        'Initial mailbox sync must complete before incremental sync.',
-      );
-    }
-    const run = await this.dependencies.store.createSyncRun({
-      id: randomUUID(),
-      accountId: input.accountId,
-      requestedBy: context.actorId,
-      mode,
-      policy: {
-        receivedAfter:
-          input.receivedAfter ??
-          (mode === 'initial' ? account.initialSyncReceivedAfter : undefined),
-        batchSize: this.syncBatchSize,
-      },
-    });
     this.dependencies.outbox.kick();
     return toSyncRunView(run);
   }

@@ -2,8 +2,8 @@ import {
   type MailAccount,
   type MailMessage,
   type MailOperationContext,
-  type MailStore,
-} from '../types.js';
+} from '../../shared/mail.js';
+import { type MailStore } from '../contracts/persistence.js';
 
 export async function requireOwnedAccount(
   store: Pick<MailStore, 'getAccount'>,

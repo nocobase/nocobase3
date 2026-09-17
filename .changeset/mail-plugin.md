@@ -30,3 +30,5 @@ Preserve mail error details in application logs, route cleanup and realtime fail
 Show accepted messages with provider IDs in the known Sent folder immediately, reconcile them with later mailbox synchronization, and prevent stale provider drafts from reverting accepted messages. Hide synchronized duplicates of editable local drafts before pagination and preserve confirmed delivery when local cleanup fails.
 
 Reorganize the Mail application Skill into focused configuration, client integration, sending, and synchronization references. Clarify production OAuth return handling, provider capabilities, delivery retry boundaries, and resumable synchronization without a total history cap.
+
+Unify personal and management message mutations, including local draft deletion; refresh mailbox data on realtime changes while preserving reading and composing state; drain background synchronization work on shutdown. Separate shared contracts, scheduling, delivery, and composer state responsibilities while preserving existing public exports.

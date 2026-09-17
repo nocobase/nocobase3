@@ -3,7 +3,7 @@ import {
   type MailLabelColor,
   DEFAULT_MAIL_LABEL_COLOR,
   isMailLabelColor,
-} from '../types.js';
+} from '../../shared/mail.js';
 
 export function normalizeMailLabelColor(
   value: unknown,

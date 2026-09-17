@@ -1,8 +1,8 @@
+import type { MailAddress } from '../../../shared/mail.js';
 import type {
-  MailAddress,
   MailProviderSendInput,
   NormalizedMailMessage,
-} from '../../types.js';
+} from '../../contracts/provider.js';
 
 export function normalizedDraft(
   input: MailProviderSendInput,

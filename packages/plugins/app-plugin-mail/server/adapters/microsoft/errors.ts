@@ -1,4 +1,7 @@
-import type { MailProviderError, MailProviderResult } from '../../types.js';
+import type {
+  MailProviderError,
+  MailProviderResult,
+} from '../../../shared/mail.js';
 
 export function unknownError(error: unknown, code: string): MailProviderError {
   if (

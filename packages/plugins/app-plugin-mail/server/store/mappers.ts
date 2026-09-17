@@ -9,21 +9,25 @@ import {
   type MailLabel,
   type MailMessage,
   type MailMessageSummary,
-  type MailOutboxRecord,
-  type MailRequestSyncPayload,
   type MailProviderError,
-  type MailProviderPushSubscription,
-  type MailScheduledSendTaskPayload,
   type MailSignature,
-  type MailStoredSubmission,
   type MailSyncCursor,
-  type MailSyncMailboxTaskPayload,
   type MailSyncRun,
   type MailTemplate,
   type NormalizedMailAttachment,
-  type NormalizedMailMessage,
   isMailLabelColor,
-} from '../types.js';
+} from '../../shared/mail.js';
+import {
+  type MailOutboxRecord,
+  type MailRequestSyncPayload,
+  type MailScheduledSendTaskPayload,
+  type MailStoredSubmission,
+  type MailSyncMailboxTaskPayload,
+} from '../contracts/persistence.js';
+import {
+  type MailProviderPushSubscription,
+  type NormalizedMailMessage,
+} from '../contracts/provider.js';
 import {
   type AccountRow,
   type FolderRow,
@@ -368,7 +372,7 @@ export function fromSyncRunRow(row: SyncRunRow): MailSyncRun {
 
 export function fromSubmissionRow(row: SubmissionRow): MailStoredSubmission {
   const input = row.composeInput
-    ? parseJson<import('../types.js').MailComposeInput>(
+    ? parseJson<import('../../shared/mail.js').MailComposeInput>(
         row.composeInput,
         'submission input',
       )

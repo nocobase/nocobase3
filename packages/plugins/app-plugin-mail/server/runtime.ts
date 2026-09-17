@@ -1,4 +1,8 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { MailBackgroundTasks } from './runtime/background-tasks.js';
+import { MailOutboxRelay } from './runtime/outbox-relay.js';
+import { MailPushSubscriptions } from './runtime/push-subscriptions.js';
+import { MailSyncScheduler } from './operations/schedule-sync.js';
+import { randomUUID } from 'node:crypto';
 
 import type {
   NocoBaseQueueManager,
@@ -22,13 +26,15 @@ import type { MailMessageChangeNotifier } from './realtime.js';
 import type { MailOutboxPublisher } from './service.js';
 import type {
   MailProviderAdapterResolver,
+  MailCredentialVault,
+} from './contracts/provider.js';
+import type {
   MailScheduledSendTaskPayload,
   MailStore,
   MailSyncMailboxTaskPayload,
-  MailOutboundAttachmentStorage,
-  MailCredentialVault,
-  MailRuntimeService,
-} from './types.js';
+} from './contracts/persistence.js';
+import type { MailOutboundAttachmentStorage } from '../shared/mail.js';
+import type { MailRuntimeService } from './contracts/service.js';
 
 export type MailRuntimeLogger = MailLogger;
 
@@ -50,7 +56,11 @@ export interface MailRuntimeOptions {
 
 export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
   private readonly operation: SyncMailboxOperation;
-  private readonly syncBatchSize: number;
+  private readonly scheduler: MailSyncScheduler;
+  private readonly subscriptions: MailPushSubscriptions;
+  private readonly relay: MailOutboxRelay;
+  private readonly tasks = new MailBackgroundTasks();
+  private closePromise?: Promise<void>;
   private readonly handler: (
     payload: MailSyncMailboxTaskPayload,
   ) => Promise<void>;
@@ -65,7 +75,14 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
   private closed = false;
 
   public constructor(private readonly options: MailRuntimeOptions) {
-    this.syncBatchSize = resolveMailSyncBatchSize(options.syncBatchSize);
+    this.scheduler = new MailSyncScheduler(
+      options.store,
+      resolveMailSyncBatchSize(options.syncBatchSize),
+    );
+    this.subscriptions = new MailPushSubscriptions(options);
+    this.relay = new MailOutboxRelay(options, (accountId) =>
+      this.activatePushSync(accountId),
+    );
     this.operation = new SyncMailboxOperation(options);
     this.handler = (payload): Promise<void> => this.operation.execute(payload);
     this.unregisterHandler = registerMailSyncJobHandler(
@@ -142,8 +159,11 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
 
   public scheduleAutomaticSync(): void {
     if (this.closed || this.automaticSyncPromise) return;
-    this.automaticSyncPromise = this.runMaintenance()
-      .then(() => this.createAutomaticSyncRuns())
+    this.automaticSyncPromise = this.tasks
+      .run(async () => {
+        await this.runMaintenance();
+        await this.createAutomaticSyncRuns();
+      }, undefined)
       .then(() => undefined)
       .catch((error: unknown): void => {
         writeMailLog(
@@ -158,13 +178,17 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
       });
   }
 
-  public async createAutomaticSyncRuns(): Promise<number> {
+  public createAutomaticSyncRuns(): Promise<number> {
+    return this.tasks.run(() => this.sweepAccounts(), 0);
+  }
+
+  private async sweepAccounts(): Promise<number> {
     let created = 0;
     const accounts = await this.options.store.listAllAccounts();
     for (const account of accounts) {
       if (account.status !== 'active') continue;
       try {
-        await this.maintainPushSubscription(account);
+        await this.subscriptions.maintain(account);
       } catch (error) {
         writeMailLog(
           this.options.logger,
@@ -207,8 +231,11 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
     );
   }
 
-  public async schedulePushSync(accountId: string): Promise<boolean> {
-    if (this.closed) return false;
+  public schedulePushSync(accountId: string): Promise<boolean> {
+    return this.tasks.run(() => this.activatePushSync(accountId), false);
+  }
+
+  private async activatePushSync(accountId: string): Promise<boolean> {
     const account = await this.options.store.getAccount(accountId);
     if (!account || account.status !== 'active') return false;
     const requestToken = randomUUID();
@@ -221,22 +248,26 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
     return created;
   }
 
-  public async schedulePushSyncBatch(
-    accounts: readonly import('./types.js').MailAccount[],
+  public schedulePushSyncBatch(
+    accounts: readonly import('../shared/mail.js').MailAccount[],
   ): Promise<void> {
-    if (this.closed || accounts.length === 0) return;
-    const requestToken = randomUUID();
-    await this.options.store.markPushSyncPendingBatch(
-      accounts.map((account) => account.id),
-      requestToken,
-    );
-    queueMicrotask(() => {
-      void this.activatePushSyncBatch(accounts, requestToken);
-    });
+    return this.tasks.run(async () => {
+      if (accounts.length === 0) return;
+      const requestToken = randomUUID();
+      await this.options.store.markPushSyncPendingBatch(
+        accounts.map((account) => account.id),
+        requestToken,
+      );
+      // Persist before acknowledging the webhook; shutdown can leave pending work for recovery.
+      void this.tasks.run(
+        () => this.activatePushSyncBatch(accounts, requestToken),
+        undefined,
+      );
+    }, undefined);
   }
 
   private async activatePushSyncBatch(
-    accounts: readonly import('./types.js').MailAccount[],
+    accounts: readonly import('../shared/mail.js').MailAccount[],
     requestToken: string,
   ): Promise<void> {
     for (const account of accounts) {
@@ -270,206 +301,7 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
   private async createSyncRun(accountId: string): Promise<boolean> {
     const account = await this.options.store.getAccount(accountId);
     if (!account || account.status !== 'active') return false;
-    if (await this.options.store.findActiveSyncRun(account.id)) return false;
-    const cursor = await this.options.store.getSyncCursor(account.id);
-    const id = randomUUID();
-    const run = await this.options.store.createSyncRun({
-      id,
-      accountId: account.id,
-      requestedBy: account.userId,
-      mode: cursor ? 'incremental' : 'initial',
-      policy: {
-        receivedAfter: cursor ? undefined : account.initialSyncReceivedAfter,
-        batchSize: this.syncBatchSize,
-      },
-    });
-    return run.id === id;
-  }
-
-  private async maintainPushSubscription(
-    account: import('./types.js').MailAccount,
-  ): Promise<void> {
-    const { pushWebhookUrl, pushWebhookSecret } = this.options;
-    if (!pushWebhookUrl || !pushWebhookSecret) return;
-    const notificationUrl = `${pushWebhookUrl.replace(/\/$/, '')}/${encodeURIComponent(account.provider.type)}/${encodeURIComponent(account.provider.name)}/${encodeURIComponent(pushWebhookSecret)}`;
-    const configurationFingerprint = createHash('sha256')
-      .update(`${notificationUrl}\0${pushWebhookSecret}`)
-      .digest('hex');
-    const current = await this.options.store.getPushSubscription(account.id);
-    if (
-      current &&
-      current.configurationFingerprint === configurationFingerprint &&
-      Date.parse(current.renewAfter) > Date.now()
-    ) {
-      return;
-    }
-    const leaseToken = randomUUID();
-    const now = new Date();
-    const lease = await this.options.store.claimPushSubscriptionMaintenance(
-      account,
-      leaseToken,
-      now.toISOString(),
-      new Date(now.getTime() + 60_000).toISOString(),
-    );
-    if (!lease) return;
-    const existing = lease.subscription;
-    if (
-      existing &&
-      existing.configurationFingerprint === configurationFingerprint &&
-      Date.parse(existing.renewAfter) > Date.now()
-    ) {
-      await this.options.store.releasePushSubscriptionMaintenance(
-        account.id,
-        leaseToken,
-      );
-      return;
-    }
-    let adapter: import('./types.js').MailProviderAdapter | undefined;
-    const renewLease = (): Promise<boolean> =>
-      this.options.store.renewPushSubscriptionMaintenance(
-        account.id,
-        leaseToken,
-        new Date(Date.now() + 60_000).toISOString(),
-      );
-    const leaseHeartbeat = setInterval(() => {
-      void renewLease().catch((error: unknown) => {
-        writeMailLog(
-          this.options.logger,
-          'error',
-          { accountId: account.id, err: mailLogError(error) },
-          'Mail push subscription lease could not be renewed.',
-        );
-      });
-    }, 20_000);
-    leaseHeartbeat.unref();
-    try {
-      adapter = await this.options.adapters.resolve(account);
-      if (
-        !adapter.capabilities.pushNotifications ||
-        adapter.pushNotificationsConfigured === false ||
-        !adapter.upsertPushSubscription
-      ) {
-        return;
-      }
-      const configurationChanged =
-        existing !== undefined &&
-        existing.configurationFingerprint !== configurationFingerprint;
-      const deletePushSubscription =
-        adapter.deletePushSubscription?.bind(adapter);
-      if (configurationChanged) {
-        if (!deletePushSubscription) {
-          writeMailLog(
-            this.options.logger,
-            'error',
-            { accountId: account.id },
-            'The Provider cannot replace a stale Mail push subscription.',
-          );
-          return;
-        }
-        const removed = await deletePushSubscription(
-          existing.providerSubscriptionId,
-        );
-        if (!removed.ok) {
-          writeMailLog(
-            this.options.logger,
-            'error',
-            {
-              accountId: account.id,
-              err: mailLogError(removed.error),
-              errorCode: removed.error.code,
-            },
-            'The stale Mail push subscription could not be removed before replacement.',
-          );
-          return;
-        }
-        if (
-          !(await this.options.store.markPushSubscriptionReplacementNeeded(
-            account.id,
-            leaseToken,
-            new Date().toISOString(),
-          ))
-        ) {
-          return;
-        }
-      }
-      const result = await adapter.upsertPushSubscription({
-        notificationUrl,
-        clientState: pushWebhookSecret,
-        providerSubscriptionId: configurationChanged
-          ? undefined
-          : existing?.providerSubscriptionId,
-      });
-      if (!result.ok) {
-        writeMailLog(
-          this.options.logger,
-          'error',
-          {
-            accountId: account.id,
-            err: mailLogError(result.error),
-            errorCode: result.error.code,
-          },
-          'Mail push subscription could not be renewed.',
-        );
-        return;
-      }
-      const providerSubscriptionIdChanged =
-        existing !== undefined &&
-        result.value.providerSubscriptionId !== existing.providerSubscriptionId;
-      const createdOrReplacedSubscription =
-        !existing || configurationChanged || providerSubscriptionIdChanged;
-      const compensateCreatedSubscription = async (): Promise<void> => {
-        if (!createdOrReplacedSubscription) return;
-        const latestAccount = await this.options.store.getAccount(account.id);
-        if (
-          !latestAccount ||
-          latestAccount.status !== 'active' ||
-          providerSubscriptionIdChanged
-        ) {
-          await adapter?.deletePushSubscription?.(
-            result.value.providerSubscriptionId,
-          );
-        }
-      };
-      if (!(await renewLease())) {
-        await compensateCreatedSubscription();
-        return;
-      }
-      const refreshedAccount = await this.options.store.getAccount(account.id);
-      if (!refreshedAccount || refreshedAccount.status !== 'active') {
-        await adapter.deletePushSubscription?.(
-          result.value.providerSubscriptionId,
-        );
-        return;
-      }
-      const persisted = await this.options.store.savePushSubscription(
-        {
-          accountId: account.id,
-          provider: account.provider,
-          configurationFingerprint,
-          ...result.value,
-          updatedAt: new Date().toISOString(),
-        },
-        leaseToken,
-      );
-      if (!persisted) {
-        await compensateCreatedSubscription();
-        return;
-      }
-      if (
-        existing &&
-        !configurationChanged &&
-        existing.providerSubscriptionId !== result.value.providerSubscriptionId
-      ) {
-        await adapter.deletePushSubscription?.(existing.providerSubscriptionId);
-      }
-    } finally {
-      clearInterval(leaseHeartbeat);
-      await this.options.store.releasePushSubscriptionMaintenance(
-        account.id,
-        leaseToken,
-      );
-      await adapter?.close?.();
-    }
+    return (await this.scheduler.request(account, account.userId)).created;
   }
 
   public kick(): void {
@@ -491,73 +323,23 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
     });
   }
 
-  public async publishPending(): Promise<void> {
-    const now = new Date();
-    const claimed = await this.options.store.claimOutbox(
-      now.toISOString(),
-      randomUUID(),
-      new Date(now.getTime() + 30_000).toISOString(),
-      50,
-    );
-    for (const record of claimed) {
-      try {
-        if (record.type === 'requestMailboxSync') {
-          await this.schedulePushSync(record.payload.accountId);
-        } else if (record.type === 'syncMailbox') {
-          await this.options.queue.dispatch(SyncMailboxJob, record.payload, {
-            queue: this.options.queueName,
-            dedup: { id: record.deduplicationKey, ttl: '1d' },
-          });
-        } else {
-          await this.options.queue.dispatch(
-            SendScheduledMailJob,
-            record.payload,
-            {
-              queue: this.options.queueName,
-              dedup: { id: record.deduplicationKey, ttl: '1d' },
-            },
-          );
-        }
-        await this.options.store.markOutboxPublished(
-          record.id,
-          record.leaseToken ?? '',
-          new Date().toISOString(),
-        );
-      } catch (error) {
-        const delay = Math.max(
-          65_000,
-          Math.min(300_000, 1_000 * 2 ** Math.min(record.attempts, 8)),
-        );
-        await this.options.store.releaseOutbox(
-          record.id,
-          record.leaseToken ?? '',
-          new Date(Date.now() + delay).toISOString(),
-        );
-        writeMailLog(
-          this.options.logger,
-          'error',
-          { err: mailLogError(error), outboxId: record.id },
-          'Mail Outbox message could not be published.',
-        );
-      }
-    }
-    if (claimed.length > 0) {
-      writeMailLog(
-        this.options.logger,
-        'info',
-        { count: claimed.length },
-        'Mail Outbox Relay processed messages.',
-      );
-    }
+  public publishPending(): Promise<void> {
+    return this.tasks.run(() => this.relay.publish(), undefined);
   }
 
-  public async close(): Promise<void> {
-    if (this.closed) return;
+  public close(): Promise<void> {
+    if (this.closePromise) return this.closePromise;
     this.closed = true;
+    this.closePromise = this.shutdown();
+    return this.closePromise;
+  }
+
+  private async shutdown(): Promise<void> {
     if (this.relayTimer) clearInterval(this.relayTimer);
     if (this.automaticSyncTimer) clearInterval(this.automaticSyncTimer);
     this.relayTimer = undefined;
     this.automaticSyncTimer = undefined;
+    await this.tasks.close();
     await this.publishPromise;
     await this.automaticSyncPromise;
     await this.worker?.stop();
