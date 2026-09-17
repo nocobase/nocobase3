@@ -1,9 +1,15 @@
+import { Redis } from 'ioredis';
 import { createRedisBackend } from 'bullmq';
 import type { BackendFactory, RedisOptions } from 'bullmq';
 import { integer, keys, record } from '../config-validation.js';
 
 /** Validates owned standalone connection settings without acquiring any sockets. */
-export function resolveRedisConnection(value: unknown): RedisOptions {
+export function resolveRedisConnection(value: unknown): RedisOptions | Redis {
+  if (value instanceof Redis) {
+    if (value.options.keyPrefix)
+      throw new TypeError('connection.keyPrefix is unsupported');
+    return value;
+  }
   const input = record(value, 'connection');
   keys(
     input,
@@ -68,27 +74,47 @@ export const createServiceRedisBackend: BackendFactory = (
 ) => {
   const connection = resolveRedisConnection(options.connection);
   const worker = metadata?.withBlockingConnection === true;
+  const policy = {
+    maxRetriesPerRequest: worker ? null : 1,
+    connectTimeout: 10000,
+    commandTimeout: worker ? undefined : 10000,
+  };
+  const owned =
+    connection instanceof Redis
+      ? connection.duplicate({ ...policy, lazyConnect: true })
+      : undefined;
   const backend = createRedisBackend(
     name,
     {
       ...options,
-      connection: {
+      connection: owned ?? {
         ...connection,
-        maxRetriesPerRequest: worker ? null : 1,
+        ...policy,
         connectTimeout:
+          !(connection instanceof Redis) &&
           typeof connection.connectTimeout === 'number'
             ? connection.connectTimeout
             : 10000,
-        ...(worker ? {} : { commandTimeout: 10000 }),
       },
     },
     metadata,
   );
   const close = backend.close.bind(backend);
-  backend.close = async (): Promise<void> => {
-    // All connections in this options-only adapter are owned. No QUIT reply is needed.
-    await close(true);
-  };
+  let closing: Promise<void> | undefined;
+  backend.close = (): Promise<void> =>
+    (closing ??= (async (): Promise<void> => {
+      // Only duplicates created here are disconnected; caller clients remain untouched.
+      let ended: Promise<void> | undefined;
+      if (owned && owned.status !== 'end') {
+        ended = new Promise<void>((resolve) => owned.once('end', resolve));
+        owned.disconnect();
+      }
+      try {
+        await close(true);
+      } finally {
+        await ended;
+      }
+    })());
   if (!worker) {
     let invalidated: Error | undefined;
     const failure = (): Error | undefined => invalidated;
