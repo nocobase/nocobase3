@@ -1,20 +1,20 @@
 ---
-"@nocobase/ai-employee": patch
-"@nocobase/api-client": patch
-"@nocobase/app-client": patch
-"@nocobase/app-plugin-ai-employee": patch
-"@nocobase/app-plugin-authentication": patch
-"@nocobase/app-plugin-authorization": patch
-"@nocobase/app-plugin-hub": patch
-"@nocobase/app-plugin-users": patch
-"@nocobase/app-server": patch
-"@nocobase/app-template-default": patch
-"@nocobase/app-template-examples": patch
-"@nocobase/app-template-hub": patch
-"@nocobase/authorization": patch
-"@nocobase/create-plugin": patch
-"@nocobase/db": patch
-"@nocobase/queue": patch
+'@nocobase/ai-employee': patch
+'@nocobase/api-client': patch
+'@nocobase/app-client': patch
+'@nocobase/app-plugin-ai-employee': patch
+'@nocobase/app-plugin-authentication': patch
+'@nocobase/app-plugin-authorization': patch
+'@nocobase/app-plugin-hub': patch
+'@nocobase/app-plugin-users': patch
+'@nocobase/app-server': patch
+'@nocobase/app-template-default': patch
+'@nocobase/app-template-examples': patch
+'@nocobase/app-template-hub': patch
+'@nocobase/authorization': patch
+'@nocobase/create-plugin': patch
+'@nocobase/db': patch
+'@nocobase/queue': patch
 ---
 
 Use host-provided peers for shared database types, authorization errors, service tokens, cache registries, and repository filter metadata. Declare their production providers in all application templates so deployments with automatic peer installation disabled retain the required runtime packages. Document the provider contract for generated plugins.
