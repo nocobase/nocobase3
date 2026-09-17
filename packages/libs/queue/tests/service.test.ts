@@ -171,4 +171,61 @@ describe('application-private queue service', () => {
       backend.mock.calls.filter((call) => call[2]?.withBlockingConnection),
     ).toHaveLength(1);
   });
+  it('keeps jobs pending after last unregister and resumes the same Worker on registration', async () => {
+    const { Worker } = await import('bullmq');
+    const pause = vi.spyOn(Worker.prototype, 'pause');
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const backend = vi.fn(createInMemoryBackendFactory());
+    instance.registerBackend('memory-test', backend);
+    const first = vi.fn(async () => {});
+    const off = instance.consumer('jobs').consume(first);
+    await instance.setup();
+    await off();
+    expect(pause).toHaveBeenCalledWith(true);
+    pause.mockRestore();
+    await instance.producer('jobs').publish('event', { value: 2 });
+    const second = vi.fn(async () => {});
+    instance.consumer('jobs').consume(second);
+    await expect.poll(() => second.mock.calls.length).toBe(1);
+    expect(first).not.toHaveBeenCalled();
+    expect(
+      backend.mock.calls.filter((call) => call[2]?.withBlockingConnection),
+    ).toHaveLength(1);
+  });
+  it('returns a claimed job to waiting when its last handler unregisters before dispatch', async () => {
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const memory = createInMemoryBackendFactory();
+    let claimed = false;
+    let off: () => Promise<void> = async () => {};
+    let inspect: ((id: string) => Promise<string>) | undefined;
+    instance.registerBackend('memory-test', (name, options, metadata) => {
+      const backend = memory(name, options, metadata);
+      if (metadata?.withBlockingConnection) {
+        inspect = (id) => backend.getState(id);
+        const claim = backend.moveToActive.bind(backend);
+        vi.spyOn(backend, 'moveToActive').mockImplementation(
+          async (...args) => {
+            const result = await claim(...args);
+            if (result[1]) {
+              claimed = true;
+              void off();
+            }
+            return result;
+          },
+        );
+      }
+      return backend;
+    });
+    const handler = vi.fn(async () => {});
+    off = instance.consumer('jobs').consume(handler);
+    await instance.setup();
+    const receipt = await instance.producer('jobs').publish('event', {});
+    await expect.poll(() => claimed).toBe(true);
+    await expect.poll(async () => inspect?.(receipt.jobId)).toBe('waiting');
+    expect(handler).not.toHaveBeenCalled();
+  });
 });
