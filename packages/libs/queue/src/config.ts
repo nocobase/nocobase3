@@ -41,3 +41,26 @@ export function withQueueJobLocations(
     },
   };
 }
+
+/** Minimal executable RED seam; replaced by the pure resolver in T008. */
+export function resolveQueueConfiguration(
+  _options: unknown,
+  _queue: string,
+  _manual?: unknown,
+): import('./types.js').ResolvedQueueConfiguration {
+  throw new Error('Queue configuration resolver is not implemented');
+}
+
+export function resolvePublishOptions(
+  _configuration: import('./types.js').ResolvedQueueConfiguration,
+  _options?: unknown,
+  _now?: number,
+): import('./types.js').PublishOptions {
+  throw new Error('Publish configuration resolver is not implemented');
+}
+
+export function resolveQueueTimeouts(
+  _options: unknown,
+): import('./types.js').QueueTimeoutOptions {
+  throw new Error('Queue timeout resolver is not implemented');
+}
