@@ -122,4 +122,27 @@ describe('memory completion protocol', () => {
       await Promise.allSettled([queue.close(), backend.close()]);
     }
   });
+  it('accepts the failure fields emitted by the real BullMQ Job API', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue<
+      unknown,
+      unknown,
+      string,
+      unknown,
+      unknown,
+      string,
+      IQueueBackend
+    >('jobs', { connection: {} }, factory);
+    try {
+      const job = await queue.add('event', {});
+      await queue.getBackend().moveToActive('owner');
+      await job.moveToFailed(new Error('business failure'), 'owner', false);
+      const stored = await queue.getJob(job.id!);
+      expect(await stored?.getState()).toBe('failed');
+      expect(stored?.failedReason).toBe('business failure');
+      expect(stored?.stacktrace?.join('\n')).toContain('business failure');
+    } finally {
+      await queue.close();
+    }
+  });
 });

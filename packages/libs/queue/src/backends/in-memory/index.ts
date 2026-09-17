@@ -200,8 +200,9 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     fetchNext: boolean,
     fieldsToUpdate?: NonNullable<RetryJobOpts['fieldsToUpdate']>,
   ): ReturnType<IQueueBackend['moveToFailed']> {
-    if (fieldsToUpdate && Object.keys(fieldsToUpdate).length)
-      throw new Error('Memory failure field updates are not implemented');
+    const stacktrace: unknown = fieldsToUpdate?.stacktrace;
+    if (stacktrace !== undefined && typeof stacktrace !== 'string')
+      throw new TypeError('Invalid job stacktrace');
     const finishedOn = this.finish(
       job.id,
       token,
@@ -209,6 +210,10 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
       failedReason,
       removeOnFail,
     );
+    const stored =
+      job.id === undefined ? undefined : this.state.records.get(job.id);
+    if (stored && typeof stacktrace === 'string')
+      stored.stacktrace = stacktrace;
     return {
       finishedOn,
       result: fetchNext && !this.closing ? this.claim(token) : undefined,
