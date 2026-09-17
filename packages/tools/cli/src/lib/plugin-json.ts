@@ -93,7 +93,9 @@ export function classifyPluginError(error: unknown): PluginJsonError {
     [
       'Invalid skill directory',
       'INVALID_SKILL_DIRECTORY',
-      ['Rename the Skill directory to the plugin-owned prefix.'],
+      [
+        'Use a nocobase-prefixed kebab-case Skill name; plugin Skills must retain their package-owned prefix.',
+      ],
     ],
     [
       'Skill name collision',
