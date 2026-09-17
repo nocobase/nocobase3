@@ -378,6 +378,11 @@ export default {
   'AI settings': 'AI settings',
   'LLM Service': 'LLM Service',
   MCP: 'MCP',
+  'mcp.configNotice': 'MCP servers are configured in config.yml.',
+  'mcp.toolsTitle': 'MCP tools',
+  'mcp.toolsEmpty': 'No MCP tools available.',
+  'mcp.transportHttp': 'HTTP (Streamable)',
+  'mcp.transportSse': 'HTTP + SSE (Legacy)',
   'MCP servers': 'MCP servers',
   'LLM services are configured in config.yml.':
     'LLM services are configured in config.yml.',

@@ -338,6 +338,11 @@ export default {
   'AI settings': 'AI 设置',
   'LLM Service': 'LLM 服务',
   MCP: 'MCP',
+  'mcp.configNotice': 'MCP 服务配置于 config.yml。',
+  'mcp.toolsTitle': 'MCP 工具',
+  'mcp.toolsEmpty': '暂无可用的 MCP 工具。',
+  'mcp.transportHttp': 'HTTP（流式）',
+  'mcp.transportSse': 'HTTP + SSE（旧版）',
   'MCP servers': 'MCP 服务',
   'LLM services are configured in config.yml.': 'LLM 服务配置于 config.yml。',
   'Manage AI employees, LLM services, and MCP services.':
