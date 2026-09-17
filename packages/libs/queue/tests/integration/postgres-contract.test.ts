@@ -125,3 +125,62 @@ it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
     }
   },
 );
+
+it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
+  'rolls back a PostgreSQL bulk when one job is rejected by SQL',
+  async () => {
+    const { Pool } = await import('pg');
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_PG_PORT),
+      user: 'postgres',
+      password: 'queue-test-only',
+      database: 'postgres',
+    };
+    const admin = new Pool(connection);
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-atomic`,
+      queueBackend: 'postgres',
+      connection: { ...connection, schema: 'atomic_fixture' },
+    });
+    const producer = service.producer('jobs');
+    try {
+      await service.setup();
+      await admin.query(
+        "CREATE FUNCTION atomic_fixture.reject_middle() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.name = 'bad' THEN RAISE EXCEPTION 'Rejected bulk fixture' USING ERRCODE='23514'; END IF; RETURN NEW; END $$",
+      );
+      await admin.query(
+        'CREATE TRIGGER reject_middle BEFORE INSERT ON atomic_fixture.job FOR EACH ROW EXECUTE FUNCTION atomic_fixture.reject_middle()',
+      );
+      await expect(
+        producer.publishMany([
+          { channel: 'first', message: 1 },
+          { channel: 'bad', message: 2 },
+          { channel: 'last', message: 3 },
+        ]),
+      ).rejects.toThrow('Rejected bulk fixture');
+      expect(
+        (
+          await admin.query(
+            'SELECT count(*)::int AS count FROM atomic_fixture.job',
+          )
+        ).rows,
+      ).toEqual([{ count: 0 }]);
+      await admin.query('DROP TRIGGER reject_middle ON atomic_fixture.job');
+      await producer.publishMany([
+        { channel: 'first', message: 1 },
+        { channel: 'last', message: 3 },
+      ]);
+      expect(
+        (
+          await admin.query(
+            'SELECT count(*)::int AS count FROM atomic_fixture.job',
+          )
+        ).rows,
+      ).toEqual([{ count: 2 }]);
+    } finally {
+      await service.shutdown();
+      await admin.end();
+    }
+  },
+);
