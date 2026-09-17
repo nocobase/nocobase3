@@ -305,6 +305,13 @@ export function createQueueService(
           ),
         );
         await current.queue.waitUntilReady();
+        if (config.rateLimit === null)
+          await current.queue.removeGlobalRateLimit();
+        else if (config.rateLimit !== undefined)
+          await current.queue.setGlobalRateLimit(
+            config.rateLimit.max,
+            config.rateLimit.duration,
+          );
         current.initializeWorker = (): Promise<void> => {
           current.workerInitialization ??= (async (): Promise<void> => {
             if (stopped) throw new Error('Queue service is shutting down');
