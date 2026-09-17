@@ -286,3 +286,63 @@ it.each(['configuration', 'publish'] as const)(
     }
   },
 );
+
+it('reports late settlement of initialization left unresolved by shutdown', async () => {
+  const { vi } = await import('vitest');
+  const { createInMemoryBackendFactory } =
+    await import('../src/backends/in-memory/index.js');
+  const warn = vi.fn();
+  const error = vi.fn();
+  const service = createQueueService(
+    {
+      namespace: 'late-preparation',
+      queueBackend: 'test',
+      setupTimeoutMs: 20000,
+      shutdownTimeoutMs: 20,
+    },
+    { logger: { warn, error } },
+  );
+  const factory = createInMemoryBackendFactory();
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered = false;
+  service.registerBackend('test', (...args) => {
+    const backend = factory(...args);
+    backend.waitUntilReady = async () => {
+      entered = true;
+      await gate;
+    };
+    return backend;
+  });
+  service.producer('jobs');
+  const starting = service.setup().catch(() => {});
+  await expect.poll(() => entered).toBe(true);
+  vi.useFakeTimers();
+  let finished = false;
+  const closing = service
+    .shutdown()
+    .catch(() => {})
+    .finally(() => {
+      finished = true;
+    });
+  try {
+    await vi.advanceTimersByTimeAsync(5021);
+    expect(finished).toBe(true);
+    expect(error).toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    release();
+    await starting;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(warn).toHaveBeenCalledWith(
+      {},
+      'Previously unresolved queue initialization or configuration has settled',
+    );
+  } finally {
+    release();
+    await starting;
+    await closing;
+    vi.useRealTimers();
+  }
+});

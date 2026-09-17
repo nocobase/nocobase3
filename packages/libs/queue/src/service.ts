@@ -739,6 +739,18 @@ export function createQueueService(
             { error },
             'Queue shutdown has unresolved initialization or configuration',
           );
+          void preparation.then(
+            () =>
+              dependencies.logger?.warn(
+                {},
+                'Previously unresolved queue initialization or configuration has settled',
+              ),
+            (error: unknown) =>
+              dependencies.logger?.error(
+                { error },
+                'Previously unresolved queue initialization or configuration failed',
+              ),
+          );
         }
         if (
           !published &&
@@ -754,6 +766,18 @@ export function createQueueService(
           dependencies.logger?.error(
             { error },
             'Queue shutdown has unresolved publications',
+          );
+          void publications.then(
+            () =>
+              dependencies.logger?.warn(
+                {},
+                'Previously unresolved queue publications have settled',
+              ),
+            (error: unknown) =>
+              dependencies.logger?.error(
+                { error },
+                'Previously unresolved queue publications failed',
+              ),
           );
         }
         if (errors.length)
