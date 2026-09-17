@@ -204,3 +204,87 @@ it.skipIf(selectedBackend() !== 'redis')(
   },
   20000,
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'borrows a caller Redis through owned duplicates without closing the caller',
+  async () => {
+    const { Redis } = await import('ioredis');
+    const { createTcpProxy } = await import('../helpers/tcp-proxy.js');
+    const proxy = await createTcpProxy(
+      Number(process.env.QUEUE_TEST_REDIS_PORT),
+    );
+    const owner = new Redis({
+      host: '127.0.0.1',
+      port: proxy.port,
+      connectionName: 'caller-owned',
+      maxRetriesPerRequest: 7,
+      commandTimeout: 5000,
+    });
+    await owner.ping();
+    const original = { ...owner.options };
+    const { vi } = await import('vitest');
+    const duplicates = vi.spyOn(owner, 'duplicate');
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-borrowed`,
+      queueBackend: 'redis',
+      connection: owner,
+    });
+    const messages: unknown[] = [];
+    service.consumer('jobs').consume(async (_channel, message) => {
+      messages.push(message);
+    });
+    try {
+      await service.setup();
+      await expect.poll(() => proxy.sockets.size).toBe(8);
+      expect(duplicates).toHaveBeenCalledTimes(2);
+      expect(duplicates.mock.results[0]?.value.options.commandTimeout).toBe(
+        10000,
+      );
+      expect(
+        duplicates.mock.results[1]?.value.options.commandTimeout,
+      ).toBeUndefined();
+      await service.producer('jobs').publish('event', 'borrowed');
+      await expect.poll(() => messages).toEqual(['borrowed']);
+      await service.shutdown();
+      await expect.poll(() => proxy.sockets.size).toBe(2);
+      expect(await owner.ping()).toBe('PONG');
+      expect(owner.options).toEqual(original);
+    } finally {
+      await service.shutdown().catch(() => {});
+      await owner.quit();
+      await proxy.close();
+    }
+  },
+);
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'closes newly constructed borrowed-client backends concurrently without opening the caller',
+  async () => {
+    const { Redis } = await import('ioredis');
+    const { createServiceRedisBackend } =
+      await import('../../src/backends/redis.js');
+    const { createTcpProxy } = await import('../helpers/tcp-proxy.js');
+    const proxy = await createTcpProxy(
+      Number(process.env.QUEUE_TEST_REDIS_PORT),
+    );
+    const owner = new Redis({
+      host: '127.0.0.1',
+      port: proxy.port,
+      lazyConnect: true,
+    });
+    const backend = createServiceRedisBackend('early-close', {
+      connection: owner,
+    });
+    backend.on('error', () => {});
+    try {
+      await Promise.all([backend.close(), backend.close(), backend.close()]);
+      await expect.poll(() => proxy.sockets.size).toBe(0);
+      expect(owner.status).toBe('wait');
+      expect(await owner.ping()).toBe('PONG');
+    } finally {
+      await backend.close();
+      owner.disconnect();
+      await proxy.close();
+    }
+  },
+);
