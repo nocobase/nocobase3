@@ -327,3 +327,45 @@ it.skipIf(selectedBackend() !== 'redis')(
     }
   },
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'preserves actual partial pipeline writes on a Redis server error',
+  async () => {
+    const { Redis } = await import('ioredis');
+    const { createQueueIdentity } = await import('../../src/identity.js');
+    const namespace = `${process.env.QUEUE_TEST_RUN}-partial`;
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_REDIS_PORT),
+    };
+    const service = createQueueService({
+      namespace,
+      connection,
+      queueBackend: 'redis',
+    });
+    const producer = service.producer('jobs');
+    const identity = createQueueIdentity(namespace, 'jobs');
+    const key = (id: string): string =>
+      `${identity.redisPrefix}:${identity.redisQueueName}:${id}`;
+    const observer = new Redis(connection);
+    try {
+      await service.setup();
+      await observer.set(key('wrong-type'), 'occupied');
+      await expect(
+        producer.publishMany(
+          ['before', 'wrong-type', 'after'].map((channel) => ({
+            channel,
+            message: {},
+          })),
+          { jobIdProducer: (_queue, channel) => channel },
+        ),
+      ).rejects.toThrow();
+      expect(await observer.exists(key('before'))).toBe(1);
+      expect(await observer.exists(key('after'))).toBe(1);
+      expect(await observer.get(key('wrong-type'))).toBe('occupied');
+    } finally {
+      await service.shutdown();
+      await observer.quit();
+    }
+  },
+);
