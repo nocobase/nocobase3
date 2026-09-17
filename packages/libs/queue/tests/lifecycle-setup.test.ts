@@ -79,3 +79,51 @@ it('does not run a Worker whose readiness arrives after shutdown begins', async 
     run.mockRestore();
   }
 });
+
+it('bounds runtime queue initialization without disabling a ready queue', async () => {
+  const service = createQueueService({
+    namespace: 'dynamic-timeout',
+    queueBackend: 'test',
+    setupTimeoutMs: 20,
+  });
+  const factory = createInMemoryBackendFactory();
+  let interrupt = (): void => {};
+  const blocked = new Promise<void>((_resolve, reject) => {
+    interrupt = () => reject(new Error('cancelled'));
+  });
+  void blocked.catch(() => {});
+  let block = false;
+  let closed = false;
+  service.registerBackend('test', (...args) => {
+    const backend = factory(...args);
+    if (block) {
+      vi.spyOn(backend, 'waitUntilReady').mockImplementation(() => blocked);
+      const close = backend.close.bind(backend);
+      backend.close = async (...values) => {
+        closed = true;
+        interrupt();
+        await close(...values);
+      };
+    }
+    return backend;
+  });
+  const healthy = service.producer('healthy');
+  await service.setup();
+  block = true;
+  let rejected = false;
+  const publishing = service
+    .producer('blocked')
+    .publish('event', {})
+    .catch(() => {
+      rejected = true;
+    });
+  try {
+    await expect.poll(() => rejected, { timeout: 1000 }).toBe(true);
+    expect(closed).toBe(true);
+    await expect(healthy.publish('event', {})).resolves.toHaveProperty('jobId');
+  } finally {
+    interrupt();
+    await publishing;
+    await service.shutdown();
+  }
+});
