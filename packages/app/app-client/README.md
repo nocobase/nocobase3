@@ -196,6 +196,16 @@ Async hooks retain the owning Provider context, so `this.app.refine` remains
 valid across `await` while the hook is running. Outside Provider lifecycle,
 read the finalized `app.refineConfig` instead of mutating `app.refine`.
 
+React components and custom Hooks can obtain the application's HTTP client with `useApiClient()`:
+
+```tsx
+import { useApiClient } from '@nocobase/app-client';
+
+const api = useApiClient();
+```
+
+This is a no-argument shorthand for `useService(apiClientToken)`. It returns the same application-scoped instance and requires application context; it does not create a client or manage request state. Non-React code continues to resolve the token from the application or receive the client explicitly.
+
 Application components can resolve services through:
 
 ```tsx

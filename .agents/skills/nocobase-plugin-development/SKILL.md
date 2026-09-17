@@ -48,7 +48,7 @@ For Client or Server Route tasks, inspect only the matching files in `packages/e
 
 For plugin frontend requests to custom endpoints or remote Repository operations, read [client API requests](../../../packages/app/app-skills/skills/nocobase-app-development/references/client-api.md). Keep the complete request guidance in that shared application reference rather than duplicating it here.
 
-Reuse the host application's `apiClientToken`: resolve it with `useService` in React or from the application's services in a Client ServiceProvider, and pass the client into ordinary business functions. Do not construct a separate client for application API calls. Import the token, hooks, `ApiClient` type and `ApiClientError` from `@nocobase/app-client`, and declare that runtime in the plugin's `peerDependencies`, not `dependencies`, so the plugin shares the host's service-token and React-context identity.
+Reuse the host application's `apiClientToken`: resolve it with `useApiClient()` in React or from the application's services in a Client ServiceProvider, and pass the client into ordinary business functions. Do not construct a separate client for application API calls. Import the token, hooks, `ApiClient` type and `ApiClientError` from `@nocobase/app-client`, and declare that runtime in the plugin's `peerDependencies`, not `dependencies`, so the plugin shares the host's service-token and React-context identity.
 
 ## Stable v3 protocol
 

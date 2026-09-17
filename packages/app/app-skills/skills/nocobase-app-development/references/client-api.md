@@ -1,16 +1,18 @@
 # Calling APIs from the frontend
 
-Use the application's HTTP client for application API calls. Resolve `apiClientToken` rather than constructing another client, hardcoding `/api`, or deriving an API URL from the browser location. The application configures `api.baseURL`, including any deployment base path. Import the token, hooks, `ApiClient` type and `ApiClientError` through `@nocobase/app-client` so plugins use the application's shared runtime and error-class identity.
+Use the application's HTTP client for application API calls. Resolve `apiClientToken` rather than constructing another client, hardcoding `/api`, or deriving an API URL from the browser location. The application configures `api.baseURL`, including any deployment base path. Import `useApiClient`, the token, other hooks, `ApiClient` type and `ApiClientError` through `@nocobase/app-client` so plugins use the application's shared runtime and error-class identity.
 
 ## Resolve the client
 
 Inside a React component or custom Hook:
 
 ```tsx
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 
-const api = useService(apiClientToken);
+const api = useApiClient();
 ```
+
+`useApiClient()` is a no-argument shorthand for `useService(apiClientToken)`. Both return the same client from the current application and require application context. Neither creates a client or manages request state.
 
 Inside a Client ServiceProvider method, resolve it after services have been registered:
 
