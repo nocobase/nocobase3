@@ -120,9 +120,18 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     return records.map((record) => record.id);
   }
   private waitingId(): string | undefined {
-    return [...this.state.records.keys()].find(
-      (id) => this.state.store.get(id)?.state === 'waiting',
-    );
+    let selected: string | undefined;
+    let priority = Infinity;
+    for (const id of this.state.records.keys()) {
+      const record = this.state.store.get(id);
+      if (record?.state !== 'waiting') continue;
+      const candidate = record.options.priority ?? 0;
+      if (candidate < priority) {
+        selected = id;
+        priority = candidate;
+      }
+    }
+    return selected;
   }
 
   async moveToActive(
