@@ -15,3 +15,9 @@ export const queueJobFactoryRegistryToken: ServiceToken<NocoBaseQueueJobFactoryR
   createServiceToken<NocoBaseQueueJobFactoryRegistry>(
     '@nocobase/queue/job-factory-registry',
   );
+
+export const queueServiceToken: ServiceToken<
+  import('@nocobase/queue').QueueService
+> = createServiceToken<import('@nocobase/queue').QueueService>(
+  '@nocobase/queue/service',
+);
