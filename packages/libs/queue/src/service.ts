@@ -1,9 +1,10 @@
 import { Queue, Worker, WaitingError } from 'bullmq';
 import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
-import { resolveQueueConfiguration } from './config.js';
+import { resolveQueueConfiguration, resolveQueueTimeouts } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
 import { createQueueProducer } from './producer.js';
+import { settlesWithin } from './lifecycle.js';
 import { QueueCancellation } from './cancellation.js';
 import { createQueueHandlerRegistry } from './consumer.js';
 import type { QueueHandlerRegistry } from './consumer.js';
@@ -99,6 +100,7 @@ export function createQueueService(
   options: QueueOptions,
   dependencies: QueueServiceDependencies = {},
 ): QueueService {
+  const timeouts = resolveQueueTimeouts(options);
   const resources = new QueueResourceCache();
   let ready = false;
   const registry = createBackendRegistry();
@@ -468,16 +470,47 @@ export function createQueueService(
         const workers = [...entries.values()].filter(
           (current) => current.worker,
         );
-        const results = await Promise.allSettled(
+        const waiting = Promise.allSettled(
           workers.map(async (current) => {
-            await current.worker?.close();
+            await current.worker!.pause(false);
+            await current.handlers.settle();
+          }),
+        );
+        let settled = await settlesWithin(waiting, timeouts.shutdownTimeoutMs);
+        if (!settled) {
+          for (const current of workers)
+            current.worker?.cancelAllJobs('Queue service shutdown');
+          settled = await settlesWithin(waiting, timeouts.cancellationGraceMs);
+        }
+        const errors: unknown[] = [];
+        if (!settled) {
+          const error = new Error(
+            'Queue shutdown grace expired; handlers may still be running',
+          );
+          errors.push(error);
+          dependencies.logger?.error(
+            { error },
+            'Queue shutdown has unresolved handlers',
+          );
+          void waiting.then(() =>
+            dependencies.logger?.warn(
+              {},
+              'Previously unresolved queue handlers have settled',
+            ),
+          );
+        } else {
+          for (const result of await waiting)
+            if (result.status === 'rejected') errors.push(result.reason);
+        }
+        producersOpen = false;
+        const closed = await Promise.allSettled(
+          workers.map(async (current) => {
+            await current.worker!.close(!settled);
             current.worker = undefined;
           }),
         );
-        producersOpen = false;
-        const errors = results.flatMap((result) =>
-          result.status === 'rejected' ? [result.reason as unknown] : [],
-        );
+        for (const result of closed)
+          if (result.status === 'rejected') errors.push(result.reason);
         try {
           await closeEntries();
         } catch (error) {
