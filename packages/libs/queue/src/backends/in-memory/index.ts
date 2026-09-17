@@ -1,5 +1,6 @@
 import { QueueKeys } from 'bullmq';
 import { InMemoryQueueStore } from './store.js';
+import { assertSupportedJob } from './guards.js';
 import { MemoryWaiter, MemoryWorkerState } from './worker.js';
 
 interface MemoryBackendState {
@@ -77,9 +78,10 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   async addJob(
     job: JobJson,
     jobId: string,
-    _parentKeyOpts?: ParentKeyOpts,
+    parentKeyOpts?: ParentKeyOpts,
   ): Promise<string> {
     await this.waitUntilReady();
+    assertSupportedJob(job, parentKeyOpts);
     const data: unknown = JSON.parse(job.data);
     const record = this.state.store.add({
       id: jobId || undefined,
