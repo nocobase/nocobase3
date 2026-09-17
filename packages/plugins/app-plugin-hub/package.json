@@ -76,7 +76,6 @@
   },
   "dependencies": {
     "@nocobase/app-host": "workspace:^",
-    "@nocobase/authorization": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "hono": "catalog:",
@@ -103,7 +102,8 @@
     "lucide-react": "catalog:",
     "react": "^19.0.0",
     "react-router": "catalog:",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@nocobase/authorization": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",

@@ -84,10 +84,10 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "react": "^19.0.0",
-    "react-router": "^7.0.0"
+    "react-router": "^7.0.0",
+    "@nocobase/caching": "workspace:^"
   },
   "dependencies": {
-    "@nocobase/caching": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "better-auth": "catalog:",

@@ -126,7 +126,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/db": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {
@@ -137,5 +136,8 @@
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/db": "workspace:^"
   }
 }

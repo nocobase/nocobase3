@@ -237,9 +237,9 @@ If yes, it belongs to the rule. In practice that means the package exports at le
 - **A module-level singleton.** A `const` holding a `new` instance or accumulated state, such as `nocobaseClient`, gives each copy its own session, cache, or connection.
 - **A registration into a process-wide registry.** `@nocobase/queue` registers job classes into the `Locator` of `@boringnode/queue`; the second copy registers into a table the first one never reads.
 
-A package that exports only classes, functions, and types holds nothing a second copy could split. Constructing two instances of a class is what callers already do, and a duplicated pure function behaves identically. `@nocobase/drive`, `@nocobase/caching`, `@nocobase/logging`, `@nocobase/session`, and `@nocobase/snowflake` are in this group today and stay ordinary dependencies. They move only if they gain one of the exports above — adding a token or a context to any of them is the moment to revisit the entry, not a later release.
+Public classes with private members also carry declaration identity: passing a DatabaseConnection between packages using different db versions can fail type checking even when runtime methods match. Review public object contracts as well as singletons, including authorization error identity, caching registries, AI employee service tokens, and repository-input filter symbols. Ordinary dependencies remain appropriate for implementation details that do not cross the package boundary.
 
-Two cases need no judgement. Every `@nocobase/app-plugin-*` is covered unconditionally, because plugins export tokens for one another and `isIdentitySensitive` matches them by prefix, so a new plugin is included the day it is created. And a package that only ever appears in `import type` needs no runtime declaration at all.
+Two cases need no judgement. Every `@nocobase/app-plugin-*` is covered unconditionally, because plugins export tokens for one another and `isIdentitySensitive` matches them by prefix, so a new plugin is included the day it is created. A type-only import that survives in published declarations still needs a consumer-resolvable dependency contract.
 
 When you do add an entry, record what breaks without it rather than only the package name. The reason is what lets the next person apply this rule to a package nobody has seen yet; a bare list decays into something people copy without understanding.
 
@@ -258,11 +258,11 @@ The current entries:
 
 ### Why a second copy is worth this much trouble
 
-Nothing warns at install time, the build succeeds, and the application starts. The symptom appears at runtime as `Service "..." is not registered` for a service that is demonstrably registered, or as a React context reading `undefined` under a provider that is demonstrably mounted — the error points at correct code, and the actual fault is a duplicated module that appears nowhere in the source.
+Installation can succeed while a later build rejects database classes from different versions because their private members have different declaration identities. If type checking succeeds, runtime identity can still fail: `Service "..." is not registered` for a service that is demonstrably registered, or a React context reads `undefined` under a mounted provider. Inspect the installed dependency graph when these symptoms cross package boundaries.
 
-It cannot be reproduced here. The monorepo links every consumer to one directory through the `workspace:` protocol, so a second copy is impossible; it becomes possible only once a plugin is installed from a registry, where a `dependencies` range lets a package manager satisfy it with its own copy. That is why the declaration has to be right before publishing, not after the first report.
+Workspace links can hide this problem by resolving consumers to the same source directory. Passing monorepo checks does not prove that published packages install correctly. Reproduce version skew with installed packages outside the workspace, as in `tests/scripts/shared-db-install.test.mjs`, and verify the published dependency contract before release.
 
-### Declaring both, and why
+### Declaring the shared dependency
 
 ```json
 {
@@ -270,15 +270,15 @@ It cannot be reproduced here. The monorepo links every consumer to one directory
 }
 ```
 
-**`peerDependencies` is the published contract.** It is what npm ships in the package metadata, and it tells the installing application "provide this, and provide exactly one". `devDependencies` are not published at all, so without the peer entry an installed plugin declares no requirement and a package manager is free to give it a second copy.
+**`peerDependencies` is the published contract.** It is what npm ships in the package metadata, and it tells the installing application which compatible package to provide. `devDependencies` are not installed for consumers, so without the peer entry an installed plugin declares no requirement and a package manager is free to give it a second copy.
 
 One declaration is enough. pnpm installs a peer and links it into the plugin's own `node_modules`, `workspace:^` resolving to the copy in this repository exactly as `workspace:*` would — a plugin with its devDependency removed still links, typechecks, builds, and tests against it. A paired `devDependency` used to be required on the grounds that development would otherwise float across the wide peer range; it does not, so the second entry only added a line to keep in step.
 
 ### Scope
 
-The rule applies to plugins, which are guests in an application someone else assembled: `packages/plugins` and `packages/examples`, which is what `CHECKED_GROUPS` in the check script covers.
+The shared-provider rule also applies to libraries and application runtimes receiving host-owned objects. Applications supply the production dependencies. The current `pnpm peers:check` scans plugins and examples against its recorded package list; review library consumers and required template providers explicitly, because the check does not cover them.
 
-It does not apply to `packages/app` and `packages/libs`. They compose the runtime and are what puts the single copy in place — `app-server` depending on `@nocobase/db` is precisely how the one copy comes to exist. Nor does it apply to `packages/templates`, which are applications, and therefore the side that satisfies a peer range rather than declaring one. A new group under `packages/` needs a deliberate decision about which side of this line it sits on before it is added to `CHECKED_GROUPS`.
+A peer range expresses compatibility; it does not guarantee a global singleton across incompatible peer contexts. Test installed artifacts and old-lockfile upgrades, and keep the host ranges compatible. Deployment sets `autoInstallPeers: false`, so promoting a dependency to a peer must include its production provider in all affected templates. Do not rely on a development dependency or a transitive copy to supply it. For changes to these contracts, update all affected templates and the lockfile, run peer/runtime checks and the installed-package regression, and document existing-application upgrade requirements in a changeset. Do not hide type conflicts with casts or relaxed checking.
 
 A plugin that contributes CLI commands declares `@oclif/core` as a peer for a related but distinct reason: not module identity, but one shared version, so help rendering and flag parsing behave the same in the plugin and in the application that assembles its commands.
 
@@ -286,9 +286,9 @@ A plugin that contributes CLI commands declares `@oclif/core` as a peer for a re
 
 ## Declaring Dependencies by How They Are Used
 
-Server code that ships goes in `dependencies`. Browser code a consumer has to resolve goes in `peerDependencies`. Build tooling, tests, and type-only imports go in `devDependencies`. `pnpm deps:check` enforces the server half and runs in CI.
+Ordinary server implementation dependencies go in `dependencies`; shared identity-sensitive packages follow the peer rule above even when imported by server code. Browser code a consumer has to resolve goes in `peerDependencies`. Build tooling, tests, and type imports absent from published declarations go in `devDependencies`. `pnpm deps:check` checks server runtime import declarations and runs in CI.
 
-The rule is one question: **does someone outside this repository have to resolve this import?** If yes, the package has to be declared where npm publishes it, and `devDependencies` are not published at all.
+The rule is one question: **does someone outside this repository have to resolve this import?** If yes, declare it as a dependency or peer according to its ownership; a published package's devDependencies are not installed for its consumers.
 
 **A deployed server resolves its imports at runtime.** `pnpm build` emits `dist/server` with its bare imports intact and generates `dist/package.json` by walking `dependencies`. A server module importing something declared only as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server. `@nocobase/app-plugin-workflow` shipped this: `server/loader/source-parser.ts` imports `typescript`, and `typescript` sat in `devDependencies`. The application crashed on start with `Cannot find package 'typescript'`, an error naming nothing that points back at the manifest.
 
@@ -300,9 +300,9 @@ A plugin's client dependency is also easy to believe is fine when it is not. Ten
 
 So the question is who resolves the import, and then what the import actually is:
 
-- **A server value import belongs in `dependencies`.** `import ts from 'typescript'` in `server/` needs it even though TypeScript sounds like build tooling.
+- **An ordinary server value import belongs in `dependencies`; shared identity-sensitive imports are peers.** `import ts from 'typescript'` in `server/` needs a runtime dependency even though TypeScript sounds like build tooling. A shared database connection follows the host-provided peer contract instead.
 - **A client value import belongs in `peerDependencies`.** `sonner`, `lucide-react`, `@base-ui/react`, `clsx` — the installing application resolves them from the published manifest and provides one shared copy, while a server deployment installs none.
-- **A type-only import belongs in `devDependencies` wherever it lives.** `import type { Config } from 'x'` and `import { type A, type B } from 'x'` are erased before anything runs.
+- **A type-only import can belong in `devDependencies` only if consumers do not need to resolve it.** JavaScript erases `import type`, but emitted `.d.ts` files can retain references to that package. Inspect the published declarations and use a dependency or peer contract when those references survive; shared classes with private members follow the peer rule.
 - **A dynamic `import()` counts as a value import.** Deferring the load changes when a package is needed, not whether.
 - **The `files` field decides whether code ships at all.** A test, an eval harness, or a build script excluded from `files` never reaches a consumer, so its imports are correctly devDependencies.
 
@@ -312,7 +312,7 @@ So the question is who resolves the import, and then what the import actually is
 
 This rule changed once, and the reason is worth recording. Client imports used to belong in `devDependencies`, because `dist/package.json` was built by walking `dependencies` transitively and dragged every client package into the server deployment — `lucide-react` and `@xyflow/react` alone were 44 MB installed and never required. They are peers now, which keeps them out of a deployment without keeping them out of the application that has to resolve them.
 
-When the check reports something, there are two correct fixes and picking the wrong one is worse than the original: declare it in `dependencies` if server code genuinely imports it, or stop importing it from server code if it is client or build-time code that leaked across. Adding a declaration to silence the check trades a startup crash for a dependency every deployment carries forever.
+When the check reports something, inspect ownership and usage: declare an ordinary server dependency, declare a shared peer and its application provider, or remove a client or build-time import that leaked into server code. Adding a declaration only to silence the check can leave either a duplicate shared module or an unnecessary deployment dependency.
 
 `pnpm plugin:create` emits a generated plugin's `AGENTS.md` carrying this rule, so a plugin created tomorrow is told where a dependency goes before anyone adds one. When the rule changes here, change `packages/tools/create-plugin/template/AGENTS.md` in the same commit — the two are kept in step by a test, but only for the files' existence, not their content.
 
