@@ -2,16 +2,19 @@ import { expect, it } from 'vitest';
 import { createQueueService } from '../../src/service.js';
 import { selectedBackend } from '../helpers/backend-harness.js';
 
-it.skipIf(selectedBackend() !== 'redis')(
-  'uses explicit Redis connection options for producer and Worker',
-  async () => {
+it.skipIf(selectedBackend() !== 'redis').each(['options', 'url'])(
+  'uses explicit Redis %s for producer and Worker',
+  async (kind) => {
     const service = createQueueService({
-      namespace: `${process.env.QUEUE_TEST_RUN}-connection`,
+      namespace: `${process.env.QUEUE_TEST_RUN}-connection-${kind}`,
       queueBackend: 'redis',
-      connection: {
-        host: '127.0.0.1',
-        port: Number(process.env.QUEUE_TEST_REDIS_PORT),
-      },
+      connection:
+        kind === 'url'
+          ? { url: `redis://127.0.0.1:${process.env.QUEUE_TEST_REDIS_PORT}/0` }
+          : {
+              host: '127.0.0.1',
+              port: Number(process.env.QUEUE_TEST_REDIS_PORT),
+            },
     });
     const received: unknown[] = [];
     service.consumer('jobs').consume(async (_channel, message) => {
