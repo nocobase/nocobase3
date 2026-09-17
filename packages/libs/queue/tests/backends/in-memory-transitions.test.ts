@@ -4,6 +4,71 @@ import { describe, expect, it, vi } from 'vitest';
 import { createInMemoryBackendFactory } from '../../src/backends/in-memory/index.js';
 
 describe('memory completion protocol', () => {
+  it.each([0, 1, 2])(
+    'caps age retention removal at %i jobs including the age boundary',
+    async (limit) => {
+      const factory = createInMemoryBackendFactory();
+      const queue = new Queue('retention-cap', { connection: {} }, factory);
+      const backend = factory('retention-cap', { connection: {} });
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(100000);
+      try {
+        for (const id of ['old-a', 'old-b', 'old-c']) {
+          const job = await queue.add(id, {}, { jobId: id });
+          await backend.moveToActive('token');
+          await backend.moveToCompleted(job, {}, false, 'token', false);
+        }
+        clock.mockReturnValue(101000);
+        const fresh = await queue.add('fresh', {}, { jobId: 'fresh' });
+        await backend.moveToActive('token');
+        await backend.moveToCompleted(
+          fresh,
+          {},
+          { age: 1, limit },
+          'token',
+          false,
+        );
+        expect(await backend.getState('fresh')).toBe('completed');
+        for (const [index, id] of ['old-c', 'old-b', 'old-a'].entries()) {
+          expect(await backend.getState(id)).toBe(
+            index < limit ? 'unknown' : 'completed',
+          );
+        }
+      } finally {
+        clock.mockRestore();
+        await Promise.all([queue.close(), backend.close()]);
+      }
+    },
+  );
+  it('applies count retention to survivors after capped age removal', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('combined-retention', { connection: {} }, factory);
+    const backend = factory('combined-retention', { connection: {} });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(100000);
+    try {
+      for (const id of ['a', 'b', 'c']) {
+        const job = await queue.add(id, {}, { jobId: id });
+        await backend.moveToActive('token');
+        await backend.moveToCompleted(job, {}, false, 'token', false);
+      }
+      clock.mockReturnValue(102000);
+      const fresh = await queue.add('fresh', {}, { jobId: 'fresh' });
+      await backend.moveToActive('token');
+      await backend.moveToCompleted(
+        fresh,
+        {},
+        { age: 1, limit: 1, count: 2 },
+        'token',
+        false,
+      );
+      expect(await backend.getState('a')).toBe('unknown');
+      expect(await backend.getState('c')).toBe('unknown');
+      expect(await backend.getState('b')).toBe('completed');
+      expect(await backend.getState('fresh')).toBe('completed');
+    } finally {
+      clock.mockRestore();
+      await Promise.all([queue.close(), backend.close()]);
+    }
+  });
   it('promotes a delayed retry behind existing FIFO work', async () => {
     const factory = createInMemoryBackendFactory();
     const queue = new Queue('retry-order', { connection: {} }, factory);
