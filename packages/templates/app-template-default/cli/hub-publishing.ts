@@ -309,7 +309,10 @@ export async function publishToHub(
       idempotencyKey: requestKey,
     };
   }
-  if (options.wait) {
+  // Reusing an operation confirms its identity, not that it can still succeed.
+  const checkUploadRetry =
+    operation === 'upload' && options.deploy && result.reused === true;
+  if (options.wait || checkUploadRetry) {
     if (typeof result.operationId !== 'string')
       throw new PublishingError(
         'NO_DEPLOYMENT',
@@ -335,6 +338,7 @@ export async function publishToHub(
           'Deployment result cannot be confirmed.',
           3,
         );
+      if (!options.wait) break;
       try {
         await delay(1000, undefined, { signal });
       } catch {

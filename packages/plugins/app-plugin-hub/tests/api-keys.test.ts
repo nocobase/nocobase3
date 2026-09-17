@@ -744,12 +744,14 @@ describe('Hub API Key HTTP boundary', () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), 'hub-publishing-acceptance-'),
     );
+    const deploymentResult = Promise.withResolvers<void>();
     const hub = new DefaultHubService({
       database: db,
       hostController: {
-        applyDeployment: vi
-          .fn()
-          .mockRejectedValue(new Error('Simulated Host failure')),
+        applyDeployment: vi.fn(async () => {
+          await deploymentResult.promise;
+          throw new Error('Simulated Host failure');
+        }),
       } as unknown as HubHostController,
       config: {
         artifact: {
@@ -812,6 +814,7 @@ describe('Hub API Key HTTP boundary', () => {
         operationId: first.operationId,
         reused: true,
       });
+      deploymentResult.resolve();
       await vi.waitFor(async () => {
         expect(
           (await hub.getDeployment('crm', String(first.operationId))).status,
@@ -820,9 +823,13 @@ describe('Hub API Key HTTP boundary', () => {
       await expect(
         publishToHub('upload', { ...options, wait: true }, root, {}),
       ).rejects.toMatchObject({ exitCode: 1, code: 'DEPLOYMENT_FAILED' });
+      await expect(
+        publishToHub('upload', { ...options, wait: false }, root, {}),
+      ).rejects.toMatchObject({ exitCode: 1, code: 'DEPLOYMENT_FAILED' });
       expect(await hub.listReleases('crm')).toHaveLength(1);
       expect((await hub.listDeployments('crm')).total).toBe(1);
     } finally {
+      deploymentResult.resolve();
       vi.unstubAllGlobals();
       await hub.shutdown();
       await rm(root, { recursive: true, force: true });
