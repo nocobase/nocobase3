@@ -181,6 +181,15 @@ describe('queue configuration contract', () => {
     );
   });
 
+  it.each(['attempts', 'priority', 'delay'])(
+    'rejects explicit null publish %s rather than treating it as omitted',
+    (field) => {
+      expect(() => resolvePublishOptions(base, { [field]: null })).toThrow(
+        new RegExp(field, 'u'),
+      );
+    },
+  );
+
   it.each([
     ['setupTimeoutMs', 0],
     ['setupTimeoutMs', 2147483648],
@@ -212,13 +221,17 @@ describe('queue configuration contract', () => {
       false,
       0,
       2,
-      {},
       { age: 0, count: 0, limit: 0 },
     ]) {
       expect(resolve({ removeOnComplete: retention }).removeOnComplete).toEqual(
         retention,
       );
     }
+    // KeepJobs requires age or count in its declaration; normalize untyped keep-all objects.
+    expect(resolve({ removeOnComplete: {} }).removeOnComplete).toBe(false);
+    expect(resolve({ removeOnComplete: { limit: 1 } }).removeOnComplete).toBe(
+      false,
+    );
   });
 
   it('accepts long stored delay but rejects score overflow, fractions and excessive priority', () => {
@@ -260,6 +273,32 @@ describe('queue configuration contract', () => {
         backoff: { type: 'exponential', delay: 5, jitter: 0 },
       }).attempts,
     ).toBe(5);
+  });
+
+  it('matches the official PostgreSQL schema identifier boundary', () => {
+    expect(
+      resolve({
+        queueBackend: 'postgres',
+        connection: { schema: 'queue$jobs' },
+      }).connection,
+    ).toEqual({ schema: 'queue$jobs' });
+    expect(() =>
+      resolve({
+        queueBackend: 'postgres',
+        connection: { schema: 'a'.repeat(64) },
+      }),
+    ).toThrow(/connection.schema/u);
+  });
+
+  it.each([
+    ['redis', { redisOptions: { port: 0 } }],
+    ['redis', { lazyConnect: 'yes' }],
+    ['redis', { maxRetriesPerRequest: -1 }],
+    ['postgres', { port: 0 }],
+    ['postgres', { max: 0 }],
+    ['postgres', { connectionString: 5 }],
+  ])('validates known %s driver settings %j', (queueBackend, connection) => {
+    expect(() => resolve({ queueBackend, connection })).toThrow(/connection/u);
   });
 
   it.each([

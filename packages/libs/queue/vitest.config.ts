@@ -11,5 +11,10 @@ export default createNodeVitestConfig({
         ],
     fileParallelism: !process.env.QUEUE_TEST_BACKEND,
     passWithNoTests: false,
+    typecheck: {
+      enabled: !process.env.QUEUE_TEST_BACKEND,
+      include: ['tests/types/**/*.test-d.ts'],
+      tsconfig: 'tsconfig.tests.json',
+    },
   },
 });
