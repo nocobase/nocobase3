@@ -135,6 +135,8 @@ Not everything transfers. Examples owns its demonstration homepage, article modu
 
 Apply all applicable sides in one change and run each affected template's `check`. A framework change that lands in only one template is incomplete, and a reviewer cannot tell whether the omission was a decision or an oversight; if it genuinely does not apply, say so in the pull request.
 
+When a template, application runtime, or CLI change affects how an agent develops, configures, builds, deploys, or upgrades an application, review `packages/app/app-skills` and update the relevant Skill or reference in the same change. Keep the guidance concise and actionable; record the current rule rather than implementation history, and link to existing detail instead of duplicating it.
+
 ## Application Themes and UI Styling
 
 For creating or editing theme presets, read `packages/app/app-skills/skills/nocobase-app-development/references/themes.md` from the repository root.

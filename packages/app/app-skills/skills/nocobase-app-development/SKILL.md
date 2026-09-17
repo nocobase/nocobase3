@@ -57,6 +57,8 @@ Read the relevant Skill before writing the feature, but treat this table as a ma
 
 Skills synchronization reads direct `@nocobase/*` dependencies from the application manifest and retains compatibility with explicitly registered plugins. It does not make an unregistered runtime plugin active; the composition roots remain the authority for registration and contribution order.
 
+Install plugins with `pnpm plugin:register <name>`. All application plugins belong in `dependencies`, including client-only and disabled plugins, because deployment dependencies come from that field. Plugin frontend libraries remain peers and are not automatically installed in the deployment. Re-registering migrates legacy `devDependencies` entries while preserving the declared range; verify the manifest and lockfile afterward. With an older CLI, use `pnpm add --save-prod <package>@<declared-range>` to correct the declaration; `--no-install` leaves lockfile synchronization to the caller.
+
 To update a registered plugin, use `pnpm plugin:update @nocobase/app-plugin-authentication` (or the short name `authentication`). Omit the name to update all registered plugins; add `--dry-run` to preview. `plugin:update` takes a positional name, not `--plugin`, and re-synchronizes Skills after a successful package update. See the Plugins section of the application's `README.MD` for version-range behavior and examples.
 
 ## Removing a direct NocoBase package

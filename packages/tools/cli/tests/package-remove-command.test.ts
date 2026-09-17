@@ -378,9 +378,9 @@ describe('package remove command', () => {
     );
     const manifestPath = path.join(appRoot, 'package.json');
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-      devDependencies?: Record<string, string>;
+      dependencies?: Record<string, string>;
     };
-    delete manifest.devDependencies?.[packageName];
+    delete manifest.dependencies?.[packageName];
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
     const result = await runCommand(config, 'package:remove', [
