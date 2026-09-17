@@ -27,3 +27,4 @@ export * from './database/index.js';
 
 export { createDatabaseQueueAdapterFactory } from './database-adapter.js';
 export type { DatabaseQueueAdapterOptions } from './database-adapter.js';
+export * from './service.js';
