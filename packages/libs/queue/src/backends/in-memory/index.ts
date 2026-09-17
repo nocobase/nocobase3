@@ -123,10 +123,13 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     const now = Date.now();
     for (const [id, job] of this.state.records) {
       if (
-        job.timestamp + (job.delay ?? job.opts.delay ?? 0) <= now &&
+        (this.state.worker.due.get(id) ??
+          job.timestamp + (job.delay ?? job.opts.delay ?? 0)) <= now &&
         this.state.store.transition(id, 'delayed', 'waiting')
-      )
+      ) {
         job.delay = 0;
+        this.state.worker.due.delete(id);
+      }
     }
   }
 
@@ -136,7 +139,8 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
       if (this.state.store.get(id)?.state === 'delayed')
         next = Math.min(
           next,
-          job.timestamp + (job.delay ?? job.opts.delay ?? 0),
+          this.state.worker.due.get(id) ??
+            job.timestamp + (job.delay ?? job.opts.delay ?? 0),
         );
     }
     return next === Infinity ? undefined : next;
@@ -268,13 +272,42 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     };
   }
   async moveToDelayed(
-    _jobId: string,
-    _timestamp: number,
-    _delay: number,
-    _token?: string,
-    _opts?: MoveToDelayedOpts,
+    jobId: string,
+    timestamp: number,
+    delay: number,
+    token?: string,
+    opts?: MoveToDelayedOpts,
   ): ReturnType<IQueueBackend['moveToDelayed']> {
-    throw new Error('Memory backend operation is not implemented');
+    if (token === undefined || !this.state.worker.owns(jobId, token))
+      throw new Error('Invalid or expired lock token');
+    const job = this.state.records.get(jobId);
+    if (!job) throw new Error('Job does not exist');
+    const fields = opts?.fieldsToUpdate ?? {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (
+        !['failedReason', 'stacktrace', 'tm'].includes(key) ||
+        (key !== 'tm' && typeof value !== 'string')
+      )
+        throw new Error('Unsupported retry field');
+    }
+    if (!Number.isFinite(timestamp + delay) || delay < 0)
+      throw new Error('Invalid delayed timestamp');
+    if (!this.state.store.transition(jobId, 'active', 'delayed'))
+      throw new Error('Job is not active');
+    if (typeof fields.failedReason === 'string')
+      job.failedReason = fields.failedReason;
+    if (typeof fields.stacktrace === 'string')
+      job.stacktrace = fields.stacktrace;
+    if (!opts?.skipAttempt) job.attemptsMade = (job.attemptsMade || 0) + 1;
+    job.delay = delay;
+    this.state.worker.due.set(jobId, timestamp + delay);
+    this.state.worker.locks.delete(jobId);
+    this.state.worker.notify();
+    if (opts?.fetchNext && !this.closing) {
+      const next = this.claim(token);
+      if (next[0]) return next;
+    }
+    return [];
   }
   async moveJobFromActiveToWait(
     jobId: string,
@@ -350,8 +383,11 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   }
   async drain(delayed: boolean): Promise<void> {
     await this.waitUntilReady();
-    for (const id of this.state.store.drain(delayed))
+    for (const id of this.state.store.drain(delayed)) {
       this.state.records.delete(id);
+      this.state.worker.due.delete(id);
+    }
+    this.state.worker.notify();
   }
   async extendLocks(
     jobIds: string[],
