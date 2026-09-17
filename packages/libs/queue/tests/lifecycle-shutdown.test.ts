@@ -213,3 +213,76 @@ it('reports unresolved resource cleanup within its cleanup budget and observes l
     vi.useRealTimers();
   }
 });
+
+it.each(['configuration', 'publish'] as const)(
+  'interrupts pending %s when the shutdown drain budget expires',
+  async (operation) => {
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const factory = createInMemoryBackendFactory();
+    const service = createQueueService({
+      namespace: 'configure-deadline',
+      queueBackend: 'test',
+      shutdownTimeoutMs: 20,
+      cancellationGraceMs: 20,
+    });
+    let interrupt = (): void => {};
+    const gate = new Promise<void>((_resolve, reject) => {
+      interrupt = () => reject(new Error('configuration interrupted'));
+    });
+    void gate.catch(() => {});
+    let entered = false;
+    let closed = false;
+    service.registerBackend('test', (...args) => {
+      const backend = factory(...args);
+      const setMeta = backend.setQueueMeta.bind(backend);
+      backend.setQueueMeta = async (meta) => {
+        if (meta.max !== undefined) {
+          entered = true;
+          await gate;
+        }
+        return setMeta(meta);
+      };
+      const addJob = backend.addJob.bind(backend);
+      backend.addJob = async (...values) => {
+        if (operation === 'publish') {
+          entered = true;
+          await gate;
+        }
+        return addJob(...values);
+      };
+      const close = backend.close.bind(backend);
+      backend.close = async (...values) => {
+        interrupt();
+        await close(...values);
+        closed = true;
+      };
+      return backend;
+    });
+    const manager = service.manager('jobs');
+    await service.setup();
+    const configuring =
+      operation === 'configuration'
+        ? manager.configure({
+            rateLimit: { max: 1, duration: 100 },
+          })
+        : service.producer('jobs').publish('event', {});
+    void configuring.catch(() => {});
+    await expect.poll(() => entered).toBe(true);
+    let finished = false;
+    const closing = service
+      .shutdown()
+      .catch(() => {})
+      .finally(() => {
+        finished = true;
+      });
+    try {
+      await expect.poll(() => finished, { timeout: 1000 }).toBe(true);
+      expect(closed).toBe(true);
+      await expect(configuring).rejects.toThrow('configuration interrupted');
+    } finally {
+      interrupt();
+      await closing;
+    }
+  },
+);
