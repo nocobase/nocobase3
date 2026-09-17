@@ -116,3 +116,40 @@ describe('shutdown idempotency', () => {
     }
   });
 });
+
+it('attempts every Queue cleanup even while another Queue close is pending', async () => {
+  const { createInMemoryBackendFactory } =
+    await import('../src/backends/in-memory/index.js');
+  const factory = createInMemoryBackendFactory();
+  const service = createQueueService({
+    namespace: 'cleanup-progress',
+    queueBackend: 'test',
+  });
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let created = 0;
+  let secondClosed = false;
+  service.registerBackend('test', (...args) => {
+    const backend = factory(...args);
+    const first = created++ === 0;
+    const close = backend.close.bind(backend);
+    backend.close = async (...values) => {
+      if (first) await gate;
+      else secondClosed = true;
+      await close(...values);
+    };
+    return backend;
+  });
+  service.producer('first');
+  service.producer('second');
+  await service.setup();
+  const closing = service.shutdown();
+  try {
+    await expect.poll(() => secondClosed, { timeout: 500 }).toBe(true);
+  } finally {
+    release();
+    await closing;
+  }
+});

@@ -263,20 +263,24 @@ export function createQueueService(
     targets: Iterable<QueueEntry> = entries.values(),
   ): Promise<void> {
     const errors: unknown[] = [];
-    for (const current of targets) {
-      for (const key of ['worker', 'queue'] as const) {
-        const resource = current[key];
-        if (!resource) continue;
-        try {
-          if (key === 'worker' && current.worker)
-            await closeWorker(current.worker);
-          else await resource.close();
-          current[key] = undefined;
-        } catch (error) {
-          errors.push(error);
-        }
-      }
-    }
+    await Promise.all(
+      Array.from(targets, async (current) => {
+        await Promise.all(
+          (['worker', 'queue'] as const).map(async (key) => {
+            const resource = current[key];
+            if (!resource) return;
+            try {
+              if (key === 'worker' && current.worker)
+                await closeWorker(current.worker);
+              else await resource.close();
+              if (current[key] === resource) current[key] = undefined;
+            } catch (error) {
+              errors.push(error);
+            }
+          }),
+        );
+      }),
+    );
     if (errors.length)
       throw new AggregateError(errors, 'Queue resource cleanup failed');
   }
