@@ -32,6 +32,8 @@ export const ALLOWED_BUILDS: readonly AllowBuildsEntry[] = [
   { name: 'esbuild', allowed: true },
   { name: 'oracledb', allowed: true },
   { name: 'tesseract.js', allowed: false },
+  // BullMQ's optional native accelerator is unnecessary for the JavaScript fallback.
+  { name: 'msgpackr-extract', allowed: false },
 ];
 
 /** YAML needs quotes around a scoped name, whose leading `@` would otherwise start a reserved indicator. */

@@ -148,6 +148,8 @@ const writeDistWorkspace = () => {
       '  oracledb: true',
       '  esbuild: true',
       '  tesseract.js: false',
+      '# BullMQ uses the JavaScript fallback; its optional native accelerator needs no install script.',
+      '  msgpackr-extract: false',
       '',
     ].join('\n'),
   );

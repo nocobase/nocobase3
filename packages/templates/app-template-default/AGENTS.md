@@ -309,3 +309,7 @@ For creating or editing theme presets, read `skills/nocobase-app-development/ref
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
 
 Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.
+
+## Deployment install-script policy
+
+The generated `dist/pnpm-workspace.yaml` explicitly sets `msgpackr-extract: false`: BullMQ can use the JavaScript fallback without building its optional native accelerator. Keep this decision aligned with `create-app` and the other application templates; omitting it makes pnpm 11 reject the deployment install. Do not permit every install script or disable build-policy checks to fix a missing entry.

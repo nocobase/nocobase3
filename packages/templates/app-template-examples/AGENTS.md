@@ -322,3 +322,7 @@ never seed workflow definitions or execution history. The other two examples hav
 no business writes. Use the existing Automation settings pages for enablement,
 manual runs, and diagnostics; the homepage links to those pages. Sample inputs
 and expected outcomes are documented in `README.MD`.
+
+## Deployment install-script policy
+
+The generated `dist/pnpm-workspace.yaml` explicitly sets `msgpackr-extract: false`: BullMQ can use the JavaScript fallback without building its optional native accelerator. Keep this decision aligned with `create-app` and the other application templates; omitting it makes pnpm 11 reject the deployment install. Do not permit every install script or disable build-policy checks to fix a missing entry.

@@ -147,3 +147,5 @@ Verify observable behavior, not just that the commands passed. [Testing and veri
 After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone, which the interface offers and the server then rejects.
 
 Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.
+
+When changing deployment dependencies, keep the generated `dist/pnpm-workspace.yaml` install-script policy synchronized with `create-app`. BullMQ's optional `msgpackr-extract` is explicitly disabled so its JavaScript fallback works without an approve-builds prompt; see the deployment policy in `AGENTS.md`.
