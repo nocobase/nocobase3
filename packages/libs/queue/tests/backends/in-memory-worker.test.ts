@@ -169,4 +169,95 @@ describe('memory worker backend claim and wake protocol', () => {
       await Promise.allSettled([worker.close(true), queue.close()]);
     }
   });
+  it('renews locks for a long-running real processor without stalled duplication', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue<
+      unknown,
+      unknown,
+      string,
+      unknown,
+      unknown,
+      string,
+      IQueueBackend
+    >('long', { connection: {} }, factory);
+    let calls = 0;
+    const errors: Error[] = [];
+    const stalled: string[] = [];
+    const worker = new Worker<unknown, unknown, string, IQueueBackend>(
+      'long',
+      async () => {
+        calls++;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      },
+      {
+        connection: {},
+        lockDuration: 200,
+        lockRenewTime: 40,
+        stalledInterval: 50,
+      },
+      factory,
+    );
+    worker.on('error', (error) => {
+      errors.push(error);
+    });
+    worker.on('stalled', (id) => {
+      stalled.push(id);
+    });
+    try {
+      const job = await queue.add('event', {});
+      await expect
+        .poll(() => queue.getJobState(job.id!), { timeout: 3000 })
+        .toBe('completed');
+      expect(calls).toBe(1);
+      expect(stalled).toEqual([]);
+      expect(errors).toEqual([]);
+    } finally {
+      await Promise.allSettled([worker.close(), queue.close()]);
+    }
+  });
+  it('fails recovered jobs past the stalled limit without calling the business processor', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue<
+      unknown,
+      unknown,
+      string,
+      unknown,
+      unknown,
+      string,
+      IQueueBackend
+    >('recovered', { connection: {} }, factory);
+    const abandoned = factory('recovered', {
+      connection: {},
+      ...{ lockDuration: 5, stalledInterval: 5, maxStalledCount: 0 },
+    });
+    let worker: Worker<unknown, unknown, string, IQueueBackend> | undefined;
+    let calls = 0;
+    try {
+      const job = await queue.add('event', {});
+      await abandoned.moveToActive('lost');
+      await abandoned.moveStalledJobsToWait();
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      expect(await abandoned.moveStalledJobsToWait()).toEqual([job.id]);
+      worker = new Worker<unknown, unknown, string, IQueueBackend>(
+        'recovered',
+        async () => {
+          calls++;
+        },
+        { connection: {} },
+        factory,
+      );
+      worker.on('error', () => {});
+      await expect.poll(() => queue.getJobState(job.id!)).toBe('failed');
+      expect(calls).toBe(0);
+      expect((await queue.getJob(job.id!))?.failedReason).toBe(
+        'job stalled more than allowable limit',
+      );
+    } finally {
+      await Promise.allSettled([
+        worker?.close(),
+        queue.close(),
+        abandoned.close(),
+      ]);
+    }
+  });
 });
