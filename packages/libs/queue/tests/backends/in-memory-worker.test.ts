@@ -84,4 +84,28 @@ describe('memory worker backend claim and wake protocol', () => {
       await Promise.allSettled([queue.close(), backend.close()]);
     }
   });
+  it('uses the Worker-configured lock duration and expires ownership', async () => {
+    const factory = createInMemoryBackendFactory();
+    const options = { connection: {}, lockDuration: 5 };
+    const backend = factory('jobs', options, { withBlockingConnection: true });
+    const queue = new Queue<
+      unknown,
+      unknown,
+      string,
+      unknown,
+      unknown,
+      string,
+      IQueueBackend
+    >('jobs', { connection: {} }, factory);
+    try {
+      const job = await queue.add('event', {});
+      await backend.moveToActive('owner');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(await backend.extendLocks([job.id!], ['owner'], 100)).toEqual([
+        job.id,
+      ]);
+    } finally {
+      await Promise.allSettled([queue.close(), backend.close()]);
+    }
+  });
 });

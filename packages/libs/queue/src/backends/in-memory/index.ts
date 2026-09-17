@@ -1,10 +1,12 @@
 import { QueueKeys } from 'bullmq';
 import { InMemoryQueueStore } from './store.js';
+import { MemoryWaiter, MemoryWorkerState } from './worker.js';
 
 interface MemoryBackendState {
   store: InMemoryQueueStore;
   records: Map<string, JobJson>;
   metadata: Map<string, string | number>;
+  worker: MemoryWorkerState;
 }
 
 import type {
@@ -30,17 +32,20 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   readonly keys: KeysMap;
   readonly qualifiedName: string;
   private displayName: string;
+  private readonly waiter: MemoryWaiter;
 
   constructor(
     private readonly state: MemoryBackendState,
     private readonly name: string,
     private readonly prefix: string,
+    private readonly lockDuration: number = 30000,
   ) {
     super();
     const keys = new QueueKeys(prefix);
     this.qualifiedName = keys.getQueueQualifiedName(name);
     this.keys = keys.getKeys(name);
     this.displayName = name;
+    this.waiter = new MemoryWaiter(state.worker);
   }
 
   async waitUntilReady(): Promise<void> {
@@ -49,6 +54,7 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   close(_force?: boolean): Promise<void> {
     if (!this.closing) {
       this.closing = Promise.resolve();
+      this.waiter.disconnect();
       this.emit('close');
     }
     return this.closing;
@@ -84,6 +90,7 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
         record.id,
         structuredClone({ ...job, id: record.id, data: record.data }),
       );
+    this.state.worker.notify();
     return record.id;
   }
   async addJobs(
@@ -95,11 +102,30 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   ): Promise<string[]> {
     throw new Error('Memory backend operation is not implemented');
   }
+  private waitingId(): string | undefined {
+    return [...this.state.records.keys()].find(
+      (id) => this.state.store.get(id)?.state === 'waiting',
+    );
+  }
+
   async moveToActive(
-    _token: string,
-    _name?: string,
-  ): ReturnType<IQueueBackend['moveToActive']> {
-    throw new Error('Memory backend operation is not implemented');
+    token: string,
+    name?: string,
+  ): Promise<[JobJson | null, string | null, number, number]> {
+    await this.waitUntilReady();
+    const id = this.waitingId();
+    if (id === undefined) return [null, null, 0, 0];
+    const job = this.state.records.get(id);
+    if (!job || !this.state.store.transition(id, 'waiting', 'active'))
+      throw new Error('Inconsistent memory claim');
+    this.state.worker.locks.set(id, {
+      token,
+      expires: Date.now() + this.lockDuration,
+    });
+    job.processedOn = Date.now();
+    job.attemptsStarted = (job.attemptsStarted || 0) + 1;
+    if (name !== undefined) job.processedBy = name;
+    return [structuredClone(job), id, 0, 0];
   }
   async moveToCompleted<
     T = MinimalJob['data'],
@@ -138,10 +164,16 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     throw new Error('Memory backend operation is not implemented');
   }
   async moveJobFromActiveToWait(
-    _jobId: string,
-    _token?: string,
+    jobId: string,
+    token?: string,
   ): Promise<number> {
-    throw new Error('Memory backend operation is not implemented');
+    if (token === undefined || !this.state.worker.owns(jobId, token))
+      throw new Error('Invalid or expired lock token');
+    if (!this.state.store.transition(jobId, 'active', 'waiting'))
+      throw new Error('Job is not active');
+    this.state.worker.locks.delete(jobId);
+    this.state.worker.notify();
+    return 0;
   }
   async retryJob(
     _jobId: string,
@@ -158,11 +190,22 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     throw new Error('Memory backend operation is not implemented');
   }
   async extendLocks(
-    _jobIds: string[],
-    _tokens: string[],
-    _duration: number,
+    jobIds: string[],
+    tokens: string[],
+    duration: number,
   ): Promise<string[]> {
-    throw new Error('Memory backend operation is not implemented');
+    const failed: string[] = [];
+    for (const [index, id] of jobIds.entries()) {
+      const token = tokens[index];
+      if (token === undefined || !this.state.worker.owns(id, token))
+        failed.push(id);
+      else
+        this.state.worker.locks.set(id, {
+          token,
+          expires: Date.now() + duration,
+        });
+    }
+    return failed;
   }
   async getState(jobId: string): Promise<JobState | 'unknown'> {
     return this.state.store.get(jobId)?.state ?? 'unknown';
@@ -205,15 +248,16 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     );
   }
   async waitForJob(
-    _blockTimeout: number,
+    blockTimeout: number,
   ): ReturnType<IQueueBackend['waitForJob']> {
-    throw new Error('Memory backend operation is not implemented');
+    return this.waiter.wait(blockTimeout, () => this.waitingId());
   }
   async disconnectBlocking(_wait?: boolean): Promise<void> {
-    throw new Error('Memory backend operation is not implemented');
+    this.waiter.disconnect();
   }
   async reconnectBlocking(): Promise<void> {
-    throw new Error('Memory backend operation is not implemented');
+    await this.waitUntilReady();
+    this.waiter.reconnect();
   }
 }
 
@@ -231,9 +275,14 @@ export function createInMemoryBackendFactory(): BackendFactory {
         store: new InMemoryQueueStore(),
         records: new Map(),
         metadata: new Map(),
+        worker: new MemoryWorkerState(),
       };
       states.set(key, state);
     }
-    return new InMemoryQueueBackend(state, name, prefix);
+    const lockDuration =
+      'lockDuration' in options && typeof options.lockDuration === 'number'
+        ? options.lockDuration
+        : 30000;
+    return new InMemoryQueueBackend(state, name, prefix, lockDuration);
   };
 }
