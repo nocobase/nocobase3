@@ -113,26 +113,46 @@ export function createQueueService(
     if (previous) return previous;
     const handlers = createQueueHandlerRegistry();
     const cancellation = new QueueCancellation();
+    let configureTail: Promise<void> = Promise.resolve();
     const current: QueueEntry = {
       handlers,
       cancellation,
       manual: {},
       manager: {
-        async configure(update): Promise<void> {
-          const next = { ...current.manual };
-          for (const [key, value] of Object.entries(update)) {
-            if (value !== undefined)
-              Object.defineProperty(next, key, {
-                value,
-                enumerable: true,
-                writable: true,
-                configurable: true,
-              });
-          }
-          resolveQueueConfiguration(options, name, next);
-          if (setupStarted)
-            throw new Error('Runtime queue configuration is not implemented');
-          current.manual = next;
+        configure(update): Promise<void> {
+          const apply = async (): Promise<void> => {
+            if (stopped) throw new Error('Queue service is shutting down');
+            const next = { ...current.manual };
+            for (const [key, value] of Object.entries(update)) {
+              if (value !== undefined)
+                Object.defineProperty(next, key, {
+                  value,
+                  enumerable: true,
+                  writable: true,
+                  configurable: true,
+                });
+            }
+            const config = resolveQueueConfiguration(options, name, next);
+            if (setupStarted) await requireReady(name, current);
+            current.manual = next;
+            if (current.worker) current.worker.concurrency = config.concurrency;
+            if (
+              setupStarted &&
+              current.queue &&
+              update.rateLimit !== undefined
+            ) {
+              if (config.rateLimit === null)
+                await current.queue.removeGlobalRateLimit();
+              else if (config.rateLimit)
+                await current.queue.setGlobalRateLimit(
+                  config.rateLimit.max,
+                  config.rateLimit.duration,
+                );
+            }
+          };
+          const operation = configureTail.then(apply);
+          configureTail = operation.catch(() => {});
+          return operation;
         },
         async drain(drainOptions): Promise<void> {
           await requireReady(name, current);
