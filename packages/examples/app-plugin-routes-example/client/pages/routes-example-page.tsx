@@ -76,39 +76,47 @@ export default function RoutesExamplePage(): ReactElement {
     <section className='mx-auto flex w-full max-w-3xl flex-col px-6 py-10'>
       <header className='space-y-2 border-b pb-6'>
         <p className='text-sm text-muted-foreground'>
-          {translateDemo('Client route example', {
+          {translateDemo('clientExample', {
             defaultValue: 'Client route example',
           })}
         </p>
         <h1 className='text-2xl font-semibold'>
-          {translateDemo('Routes example', { defaultValue: 'Routes example' })}
+          {translateDemo('title', { defaultValue: 'Routes example' })}
         </h1>
         <p className='text-sm text-muted-foreground'>
-          {translateDemo(description, { defaultValue: description })}{' '}
           {translateDemo(
-            "It was lazy-loaded and reads a response from the same plugin's server route.",
-            {
-              defaultValue:
-                "It was lazy-loaded and reads a response from the same plugin's server route.",
-            },
-          )}
+            description ===
+              'This page uses a provider contributed by the same client plugin.'
+              ? 'providerDescription'
+              : description,
+            { defaultValue: description },
+          )}{' '}
+          {translateDemo('pageDescription', {
+            defaultValue:
+              "It was lazy-loaded and reads a response from the same plugin's server route.",
+          })}
         </p>
       </header>
 
       <section className='flex-1 py-10'>
         {isLoading ? (
           <p className='text-sm text-muted-foreground'>
-            {translateDemo('Loading server data…', {
+            {translateDemo('loading', {
               defaultValue: 'Loading server data…',
             })}
           </p>
         ) : error ? (
           <div className='space-y-4'>
             <p className='text-sm text-red-600'>
-              {translateDemo(error, { defaultValue: error })}
+              {translateDemo(
+                error === 'Unable to load the server route.'
+                  ? 'loadError'
+                  : error,
+                { defaultValue: error },
+              )}
             </p>
             <Button variant='outline' onClick={() => void loadResult()}>
-              {translateDemo('Retry request', {
+              {translateDemo('retry', {
                 defaultValue: 'Retry request',
               })}
             </Button>
@@ -117,19 +125,19 @@ export default function RoutesExamplePage(): ReactElement {
           <dl className='space-y-4 rounded-xl border p-6'>
             <div>
               <dt className='text-sm text-muted-foreground'>
-                {translateDemo('Plugin', { defaultValue: 'Plugin' })}
+                {translateDemo('plugin', { defaultValue: 'Plugin' })}
               </dt>
               <dd className='font-medium'>{result?.plugin}</dd>
             </div>
             <div>
               <dt className='text-sm text-muted-foreground'>
-                {translateDemo('Scope', { defaultValue: 'Scope' })}
+                {translateDemo('scope', { defaultValue: 'Scope' })}
               </dt>
               <dd className='font-medium'>{result?.scope}</dd>
             </div>
             <div>
               <dt className='text-sm text-muted-foreground'>
-                {translateDemo('Message', { defaultValue: 'Message' })}
+                {translateDemo('message', { defaultValue: 'Message' })}
               </dt>
               <dd className='font-medium'>{result?.message}</dd>
             </div>

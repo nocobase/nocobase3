@@ -15,28 +15,34 @@ export default function RoutesExampleSettingsPage(): ReactElement {
   return (
     <PageContainer>
       <PageHeader
-        title={translateDemo('Routes example', {
+        title={translateDemo('title', {
           defaultValue: 'Routes example',
         })}
-        description={translateDemo(description, { defaultValue: description })}
+        description={translateDemo(
+          description ===
+            'This page uses a provider contributed by the same client plugin.'
+            ? 'providerDescription'
+            : description,
+          { defaultValue: description },
+        )}
       />
 
       <dl className='space-y-4 rounded-xl border p-6'>
         <div>
           <dt className='text-sm text-muted-foreground'>
-            {translateDemo('App route', { defaultValue: 'App route' })}
+            {translateDemo('appRoute', { defaultValue: 'App route' })}
           </dt>
           <dd className='font-mono text-sm'>/routes-example</dd>
         </div>
         <div>
           <dt className='text-sm text-muted-foreground'>
-            {translateDemo('API route', { defaultValue: 'API route' })}
+            {translateDemo('apiRoute', { defaultValue: 'API route' })}
           </dt>
           <dd className='font-mono text-sm'>/api/routes-example</dd>
         </div>
         <div>
           <dt className='text-sm text-muted-foreground'>
-            {translateDemo('Root route', { defaultValue: 'Root route' })}
+            {translateDemo('rootRoute', { defaultValue: 'Root route' })}
           </dt>
           <dd className='font-mono text-sm'>/routes-example/root</dd>
         </div>

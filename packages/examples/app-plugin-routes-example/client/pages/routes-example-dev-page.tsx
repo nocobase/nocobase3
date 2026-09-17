@@ -18,33 +18,39 @@ export default function RoutesExampleDevPage(): ReactElement {
     <section className='mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-10'>
       <header className='space-y-2 border-b pb-6'>
         <p className='text-sm text-muted-foreground'>
-          {translateDemo('Dev route example', {
+          {translateDemo('devExample', {
             defaultValue: 'Dev route example',
           })}
         </p>
         <h1 className='text-2xl font-semibold'>
-          {translateDemo('Routes example dev tools', {
+          {translateDemo('devTitle', {
             defaultValue: 'Routes example dev tools',
           })}
         </h1>
         <p className='text-sm text-muted-foreground'>
-          {translateDemo(description, { defaultValue: description })}
+          {translateDemo(
+            description ===
+              'This page uses a provider contributed by the same client plugin.'
+              ? 'providerDescription'
+              : description,
+            { defaultValue: description },
+          )}
         </p>
       </header>
 
       <dl className='space-y-4 rounded-xl border p-6'>
         <div>
           <dt className='text-sm text-muted-foreground'>
-            {translateDemo('Dev route', { defaultValue: 'Dev route' })}
+            {translateDemo('devRoute', { defaultValue: 'Dev route' })}
           </dt>
           <dd className='font-mono text-sm'>/dev/routes-example</dd>
         </div>
         <div>
           <dt className='text-sm text-muted-foreground'>
-            {translateDemo('Available in', { defaultValue: 'Available in' })}
+            {translateDemo('availableIn', { defaultValue: 'Available in' })}
           </dt>
           <dd className='text-sm'>
-            {translateDemo('Development builds only', {
+            {translateDemo('developmentOnly', {
               defaultValue: 'Development builds only',
             })}
           </dd>
