@@ -5,9 +5,13 @@ import enUS from '../../app-plugin-users/client/locales/en-US.js';
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({
     t: (key: string, values?: { name?: string }) => {
-      let result: unknown = enUS;
-      for (const part of key.split('.'))
-        result = (result as Record<string, unknown>)[part];
+      const resource = enUS as Record<string, unknown>;
+      let result: unknown = resource[key];
+      if (!Object.hasOwn(resource, key)) {
+        result = resource;
+        for (const part of key.split('.'))
+          result = (result as Record<string, unknown>)[part];
+      }
       return String(result).replace('{{name}}', values?.name ?? '');
     },
   }),
