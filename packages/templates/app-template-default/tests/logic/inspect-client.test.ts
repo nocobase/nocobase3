@@ -145,6 +145,11 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
         path: '/settings/automation/workflow-runs/:runId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-scheduler:schedule-detail',
+        path: '/settings/automation/schedules/:scheduleId',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),

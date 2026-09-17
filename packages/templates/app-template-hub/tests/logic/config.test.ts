@@ -44,6 +44,7 @@ describe('application config', () => {
       'system',
     );
     expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
+    expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toBeUndefined();
     expect(runtime.config.get<AppSessionConfigInput>('session')!.default).toBe(
       'memory',
     );

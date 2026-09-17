@@ -29,10 +29,12 @@ try {
     trigger: async () => ({
       status: 'accepted' as const,
       eventKey: 'fixture-event',
+      runId: '1',
     }),
     triggerRevision: async () => ({
       status: 'accepted' as const,
       eventKey: 'fixture-event',
+      runId: '1',
     }),
     discoverArtifacts: async () => [],
     ensureArtifactMaterialized: async () => undefined,

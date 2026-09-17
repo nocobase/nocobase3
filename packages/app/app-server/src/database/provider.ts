@@ -5,7 +5,7 @@ import {
 import { databaseManagerToken } from '@nocobase/db';
 import { createAppDatabaseManager } from './manager.js';
 import { executeAppDatabasePlan } from './tasks.js';
-import { planAppDatabaseTasks } from './plan.js';
+import { planAppRuntimeDatabaseTasks } from './plan.js';
 import { prepareAppDatabaseStorage } from './storage.js';
 import type { AppConfigAccessor, ConfigPaths } from '../config/index.js';
 import type {
@@ -46,9 +46,10 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
     }
 
     const config = this.getDatabaseConfig();
-    const plan = planAppDatabaseTasks(config, ['migrations', 'seeds'], {
+    const plan = planAppRuntimeDatabaseTasks(config, ['migrations', 'seeds'], {
       paths: this.app.paths,
       contributions: this.app.databaseTaskContributions,
+      runtimeConfig: this.app.config,
       autoRun: true,
     });
     // All SQLite connections must be usable by runtime services even without automatic tasks.

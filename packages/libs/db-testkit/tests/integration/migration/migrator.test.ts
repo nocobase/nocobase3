@@ -16,6 +16,132 @@ describeIntegrationDatabases('migration runner', (context) => {
     );
   });
 
+  it.each([true, false])(
+    'keeps conditionally skipped migrations pending with transaction=%s',
+    async (transaction) => {
+      const directory = await createTempDirectory();
+      const gate = context.table('conditionalGate');
+      const output = context.table('conditionalRecord');
+      await writeMigration(
+        directory,
+        '202608170001_conditional',
+        `
+      import { defineMigration } from '../../../../db/src/index.js';
+      export default defineMigration({
+        name: '202608170001_conditional',
+        transaction: ${transaction},
+        async shouldRun({ connection, parameters }) {
+          const client = await connection.client();
+          return client.schema.hasTable(parameters.gate);
+        },
+        async up({ builder }) {
+          await builder.createCollection('conditionalRecord', collection => { collection.increments('id'); });
+        },
+        async down({ builder }) {
+          await builder.dropCollection('conditionalRecord');
+        },
+      });
+    `,
+      );
+      const migrator = context.database.createMigrator({
+        connection: context.spec.name,
+        tableName: context.table('conditionalHistory'),
+        lockTableName: context.table('conditionalLock'),
+        sources: [
+          { packageName: 'conditional-test', directory, parameters: { gate } },
+        ],
+      });
+      const skipped = await migrator.latest();
+      expect(skipped.batch).toBe(0);
+      expect(skipped.executed).toEqual([]);
+      expect(skipped.skipped).toHaveLength(1);
+      expect(await migrator.history()).toEqual([]);
+      expect(await context.db.schema.hasTable(output)).toBe(false);
+      await context.db.schema.createTable(gate, (table) => {
+        table.integer('id');
+      });
+      expect((await migrator.latest()).executed).toEqual(skipped.skipped);
+      expect(await migrator.history()).toHaveLength(1);
+      expect(await context.db.schema.hasTable(output)).toBe(true);
+      await context.db.schema.dropTable(gate);
+      expect((await migrator.latest()).executed).toEqual([]);
+      expect((await migrator.rollback()).rolledBack).toEqual(skipped.skipped);
+      expect(await context.db.schema.hasTable(output)).toBe(false);
+    },
+  );
+
+  it('does not record a migration when its execution condition throws', async () => {
+    const directory = await createTempDirectory();
+    await writeMigration(
+      directory,
+      '202608170002_condition_error',
+      `
+      import { defineMigration } from '../../../../db/src/index.js';
+      export default defineMigration({
+        name: '202608170002_condition_error',
+        shouldRun() { throw new Error('condition failed'); },
+        async up() { throw new Error('up must not execute'); },
+        async down() {},
+      });
+    `,
+    );
+    const migrator = context.database.createMigrator({
+      connection: context.spec.name,
+      directory,
+      tableName: context.table('conditionErrorHistory'),
+      lockTableName: context.table('conditionErrorLock'),
+    });
+    await expect(migrator.latest()).rejects.toThrow('condition failed');
+    expect(await migrator.history()).toEqual([]);
+  });
+
+  it.each([true, false])(
+    'applies and rolls back parameterized targets with transaction=%s',
+    async (transaction) => {
+      const directory = await createTempDirectory();
+      await writeMigration(
+        directory,
+        '202608180000_parameterized',
+        `
+      import { defineMigration } from '../../../../db/src/index.js';
+      export default defineMigration({
+        name: '202608180000_parameterized',
+        transaction: ${transaction},
+        async up({ builder, parameters }) {
+          await builder.createCollection(parameters.table, collection => { collection.increments('id'); });
+        },
+        async down({ builder, parameters }) {
+          await builder.dropCollection(parameters.table);
+        },
+      });
+    `,
+      );
+      const migrator = context.database.createMigrator({
+        connection: context.spec.name,
+        tableName: context.table('parameterHistory'),
+        lockTableName: context.table('parameterLock'),
+        sources: ['parameterFirst', 'parameterSecond'].map((table) => ({
+          packageName: 'parameter-test',
+          directory,
+          parameters: { table },
+        })),
+      });
+      expect((await migrator.latest()).executed).toHaveLength(2);
+      expect((await migrator.latest()).executed).toEqual([]);
+      for (const table of ['parameterFirst', 'parameterSecond']) {
+        expect(await context.db.schema.hasTable(context.table(table))).toBe(
+          true,
+        );
+      }
+      expect((await migrator.rollback()).rolledBack).toHaveLength(2);
+      for (const table of ['parameterFirst', 'parameterSecond']) {
+        expect(await context.db.schema.hasTable(context.table(table))).toBe(
+          false,
+        );
+      }
+    },
+  );
+
   it('runs pending migrations once and records history', async () => {
     const directory = await createTempDirectory();
     const tableName = context.table('migrationHistory');

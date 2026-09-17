@@ -38,6 +38,7 @@ export interface WorkflowServiceOptions {
   distRoot: string;
   artifactDisk: FsDriveDiskConfig;
   production: boolean;
+  terminalObserver?: import('./engine/types.js').WorkflowTerminalObserver;
 }
 
 export class WorkflowService {
@@ -64,6 +65,9 @@ export class WorkflowService {
       ...(options.queueName === undefined
         ? {}
         : { queueName: options.queueName }),
+      ...(options.terminalObserver === undefined
+        ? {}
+        : { terminalObserver: options.terminalObserver }),
       services: createWorkflowRunServices(options.services),
       artifactStore: this.store,
       ...(this.developmentResourceRoot === undefined
@@ -248,7 +252,7 @@ export class WorkflowService {
 
     await this.ensureInitialized();
     const eventKey = triggerOptions.eventKey ?? randomUUID();
-    await this.engine.trigger(workflow, input, {
+    const execution = await this.engine.trigger(workflow, input, {
       ...triggerOptions,
       eventKey,
       ...(triggerOptions.parentRunId === undefined
@@ -256,7 +260,24 @@ export class WorkflowService {
         : { parentRunId: triggerOptions.parentRunId }),
       ...(stack === undefined ? {} : { stack }),
     });
-    return { status: 'accepted', eventKey };
+    if (execution && typeof execution === 'object' && 'id' in execution)
+      return { status: 'accepted', eventKey, runId: String(execution.id) };
+    const run = await this.findAcceptedRun(eventKey);
+    return { status: 'accepted', eventKey, runId: String(run.id) };
+  }
+
+  private async findAcceptedRun(eventKey: string): Promise<{ id: unknown }> {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const run = await this.collections.runs.findOne({
+        filter: { eventKey },
+        select: (select) => select.fields('id'),
+      });
+      if (run) return run;
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(
+      `Workflow Run for accepted event "${eventKey}" was not found`,
+    );
   }
 }
 

@@ -197,6 +197,7 @@
     "@nocobase/app-plugin-realtime-example": "workspace:^",
     "@nocobase/app-plugin-repository-example": "workspace:^",
     "@nocobase/app-plugin-routes-example": "workspace:^",
+    "@nocobase/app-plugin-scheduler": "workspace:^",
     "@nocobase/app-plugin-service-provider-example": "workspace:^",
     "@nocobase/app-plugin-skills-example": "workspace:^",
     "@nocobase/app-plugin-users": "workspace:^",
