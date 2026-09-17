@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { assertNoQueueContribution } from './queue-contribution.js';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
@@ -103,6 +104,7 @@ function resolvePlugin(
   definition: AppServerPlugin,
   preferBuiltPackages: boolean,
 ): ResolvedAppPlugin {
+  assertNoQueueContribution(definition);
   const packageJsonPath = resolvePackageJson(
     rootDir,
     definition.packageName,
@@ -124,22 +126,8 @@ function resolvePlugin(
       packageRoot,
       definition.database?.seeds,
     ),
-    jobLocations: Object.freeze(
-      (definition.queue?.jobs ?? []).flatMap((configuredPath) => {
-        const resolvedPath = resolveOptionalDirectoryPath(
-          packageRoot,
-          configuredPath,
-        );
-        return resolvedPath ? [createJobLocation(resolvedPath)] : [];
-      }),
-    ),
+    jobLocations: Object.freeze([]),
   };
-}
-
-function createJobLocation(resolvedPath: string): string {
-  return statSync(resolvedPath).isDirectory()
-    ? path.join(resolvedPath, '**/*.{ts,js,mts,mjs}')
-    : resolvedPath;
 }
 
 function resolveOptionalDirectoryPath(

@@ -1,3 +1,4 @@
+import { assertNoQueueContribution } from './queue-contribution.js';
 import type { ResolvedAppServerPlugins } from './types.js';
 
 export interface AppServerInspectionIssue {
@@ -94,6 +95,7 @@ export function inspectResolvedAppServerPlugins(
   let providerOrder = 0;
   let routeOrder = 0;
   const plugins = resolved.plugins.map((plugin, index) => {
+    assertNoQueueContribution(plugin.definition);
     const pluginOrder = index + 1;
     if (plugin.definition.locales) {
       locales.push({

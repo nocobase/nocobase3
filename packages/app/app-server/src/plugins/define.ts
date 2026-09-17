@@ -1,3 +1,4 @@
+import { assertNoQueueContribution } from './queue-contribution.js';
 import type {
   AppServerPlugin,
   AppServerPluginDefinition,
@@ -10,6 +11,7 @@ export function defineServerPlugin<TConfig = object>(
   definition: AppServerPluginDefinition<TConfig>,
 ): AppServerPlugin<TConfig> {
   const packageName = normalizePackageName(definition.packageName);
+  assertNoQueueContribution(definition);
 
   return Object.freeze({
     packageName,
@@ -18,14 +20,7 @@ export function defineServerPlugin<TConfig = object>(
     database: definition.database
       ? Object.freeze({ ...definition.database })
       : undefined,
-    queue: definition.queue
-      ? Object.freeze({
-          ...definition.queue,
-          jobs: definition.queue.jobs
-            ? Object.freeze([...definition.queue.jobs])
-            : undefined,
-        })
-      : undefined,
+    queue: undefined,
     locales: definition.locales,
   });
 }
@@ -35,6 +30,7 @@ export function defineServerPlugins(
 ): AppServerPlugins {
   const seen = new Set<string>();
   for (const plugin of plugins) {
+    assertNoQueueContribution(plugin);
     if (seen.has(plugin.packageName)) {
       throw new Error(
         `Server plugin "${plugin.packageName}" is registered more than once.`,

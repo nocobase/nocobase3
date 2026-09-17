@@ -47,7 +47,6 @@ describe('Server plugin inspection', () => {
         migrations: './database/migrations',
         seeds: './database/seeds',
       },
-      queue: { jobs: ['./server/jobs'] },
       locales: async () => {
         localeLoaderCalls += 1;
         return { default: {} };
@@ -64,7 +63,7 @@ describe('Server plugin inspection', () => {
             rootDir: '/plugins/example',
             migrationsDirectory: '/plugins/example/database/migrations',
             seedsDirectory: '/plugins/example/database/seeds',
-            jobLocations: ['/plugins/example/server/jobs/**/*.{ts,js,mts,mjs}'],
+            jobLocations: [],
           },
         },
       ],
@@ -85,7 +84,7 @@ describe('Server plugin inspection', () => {
           locales: true,
           migrations: true,
           seeds: true,
-          jobLocations: 1,
+          jobLocations: 0,
         },
       }),
     ]);
@@ -149,6 +148,30 @@ describe('Server plugin inspection', () => {
     expect(inspection.locales).toHaveLength(1);
   });
 
+  it('rejects legacy declarations passed directly to inspection', () => {
+    expect(() =>
+      inspectResolvedAppServerPlugins({
+        appPackageName: 'app',
+        plugins: [
+          {
+            definition: {
+              packageName: '@nocobase/legacy',
+              serviceProviders: [],
+              routes: [],
+              queue: { jobs: ['./jobs'] },
+            },
+            metadata: {
+              packageName: '@nocobase/legacy',
+              version: '1.0.0',
+              rootDir: '/unused',
+              jobLocations: [],
+            },
+          },
+        ],
+      }),
+    ).toThrow('queue.jobs is retired');
+  });
+
   it('reports configured contribution locations that did not resolve', () => {
     const plugin = defineServerPlugin({
       packageName: '@nocobase/app-plugin-missing',
@@ -156,7 +179,6 @@ describe('Server plugin inspection', () => {
         migrations: './database/migrations',
         seeds: './database/seeds',
       },
-      queue: { jobs: ['./server/jobs', './server/more-jobs'] },
     });
 
     const inspection = inspectResolvedAppServerPlugins({
@@ -168,7 +190,7 @@ describe('Server plugin inspection', () => {
             packageName: plugin.packageName,
             version: '1.0.0',
             rootDir: '/plugins/missing',
-            jobLocations: ['/plugins/missing/server/jobs/**/*.{ts,js,mts,mjs}'],
+            jobLocations: [],
           },
         },
       ],
@@ -177,12 +199,10 @@ describe('Server plugin inspection', () => {
     expect(inspection.issues.map(({ code }) => code)).toEqual([
       'SERVER_MIGRATIONS_DIRECTORY_MISSING',
       'SERVER_SEEDS_DIRECTORY_MISSING',
-      'SERVER_JOB_LOCATION_MISSING',
     ]);
     expect(inspection.consistent).toBe(false);
     expect(inspection.suggestions).toEqual([
       'Check the plugin database declaration, package files, and resolved installation contents.',
-      'Check the plugin Queue Job declaration, package files, and resolved installation contents.',
     ]);
   });
 });
