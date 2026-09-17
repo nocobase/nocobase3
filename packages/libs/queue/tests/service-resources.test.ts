@@ -150,4 +150,31 @@ describe('queue service resource initialization', () => {
     expect(resources[0]?.drained).toHaveBeenCalledTimes(1);
     expect(resources[0]?.closed).not.toHaveBeenCalled();
   });
+  it('does not close a dynamic resource before its in-flight initialization settles', async () => {
+    const { service, factory } = fixture();
+    await service.setup();
+    let release = (): void => {};
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let resource: ResourceBackend | undefined;
+    factory.mockImplementationOnce((name, options) => {
+      resource = new ResourceBackend(name, options, barrier);
+      return resource;
+    });
+    const operation = service.manager('late').drain();
+    const outcome = operation.catch((error: unknown) => error);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    const shutdown = service.shutdown();
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(resource?.closed).not.toHaveBeenCalled();
+    } finally {
+      release();
+    }
+    await shutdown;
+    expect(await outcome).toBeInstanceOf(Error);
+    expect(resource?.closed).toHaveBeenCalledTimes(1);
+    expect(resource?.drained).not.toHaveBeenCalled();
+  });
 });

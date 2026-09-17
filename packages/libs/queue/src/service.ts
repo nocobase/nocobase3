@@ -3,6 +3,7 @@ import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
 import { resolveQueueConfiguration } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
+import { QueueResourceCache } from './resources.js';
 import type { BackendFactory } from 'bullmq';
 import type {
   QueueOptions,
@@ -89,6 +90,8 @@ export function createQueueService(
   options: QueueOptions,
   dependencies: QueueServiceDependencies = {},
 ): QueueService {
+  const resources = new QueueResourceCache();
+  let ready = false;
   const registry = createBackendRegistry();
   const entries = new Map<string, QueueEntry>();
   let setupStarted = false;
@@ -122,6 +125,7 @@ export function createQueueService(
           current.manual = next;
         },
         async drain(drainOptions): Promise<void> {
+          await requireReady(name, current);
           if (!current.queue) throw new Error('Queue is not ready');
           await current.queue.drain(drainOptions?.delayed);
         },
@@ -134,9 +138,11 @@ export function createQueueService(
       },
       producer: {
         async publish(): Promise<PublishReceipt> {
+          await requireReady(name, current);
           throw new Error('Queue publishing is not implemented');
         },
         async publishMany(): Promise<PublishReceipt[]> {
+          await requireReady(name, current);
           throw new Error('Queue publishing is not implemented');
         },
       },
@@ -160,81 +166,122 @@ export function createQueueService(
     return current;
   }
 
-  async function closeEntries(): Promise<void> {
+  async function closeEntries(
+    targets: Iterable<QueueEntry> = entries.values(),
+  ): Promise<void> {
     const errors: unknown[] = [];
-    for (const current of entries.values()) {
-      for (const resource of [current.worker, current.queue]) {
+    for (const current of targets) {
+      for (const key of ['worker', 'queue'] as const) {
+        const resource = current[key];
         if (!resource) continue;
         try {
           await resource.close();
+          current[key] = undefined;
         } catch (error) {
           errors.push(error);
         }
       }
-      current.worker = undefined;
-      current.queue = undefined;
     }
     if (errors.length)
       throw new AggregateError(errors, 'Queue resource cleanup failed');
   }
 
+  async function requireReady(
+    name: string,
+    current: QueueEntry,
+  ): Promise<void> {
+    if (stopped) throw new Error('Queue service is shutting down');
+    if (!setupPromise) throw new Error('Queue is not ready');
+    await setupPromise;
+    if (!ready || stopped) throw new Error('Queue is not ready');
+    await initializeEntry(name, current);
+    if (stopped) throw new Error('Queue service is shutting down');
+  }
+
   async function initialize(): Promise<void> {
-    // Validate defaults and all configured backend names before creating resources.
-    registry.resolve(
-      resolveQueueConfiguration(options, '__defaults__').queueBackend,
-    );
-    for (const name of Object.keys(options.queues ?? {})) {
-      registry.resolve(resolveQueueConfiguration(options, name).queueBackend);
-    }
-    for (const [name, current] of entries) {
-      const config = resolveQueueConfiguration(options, name, current.manual);
-      const factory = registry.resolve(config.queueBackend);
-      const identity = createQueueIdentity(config.namespace, name);
-      // Connection adapters are introduced by the resource/backend slices; never silently discard one.
-      if (config.connection !== undefined)
-        throw new Error('Queue connection adaptation is not implemented');
-      const physicalName =
-        config.queueBackend === 'postgres'
-          ? identity.postgresQueueName
-          : identity.redisQueueName;
-      const base: QueueBaseOptions & { prefix: string } = {
-        connection: {},
-        prefix: identity.redisPrefix,
-      };
-      current.queue = new Queue<
-        unknown,
-        unknown,
-        string,
-        unknown,
-        unknown,
-        string,
-        IQueueBackend
-      >(physicalName, base, factory);
-      current.queue.on('error', (error: Error) =>
-        dependencies.logger?.error(
-          { error, queue: name },
-          'Queue backend error',
-        ),
+    const defaults = resolveQueueConfiguration(options, '__defaults__');
+    validateQueueName(defaults.namespace, 'namespace');
+    registry.resolve(defaults.queueBackend);
+    for (const name of new Set([
+      ...Object.keys(options.queues ?? {}),
+      ...entries.keys(),
+    ])) {
+      const config = resolveQueueConfiguration(
+        options,
+        name,
+        entries.get(name)?.manual,
       );
-      await current.queue.waitUntilReady();
-      if (current.handlers.size) {
-        current.worker = new Worker<unknown, unknown, string, IQueueBackend>(
-          physicalName,
-          async () => {
-            throw new Error('Queue dispatch is not implemented');
-          },
-          { ...base, autorun: false, concurrency: config.concurrency },
-          factory,
-        );
-        current.worker.on('error', (error: Error) =>
+      createQueueIdentity(config.namespace, name);
+      registry.resolve(config.queueBackend);
+    }
+    for (const [name, current] of entries) await initializeEntry(name, current);
+    ready = true;
+  }
+
+  function initializeEntry(name: string, current: QueueEntry): Promise<void> {
+    return resources.initialize(name, async () => {
+      if (stopped) throw new Error('Queue service is shutting down');
+      try {
+        const config = resolveQueueConfiguration(options, name, current.manual);
+        const factory = registry.resolve(config.queueBackend);
+        const identity = createQueueIdentity(config.namespace, name);
+        // Connection adapters are introduced by the resource/backend slices; never silently discard one.
+        if (config.connection !== undefined)
+          throw new Error('Queue connection adaptation is not implemented');
+        const physicalName =
+          config.queueBackend === 'postgres'
+            ? identity.postgresQueueName
+            : identity.redisQueueName;
+        const base: QueueBaseOptions & { prefix: string } = {
+          connection: {},
+          prefix: identity.redisPrefix,
+        };
+        current.queue = new Queue<
+          unknown,
+          unknown,
+          string,
+          unknown,
+          unknown,
+          string,
+          IQueueBackend
+        >(physicalName, base, factory);
+        current.queue.on('error', (error: Error) =>
           dependencies.logger?.error(
             { error, queue: name },
-            'Queue worker error',
+            'Queue backend error',
           ),
         );
-        await current.worker.waitUntilReady();
+        await current.queue.waitUntilReady();
+        if (current.handlers.size) {
+          current.worker = new Worker<unknown, unknown, string, IQueueBackend>(
+            physicalName,
+            async () => {
+              throw new Error('Queue dispatch is not implemented');
+            },
+            { ...base, autorun: false, concurrency: config.concurrency },
+            factory,
+          );
+          current.worker.on('error', (error: Error) =>
+            dependencies.logger?.error(
+              { error, queue: name },
+              'Queue worker error',
+            ),
+          );
+          await current.worker.waitUntilReady();
+        }
+      } catch (error) {
+        try {
+          await closeEntries([current]);
+        } catch (cleanup) {
+          throw new AggregateError(
+            [error, cleanup],
+            'Queue initialization and cleanup failed',
+            { cause: cleanup },
+          );
+        }
+        throw error;
       }
-    }
+    });
   }
 
   return {
@@ -265,6 +312,7 @@ export function createQueueService(
     async shutdown(): Promise<void> {
       stopped = true;
       if (setupPromise) await setupPromise.catch(() => {});
+      await resources.settle();
       await closeEntries();
     },
   };
