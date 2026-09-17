@@ -209,6 +209,8 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     const job = this.state.records.get(id);
     if (!job || !this.state.store.transition(id, 'waiting', 'active'))
       throw new Error('Inconsistent memory claim');
+    this.state.records.delete(id);
+    this.state.records.set(id, job);
     this.state.worker.locks.set(id, {
       token,
       expires: Date.now() + this.lockDuration,
