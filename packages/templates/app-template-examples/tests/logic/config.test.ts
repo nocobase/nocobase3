@@ -184,11 +184,13 @@ describe('application config', () => {
       configPath,
       env: {
         APP_SERVER_PORT: '14001',
+        APP_SERVER_START_LOG: 'false',
         REDIS_HOST: 'ignored',
         NODE_ENV: 'production',
       },
     });
     expect(runtime.config.get('server.port')).toBe(14001);
+    expect(runtime.config.get('server.startLog')).toBe(false);
     expect(runtime.config.get('queue.connections.redis.host')).toBe(
       '127.0.0.1',
     );
@@ -197,7 +199,9 @@ describe('application config', () => {
     expect(runtime.config.get('session.cookie.secure')).toBe(true);
     expect(runtime.config.get('workflow.production')).toBe(true);
     delete runtime.env.APP_SERVER_PORT;
+    delete runtime.env.APP_SERVER_START_LOG;
     await runtime.config.reload();
     expect(runtime.config.get('server.port')).toBe(13000);
+    expect(runtime.config.get('server.startLog')).toBe(true);
   });
 });

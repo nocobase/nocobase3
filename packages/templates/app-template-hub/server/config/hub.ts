@@ -23,7 +23,7 @@ const hub: AppConfigFactory<HubPluginConfig> = defineAppConfig((runtime) => ({
         maxFileSizeMB: 10,
         maxTotalSizeMB: 500,
       },
-      console: { enabled: true, pretty: false },
+      console: { enabled: true, pretty: runtime.env.NODE_ENV !== 'production' },
     },
   },
   artifact: {

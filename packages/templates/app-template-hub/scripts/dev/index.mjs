@@ -170,6 +170,16 @@ const appServerPort = proxyTarget
       label: 'application server',
       preferredPort: configuredAppServerPort,
     });
+if (proxyTarget && vitePort !== configuredVitePort) {
+  console.log(
+    `  Vite port ${configuredVitePort} is unavailable; using ${vitePort}.`,
+  );
+}
+if (!proxyTarget && appServerPort !== configuredAppServerPort) {
+  console.log(
+    `  App server port ${configuredAppServerPort} is unavailable; using ${appServerPort}.`,
+  );
+}
 const nextEnv = {
   ...initialEnv,
   APP_SERVER_HOST: appServerHost,
@@ -305,15 +315,5 @@ if (!shuttingDown) {
   console.log(`\n  App dev server ready`);
   console.log(`  Local:     ${appUrl}`);
   if (proxyTarget) console.log(`  Backend:   ${proxyTarget.href}`);
-  if (proxyTarget && vitePort !== configuredVitePort) {
-    console.log(
-      `  Vite port ${configuredVitePort} is unavailable; using ${vitePort}.`,
-    );
-  }
-  if (!proxyTarget && appServerPort !== configuredAppServerPort) {
-    console.log(
-      `  App server port ${configuredAppServerPort} is unavailable; using ${appServerPort}.`,
-    );
-  }
   console.log();
 }

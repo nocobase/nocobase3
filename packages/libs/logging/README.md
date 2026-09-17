@@ -34,6 +34,8 @@ File capture is independent of `console.enabled` and `console.pretty`. Templates
 
 Application templates configure the `request` source with `file.name: request` by default, separating HTTP request logs from the shared app file.
 
+Pretty console output uses local time, readable levels and `[appId/logger]` identity, with duration and additional fields rendered inline. Successful request completions omit repeated request fields and correlation identifiers from the terminal; JSON output and files retain them. Request starts and their input headers use DEBUG, while failed completion records include the selected request headers and query even at INFO. Configuration loading and AI registration stages also use DEBUG. Set `logging.level: debug` (or `hub.logging.apps.level` for hosted applications) when investigating those details.
+
 ## Compatibility
 
 New configuration omits `default`, top-level `pretty`, and `file.maxSizeMB`. Legacy `default` still chooses the no-argument logger source, with a warning. Legacy `pretty` is the terminal fallback when `console` is absent. Migrate it to `console.enabled` and `console.pretty`. Legacy runtime `maxSizeMB` means total retained size; migrate it to `file.maxTotalSizeMB`. Legacy aliases take precedence over merged new defaults until removed, with a warning, so old limits remain effective. Legacy Host App policies using flat `enabled`, `retentionDays`, and `maxSizeMB` migrate into `file`. Deployment `maxSizeMB` historically limits one deployment journal and migrates to `maxFileSizeMB`, not total size. Keep only the new spelling after migration.

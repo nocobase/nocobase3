@@ -427,7 +427,7 @@ function attachAppEventLogs(
   });
 
   registry.events.on('app:created', (event) => {
-    logger.info({ ...event, event: 'app:created' }, 'App runtime created');
+    logger.debug({ ...event, event: 'app:created' }, 'App runtime created');
   });
 
   registry.events.on('app:draining', (event) => {

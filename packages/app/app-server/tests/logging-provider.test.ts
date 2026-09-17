@@ -72,6 +72,67 @@ it('normalizes legacy runtime policy over merged defaults without losing console
   });
 });
 
+it.each([
+  { enabled: true, pretty: true },
+  { enabled: true, pretty: false },
+  { enabled: false, pretty: true },
+])(
+  'applies the structured Host console policy %j over application defaults',
+  async (consolePolicy) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'host-console-policy-'));
+    const config = new AppConfig();
+    await config.loadAll();
+    config.mergeDefaults({
+      app: { name: 'main' },
+      logging: {
+        level: 'info',
+        console: { enabled: true, pretty: !consolePolicy.pretty },
+        file: { enabled: false },
+      },
+    });
+    const app = new Application({
+      config,
+      paths: createConfigPaths({ rootDir: root }),
+      runtimeLogging: {
+        file: { enabled: false },
+        console: consolePolicy,
+        bindings: { appId: 'app3', runtimeId: 'runtime-1' },
+      },
+    });
+    app.addServiceProvider(LoggingProvider);
+    const output = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(() => true);
+    try {
+      await app.start();
+      app.container
+        .resolve(loggingToken)
+        .getLogger('ai-employee')
+        .info({ count: 4 }, 'Resources loaded');
+      await app.shutdown();
+      expect(output).toHaveBeenCalledTimes(consolePolicy.enabled ? 1 : 0);
+      if (consolePolicy.enabled) {
+        const line = String(output.mock.calls[0]?.[0]);
+        if (consolePolicy.pretty)
+          expect(line).toContain(
+            'INFO [app3/ai-employee] Resources loaded count=4',
+          );
+        else
+          expect(JSON.parse(line)).toMatchObject({
+            appId: 'app3',
+            runtimeId: 'runtime-1',
+            count: 4,
+            level: 30,
+          });
+      }
+    } finally {
+      output.mockRestore();
+      await app.shutdown();
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
+
 it.each([true, false])(
   'enforces hosted file capture=%s despite App and source overrides',
   async (enabled) => {

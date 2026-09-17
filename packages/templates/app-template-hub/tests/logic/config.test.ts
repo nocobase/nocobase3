@@ -22,6 +22,23 @@ import appRuntime from '../../server/runtime.ts';
 const templateRootDir = fileURLToPath(new URL('../..', import.meta.url));
 
 describe('application config', () => {
+  it.each(['development', 'production'])(
+    'aligns hosted console formatting with the Hub in %s',
+    async (mode) => {
+      const runtime = await resolveStandaloneAppRuntime(appRuntime, {
+        rootDir: templateRootDir,
+        configPath,
+        env: { NODE_ENV: mode },
+      });
+      expect(runtime.config.get('hub.logging.apps.console')).toEqual({
+        enabled: true,
+        pretty: mode !== 'production',
+      });
+      expect(runtime.config.get('logging.console.pretty')).toBe(
+        mode !== 'production',
+      );
+    },
+  );
   let configRoot: string;
   let configPath: string;
   beforeAll(async () => {
@@ -82,11 +99,13 @@ describe('application config', () => {
       configPath,
       env: {
         APP_SERVER_PORT: '14001',
+        APP_SERVER_START_LOG: 'false',
         REDIS_HOST: 'ignored',
         NODE_ENV: 'production',
       },
     });
     expect(runtime.config.get('server.port')).toBe(14001);
+    expect(runtime.config.get('server.startLog')).toBe(false);
     expect(runtime.config.get('queue.connections.redis.host')).toBe(
       '127.0.0.1',
     );
@@ -97,7 +116,9 @@ describe('application config', () => {
     expect(runtime.config.get('notification')).toBeUndefined();
     expect(runtime.config.get('heartbeat')).toBeUndefined();
     delete runtime.env.APP_SERVER_PORT;
+    delete runtime.env.APP_SERVER_START_LOG;
     await runtime.config.reload();
     expect(runtime.config.get('server.port')).toBe(13000);
+    expect(runtime.config.get('server.startLog')).toBe(true);
   });
 });

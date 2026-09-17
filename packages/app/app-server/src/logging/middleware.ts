@@ -44,7 +44,7 @@ export function requestLogger(
     const method = context.req.method;
     const path = context.req.path;
 
-    logger.info(
+    logger.debug(
       {
         ...(app ? { app } : {}),
         req: {
@@ -72,6 +72,7 @@ export function requestLogger(
           startedAt,
           statusFromError(error),
           error,
+          options.requestHeaders,
         ),
         `${method} ${path} failed`,
       );
@@ -87,6 +88,7 @@ export function requestLogger(
       startedAt,
       status,
       context.error,
+      options.requestHeaders,
     );
 
     if (status >= 500) {
@@ -110,7 +112,6 @@ export const requestLoggingMiddleware: AppHttpMiddleware<AppPluginApplication> =
         '*',
         requestLogger({
           logger: logging.getLogger('request'),
-          app: app.appName,
           skip: (context) => {
             const path = context.req.path;
             return (
@@ -131,6 +132,7 @@ function completionBindings(
   startedAt: number,
   status: number,
   error?: unknown,
+  requestHeaders: readonly string[] = defaultRequestHeaders,
 ): Record<string, unknown> {
   return {
     ...(app ? { app } : {}),
@@ -139,6 +141,12 @@ function completionBindings(
       path,
       route: context.req.routePath,
       params: context.req.param(),
+      ...(status >= 400
+        ? {
+            query: context.req.query(),
+            headers: selectHeaders(context, requestHeaders),
+          }
+        : {}),
     },
     res: {
       status,

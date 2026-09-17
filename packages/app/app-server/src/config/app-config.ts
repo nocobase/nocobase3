@@ -6,6 +6,7 @@ import { Config, type ConfigMap } from '@nocobase/config';
 import { jsonParser } from '@nocobase/config/parsers/json';
 import { tomlParser } from '@nocobase/config/parsers/toml';
 import { yamlParser } from '@nocobase/config/parsers/yaml';
+import type { Logger } from '@nocobase/logging';
 import { fileProvider } from '@nocobase/config/providers/file';
 
 import type {
@@ -26,6 +27,20 @@ export class AppConfig {
   private defaults = new Config();
   private overrides = new Config();
   private reloadPromise: Promise<AppConfigReloadResult> | undefined;
+  private logger?: Pick<Logger, 'debug'>;
+  private loadDurationMs?: number;
+
+  /** Attach diagnostics after the logging configuration has been resolved. */
+  public setLogger(logger: Pick<Logger, 'debug'>): void {
+    this.logger = logger;
+    if (this.loadDurationMs !== undefined) {
+      logger.debug(
+        { durationMs: this.loadDurationMs },
+        'App configuration loaded',
+      );
+      this.loadDurationMs = undefined;
+    }
+  }
 
   public load(
     provider: AppConfigSource['provider'],
@@ -62,10 +77,8 @@ export class AppConfig {
     const startedAt = Date.now();
     const next = await this.loadConfig();
     this.current = next;
-    // Configuration diagnostics must not corrupt machine-readable CLI stdout.
-    console.error('App configuration loaded', {
-      durationMs: Date.now() - startedAt,
-    });
+    this.loadDurationMs = Date.now() - startedAt;
+    if (this.logger) this.setLogger(this.logger);
   }
 
   public get<TValue = unknown>(key: string): TValue | undefined {
@@ -102,10 +115,13 @@ export class AppConfig {
     const startedAt = Date.now();
     this.reloadPromise ??= this.performReload()
       .then((result) => {
-        console.error('App configuration reloaded', {
-          changedNamespaces: result.changedNamespaces,
-          durationMs: Date.now() - startedAt,
-        });
+        this.logger?.debug(
+          {
+            changedNamespaces: result.changedNamespaces,
+            durationMs: Date.now() - startedAt,
+          },
+          'App configuration reloaded',
+        );
         return result;
       })
       .finally(() => {

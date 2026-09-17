@@ -13,9 +13,11 @@ export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-server/logging';
 
   public override register(): void {
-    this.app.container.singleton(loggingToken, () =>
-      createLogging(this.createLoggingConfig()),
-    );
+    this.app.container.singleton(loggingToken, () => {
+      const logging = createLogging(this.createLoggingConfig());
+      this.app.config.setLogger?.(logging.getLogger('config'));
+      return logging;
+    });
   }
 
   private createLoggingConfig(): LoggingConfig {

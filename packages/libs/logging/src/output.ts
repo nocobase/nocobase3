@@ -79,6 +79,11 @@ function prettyEntry(entry: JournalEntry): string {
     err,
     pid: _pid,
     hostname: _hostname,
+    service: _service,
+    appId,
+    runtimeId: _runtimeId,
+    deploymentId: _deploymentId,
+    durationMs,
     ...fields
   } = entry;
   const names: Record<number, string> = {
@@ -93,7 +98,25 @@ function prettyEntry(entry: JournalEntry): string {
     typeof level === 'number'
       ? (names[level] ?? String(level))
       : level.toUpperCase();
-  return `${time} ${label} [${typeof logger === 'string' ? logger : 'system'}] ${msg}${Object.keys(fields).length ? ` ${JSON.stringify(fields)}` : ''}${err ? `\n${JSON.stringify(err, null, 2)}` : ''}\n`;
+  const name = typeof logger === 'string' ? logger : 'system';
+  const scope = typeof appId === 'string' ? `${appId}/${name}` : name;
+  if (fields.app === appId) delete fields.app;
+  // The completion message already contains the method, path and status.
+  // Keep failure and debug context, and retain every field in the journal.
+  if (name === 'request' && label === 'INFO') {
+    delete fields.req;
+    delete fields.res;
+    delete fields.requestId;
+  }
+  const details = Object.entries(fields)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
+    .join(' ');
+  const date = new Date(time);
+  const clock = Number.isNaN(date.getTime())
+    ? time
+    : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}.${String(date.getMilliseconds()).padStart(3, '0')}`;
+  return `${clock} ${label} [${scope}] ${msg}${typeof durationMs === 'number' ? ` ${durationMs}ms` : ''}${details ? ` ${details}` : ''}${err ? `\n${JSON.stringify(err, null, 2)}` : ''}\n`;
 }
 interface DirectoryWriter {
   references: number;

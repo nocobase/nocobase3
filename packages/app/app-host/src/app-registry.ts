@@ -209,7 +209,7 @@ export class AppRuntimeRegistry {
           replaceOptions.activate && !currentRuntime
             ? await this.ensureActiveUnlocked(id)
             : (currentRuntime?.snapshot() ?? null);
-        this.logger?.info(
+        this.logger?.debug(
           {
             appId: id,
             changed: false,
@@ -249,7 +249,7 @@ export class AppRuntimeRegistry {
 
       this.definitions.set(id, nextDefinition);
 
-      this.logger?.info(
+      this.logger?.debug(
         {
           appId: id,
           changed: true,
