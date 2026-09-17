@@ -149,3 +149,30 @@ it.skipIf(selectedBackend() !== 'redis')(
   },
   20000,
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'aborts a blackholed initial handshake within setup budget and releases sockets',
+  async () => {
+    const { createTcpProxy } = await import('../helpers/tcp-proxy.js');
+    const proxy = await createTcpProxy(
+      Number(process.env.QUEUE_TEST_REDIS_PORT),
+    );
+    proxy.blackhole(true);
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-setup-blackhole`,
+      queueBackend: 'redis',
+      setupTimeoutMs: 100,
+      connection: { host: '127.0.0.1', port: proxy.port },
+    });
+    service.consumer('jobs').consume(async () => {});
+    const started = performance.now();
+    try {
+      await expect(service.setup()).rejects.toThrow();
+      expect(performance.now() - started).toBeLessThan(1500);
+      await expect.poll(() => proxy.sockets.size).toBe(0);
+    } finally {
+      await service.shutdown().catch(() => {});
+      await proxy.close();
+    }
+  },
+);
