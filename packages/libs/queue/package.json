@@ -28,7 +28,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
     "test": "vitest run",
     "test:integration": "node scripts/test-integration.mjs",
@@ -41,12 +42,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@boringnode/queue": "catalog:",
-    "@nocobase/db": "workspace:^",
-    "@nocobase/logging": "workspace:^",
     "bullmq": "catalog:",
-    "ioredis": "catalog:",
-    "knex": "catalog:"
+    "ioredis": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

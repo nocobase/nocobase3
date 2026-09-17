@@ -2,14 +2,7 @@ import {
   createServiceToken,
   type ServiceToken,
 } from '@nocobase/service-provider';
+import type { QueueService } from '@nocobase/queue';
 
-import type { NocoBaseQueueManager } from '@nocobase/queue';
-
-export const queueManagerToken: ServiceToken<NocoBaseQueueManager> =
-  createServiceToken<NocoBaseQueueManager>('@nocobase/queue/manager');
-
-export const queueServiceToken: ServiceToken<
-  import('@nocobase/queue').QueueService
-> = createServiceToken<import('@nocobase/queue').QueueService>(
-  '@nocobase/queue/service',
-);
+export const queueServiceToken: ServiceToken<QueueService> =
+  createServiceToken<QueueService>('@nocobase/queue/service');

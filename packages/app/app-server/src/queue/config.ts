@@ -1,5 +1,3 @@
-export type { AppQueueConfig } from '@nocobase/queue';
-
 import type { QueueOptions } from '@nocobase/queue';
 
 /** Application-only environment context; never forwarded as a backend option. */

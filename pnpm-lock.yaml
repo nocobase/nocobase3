@@ -12,9 +12,6 @@ catalogs:
     '@base-ui/react':
       specifier: ^1.6.0
       version: 1.7.0
-    '@boringnode/queue':
-      specifier: ^0.7.1
-      version: 0.7.1
     '@cacheable/memory':
       specifier: ^2.2.0
       version: 2.2.0
@@ -1911,24 +1908,12 @@ importers:
 
   packages/libs/queue:
     dependencies:
-      '@boringnode/queue':
-        specifier: 'catalog:'
-        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3))(kysely@0.29.5)
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../db
-      '@nocobase/logging':
-        specifier: workspace:^
-        version: link:../logging
       bullmq:
         specifier: 'catalog:'
         version: 6.3.6(ioredis@5.11.1)(pg@8.16.3)
       ioredis:
         specifier: 'catalog:'
         version: 5.11.1
-      knex:
-        specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3)
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
@@ -3171,9 +3156,6 @@ importers:
         specifier: 'catalog:'
         version: 6.0.3
     devDependencies:
-      '@boringnode/queue':
-        specifier: 'catalog:'
-        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../../libs/db-sqlite
@@ -5100,30 +5082,6 @@ packages:
   '@borewit/text-codec@0.2.2':
     resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
 
-  '@boringnode/queue@0.7.1':
-    resolution: {integrity: sha512-n3hGc4FA1kQgd9iZW/D0cTj0v5o4+ZWgOJqe9lnzRrY2fJ9vU9nISlkMMYkCxJcpoSOklC/zBHaTEFXf9j4AMQ==}
-    engines: {node: '>=24.0.0'}
-    peerDependencies:
-      '@opentelemetry/api': ^1.9.0
-      '@opentelemetry/core': ^1.30.0 || ^2.0.0
-      '@opentelemetry/instrumentation': ^0.200.0
-      ioredis: ^5.0.0
-      knex: ^3.0.0
-      kysely: ^0.29.0
-    peerDependenciesMeta:
-      '@opentelemetry/api':
-        optional: true
-      '@opentelemetry/core':
-        optional: true
-      '@opentelemetry/instrumentation':
-        optional: true
-      ioredis:
-        optional: true
-      knex:
-        optional: true
-      kysely:
-        optional: true
-
   '@braidai/lang@1.1.2':
     resolution: {integrity: sha512-qBcknbBufNHlui137Hft8xauQMTZDKdophmLFv05r2eNmdIv/MlPuP4TdUknHG68UdWLgVZwgxVe735HzJNIwA==}
 
@@ -6502,10 +6460,6 @@ packages:
 
   '@loaderkit/resolve@1.0.6':
     resolution: {integrity: sha512-G8FdIoF5CypfwmD9rl8BXod5HDn8JqB0CCNBXDTaRZ+yRYhARrrSToX1zg1zy9jX3zLqigsELwhT4gNtkdQAUg==}
-
-  '@lukeed/ms@2.0.2':
-    resolution: {integrity: sha512-9I2Zn6+NJLfaGoz9jN3lpwDgAYvfGeNYdbAIjJOqzs4Tpc+VU3Jqq4IofSUBKajiDS8k9fZIg18/z13mpk1bsA==}
-    engines: {node: '>=8'}
 
   '@manypkg/find-root@3.1.0':
     resolution: {integrity: sha512-BcSqCyKhBVZ5YkSzOiheMCV41kqAFptW6xGqYSTjkVTl9XQpr+pqHhwgGCOHQtjDCv7Is6EFyA14Sm5GVbVABA==}
@@ -9168,10 +9122,6 @@ packages:
 
   crelt@1.0.7:
     resolution: {integrity: sha512-aK6BbWfhf4U/wCcLHKPJl/xa6VkVstRaPywWtMKGwuOLc/wZTyQYuoxgvZnNsBvv7Kg3YTBQYYBCggcviQczuA==}
-
-  cron-parser@5.10.0:
-    resolution: {integrity: sha512-izNAxJyRWUP8ljBoDSub5WyrVOUlT4SLGShswE7eoRBpp6QUsSycYxLBMJlbshgPBMcPT/nrfgjNY2918ayv2A==}
-    engines: {node: '>=18'}
 
   cron-parser@5.10.1:
     resolution: {integrity: sha512-pKRrRagItwk9rGIStcUyMxFX34x56zoX3KDf9HJ4ttwkXIK1qxK63EvXvEDmlxI9AdPJ+Y7TEKRftRlW5eSS7A==}
@@ -15845,28 +15795,6 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
-  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3))(kysely@0.29.5)':
-    dependencies:
-      '@lukeed/ms': 2.0.2
-      '@poppinss/utils': 7.0.1
-      cron-parser: 5.10.0
-    optionalDependencies:
-      '@opentelemetry/api': 1.9.0
-      ioredis: 5.11.1
-      knex: 3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3)
-      kysely: 0.29.5
-
-  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)':
-    dependencies:
-      '@lukeed/ms': 2.0.2
-      '@poppinss/utils': 7.0.1
-      cron-parser: 5.10.0
-    optionalDependencies:
-      '@opentelemetry/api': 1.9.0
-      ioredis: 5.11.1
-      knex: 3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
-      kysely: 0.29.5
-
   '@braidai/lang@1.1.2': {}
 
   '@bramus/specificity@2.4.2':
@@ -16916,8 +16844,6 @@ snapshots:
   '@loaderkit/resolve@1.0.6':
     dependencies:
       '@braidai/lang': 1.1.2
-
-  '@lukeed/ms@2.0.2': {}
 
   '@manypkg/find-root@3.1.0':
     dependencies:
@@ -19895,10 +19821,6 @@ snapshots:
 
   crelt@1.0.7: {}
 
-  cron-parser@5.10.0:
-    dependencies:
-      luxon: 3.7.2
-
   cron-parser@5.10.1:
     dependencies:
       luxon: 3.7.2
@@ -22443,29 +22365,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3):
-    dependencies:
-      colorette: 2.0.19
-      commander: 10.0.1
-      debug: 4.3.4(supports-color@8.1.1)
-      escalade: 3.2.0
-      esm: 3.2.25
-      get-package-type: 0.1.0
-      getopts: 2.3.0
-      interpret: 2.2.0
-      lodash: 4.18.1
-      pg-connection-string: 2.6.2
-      rechoir: 0.8.0
-      resolve-from: 5.0.0
-      tarn: 3.1.2
-      tildify: 2.0.0
-    optionalDependencies:
-      better-sqlite3: 12.11.1
-      pg: 8.16.3
-      pg-query-stream: 4.17.0(pg@8.16.3)
-    transitivePeerDependencies:
-      - supports-color
-
   knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(supports-color@8.1.1):
     dependencies:
       colorette: 2.0.19
@@ -24060,11 +23959,6 @@ snapshots:
 
   pg-connection-string@2.6.2: {}
 
-  pg-cursor@2.22.0(pg@8.16.3):
-    dependencies:
-      pg: 8.16.3
-    optional: true
-
   pg-cursor@2.22.0(pg@8.23.0):
     dependencies:
       pg: 8.23.0
@@ -24080,12 +23974,6 @@ snapshots:
       pg: 8.23.0
 
   pg-protocol@1.16.0: {}
-
-  pg-query-stream@4.17.0(pg@8.16.3):
-    dependencies:
-      pg: 8.16.3
-      pg-cursor: 2.22.0(pg@8.16.3)
-    optional: true
 
   pg-query-stream@4.17.0(pg@8.23.0):
     dependencies:

@@ -21,8 +21,7 @@ import type {
   PublishOptions,
 } from './types.js';
 
-/** Temporary name while the legacy QueueManager export remains in use. */
-export interface QueueServiceManager {
+export interface QueueManager {
   configure(options: QueueRuntimeOptions): Promise<void>;
   drain(options?: { delayed?: boolean }): Promise<void>;
   cancelJob(jobId: string, reason?: string): boolean;
@@ -57,7 +56,7 @@ export interface QueueConsumer {
 
 export interface QueueService {
   registerBackend(name: string, factory: BackendFactory): void;
-  manager(queue: string): QueueServiceManager;
+  manager(queue: string): QueueManager;
   producer(queue: string): QueueProducer;
   consumer(queue: string): QueueConsumer;
   setup(): Promise<void>;
@@ -87,7 +86,7 @@ type ServiceQueue = Queue<
 type ServiceWorker = Worker<unknown, unknown, string, IQueueBackend>;
 
 interface QueueEntry {
-  manager: QueueServiceManager;
+  manager: QueueManager;
   producer: QueueProducer;
   consumer: QueueConsumer;
   handlers: QueueHandlerRegistry;
@@ -634,7 +633,7 @@ export function createQueueService(
 
   return {
     registerBackend: (name, factory): void => registry.register(name, factory),
-    manager: (name): QueueServiceManager => entry(name).manager,
+    manager: (name): QueueManager => entry(name).manager,
     producer: (name): QueueProducer => {
       validateQueueName(name, 'queue');
       if (stopped && producersOpen) {
