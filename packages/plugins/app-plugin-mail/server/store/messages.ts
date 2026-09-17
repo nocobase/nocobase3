@@ -67,6 +67,37 @@ export class MailMessagesStore {
     >,
   ) {}
 
+  /** Detach an editable draft from provider message IDs that can change on save. */
+  public async localizeDraft(
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage> {
+    await this.database.transaction(async (connection) => {
+      const row = await connection.query
+        .selectFrom<MessageRow>('mailMessages')
+        .selectAll()
+        .where('accountId', '=', accountId)
+        .where('id', '=', messageId)
+        .where('draft', '=', true)
+        .executeTakeFirst<MessageRow>();
+      if (!row) throw new Error('Mail draft was not found.');
+      if (row.providerMessageId.startsWith('local-draft:')) return;
+      await connection.query
+        .updateTable<MessageRow>('mailMessages')
+        .set({
+          providerMessageId: `local-draft:${messageId}`,
+          providerDraftMessageId:
+            row.providerDraftMessageId ?? row.providerMessageId,
+        })
+        .where('accountId', '=', accountId)
+        .where('id', '=', messageId)
+        .execute();
+    });
+    const draft = await this.getMessageForAccount(accountId, messageId);
+    if (!draft) throw new Error('Mail draft was not found.');
+    return draft;
+  }
+
   public async saveMessage(
     accountId: string,
     message: NormalizedMailMessage,
@@ -162,77 +193,66 @@ export class MailMessagesStore {
     if (requestedFolderId === MAIL_LOCAL_DRAFT_FOLDER_ID) {
       query = query.where('mailMessages.draft', '=', true);
     } else if (syntheticFolderType) {
-      query = query
-        .innerJoin(
-          'mailMessageFolders',
-          'mailMessages.id',
-          'mailMessageFolders.messageId',
-        )
-        .innerJoin('mailFolders', (join) =>
-          join
-            .onRef('mailFolders.accountId', '=', 'mailMessages.accountId')
-            .onRef(
-              'mailFolders.providerFolderId',
-              '=',
-              'mailMessageFolders.providerFolderId',
-            )
-            .on('mailFolders.type', '=', syntheticFolderType),
-        )
-        .distinct();
-    } else if (input.folderIds?.length) {
-      query = query
-        .innerJoin(
-          'mailMessageFolders',
-          'mailMessages.id',
-          'mailMessageFolders.messageId',
-        )
-        .where((builder) =>
-          builder.or([
-            builder(
-              'mailMessageFolders.providerFolderId',
-              'in',
-              input.folderIds!,
-            ),
-            builder.and([
-              builder(
-                'mailMessageFolders.providerFolderId',
-                '=',
-                MAIL_LOCAL_DRAFT_FOLDER_ID,
-              ),
-              builder('mailMessages.providerDraftMessageId', 'is not', null),
-              builder.exists(
-                builder
+      query = query.where((builder) =>
+        builder.exists(
+          builder
+            .selectFrom('mailMessageFolders')
+            .select('messageId')
+            .where((folder) =>
+              folder.exists(
+                folder
                   .selectFrom('mailFolders')
                   .select('id')
                   .whereRef(
                     'mailFolders.accountId',
                     '=',
-                    'mailMessages.accountId',
+                    'mailMessageFolders.accountId',
                   )
-                  .where('mailFolders.providerFolderId', 'in', input.folderIds!)
-                  .where('mailFolders.type', '=', 'drafts'),
+                  .whereRef(
+                    'mailFolders.providerFolderId',
+                    '=',
+                    'mailMessageFolders.providerFolderId',
+                  )
+                  .where('mailFolders.type', '=', syntheticFolderType),
               ),
-            ]),
-          ]),
-        )
-        .distinct();
-    }
-    if (
-      draftsOnlyInDraftFolders &&
-      requestedFolderId !== MAIL_LOCAL_DRAFT_FOLDER_ID
-    ) {
-      query =
-        input.folderIds?.length && !syntheticFolderType
-          ? query.where((builder) =>
-              builder.eb.or([
-                builder.eb('mailMessages.draft', '=', false),
-                builder.eb(
+            )
+            .whereRef('mailMessageFolders.messageId', '=', 'mailMessages.id')
+            .whereRef(
+              'mailMessageFolders.accountId',
+              '=',
+              'mailMessages.accountId',
+            ),
+        ),
+      );
+      if (draftsOnlyInDraftFolders)
+        query = query.where('mailMessages.draft', '=', false);
+    } else if (input.folderIds?.length) {
+      query = query.where((builder) => {
+        let folders = builder
+          .selectFrom('mailMessageFolders')
+          .select('messageId')
+          .whereRef('mailMessageFolders.messageId', '=', 'mailMessages.id')
+          .whereRef(
+            'mailMessageFolders.accountId',
+            '=',
+            'mailMessages.accountId',
+          )
+          .where((filter) =>
+            filter.or([
+              filter(
+                'mailMessageFolders.providerFolderId',
+                'in',
+                input.folderIds!,
+              ),
+              filter.and([
+                filter(
                   'mailMessageFolders.providerFolderId',
                   '=',
                   MAIL_LOCAL_DRAFT_FOLDER_ID,
                 ),
-                builder.exists(
-                  builder
+                filter('mailMessages.providerDraftMessageId', 'is not', null),
+                filter.exists(
+                  filter
                     .selectFrom('mailFolders')
                     .select('id')
                     .whereRef(
@@ -240,16 +260,47 @@ export class MailMessagesStore {
                       '=',
                       'mailMessages.accountId',
                     )
-                    .whereRef(
+                    .where(
                       'mailFolders.providerFolderId',
-                      '=',
-                      'mailMessageFolders.providerFolderId',
+                      'in',
+                      input.folderIds!,
                     )
                     .where('mailFolders.type', '=', 'drafts'),
                 ),
               ]),
-            )
-          : query.where('mailMessages.draft', '=', false);
+            ]),
+          );
+        if (draftsOnlyInDraftFolders)
+          folders = folders.where((filter) =>
+            filter.or([
+              filter('mailMessages.draft', '=', false),
+              filter(
+                'mailMessageFolders.providerFolderId',
+                '=',
+                MAIL_LOCAL_DRAFT_FOLDER_ID,
+              ),
+              filter.exists(
+                filter
+                  .selectFrom('mailFolders')
+                  .select('id')
+                  .whereRef(
+                    'mailFolders.accountId',
+                    '=',
+                    'mailMessages.accountId',
+                  )
+                  .whereRef(
+                    'mailFolders.providerFolderId',
+                    '=',
+                    'mailMessageFolders.providerFolderId',
+                  )
+                  .where('mailFolders.type', '=', 'drafts'),
+              ),
+            ]),
+          );
+        return builder.exists(folders);
+      });
+    } else if (draftsOnlyInDraftFolders) {
+      query = query.where('mailMessages.draft', '=', false);
     }
     // Keep the editable local draft visible without also listing its synced copy.
     query = query.where((builder) =>
@@ -273,14 +324,15 @@ export class MailMessagesStore {
       ]),
     );
     if (input.labelIds?.length) {
-      query = query
-        .innerJoin(
-          'mailMessageLabels',
-          'mailMessages.id',
-          'mailMessageLabels.messageId',
-        )
-        .where('mailMessageLabels.labelId', 'in', input.labelIds)
-        .distinct();
+      query = query.where((builder) =>
+        builder.exists(
+          builder
+            .selectFrom('mailMessageLabels')
+            .select('messageId')
+            .whereRef('mailMessageLabels.messageId', '=', 'mailMessages.id')
+            .where('mailMessageLabels.labelId', 'in', input.labelIds!),
+        ),
+      );
     }
     if (input.conversationId)
       query = query.where(
@@ -297,8 +349,12 @@ export class MailMessagesStore {
         builder.eb.or([
           builder.eb('mailMessages.subject', 'like', `%${input.query}%`),
           builder.eb('mailMessages.preview', 'like', `%${input.query}%`),
-          builder.eb('mailMessages.sender', 'like', `%${input.query}%`),
-          builder.eb('mailMessages.recipients', 'like', `%${input.query}%`),
+          builder.eb('mailMessages.senderSearch', 'like', `%${input.query}%`),
+          builder.eb(
+            'mailMessages.recipientsSearch',
+            'like',
+            `%${input.query}%`,
+          ),
         ]),
       );
     const count = input.withTotal
@@ -546,10 +602,20 @@ export class MailMessagesStore {
     providerFolderId: string,
   ): Promise<MailMessage | undefined> {
     await this.database.transaction(async (connection): Promise<void> => {
+      const existing = await connection.query
+        .selectFrom<MessageRow>('mailMessages')
+        .select(['providerMessageId', 'draft'])
+        .where('accountId', '=', accountId)
+        .where('id', '=', messageId)
+        .executeTakeFirst<MessageRow>();
+      if (!existing) return;
       const updated = await connection.query
         .updateTable<MessageRow>('mailMessages')
         .set({
-          providerMessageId,
+          ...(existing.draft &&
+          existing.providerMessageId.startsWith('local-draft:')
+            ? { providerDraftMessageId: providerMessageId }
+            : { providerMessageId }),
           updatedAt: new Date().toISOString(),
         })
         .where('id', '=', messageId)

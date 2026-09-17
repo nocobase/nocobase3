@@ -222,13 +222,15 @@ pnpm --filter @nocobase/app-plugin-mail test
 pnpm --filter @nocobase/app-plugin-mail build
 ```
 
+The query and search-migration regressions also run on PostgreSQL with `PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=postgres PGUSER=postgres pnpm --filter @nocobase/app-plugin-mail test:postgres` (set `PGPASSWORD` when required). Use a test database role allowed to create schemas. Each test creates and drops only its own randomly named `mail_test_*` schema; the normal test command continues to use SQLite.
+
 ## Application-owned client and draft attachments
 
 Register the Mail Client plugin before rendering its public components. Each `ClientApplication` owns one lazy `MailClient`; React consumers use `useMailClient()` and imperative consumers resolve `mailClientToken` from that application's services. Both are exported by `@nocobase/app-plugin-mail/client`. Do not create or retain a module-global client. Public label and template managers explicitly use the Mail translation namespace when embedded in an application-owned page.
 
 The Server entry point exposes the plugin factory, `mailConfig`, `createMailProviderRegistry`, Tokens, and contract types. Default persistence, operation, and runtime implementations remain internal; resolve the supported service through its Token instead of constructing those implementations.
 
-Local draft attachments retain their upload identity separately from Provider attachment identifiers. Reopening or rescheduling a draft sends the retained local file contents. Upload cleanup preserves files referenced by live drafts and reclaims them after the final draft reference is removed and the upload expires.
+Local draft attachments retain their upload identity separately from Provider attachment identifiers until successful remote mirroring replaces them with the Provider’s current attachment references. Reopening or rescheduling a local-only draft sends the retained local file contents. Upload cleanup preserves files referenced by live drafts and reclaims them after the final draft reference is removed and the upload expires. Editing a synchronized draft keeps its local record ID stable while updating the remote message and attachment IDs returned by the Provider.
 
 ## Mail workspace UI
 

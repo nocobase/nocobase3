@@ -139,6 +139,42 @@ describe('IMAP/SMTP mail Provider', () => {
     );
   });
 
+  it('filters history UIDs by SINCE before fetching bodies, including legacy cursors', async () => {
+    const provider = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    mocks.imap.search.mockResolvedValue([]);
+    await provider.listMessages!({
+      limit: 100,
+      receivedAfter: '2026-09-01T12:34:56Z',
+    });
+    expect(mocks.imap.search).toHaveBeenCalledWith(
+      { uid: '1:3', since: new Date('2026-08-31T00:00:00Z') },
+      { uid: true },
+    );
+    expect(mocks.imap.fetch).not.toHaveBeenCalled();
+    mocks.imap.search
+      .mockReset()
+      .mockResolvedValueOnce([1, 2, 3])
+      .mockResolvedValueOnce([1]);
+    await provider.listMessages!({
+      limit: 100,
+      receivedAfter: '2026-09-01T12:34:56Z',
+      cursor: Buffer.from(
+        JSON.stringify({ folderIndex: 0, offset: 1 }),
+      ).toString('base64url'),
+    });
+    expect(mocks.imap.search).toHaveBeenLastCalledWith(
+      { uid: '2,1', since: new Date('2026-08-31T00:00:00Z') },
+      { uid: true },
+    );
+    expect(mocks.imap.fetch).toHaveBeenCalledWith([1], expect.any(Object), {
+      uid: true,
+    });
+  });
+
   it('uses receipt time for an inclusive history boundary despite a misleading Date header', async () => {
     mocks.imap.list.mockResolvedValue([{ path: 'INBOX', name: 'Inbox' }]);
     mocks.imap.search.mockResolvedValue([1, 2]);

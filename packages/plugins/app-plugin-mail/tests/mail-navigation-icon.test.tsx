@@ -88,13 +88,44 @@ describe('MailNavigationIcon', () => {
     act(() => {
       window.dispatchEvent(new Event(MAIL_UNREAD_COUNT_CHANGED_EVENT));
     });
-    await screen.findByLabelText('2 unread messages');
+    expect(mocks.getUnreadCount).toHaveBeenCalledOnce();
     await act(async () => {
       finishOld(5);
     });
-    expect(screen.getByLabelText('2 unread messages')).toBeVisible();
+    expect(await screen.findByLabelText('2 unread messages')).toBeVisible();
     expect(
       screen.queryByLabelText('5 unread messages'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('coalesces local and realtime bursts with one trailing refresh during a pending request', async () => {
+    const pending = Promise.withResolvers<number>();
+    mocks.getUnreadCount
+      .mockResolvedValueOnce(50)
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce(0);
+    render(<MailNavigationIcon />);
+    await screen.findByLabelText('50 unread messages');
+    const burst = () => {
+      for (let i = 0; i < 50; i++) {
+        mocks.refresh?.();
+        window.dispatchEvent(new Event(MAIL_UNREAD_COUNT_CHANGED_EVENT));
+      }
+    };
+    act(burst);
+    await waitFor(() => expect(mocks.getUnreadCount).toHaveBeenCalledTimes(2));
+    act(burst);
+    await act(async () => {
+      pending.resolve(25);
+    });
+    await waitFor(() => expect(mocks.getUnreadCount).toHaveBeenCalledTimes(3));
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText('50 unread messages'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.queryByLabelText('25 unread messages'),
     ).not.toBeInTheDocument();
   });
 

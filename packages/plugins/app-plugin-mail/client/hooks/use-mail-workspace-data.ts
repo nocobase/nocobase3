@@ -50,9 +50,16 @@ export function useMailWorkspaceData({
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingConversation, setLoadingConversation] = useState(false);
   const conversationRequestIdRef = useRef(0);
-  const markingReadRef = useRef(new Set<string>());
+  const markingReadRef = useRef(new Map<string, Promise<void>>());
+  const openedRef = useRef(new Set<string>());
+  const readIntentRef = useRef(new Map<string, number>());
+  const readQueueRef = useRef({ running: 0, waiting: [] as (() => void)[] });
+  const accountsKey = JSON.stringify(
+    accounts.map((account) => [account.id, account.status]).sort(),
+  );
+  const accountCount = accounts.length;
   const messageRequestIdRef = useRef(0);
-  const loadedMessageQueryRef = useRef<typeof messageQuery | undefined>(
+  const settledMessageQueryRef = useRef<typeof messageQuery | undefined>(
     undefined,
   );
   const messagePageRequestRef = useRef<number | undefined>(undefined);
@@ -61,14 +68,82 @@ export function useMailWorkspaceData({
   useEffect(
     () => () => {
       backgroundRefreshIdRef.current += 1;
+      openedRef.current = new Set();
     },
     [],
   );
+  const markOpenedMessagesRead = useCallback(
+    (openedMessages: readonly MailMessage[], requestId: number): void => {
+      for (const message of openedMessages) {
+        const key = `${message.accountId}:${message.id}`;
+        const opened = openedRef.current;
+        if (opened.has(key)) continue;
+        opened.add(key);
+        if (
+          message.read ||
+          message.draft ||
+          markingReadRef.current.has(key) ||
+          !accounts.some(
+            (account) =>
+              account.id === message.accountId && account.status === 'active',
+          )
+        )
+          continue;
+        const intent = readIntentRef.current.get(key);
+        const operation = enqueueRead(readQueueRef.current, async () => {
+          if (
+            !openedRef.current.has(key) ||
+            readIntentRef.current.get(key) !== intent
+          )
+            return;
+          const updated = await mail.updateMessage({
+            accountId: message.accountId,
+            messageId: message.id,
+            read: true,
+          });
+          return updated;
+        })
+          .then((updated) => {
+            if (!updated || readIntentRef.current.get(key) !== intent) return;
+            backgroundRefreshIdRef.current += 1;
+            const matches = (item: MailMessageSummary): boolean =>
+              item.accountId === updated.accountId && item.id === updated.id;
+            // Patch only read state so other edits made while this request ran survive.
+            setMessages((current) =>
+              current.map((item) =>
+                matches(item) ? { ...item, read: updated.read } : item,
+              ),
+            );
+            setConversation((current) =>
+              current.map((item) =>
+                matches(item) ? { ...item, read: updated.read } : item,
+              ),
+            );
+            setSelected((current) =>
+              current && matches(current)
+                ? { ...current, read: updated.read }
+                : current,
+            );
+            window.dispatchEvent(new Event(MAIL_UNREAD_COUNT_CHANGED_EVENT));
+          })
+          .catch((cause: unknown) => {
+            if (conversationRequestIdRef.current === requestId)
+              requestError(cause);
+          })
+          .finally(() => {
+            markingReadRef.current.delete(key);
+          });
+        markingReadRef.current.set(key, operation);
+      }
+    },
+    [accounts, mail, requestError],
+  );
+
   useMailInvalidations(() => {
     if (
       loadingMessages ||
       loadingConversation ||
-      loadedMessageQueryRef.current !== messageQuery
+      settledMessageQueryRef.current !== messageQuery
     )
       return false;
     const refreshId = ++backgroundRefreshIdRef.current;
@@ -140,6 +215,9 @@ export function useMailWorkspaceData({
           setConversationCursor(
             retainedSelection ? detail?.nextCursor : undefined,
           );
+          if (retainedSelection && detail) {
+            markOpenedMessagesRead(detail.items, conversationRequestId);
+          }
         }
       })
       .catch((cause: unknown) => {
@@ -155,7 +233,8 @@ export function useMailWorkspaceData({
     const requestId = messageRequestIdRef.current + 1;
     messageRequestIdRef.current = requestId;
     conversationRequestIdRef.current += 1;
-    loadedMessageQueryRef.current = undefined;
+    settledMessageQueryRef.current = undefined;
+    openedRef.current = new Set();
     void Promise.resolve()
       .then(() => {
         if (messageRequestIdRef.current !== requestId) return undefined;
@@ -165,19 +244,20 @@ export function useMailWorkspaceData({
         setPageCursors([undefined]);
         setPageIndex(0);
         setListVersion((version) => version + 1);
+        openedRef.current = new Set();
         setSelected(undefined);
         setConversation([]);
         setConversationCursor(undefined);
         setLoadingConversation(false);
         setError(undefined);
-        return accounts.length === 0
+        return accountCount === 0
           ? { items: [], nextCursor: undefined }
           : mail.listMessages(messageQuery);
       })
       .then(
         (page) => {
           if (!page || messageRequestIdRef.current !== requestId) return;
-          loadedMessageQueryRef.current = messageQuery;
+          settledMessageQueryRef.current = messageQuery;
           setMessages(page.items);
           setNextCursor(page.nextCursor);
           setSelected(undefined);
@@ -189,71 +269,27 @@ export function useMailWorkspaceData({
         },
         (cause: unknown) => {
           if (messageRequestIdRef.current !== requestId) return;
+          // A settled failure must allow later invalidations to retry this query.
+          settledMessageQueryRef.current = messageQuery;
           requestError(cause);
           setLoadingMessages(false);
         },
       );
-  }, [accounts, mail, messageQuery, reloadVersion, requestError, setError]);
-
-  const markOpenedMessagesRead = useCallback(
-    (openedMessages: readonly MailMessage[], requestId: number): void => {
-      for (const message of openedMessages) {
-        const key = `${message.accountId}:${message.id}`;
-        if (
-          message.read ||
-          message.draft ||
-          markingReadRef.current.has(key) ||
-          !accounts.some(
-            (account) =>
-              account.id === message.accountId && account.status === 'active',
-          )
-        )
-          continue;
-        markingReadRef.current.add(key);
-        void mail
-          .updateMessage({
-            accountId: message.accountId,
-            messageId: message.id,
-            read: true,
-          })
-          .then((updated) => {
-            backgroundRefreshIdRef.current += 1;
-            const matches = (item: MailMessageSummary): boolean =>
-              item.accountId === updated.accountId && item.id === updated.id;
-            // Patch only read state so other edits made while this request ran survive.
-            setMessages((current) =>
-              current.map((item) =>
-                matches(item) ? { ...item, read: updated.read } : item,
-              ),
-            );
-            setConversation((current) =>
-              current.map((item) =>
-                matches(item) ? { ...item, read: updated.read } : item,
-              ),
-            );
-            setSelected((current) =>
-              current && matches(current)
-                ? { ...current, read: updated.read }
-                : current,
-            );
-            window.dispatchEvent(new Event(MAIL_UNREAD_COUNT_CHANGED_EVENT));
-          })
-          .catch((cause: unknown) => {
-            if (conversationRequestIdRef.current === requestId)
-              requestError(cause);
-          })
-          .finally(() => {
-            markingReadRef.current.delete(key);
-          });
-      }
-    },
-    [accounts, mail, requestError],
-  );
+  }, [
+    accountsKey,
+    accountCount,
+    mail,
+    messageQuery,
+    reloadVersion,
+    requestError,
+    setError,
+  ]);
 
   const selectMessage = useCallback(
     (message: MailMessageSummary): void => {
       const requestId = conversationRequestIdRef.current + 1;
       conversationRequestIdRef.current = requestId;
+      openedRef.current = new Set();
       setSelected(message);
       setConversation([]);
       setConversationCursor(undefined);
@@ -290,7 +326,7 @@ export function useMailWorkspaceData({
   const changeMessagePage = (targetIndex: number): void => {
     if (
       loadingMessages ||
-      loadedMessageQueryRef.current !== messageQuery ||
+      settledMessageQueryRef.current !== messageQuery ||
       messagePageRequestRef.current === messageRequestIdRef.current ||
       targetIndex < 0 ||
       targetIndex > pageIndex + 1 ||
@@ -313,6 +349,7 @@ export function useMailWorkspaceData({
         setPageCursors((current) => [...current.slice(0, targetIndex), cursor]);
         setPageIndex(targetIndex);
         setListVersion((version) => version + 1);
+        openedRef.current = new Set();
         setSelected(undefined);
         setConversation([]);
         setConversationCursor(undefined);
@@ -356,6 +393,21 @@ export function useMailWorkspaceData({
       });
   };
 
+  const setMessageRead = async (
+    message: MailMessageSummary,
+    read: boolean,
+  ): Promise<MailMessage> => {
+    const key = `${message.accountId}:${message.id}`;
+    openedRef.current.add(key);
+    readIntentRef.current.set(key, (readIntentRef.current.get(key) ?? 0) + 1);
+    await markingReadRef.current.get(key);
+    return mail.updateMessage({
+      accountId: message.accountId,
+      messageId: message.id,
+      read,
+    });
+  };
+
   const updateVisibleMessage = (updated: MailMessage): void => {
     backgroundRefreshIdRef.current += 1;
     setConversation((current) =>
@@ -375,9 +427,11 @@ export function useMailWorkspaceData({
     messageRequestIdRef.current += 1;
     conversationRequestIdRef.current += 1;
     backgroundRefreshIdRef.current += 1;
+    openedRef.current = new Set();
   }, []);
   const clearSelection = useCallback((): void => {
     conversationRequestIdRef.current += 1;
+    openedRef.current = new Set();
     setSelected(undefined);
     setConversation([]);
     setConversationCursor(undefined);
@@ -405,6 +459,7 @@ export function useMailWorkspaceData({
     changeMessagePage,
     loadMoreConversation,
     updateVisibleMessage,
+    setMessageRead,
     clearSelection,
     resetMailbox,
     cancelRequests,
@@ -424,6 +479,10 @@ interface MailWorkspaceData {
   readonly selectMessage: (message: MailMessageSummary) => void;
   readonly changeMessagePage: (index: number) => void;
   readonly loadMoreConversation: () => void;
+  readonly setMessageRead: (
+    message: MailMessageSummary,
+    read: boolean,
+  ) => Promise<MailMessage>;
   readonly updateVisibleMessage: (message: MailMessage) => void;
   readonly clearSelection: () => void;
   readonly resetMailbox: () => void;
@@ -452,4 +511,24 @@ async function reloadConversation(
     if (page.items.length === 0) break;
   } while (cursor && items.length < target);
   return { items, nextCursor: cursor };
+}
+
+/** Bound automatic provider mutations across conversation pages and refreshes. */
+function enqueueRead<T>(
+  queue: { running: number; waiting: (() => void)[] },
+  task: () => Promise<T>,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const run = (): void => {
+      queue.running += 1;
+      void task()
+        .then(resolve, reject)
+        .finally(() => {
+          queue.running -= 1;
+          queue.waiting.shift()?.();
+        });
+    };
+    if (queue.running < 4) run();
+    else queue.waiting.push(run);
+  });
 }

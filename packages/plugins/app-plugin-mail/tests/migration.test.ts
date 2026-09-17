@@ -61,7 +61,10 @@ describe('mail database migration', () => {
 
   it('creates the complete mail schema', async () => {
     const result = await migrateUp(database);
-    expect(result.executed).toEqual(['202609030001_create_mail_tables']);
+    expect(result.executed).toEqual([
+      '202609030001_create_mail_tables',
+      '202609170001_add_mail_address_search',
+    ]);
 
     const client = await database.connection().client<SqliteClient>();
     await expect(

@@ -32,3 +32,9 @@ Show accepted messages with provider IDs in the known Sent folder immediately, r
 Reorganize the Mail application Skill into focused configuration, client integration, sending, and synchronization references. Clarify production OAuth return handling, provider capabilities, delivery retry boundaries, and resumable synchronization without a total history cap.
 
 Unify personal and management message mutations, including local draft deletion; refresh mailbox data on realtime changes while preserving reading and composing state; drain background synchronization work on shutdown. Separate shared contracts, scheduling, delivery, and composer state responsibilities while preserving existing public exports.
+
+Recover failed initial mailbox loads on realtime changes and mark newly displayed replies in an open conversation as read after refreshing.
+
+Fix PostgreSQL folder and label queries, index creation, and address searches with a batched text-projection migration. Preserve editable Gmail drafts and attachments across changing provider message IDs. Honor Reply-To, keep explicit unread state and mailbox pagination during refreshes, bound automatic read writes, coalesce badge refreshes, preserve notifications across service boot order, and prefilter IMAP history by receipt date before downloading bodies.
+
+Store absent mail received and sent timestamps as SQL NULL so PostgreSQL accepts messages with missing date metadata and clears dates consistently on updates.

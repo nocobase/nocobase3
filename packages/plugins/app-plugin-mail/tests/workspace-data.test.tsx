@@ -62,10 +62,17 @@ function setup() {
   const listConversationMessages = vi
     .fn<MailClient['listConversationMessages']>()
     .mockResolvedValue({ items: [] });
+  const updateMessage = vi
+    .fn<MailClient['updateMessage']>()
+    .mockImplementation(async (input) => ({
+      ...message(input.messageId),
+      read: input.read ?? true,
+    }));
   const mail = {
     listMessages,
     getMessage,
     listConversationMessages,
+    updateMessage,
   } as unknown as MailClient;
   const options = {
     mail,
@@ -79,9 +86,11 @@ function setup() {
   const hook = renderHook(() => useMailWorkspaceData(options));
   return {
     ...hook,
+    options,
     listMessages,
     getMessage,
     listConversationMessages,
+    updateMessage,
     requestError: options.requestError,
   };
 }
@@ -97,6 +106,157 @@ function invalidate(): void {
 describe('workspace data invalidation', () => {
   beforeEach(() => {
     transport.listener = undefined;
+  });
+
+  it('preserves page and selection when focus supplies equivalent account objects', async () => {
+    const { result, listMessages, options, rerender } = setup();
+    listMessages.mockResolvedValueOnce({
+      items: [message('selected')],
+      nextCursor: 'page2',
+    });
+    await waitFor(() => expect(result.current.nextCursor).toBe('page2'));
+    act(() => result.current.changeMessagePage(1));
+    await waitFor(() => expect(result.current.pageIndex).toBe(1));
+    act(() => result.current.selectMessage(message('selected')));
+    await waitFor(() => expect(result.current.conversation).toHaveLength(1));
+    options.accounts = options.accounts.map((account) => ({ ...account }));
+    rerender();
+    await act(async () => {});
+    expect(result.current.pageIndex).toBe(1);
+    expect(result.current.selected?.id).toBe('selected');
+    expect(listMessages).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps explicitly unread messages unread through refresh and marks new replies only', async () => {
+    const { result, getMessage, updateMessage } = setup();
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    act(() => result.current.selectMessage(message('selected')));
+    await waitFor(() => expect(result.current.conversation).toHaveLength(1));
+    const unread = { ...message('selected'), read: false };
+    act(() => result.current.updateVisibleMessage(unread));
+    getMessage.mockResolvedValue(unread);
+    invalidate();
+    await waitFor(() => expect(getMessage).toHaveBeenCalledTimes(2));
+    expect(updateMessage).not.toHaveBeenCalled();
+    expect(result.current.conversation[0]?.read).toBe(false);
+  });
+
+  it('bounds automatic reads and serializes a manual unread intent after an in-flight read', async () => {
+    const { result, listConversationMessages, updateMessage } = setup();
+    const pending: ReturnType<typeof Promise.withResolvers<MailMessage>>[] = [];
+    updateMessage.mockImplementation((input) => {
+      if (input.read === false)
+        return Promise.resolve({ ...message(input.messageId), read: false });
+      const request = Promise.withResolvers<MailMessage>();
+      pending.push(request);
+      return request.promise;
+    });
+    const items = Array.from({ length: 50 }, (_, index) => ({
+      ...message(String(index)),
+      read: false,
+    }));
+    listConversationMessages.mockResolvedValue({ items });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    act(() =>
+      result.current.selectMessage({ ...items[0], conversationId: 'thread' }),
+    );
+    await waitFor(() => expect(pending).toHaveLength(4));
+    let manual: Promise<MailMessage>;
+    act(() => {
+      manual = result.current.setMessageRead(items[0], false);
+    });
+    expect(updateMessage).toHaveBeenCalledTimes(4);
+    await act(async () => {
+      pending[0].resolve(message('0'));
+      result.current.updateVisibleMessage(await manual!);
+    });
+    expect(result.current.conversation[0]?.read).toBe(false);
+    expect(updateMessage).toHaveBeenCalledWith({
+      accountId: 'account',
+      messageId: '0',
+      read: false,
+    });
+    // Cancel queued automatic work when leaving the conversation.
+    act(() => result.current.clearSelection());
+    await act(async () => {
+      for (const request of pending) request.resolve(message('other'));
+    });
+    expect(pending.length).toBeLessThanOrEqual(5);
+  });
+
+  it('continues queued reads when the same conversation is reopened while writes are pending', async () => {
+    const { result, listConversationMessages, updateMessage } = setup();
+    const items = Array.from({ length: 8 }, (_, index) => ({
+      ...message(String(index)),
+      read: false,
+    }));
+    const gate = Promise.withResolvers<void>();
+    updateMessage.mockImplementation(async (input) => {
+      await gate.promise;
+      return message(input.messageId);
+    });
+    listConversationMessages.mockResolvedValue({ items });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    act(() =>
+      result.current.selectMessage({ ...items[0], conversationId: 'thread' }),
+    );
+    await waitFor(() => expect(updateMessage).toHaveBeenCalledTimes(4));
+    act(() => result.current.clearSelection());
+    act(() =>
+      result.current.selectMessage({ ...items[0], conversationId: 'thread' }),
+    );
+    await waitFor(() => expect(result.current.conversation).toHaveLength(8));
+    act(() =>
+      result.current.updateVisibleMessage({ ...items[4], starred: true }),
+    );
+    await act(async () => {
+      gate.resolve();
+    });
+    await waitFor(() => expect(updateMessage).toHaveBeenCalledTimes(8));
+    expect(result.current.conversation.every((item) => item.read)).toBe(true);
+  });
+
+  it('recovers a failed initial list request when mail changes', async () => {
+    const { result, listMessages, requestError } = setup();
+    listMessages.mockRejectedValueOnce(new Error('Temporary failure'));
+    await waitFor(() => expect(requestError).toHaveBeenCalledOnce());
+    expect(result.current.loadingMessages).toBe(false);
+    listMessages.mockResolvedValue({ items: [message('recovered')] });
+    invalidate();
+    await waitFor(() =>
+      expect(result.current.messages[0]?.id).toBe('recovered'),
+    );
+  });
+
+  it('marks new replies in the open conversation as read after a realtime refresh', async () => {
+    const { result, listConversationMessages, updateMessage } = setup();
+    listConversationMessages.mockResolvedValueOnce({
+      items: [message('selected')],
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    act(() =>
+      result.current.selectMessage({
+        ...message('selected'),
+        conversationId: 'thread',
+      }),
+    );
+    await waitFor(() => expect(result.current.conversation).toHaveLength(1));
+    listConversationMessages.mockResolvedValue({
+      items: [message('selected'), { ...message('reply'), read: false }],
+    });
+    invalidate();
+    await waitFor(() => expect(result.current.conversation).toHaveLength(2));
+    await waitFor(() =>
+      expect(updateMessage).toHaveBeenCalledWith({
+        accountId: 'account',
+        messageId: 'reply',
+        read: true,
+      }),
+    );
+    await waitFor(() =>
+      expect(result.current.conversation[1]?.read).toBe(true),
+    );
+    expect(updateMessage).toHaveBeenCalledOnce();
   });
 
   it('keeps a reader when new messages push its row off the current page', async () => {

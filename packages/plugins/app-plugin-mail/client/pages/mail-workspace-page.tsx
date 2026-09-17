@@ -129,6 +129,7 @@ export default function MailWorkspacePage({
     changeMessagePage,
     loadMoreConversation,
     updateVisibleMessage,
+    setMessageRead,
     clearSelection,
     resetMailbox,
     cancelRequests,
@@ -820,7 +821,11 @@ export default function MailWorkspacePage({
                             ...EMPTY_COMPOSER,
                             mode: 'reply',
                             relatedMessageId: message.id,
-                            to: message.from?.address ?? '',
+                            to: message.replyTo.length
+                              ? message.replyTo
+                                  .map((address) => address.address)
+                                  .join(', ')
+                              : (message.from?.address ?? ''),
                             subject: replySubject(message.subject),
                           },
                           [],
@@ -859,13 +864,7 @@ export default function MailWorkspacePage({
                             )
                         : undefined,
                       toggleRead: (message) =>
-                        mutateMessage(
-                          mail.updateMessage({
-                            accountId: message.accountId,
-                            messageId: message.id,
-                            read: !message.read,
-                          }),
-                        ),
+                        mutateMessage(setMessageRead(message, !message.read)),
                       toggleStarred: (message) =>
                         mutateMessage(
                           mail.updateMessage({

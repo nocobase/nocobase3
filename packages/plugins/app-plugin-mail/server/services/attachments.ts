@@ -7,7 +7,7 @@ import {
   type MailUploadAttachmentInput,
 } from '../../shared/mail.js';
 import { type MailServiceDependencies } from './dependencies.js';
-import { isLocalDraftMessage } from './draft-content.js';
+import { isLocalDraftMessage, remoteMessageId } from './draft-content.js';
 import { assertProviderResult } from './errors.js';
 import { closeAdapter, finalizeStream } from './provider-lifecycle.js';
 
@@ -100,6 +100,9 @@ export class MailAttachmentsService {
         stream: content.stream,
       };
     }
+    const providerMessageId = remoteMessageId(message);
+    if (!providerMessageId)
+      throw new Error('Mail attachment was not mirrored to the provider.');
     const adapter = await this.dependencies.adapters.resolve(account, signal);
     try {
       if (!adapter.getAttachment) {
@@ -109,7 +112,7 @@ export class MailAttachmentsService {
       }
       const content = assertProviderResult(
         await adapter.getAttachment(
-          message.providerMessageId,
+          providerMessageId,
           attachment.providerAttachmentId,
           signal,
         ),

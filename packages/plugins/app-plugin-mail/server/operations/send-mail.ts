@@ -1,3 +1,4 @@
+import { remoteMessageId } from '../services/draft-content.js';
 import { mailLogError, writeMailLog, type MailLogger } from '../logging.js';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -690,10 +691,7 @@ export class SendMailOperation {
       providerConversationId: input.inReplyToMessageId
         ? related?.conversationId
         : draft?.conversationId,
-      draftProviderMessageId:
-        draft && !draft.providerMessageId.startsWith('local-draft:')
-          ? draft.providerMessageId
-          : draft?.providerDraftMessageId,
+      draftProviderMessageId: draft ? remoteMessageId(draft) : undefined,
       draftProviderDraftId: draft?.providerDraftId,
       replyToProviderMessageId: input.inReplyToMessageId
         ? related?.providerMessageId

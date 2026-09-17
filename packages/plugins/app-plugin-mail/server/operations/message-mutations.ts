@@ -7,7 +7,10 @@ import type {
 import type { MailProviderAdapter } from '../contracts/provider.js';
 import type { MailStore } from '../contracts/persistence.js';
 import type { DefaultMailServiceDependencies } from '../services/dependencies.js';
-import { isLocalDraftMessage } from '../services/draft-content.js';
+import {
+  isLocalDraftMessage,
+  remoteMessageId,
+} from '../services/draft-content.js';
 import { assertProviderResult } from '../services/errors.js';
 import { closeAdapter } from '../services/provider-lifecycle.js';
 
@@ -37,11 +40,20 @@ export class MailMessageMutations {
       input.todo === undefined
     )
       return message;
-    if (input.read === undefined && input.starred === undefined) {
+    const providerMessageId = remoteMessageId(message);
+    if (
+      (input.read === undefined && input.starred === undefined) ||
+      !providerMessageId
+    ) {
       const updated = await this.dependencies.store.updateMessageState(
         account.id,
         message.id,
-        { note: input.note, todo: input.todo },
+        {
+          note: input.note,
+          todo: input.todo,
+          read: input.read,
+          starred: input.starred,
+        },
       );
       if (!updated) throw new Error('Mail message was not found after update.');
       notifyMailMessageChange(
@@ -62,11 +74,7 @@ export class MailMessageMutations {
             'The selected Mail Provider cannot change read state.',
           );
         assertProviderResult(
-          await adapter.setRead(
-            message.providerMessageId,
-            input.read,
-            context.signal,
-          ),
+          await adapter.setRead(providerMessageId, input.read, context.signal),
         );
       }
       if (input.starred !== undefined) {
@@ -76,7 +84,7 @@ export class MailMessageMutations {
           );
         assertProviderResult(
           await adapter.setStarred(
-            message.providerMessageId,
+            providerMessageId,
             input.starred,
             context.signal,
           ),
@@ -110,6 +118,11 @@ export class MailMessageMutations {
     message: MailMessage,
     input: import('../../shared/mail.js').MailMoveMessageInput,
   ): Promise<MailMessage> {
+    const providerMessageId = remoteMessageId(message);
+    if (!providerMessageId)
+      throw new Error(
+        'A local-only draft cannot be moved to a provider folder.',
+      );
     const folder = (await this.dependencies.store.listFolders(account.id)).find(
       (item) => item.providerFolderId === input.providerFolderId,
     );
@@ -124,7 +137,7 @@ export class MailMessageMutations {
       }
       const moved = assertProviderResult(
         await adapter.moveMessage(
-          message.providerMessageId,
+          providerMessageId,
           input.providerFolderId,
           context.signal,
         ),

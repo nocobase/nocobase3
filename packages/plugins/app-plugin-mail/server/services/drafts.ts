@@ -19,6 +19,7 @@ import {
   draftFingerprint,
   isLocalDraftMessage,
   normalizedDraftFromMessage,
+  remoteMessageId,
   sameDraftContent,
   toDraftConflict,
 } from './draft-content.js';
@@ -32,7 +33,8 @@ export class MailDraftsService {
       | 'getIdentity'
       | 'getMessage'
       | 'getOutboundAttachment'
-      | 'saveMessage',
+      | 'saveMessage'
+      | 'localizeDraft',
       'adapters' | 'messageChangeNotifier' | 'logger'
     >,
     private readonly sendMail: SendMailOperation,
@@ -58,7 +60,7 @@ export class MailDraftsService {
     if (!identity || identity.accountId !== account.id || !identity.canSend) {
       throw new Error('Mail sending identity is not available.');
     }
-    const existingDraft = input.draftMessageId
+    let existingDraft = input.draftMessageId
       ? await this.dependencies.store.getMessage(
           context.actorId,
           account.id,
@@ -67,6 +69,12 @@ export class MailDraftsService {
       : undefined;
     if (input.draftMessageId && (!existingDraft || !existingDraft.draft)) {
       throw new Error('Mail draft was not found.');
+    }
+    if (existingDraft && !isLocalDraftMessage(existingDraft)) {
+      existingDraft = await this.dependencies.store.localizeDraft(
+        account.id,
+        existingDraft.id,
+      );
     }
     let localDraft = await this.dependencies.store.saveMessage(
       account.id,
@@ -93,11 +101,9 @@ export class MailDraftsService {
     }
     try {
       if (!adapter.capabilities.drafts || !adapter.saveDraft) return localDraft;
-      const remoteDraftId =
-        existingDraft?.providerDraftMessageId ??
-        (existingDraft && !isLocalDraftMessage(existingDraft)
-          ? existingDraft.providerMessageId
-          : undefined);
+      const remoteDraftId = existingDraft
+        ? remoteMessageId(existingDraft)
+        : undefined;
       if (remoteDraftId && adapter.getMessage) {
         const remote = await adapter.getMessage(remoteDraftId, context.signal);
         if (remote.ok && !sameDraftContent(existingDraft, remote.value)) {
@@ -154,6 +160,7 @@ export class MailDraftsService {
       );
       const saved = await this.dependencies.store.saveMessage(account.id, {
         ...normalizedDraftFromMessage(localDraft),
+        attachments: draft.attachments,
         remoteDraftFingerprint: draftFingerprint(draft),
         providerDraftMessageId: draft.providerMessageId,
         providerDraftId: draft.providerDraftId,

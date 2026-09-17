@@ -260,6 +260,32 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     expect(mail.listMessages).toHaveBeenCalledTimes(requests);
   });
 
+  it.each([true, false])(
+    'replies to Reply-To with a From fallback: %s',
+    async (hasReplyTo) => {
+      const message = {
+        ...createUnreadMessage('reply-target'),
+        read: true,
+        from: { address: 'sender@example.com' },
+        replyTo: hasReplyTo
+          ? [{ address: 'reply@example.com' }, { address: 'team@example.com' }]
+          : [],
+      };
+      mail.listMessages.mockResolvedValue({ items: [message] });
+      mail.getMessage.mockResolvedValue(message);
+      render(<MailWorkspacePage />);
+      fireEvent.click(
+        await screen.findByRole('button', { name: /reply-target/ }),
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'Reply' }));
+      expect(await screen.findByLabelText('TO')).toHaveValue(
+        hasReplyTo
+          ? 'reply@example.com, team@example.com'
+          : 'sender@example.com',
+      );
+    },
+  );
+
   it('marks opened unread mail as read and immediately invalidates the unread badge', async () => {
     const message = createUnreadMessage('opened');
     mail.listMessages.mockResolvedValue({ items: [message] });

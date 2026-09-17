@@ -379,6 +379,13 @@ export class DatabaseMailStore implements MailStore {
     return this.messages.saveMessageContent(accountId, messageId, message);
   }
 
+  public localizeDraft(
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage> {
+    return this.messages.localizeDraft(accountId, messageId);
+  }
+
   public async saveMessage(
     accountId: string,
     message: NormalizedMailMessage,

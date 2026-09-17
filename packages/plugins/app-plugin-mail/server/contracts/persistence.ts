@@ -246,6 +246,7 @@ export interface MailStore {
     messageId: string,
     message: NormalizedMailMessage,
   ): Promise<MailMessage>;
+  localizeDraft(accountId: string, messageId: string): Promise<MailMessage>;
   saveMessage(
     accountId: string,
     message: NormalizedMailMessage,

@@ -178,6 +178,13 @@ export function toMessageRow(
     providerDraftMessageId: message.providerDraftMessageId,
     internetMessageId: message.internetMessageId,
     providerConversationId: message.providerConversationId,
+    senderSearch: message.from
+      ? [message.from.name, message.from.address].filter(Boolean).join(' ')
+      : '',
+    recipientsSearch: [...message.to, ...message.cc, ...message.bcc]
+      .flatMap((address) => [address.name, address.address])
+      .filter(Boolean)
+      .join(' '),
     sender: jsonOrNull(message.from),
     recipients: JSON.stringify({
       to: message.to,
@@ -191,8 +198,8 @@ export function toMessageRow(
     preview: message.preview,
     text: message.text,
     html: message.html,
-    receivedAt: message.receivedAt,
-    sentAt: message.sentAt,
+    receivedAt: message.receivedAt ?? null,
+    sentAt: message.sentAt ?? null,
     sortAt: message.receivedAt ?? message.sentAt ?? createdAt,
     read: message.read,
     starred: message.starred,

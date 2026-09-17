@@ -145,6 +145,12 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
       let folderIndex = position.folderIndex;
       let upperUid = position.upperUid;
       let legacyOffset = position.legacyOffset;
+      // IMAP SINCE compares calendar days. Include the previous UTC day for
+      // server timezone differences, then enforce the exact instant after FETCH.
+      const since = input.receivedAfter
+        ? new Date(Date.parse(input.receivedAfter) - 86_400_000)
+        : undefined;
+      since?.setUTCHours(0, 0, 0, 0);
       let scannedRanges = 0;
       while (
         folderIndex < folders.length &&
@@ -180,6 +186,15 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
           selected = uids.slice(legacyOffset, legacyOffset + remaining);
           legacyOffset = undefined;
           upperUid = selected.at(-1) ? (selected.at(-1) as number) - 1 : 0;
+          if (since && selected.length) {
+            const matching = await (
+              await this.imap()
+            ).search({ uid: selected.join(','), since }, { uid: true });
+            const matchingIds = new Set(
+              Array.isArray(matching) ? matching : [],
+            );
+            selected = selected.filter((uid) => matchingIds.has(uid));
+          }
         } else {
           const maxUid =
             upperUid ?? (await this.selectedFolderState(mailbox)).uidNext - 1;
@@ -191,7 +206,10 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
           const start = Math.max(1, maxUid - remaining + 1);
           const result = await (
             await this.imap()
-          ).search({ uid: rangeFor(start, maxUid) }, { uid: true });
+          ).search(
+            { uid: rangeFor(start, maxUid), ...(since ? { since } : {}) },
+            { uid: true },
+          );
           selected = Array.isArray(result)
             ? [...result].sort((left, right) => right - left)
             : [];
@@ -751,7 +769,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
     uids: number[] | string,
     signal?: AbortSignal,
   ): Promise<NormalizedMailMessage[]> {
-    if (typeof uids === 'string' && uids.length === 0) return [];
+    if (uids.length === 0) return [];
     const messages: NormalizedMailMessage[] = [];
     const client = await this.imap();
     for await (const message of client.fetch(

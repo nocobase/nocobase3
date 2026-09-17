@@ -139,6 +139,8 @@ export interface MessageRow extends Row {
   providerDraftMessageId?: string | null;
   internetMessageId?: string | null;
   providerConversationId?: string | null;
+  senderSearch?: string | null;
+  recipientsSearch?: string | null;
   sender?: MailAddress | string | null;
   recipients:
     | {

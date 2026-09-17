@@ -21,29 +21,43 @@ export function MailNavigationIcon(): ReactElement {
 
   useEffect(() => {
     let active = true;
-    let requestId = 0;
+    let pending = false;
+    let inFlight = false;
+    let debounce: number | undefined;
     const refresh = (): void => {
-      const currentRequestId = ++requestId;
+      if (!active || inFlight) return;
+      pending = false;
+      inFlight = true;
       void mail
         .getUnreadCount()
         .then((count) => {
-          if (active && currentRequestId === requestId) setUnread(count);
+          if (active && !pending) setUnread(count);
         })
-        .catch(() => undefined);
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight = false;
+          if (active && pending) schedule();
+        });
+    };
+    const schedule = (): void => {
+      pending = true;
+      window.clearTimeout(debounce);
+      debounce = window.setTimeout(refresh, 100);
     };
     refresh();
     const unsubscribeRealtime = subscribeToMailInvalidations(
       realtime,
       window,
-      refresh,
+      schedule,
     );
-    const timer = window.setInterval(refresh, REFRESH_INTERVAL_MS);
-    window.addEventListener(MAIL_UNREAD_COUNT_CHANGED_EVENT, refresh);
+    const timer = window.setInterval(schedule, REFRESH_INTERVAL_MS);
+    window.addEventListener(MAIL_UNREAD_COUNT_CHANGED_EVENT, schedule);
     return () => {
       active = false;
       window.clearInterval(timer);
+      window.clearTimeout(debounce);
       unsubscribeRealtime();
-      window.removeEventListener(MAIL_UNREAD_COUNT_CHANGED_EVENT, refresh);
+      window.removeEventListener(MAIL_UNREAD_COUNT_CHANGED_EVENT, schedule);
     };
   }, [mail, realtime]);
 

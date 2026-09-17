@@ -122,7 +122,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.datetimeTz('leaseExpiresAt');
       collection.datetimeTz('updatedAt', { nullable: false });
       collection
-        .belongsTo('account', 'mailAccounts')
+        .belongsTo('account', 'mailAccounts', { index: false })
         .targetKey('id')
         .foreignKey('accountId')
         .constraints(true)
@@ -141,7 +141,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.string('requestToken', { length: 100, nullable: false });
       collection.datetimeTz('requestedAt', { nullable: false });
       collection
-        .belongsTo('account', 'mailAccounts')
+        .belongsTo('account', 'mailAccounts', { index: false })
         .targetKey('id')
         .foreignKey('accountId')
         .constraints(true)
@@ -325,7 +325,7 @@ const migration: MigrationDefinition = defineMigration({
       collection.json('cursor', { nullable: false });
       collection.datetimeTz('lastSyncedAt', { nullable: false });
       collection
-        .belongsTo('account', 'mailAccounts')
+        .belongsTo('account', 'mailAccounts', { index: false })
         .targetKey('id')
         .foreignKey('accountId')
         .constraints(true)

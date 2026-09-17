@@ -13,6 +13,16 @@ export function isLocalDraftMessage(
   return message.providerMessageId.startsWith('local-draft:');
 }
 
+/** Provider draft message IDs may change while the local editable record stays stable. */
+export function remoteMessageId(
+  message: Pick<MailMessage, 'providerMessageId' | 'providerDraftMessageId'>,
+): string | undefined {
+  return (
+    message.providerDraftMessageId ??
+    (isLocalDraftMessage(message) ? undefined : message.providerMessageId)
+  );
+}
+
 export function sameDraftContent(
   local: MailMessage | undefined,
   remote: NormalizedMailMessage,

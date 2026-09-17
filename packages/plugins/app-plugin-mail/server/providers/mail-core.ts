@@ -24,7 +24,6 @@ import { createMailRuntime } from '../runtime.js';
 import { DefaultMailService } from '../service.js';
 import { DriveMailOutboundAttachmentStorage } from '../outbound-attachments.js';
 import {
-  createMailMessageChangeNotifier,
   MAIL_REALTIME_TOPIC,
   type MailMessageChangeNotifier,
   type MailRealtimeEvent,
@@ -45,7 +44,11 @@ export type MailCoreProviderApplication = AppPluginApplication;
 export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplication> {
   public readonly name: string = '@nocobase/app-plugin-mail';
   private realtimeTopic?: RealtimeUserTopic<MailRealtimeEvent>;
-  private messageChangeNotifier?: MailMessageChangeNotifier;
+  private readonly messageChangeNotifier: MailMessageChangeNotifier = {
+    notify: (userId) => {
+      this.realtimeTopic?.publishFor(userId, { kind: 'mail.changed' });
+    },
+  };
 
   public override register(): void {
     const registry = createMailProviderRegistry();
@@ -146,9 +149,6 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
         .defineTopic<MailRealtimeEvent, 'user'>(MAIL_REALTIME_TOPIC, {
           audience: 'user',
         });
-      this.messageChangeNotifier = createMailMessageChangeNotifier(
-        this.realtimeTopic,
-      );
     }
     return Promise.resolve();
   }
@@ -181,6 +181,5 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
     await this.app.container.resolveIfCreated(mailRuntimeToken)?.close();
     this.realtimeTopic?.close();
     this.realtimeTopic = undefined;
-    this.messageChangeNotifier = undefined;
   }
 }

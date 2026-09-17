@@ -2602,6 +2602,209 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     expect(saveDraft).toHaveBeenCalledTimes(1);
   });
 
+  it('uses remote draft IDs for mutations and keeps local-only draft state local', async () => {
+    const setStarred = vi.fn<NonNullable<MailProviderAdapter['setStarred']>>(
+      async () => ({ ok: true, value: undefined }),
+    );
+    const moveMessage = vi.fn<NonNullable<MailProviderAdapter['moveMessage']>>(
+      async () => ({ ok: true, value: { providerMessageId: 'moved-remote' } }),
+    );
+    const adapters = resolver({
+      ...baseAdapter(),
+      setStarred,
+      moveMessage,
+      capabilities: { ...baseAdapter().capabilities, moveMessage: true },
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters,
+      outbox: { kick: vi.fn() },
+    });
+    for (const remote of [undefined, 'current-remote']) {
+      const draft = await store.saveMessage('account-1', {
+        ...message(`local-draft:${remote ?? 'new'}`, 'Draft'),
+        draft: true,
+        providerDraftMessageId: remote,
+      });
+      const updated = await service.updateMessage(
+        { actorId: 'user-1' },
+        { accountId: 'account-1', messageId: draft.id, starred: true },
+      );
+      expect(updated.starred).toBe(true);
+      if (remote) {
+        expect(setStarred).toHaveBeenCalledWith(remote, true, undefined);
+        await store.saveFolder('account-1', {
+          providerFolderId: 'drafts',
+          name: 'Drafts',
+          type: 'drafts',
+          kind: 'folder',
+        });
+        const moved = await service.moveMessage(
+          { actorId: 'user-1' },
+          {
+            accountId: 'account-1',
+            messageId: draft.id,
+            providerFolderId: 'drafts',
+          },
+        );
+        expect(moveMessage).toHaveBeenCalledWith(remote, 'drafts', undefined);
+        expect(moved.providerMessageId).toBe(draft.providerMessageId);
+        expect(moved.providerDraftMessageId).toBe('moved-remote');
+      } else expect(setStarred).not.toHaveBeenCalled();
+    }
+  });
+
+  it('edits synchronized Gmail drafts repeatedly with changing remote message and attachment IDs', async () => {
+    let remote: NormalizedMailMessage = {
+      ...message('gmail-0', 'Original'),
+      from: { address: 'sender@example.com' },
+      draft: true,
+      providerDraftId: 'stable-draft',
+      attachments: [
+        {
+          providerAttachmentId: 'part-0',
+          fileName: 'file.txt',
+          contentType: 'text/plain',
+          size: 3,
+          inline: false,
+        },
+      ],
+    };
+    const initial = await store.saveMessage('account-1', remote);
+    let revision = 0;
+    const updateDraft = vi.fn<NonNullable<MailProviderAdapter['updateDraft']>>(
+      async (draftId, input) => {
+        expect(draftId).toBe('stable-draft');
+        expect(input.message.draftProviderMessageId).toBe(
+          remote.providerMessageId,
+        );
+        expect(input.message.retainedProviderAttachmentIds).toEqual([
+          `part-${revision}`,
+        ]);
+        revision += 1;
+        remote = {
+          ...remote,
+          providerMessageId: `gmail-${revision}`,
+          subject: input.message.subject,
+          text: input.message.text,
+          attachments: [
+            {
+              ...remote.attachments[0],
+              providerAttachmentId: `part-${revision}`,
+            },
+          ],
+        };
+        return { ok: true, value: remote };
+      },
+    );
+    const getMessage = vi.fn<NonNullable<MailProviderAdapter['getMessage']>>(
+      async (id) => {
+        expect(id).toBe(remote.providerMessageId);
+        return { ok: true, value: remote };
+      },
+    );
+    const getAttachment = vi.fn<
+      NonNullable<MailProviderAdapter['getAttachment']>
+    >(async (id, part) => {
+      expect(id).toBe(remote.providerMessageId);
+      expect(part).toBe(`part-${revision}`);
+      return {
+        ok: true,
+        value: {
+          fileName: 'file.txt',
+          contentType: 'text/plain',
+          size: 3,
+          stream: new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('abc'));
+              controller.close();
+            },
+          }),
+        },
+      };
+    });
+    const sendMessage = vi.fn<NonNullable<MailProviderAdapter['sendMessage']>>(
+      async (input) => {
+        expect(input.message.draftProviderMessageId).toBe('gmail-2');
+        expect(input.message.retainedProviderAttachmentIds).toEqual(['part-2']);
+        return { status: 'accepted', providerMessageId: 'sent-message' };
+      },
+    );
+    const adapters = resolver({
+      ...baseAdapter(),
+      capabilities: { ...baseAdapter().capabilities, drafts: true },
+      saveDraft: async () => ({ ok: true, value: remote }),
+      updateDraft,
+      sendMessage,
+      getMessage,
+      getAttachment,
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters,
+      outbox: { kick: vi.fn() },
+    });
+    const input = {
+      accountId: 'account-1',
+      identityId: 'identity-1',
+      to: remote.to,
+      subject: 'Edited',
+      text: 'Body',
+      draftMessageId: initial.id,
+      idempotencyKey: 'edit',
+    };
+    for (let index = 1; index <= 2; index++) {
+      const saved = await service.saveDraft({ actorId: 'user-1' }, input);
+      expect(updateDraft).toHaveBeenCalledTimes(index);
+      expect(saved.id).toBe(initial.id);
+      expect(saved.providerDraftMessageId).toBe(`gmail-${index}`);
+      expect(saved.attachments[0].providerAttachmentId).toBe(`part-${index}`);
+      await store.commitSyncBatch({
+        accountId: 'account-1',
+        folders: [],
+        messages: [remote],
+        deletedProviderMessageIds: [`gmail-${index - 1}`],
+        nextCursor: { value: String(index) },
+      });
+      expect(
+        (
+          await store.listMessages('user-1', {
+            folderIds: [MAIL_LOCAL_DRAFT_FOLDER_ID],
+          })
+        ).items.map((item) => item.id),
+      ).toEqual([initial.id]);
+      expect(
+        await store.getMessage('user-1', 'account-1', initial.id),
+      ).toBeDefined();
+    }
+    const content = await service.getAttachment(
+      { actorId: 'user-1' },
+      'account-1',
+      initial.id,
+      'part-2',
+    );
+    expect(await new Response(content.stream).text()).toBe('abc');
+    const prepared = await new SendMailOperation({
+      store,
+      adapters,
+    }).prepareProviderMessage({ actorId: 'user-1' }, input);
+    expect(prepared.draftProviderMessageId).toBe('gmail-2');
+    expect(prepared.retainedProviderAttachmentIds).toEqual(['part-2']);
+    const sent = await new SendMailOperation({ store, adapters }).execute(
+      { actorId: 'user-1' },
+      {
+        ...input,
+        to: [{ address: 'recipient@example.com' }],
+        idempotencyKey: 'send-revised-draft',
+      },
+    );
+    expect(sent.status).toBe('accepted');
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(
+      await store.getMessage('user-1', 'account-1', initial.id),
+    ).toBeUndefined();
+  });
+
   it.each(['html', 'signature'] as const)(
     'updates a %s draft against its persisted remote baseline',
     async (kind) => {
