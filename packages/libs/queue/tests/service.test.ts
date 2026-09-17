@@ -134,4 +134,19 @@ describe('application-private queue service', () => {
     expect(roles).toEqual([false, true]);
     expect(close).toHaveBeenCalledTimes(1);
   });
+  it('connects the producer facade to the initialized private queue', async () => {
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    instance.registerBackend('memory-test', createInMemoryBackendFactory());
+    const producer = instance.producer('jobs');
+    await expect(producer.publish('event', {})).rejects.toThrow(/not ready/u);
+    await instance.setup();
+    expect(await producer.publish('event', {})).toEqual({
+      jobId: expect.any(String),
+    });
+    expect(
+      await producer.publishMany([{ channel: 'event', message: 2 }]),
+    ).toHaveLength(1);
+  });
 });

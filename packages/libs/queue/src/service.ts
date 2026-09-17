@@ -3,6 +3,7 @@ import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
 import { resolveQueueConfiguration } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
+import { createQueueProducer } from './producer.js';
 import { QueueResourceCache } from './resources.js';
 import type { BackendFactory } from 'bullmq';
 import type {
@@ -136,16 +137,16 @@ export function createQueueService(
           current.worker?.cancelAllJobs(reason);
         },
       },
-      producer: {
-        async publish(): Promise<PublishReceipt> {
+      producer: createQueueProducer({
+        name,
+        async queue(): Promise<ServiceQueue> {
           await requireReady(name, current);
-          throw new Error('Queue publishing is not implemented');
+          if (!current.queue) throw new Error('Queue is not ready');
+          return current.queue;
         },
-        async publishMany(): Promise<PublishReceipt[]> {
-          await requireReady(name, current);
-          throw new Error('Queue publishing is not implemented');
-        },
-      },
+        configuration: () =>
+          resolveQueueConfiguration(options, name, current.manual),
+      }),
       consumer: {
         consume(handler): UnregisterHandler {
           if (stopped) throw new Error('Queue service is shutting down');
