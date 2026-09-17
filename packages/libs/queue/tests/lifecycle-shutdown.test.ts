@@ -83,4 +83,36 @@ describe('shutdown idempotency', () => {
     }
     await expect(publishing).resolves.toHaveProperty('jobId');
   });
+  it('does not report successful shutdown when Worker backend close fails', async () => {
+    const service = createQueueService({
+      namespace: 'close-failure',
+      queueBackend: 'test',
+    });
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const factory = createInMemoryBackendFactory();
+    let recover = (): void => {};
+    service.registerBackend('test', (name, options, metadata) => {
+      const backend = factory(name, options, metadata);
+      if (metadata?.withBlockingConnection) {
+        const close = backend.close.bind(backend);
+        let fail = true;
+        recover = (): void => {
+          fail = false;
+        };
+        backend.close = async (...args) => {
+          if (fail) throw new Error('backend close failed');
+          await close(...args);
+        };
+      }
+      return backend;
+    });
+    service.consumer('jobs').consume(async () => {});
+    await service.setup();
+    try {
+      await expect(service.shutdown()).rejects.toThrow();
+    } finally {
+      recover();
+    }
+  });
 });
