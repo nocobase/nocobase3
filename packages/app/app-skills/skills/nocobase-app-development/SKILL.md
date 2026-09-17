@@ -79,6 +79,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Build a page with Tabs, add child pages or menu groups                           | [child routes and Tabs](references/client-child-routes.md)       |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode | [components and styling](references/components-and-styling.md)   |
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it     | [server routes](references/server-routes.md)                     |
+| Call an API from the frontend using the application's HTTP client                | [client API requests](references/client-api.md)                  |
 | Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
 | Create a table, alter a column, add an index, write required initial data        | [migrations and seeds](references/migrations.md)                 |
 | Switch the database, register a dialect, add a second connection                 | [database connections](references/database-connections.md)       |
