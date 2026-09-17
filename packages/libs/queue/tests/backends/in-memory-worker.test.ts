@@ -135,7 +135,6 @@ describe('memory worker backend claim and wake protocol', () => {
       {
         connection: {},
         concurrency: 2,
-        skipStalledCheck: true,
         autorun: false,
       },
       factory,

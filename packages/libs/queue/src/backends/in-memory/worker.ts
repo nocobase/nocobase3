@@ -7,6 +7,8 @@ export interface MemoryLock {
 export class MemoryWorkerState {
   readonly locks: Map<string, MemoryLock> = new Map();
   readonly listeners: Set<() => void> = new Set();
+  readonly stalled: Set<string> = new Set();
+  nextStalledCheck: number = 0;
 
   notify(): void {
     for (const listener of [...this.listeners]) listener();
