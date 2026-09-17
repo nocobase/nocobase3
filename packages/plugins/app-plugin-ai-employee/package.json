@@ -143,9 +143,7 @@
     "@langchain/core": "1.1.49",
     "@langchain/langgraph": "1.4.4",
     "@langchain/langgraph-checkpoint": "1.1.2",
-    "@nocobase/ai-employee": "workspace:^",
     "@nocobase/ai-employee-avatars": "^1.0.2",
-    "@nocobase/caching": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
@@ -198,6 +196,8 @@
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.57.0",
     "react-router": "^7.0.0",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@nocobase/caching": "workspace:^",
+    "@nocobase/ai-employee": "workspace:^"
   }
 }

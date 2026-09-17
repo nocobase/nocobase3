@@ -186,17 +186,12 @@
   "dependencies": {
     "@hono/node-server": "catalog:",
     "@nocobase/app-websocket": "workspace:^",
-    "@nocobase/db": "workspace:^",
-    "@nocobase/i18n": "workspace:^",
-    "@nocobase/caching": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@nocobase/logging": "workspace:^",
-    "@nocobase/queue": "workspace:^",
     "@nocobase/realtime": "workspace:^",
     "@nocobase/session": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "hono": "catalog:"
   },
@@ -213,5 +208,12 @@
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/caching": "workspace:^",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/service-provider": "workspace:^",
+    "@nocobase/queue": "workspace:^"
   }
 }

@@ -334,3 +334,7 @@ TypeScript and compiled JavaScript use the same source checksum for migration hi
 The account menu checks Better Auth sign-out results before refreshing the session and shows a localized error toast for API or network failures. Preserve this behavior when upgrading the shell; navigation alone does not revoke a session.
 
 The authorization provider clears the permission snapshot before rendering a new session. Route navigation and page guards subscribe to the authorization revision; preserve these checks when customizing the shell so account changes and permission updates take effect without a reload. Pending checks hide protected content, and failed checks deny access.
+
+## Shared runtime dependency providers
+
+This application supplies shared server packages through `dependencies`, including db, service-provider, repository-input, authorization, caching, i18n, and queue; applications with the AI employee plugin also supply ai-employee. Libraries and plugins declare these as peers so database classes, service tokens, filter metadata, and driver registries resolve through the host. Keep these providers in production dependencies: the deployment disables automatic peer installation. Client-only app-client and app-portal-sdk stay in development dependencies. When adding a plugin, check its required server peers and keep their ranges compatible with the application.

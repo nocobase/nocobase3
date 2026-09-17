@@ -44,7 +44,7 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@nocobase/repository-input": "workspace:^"
   }
 }

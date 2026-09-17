@@ -18,8 +18,8 @@ import process from 'node:process';
 // This list records decisions already made; it is not the rule and it is expected to be incomplete. A package belongs
 // here when it exports something that only works while one copy of the module exists: a value used as a key by
 // identity (a ServiceToken in the container's Map), a React context, a module-level singleton, or a registration into
-// a process-wide registry. A package exporting only classes, functions, and types holds nothing a second copy could
-// split, and stays an ordinary dependency until it gains one of those exports.
+// a process-wide registry. Classes with private members also carry declaration identity when their instances cross
+// package boundaries. Public type contracts must not resolve those classes through independent package versions.
 //
 // The reason is recorded per package because it is what lets someone apply the rule to a package not listed here. A
 // bare list gets copied without being understood. See AGENTS.md, "Depending on Identity-Sensitive Packages".
@@ -43,6 +43,22 @@ export const IDENTITY_SENSITIVE_PACKAGES = new Map([
     '@nocobase/queue',
     'registers job classes into the global Locator of @boringnode/queue',
   ],
+  [
+    '@nocobase/caching',
+    'owns the shared cache driver registry and Caching class',
+  ],
+  [
+    '@nocobase/ai-employee',
+    'exports fileStorageFactoryToken for application extensions',
+  ],
+  [
+    '@nocobase/authorization',
+    'shares Authorization instances and AuthorizationDeniedError identity',
+  ],
+  [
+    '@nocobase/repository-input',
+    'uses a module-local Symbol on filter nodes shared with the database',
+  ],
 ]);
 
 /** Plugins export service tokens for one another, so a plugin-to-plugin dependency carries the same risk. */
@@ -63,7 +79,7 @@ export function reasonFor(packageName) {
 /**
  * Violations for a single manifest.
  *
- * One rule: an identity-sensitive package is a peer, never a dependency, so an application provides exactly one copy.
+ * An identity-sensitive package is a peer, never a dependency; the application owns its compatible shared provider.
  *
  * A matching devDependency used to be required alongside each workspace peer, on the grounds that the peer range is
  * wide enough for development to drift off this repository's copy. It does not: pnpm resolves a `workspace:^` peer to
@@ -72,7 +88,10 @@ export function reasonFor(packageName) {
  * every peer — workspace or third-party — is now declared once.
  */
 export function findViolations(manifest) {
-  const dependencies = Object.keys(manifest.dependencies ?? {});
+  const dependencies = new Set([
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.optionalDependencies ?? {}),
+  ]);
   const violations = [];
 
   for (const dependency of dependencies) {
@@ -88,26 +107,53 @@ export function findViolations(manifest) {
   return violations;
 }
 
-// Only plugins are checked. A plugin is loaded into an application that already provides the runtime, so it must
-// never install its own copy.
-//
-// The other groups are hosts rather than guests. `packages/app` and `packages/libs` compose the runtime — `app-server`
-// depending on `@nocobase/db` is what puts the single copy in place for everyone else — and `packages/templates` are
-// applications, which is the side that satisfies a peer range. Requiring peers there would leave the ranges with
-// nothing to resolve against.
-//
-// A new group under `packages/` needs a deliberate decision about which side of that line it sits on before it is
-// added here.
-const CHECKED_GROUPS = ['plugins', 'examples'];
+// Libraries and runtimes also consume host-owned objects. Only application templates provide the shared runtime;
+// their production dependencies are checked separately because deployment disables automatic peer installation.
+const CHECKED_GROUPS = ['plugins', 'examples', 'libs', 'app', 'tools'];
 
-export async function collectPackages(repositoryRoot) {
+const CLIENT_ONLY_PACKAGES = new Set([
+  '@nocobase/app-client',
+  '@nocobase/app-portal-sdk',
+]);
+
+export function findApplicationViolations(manifest, packages) {
+  const violations = [];
+  const visited = new Set();
+  const provided = new Set(Object.keys(manifest.dependencies ?? {}));
+  const pending = [...provided];
+  while (pending.length > 0) {
+    const name = pending.pop();
+    if (visited.has(name)) continue;
+    visited.add(name);
+    const dependency = packages.get(name);
+    if (!dependency) continue;
+    pending.push(...Object.keys(dependency.dependencies ?? {}));
+    for (const peer of Object.keys(dependency.peerDependencies ?? {})) {
+      if (!isIdentitySensitive(peer) || CLIENT_ONLY_PACKAGES.has(peer))
+        continue;
+      if (dependency.peerDependenciesMeta?.[peer]?.optional) continue;
+      if (!provided.has(peer)) {
+        violations.push({
+          kind: 'missing-runtime-peer',
+          dependency: peer,
+          message: `"${peer}" is required by ${name} and must be in the application's dependencies; production installs do not auto-install peers`,
+        });
+      }
+      pending.push(peer);
+    }
+  }
+  return violations;
+}
+
+export async function collectPackages(repositoryRoot, groups = CHECKED_GROUPS) {
   const packages = [];
-  for (const group of CHECKED_GROUPS) {
+  for (const group of groups) {
     const groupDirectory = path.join(repositoryRoot, 'packages', group);
     let entries;
     try {
       entries = await readdir(groupDirectory, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
       continue;
     }
     for (const entry of entries) {
@@ -120,7 +166,8 @@ export async function collectPackages(repositoryRoot) {
       let manifest;
       try {
         manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-      } catch {
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
         continue;
       }
       packages.push({ manifest, manifestPath });
@@ -132,10 +179,16 @@ export async function collectPackages(repositoryRoot) {
 async function main() {
   const repositoryRoot = path.resolve(import.meta.dirname, '..');
   const packages = await collectPackages(repositoryRoot);
+  const applications = await collectPackages(repositoryRoot, ['templates']);
+  const byName = new Map(
+    packages.map(({ manifest }) => [manifest.name, manifest]),
+  );
   let failed = false;
 
-  for (const { manifest, manifestPath } of packages) {
-    const violations = findViolations(manifest);
+  for (const { manifest, manifestPath } of [...packages, ...applications]) {
+    const violations = applications.some((app) => app.manifest === manifest)
+      ? findApplicationViolations(manifest, byName)
+      : findViolations(manifest);
     if (violations.length === 0) continue;
     failed = true;
     const relativePath = path.relative(repositoryRoot, manifestPath);
@@ -150,14 +203,14 @@ async function main() {
 
   if (failed) {
     console.error(
-      '\nMove each entry to peerDependencies and keep a devDependency on the same package.',
+      '\nConsumers must use peerDependencies; applications must provide their runtime peers in dependencies.',
     );
     console.error('See AGENTS.md, "Depending on Identity-Sensitive Packages".');
     process.exit(1);
   }
 
   console.log(
-    `Checked ${packages.length} packages — no peer dependency violations.`,
+    `Checked ${packages.length} packages and ${applications.length} applications — no peer dependency violations.`,
   );
 }
 

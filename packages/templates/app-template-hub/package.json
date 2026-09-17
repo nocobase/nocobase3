@@ -23,12 +23,9 @@
     "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
-    "@nocobase/caching": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
-    "@nocobase/i18n": "workspace:^",
     "@nocobase/logging": "workspace:^",
-    "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@refinedev/cli": "^2.16.48",
     "@refinedev/core": "catalog:",
@@ -192,7 +189,12 @@
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
-    "better-auth": "catalog:"
+    "better-auth": "catalog:",
+    "@nocobase/authorization": "workspace:^",
+    "@nocobase/queue": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/caching": "workspace:^",
+    "@nocobase/repository-input": "workspace:^"
   },
   "description": "NocoBase 3 Hub for managing and hosting applications."
 }

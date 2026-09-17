@@ -85,7 +85,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/authorization": "workspace:^",
     "hono": "catalog:"
   },
   "peerDependencies": {
@@ -95,7 +94,8 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "lucide-react": "catalog:",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "@nocobase/authorization": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

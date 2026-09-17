@@ -171,3 +171,7 @@ Verify observable behavior, not just that the commands passed. [Testing and veri
 After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i18n:check`. It reports a language declared on one side alone and exits nonzero until the lists align. A client-only language is still supported at runtime and the server falls back to English; add matching server translations when server-produced text should use that language.
 
 Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the interface offers is not configured — `client/locales/` is that list, while `server/locales/` independently defines the server's translated languages. See the i18n and themes references.
+
+## Shared runtime dependency providers
+
+This application supplies shared server packages through `dependencies`, including db, service-provider, repository-input, authorization, caching, i18n, and queue; applications with the AI employee plugin also supply ai-employee. Libraries and plugins declare these as peers so database classes, service tokens, filter metadata, and driver registries resolve through the host. Keep these providers in production dependencies: the deployment disables automatic peer installation. Client-only app-client and app-portal-sdk stay in development dependencies. When adding a plugin, check its required server peers and keep their ranges compatible with the application.

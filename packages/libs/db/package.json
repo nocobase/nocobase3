@@ -56,9 +56,7 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/service-provider": "workspace:^",
-    "knex": "catalog:",
-    "@nocobase/repository-input": "workspace:^"
+    "knex": "catalog:"
   },
   "devDependencies": {
     "@hono/node-server": "catalog:",
@@ -78,5 +76,9 @@
     "@nocobase/db-mysql": "workspace:*",
     "@nocobase/db-oracle": "workspace:*",
     "@nocobase/db-mssql": "workspace:*"
+  },
+  "peerDependencies": {
+    "@nocobase/service-provider": "workspace:^",
+    "@nocobase/repository-input": "workspace:^"
   }
 }
