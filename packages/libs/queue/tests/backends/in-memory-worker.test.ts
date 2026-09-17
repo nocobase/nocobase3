@@ -23,6 +23,71 @@ function fixture() {
 }
 
 describe('memory worker backend claim and wake protocol', () => {
+  it.each([false, true])(
+    'places an immediate retry at the expected end (lifo: %s)',
+    async (lifo) => {
+      const { queue, backend } = fixture();
+      try {
+        const first = await queue.add('first', {});
+        const second = await queue.add('second', {});
+        await backend.moveToActive('owner');
+        await expect(
+          backend.retryJob(first.id!, lifo, 'wrong'),
+        ).rejects.toThrow(/token/u);
+        expect(await queue.getJobState(first.id!)).toBe('active');
+        await expect(
+          backend.retryJob(first.id!, lifo, 'owner', {
+            fieldsToUpdate: { unsupported: true },
+          }),
+        ).rejects.toThrow();
+        expect((await queue.getJob(first.id!))?.attemptsMade).toBe(0);
+        await backend.retryJob(first.id!, lifo, 'owner', {
+          fieldsToUpdate: {
+            failedReason: 'temporary',
+            stacktrace: '["temporary"]',
+          },
+        });
+        const stored = await queue.getJob(first.id!);
+        expect(stored?.attemptsMade).toBe(1);
+        expect(stored?.failedReason).toBe('temporary');
+        expect(stored?.stacktrace).toEqual(['temporary']);
+        expect((await backend.moveToActive('next'))[1]).toBe(
+          lifo ? first.id : second.id,
+        );
+      } finally {
+        await Promise.all([queue.close(), backend.close()]);
+      }
+    },
+  );
+  it('retries an immediate failure and completes once on the second attempt', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('retry', { connection: {} }, factory);
+    let calls = 0;
+    const worker = new Worker(
+      'retry',
+      async () => {
+        if (++calls === 1) throw new Error('temporary');
+        return 'ok';
+      },
+      { connection: {}, autorun: false },
+      factory,
+    );
+    worker.on('error', () => {});
+    let running: Promise<void> | undefined;
+    try {
+      const job = await queue.add('event', {}, { attempts: 2 });
+      running = worker.run();
+      await expect.poll(() => queue.getJobState(job.id!)).toBe('completed');
+      expect(calls).toBe(2);
+      const stored = await queue.getJob(job.id!);
+      expect(stored?.attemptsMade).toBe(2);
+      expect(stored?.attemptsStarted).toBe(2);
+    } finally {
+      await worker.close(true);
+      await running;
+      await queue.close();
+    }
+  });
   it('claims unprioritized jobs first, then ascending priority with FIFO ties', async () => {
     const { queue, backend } = fixture();
     try {

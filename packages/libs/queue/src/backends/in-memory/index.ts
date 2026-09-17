@@ -265,12 +265,39 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     return 0;
   }
   async retryJob(
-    _jobId: string,
-    _lifo: boolean,
-    _token?: string,
-    _opts?: RetryJobOpts,
+    jobId: string,
+    lifo: boolean,
+    token?: string,
+    opts?: RetryJobOpts,
   ): Promise<void> {
-    throw new Error('Memory backend operation is not implemented');
+    if (token === undefined || !this.state.worker.owns(jobId, token))
+      throw new Error('Invalid or expired lock token');
+    const job = this.state.records.get(jobId);
+    if (!job) throw new Error('Job does not exist');
+    const fields = opts?.fieldsToUpdate ?? {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (
+        !['failedReason', 'stacktrace', 'tm'].includes(key) ||
+        (key !== 'tm' && typeof value !== 'string')
+      )
+        throw new Error('Unsupported retry field');
+    }
+    if (!this.state.store.transition(jobId, 'active', 'waiting'))
+      throw new Error('Job is not active');
+    if (typeof fields.failedReason === 'string')
+      job.failedReason = fields.failedReason;
+    if (typeof fields.stacktrace === 'string')
+      job.stacktrace = fields.stacktrace;
+    job.attemptsMade = (job.attemptsMade || 0) + 1;
+    this.state.worker.locks.delete(jobId);
+    this.state.records.delete(jobId);
+    if (lifo) {
+      const rest = [...this.state.records];
+      this.state.records.clear();
+      this.state.records.set(jobId, job);
+      for (const [id, record] of rest) this.state.records.set(id, record);
+    } else this.state.records.set(jobId, job);
+    this.state.worker.notify();
   }
   async moveStalledJobsToWait(): Promise<string[]> {
     const now = Date.now();
