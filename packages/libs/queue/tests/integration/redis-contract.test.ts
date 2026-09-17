@@ -153,3 +153,62 @@ it.skipIf(selectedBackend() !== 'redis')(
     }
   },
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'drains shared waiting and delayed jobs without affecting another namespace',
+  async () => {
+    const { Queue } = await import('bullmq');
+    const { createQueueIdentity } = await import('../../src/identity.js');
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_REDIS_PORT),
+    };
+    const namespace = `${process.env.QUEUE_TEST_RUN}-drain`;
+    const first = createQueueService({
+      namespace,
+      queueBackend: 'redis',
+      connection,
+    });
+    const second = createQueueService({
+      namespace,
+      queueBackend: 'redis',
+      connection,
+    });
+    const isolated = createQueueService({
+      namespace: `${namespace}-isolated`,
+      queueBackend: 'redis',
+      connection,
+    });
+    const producer = first.producer('jobs');
+    second.manager('jobs');
+    const other = isolated.producer('jobs');
+    const identity = createQueueIdentity(namespace, 'jobs');
+    const observer = new Queue(identity.redisQueueName, {
+      connection,
+      prefix: identity.redisPrefix,
+    });
+    try {
+      await Promise.all([first.setup(), second.setup(), isolated.setup()]);
+      const waiting = await producer.publish('waiting', {});
+      const delayed = await producer.publish('delayed', {}, { delay: 60000 });
+      await other.publish('isolated', {});
+      await second.manager('jobs').drain();
+      expect(await observer.getJobState(waiting.jobId)).toBe('unknown');
+      expect(await observer.getJobState(delayed.jobId)).toBe('delayed');
+      await second.manager('jobs').drain({ delayed: true });
+      expect(await observer.getJobState(delayed.jobId)).toBe('unknown');
+      const received: string[] = [];
+      isolated.consumer('jobs').consume(async (channel) => {
+        received.push(channel);
+      });
+      await expect.poll(() => received).toEqual(['isolated']);
+    } finally {
+      await observer.close();
+      await Promise.all([
+        first.shutdown(),
+        second.shutdown(),
+        isolated.shutdown(),
+      ]);
+    }
+  },
+);
