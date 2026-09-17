@@ -422,7 +422,7 @@ const zhCN: HubResource = {
     descriptions: {
       'hub-administrator': '完整管理应用、运维操作和用户权限',
       'hub-operator': '创建、配置、发布和运维自己创建的应用',
-      'hub-viewer': '仅查看自己创建的应用和运行状态',
+      'hub-viewer': '仅可查看有权限的应用及运行状态',
     },
     groups: {
       visibility: '应用与状态',

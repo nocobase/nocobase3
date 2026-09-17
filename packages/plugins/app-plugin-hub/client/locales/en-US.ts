@@ -461,7 +461,8 @@ const enUS = {
       'hub-administrator': 'Full access to applications and user management',
       'hub-operator':
         'Create, configure, deploy, and operate your own applications',
-      'hub-viewer': 'View your own applications and runtime status only',
+      'hub-viewer':
+        'Read-only access to permitted applications and runtime status',
     },
     groups: {
       visibility: 'Applications and status',
