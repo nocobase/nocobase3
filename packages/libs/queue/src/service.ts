@@ -3,6 +3,8 @@ import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
 import { resolveRedisConnection } from './backends/redis.js';
 import { resolvePostgresConnection } from './backends/postgres.js';
+import { createPostgresMigrationResource } from './backends/postgres-migrations.js';
+import type { PostgresMigrationResource } from './backends/postgres-migrations.js';
 import { resolveQueueConfiguration, resolveQueueTimeouts } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
 import { createQueueProducer } from './producer.js';
@@ -116,6 +118,7 @@ export function createQueueService(
   let shutdownPromise: Promise<void> | undefined;
   let producersOpen = true;
   const publishing = new Set<Promise<void>>();
+  const migrations = new Set<PostgresMigrationResource>();
 
   function entry(name: string): QueueEntry {
     validateQueueName(name, 'queue');
@@ -266,6 +269,16 @@ export function createQueueService(
     force: boolean = false,
   ): Promise<void> {
     const errors: unknown[] = [];
+    const migrationCleanup = Promise.all(
+      [...migrations].map(async (resource) => {
+        try {
+          await resource.close();
+          migrations.delete(resource);
+        } catch (error) {
+          errors.push(error);
+        }
+      }),
+    );
     await Promise.all(
       Array.from(targets, async (current) => {
         await Promise.all(
@@ -284,6 +297,7 @@ export function createQueueService(
         );
       }),
     );
+    await migrationCleanup;
     if (errors.length)
       throw new AggregateError(errors, 'Queue resource cleanup failed');
   }
@@ -336,7 +350,8 @@ export function createQueueService(
   }
 
   async function initialize(): Promise<void> {
-    const defaults = resolveQueueConfiguration(options, '__defaults__');
+    const deadline = performance.now() + timeouts.setupTimeoutMs;
+    const defaults = resolveQueueConfiguration(options, undefined);
     validateQueueName(defaults.namespace, 'namespace');
     registry.resolve(defaults.queueBackend);
     if (defaults.queueBackend === 'redis')
@@ -358,6 +373,40 @@ export function createQueueService(
         resolveRedisConnection(config.connection);
       if (config.queueBackend === 'postgres')
         resolvePostgresConnection(config.connection);
+    }
+    const migrationTargets = [
+      defaults,
+      ...[
+        ...new Set([...Object.keys(options.queues ?? {}), ...entries.keys()]),
+      ].map((name) =>
+        resolveQueueConfiguration(options, name, entries.get(name)?.manual),
+      ),
+    ];
+    for (const target of migrationTargets) {
+      if (stopped) throw new Error('Queue initialization was cancelled');
+      if (target.queueBackend !== 'postgres') continue;
+      const resource = createPostgresMigrationResource(
+        resolvePostgresConnection(target.connection),
+        deadline,
+      );
+      migrations.add(resource);
+      try {
+        await resource.run();
+      } catch (error) {
+        try {
+          await resource.close();
+          migrations.delete(resource);
+        } catch (cleanup) {
+          throw new AggregateError(
+            [error, cleanup],
+            'PostgreSQL migration and cleanup failed',
+            { cause: cleanup },
+          );
+        }
+        throw error;
+      }
+      await resource.close();
+      migrations.delete(resource);
     }
     for (const [name, current] of entries) await initializeEntry(name, current);
     if (stopped) throw new Error('Queue initialization was cancelled');
@@ -459,7 +508,10 @@ export function createQueueService(
             config.queueBackend === 'redis'
               ? resolveRedisConnection(config.connection)
               : config.queueBackend === 'postgres'
-                ? resolvePostgresConnection(config.connection)
+                ? {
+                    ...resolvePostgresConnection(config.connection),
+                    migrate: false,
+                  }
                 : {},
           prefix: identity.redisPrefix,
         };
