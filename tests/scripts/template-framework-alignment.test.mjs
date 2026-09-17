@@ -114,6 +114,8 @@ for (const template of templates) {
     // Product-specific scripts need a documented exception; compare the shared contract in both directions.
     const exceptions = [
       'pack:check', // Tarball names identify each template.
+      'upload', // Hub publishing commands are implemented only by Default.
+      'deploy',
       ...(template.kind === 'hub' ? ['test:e2e'] : []), // Hub has no AI plugin.
     ];
     const sharedScripts = (scripts) =>
@@ -125,6 +127,19 @@ for (const template of templates) {
       sharedScripts(baseline.manifest.scripts),
       `${template.kind}: shared scripts`,
     );
+  });
+
+  test(`${template.kind} exposes publishing scripts only when supported`, () => {
+    for (const command of ['upload', 'deploy']) {
+      if (template.kind === 'default') {
+        assert.equal(
+          template.manifest.scripts[command],
+          `pnpm nocobase app ${command}`,
+        );
+      } else {
+        assert.equal(Object.hasOwn(template.manifest.scripts, command), false);
+      }
+    }
   });
 
   test(`${template.kind} declares a single dependency category and the database runtime peer`, () => {
