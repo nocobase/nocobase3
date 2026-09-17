@@ -16,7 +16,8 @@ export type HubRoleCapabilityKey =
   | 'operate'
   | 'configure'
   | 'remove'
-  | 'manage-users';
+  | 'manage-users'
+  | 'manage-api-keys';
 
 export type HubRoleCapabilityGroupKey =
   'visibility' | 'operations' | 'user-management';
@@ -80,6 +81,11 @@ export const HUB_ROLE_CAPABILITIES: readonly HubRoleCapability[] = [
     requirements: [requirement('hub.app', 'remove')],
   },
   {
+    key: 'manage-api-keys',
+    group: 'operations',
+    requirements: [requirement('hub.app', 'manage-api-keys')],
+  },
+  {
     key: 'manage-users',
     group: 'user-management',
     requirements: [
@@ -93,6 +99,7 @@ export const HUB_ROLE_CAPABILITIES: readonly HubRoleCapability[] = [
         'assign-role',
         'reset-password',
         'revoke-sessions',
+        'delete',
       ),
     ],
   },

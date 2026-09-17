@@ -346,3 +346,32 @@ is submitted.
 ## License
 
 MIT
+
+## Publish to an application Hub
+
+The Default template includes `upload` and `deploy` scripts. Run `pnpm run upload` or `pnpm run deploy` from the App root; these forward all arguments to `pnpm nocobase app upload` and `pnpm nocobase app deploy`, respectively. Use `pnpm run deploy` explicitly because `pnpm deploy` is also a pnpm built-in command. Existing applications need to add these scripts if they already have the publishing CLI but predate the shortcuts.
+
+```bash
+pnpm run upload
+pnpm run upload --deploy --json
+pnpm run upload --deploy --no-wait --json
+pnpm run deploy --release-id <releaseId> --json
+```
+
+Build with `pnpm build --tar`, then run `pnpm nocobase app upload`. Set `HUB_URL` (including the Hub mount path, such as `https://hub.example/main`), `HUB_APP_ID`, and `HUB_API_KEY`, or supply the corresponding `--hub`, `--app-id`, and `--api-key` flags. Prefer environment variables for secrets.
+
+Both commands read `HUB_URL`, `HUB_APP_ID`, and `HUB_API_KEY` from the App root `.env` as defaults. Precedence is command flags > process environment (terminal or CI) > `.env`, resolved separately for each value. The file is optional, supports quoted values and comments, and does not modify the process environment. Only `.env` is loaded; `.env.local` and mode-specific files are not loaded. Keep `.env` out of version control because it contains credentials.
+
+```dotenv
+HUB_URL=http://127.0.0.1:13000/main
+HUB_APP_ID=crm
+HUB_API_KEY=your-publishing-key
+```
+
+Use `app upload --deploy --json` to upload and deploy, or omit `--deploy` to upload only. Hub has no automatic/manual deployment setting; scripts decide which commands to run. `--file` defaults to `storage/dist.tar.gz`; `--timeout` defaults to 600 seconds. `app deploy --release-id <id> --json` deploys an existing Release. Uploads default to checksum-based retry identity; deploys default to an App/Release digest. Use the same `--idempotency-key` after a failed connection and a fresh key when intentionally redeploying the same Release. Exit codes are 0 for success/acceptance, 1 for a Hub rejection or failed deployment, 2 for invalid local input, and 3 for an unconfirmed outcome caused by a connection failure, timeout, malformed response, or unknown deployment status. Exit 3 does not mean the deployment failed or was cancelled: inspect the deployment in Hub and retry with the same idempotency key if necessary. `--no-wait` validates the deployment acceptance response too; it never treats an unknown status as successful acceptance.
+
+Publishing keys reuse Hub's `upload-release` and `deploy` actions and remain restricted to their selected Apps and their owner's current permissions. Uploading with deployment needs both permissions; waiting uses a minimal deployment status endpoint under `deploy`. These commands call Hub over HTTP and never load this application's server or connect directly to Host.
+
+Both `app deploy --release-id <id> --config ./runtime.yml` and `app upload --deploy --config ./runtime.yml` accept an optional runtime YAML file (non-empty UTF-8, at most 1 MiB). Paths resolve from the App root. Omitting `--config` reuses the current Hub configuration; on first deployment, the existing Release-template initialization still applies. Supplied configuration replaces the configuration document through the existing Hub secret handling and YAML validation; it is not merged with arbitrary existing fields and never changes the Release template or archive. `app upload --config` without `--deploy` is rejected. Use `app deploy` to apply a different configuration to an already uploaded Release; configured upload retries reuse only the originally supplied configuration. Default deployment retry identity includes supplied configuration content. Configuration content is never printed in CLI results.
+
+Deployment commands (`app deploy` and `app upload --deploy`) wait for the final result by default. Use `--no-wait` to return after acceptance; acceptance does not mean deployment succeeded. Explicit `--wait` remains supported. Upload without `--deploy` only waits for the upload. `--timeout` defaults to 600 seconds; a timeout leaves the deployment outcome unconfirmed and does not cancel it.

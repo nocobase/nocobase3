@@ -1,4 +1,5 @@
 import { Trash2 } from 'lucide-react';
+import { Input } from '../../components/ui/input.js';
 import { Button } from '../../components/ui/button.js';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group.js';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -7,6 +8,7 @@ import type { ActivationPolicy } from './types.js';
 
 export function Settings({
   activation,
+  name,
   busy,
   canUpdate,
   canRemove,
@@ -14,14 +16,20 @@ export function Settings({
   onRemove,
 }: {
   readonly activation: ActivationPolicy;
+  readonly name: string;
   readonly busy: boolean;
   readonly canUpdate: boolean;
   readonly canRemove: boolean;
-  readonly onSave: (activation: ActivationPolicy) => void;
+  readonly onSave: (settings: {
+    name: string;
+    activation: ActivationPolicy;
+  }) => void;
   readonly onRemove: () => void;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
   const [value, setValue] = useState<ActivationPolicy>(activation);
+  const [appName, setAppName] = useState(name);
+  const validName = appName.trim().length > 0 && appName.trim().length <= 255;
   return (
     <div className='max-w-3xl space-y-5'>
       <div>
@@ -31,7 +39,7 @@ export function Settings({
         <p className='mt-1 text-sm leading-6 text-muted-foreground'>
           {t('settings.description', {
             defaultValue:
-              'Choose how this application is activated after Hub starts. This is an application setting and is not changed by deployments.',
+              'Change the application name and startup behavior. These settings are preserved across deployments.',
           })}
         </p>
       </div>
@@ -40,9 +48,33 @@ export function Settings({
           className='space-y-6'
           onSubmit={(event) => {
             event.preventDefault();
-            onSave(value);
+            if (validName && !busy)
+              onSave({ name: appName.trim(), activation: value });
           }}
         >
+          <div className='grid gap-2'>
+            <label className='text-sm font-medium' htmlFor='hub-settings-name'>
+              {t('page.applicationName', { defaultValue: 'Application name' })}
+            </label>
+            <Input
+              id='hub-settings-name'
+              value={appName}
+              disabled={busy}
+              required
+              maxLength={255}
+              onChange={(event) => setAppName(event.target.value)}
+              aria-describedby='hub-settings-name-hint'
+            />
+            <p
+              id='hub-settings-name-hint'
+              className='text-xs leading-5 text-muted-foreground'
+            >
+              {t('settings.nameHint', {
+                defaultValue:
+                  'Names can be changed and repeated. The application ID and URL stay the same.',
+              })}
+            </p>
+          </div>
           <div className='grid gap-2'>
             <label className='text-sm font-medium'>
               {t('settings.startup', { defaultValue: 'Startup' })}
@@ -98,7 +130,14 @@ export function Settings({
             </RadioGroup>
           </div>
           <div className='flex justify-end border-t pt-5'>
-            <Button disabled={busy || value === activation} type='submit'>
+            <Button
+              disabled={
+                busy ||
+                !validName ||
+                (value === activation && appName.trim() === name)
+              }
+              type='submit'
+            >
               {busy
                 ? t('settings.saving', { defaultValue: 'Saving…' })
                 : t('settings.save', { defaultValue: 'Save settings' })}

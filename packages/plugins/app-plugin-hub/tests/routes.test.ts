@@ -164,16 +164,6 @@ describe('@nocobase/app-plugin-hub API routes', () => {
             },
           ],
         },
-        {
-          key: 'hub-viewer',
-          title: 'Hub viewer',
-          grants: [
-            {
-              resource: { type: 'hub.app', id: '*' },
-              actions: ['read'],
-            },
-          ],
-        },
       ],
     });
   });
@@ -253,6 +243,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     const response = await router.request('/hub/apps/customer/releases', {
       method: 'POST',
       headers: {
+        'content-type': 'application/gzip',
         'content-length': String(256 * 1024 * 1024 + 1),
       },
       body: 'not-read',
@@ -316,11 +307,12 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     const response = await router.request('/hub/apps/customer/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ activation: 'lazy' }),
+      body: JSON.stringify({ activation: 'lazy', name: 'Renamed App' }),
     });
 
     expect(response.status).toBe(200);
     expect(updateSettings).toHaveBeenCalledWith('customer', {
+      name: 'Renamed App',
       activation: 'lazy',
     });
   });
@@ -459,6 +451,7 @@ function createApplication(
     middleware: () => async (context, next) => {
       context.set('authz', {
         identity: { principal: { type: 'user', id: role } },
+        can: async () => role === 'administrator',
         require: async () => {
           if (role !== 'administrator') {
             throw new AuthorizationDeniedError({

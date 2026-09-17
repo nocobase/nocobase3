@@ -127,3 +127,7 @@ Read only the reference the task needs.
   test database.
 - The application passes `lint`, `typecheck`, `test`, and `build`. Skill
   synchronization alone proves only that the copy matches this source.
+
+## Trusted plugin API
+
+`Auth.pluginApi<TPlugin>(pluginId)` returns only the registered plugin’s API methods through Better Auth’s normal dispatch, including before and after hooks. It does not expose the full authentication context and does not authenticate a caller. `Auth.forConnection(connection)` binds those operations to a caller-owned transaction. Consumers still enforce authorization; HTTP-specific hooks must explicitly check for `request` or `headers` instead of accidentally denying trusted server calls.
