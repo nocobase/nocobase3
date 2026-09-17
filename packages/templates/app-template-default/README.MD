@@ -349,6 +349,15 @@ MIT
 
 ## Publish to an application Hub
 
+The Default template includes `upload` and `deploy` scripts. Run `pnpm run upload` or `pnpm run deploy` from the App root; these forward all arguments to `pnpm nocobase app upload` and `pnpm nocobase app deploy`, respectively. Use `pnpm run deploy` explicitly because `pnpm deploy` is also a pnpm built-in command. Existing applications need to add these scripts if they already have the publishing CLI but predate the shortcuts.
+
+```bash
+pnpm run upload
+pnpm run upload --deploy --json
+pnpm run upload --deploy --no-wait --json
+pnpm run deploy --release-id <releaseId> --json
+```
+
 Build with `pnpm build --tar`, then run `pnpm nocobase app upload`. Set `HUB_URL` (including the Hub mount path, such as `https://hub.example/main`), `HUB_APP_ID`, and `HUB_API_KEY`, or supply the corresponding `--hub`, `--app-id`, and `--api-key` flags. Prefer environment variables for secrets.
 
 Both commands read `HUB_URL`, `HUB_APP_ID`, and `HUB_API_KEY` from the App root `.env` as defaults. Precedence is command flags > process environment (terminal or CI) > `.env`, resolved separately for each value. The file is optional, supports quoted values and comments, and does not modify the process environment. Only `.env` is loaded; `.env.local` and mode-specific files are not loaded. Keep `.env` out of version control because it contains credentials.
