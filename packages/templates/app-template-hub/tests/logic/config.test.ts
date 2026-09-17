@@ -14,7 +14,7 @@ import {
   type CachingConfig,
   type AppDriveConfig,
   type AppLoggingConfig,
-  type AppQueueConfig,
+  type AppQueueServiceConfig,
   type AppSessionConfigInput,
 } from '@nocobase/app-server';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -125,8 +125,10 @@ describe('application config', () => {
       runtime.config.get<AppLoggingConfig>('logging')!.default,
     ).toBeUndefined();
     expect(runtime.config.get('logging.file.name')).toBe('app');
-    expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
-    expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toBeUndefined();
+    expect(runtime.config.get<AppQueueServiceConfig>('queue')).toEqual({
+      queueBackend: 'inMemory',
+      environment: runtime.env.NODE_ENV,
+    });
     expect(runtime.config.get<AppJobsConfig>('jobs')).toEqual({
       memory: {
         adapter: 'memory',
@@ -168,9 +170,10 @@ describe('application config', () => {
     });
     expect(runtime.config.get('server.port')).toBe(14001);
     expect(runtime.config.get('server.startLog')).toBe(false);
-    expect(runtime.config.get('queue.connections.redis.host')).toBe(
-      '127.0.0.1',
-    );
+    expect(runtime.config.get<AppQueueServiceConfig>('queue')).toEqual({
+      queueBackend: 'inMemory',
+      environment: 'production',
+    });
     expect(runtime.config.get('session.stores.redis.host')).toBe('127.0.0.1');
     expect(runtime.config.get('logging.console.pretty')).toBe(false);
     expect(runtime.config.get('session.cookie.secure')).toBe(true);

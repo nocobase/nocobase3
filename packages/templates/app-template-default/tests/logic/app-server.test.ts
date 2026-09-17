@@ -25,7 +25,10 @@ import {
   LoggingProvider,
   requestLoggingMiddleware,
 } from '@nocobase/app-server/logging';
-import { QueueProvider } from '@nocobase/app-server/queue';
+import {
+  QueueServiceProvider,
+  type AppQueueServiceConfig,
+} from '@nocobase/app-server/queue';
 import {
   SessionProvider,
   sessionHttpMiddleware,
@@ -61,7 +64,6 @@ import {
   type QueryAdapter,
 } from '@nocobase/db';
 import { createSilentLoggingConfig } from '@nocobase/logging';
-import { createSyncQueueConfig, type AppQueueConfig } from '@nocobase/queue';
 import { spaRootRoutes } from '@nocobase/app-server/spa';
 import { createNullSessionConfig } from '@nocobase/session';
 import {
@@ -1144,7 +1146,7 @@ interface CreateTestAppOptions {
   publicOrigin?: string;
   publicBasePath?: string;
   database?: DatabaseManager | false;
-  queue?: AppQueueConfig;
+  queue?: AppQueueServiceConfig;
   plugins?: readonly AppServerPlugin<AppConfig>[];
   spa?: {
     indexPath?: string;
@@ -1193,7 +1195,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
       },
     },
     logging: createSilentLoggingConfig(),
-    queue: options.queue ?? createSyncQueueConfig(),
+    queue: options.queue ?? { queueBackend: 'inMemory' },
     session: createNullSessionConfig(),
     workflow: {
       sourceRoot: path.resolve(process.cwd(), 'workflows'),
@@ -1249,7 +1251,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
   app.addServiceProvider(IdGeneratorProvider);
   app.addServiceProvider(SessionProvider);
   app.addServiceProvider(DriveProvider);
-  app.addServiceProvider(QueueProvider);
+  app.addServiceProvider(QueueServiceProvider);
   app.addHttpMiddleware(requestLoggingMiddleware);
   app.addHttpMiddleware(sessionHttpMiddleware);
   app.addRoutes(healthCheckApiRoutes);
