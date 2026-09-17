@@ -1,5 +1,5 @@
 import type { DatabaseManager } from '@nocobase/db';
-import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { QueueService } from '@nocobase/queue';
 import type { WorkflowRunServices } from './run-services.js';
 
 import type {
@@ -157,7 +157,7 @@ export interface WorkflowEngineOptions {
    * in-process (`Dispatcher.enqueue()` falls through to `dispatch()`), which is
    * useful for a single-process test or an application without a queue manager.
    */
-  queue?: NocoBaseQueueManager;
+  queue?: QueueService;
   /** Queue name to publish on and to consume from, default `WORKFLOW_QUEUE_NAME`. */
   queueName?: string;
   /** `false` keeps the reaper from being created at all; default is enabled. */

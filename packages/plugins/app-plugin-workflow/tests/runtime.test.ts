@@ -1,11 +1,5 @@
-import { QueueSchemaService } from '@boringnode/queue';
 import type { DatabaseManager } from '@nocobase/db';
-import {
-  createQueueManager,
-  type AppQueueConfig,
-  type NocoBaseQueueManager,
-} from '@nocobase/queue';
-import type { Knex } from 'knex';
+import { createQueueService, type QueueService } from '@nocobase/queue';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -27,7 +21,6 @@ import type {
 } from '../server/engine/types.js';
 import type { WorkflowInstructionClass } from '../server/instructions/base.js';
 import { ConditionInstruction } from '../server/instructions/condition/instruction.js';
-import { WORKFLOW_QUEUE_NAME } from '../server/queue.js';
 import {
   createCounterInstruction,
   createFailingInstruction,
@@ -49,9 +42,6 @@ import {
   waitFor,
 } from './helpers.js';
 
-const QUEUE_TABLE = 'queue_jobs';
-const SCHEDULES_TABLE = 'queue_schedules';
-
 type RuntimeOverrides = Omit<Partial<WorkflowEngineOptions>, 'database'>;
 
 function equals(path: string, right: unknown): JsonObject {
@@ -62,29 +52,10 @@ function defineWorkflow(input: TestWorkflowInput): TestWorkflowInput {
   return input;
 }
 
-function databaseQueueConfig(): AppQueueConfig {
-  return {
-    default: 'database',
-    connections: {
-      database: {
-        driver: 'database',
-        table: QUEUE_TABLE,
-        schedulesTable: SCHEDULES_TABLE,
-      },
-    },
-    worker: {
-      queues: [WORKFLOW_QUEUE_NAME],
-      concurrency: 1,
-      idleDelay: '10ms',
-    },
-    jobs: { autoLoad: false, locations: [] },
-  };
-}
-
 describe('workflow runtime', () => {
   let database: DatabaseManager;
   const runtimes: WorkflowEngine[] = [];
-  let queueManager: NocoBaseQueueManager | null = null;
+  let queueManager: QueueService | null = null;
 
   function buildRuntime(
     instructions: Map<string, WorkflowInstructionClass>,
@@ -110,13 +81,9 @@ describe('workflow runtime', () => {
     return runtime;
   }
 
-  async function createQueue(): Promise<NocoBaseQueueManager> {
-    const connection = await database.connect();
-    const client = await connection.client<Knex>();
-    const schema = new QueueSchemaService(client);
-    await schema.createJobsTable(QUEUE_TABLE);
-    await schema.createSchedulesTable(SCHEDULES_TABLE);
-    queueManager = createQueueManager(databaseQueueConfig(), { database });
+  async function createQueue(): Promise<QueueService> {
+    queueManager = createQueueService({ namespace: 'workflow-runtime-test' });
+    await queueManager.setup();
     return queueManager;
   }
 
@@ -154,11 +121,10 @@ describe('workflow runtime', () => {
   });
 
   afterEach(async () => {
-    // The queue adapter claims its queue name in a module-global registry, so a
-    // failing test must not leak it into the next one.
+    // Unregister runtime handlers before shutting down their shared queue service.
     await Promise.allSettled(runtimes.map((runtime) => runtime.dispose()));
     runtimes.length = 0;
-    await queueManager?.close();
+    await queueManager?.shutdown();
     queueManager = null;
     await database.destroy();
   });
@@ -941,7 +907,7 @@ describe('workflow runtime', () => {
       });
     });
 
-    it('picks up a task the previous process persisted but never consumed', async () => {
+    it('recovers persisted undispatched workflow runs with a fresh queue service', async () => {
       const queue = await createQueue();
       const workflow = await createTestWorkflow(
         database,
@@ -958,23 +924,13 @@ describe('workflow runtime', () => {
         eventKey: 'queued-restart-1',
       });
 
-      // A publisher-only process: it never starts a worker, so the task is still
-      // in the queue table when the process goes away.
-      const publisher = buildRuntime(new Map([['echo', echoInstruction]]), {
-        queue,
-      });
-      await publisher.enqueue({ executionId: runId });
-      await expect(
-        database
-          .query()
-          .selectFrom(QUEUE_TABLE)
-          .selectAll()
-          .where('status', '=', 'pending')
-          .execute(),
-      ).resolves.toHaveLength(1);
-      await publisher.dispose();
+      // The business record survived; a fresh in-memory queue contains no task.
+      // Recovery must republish from the database rather than depend on queue storage.
 
-      await initializeRuntime(new Map([['echo', echoInstruction]]), { queue });
+      await initializeRuntime(new Map([['echo', echoInstruction]]), {
+        queue,
+        recoverGracePeriod: 0,
+      });
       await waitFor(
         async () =>
           (await readRun(database, runId)).status === EXECUTION_STATUS.RESOLVED,

@@ -1,4 +1,4 @@
-import { queueManagerToken } from '@nocobase/app-server/queue';
+import { queueServiceToken } from '@nocobase/app-server/queue';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
 import type { AppDriveConfig, FsDriveDiskConfig } from '@nocobase/drive';
@@ -43,8 +43,7 @@ export class WorkflowProvider<
       (container) =>
         new WorkflowService({
           database: container.resolve(databaseManagerToken),
-          queue: container.resolve(queueManagerToken),
-          queueName: `workflow:${this.app.appName}`,
+          queue: container.resolve(queueServiceToken),
           services: this.app.container,
           sourceRoot: workflow.sourceRoot,
           distRoot: workflow.distRoot,
@@ -55,6 +54,12 @@ export class WorkflowProvider<
     this.app.container.singleton(workflowServiceToken, (container) =>
       container.resolve(internalWorkflowServiceToken),
     );
+  }
+
+  public override async boot(): Promise<void> {
+    if (this.app.container.has(internalWorkflowServiceToken)) {
+      this.app.container.resolve(internalWorkflowServiceToken);
+    }
   }
 
   public override async shutdown(): Promise<void> {

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { DatabaseManager } from '@nocobase/db';
-import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { QueueService } from '@nocobase/queue';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import { randomUUID } from 'node:crypto';
 import {
@@ -31,7 +31,7 @@ import { createWorkflowRunServices } from './engine/run-services.js';
 
 export interface WorkflowServiceOptions {
   database: DatabaseManager;
-  queue: NocoBaseQueueManager;
+  queue: QueueService;
   queueName?: string;
   services: ServiceResolver;
   sourceRoot?: string;

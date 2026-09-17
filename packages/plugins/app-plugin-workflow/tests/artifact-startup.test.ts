@@ -5,11 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
-import {
-  createQueueManager,
-  createSyncQueueConfig,
-  type NocoBaseQueueManager,
-} from '@nocobase/queue';
+import { createQueueService, type QueueService } from '@nocobase/queue';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
   buildWorkflowArtifact,
@@ -23,11 +19,13 @@ import {
   workflowStore,
 } from '../server/collections/index.js';
 import { asId, asIdFilter } from '../server/engine/utils.js';
-import { requireRow } from './helpers.js';
+import { EXECUTION_STATUS } from '../server/engine/constants.js';
+import { findRun, requireRow } from './helpers.js';
 
 const roots: string[] = [];
 const databases: DatabaseManager[] = [];
-const queues: NocoBaseQueueManager[] = [];
+const queues: QueueService[] = [];
+const services: WorkflowService[] = [];
 async function createWorkflowCollections(
   database: DatabaseManager,
 ): Promise<void> {
@@ -39,7 +37,8 @@ async function createWorkflowCollections(
   );
 }
 afterEach(async () => {
-  await Promise.all(queues.splice(0).map((queue) => queue.close()));
+  await Promise.all(services.splice(0).map((service) => service.dispose()));
+  await Promise.all(queues.splice(0).map((queue) => queue.shutdown()));
   await Promise.all(databases.splice(0).map((database) => database.destroy()));
   await Promise.all(
     roots
@@ -52,7 +51,7 @@ async function fixture(): Promise<{
   distRoot: string;
   storeRoot: string;
   database: DatabaseManager;
-  queue: NocoBaseQueueManager;
+  queue: QueueService;
 }> {
   const root = await fs.mkdtemp(
     path.join(os.tmpdir(), 'app-workflow-startup-'),
@@ -64,8 +63,9 @@ async function fixture(): Promise<{
   });
   databases.push(database);
   await createWorkflowCollections(database);
-  const queue = createQueueManager(createSyncQueueConfig());
+  const queue = createQueueService({ namespace: path.basename(root) });
   queues.push(queue);
+  await queue.setup();
   return {
     root,
     distRoot: path.join(root, 'dist/server/workflows'),
@@ -108,7 +108,7 @@ function createService(
   f: Awaited<ReturnType<typeof fixture>>,
   production: boolean = true,
 ) {
-  return new WorkflowService({
+  const service = new WorkflowService({
     database: f.database,
     queue: f.queue,
     services: new ServiceContainer(),
@@ -121,7 +121,19 @@ function createService(
     },
     production,
   });
+  services.push(service);
+  return service;
 }
+
+async function waitForResolvedRun(database: DatabaseManager, eventKey: string) {
+  await expect
+    .poll(() => findRun(database, eventKey))
+    .toMatchObject({
+      status: EXECUTION_STATUS.RESOLVED,
+    });
+  return findRun(database, eventKey);
+}
+
 describe('application workflow Artifact lazy synchronization', () => {
   it('loads TypeScript resources directly from the workflow package in development', async () => {
     const f = await fixture();
@@ -138,13 +150,7 @@ describe('application workflow Artifact lazy synchronization', () => {
 
     await service.trigger('sample', {}, { eventKey: 'development-source' });
 
-    const run = await requireRow(
-      workflowStore(f.database).runs.findOne({
-        filter: { eventKey: 'development-source' },
-        select: (select) => select.fields('id'),
-      }),
-      'The development-source run',
-    );
+    const run = await waitForResolvedRun(f.database, 'development-source');
     const nodeRun = await requireRow(
       workflowStore(f.database).nodeRuns.findOne({
         filter: { workflowRunId: asIdFilter(asId(run.id)) },
@@ -222,6 +228,7 @@ describe('application workflow Artifact lazy synchronization', () => {
     await expect(
       firstRuns.run(first.id as string, {}, { eventKey: 'recovered-run' }),
     ).resolves.toMatchObject({ eventKey: 'recovered-run' });
+    await waitForResolvedRun(f.database, 'recovered-run');
     await expect(
       fs.readdir(path.join(f.storeRoot, 'workflows/sample', v1)),
     ).resolves.toEqual(expect.arrayContaining(['workflow.json', 'server']));
@@ -236,12 +243,7 @@ describe('application workflow Artifact lazy synchronization', () => {
       firstRepository.enable(first.id as string),
     ).resolves.toMatchObject({ id: String(first.id), enabled: true, hash: v1 });
     await firstService.trigger('sample', {}, { eventKey: 'artifact-run' });
-    const run = await requireRow(
-      workflowStore(f.database).runs.findOne({
-        filter: { eventKey: 'artifact-run' },
-      }),
-      'The artifact-run run',
-    );
+    const run = await waitForResolvedRun(f.database, 'artifact-run');
     expect(run.hash).toBe(v1);
     const nodeRun = await requireRow(
       workflowStore(f.database).nodeRuns.findOne({
@@ -260,12 +262,7 @@ describe('application workflow Artifact lazy synchronization', () => {
       upgradeService,
     );
     await upgradeService.trigger('sample', {}, { eventKey: 'artifact-v2' });
-    const automatic = await requireRow(
-      workflowStore(f.database).runs.findOne({
-        filter: { eventKey: 'artifact-v2' },
-      }),
-      'The artifact-v2 run',
-    );
+    const automatic = await waitForResolvedRun(f.database, 'artifact-v2');
     expect(automatic.hash).toBe(v1);
     expect(
       await workflowStore(f.database).workflows.findMany({
@@ -296,12 +293,7 @@ describe('application workflow Artifact lazy synchronization', () => {
       workflowVersion: 'version-2',
       eventKey: 'manual-v2',
     });
-    const manualRow = await requireRow(
-      workflowStore(f.database).runs.findOne({
-        filter: { eventKey: 'manual-v2' },
-      }),
-      'The manual-v2 run',
-    );
+    const manualRow = await waitForResolvedRun(f.database, 'manual-v2');
     expect(Boolean(manualRow.manually)).toBe(true);
     expect(manualRow.hash).toBe(v2);
     await upgradeService.dispose();

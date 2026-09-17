@@ -11,11 +11,7 @@ import {
   type Row,
 } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
-import {
-  createQueueManager,
-  createSyncQueueConfig,
-  type NocoBaseQueueManager,
-} from '@nocobase/queue';
+import { createQueueService, type QueueService } from '@nocobase/queue';
 import { ServiceContainer } from '@nocobase/service-provider';
 
 import { buildApplicationWorkflows } from '../build/index.js';
@@ -27,18 +23,20 @@ import {
   WORKFLOW_COLLECTIONS,
   workflowCollectionSchemas,
 } from '../server/collections/index.js';
+import { EXECUTION_STATUS } from '../server/engine/constants.js';
+import { findRun } from './helpers.js';
 import { echoInstruction } from './fixtures/instructions.js';
 
 const authoringEntry = fileURLToPath(new URL('../index.ts', import.meta.url));
 const roots: string[] = [];
 const databases: DatabaseManager[] = [];
-const queues: NocoBaseQueueManager[] = [];
+const queues: QueueService[] = [];
 const services: WorkflowService[] = [];
 let queueSequence = 0;
 
 afterEach(async () => {
   await Promise.all(services.splice(0).map((service) => service.dispose()));
-  await Promise.all(queues.splice(0).map((queue) => queue.close()));
+  await Promise.all(queues.splice(0).map((queue) => queue.shutdown()));
   await Promise.all(databases.splice(0).map((database) => database.destroy()));
   await Promise.all(
     roots
@@ -92,12 +90,14 @@ async function createService(
       definition: define,
     })),
   );
-  const queue = createQueueManager(createSyncQueueConfig());
+  const queue = createQueueService({
+    namespace: `workflow-dev-source-${(queueSequence += 1)}`,
+  });
   queues.push(queue);
+  await queue.setup();
   const service = new WorkflowService({
     database,
     queue,
-    queueName: `workflow:dev-source-${(queueSequence += 1)}`,
     services: new ServiceContainer(),
     sourceRoot: path.join(root, 'server/workflows'),
     distRoot: path.join(root, 'dist/server/workflows'),
@@ -249,8 +249,11 @@ describe('development workflow loading', () => {
     // will look for it. In development that is the source package, so a store
     // lookup would refuse a workflow that is perfectly runnable.
     await expect(
-      service.trigger('sample', {}, { manually: true }),
-    ).resolves.toMatchObject({ status: 'accepted' });
+      service.trigger('sample', {}, { manually: true, eventKey: 'source-run' }),
+    ).resolves.toMatchObject({ status: 'accepted', eventKey: 'source-run' });
+    await expect
+      .poll(() => findRun(databases[databases.length - 1], 'source-run'))
+      .toMatchObject({ status: EXECUTION_STATUS.RESOLVED });
   });
 
   it('refuses to run when the source package is gone', async () => {

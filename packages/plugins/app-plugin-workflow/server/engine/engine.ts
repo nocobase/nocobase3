@@ -47,9 +47,7 @@ export default class WorkflowEngine {
     this.instructions = new Map<string, WorkflowInstructionClass>(
       coreInstructions,
     );
-    // The adapter has to exist before the dispatcher, because the dispatcher
-    // takes it as its `queue`. Creating it also claims the queue name globally,
-    // which `dispose()` releases.
+    // The adapter registers an instance-local handler before recovery can publish.
     this.queueAdapter = options.queue
       ? createWorkflowQueueAdapter({
           queue: options.queue,
@@ -120,7 +118,6 @@ export default class WorkflowEngine {
    * `recover()` re-publishes what a previous process left behind.
    */
   async initialize(): Promise<void> {
-    await this.queueAdapter?.startWorker();
     this.reaper?.start();
     const recovered = await this.dispatcher.recover(
       this.options.recoverGracePeriod === undefined
@@ -156,8 +153,8 @@ export default class WorkflowEngine {
    */
   async dispose(): Promise<void> {
     this.reaper?.stop();
-    await this.dispatcher.drain();
     await this.queueAdapter?.stop();
+    await this.dispatcher.drain();
   }
 
   /** Resume or re-run a persisted execution. This is what the queue worker calls. */

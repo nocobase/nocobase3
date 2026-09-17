@@ -1,278 +1,132 @@
-import type { DatabaseManager } from '@nocobase/db';
-import { QueueSchemaService } from '@boringnode/queue';
-import {
-  createQueueManager,
-  type AppQueueConfig,
-  type NocoBaseQueueManager,
-} from '@nocobase/queue';
-import type { Knex } from 'knex';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
+import { createQueueService, type QueueService } from '@nocobase/queue';
+import { afterEach, expect, it } from 'vitest';
 import {
   createWorkflowQueueAdapter,
   publishWorkflowTask,
   WORKFLOW_QUEUE_NAME,
   WORKFLOW_TASK_JOB_NAME,
-  WorkflowTaskJob,
   type WorkflowQueueAdapter,
-  type WorkflowQueueTask,
 } from '../server/queue.js';
-import { createTestDatabase } from './helpers.js';
 
-const QUEUE_TABLE = 'queue_jobs';
-const SCHEDULES_TABLE = 'queue_schedules';
+const services: QueueService[] = [];
+const adapters: WorkflowQueueAdapter[] = [];
+function createQueue(): QueueService {
+  const queue = createQueueService({ namespace: 'workflow-adapter-test' });
+  services.push(queue);
+  return queue;
+}
+function adapter(
+  options: Parameters<typeof createWorkflowQueueAdapter>[0],
+): WorkflowQueueAdapter {
+  const result = createWorkflowQueueAdapter(options);
+  adapters.push(result);
+  return result;
+}
+afterEach(async () => {
+  await Promise.all(adapters.splice(0).map((item) => item.stop()));
+  await Promise.all(services.splice(0).map((item) => item.shutdown()));
+});
 
-function databaseQueueConfig(): AppQueueConfig {
-  return {
-    default: 'database',
-    connections: {
-      database: {
-        driver: 'database',
-        table: QUEUE_TABLE,
-        schedulesTable: SCHEDULES_TABLE,
-      },
+it('routes the workflow channel and preserves the complete task payload', async () => {
+  const queue = createQueue();
+  const received: unknown[] = [];
+  const consumer = adapter({
+    queue,
+    dispatch: async (task) => {
+      received.push(task);
     },
-    worker: {
-      queues: [WORKFLOW_QUEUE_NAME],
-      concurrency: 1,
-      idleDelay: '10ms',
-    },
-    jobs: { autoLoad: false, locations: [] },
+  });
+  expect(received).toEqual([]);
+  await queue.setup();
+  await queue
+    .producer(WORKFLOW_QUEUE_NAME)
+    .publish('unrelated', { executionId: 99 });
+  const task = {
+    executionId: 7,
+    nodeRunId: 42,
+    rerun: { nodeKey: 'check', overwrite: true },
   };
-}
+  await consumer.publish(task);
+  await expect.poll(() => received).toEqual([task]);
+});
 
-async function createQueueTables(database: DatabaseManager): Promise<void> {
-  const connection = await database.connect();
-  const client = await connection.client<Knex>();
-  const schema = new QueueSchemaService(client);
-  await schema.createJobsTable(QUEUE_TABLE);
-  await schema.createSchedulesTable(SCHEDULES_TABLE);
-}
-
-async function countPendingJobs(database: DatabaseManager): Promise<number> {
-  const rows = await database
-    .query()
-    .selectFrom(QUEUE_TABLE)
-    .selectAll()
-    .where('status', '=', 'pending')
-    .execute();
-  return rows.length;
-}
-
-async function waitFor(
-  predicate: () => boolean | Promise<boolean>,
-  timeoutMs = 5000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await predicate()) {
-      return;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error('Timed out waiting for the queue');
-}
-
-describe('workflow queue adapter', () => {
-  let database: DatabaseManager;
-  let queueManager: NocoBaseQueueManager | null = null;
-  const adapters: WorkflowQueueAdapter[] = [];
-
-  function track(adapter: WorkflowQueueAdapter): WorkflowQueueAdapter {
-    adapters.push(adapter);
-    return adapter;
-  }
-
-  beforeEach(async () => {
-    database = await createTestDatabase();
-    await createQueueTables(database);
+it('accepts a millisecond delay on a custom queue', async () => {
+  const queue = createQueue();
+  const started: number[] = [];
+  adapter({
+    queue,
+    queueName: 'custom',
+    dispatch: async () => {
+      started.push(Date.now());
+    },
   });
+  await queue.setup();
+  const before = Date.now();
+  await publishWorkflowTask(
+    queue,
+    { executionId: 1 },
+    { queueName: 'custom', delay: 150 },
+  );
+  expect(started).toEqual([]);
+  await expect.poll(() => started.length).toBe(1);
+  expect(started[0]! - before).toBeGreaterThanOrEqual(140);
+});
 
-  afterEach(async () => {
-    // The dispatch registry is module-global, so a failed test must not leak
-    // its queue name into the next one.
-    await Promise.allSettled(adapters.map((adapter) => adapter.stop()));
-    adapters.length = 0;
-    await queueManager?.close();
-    queueManager = null;
-    await database.destroy();
+it('waits for dispatch when unregistering without shutting down the shared worker', async () => {
+  const queue = createQueue();
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const consumer = adapter({
+    queue,
+    dispatch: async () => {
+      entered.resolve();
+      await release.promise;
+    },
   });
-
-  it('carries a task through the database driver and back into dispatch', async () => {
-    const dispatched: WorkflowQueueTask[] = [];
-    queueManager = createQueueManager(databaseQueueConfig(), { database });
-    const adapter = track(
-      createWorkflowQueueAdapter({
-        queue: queueManager,
-        dispatch: async (task) => {
-          dispatched.push(task);
-        },
-      }),
-    );
-
-    // Publishing persists the task; nothing runs until a worker is started.
-    await adapter.publish({
-      executionId: 7,
-      nodeRunId: 42,
-      rerun: { nodeKey: 'check', overwrite: true },
+  await queue.setup();
+  try {
+    await consumer.publish({ executionId: 1 });
+    await entered.promise;
+    let stopped = false;
+    const stop = consumer.stop().then(() => {
+      stopped = true;
     });
-    expect(await countPendingJobs(database)).toBe(1);
-    expect(dispatched).toEqual([]);
-
-    await adapter.startWorker();
-    await waitFor(() => dispatched.length === 1);
-    expect(dispatched).toEqual([
-      {
-        executionId: 7,
-        nodeRunId: 42,
-        rerun: { nodeKey: 'check', overwrite: true },
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(stopped).toBe(false);
+    release.resolve();
+    await stop;
+    const received: unknown[] = [];
+    adapter({
+      queue,
+      dispatch: async (task) => {
+        received.push(task);
       },
-    ]);
+    });
+    await queue
+      .producer(WORKFLOW_QUEUE_NAME)
+      .publish(WORKFLOW_TASK_JOB_NAME, { executionId: 2 });
+    await expect.poll(() => received).toEqual([{ executionId: 2 }]);
+  } finally {
+    release.resolve();
+  }
+});
 
-    await adapter.stop();
+it('retries a failed dispatch and leaves deduplication of business effects to the handler', async () => {
+  const queue = createQueue();
+  let attempts = 0;
+  const effects = new Set<number>();
+  adapter({
+    queue,
+    dispatch: async (task) => {
+      attempts += 1;
+      effects.add(Number(task.executionId));
+      if (attempts === 1) throw new Error('Transient acknowledgement failure');
+    },
   });
-
-  it('survives a restart because the task stays in the database', async () => {
-    queueManager = createQueueManager(databaseQueueConfig(), { database });
-    const publisher = track(
-      createWorkflowQueueAdapter({
-        queue: queueManager,
-        dispatch: async () => undefined,
-      }),
-    );
-    await publisher.publish({ executionId: 1 });
-    await publisher.stop();
-    await queueManager.close();
-    expect(await countPendingJobs(database)).toBe(1);
-
-    // A fresh process: new queue manager, new adapter, same table.
-    const dispatched: WorkflowQueueTask[] = [];
-    queueManager = createQueueManager(databaseQueueConfig(), { database });
-    const consumer = track(
-      createWorkflowQueueAdapter({
-        queue: queueManager,
-        dispatch: async (task) => {
-          dispatched.push(task);
-        },
-      }),
-    );
-    await consumer.startWorker();
-    await waitFor(() => dispatched.length === 1);
-    expect(dispatched).toEqual([{ executionId: 1 }]);
-
-    await consumer.stop();
-  });
-
-  it('keeps the delayed delivery capability available for later node types', async () => {
-    const dispatched: WorkflowQueueTask[] = [];
-    queueManager = createQueueManager(databaseQueueConfig(), { database });
-    const adapter = track(
-      createWorkflowQueueAdapter({
-        queue: queueManager,
-        dispatch: async (task) => {
-          dispatched.push(task);
-        },
-      }),
-    );
-
-    await publishWorkflowTask(
-      queueManager,
-      { executionId: 3 },
-      { delay: '30s' },
-    );
-    const rows = await database
-      .query()
-      .selectFrom(QUEUE_TABLE)
-      .selectAll()
-      .execute();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].status).toBe('delayed');
-
-    await adapter.startWorker();
-    // The worker must not pick a delayed task up before it is due.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(dispatched).toEqual([]);
-
-    await adapter.stop();
-  });
-
-  it('refuses a second adapter on the same queue name', async () => {
-    queueManager = createQueueManager(databaseQueueConfig(), { database });
-    const adapter = track(
-      createWorkflowQueueAdapter({
-        queue: queueManager,
-        dispatch: async () => undefined,
-      }),
-    );
-
-    expect(() =>
-      createWorkflowQueueAdapter({
-        queue: queueManager!,
-        dispatch: async () => undefined,
-      }),
-    ).toThrow(
-      `A workflow queue adapter is already listening on queue "${WORKFLOW_QUEUE_NAME}"`,
-    );
-
-    await adapter.stop();
-    // After stop() the queue name is free again.
-    const replacement = track(
-      createWorkflowQueueAdapter({
-        queue: queueManager,
-        dispatch: async () => undefined,
-      }),
-    );
-    await replacement.stop();
-  });
-
-  it('routes by queue name so two adapters can coexist', async () => {
-    const defaultTasks: WorkflowQueueTask[] = [];
-    const otherTasks: WorkflowQueueTask[] = [];
-    queueManager = createQueueManager(
-      {
-        ...databaseQueueConfig(),
-        worker: {
-          queues: [WORKFLOW_QUEUE_NAME, 'workflow-other'],
-          concurrency: 1,
-          idleDelay: '10ms',
-        },
-      },
-      { database },
-    );
-
-    const first = track(
-      createWorkflowQueueAdapter({
-        queue: queueManager,
-        dispatch: async (task) => {
-          defaultTasks.push(task);
-        },
-      }),
-    );
-    const second = track(
-      createWorkflowQueueAdapter({
-        queue: queueManager,
-        queueName: 'workflow-other',
-        dispatch: async (task) => {
-          otherTasks.push(task);
-        },
-      }),
-    );
-
-    await first.publish({ executionId: 1 });
-    await second.publish({ executionId: 2 });
-    await first.startWorker();
-    await second.startWorker();
-    await waitFor(() => defaultTasks.length === 1 && otherTasks.length === 1);
-
-    expect(defaultTasks).toEqual([{ executionId: 1 }]);
-    expect(otherTasks).toEqual([{ executionId: 2 }]);
-
-    await first.stop();
-    await second.stop();
-  });
-
-  it('names the job class stably so a persisted task keeps resolving', () => {
-    expect(WorkflowTaskJob.options.name).toBe(WORKFLOW_TASK_JOB_NAME);
-    expect(WorkflowTaskJob.options.queue).toBe(WORKFLOW_QUEUE_NAME);
-  });
+  await queue.setup();
+  await queue
+    .producer(WORKFLOW_QUEUE_NAME)
+    .publish(WORKFLOW_TASK_JOB_NAME, { executionId: 17 }, { attempts: 2 });
+  await expect.poll(() => attempts).toBe(2);
+  expect([...effects]).toEqual([17]);
 });
