@@ -15,6 +15,7 @@ export default createNodeVitestConfig({
     include: backend
       ? [
           'tests/integration/infrastructure.test.ts',
+          'tests/integration/service-contract.test.ts',
           ...integrationFiles[backend]!.map(
             (name) => `tests/integration/${name}.test.ts`,
           ),
