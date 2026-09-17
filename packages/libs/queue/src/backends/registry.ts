@@ -1,4 +1,5 @@
-import { createPostgresBackend, createRedisBackend } from 'bullmq';
+import { createPostgresBackend } from 'bullmq';
+import { createServiceRedisBackend } from './redis.js';
 import type { BackendFactory } from 'bullmq';
 import { createInMemoryBackendFactory } from './in-memory/index.js';
 
@@ -10,7 +11,7 @@ export interface BackendRegistry {
 
 export function createBackendRegistry(): BackendRegistry {
   const factories = new Map<string, BackendFactory>([
-    ['redis', createRedisBackend],
+    ['redis', createServiceRedisBackend],
     ['postgres', createPostgresBackend],
     ['inMemory', createInMemoryBackendFactory()],
   ]);

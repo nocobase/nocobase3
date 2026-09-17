@@ -1,6 +1,7 @@
 import { Queue, Worker, WaitingError } from 'bullmq';
 import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
+import { resolveRedisConnection } from './backends/redis.js';
 import { resolveQueueConfiguration, resolveQueueTimeouts } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
 import { createQueueProducer } from './producer.js';
@@ -435,14 +436,17 @@ export function createQueueService(
         const factory = registry.resolve(config.queueBackend);
         const identity = createQueueIdentity(config.namespace, name);
         // Connection adapters are introduced by the resource/backend slices; never silently discard one.
-        if (config.connection !== undefined)
+        if (config.connection !== undefined && config.queueBackend !== 'redis')
           throw new Error('Queue connection adaptation is not implemented');
         const physicalName =
           config.queueBackend === 'postgres'
             ? identity.postgresQueueName
             : identity.redisQueueName;
         const base: QueueBaseOptions & { prefix: string } = {
-          connection: {},
+          connection:
+            config.queueBackend === 'redis'
+              ? resolveRedisConnection(config.connection)
+              : {},
           prefix: identity.redisPrefix,
         };
         current.queue = new Queue<
