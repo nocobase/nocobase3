@@ -498,7 +498,7 @@ export function createQueueService(
         // Connection adapters are introduced by the resource/backend slices; never silently discard one.
         if (
           config.connection !== undefined &&
-          !['redis', 'postgres'].includes(config.queueBackend)
+          !['redis', 'postgres', 'inMemory'].includes(config.queueBackend)
         )
           throw new Error('Queue connection adaptation is not implemented');
         const physicalName =
