@@ -623,18 +623,32 @@ export function createQueueService(
       if (shutdownPromise) return shutdownPromise;
       stopped = true;
       shutdownPromise = (async (): Promise<void> => {
-        if (setupPromise) await setupPromise.catch(() => {});
-        await Promise.all(
-          [...entries.values()].map((current) =>
-            current.configurationSettlement(),
-          ),
+        const drainDeadline = performance.now() + timeouts.shutdownTimeoutMs;
+        const preparation = (async (): Promise<void> => {
+          if (setupPromise) await setupPromise.catch(() => {});
+          await Promise.all(
+            [...entries.values()].map((current) =>
+              current.configurationSettlement(),
+            ),
+          );
+          await resources.settle();
+          await Promise.allSettled(
+            [...entries.values()].flatMap((current) =>
+              current.workerInitialization
+                ? [current.workerInitialization]
+                : [],
+            ),
+          );
+        })();
+        const prepared = await settlesWithin(
+          preparation,
+          timeouts.shutdownTimeoutMs,
         );
-        await resources.settle();
-        await Promise.allSettled(
-          [...entries.values()].flatMap((current) =>
-            current.workerInitialization ? [current.workerInitialization] : [],
-          ),
-        );
+        const errors: unknown[] = [];
+        if (!prepared)
+          errors.push(
+            new Error('Queue shutdown preparation deadline exceeded'),
+          );
         const workers = [...entries.values()].filter(
           (current) => current.worker,
         );
@@ -644,13 +658,15 @@ export function createQueueService(
             await current.handlers.settle();
           }),
         );
-        let settled = await settlesWithin(waiting, timeouts.shutdownTimeoutMs);
+        let settled = await settlesWithin(
+          waiting,
+          Math.max(0, drainDeadline - performance.now()),
+        );
         if (!settled) {
           for (const current of workers)
             current.worker?.cancelAllJobs('Queue service shutdown');
           settled = await settlesWithin(waiting, timeouts.cancellationGraceMs);
         }
-        const errors: unknown[] = [];
         if (!settled) {
           const error = new Error(
             'Queue shutdown grace expired; handlers may still be running',
@@ -671,7 +687,16 @@ export function createQueueService(
             if (result.status === 'rejected') errors.push(result.reason);
         }
         producersOpen = false;
-        await Promise.all([...publishing]);
+        const publications = Promise.all([...publishing]);
+        const published = await settlesWithin(
+          publications,
+          Math.max(0, drainDeadline - performance.now()),
+        );
+        if (!published)
+          errors.push(
+            new Error('Queue shutdown publication deadline exceeded'),
+          );
+        const cleanupDeadline = performance.now() + 5000;
         const cleanup = closeEntries(entries.values(), !settled);
         try {
           if (!(await settlesWithin(cleanup, 5000))) {
@@ -698,6 +723,38 @@ export function createQueueService(
           }
         } catch (error) {
           errors.push(error);
+        }
+        if (
+          !prepared &&
+          !(await settlesWithin(
+            preparation,
+            Math.max(0, cleanupDeadline - performance.now()),
+          ))
+        ) {
+          const error = new Error(
+            'Queue shutdown preparation cancellation remains unconfirmed',
+          );
+          errors.push(error);
+          dependencies.logger?.error(
+            { error },
+            'Queue shutdown has unresolved initialization or configuration',
+          );
+        }
+        if (
+          !published &&
+          !(await settlesWithin(
+            publications,
+            Math.max(0, cleanupDeadline - performance.now()),
+          ))
+        ) {
+          const error = new Error(
+            'Queue shutdown publication cancellation remains unconfirmed',
+          );
+          errors.push(error);
+          dependencies.logger?.error(
+            { error },
+            'Queue shutdown has unresolved publications',
+          );
         }
         if (errors.length)
           throw new AggregateError(errors, 'Queue shutdown failed');
