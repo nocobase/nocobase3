@@ -1,5 +1,19 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.8
+
+### Patch Changes
+
+- 415d763: Add optional standalone HTTP and WebSocket proxy routing and configure Hub to forward paths outside its public mount to the current ready App Host port. Preserve public request identity and streaming, release proxy connections during shutdown, and use the shared public entry for hosted application links.
+
+  Return 502 and close the upstream connection when a regular HTTP request receives an unexpected protocol upgrade. Validate App IDs against the normalized Hub mount and the managed Host's reserved `__` namespace before creating an application.
+
+- Updated dependencies [415d763]
+- Updated dependencies [1fea79a]
+  - @nocobase/app-server@1.0.0-beta.16
+  - @nocobase/app-plugin-authorization@0.2.0-beta.11
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+
 ## 0.1.0-beta.7
 
 ### Patch Changes

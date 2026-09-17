@@ -237,6 +237,7 @@ export interface HubService {
   restoreDesiredState(): Promise<void>;
   createDeploymentSet(): Promise<HostDeploymentSet>;
   hostUrl(): string | null;
+  getHostProxyTarget(): URL | null;
   shutdown(): Promise<void>;
 }
 

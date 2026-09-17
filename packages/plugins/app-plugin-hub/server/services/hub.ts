@@ -30,6 +30,8 @@ import {
   type NocoBaseDriveDisk,
 } from '@nocobase/drive';
 import type { Knex } from 'knex';
+import type { AppHostSupervisorInfo } from '@nocobase/app-host/supervisor';
+import { normalizeBasePath } from '@nocobase/app-server/support';
 import { x as extractTar } from 'tar';
 import {
   parse as parseYaml,
@@ -86,11 +88,13 @@ export interface DefaultHubServiceOptions {
   readonly database: DatabaseManager;
   readonly config: HubPluginConfig;
   readonly hostController: HubHostController;
+  readonly publicBasePath?: string;
   /** Upper bound on how long reads wait for startup restoration. Defaults to five seconds. */
   readonly startupRestorationWaitMs?: number;
 }
 
 export interface HubHostController {
+  getInfo(): Pick<AppHostSupervisorInfo, 'status' | 'targetUrl'>;
   onReady(listener: () => void): () => void;
   restoreDeploymentSet(
     deploymentSet: HostDeploymentSet,
@@ -322,6 +326,26 @@ export class DefaultHubService implements HubService {
     if (!APP_ID_PATTERN.test(id)) {
       throw new HubError(
         'App ID may contain only letters, numbers, underscores, and hyphens.',
+        'INVALID_APP_ID',
+        422,
+      );
+    }
+    // Managed App Host reserves the /__ namespace for listener-owned routes.
+    if (id.startsWith('__')) {
+      throw new HubError(
+        'App IDs beginning with "__" are reserved by App Host.',
+        'INVALID_APP_ID',
+        422,
+      );
+    }
+    const basePath = `/${id}`;
+    const publicBasePath = normalizeBasePath(this.options.publicBasePath ?? '');
+    if (
+      publicBasePath === basePath ||
+      publicBasePath.startsWith(`${basePath}/`)
+    ) {
+      throw new HubError(
+        'App ID conflicts with the Hub public base path.',
         'INVALID_APP_ID',
         422,
       );
@@ -1150,7 +1174,15 @@ export class DefaultHubService implements HubService {
   }
 
   public hostUrl(): string | null {
-    return this.currentHostUrl;
+    return this.options.config.publicHostUrl ?? this.currentHostUrl;
+  }
+
+  public getHostProxyTarget(): URL | null {
+    if (!this.options.config.host.enabled) return null;
+    const info = this.hostController.getInfo();
+    return info.status === 'ready' && info.targetUrl
+      ? new URL(info.targetUrl)
+      : null;
   }
 
   public async shutdown(): Promise<void> {
@@ -1210,7 +1242,7 @@ export class DefaultHubService implements HubService {
         updatedAt: current?.finishedAt ?? app.updatedAt,
       },
       runtime,
-      hostUrl: this.currentHostUrl,
+      hostUrl: this.hostUrl(),
     };
   }
 

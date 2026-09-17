@@ -52,6 +52,7 @@ export class HubProvider extends ServiceProvider<HubProviderApplication> {
         database: resolver.resolve(databaseManagerToken),
         config,
         hostController: this.hostController,
+        publicBasePath: this.app.config.get<string>('app.publicBasePath'),
       });
     });
   }

@@ -50,6 +50,8 @@ A feature with a page and an API touches five places: a migration for the table,
 
 ### The rest is framework structure
 
+`server/standalone.ts` configures a listener-level proxy outside the Hub public base path. The exact base path and its descendants belong to Hub; all other HTTP and WebSocket requests forward unchanged to `hubServiceToken.getHostProxyTarget()`. Keep this before the public mount adapter and independent of Hub session middleware. Host lifecycle stays in the Hub plugin, and unavailable Host requests must not start a process. Visit App links use `hub.publicHostUrl: /`. This composition is specific to Hub; Default and Examples do not enable it.
+
 Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
 
 The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.

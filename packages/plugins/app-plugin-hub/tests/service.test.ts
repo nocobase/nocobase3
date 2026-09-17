@@ -516,6 +516,65 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
   });
 
+  it('reads the current ready proxy target without starting the Host', () => {
+    const start = vi.spyOn(host, 'ensureStarted');
+    expect(service.getHostProxyTarget()).toBeNull();
+    host.info = { status: 'ready', targetUrl: 'http://127.0.0.1:13010' };
+    expect(service.getHostProxyTarget()?.href).toBe('http://127.0.0.1:13010/');
+    host.info = { status: 'starting', targetUrl: 'http://127.0.0.1:13011' };
+    expect(service.getHostProxyTarget()).toBeNull();
+    host.info.status = 'ready';
+    expect(service.getHostProxyTarget()?.href).toBe('http://127.0.0.1:13011/');
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it.each(['/hub', 'hub', ' //hub// ', '/hub/admin', '//hub/admin//'])(
+    'reserves the normalized Hub mount %j and exposes the configured public entry',
+    async (publicBasePath) => {
+      const options = createServiceOptions({ publicBasePath });
+      service = new DefaultHubService({
+        ...options,
+        config: { ...options.config, publicHostUrl: '/' },
+      });
+      await expect(
+        service.createApp({ id: 'hub', name: 'Conflict' }),
+      ).rejects.toMatchObject({ code: 'INVALID_APP_ID', status: 422 });
+      expect(await service.listApps()).toEqual([]);
+      const detail = await service.createApp({ id: 'hubble', name: 'Hubble' });
+      expect(detail.hostUrl).toBe('/');
+    },
+  );
+
+  it.each([undefined, '', '/', '///', '   '])(
+    'allows App IDs when Hub has no public mount prefix (%j)',
+    async (publicBasePath) => {
+      service = new DefaultHubService(createServiceOptions({ publicBasePath }));
+      const detail = await service.createApp({ id: 'hub', name: 'Hub' });
+      expect(detail.app.basePath).toBe('/hub');
+    },
+  );
+
+  it.each(['__live', '__ready', '__health', '__apps', '__future', ' __live '])(
+    'rejects the Host-reserved App ID %j before persisting it',
+    async (id) => {
+      await expect(
+        service.createApp({ id, name: 'Reserved' }),
+      ).rejects.toMatchObject({
+        code: 'INVALID_APP_ID',
+        status: 422,
+      });
+      expect(await service.listApps()).toEqual([]);
+    },
+  );
+
+  it.each(['_live', 'customer__app'])(
+    'allows underscores outside the Host-reserved prefix (%j)',
+    async (id) => {
+      const detail = await service.createApp({ id, name: 'Customer' });
+      expect(detail.app.id).toBe(id);
+    },
+  );
+
   it('restarts only the requested App without creating a deployment', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
     await expect(service.restart('customer')).rejects.toMatchObject({
@@ -1866,6 +1925,10 @@ async function waitForDeployment(
 }
 
 class FakeHostController implements HubHostController {
+  info: ReturnType<HubHostController['getInfo']> = { status: 'stopped' };
+  getInfo(): ReturnType<HubHostController['getInfo']> {
+    return this.info;
+  }
   readonly readyListeners = new Set<() => void>();
   onReady(listener: () => void): () => void {
     this.readyListeners.add(listener);

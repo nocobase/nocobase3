@@ -665,6 +665,7 @@ function createHubService(): HubService {
     restoreDesiredState: vi.fn(() => Promise.resolve()),
     createDeploymentSet: vi.fn(() => Promise.resolve({} as never)),
     hostUrl: vi.fn(() => null),
+    getHostProxyTarget: vi.fn(() => null),
     shutdown: vi.fn(() => Promise.resolve()),
   };
 }

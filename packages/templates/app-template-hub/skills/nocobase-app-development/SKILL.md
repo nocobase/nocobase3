@@ -87,6 +87,8 @@ Keep `@nocobase/db` in the Hub's `dependencies`, alongside the driver that requi
 
 ## Where to work
 
+Hub's `server/standalone.ts` uses the core standalone `proxy` factory to forward requests outside `application.publicBasePath` to the current ready App Host origin. The same matcher applies before HTTP mount adaptation and before WebSocket upgrade handling. Do not implement this as a plugin API route, start Host from a proxy request, or cache a port across Host restarts. `hub.publicHostUrl: /` makes Visit App links use this same public entry. This listener composition belongs only to Hub; it is not part of the embedded App contract or the Default and Examples templates.
+
 The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
 Business code belongs in a small, stable set of places:

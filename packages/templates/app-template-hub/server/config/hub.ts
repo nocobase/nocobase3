@@ -6,6 +6,7 @@ import type { HubPluginConfig } from '@nocobase/app-plugin-hub/server';
 import path from 'node:path';
 
 const hub: AppConfigFactory<HubPluginConfig> = defineAppConfig((runtime) => ({
+  publicHostUrl: '/',
   artifact: {
     driver: 'fs',
     location: runtime.configPaths.storage('app-artifacts'),
