@@ -137,6 +137,13 @@ export const createServiceRedisBackend: BackendFactory = (
     const addJobs = backend.addJobs.bind(backend);
     backend.addJob = (...args) => execute(() => addJob(...args));
     backend.addJobs = (...args) => execute(() => addJobs(...args));
+    const setQueueMeta = backend.setQueueMeta.bind(backend);
+    const removeQueueMetaFields = backend.removeQueueMetaFields.bind(backend);
+    const drain = backend.drain.bind(backend);
+    backend.setQueueMeta = (...args) => execute(() => setQueueMeta(...args));
+    backend.removeQueueMetaFields = (...args) =>
+      execute(() => removeQueueMetaFields(...args));
+    backend.drain = (...args) => execute(() => drain(...args));
   }
   return backend;
 };
