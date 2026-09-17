@@ -55,6 +55,42 @@ t('actions.save');
 
 Keys nest and are addressed with dots: `t('trigger.types.schedule')`.
 
+## Naming translation keys
+
+Use short semantic keys that describe the purpose of the text and stay valid when its wording changes. Use lower camelCase within each segment and dots for useful feature or context groups, such as `files.uploadFailed` or `demo.pageDescription`. A small namespace may use `title` directly. Do not use complete English sentences as keys or merely convert a sentence into camelCase.
+
+| Purpose              | Prefer                        | Avoid                                       |
+| -------------------- | ----------------------------- | ------------------------------------------- |
+| Page heading         | `orders.title`                | `Order list`                                |
+| Empty state          | `orders.empty`                | `orders.noOrdersHaveBeenCreatedYet`         |
+| Upload error         | `files.uploadFailed`          | `File upload failed.`                       |
+| Demo explanation     | `demo.pageDescription`        | `This page demonstrates the plugin.`        |
+| Action versus status | `actions.open`, `status.open` | Sharing `open` just because both say “Open” |
+
+Follow existing semantic groups and reuse keys only for the same meaning and translation context. Prefer nested objects for new groups; do not restructure existing flat dotted keys or rename unrelated keys solely for consistency. Keep the package name in the namespace, not repeated inside each key.
+
+Variables belong in translated values, not in keys. i18next plural suffixes `_one` and `_other` are exceptions to camelCase:
+
+```ts
+// client/locales/en-US.ts; mirror these keys in the other locales.
+const enUS = {
+  files: { uploadFailed: 'Could not upload {{name}}.' },
+  selection: {
+    count_one: '{{count}} item selected',
+    count_other: '{{count}} items selected',
+  },
+};
+```
+
+```tsx
+const NS = '@acme/app-plugin-files';
+const { t } = useTranslation(NS);
+t('files.uploadFailed', { name: file.name });
+t('selection.count', { count: selectedItems.length });
+```
+
+Keep keys stable when only wording changes. A key rename must update all locales, callers, route navigation/breadcrumb titles, and dynamic lookups together. Preserve custom labels and unknown server messages as fallback text. Type checking checks locale shape; review key naming separately.
+
 ## Naming a namespace
 
 Only in these two cases:

@@ -1,6 +1,13 @@
 import type { HubResource } from './en-US.js';
 
 const zhCN: HubResource = {
+  'common.close': '关闭',
+  'common.pagination': '分页',
+  'common.previous': '上一页',
+  'common.next': '下一页',
+  'common.previousPage': '上一页',
+  'common.nextPage': '下一页',
+  'common.morePages': '更多页',
   navigation: {
     applications: '应用管理',
     userAccess: '用户与权限',
@@ -316,14 +323,30 @@ const zhCN: HubResource = {
     remove: '删除应用',
   },
   development: {
-    title: '开发此应用',
-    description:
-      '使用此应用 ID 创建本地 NocoBase 项目，然后构建并从部署流程上传版本。',
-    createTitle: '创建新应用',
-    createDescription: '在存放源代码项目的目录中运行此命令。',
+    buildTitle: '构建版本',
+    projectSource: '项目来源',
+    prepareTitle: '准备项目',
+    title: '部署第一个版本',
+    description: '在本地准备好项目，再回到这里上传和部署。',
+    createTitle: '新建项目',
+    createDescription: '在存放源代码项目的目录中运行：',
     copyCommand: '复制 create-app 命令',
-    footer:
-      '此命令会在本地创建源代码项目。准备好后返回此处，选择“部署”上传第一个版本。',
+    footer: '进入生成的目录，完成本地初始化和开发后再构建。',
+    existingTitle: '已有项目',
+    existingDescription:
+      '进入已有的 NocoBase 3 项目目录，直接继续构建，无需重新创建项目。',
+    publishTitle: '上传并部署',
+    buildDescription: '在项目目录中运行，压缩包将保存到 storage/dist.tar.gz。',
+    copyBuild: '复制构建命令',
+    buildTarget:
+      '部署到另一台机器？使用 --target 和 --node-version 匹配 Hub 主机环境，支持的选项见 pnpm build --help。',
+    uploadDescription:
+      '在“版本”中上传 storage/dist.tar.gz，再到“部署”中点击“部署”，选择版本并检查配置。',
+    openReleases: '前往版本',
+    deployDescription: '上传不会启动应用，请在部署成功后再访问。',
+    openDeployments: '前往部署',
+    copyFailed: '复制失败，请手动选择并复制命令。',
+    copied: '命令已复制',
   },
   roles: {
     title: '角色权限',

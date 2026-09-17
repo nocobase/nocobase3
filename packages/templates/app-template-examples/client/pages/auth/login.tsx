@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement } from 'react';
 
 import { AuthLayout } from '../../extensions/nocobase-auth-ui/components/auth-layout.js';
@@ -5,13 +6,17 @@ import { PasswordLoginForm } from '../../extensions/nocobase-auth-ui/forms/passw
 import { authLogo, authMarketing } from './shared.js';
 
 export default function LoginPage(): ReactElement {
+  const { t } = useTranslation();
+
   return (
     <AuthLayout
-      description='Sign in with your username or email and password.'
+      description={t('auth.loginDescription', {
+        defaultValue: 'Sign in with your username or email and password.',
+      })}
       form={<PasswordLoginForm />}
       logo={authLogo}
       marketing={authMarketing}
-      title='Welcome back'
+      title={t('auth.welcome', { defaultValue: 'Welcome back' })}
     />
   );
 }

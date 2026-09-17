@@ -1,9 +1,6 @@
 import {
   ArrowLeft,
   CircleStop,
-  Clipboard,
-  ClipboardCheck,
-  Code2,
   ExternalLink,
   Play,
   RefreshCw,
@@ -11,12 +8,6 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { Button } from '../../components/ui/button.js';
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from '../../components/ui/card.js';
 import {
   Dialog as UiDialog,
   DialogContent,
@@ -26,7 +17,7 @@ import {
 } from '../../components/ui/dialog.js';
 import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs.js';
 import { useTranslation } from '@nocobase/i18n/client';
-import { useState, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import { Outlet } from 'react-router';
 import type { DetailTab, AppDetail } from './types.js';
 import { AppMark, StatusBadge } from './shared.js';
@@ -385,82 +376,5 @@ export function RemoveApplicationDialog({
         </div>
       </DialogContent>
     </UiDialog>
-  );
-}
-
-export function Development({
-  appId,
-}: {
-  readonly appId: string;
-}): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
-  const [copied, setCopied] = useState(false);
-  const command = `npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app ${appId}`;
-  const copy = async (): Promise<void> => {
-    await navigator.clipboard.writeText(command);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  };
-  return (
-    <div className='mx-auto max-w-3xl py-4'>
-      <div className='mb-6 flex items-start gap-4'>
-        <span className='grid size-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary'>
-          <Code2 className='size-5' />
-        </span>
-        <div>
-          <h2 className='text-lg font-semibold'>
-            {t('development.title', {
-              defaultValue: 'Develop this application',
-            })}
-          </h2>
-          <p className='mt-1 text-sm leading-6 text-muted-foreground'>
-            {t('development.description', {
-              defaultValue:
-                'Create a local NocoBase project using this application ID, then build and upload its release from the Deploy flow.',
-            })}
-          </p>
-        </div>
-      </div>
-      <Card className='overflow-hidden'>
-        <CardHeader className='border-b bg-muted/20'>
-          <p className='text-sm font-medium'>
-            {t('development.createTitle', {
-              defaultValue: 'Create a new application',
-            })}
-          </p>
-          <p className='mt-1 text-xs text-muted-foreground'>
-            {t('development.createDescription', {
-              defaultValue:
-                'Run this command in the directory where you keep source projects.',
-            })}
-          </p>
-        </CardHeader>
-        <CardContent className='p-0'>
-          <div className='flex items-center gap-3 bg-slate-950 px-4 py-4 text-slate-100'>
-            <span className='select-none text-slate-500'>$</span>
-            <code className='min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs sm:text-sm'>
-              {command}
-            </code>
-            <Button
-              aria-label={t('development.copyCommand', {
-                defaultValue: 'Copy create-app command',
-              })}
-              className='border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800'
-              onClick={() => void copy()}
-              size='icon'
-              variant='outline'
-            >
-              {copied ? <ClipboardCheck /> : <Clipboard />}
-            </Button>
-          </div>
-        </CardContent>
-        <CardFooter className='block bg-muted/20 text-xs leading-5 text-muted-foreground'>
-          {t('development.footer', {
-            defaultValue:
-              'The command creates the source project locally. When it is ready, return here and choose Deploy to upload the first release.',
-          })}
-        </CardFooter>
-      </Card>
-    </div>
   );
 }

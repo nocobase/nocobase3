@@ -1,3 +1,5 @@
+import { messageKey } from '../../lib/message-key.js';
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import { PageHeader } from '../../components/page-header.js';
 import {
   AIChatWindow,
@@ -171,6 +173,10 @@ function AIChatPageContent({
   webSearch: boolean;
   onWebSearchChange: (enabled: boolean) => void;
 }) {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const t = useAITranslate();
   const [container, setContainer] = useState<ChatContainer>('embedded');
   const [surfaceOpen, setSurfaceOpen] = useState(false);
@@ -296,9 +302,17 @@ function AIChatPageContent({
 
         <section className='space-y-5'>
           <SectionTitle
-            eyebrow='Container patterns'
-            title='Use the same conversation window wherever the product needs it'
-            description='The provider owns conversation state. Page, embedded block, push side panel, dialog, and mobile containers only decide placement and dimensions.'
+            eyebrow={translateDemo('demo.containerPatterns', {
+              defaultValue: 'Container patterns',
+            })}
+            title={translateDemo('demo.containersTitle', {
+              defaultValue:
+                'Use the same conversation window wherever the product needs it',
+            })}
+            description={translateDemo('demo.containersDescription', {
+              defaultValue:
+                'The provider owns conversation state. Page, embedded block, push side panel, dialog, and mobile containers only decide placement and dimensions.',
+            })}
           />
           <ContainerShowcase
             value={container}
@@ -309,36 +323,66 @@ function AIChatPageContent({
 
         <section className='space-y-5'>
           <SectionTitle
-            eyebrow='Message presentation'
-            title='Choose how much conversation history the page should expose'
-            description='Use the complete transcript for conversational work, or a compact worker surface that opens message history only when the user asks for it.'
+            eyebrow={translateDemo('demo.messagePresentation', {
+              defaultValue: 'Message presentation',
+            })}
+            title={translateDemo('demo.historyTitle', {
+              defaultValue:
+                'Choose how much conversation history the page should expose',
+            })}
+            description={translateDemo('demo.historyDescription', {
+              defaultValue:
+                'Use the complete transcript for conversational work, or a compact worker surface that opens message history only when the user asks for it.',
+            })}
           />
           <InteractionShowcase />
         </section>
 
         <section className='space-y-5'>
           <SectionTitle
-            eyebrow='Prompt generator'
-            title='Describe where chat belongs, then copy an implementation prompt'
-            description='This replaces a generic prop configuration panel with a task-oriented generator: choose the target area, placement mode, and required capabilities.'
+            eyebrow={translateDemo('demo.promptGenerator', {
+              defaultValue: 'Prompt generator',
+            })}
+            title={translateDemo('demo.promptGeneratorTitle', {
+              defaultValue:
+                'Describe where chat belongs, then copy an implementation prompt',
+            })}
+            description={translateDemo('demo.promptGeneratorDescription', {
+              defaultValue:
+                'This replaces a generic prop configuration panel with a task-oriented generator: choose the target area, placement mode, and required capabilities.',
+            })}
           />
           <PromptGenerator />
         </section>
 
         <section className='space-y-5'>
           <SectionTitle
-            eyebrow='Component API'
-            title='ChatSurface props'
-            description='Use variant as the single presentation switch. The child AIChatWindow remains the same React instance while the surface changes shape.'
+            eyebrow={translateDemo('demo.componentApi', {
+              defaultValue: 'Component API',
+            })}
+            title={translateDemo('demo.chatSurfaceProps', {
+              defaultValue: 'ChatSurface props',
+            })}
+            description={translateDemo('demo.surfacePropsDescription', {
+              defaultValue:
+                'Use variant as the single presentation switch. The child AIChatWindow remains the same React instance while the surface changes shape.',
+            })}
           />
           <PropsTable rows={surfacePropRows} />
         </section>
 
         <section className='space-y-5'>
           <SectionTitle
-            eyebrow='Component API'
-            title='AIChatWindow props'
-            description='The core window stays reusable while business pages provide placement, composer actions, and tool-approval behavior.'
+            eyebrow={translateDemo('demo.componentApi', {
+              defaultValue: 'Component API',
+            })}
+            title={translateDemo('demo.chatWindowProps', {
+              defaultValue: 'AIChatWindow props',
+            })}
+            description={translateDemo('demo.windowPropsDescription', {
+              defaultValue:
+                'The core window stays reusable while business pages provide placement, composer actions, and tool-approval behavior.',
+            })}
           />
           <PropsTable rows={propRows} />
         </section>
@@ -356,15 +400,29 @@ function AIChatPageContent({
 }
 
 function PropsTable({ rows }: { rows: string[][] }) {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   return (
     <Card className='gap-0 overflow-hidden py-0'>
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Prop</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Default</TableHead>
-            <TableHead>Description</TableHead>
+            <TableHead>
+              {translateDemo('demo.prop', { defaultValue: 'Prop' })}
+            </TableHead>
+            <TableHead>
+              {translateDemo('demo.type', { defaultValue: 'Type' })}
+            </TableHead>
+            <TableHead>
+              {translateDemo('demo.default', { defaultValue: 'Default' })}
+            </TableHead>
+            <TableHead>
+              {translateDemo('demo.description', {
+                defaultValue: 'Description',
+              })}
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -380,7 +438,9 @@ function PropsTable({ rows }: { rows: string[][] }) {
                 {defaultValue}
               </TableCell>
               <TableCell className='min-w-80 whitespace-normal text-muted-foreground'>
-                {description}
+                {translateDemo(messageKey(description), {
+                  defaultValue: description,
+                })}
               </TableCell>
             </TableRow>
           ))}

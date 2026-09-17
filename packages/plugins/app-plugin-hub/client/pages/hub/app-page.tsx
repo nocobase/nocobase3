@@ -43,6 +43,7 @@ import type {
 import { DETAIL_TABS } from './types.js';
 import { uploadArtifact, readError, type ReadableError } from './utils.js';
 import {
+  defaultHubDetailTab,
   emptyHubCapabilities,
   loadHubCapabilities,
   resolveHubDetailTab,
@@ -218,7 +219,15 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         capabilities,
       )
     : [];
-  const defaultTab = availableTabs[0];
+  const defaultTab = detail
+    ? defaultHubDetailTab(
+        {
+          hasReleases: detail.hasReleases,
+          deployed: Boolean(detail.app.currentDeploymentId),
+        },
+        capabilities,
+      )
+    : undefined;
   const isParentEntry = Boolean(
     matchPath({ path: appPath.pathname, end: true }, location.pathname),
   );

@@ -27,8 +27,8 @@ import { Switch } from '../../registry/nocobase-ai/shared/ui/switch.js';
 
 const transportLabels: Record<MCPTransport, string> = {
   stdio: 'Stdio',
-  http: 'HTTP (Streamable)',
-  sse: 'HTTP + SSE (Legacy)',
+  http: 'mcp.transportHttp',
+  sse: 'mcp.transportSse',
 };
 
 const transportColors: Record<MCPTransport, string> = {
@@ -106,7 +106,7 @@ export default function MCPPage(): ReactElement {
               className='mt-0.5 h-4 w-4 shrink-0'
               aria-hidden='true'
             />
-            <span>{t('MCP servers are configured in config.yml.')}</span>
+            <span>{t('mcp.configNotice')}</span>
           </p>
         </CardHeader>
         <CardContent className='p-0'>
@@ -232,12 +232,12 @@ function MCPDrawer({
         className='absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l bg-background shadow-xl'
         role='dialog'
         aria-modal='true'
-        aria-label={t('MCP tools')}
+        aria-label={t('mcp.toolsTitle')}
       >
         <div className='flex items-center justify-between border-b px-4 py-3'>
           <div className='flex items-center gap-2 font-semibold'>
             <Server className='h-4 w-4' />
-            {t('MCP tools')}
+            {t('mcp.toolsTitle')}
           </div>
           <button
             type='button'
@@ -296,7 +296,7 @@ function ToolsPanel({
   if (!tools.length)
     return (
       <div className='rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground'>
-        {t('No MCP tools available.')}
+        {t('mcp.toolsEmpty')}
       </div>
     );
   return (

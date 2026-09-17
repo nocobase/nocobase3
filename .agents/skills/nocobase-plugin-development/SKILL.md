@@ -162,6 +162,14 @@ Reuse the host application's `apiClientToken`: resolve it with `useService` in R
 - Follow repository and package `AGENTS.md` rules, including shared dev config,
   dependency protocols, and validation requirements.
 
+## Translation keys
+
+When adding or changing plugin text, read the [internationalization Skill's key naming rules](../../../packages/plugins/app-plugin-i18n/skills/nocobase-app-plugin-i18n/SKILL.md#naming-translation-keys). It covers locale files, interpolation, namespace ownership, and examples for both application and plugin text.
+
+Use concise semantic keys with lower camelCase segments and useful dot-separated groups: `orders.title`, `orders.empty`, `files.uploadFailed`, and `demo.pageDescription`. Do not use `File upload failed.` or turn a whole sentence into a long camelCase key. Keep package names in the namespace, and reuse a key only when its meaning and translation context match. Plural suffixes such as `selection.count_one` and `selection.count_other` are exceptions to camelCase; call `t('selection.count', { count })`.
+
+Keep keys stable when wording changes. When a rename is needed, update every locale, caller, navigation/breadcrumb title, and dynamic lookup together, preserving custom text fallbacks. Review naming explicitly: locale type checking does not enforce this convention.
+
 ## Resource and checksum contract
 
 Every Server plugin requires `baseDir`, an absolute resource base. In a declaration under `server/`, import `path` from `node:path` and set `baseDir: path.resolve(import.meta.dirname, '..')`. Database and Queue paths are relative to this base, not automatically to the package root. Compiled declarations resolve compiled resources without a source/dist fallback. Keep source and publish exports aligned, and never calculate this directory from the application's working directory.
