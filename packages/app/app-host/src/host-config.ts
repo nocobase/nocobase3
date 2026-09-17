@@ -202,38 +202,18 @@ function createDefaultHostLoggingConfig(
   rootDir: string,
   nodeEnv: string | undefined,
 ): ConfigMap {
-  const config: ConfigMap = {
-    default: 'host',
-    name: 'app-host',
+  return {
     level: 'info',
     base: { service: 'app-host' },
-  };
-  if (nodeEnv === 'production') {
-    return {
-      ...config,
-      transport: {
-        target: 'pino-roll',
-        options: {
-          file: path.join(rootDir, 'storage', 'host', 'logs', '{logger}.log'),
-          frequency: 'daily',
-          dateFormat: 'yyyy_MM_dd',
-          mkdir: true,
-          limit: { count: 6, removeOtherLogFiles: true },
-        },
-      },
-    };
-  }
-  return {
-    ...config,
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-        singleLine: true,
-      },
+    file: {
+      enabled: true,
+      directory: path.join(rootDir, 'storage', 'host', 'logs'),
+      retentionDays: 7,
+      name: 'host',
+      maxFileSizeMB: 10,
+      maxTotalSizeMB: 500,
     },
+    console: { enabled: true, pretty: nodeEnv !== 'production' },
   };
 }
 

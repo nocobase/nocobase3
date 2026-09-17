@@ -49,9 +49,12 @@ export class NotificationProvider<
       createNotificationManager<NotificationChannelMap>({
         database: container.resolve(databaseManagerToken),
         queue: container.resolve(queueManagerToken),
-        logger: container.resolve(loggingToken).getLogger().child({
-          module: 'notification',
-        }),
+        logger: container
+          .resolve(loggingToken)
+          .getLogger('notification')
+          .child({
+            module: 'notification',
+          }),
         config: this.app.config.get<NotificationConfig>('notification')!,
         registry,
       }),

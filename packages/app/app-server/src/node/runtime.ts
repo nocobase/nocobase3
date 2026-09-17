@@ -1,3 +1,4 @@
+import { loggingToken } from '../logging/token.js';
 import type { Application } from '../application/index.js';
 import { NodeServerProxy, type NodeServerProxyOptions } from './proxy.js';
 import {
@@ -160,8 +161,19 @@ async function startStandaloneServer(
 ): Promise<void> {
   const app = await createStandaloneServer(options);
 
+  const logger = app.application.container.has(loggingToken)
+    ? app.application.container.resolve(loggingToken).getLogger('server')
+    : undefined;
   try {
     await startNodeAppServer(app, {
+      ...(logger
+        ? {
+            logger: {
+              error: (message: string, err?: unknown) =>
+                logger.error({ err }, message),
+            },
+          }
+        : {}),
       hostname: app.listenOptions.hostname,
       port: app.listenOptions.port,
       onListen: (info): void => {
@@ -169,9 +181,9 @@ async function startStandaloneServer(
           return;
         }
 
-        console.log(
-          `App server listening on http://${info.address}:${info.port}`,
-        );
+        const message = `App server listening on http://${info.address}:${info.port}`;
+        if (logger) logger.info(message);
+        else console.log(message);
       },
     });
   } catch (error) {

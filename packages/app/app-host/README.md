@@ -39,10 +39,9 @@ host:
   appVolumesDir: ./storage/app-volumes
 ```
 
-The host owns its logging lifecycle. In production, the default rolling-file
-transport writes structured logs to `storage/host/logs/{logger}.log`; outside
-production, logs go to stdout. Set `host.logging` or `APP_HOST_LOG_LEVEL` to
-override the logging configuration.
+The Host owns its logging lifecycle. Both development and production write JSON Lines to `storage/host/logs/host.<UTC-date>.<part>.log` and independently emit terminal output. `host.logging.console.pretty` defaults to true in development and false in production. Configure `host.logging.file` with `enabled`, `name`, `retentionDays`, `maxFileSizeMB`, and `maxTotalSizeMB`; `APP_HOST_LOG_LEVEL` overrides the level. The Host selects source `host` explicitly, so no `default` option is needed. See [logging configuration](../../libs/logging/README.md).
+
+Hosted App runtime logs, including lifecycle and initialization failures, belong to `storage/app-volumes/<appId>/storage/logs/app.<UTC-date>.<part>.log`. App sources share that file unless `logging.loggers.<source>.file.name` selects a separate file. The Host passes capture policy and App/deployment/runtime identities to compatible application runtimes. Hub deployment journals remain separate, with one file per deployment operation.
 
 The directories have separate lifecycles:
 

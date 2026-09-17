@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { deploymentLog } from './deployment-log.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import {
@@ -158,6 +159,9 @@ export class DriveArtifactResolver implements ArtifactResolver {
         true,
       );
       if (cachedArtifact) {
+        deploymentLog('resolving', 'Reusing expanded release cache', {
+          cacheHit: true,
+        });
         this.logger?.info(
           {
             appId: reference.appId,
@@ -173,12 +177,16 @@ export class DriveArtifactResolver implements ArtifactResolver {
         return this.withRevisionCommit(cachedArtifact, revisionRoot, targetDir);
       }
 
+      deploymentLog('resolving', 'Reading release artifact');
       const checksumStartedAt = Date.now();
       const localPath = this.localArtifactPath(reference.key);
       const actualChecksum = localPath
         ? await hashLocalArtifact(localPath)
         : await downloadArtifact(this.disk, reference.key, archivePath);
       const checksumDurationMs = Date.now() - checksumStartedAt;
+      deploymentLog('verifying', 'Verifying artifact checksum', {
+        durationMs: checksumDurationMs,
+      });
       if (actualChecksum !== checksum) {
         throw new Error(
           `Artifact checksum mismatch for app "${reference.appId}": expected "${reference.checksum}", received "${actualChecksum}"`,
@@ -186,6 +194,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
       }
 
       await mkdir(stagingDir, { recursive: true, mode: 0o700 });
+      deploymentLog('extracting', 'Extracting release artifact');
       const extractStartedAt = Date.now();
       await extractTar({
         cwd: stagingDir,
@@ -196,6 +205,9 @@ export class DriveArtifactResolver implements ArtifactResolver {
         filter: assertSafeArchiveEntry,
       });
       const extractDurationMs = Date.now() - extractStartedAt;
+      deploymentLog('preparing', 'Validating application entry point', {
+        extractDurationMs,
+      });
       const discoveryStartedAt = Date.now();
       const stagedDefinition = await this.catalog.discoverAt(
         reference.appId,
@@ -303,12 +315,16 @@ export class DriveArtifactResolver implements ArtifactResolver {
         return installedArtifact;
       }
 
+      deploymentLog('resolving', 'Reading release artifact');
       const checksumStartedAt = Date.now();
       const localPath = this.localArtifactPath(reference.key);
       const actualChecksum = localPath
         ? await hashLocalArtifact(localPath)
         : await downloadArtifact(this.disk, reference.key, archivePath);
       const checksumDurationMs = Date.now() - checksumStartedAt;
+      deploymentLog('verifying', 'Verifying artifact checksum', {
+        durationMs: checksumDurationMs,
+      });
       phases.complete('artifact download', checksumDurationMs);
       currentPhase = 'checksum verification';
       if (actualChecksum !== reference.checksum) {
@@ -319,6 +335,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
 
       currentPhase = 'extract';
       await mkdir(stagingDir, { recursive: true, mode: 0o700 });
+      deploymentLog('extracting', 'Extracting release artifact');
       const extractStartedAt = Date.now();
       await extractTar({
         cwd: stagingDir,
@@ -331,6 +348,9 @@ export class DriveArtifactResolver implements ArtifactResolver {
       const extractDurationMs = Date.now() - extractStartedAt;
       phases.complete('extract', extractDurationMs);
       currentPhase = 'discovery';
+      deploymentLog('preparing', 'Validating application entry point', {
+        extractDurationMs,
+      });
       const discoveryStartedAt = Date.now();
       const stagedDefinition = await this.catalog.discoverAt(
         reference.appId,

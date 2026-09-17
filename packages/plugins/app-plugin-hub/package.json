@@ -82,7 +82,8 @@
     "hono": "catalog:",
     "tar": "^7.4.3",
     "yaml": "^2.8.1",
-    "better-auth": "catalog:"
+    "better-auth": "catalog:",
+    "@nocobase/logging": "workspace:^"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
@@ -120,7 +121,6 @@
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
-    "@nocobase/logging": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "knex": "catalog:",

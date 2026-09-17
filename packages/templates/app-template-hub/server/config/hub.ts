@@ -7,6 +7,25 @@ import path from 'node:path';
 
 const hub: AppConfigFactory<HubPluginConfig> = defineAppConfig((runtime) => ({
   publicHostUrl: '/',
+  logging: {
+    deployments: {
+      enabled: true,
+      retentionDays: 30,
+      maxFileSizeMB: 50,
+      maxTotalSizeMB: 1024,
+    },
+    apps: {
+      level: 'info',
+      file: {
+        enabled: true,
+        name: 'app',
+        retentionDays: 7,
+        maxFileSizeMB: 10,
+        maxTotalSizeMB: 500,
+      },
+      console: { enabled: true, pretty: false },
+    },
+  },
   artifact: {
     driver: 'fs',
     location: runtime.configPaths.storage('app-artifacts'),

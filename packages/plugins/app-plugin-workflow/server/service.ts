@@ -1,3 +1,4 @@
+import type { WorkflowLogger } from './engine/types.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { DatabaseManager } from '@nocobase/db';
@@ -30,6 +31,7 @@ import { workflowStore, type WorkflowStore } from './collections/store.js';
 import { createWorkflowRunServices } from './engine/run-services.js';
 
 export interface WorkflowServiceOptions {
+  logger?: WorkflowLogger;
   database: DatabaseManager;
   queue: NocoBaseQueueManager;
   queueName?: string;
@@ -59,6 +61,7 @@ export class WorkflowService {
       storeRoot: options.artifactDisk.location,
     });
     this.engine = new WorkflowEngine({
+      logger: options.logger,
       database: options.database,
       queue: options.queue,
       ...(options.queueName === undefined

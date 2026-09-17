@@ -40,9 +40,10 @@ describe('application config', () => {
       visibility: 'private',
     });
     expect(drive.disks.public).toBeUndefined();
-    expect(runtime.config.get<AppLoggingConfig>('logging')!.default).toBe(
-      'system',
-    );
+    expect(
+      runtime.config.get<AppLoggingConfig>('logging')!.default,
+    ).toBeUndefined();
+    expect(runtime.config.get('logging.file.name')).toBe('app');
     expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
     expect(runtime.config.get<AppSessionConfigInput>('session')!.default).toBe(
       'memory',
@@ -73,7 +74,7 @@ describe('application config', () => {
       '127.0.0.1',
     );
     expect(runtime.config.get('session.stores.redis.host')).toBe('127.0.0.1');
-    expect(runtime.config.get('logging.pretty')).toBe(false);
+    expect(runtime.config.get('logging.console.pretty')).toBe(false);
     expect(runtime.config.get('session.cookie.secure')).toBe(true);
     expect(runtime.config.get('workflow')).toBeUndefined();
     expect(runtime.config.get('notification')).toBeUndefined();

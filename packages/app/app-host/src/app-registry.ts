@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import { deploymentLog } from './deployment-log.js';
 import type { AppConfigReloadResult } from '@nocobase/app-server/config';
 import {
   InvalidAppIdError,
@@ -419,6 +420,7 @@ export class AppRuntimeRegistry {
     } = options;
 
     if (currentRuntime) {
+      deploymentLog('starting', 'Stopping previous application instance');
       await currentRuntime.destroy({ reason, timeoutMs: destroyTimeoutMs });
       if (this.runtimes.get(id) === currentRuntime) {
         this.runtimes.delete(id);
@@ -435,10 +437,21 @@ export class AppRuntimeRegistry {
       }
 
       try {
+        deploymentLog(
+          'starting',
+          'Restoring previous application after activation failure',
+          { err: activationError },
+        );
         const restoredRuntime =
           await this.activateDefinition(currentDefinition);
         this.runtimes.set(id, restoredRuntime);
+        deploymentLog('starting', 'Previous application restored');
       } catch (restoreError) {
+        deploymentLog(
+          'starting',
+          'Previous application could not be restored',
+          { err: restoreError },
+        );
         throw new AggregateError(
           [activationError, restoreError],
           `App "${id}" failed to activate the replacement and restore the previous runtime`,
@@ -798,6 +811,8 @@ export class AppRuntimeRegistry {
 
     return {
       id,
+      deploymentId: options.deploymentId,
+      logging: options.logging,
       appName: options.appName,
       basePath: options.basePath ?? `/${options.appName ?? id}`,
       enabled: options.enabled ?? true,

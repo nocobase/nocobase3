@@ -103,6 +103,61 @@ describe('managed host reconciliation', () => {
     },
   );
 
+  it('captures deployment stages and initialization errors before restoring the running app', async () => {
+    const fixture = await createFixture();
+    const host = createAppHost({
+      mode: 'managed',
+      appDeploymentsDir: fixture.deploymentsDir,
+      appVolumesDir: fixture.volumesDir,
+      artifact: fsArtifact(fixture.artifactDir),
+      evictionIntervalMs: 0,
+    });
+    hosts.push(host);
+    const entries: Array<Record<string, unknown>> = [];
+    const first = deploymentSet(1, fixture.artifact, { activation: 'eager' })
+      .deployments[0]!;
+    await host.management.applyDeployment(
+      { ...first, operationId: 'first-operation' },
+      (entry) => entries.push(entry),
+    );
+    expect(entries.some((entry) => entry.phase === 'extracting')).toBe(true);
+    expect(
+      entries.every((entry) => entry.deploymentId === 'first-operation'),
+    ).toBe(true);
+    await writeFile(
+      path.join(fixture.appRoot, 'dist', 'server', 'embedded.js'),
+      'export function createServer() { throw new Error("session.secret is still set to the default value"); }',
+    );
+    const artifact = await createArtifact(fixture, '1.2.4');
+    entries.length = 0;
+    const result = await host.management.applyDeployment(
+      { ...first, artifact, operationId: 'failed-operation' },
+      (entry) => entries.push(entry),
+    );
+    expect(result.deployments[0]?.observedState).toBe('failed');
+    expect(JSON.stringify(entries)).toContain('session.secret');
+    expect(
+      entries.some(
+        (entry) => entry.err && JSON.stringify(entry.err).includes('stack'),
+      ),
+    ).toBe(true);
+    expect(host.registry.isActive('customer')).toBe(true);
+    const directory = path.join(
+      fixture.volumesDir,
+      'customer',
+      'storage',
+      'logs',
+    );
+    const files = await readdir(directory);
+    const content = (
+      await Promise.all(
+        files.map((file) => readFile(path.join(directory, file), 'utf8')),
+      )
+    ).join('');
+    expect(content).toContain('Application initialization failed');
+    expect(content).toContain('failed-operation');
+  });
+
   it('rejects configuration publishing without a registered runtime config', async () => {
     const fixture = await createFixture();
     const host = createAppHost({

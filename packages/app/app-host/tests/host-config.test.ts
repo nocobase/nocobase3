@@ -33,10 +33,8 @@ describe('loadAppHostConfig', () => {
       environment: { NODE_ENV: 'development' },
     });
     expect(config.logging).toMatchObject({
-      transport: {
-        target: 'pino-pretty',
-        options: { colorize: true, singleLine: true },
-      },
+      file: { enabled: true },
+      console: { enabled: true, pretty: true },
     });
   });
 
@@ -120,17 +118,13 @@ describe('loadAppHostConfig', () => {
     });
 
     expect(config.logging).toMatchObject({
-      default: 'host',
       level: 'info',
       base: { service: 'app-host' },
-      transport: {
-        target: 'pino-roll',
-        options: {
-          file: path.join(rootDir, 'storage/host/logs/{logger}.log'),
-          frequency: 'daily',
-          mkdir: true,
-        },
+      file: {
+        enabled: true,
+        directory: path.join(rootDir, 'storage/host/logs'),
       },
+      console: { enabled: true, pretty: false },
     });
   });
 });

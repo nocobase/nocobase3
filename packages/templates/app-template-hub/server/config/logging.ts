@@ -6,28 +6,19 @@ import type { AppLoggingConfig } from '@nocobase/app-server/logging';
 
 const logging: AppConfigFactory<AppLoggingConfig> = defineAppConfig(
   (runtime) => ({
-    default: 'system',
-    name: 'app',
     level: 'info',
-    pretty: runtime.env.NODE_ENV !== 'production',
-    base: { service: 'app' },
-    redact: [
-      'password',
-      'password_confirmation',
-      'token',
-      'accessToken',
-      'refreshToken',
-      'secret',
-      'authorization',
-      'Authorization',
-      'cookie',
-      'Cookie',
-      'headers.authorization',
-      'headers.Authorization',
-      'headers.cookie',
-      'headers.Cookie',
-    ],
+    file: {
+      enabled: true,
+      name: 'app',
+      retentionDays: 7,
+      maxFileSizeMB: 10,
+      maxTotalSizeMB: 500,
+    },
+    loggers: {
+      request: { file: { name: 'request' } },
+    },
+    console: { enabled: true, pretty: runtime.env.NODE_ENV !== 'production' },
+    base: { service: 'hub' },
   }),
 );
-
 export default logging;

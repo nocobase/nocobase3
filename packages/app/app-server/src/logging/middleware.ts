@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Context, Hono, MiddlewareHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { Logger } from '@nocobase/logging';
@@ -37,12 +38,13 @@ export function requestLogger(
       return;
     }
 
+    const logger = options.logger.child({ requestId: randomUUID() });
     const startedAt = Date.now();
     const app = options.app;
     const method = context.req.method;
     const path = context.req.path;
 
-    options.logger.info(
+    logger.info(
       {
         ...(app ? { app } : {}),
         req: {
@@ -61,7 +63,7 @@ export function requestLogger(
     try {
       await next();
     } catch (error) {
-      options.logger.error(
+      logger.error(
         completionBindings(
           context,
           app,
@@ -88,14 +90,14 @@ export function requestLogger(
     );
 
     if (status >= 500) {
-      options.logger.error(bindings, `${method} ${path} ${status} failed`);
+      logger.error(bindings, `${method} ${path} ${status} failed`);
       return;
     }
     if (status >= 400) {
-      options.logger.warn(bindings, `${method} ${path} ${status} completed`);
+      logger.warn(bindings, `${method} ${path} ${status} completed`);
       return;
     }
-    options.logger.info(bindings, `${method} ${path} ${status} completed`);
+    logger.info(bindings, `${method} ${path} ${status} completed`);
   });
 }
 

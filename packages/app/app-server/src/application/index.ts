@@ -1,3 +1,4 @@
+import type { AppRuntimeLogging } from '../logging/config.js';
 import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
 import { type AppIdentityConfig } from '../config/index.js';
@@ -49,6 +50,7 @@ export interface ApplicationOptions<
   readonly mode?: 'standalone' | 'embedded';
   readonly paths: ConfigPaths;
   readonly websocket?: ApplicationWebSocketFactory;
+  readonly runtimeLogging?: AppRuntimeLogging;
 }
 
 export type ApplicationServiceProviderConstructor<
@@ -78,6 +80,7 @@ export interface ApplicationRuntimeContributions<
 export class Application<
   TConfig extends ApplicationConfig = ApplicationConfig,
 > {
+  public readonly runtimeLogging: AppRuntimeLogging | undefined;
   public readonly config: TConfig;
   public readonly mode: 'standalone' | 'embedded';
   public readonly paths: ConfigPaths;
@@ -117,6 +120,7 @@ export class Application<
   private applicationLocales: AppServerPluginLocalesLoader | undefined;
 
   public constructor(options: ApplicationOptions<TConfig>) {
+    this.runtimeLogging = options.runtimeLogging;
     this.config = options.config;
     this.mode = options.mode ?? 'embedded';
     this.paths = options.paths;

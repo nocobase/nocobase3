@@ -23,6 +23,7 @@ import { spaRootRoutes } from '@nocobase/app-server/spa';
 export function createApp(runtime: AppRuntimeContext): Application {
   const app = new Application<ApplicationConfig>({
     config: runtime.config,
+    runtimeLogging: runtime.scope.logging,
     mode: runtime.mode,
     paths: runtime.configPaths,
   });

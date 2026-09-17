@@ -4,6 +4,19 @@ import { Readable } from 'node:stream';
 import { receiveArtifact, validateIdempotencyKey } from './artifact-upload.js';
 import { isPlaceholderSecret } from '@nocobase/app-server/config';
 import type { HubApiKeyService } from './api-keys.js';
+
+import { normalizeRuntimeLogging } from '@nocobase/app-server/logging';
+import {
+  appendJournal,
+  readJournal,
+  pruneJournals,
+  normalizeFileOptions,
+  createDiagnosticLogger,
+  reportLoggingFailure,
+  type Logger,
+  type JournalPage,
+  type JournalQuery,
+} from '@nocobase/logging';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   chmod,
@@ -11,6 +24,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rename,
   rm,
   writeFile,
@@ -19,6 +33,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type {
+  DeploymentLogListener,
   HostDeploymentSet,
   HostDeploymentSpec,
   HostManagementService,
@@ -86,6 +101,8 @@ const DEFAULT_STARTUP_RESTORATION_WAIT_MS = 5_000;
 
 export interface DefaultHubServiceOptions {
   readonly apiKeys?: Pick<HubApiKeyService, 'removeAppKeys'>;
+
+  readonly logger?: Logger;
   readonly database: DatabaseManager;
   readonly config: HubPluginConfig;
   readonly hostController: HubHostController;
@@ -104,7 +121,10 @@ export interface HubHostController {
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<{ readonly status: HostStatus }>;
-  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
+  applyDeployment(
+    deployment: HostDeploymentSpec,
+    listener?: DeploymentLogListener,
+  ): Promise<HostStatus>;
   startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
   stopDeployment(appId: string): Promise<HostStatus>;
   removeDeployment(appId: string): Promise<HostStatus>;
@@ -123,6 +143,7 @@ export class HubError extends Error {
 }
 
 export class DefaultHubService implements HubService {
+  private readonly diagnostic: ReturnType<typeof createDiagnosticLogger>;
   private readonly disk: NocoBaseDriveDisk;
   private readonly hostController: HubHostController;
   private readonly locks = new Map<string, Promise<unknown>>();
@@ -132,6 +153,7 @@ export class DefaultHubService implements HubService {
   private unsubscribeHostReady: (() => void) | undefined;
 
   public constructor(private readonly options: DefaultHubServiceOptions) {
+    this.diagnostic = createDiagnosticLogger(options.logger);
     const drive = createDriveManager({
       default: 'artifact',
       disks: { artifact: options.config.artifact },
@@ -145,7 +167,153 @@ export class DefaultHubService implements HubService {
       recursive: true,
       mode: 0o700,
     });
+    const deployments = this.options.config.logging?.deployments;
+    if (deployments?.maxSizeMB !== undefined)
+      reportLoggingFailure(
+        'hub.logging.deployments.maxSizeMB is deprecated; use maxFileSizeMB',
+      );
+    normalizeFileOptions({
+      retentionDays: deployments?.retentionDays ?? 30,
+      maxFileSizeMB: deployments?.maxSizeMB ?? deployments?.maxFileSizeMB ?? 50,
+      maxTotalSizeMB: deployments?.maxTotalSizeMB ?? 1024,
+    });
+    normalizeFileOptions(
+      normalizeRuntimeLogging(this.options.config.logging?.apps).file ?? {},
+    );
     await this.writeHostConfig();
+  }
+
+  private deploymentLogPath(appId: string, deploymentId: string): string {
+    if (!APP_ID_PATTERN.test(appId) || !APP_ID_PATTERN.test(deploymentId))
+      throw new HubError('Invalid log identity.', 'INVALID_LOG_ID', 400);
+    return path.join(
+      path.dirname(this.options.config.host.configPath),
+      'deployment-logs',
+      appId,
+      `${deploymentId}.log`,
+    );
+  }
+
+  private logDeployment(
+    deployment: HubDeploymentRecord,
+    phase: string,
+    msg: string,
+    err?: unknown,
+  ): void {
+    const policy = this.options.config.logging?.deployments;
+    if (policy?.enabled === false) return;
+    this.appendDeploymentLog(deployment, {
+      time: new Date().toISOString(),
+      level: err ? 'error' : 'info',
+      appId: deployment.appId,
+      deploymentId: deployment.id,
+      phase,
+      msg,
+      ...(err ? { err } : {}),
+    });
+  }
+
+  private appendDeploymentLog(
+    deployment: HubDeploymentRecord,
+    entry: Parameters<typeof appendJournal>[1],
+  ): void {
+    try {
+      appendJournal(
+        this.deploymentLogPath(deployment.appId, deployment.id),
+        entry,
+        this.options.config.logging?.deployments?.maxSizeMB ??
+          this.options.config.logging?.deployments?.maxFileSizeMB ??
+          50,
+      );
+    } catch (error) {
+      reportLoggingFailure('Failed to persist deployment log', error);
+    }
+  }
+
+  public async readLogs(
+    appId: string,
+    query: JournalQuery = {},
+    deploymentId?: string,
+  ): Promise<
+    JournalPage & { enabled: boolean; status?: string; phase?: string }
+  > {
+    await this.requireApp(appId);
+    if (!APP_ID_PATTERN.test(appId))
+      throw new HubError('Invalid app ID.', 'INVALID_APP_ID', 400);
+    const deployment = deploymentId
+      ? await this.getDeployment(appId, deploymentId)
+      : undefined;
+    const policy = deployment
+      ? this.options.config.logging?.deployments
+      : normalizeRuntimeLogging(this.options.config.logging?.apps).file;
+    const directory = deployment
+      ? path.dirname(this.deploymentLogPath(appId, deployment.id))
+      : path.join(
+          this.options.config.host.appVolumesDir,
+          appId,
+          'storage',
+          'logs',
+        );
+    try {
+      const base = deployment
+        ? path.join(
+            path.dirname(this.options.config.host.configPath),
+            'deployment-logs',
+          )
+        : this.options.config.host.appVolumesDir;
+      try {
+        const canonicalBase = await realpath(base);
+        const expected = path.join(
+          canonicalBase,
+          path.relative(base, directory),
+        );
+        if ((await realpath(directory)) !== expected)
+          throw new HubError(
+            'Invalid log directory.',
+            'INVALID_LOG_DIRECTORY',
+            400,
+          );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      await pruneJournals(
+        directory,
+        {
+          retentionDays: policy?.retentionDays ?? (deployment ? 30 : 7),
+          maxSizeMB: deployment
+            ? (this.options.config.logging?.deployments?.maxTotalSizeMB ?? 1024)
+            : (normalizeRuntimeLogging(this.options.config.logging?.apps).file
+                ?.maxTotalSizeMB ??
+              policy?.maxSizeMB ??
+              500),
+        },
+        deployment && ['queued', 'deploying'].includes(deployment.status)
+          ? `${deployment.id}.log`
+          : undefined,
+      );
+      const result = await readJournal(
+        directory,
+        query,
+        deployment ? `${deployment.id}.log` : undefined,
+      );
+      return {
+        ...result,
+        enabled: policy?.enabled !== false,
+        ...(deployment
+          ? {
+              status: deployment.status,
+              phase:
+                typeof result.entries.at(-1)?.phase === 'string'
+                  ? (result.entries.at(-1)!.phase as string)
+                  : deployment.phase,
+            }
+          : {}),
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Invalid log cursor')
+        throw new HubError(error.message, 'INVALID_LOG_CURSOR', 400);
+      throw error;
+    }
   }
 
   public async listApps(): Promise<readonly HubAppSummary[]> {
@@ -571,7 +739,7 @@ export class DefaultHubService implements HubService {
           if (winner) return winner;
           throw error;
         }
-        if (deployment) this.schedule(appId, deployment.id);
+        if (deployment) this.schedule(deployment);
         return {
           ...release,
           reused: false,
@@ -827,7 +995,7 @@ export class DefaultHubService implements HubService {
         }
         throw error;
       }
-      this.schedule(app.id, deployment.id);
+      this.schedule(deployment);
       return deployment;
     });
   }
@@ -881,7 +1049,7 @@ export class DefaultHubService implements HubService {
         input.config ?? { mode: target.config.mode },
         target.config,
       );
-      this.schedule(app.id, deployment.id);
+      this.schedule(deployment);
       return deployment;
     });
   }
@@ -1048,6 +1216,10 @@ export class DefaultHubService implements HubService {
         });
         await Promise.allSettled([
           ...releases.map((release) => this.disk.delete(release.artifactKey)),
+          rm(path.dirname(this.deploymentLogPath(appId, 'cleanup')), {
+            recursive: true,
+            force: true,
+          }),
           rm(
             path.join(
               path.dirname(this.options.config.host.configPath),
@@ -1106,6 +1278,18 @@ export class DefaultHubService implements HubService {
   public async restoreDesiredState(): Promise<void> {
     await this.prepare();
     const recoveredAt = new Date();
+    const interrupted = await this.query()
+      .selectFrom('hubAppDeployments')
+      .selectAll()
+      .where('status', 'in', ['queued', 'deploying'])
+      .execute<Row>();
+    for (const row of interrupted)
+      this.logDeployment(
+        decodeDeployment(row),
+        'completed',
+        'Deployment interrupted by a Hub restart',
+        new Error('Hub restarted before deployment completion'),
+      );
     await this.query()
       .updateTable('hubAppDeployments')
       .set({
@@ -1132,7 +1316,7 @@ export class DefaultHubService implements HubService {
       )
       .then(() => undefined)
       .catch((error: unknown) =>
-        console.error('Failed to restore app-host applications', error),
+        this.diagnostic.error('Failed to restore app-host applications', error),
       )
       .finally(() => {
         if (this.startupReconciliation === restoration)
@@ -1168,6 +1352,8 @@ export class DefaultHubService implements HubService {
       // Host deployment identity is stable per App. Hub deployment IDs are
       // immutable operation-history identities and must not replace it.
       id: app.id,
+      operationId: deployment.id,
+      logging: this.options.config.logging?.apps,
       appId: app.id,
       artifact: {
         key: release.artifactKey,
@@ -1550,10 +1736,11 @@ export class DefaultHubService implements HubService {
     return { mode: 'file', path: configPath };
   }
 
-  private schedule(appId: string, deploymentId: string): void {
-    void this.withLock(appId, () => this.runDeployment(deploymentId)).catch(
-      () => undefined,
-    );
+  private schedule(deployment: HubDeploymentRecord): void {
+    this.logDeployment(deployment, 'queued', 'Deployment queued');
+    void this.withLock(deployment.appId, () =>
+      this.runDeployment(deployment.id),
+    ).catch(() => undefined);
   }
 
   private async getDeploymentById(
@@ -1574,6 +1761,9 @@ export class DefaultHubService implements HubService {
     const app = await this.requireApp(deployment.appId);
     const previous = await this.currentDeployment(app);
     let rejectedByHost = false;
+    let phaseWrites = Promise.resolve();
+    let lastSequence = 0;
+    let phaseError: Error | undefined;
     await this.updateDeployment(deploymentId, {
       status: 'deploying',
       phase: 'resolving',
@@ -1582,14 +1772,39 @@ export class DefaultHubService implements HubService {
       previousDeploymentId: app.currentDeploymentId,
     });
     try {
-      await this.updateDeployment(deploymentId, { phase: 'starting' });
+      this.logDeployment(deployment, 'resolving', 'Deployment started');
       const hostStatus = await this.hostController.applyDeployment(
         await this.createDeploymentSpec(
           { ...app, enabled: true },
           deployment,
           'running',
         ),
+        this.options.config.logging?.deployments?.enabled === false
+          ? undefined
+          : (entry) => {
+              if (typeof entry.sequence === 'number') {
+                if (entry.sequence <= lastSequence) return;
+                lastSequence = entry.sequence;
+              }
+              if (typeof entry.phase === 'string') {
+                const phase = entry.phase as HubDeploymentRecord['phase'];
+                phaseWrites = phaseWrites
+                  .then(() => this.updateDeployment(deploymentId, { phase }))
+                  .then(() => undefined)
+                  .catch((error: unknown) => {
+                    phaseError =
+                      error instanceof Error ? error : new Error(String(error));
+                  });
+              }
+              this.appendDeploymentLog(deployment, {
+                ...entry,
+                appId: app.id,
+                deploymentId: deployment.id,
+              });
+            },
       );
+      await phaseWrites;
+      if (phaseError) throw phaseError;
       const observed = hostStatus.deployments.find(
         (candidate) => candidate.appId === app.id,
       );
@@ -1599,6 +1814,7 @@ export class DefaultHubService implements HubService {
           observed?.error ?? 'Host did not report deployment status.',
         );
       }
+      this.logDeployment(deployment, 'completed', 'Deployment succeeded');
       const finishedAt = new Date();
       await this.options.database.transaction(async (connection) => {
         await connection.query
@@ -1624,6 +1840,15 @@ export class DefaultHubService implements HubService {
       });
       if (previous) await this.removeDeploymentConfig(previous);
     } catch (error) {
+      await phaseWrites.catch(() => undefined);
+      try {
+        this.logDeployment(deployment, 'completed', 'Deployment failed', error);
+      } catch (logError) {
+        reportLoggingFailure(
+          'Failed to persist deployment failure log',
+          logError,
+        );
+      }
       await this.updateDeployment(deploymentId, {
         status: 'failed',
         phase: 'completed',
@@ -1633,6 +1858,18 @@ export class DefaultHubService implements HubService {
       // An IPC failure can occur after activation. Keep the candidate file
       // unless the host has explicitly reported that the deployment failed.
       if (rejectedByHost) await this.removeDeploymentConfig(deployment);
+    } finally {
+      const policy = this.options.config.logging?.deployments;
+      await pruneJournals(
+        path.dirname(this.deploymentLogPath(app.id, deployment.id)),
+        {
+          retentionDays: policy?.retentionDays ?? 30,
+          maxSizeMB: policy?.maxTotalSizeMB ?? 1024,
+        },
+        `${deployment.id}.log`,
+      ).catch((error: unknown) =>
+        reportLoggingFailure('Deployment log cleanup failed', error),
+      );
     }
   }
 
@@ -1656,6 +1893,9 @@ export class DefaultHubService implements HubService {
     const document = {
       host: {
         mode: 'managed',
+        ...(this.options.config.host.logging
+          ? { logging: this.options.config.host.logging }
+          : {}),
         server: { host: '127.0.0.1', port: 3000 },
         artifact: normalizeArtifactConfig(this.options.config.artifact),
         appDeploymentsDir: this.options.config.host.appDeploymentsDir,

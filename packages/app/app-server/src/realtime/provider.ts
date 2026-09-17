@@ -1,3 +1,4 @@
+import { loggingToken } from '../logging/token.js';
 import {
   ServiceProvider,
   type ServiceContainer,
@@ -17,7 +18,11 @@ export class RealtimeProvider<
 
   public override register(): void {
     this.app.container.singleton(realtimeServiceToken, () =>
-      createRealtimeService(),
+      createRealtimeService({
+        logger: this.app.container.has(loggingToken)
+          ? this.app.container.resolve(loggingToken).getLogger('realtime')
+          : undefined,
+      }),
     );
   }
 

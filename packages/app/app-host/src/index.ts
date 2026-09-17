@@ -100,13 +100,11 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   const mode = resolveAppHostMode(options.mode);
   const logging = createLogging(
     options.logging ?? {
-      default: 'host',
-      name: 'app-host',
       level: 'info',
       base: { service: 'app-host' },
     },
   );
-  const logger = logging.getLogger();
+  const logger = logging.getLogger('host');
   const deploymentCatalog = new DeploymentCatalog({
     deploymentsDir: options.appDeploymentsDir,
     volumesDir: options.appVolumesDir,
@@ -140,6 +138,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   });
   attachAppEventLogs(registry, logger);
   const manager = new HostManager({
+    logger,
     mode,
     registry,
     deploymentCatalog,

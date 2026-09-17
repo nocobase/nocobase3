@@ -1434,6 +1434,8 @@ describe('Hub API Key HTTP boundary', () => {
       '/hub/api-keys',
       '/hub/apps/crm/releases',
       '/hub/apps/crm/deployments',
+      '/hub/apps/crm/logs',
+      '/hub/apps/crm/deployments/op-1/logs',
     ])
       expect((await api.request(path, { headers })).status).toBe(403);
     expect(listReleases).not.toHaveBeenCalled();

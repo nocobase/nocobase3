@@ -1,3 +1,4 @@
+import type { AppRuntimeLogging } from '../logging/config.js';
 import type {
   ServiceContainer,
   ServiceProviderLifecycle,
@@ -10,6 +11,7 @@ import type { ConfigPaths } from '../config/index.js';
 import type { AppRouteContribution } from '../router/index.js';
 
 export interface AppPluginApplication<TConfig = object> {
+  readonly runtimeLogging?: AppRuntimeLogging;
   readonly appName: string;
   /**
    * Whether this app owns the process it runs in, or is one of several an

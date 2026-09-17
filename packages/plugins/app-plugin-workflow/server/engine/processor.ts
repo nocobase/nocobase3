@@ -1,3 +1,4 @@
+import { bindWorkflowLogger } from './logger.js';
 import type { DatabaseManager } from '@nocobase/db';
 
 import { workflowStore, type WorkflowStore } from '../collections/store.js';
@@ -121,7 +122,10 @@ export default class Processor {
     this.workflowResourceRoot = options.workflowResourceRoot;
     this.services = options.services;
     this.instructions = options.instructions;
-    this.logger = options.logger ?? noopWorkflowLogger;
+    this.logger = bindWorkflowLogger(options.logger ?? noopWorkflowLogger, {
+      workflowId: options.workflow.id,
+      executionId: options.execution.id,
+    });
     this.environment = options.environment;
     this.functions = options.functions ?? {};
   }
@@ -328,6 +332,8 @@ export default class Processor {
       `Running instruction "${node.type}" for node "${node.key}"`,
       {
         executionId: this.execution.id,
+        nodeId: node.id,
+        nodeKey: node.key,
       },
     );
     const nodeRun = await this.createNodeRun(node);
@@ -474,7 +480,11 @@ export default class Processor {
     this.nodeResultsByNodeKey[nodeRun.nodeKey] = nodeRun.result;
     this.logger.debug(
       `Saved node run "${nodeRun.id}" for node "${nodeRun.nodeKey}"`,
-      { status: nodeRun.status },
+      {
+        status: nodeRun.status,
+        nodeId: nodeRun.nodeId,
+        nodeKey: nodeRun.nodeKey,
+      },
     );
     return nodeRun;
   }
@@ -710,7 +720,7 @@ export default class Processor {
     } catch (error) {
       this.logger.error(
         `Instruction "${node.type}" failed for node "${node.key}"`,
-        { error },
+        { error, nodeId: node.id, nodeKey: node.key },
       );
       result = {
         status: this.abortSignal.aborted

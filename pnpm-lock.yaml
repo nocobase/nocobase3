@@ -502,6 +502,9 @@ importers:
 
   packages/app/app-host:
     dependencies:
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../app-server
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../app-websocket
@@ -518,9 +521,6 @@ importers:
         specifier: ^7.4.3
         version: 7.5.22
     devDependencies:
-      '@nocobase/app-server':
-        specifier: workspace:*
-        version: link:../app-server
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -2702,6 +2702,9 @@ importers:
       '@nocobase/i18n':
         specifier: workspace:^
         version: link:../../libs/i18n
+      '@nocobase/logging':
+        specifier: workspace:^
+        version: link:../../libs/logging
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -2745,9 +2748,6 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
-      '@nocobase/logging':
-        specifier: workspace:*
-        version: link:../../libs/logging
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)

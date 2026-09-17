@@ -1,3 +1,4 @@
+import type { AppRuntimeLogging } from '../logging/config.js';
 import type { EnvMap } from '../config/index.js';
 import type { AppConfigAccessor } from '../config/index.js';
 import type { ApplicationFetchHandler } from '../application/index.js';
@@ -34,6 +35,7 @@ export interface AppPathOptions {
  * provide the information available in their respective runtime modes.
  */
 export interface AppScope extends AppLifecycle {
+  readonly logging?: AppRuntimeLogging;
   readonly mode?: 'embedded' | 'standalone';
   readonly id: string;
   readonly appName?: string;

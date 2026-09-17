@@ -279,6 +279,16 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     await waitForDeployment(service, 'customer', uploaded.operationId!);
     expect((await service.listDeployments('customer')).total).toBe(1);
+    const logs = await service.readLogs(
+      'customer',
+      { fromStart: true },
+      uploaded.operationId!,
+    );
+    expect(logs.entries.map((entry) => entry.msg)).toEqual([
+      'Deployment queued',
+      'Deployment started',
+      'Deployment succeeded',
+    ]);
     const uploadOnly = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '2.0.0'),
     });
@@ -455,6 +465,38 @@ describe('@nocobase/app-plugin-hub service', () => {
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
     await waitForDeployment(service, 'customer', first.id);
     expect((await service.listDeployments('customer')).total).toBe(1);
+  });
+
+  it('retains deployment logs and isolates them from other apps without starting Host', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    await service.createApp({ id: 'other', name: 'Other' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', queued.id);
+    const ensure = vi.spyOn(host, 'ensureStarted');
+    const page = await service.readLogs(
+      'customer',
+      { fromStart: true },
+      queued.id,
+    );
+    expect(page.entries.map((entry) => entry.msg)).toEqual([
+      'Deployment queued',
+      'Deployment started',
+      'Deployment succeeded',
+    ]);
+    expect(ensure).not.toHaveBeenCalled();
+    await expect(service.readLogs('other', {}, queued.id)).rejects.toThrow(
+      'Deployment not found',
+    );
+    expect(
+      (await service.readLogs('customer', { cursor: page.cursor }, queued.id))
+        .entries,
+    ).toEqual([]);
   });
 
   it('paginates deployments with stable ordering and app isolation', async () => {
