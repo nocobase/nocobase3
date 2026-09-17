@@ -256,13 +256,21 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
       const completed = [...this.state.records.entries()]
         .reverse()
         .filter(([key]) => this.state.store.get(key)?.state === status);
-      for (const [index, [key, job]] of completed.entries()) {
-        if (
-          (keep.count !== undefined && index >= keep.count) ||
-          ('age' in keep &&
-            keep.age !== undefined &&
-            (job.finishedOn ?? 0) < finishedOn - keep.age * 1000)
-        )
+      let removedByAge = 0;
+      let survivors = 0;
+      for (const [key, job] of completed) {
+        const expired =
+          'age' in keep &&
+          keep.age !== undefined &&
+          (job.finishedOn ?? 0) <= finishedOn - keep.age * 1000;
+        const ageRemoval =
+          expired &&
+          (!('limit' in keep) ||
+            keep.limit === undefined ||
+            removedByAge < keep.limit);
+        if (ageRemoval) removedByAge++;
+        else survivors++;
+        if (ageRemoval || (keep.count !== undefined && survivors > keep.count))
           this.removeFinished(key);
       }
     }
