@@ -9,6 +9,7 @@ import {
   humanInTheLoopMiddleware,
   ToolMessage,
 } from 'langchain';
+import { isToolMessage } from '@langchain/core/messages';
 import z from 'zod';
 import _ from 'lodash';
 import type { ConversationProvider, CurrentConversation } from '../types.js';
@@ -94,7 +95,7 @@ export const toolCallStatusMiddleware = (
       let result;
       try {
         const toolMessage = await handler(request);
-        if (toolMessage instanceof ToolMessage) {
+        if (isToolMessage(toolMessage)) {
           if (_.isObject(toolMessage.content)) result = toolMessage.content;
           else if (typeof toolMessage.content === 'string') {
             try {

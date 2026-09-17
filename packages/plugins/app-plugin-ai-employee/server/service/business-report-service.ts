@@ -28,7 +28,7 @@ export const businessReportInputSchema = z
             title: text(BUSINESS_REPORT_LIMITS.title).optional(),
             summary: text(BUSINESS_REPORT_LIMITS.summary).optional(),
             options: z
-              .record(z.unknown())
+              .record(z.string(), z.unknown())
               .describe(
                 'Structured JSON ECharts options, with a series object or nonempty series array. No functions, stringified JSON, custom renderers, navigation links, images, or external maps.',
               ),
