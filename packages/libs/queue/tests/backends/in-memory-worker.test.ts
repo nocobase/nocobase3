@@ -1,4 +1,4 @@
-import { Queue } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
 import type { IQueueBackend } from 'bullmq';
 import { describe, expect, it } from 'vitest';
 import { createInMemoryBackendFactory } from '../../src/backends/in-memory/index.js';
@@ -106,6 +106,68 @@ describe('memory worker backend claim and wake protocol', () => {
       ]);
     } finally {
       await Promise.allSettled([queue.close(), backend.close()]);
+    }
+  });
+  it('runs a real Worker concurrently, pauses locally and closes without leftover work', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue<
+      unknown,
+      unknown,
+      string,
+      unknown,
+      unknown,
+      string,
+      IQueueBackend
+    >('jobs', { connection: {} }, factory);
+    let active = 0;
+    let maximum = 0;
+    const completed = new Set<string>();
+    const errors: Error[] = [];
+    const worker = new Worker<unknown, unknown, string, IQueueBackend>(
+      'jobs',
+      async (job) => {
+        active++;
+        maximum = Math.max(maximum, active);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active--;
+        return job.id;
+      },
+      {
+        connection: {},
+        concurrency: 2,
+        skipStalledCheck: true,
+        autorun: false,
+      },
+      factory,
+    );
+    worker.on('error', (error) => {
+      errors.push(error);
+    });
+    worker.on('completed', (job) => {
+      completed.add(job.id!);
+    });
+    try {
+      await queue.add('event', {});
+      await queue.add('event', {});
+      await queue.add('event', {});
+      const run = worker.run();
+      void run.catch((error: unknown) => {
+        errors.push(error instanceof Error ? error : new Error(String(error)));
+      });
+      await expect.poll(() => completed.size).toBe(3);
+      await worker.pause();
+      await queue.add('paused', {});
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(completed.size).toBe(3);
+      worker.resume();
+      await expect.poll(() => completed.size).toBe(4);
+      expect(maximum).toBe(2);
+      expect(errors).toEqual([]);
+      await worker.close();
+      await run;
+      expect(active).toBe(0);
+    } finally {
+      await Promise.allSettled([worker.close(true), queue.close()]);
     }
   });
 });

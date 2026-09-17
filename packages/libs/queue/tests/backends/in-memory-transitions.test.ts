@@ -98,4 +98,28 @@ describe('memory completion protocol', () => {
       await Promise.allSettled([queue.close(), backend.close()]);
     }
   });
+  it('makes finish-next visible as one synchronous state transition', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue<
+      unknown,
+      unknown,
+      string,
+      unknown,
+      unknown,
+      string,
+      IQueueBackend
+    >('jobs', { connection: {} }, factory);
+    const backend = factory('jobs', { connection: {} });
+    try {
+      const first = await queue.add('first', {});
+      const second = await queue.add('second', {});
+      await backend.moveToActive('owner');
+      const finish = backend.moveToCompleted(first, null, false, 'owner', true);
+      const observed = backend.getState(second.id!);
+      await finish;
+      expect(await observed).toBe('active');
+    } finally {
+      await Promise.allSettled([queue.close(), backend.close()]);
+    }
+  });
 });
