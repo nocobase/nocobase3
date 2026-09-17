@@ -232,6 +232,30 @@ export function createQueueService(
     return current;
   }
 
+  const workerCloseErrors = new WeakMap<ServiceWorker, unknown[]>();
+  async function closeWorker(
+    worker: ServiceWorker,
+    force: boolean = false,
+  ): Promise<void> {
+    let errors = workerCloseErrors.get(worker);
+    if (!errors) {
+      errors = [];
+      workerCloseErrors.set(worker, errors);
+    }
+    const observed = errors;
+    const onError = (error: Error): void => {
+      observed.push(error);
+    };
+    worker.on('error', onError);
+    try {
+      await worker.close(force);
+    } finally {
+      worker.off('error', onError);
+    }
+    if (observed.length)
+      throw new AggregateError(observed, 'Queue Worker cleanup failed');
+  }
+
   async function closeEntries(
     targets: Iterable<QueueEntry> = entries.values(),
   ): Promise<void> {
@@ -241,7 +265,9 @@ export function createQueueService(
         const resource = current[key];
         if (!resource) continue;
         try {
-          await resource.close();
+          if (key === 'worker' && current.worker)
+            await closeWorker(current.worker);
+          else await resource.close();
           current[key] = undefined;
         } catch (error) {
           errors.push(error);
@@ -410,7 +436,7 @@ export function createQueueService(
             await current.worker.waitUntilReady();
           })().catch(async (error: unknown) => {
             try {
-              await current.worker?.close();
+              if (current.worker) await closeWorker(current.worker);
               current.worker = undefined;
             } catch (cleanup) {
               throw new AggregateError(
@@ -526,7 +552,7 @@ export function createQueueService(
         await Promise.all([...publishing]);
         const closed = await Promise.allSettled(
           workers.map(async (current) => {
-            await current.worker!.close(!settled);
+            await closeWorker(current.worker!, !settled);
             current.worker = undefined;
           }),
         );
