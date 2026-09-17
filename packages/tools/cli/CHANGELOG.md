@@ -1,5 +1,13 @@
 # @nocobase/nb3-cli
 
+## 1.0.0-beta.9
+
+### Patch Changes
+
+- 6e15911: Register all application plugins as production dependencies so they reach deployments, migrate legacy development declarations, and preserve declared version ranges when registering existing plugins.
+
+  Document plugin dependency placement and migration in the shared application development Skill.
+
 ## 1.0.0-beta.8
 
 ### Minor Changes
