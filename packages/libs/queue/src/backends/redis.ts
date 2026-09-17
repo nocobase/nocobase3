@@ -1,10 +1,17 @@
-import { Redis } from 'ioredis';
+import { Redis, Cluster } from 'ioredis';
 import { createRedisBackend } from 'bullmq';
 import type { BackendFactory, RedisOptions } from 'bullmq';
 import { integer, keys, record } from '../config-validation.js';
 
 /** Validates owned standalone connection settings without acquiring any sockets. */
-export function resolveRedisConnection(value: unknown): RedisOptions | Redis {
+export function resolveRedisConnection(
+  value: unknown,
+): RedisOptions | Redis | Cluster {
+  if (value instanceof Cluster) {
+    if (value.options.redisOptions?.keyPrefix)
+      throw new TypeError('connection.keyPrefix is unsupported');
+    return value;
+  }
   if (value instanceof Redis) {
     if (value.options.keyPrefix)
       throw new TypeError('connection.keyPrefix is unsupported');
@@ -82,7 +89,12 @@ export const createServiceRedisBackend: BackendFactory = (
   const owned =
     connection instanceof Redis
       ? connection.duplicate({ ...policy, lazyConnect: true })
-      : undefined;
+      : connection instanceof Cluster
+        ? connection.duplicate(undefined, {
+            lazyConnect: true,
+            redisOptions: { ...connection.options.redisOptions, ...policy },
+          })
+        : undefined;
   const backend = createRedisBackend(
     name,
     {
@@ -92,6 +104,7 @@ export const createServiceRedisBackend: BackendFactory = (
         ...policy,
         connectTimeout:
           !(connection instanceof Redis) &&
+          !(connection instanceof Cluster) &&
           typeof connection.connectTimeout === 'number'
             ? connection.connectTimeout
             : 10000,
