@@ -371,7 +371,15 @@ export function createQueueService(
                     ),
                 );
               },
-              { ...base, autorun: false, concurrency: config.concurrency },
+              {
+                ...base,
+                autorun: false,
+                concurrency: resolveQueueConfiguration(
+                  options,
+                  name,
+                  current.manual,
+                ).concurrency,
+              },
               factory,
             );
             current.worker.on('error', (error: Error) =>
