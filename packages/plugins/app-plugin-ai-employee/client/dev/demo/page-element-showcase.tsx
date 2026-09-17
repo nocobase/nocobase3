@@ -1,3 +1,4 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import {
   AIChatWindow,
   ChatInline,
@@ -38,6 +39,10 @@ export function PageElementShowcase() {
 }
 
 function PageElementShowcaseContent() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const t = useAITranslate();
   const [customerName, setCustomerName] = useState('Northwind Studio');
   const [contactEmail, setContactEmail] = useState('ops@northwind.test');
@@ -83,7 +88,9 @@ function PageElementShowcaseContent() {
 
   const formRef = useAIPageElement({
     id: 'customer-intake-form',
-    title: 'Customer intake form',
+    title: translateDemo('Customer intake form', {
+      defaultValue: 'Customer intake form',
+    }),
     kind: 'form',
     getContext: () => ({
       form: 'customer-intake',
@@ -92,7 +99,9 @@ function PageElementShowcaseContent() {
   });
   const detailRef = useAIPageElement({
     id: 'customer-health-summary',
-    title: 'Customer health summary',
+    title: translateDemo('Customer health summary', {
+      defaultValue: 'Customer health summary',
+    }),
     kind: 'record-detail',
     getContext: () => ({
       resource: 'customers',
@@ -112,26 +121,51 @@ function PageElementShowcaseContent() {
         <div className='space-y-4 bg-muted/15 p-4 sm:p-5'>
           <div className='flex flex-wrap items-center justify-between gap-3'>
             <div>
-              <div className='text-sm font-medium'>Customer workspace</div>
+              <div className='text-sm font-medium'>
+                {translateDemo('Customer workspace', {
+                  defaultValue: 'Customer workspace',
+                })}
+              </div>
               <div className='text-xs text-muted-foreground'>
-                The form and detail card are registered page elements.
+                {translateDemo(
+                  'The form and detail card are registered page elements.',
+                  {
+                    defaultValue:
+                      'The form and detail card are registered page elements.',
+                  },
+                )}
               </div>
             </div>
-            <Badge variant='outline'>2 selectable elements</Badge>
+            <Badge variant='outline'>
+              {translateDemo('2 selectable elements', {
+                defaultValue: '2 selectable elements',
+              })}
+            </Badge>
           </div>
 
           <Card ref={formRef} className='transition-shadow'>
             <CardHeader>
-              <CardTitle>Customer intake form</CardTitle>
+              <CardTitle>
+                {translateDemo('Customer intake form', {
+                  defaultValue: 'Customer intake form',
+                })}
+              </CardTitle>
               <p className='text-xs leading-5 text-muted-foreground'>
-                Update a value, then pick this form to capture its current
-                state.
+                {translateDemo(
+                  'Update a value, then pick this form to capture its current state.',
+                  {
+                    defaultValue:
+                      'Update a value, then pick this form to capture its current state.',
+                  },
+                )}
               </p>
             </CardHeader>
             <CardContent className='grid gap-4 sm:grid-cols-2'>
               <div className='space-y-2 sm:col-span-2'>
                 <Label htmlFor='page-context-customer-name'>
-                  Customer name
+                  {translateDemo('Customer name', {
+                    defaultValue: 'Customer name',
+                  })}
                 </Label>
                 <Input
                   id='page-context-customer-name'
@@ -141,7 +175,9 @@ function PageElementShowcaseContent() {
               </div>
               <div className='space-y-2'>
                 <Label htmlFor='page-context-contact-email'>
-                  Contact email
+                  {translateDemo('Contact email', {
+                    defaultValue: 'Contact email',
+                  })}
                 </Label>
                 <Input
                   id='page-context-contact-email'
@@ -150,7 +186,9 @@ function PageElementShowcaseContent() {
                 />
               </div>
               <div className='space-y-2'>
-                <Label>Priority</Label>
+                <Label>
+                  {translateDemo('Priority', { defaultValue: 'Priority' })}
+                </Label>
                 <Select
                   value={priority}
                   onValueChange={(value) => value && setPriority(value)}
@@ -159,9 +197,15 @@ function PageElementShowcaseContent() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value='low'>Low</SelectItem>
-                    <SelectItem value='normal'>Normal</SelectItem>
-                    <SelectItem value='high'>High</SelectItem>
+                    <SelectItem value='low'>
+                      {translateDemo('Low', { defaultValue: 'Low' })}
+                    </SelectItem>
+                    <SelectItem value='normal'>
+                      {translateDemo('Normal', { defaultValue: 'Normal' })}
+                    </SelectItem>
+                    <SelectItem value='high'>
+                      {translateDemo('High', { defaultValue: 'High' })}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -170,7 +214,11 @@ function PageElementShowcaseContent() {
 
           <Card ref={detailRef} className='transition-shadow'>
             <CardHeader>
-              <CardTitle>Customer health summary</CardTitle>
+              <CardTitle>
+                {translateDemo('Customer health summary', {
+                  defaultValue: 'Customer health summary',
+                })}
+              </CardTitle>
             </CardHeader>
             <CardContent className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
               {[

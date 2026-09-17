@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Download, Eye, Trash2 } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 
@@ -15,24 +16,34 @@ function triggerDownload(url: string, filename: string): void {
   link.click();
 }
 
-export function FileList({
-  files,
-  onPreview,
-  onDownload,
-  onRemove,
-  onError,
-  labels,
-  emptyState,
-}: FileListProps): ReactElement {
+export function FileList(inputProps: FileListProps): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-file');
+  const {
+    files,
+    onPreview,
+    onDownload,
+    onRemove,
+    onError,
+    labels,
+    emptyState,
+  } = inputProps;
+
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const previewLabel = labels?.preview ?? 'Preview';
-  const downloadLabel = labels?.download ?? 'Download';
-  const removeLabel = labels?.remove ?? 'Remove';
+  const previewLabel =
+    labels?.preview ?? t('files.preview', { defaultValue: 'Preview' });
+  const downloadLabel =
+    labels?.download ?? t('files.download', { defaultValue: 'Download' });
+  const removeLabel =
+    labels?.remove ?? t('files.remove', { defaultValue: 'Remove' });
 
   if (!files.length)
     return (
-      <div role='status'>{emptyState ?? labels?.empty ?? 'No files.'}</div>
+      <div role='status'>
+        {emptyState ??
+          labels?.empty ??
+          t('files.empty', { defaultValue: 'No files.' })}
+      </div>
     );
 
   const downloadFile = (file: FileRecord): void => {
@@ -43,11 +54,22 @@ export function FileList({
     void (async () => {
       const raw = file.contentUrl;
       const url = raw ? resolveSafeFileUrl(raw) : undefined;
-      if (!url) throw new Error('File URL is not allowed.');
+      if (!url)
+        throw new Error(
+          t('File URL is not allowed.', {
+            defaultValue: 'File URL is not allowed.',
+          }),
+        );
       triggerDownload(url, file.filename);
     })().catch((error: unknown) => {
       onError?.(
-        error instanceof Error ? error : new Error('File download failed.'),
+        error instanceof Error
+          ? error
+          : new Error(
+              t('File download failed.', {
+                defaultValue: 'File download failed.',
+              }),
+            ),
       );
     });
   };

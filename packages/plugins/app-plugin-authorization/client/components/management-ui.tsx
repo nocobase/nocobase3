@@ -1,24 +1,23 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement, ReactNode } from 'react';
 
 import { Button, Input } from './ui.js';
 
-export function ManagementToolbar({
-  search,
-  onSearch,
-  actionLabel,
-  onAction,
-}: {
+export function ManagementToolbar(inputProps: {
   search: string;
   onSearch: (value: string) => void;
   actionLabel: string;
   onAction: () => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { search, onSearch, actionLabel, onAction } = inputProps;
+
   return (
     <div className='flex flex-col gap-3 border-b bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between'>
       <Input
         className='w-full sm:w-96 sm:flex-none'
         type='search'
-        placeholder='Search'
+        placeholder={t('Search', { defaultValue: 'Search' })}
         value={search}
         onChange={(event) => onSearch(event.target.value)}
       />
@@ -58,19 +57,16 @@ export function EmptyTableRow({
   );
 }
 
-export function DetailHeader({
-  onBack,
-  title,
-  subtitle,
-  badge,
-  actions,
-}: {
+export function DetailHeader(inputProps: {
   onBack: () => void;
   title: string;
   subtitle?: string;
   badge?: ReactNode;
   actions?: ReactNode;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { onBack, title, subtitle, badge, actions } = inputProps;
+
   return (
     <header className='rounded-xl border bg-card px-6 py-5 shadow-sm'>
       <button
@@ -78,7 +74,7 @@ export function DetailHeader({
         type='button'
         onClick={onBack}
       >
-        ← Back to list
+        {t('← Back to list', { defaultValue: '← Back to list' })}
       </button>
       <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
         <div>
@@ -96,17 +92,19 @@ export function DetailHeader({
   );
 }
 
-export function DetailTabs({
-  value,
-  items,
-  onChange,
-}: {
+export function DetailTabs(inputProps: {
   value: string;
   items: readonly { value: string; label: string; count?: number }[];
   onChange: (value: string) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { value, items, onChange } = inputProps;
+
   return (
-    <nav className='flex gap-6 border-b px-1' aria-label='Detail sections'>
+    <nav
+      className='flex gap-6 border-b px-1'
+      aria-label={t('Detail sections', { defaultValue: 'Detail sections' })}
+    >
       {items.map((item) => (
         <button
           key={item.value}
@@ -114,7 +112,7 @@ export function DetailTabs({
           className={`border-b-2 px-1 py-3 text-sm font-medium ${value === item.value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           onClick={() => onChange(item.value)}
         >
-          {item.label}
+          {t(item.label, { defaultValue: item.label })}
           {item.count === undefined ? null : (
             <span className='ml-2 rounded-full bg-muted px-2 py-0.5 text-xs'>
               {item.count}
@@ -126,14 +124,7 @@ export function DetailTabs({
   );
 }
 
-export function SidePanel({
-  title,
-  description,
-  onClose,
-  children,
-  wide = false,
-  scrollable = true,
-}: {
+export function SidePanel(inputProps: {
   title: string;
   description?: string;
   onClose: () => void;
@@ -141,6 +132,16 @@ export function SidePanel({
   wide?: boolean;
   scrollable?: boolean;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const {
+    title,
+    description,
+    onClose,
+    children,
+    wide = false,
+    scrollable = true,
+  } = inputProps;
+
   return (
     <div
       className='fixed inset-0 z-50 flex justify-end bg-black/30'
@@ -164,7 +165,7 @@ export function SidePanel({
             ) : null}
           </div>
           <Button size='sm' variant='ghost' onClick={onClose}>
-            Close
+            {t('Close', { defaultValue: 'Close' })}
           </Button>
         </header>
         <div
@@ -177,25 +178,22 @@ export function SidePanel({
   );
 }
 
-export function RuleEditorLayout({
-  steps,
-  value,
-  onChange,
-  children,
-  footer,
-}: {
+export function RuleEditorLayout(inputProps: {
   steps: readonly { value: string; label: string; description: string }[];
   value: string;
   onChange: (value: string) => void;
   children: ReactNode;
   footer: ReactNode;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { steps, value, onChange, children, footer } = inputProps;
+
   return (
     <div className='flex h-full min-h-0 flex-col'>
       <div className='grid min-h-0 flex-1 md:grid-cols-[14rem_minmax(0,1fr)]'>
         <nav
           className='border-b bg-muted/20 p-4 md:border-r md:border-b-0'
-          aria-label='Rule sections'
+          aria-label={t('Rule sections', { defaultValue: 'Rule sections' })}
         >
           <div className='grid gap-1 sm:grid-cols-3 md:grid-cols-1'>
             {steps.map((step, index) => (
@@ -211,10 +209,10 @@ export function RuleEditorLayout({
                   >
                     {index + 1}
                   </span>
-                  {step.label}
+                  {t(step.label, { defaultValue: step.label })}
                 </span>
                 <span className='mt-1 block pl-7 text-xs leading-5 text-muted-foreground'>
-                  {step.description}
+                  {t(step.description, { defaultValue: step.description })}
                 </span>
               </button>
             ))}

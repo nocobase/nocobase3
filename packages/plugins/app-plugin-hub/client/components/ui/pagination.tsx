@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import * as React from 'react';
 import { cn } from '../../lib/utils.js';
 
@@ -8,15 +9,17 @@ import {
   MoreHorizontalIcon,
 } from 'lucide-react';
 
-function Pagination({
-  className,
-  ...props
-}: React.ComponentProps<'nav'>): React.ReactElement {
+function Pagination(
+  inputProps: React.ComponentProps<'nav'>,
+): React.ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { className, ...props } = inputProps;
+
   return (
     <nav
       role='navigation'
-      aria-label='pagination'
-      data-slot='pagination'
+      aria-label={t('common.pagination', { defaultValue: 'pagination' })}
+      data-slot={t('common.pagination', { defaultValue: 'pagination' })}
       className={cn('mx-auto flex w-full justify-center', className)}
       {...props}
     />
@@ -71,16 +74,23 @@ function PaginationLink({
   );
 }
 
-function PaginationPrevious({
-  className,
-  text = 'Previous',
-  ...props
-}: React.ComponentProps<typeof PaginationLink> & {
-  text?: string;
-}): React.ReactElement {
+function PaginationPrevious(
+  inputProps: React.ComponentProps<typeof PaginationLink> & {
+    text?: string;
+  },
+): React.ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const {
+    className,
+    text = t('common.previous', { defaultValue: 'Previous' }),
+    ...props
+  } = inputProps;
+
   return (
     <PaginationLink
-      aria-label='Go to previous page'
+      aria-label={t('common.previousPage', {
+        defaultValue: 'Go to previous page',
+      })}
       size='default'
       className={cn('pl-1.5!', className)}
       {...props}
@@ -91,16 +101,21 @@ function PaginationPrevious({
   );
 }
 
-function PaginationNext({
-  className,
-  text = 'Next',
-  ...props
-}: React.ComponentProps<typeof PaginationLink> & {
-  text?: string;
-}): React.ReactElement {
+function PaginationNext(
+  inputProps: React.ComponentProps<typeof PaginationLink> & {
+    text?: string;
+  },
+): React.ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const {
+    className,
+    text = t('common.next', { defaultValue: 'Next' }),
+    ...props
+  } = inputProps;
+
   return (
     <PaginationLink
-      aria-label='Go to next page'
+      aria-label={t('common.nextPage', { defaultValue: 'Go to next page' })}
       size='default'
       className={cn('pr-1.5!', className)}
       {...props}
@@ -111,10 +126,12 @@ function PaginationNext({
   );
 }
 
-function PaginationEllipsis({
-  className,
-  ...props
-}: React.ComponentProps<'span'>): React.ReactElement {
+function PaginationEllipsis(
+  inputProps: React.ComponentProps<'span'>,
+): React.ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { className, ...props } = inputProps;
+
   return (
     <span
       aria-hidden
@@ -126,7 +143,9 @@ function PaginationEllipsis({
       {...props}
     >
       <MoreHorizontalIcon />
-      <span className='sr-only'>More pages</span>
+      <span className='sr-only'>
+        {t('common.morePages', { defaultValue: 'More pages' })}
+      </span>
     </span>
   );
 }

@@ -766,7 +766,7 @@ export default function AIEmployeePage(): ReactElement {
           })}
           {!employees.length ? (
             <p className='p-6 text-center text-sm text-muted-foreground'>
-              No AI employees.
+              {t('No AI employees are available.')}
             </p>
           ) : null}
         </div>

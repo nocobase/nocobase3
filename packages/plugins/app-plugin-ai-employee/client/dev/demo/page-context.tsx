@@ -1,3 +1,4 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import { PageHeader } from '../../components/page-header.js';
 import {
   AIChatWindow,
@@ -54,6 +55,10 @@ export function PageContextPage() {
 }
 
 function PageContextPageContent() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const t = useAITranslate();
   return (
     <div className='space-y-6'>
@@ -67,56 +72,117 @@ function PageContextPageContent() {
 
       <ContextSection
         eyebrow='Manual context'
-        title='Pick page context while composing a message'
-        description='The user can pick any registered page element from the composer. Its current content is added to this message without changing task configuration.'
+        title={translateDemo('Pick page context while composing a message', {
+          defaultValue: 'Pick page context while composing a message',
+        })}
+        description={translateDemo(
+          'The user can pick any registered page element from the composer. Its current content is added to this message without changing task configuration.',
+          {
+            defaultValue:
+              'The user can pick any registered page element from the composer. Its current content is added to this message without changing task configuration.',
+          },
+        )}
       >
         <PageElementShowcase />
       </ContextSection>
 
       <ContextSection
         eyebrow='Task context · Shortcut'
-        title='Reference page context from a Shortcut task'
-        description='The Shortcut task stores a page-element reference in message.workContext and reads its latest content when the user starts the task.'
+        title={translateDemo('Reference page context from a Shortcut task', {
+          defaultValue: 'Reference page context from a Shortcut task',
+        })}
+        description={translateDemo(
+          'The Shortcut task stores a page-element reference in message.workContext and reads its latest content when the user starts the task.',
+          {
+            defaultValue:
+              'The Shortcut task stores a page-element reference in message.workContext and reads its latest content when the user starts the task.',
+          },
+        )}
       >
         <ShortcutTaskContextShowcase />
       </ContextSection>
 
       <ContextSection
         eyebrow='Task context · Conversation preset'
-        title='Reference page context from a conversation preset task'
-        description='The AIChatProvider employeeTasks configuration uses the same message.workContext reference, but exposes the task in the conversation empty state instead of through a Shortcut.'
+        title={translateDemo(
+          'Reference page context from a conversation preset task',
+          {
+            defaultValue:
+              'Reference page context from a conversation preset task',
+          },
+        )}
+        description={translateDemo(
+          'The AIChatProvider employeeTasks configuration uses the same message.workContext reference, but exposes the task in the conversation empty state instead of through a Shortcut.',
+          {
+            defaultValue:
+              'The AIChatProvider employeeTasks configuration uses the same message.workContext reference, but exposes the task in the conversation empty state instead of through a Shortcut.',
+          },
+        )}
       >
         <PresetTaskContextShowcase />
       </ContextSection>
 
       <ContextSection
         eyebrow='Task context · Scope inheritance'
-        title='Inherit the surrounding page context'
-        description='A Shortcut or AIChatProvider inside AIPageContextScope inherits that context. A task-level message.workContext still takes precedence when configured.'
+        title={translateDemo('Inherit the surrounding page context', {
+          defaultValue: 'Inherit the surrounding page context',
+        })}
+        description={translateDemo(
+          'A Shortcut or AIChatProvider inside AIPageContextScope inherits that context. A task-level message.workContext still takes precedence when configured.',
+          {
+            defaultValue:
+              'A Shortcut or AIChatProvider inside AIPageContextScope inherits that context. A task-level message.workContext still takes precedence when configured.',
+          },
+        )}
       >
         <InheritedContextShowcase />
       </ContextSection>
 
       <ContextSection
         eyebrow='Built-in frontend tool'
-        title='Fill a registered React form with Form filler'
-        description='Form filler is registered once by AIProvider. The form exposes its identifier, field schema, live values, and setter through useAIForm; it is not part of the custom frontend Tool catalog.'
+        title={translateDemo('Fill a registered React form with Form filler', {
+          defaultValue: 'Fill a registered React form with Form filler',
+        })}
+        description={translateDemo(
+          'Form filler is registered once by AIProvider. The form exposes its identifier, field schema, live values, and setter through useAIForm; it is not part of the custom frontend Tool catalog.',
+          {
+            defaultValue:
+              'Form filler is registered once by AIProvider. The form exposes its identifier, field schema, live values, and setter through useAIForm; it is not part of the custom frontend Tool catalog.',
+          },
+        )}
       >
         <FormFillerShowcase />
       </ContextSection>
 
       <ContextSection
         eyebrow='Custom frontend tool'
-        title='Expose a page-specific action to the AI employee'
-        description='A registered page element can advertise custom Tools through the NocoBase loadFrontendTool and executeFrontendTool protocol. The example uses ASK permission and updates only the local quote preview.'
+        title={translateDemo(
+          'Expose a page-specific action to the AI employee',
+          { defaultValue: 'Expose a page-specific action to the AI employee' },
+        )}
+        description={translateDemo(
+          'A registered page element can advertise custom Tools through the NocoBase loadFrontendTool and executeFrontendTool protocol. The example uses ASK permission and updates only the local quote preview.',
+          {
+            defaultValue:
+              'A registered page element can advertise custom Tools through the NocoBase loadFrontendTool and executeFrontendTool protocol. The example uses ASK permission and updates only the local quote preview.',
+          },
+        )}
       >
         <CustomFrontendToolShowcase />
       </ContextSection>
 
       <ContextSection
         eyebrow='Prompt generator'
-        title='Generate a complete page context scene'
-        description='Describe the business scene, select the AI employee and task, then generate the full page surface, context binding, conversation layout, and optional frontend capability together.'
+        title={translateDemo('Generate a complete page context scene', {
+          defaultValue: 'Generate a complete page context scene',
+        })}
+        description={translateDemo(
+          'Describe the business scene, select the AI employee and task, then generate the full page surface, context binding, conversation layout, and optional frontend capability together.',
+          {
+            defaultValue:
+              'Describe the business scene, select the AI employee and task, then generate the full page surface, context binding, conversation layout, and optional frontend capability together.',
+          },
+        )}
       >
         <PageContextPromptGenerator />
       </ContextSection>
@@ -132,6 +198,10 @@ type LeadIntakeValues = {
 };
 
 function FormFillerShowcase() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const { employees } = useAI();
   const employee =
     employees.find((item) => item.username.toLowerCase() === 'dex') ??
@@ -150,26 +220,37 @@ function FormFillerShowcase() {
   });
   const fields = useMemo(
     () => [
-      { name: 'company', title: 'Company', type: 'string', required: true },
       {
-        name: 'contactName',
-        title: 'Contact name',
+        name: 'company',
+        title: translateDemo('Company', { defaultValue: 'Company' }),
         type: 'string',
         required: true,
       },
-      { name: 'email', title: 'Email', type: 'email' },
+      {
+        name: 'contactName',
+        title: translateDemo('Contact name', { defaultValue: 'Contact name' }),
+        type: 'string',
+        required: true,
+      },
+      {
+        name: 'email',
+        title: translateDemo('Email', { defaultValue: 'Email' }),
+        type: 'email',
+      },
       {
         name: 'priority',
-        title: 'Priority',
+        title: translateDemo('Priority', { defaultValue: 'Priority' }),
         type: 'string',
         enum: ['low', 'normal', 'high'],
       },
     ],
-    [],
+    [translateDemo],
   );
   const formRef = useAIForm({
     id: 'lead-intake-form',
-    title: 'Lead intake form',
+    title: translateDemo('Lead intake form', {
+      defaultValue: 'Lead intake form',
+    }),
     fields,
     getValues: form.getValues,
     setValues: (values) => applyReactHookFormValues(form, values),
@@ -178,20 +259,24 @@ function FormFillerShowcase() {
     () => ({
       type: 'page-element',
       id: 'lead-intake-form',
-      title: 'Lead intake form',
+      title: translateDemo('Lead intake form', {
+        defaultValue: 'Lead intake form',
+      }),
       kind: 'form',
     }),
-    [],
+    [translateDemo],
   );
   const task = useMemo<AIEmployeeTask>(
     () => ({
-      title: 'Fill lead form',
+      title: translateDemo('Fill lead form', {
+        defaultValue: 'Fill lead form',
+      }),
       message: {
         user: `Extract the lead details from the following text and fill the current form. Do not submit it.\n\n${sourceText}`,
       },
       autoSend: true,
     }),
-    [sourceText],
+    [translateDemo, sourceText],
   );
 
   return (
@@ -208,10 +293,19 @@ function FormFillerShowcase() {
                 <CardHeader>
                   <div className='flex items-start justify-between gap-4'>
                     <div>
-                      <CardTitle>Source content</CardTitle>
+                      <CardTitle>
+                        {translateDemo('Source content', {
+                          defaultValue: 'Source content',
+                        })}
+                      </CardTitle>
                       <p className='mt-1 text-xs leading-5 text-muted-foreground'>
-                        Edit this text, then ask the AI employee to fill the
-                        registered form below.
+                        {translateDemo(
+                          'Edit this text, then ask the AI employee to fill the registered form below.',
+                          {
+                            defaultValue:
+                              'Edit this text, then ask the AI employee to fill the registered form below.',
+                          },
+                        )}
                       </p>
                     </div>
                     <AIEmployeeShortcut
@@ -235,10 +329,19 @@ function FormFillerShowcase() {
               <form ref={formRef} className='rounded-xl border bg-card'>
                 <div className='flex flex-wrap items-start justify-between gap-3 border-b p-5'>
                   <div>
-                    <h3 className='font-semibold'>Lead intake form</h3>
+                    <h3 className='font-semibold'>
+                      {translateDemo('Lead intake form', {
+                        defaultValue: 'Lead intake form',
+                      })}
+                    </h3>
                     <p className='mt-1 text-xs text-muted-foreground'>
-                      Form filler changes visible values only. It never submits
-                      the form.
+                      {translateDemo(
+                        'Form filler changes visible values only. It never submits the form.',
+                        {
+                          defaultValue:
+                            'Form filler changes visible values only. It never submits the form.',
+                        },
+                      )}
                     </p>
                   </div>
                   <div className='flex items-center gap-2'>
@@ -256,27 +359,35 @@ function FormFillerShowcase() {
                         })
                       }
                     >
-                      Clear
+                      {translateDemo('Clear', { defaultValue: 'Clear' })}
                     </Button>
                   </div>
                 </div>
                 <div className='grid gap-4 p-5 sm:grid-cols-2'>
                   <label className='space-y-2'>
-                    <Label htmlFor='form-filler-company'>Company</Label>
+                    <Label htmlFor='form-filler-company'>
+                      {translateDemo('Company', { defaultValue: 'Company' })}
+                    </Label>
                     <Input
                       id='form-filler-company'
                       {...form.register('company')}
                     />
                   </label>
                   <label className='space-y-2'>
-                    <Label htmlFor='form-filler-contact'>Contact name</Label>
+                    <Label htmlFor='form-filler-contact'>
+                      {translateDemo('Contact name', {
+                        defaultValue: 'Contact name',
+                      })}
+                    </Label>
                     <Input
                       id='form-filler-contact'
                       {...form.register('contactName')}
                     />
                   </label>
                   <label className='space-y-2'>
-                    <Label htmlFor='form-filler-email'>Email</Label>
+                    <Label htmlFor='form-filler-email'>
+                      {translateDemo('Email', { defaultValue: 'Email' })}
+                    </Label>
                     <Input
                       id='form-filler-email'
                       type='email'
@@ -284,7 +395,9 @@ function FormFillerShowcase() {
                     />
                   </label>
                   <label className='space-y-2'>
-                    <Label>Priority</Label>
+                    <Label>
+                      {translateDemo('Priority', { defaultValue: 'Priority' })}
+                    </Label>
                     <Select
                       value={form.watch('priority')}
                       onValueChange={(value) =>
@@ -303,9 +416,15 @@ function FormFillerShowcase() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value='low'>Low</SelectItem>
-                        <SelectItem value='normal'>Normal</SelectItem>
-                        <SelectItem value='high'>High</SelectItem>
+                        <SelectItem value='low'>
+                          {translateDemo('Low', { defaultValue: 'Low' })}
+                        </SelectItem>
+                        <SelectItem value='normal'>
+                          {translateDemo('Normal', { defaultValue: 'Normal' })}
+                        </SelectItem>
+                        <SelectItem value='high'>
+                          {translateDemo('High', { defaultValue: 'High' })}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </label>
@@ -329,6 +448,10 @@ function FormFillerShowcase() {
 }
 
 function CustomFrontendToolShowcase() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const { employees } = useAI();
   const employee = employees.filter(isBusinessEmployee)[0]!;
   const controller = useAIChatController();
@@ -340,7 +463,9 @@ function CustomFrontendToolShowcase() {
     () => [
       {
         name: 'update_quote_discount',
-        title: 'Update quote discount',
+        title: translateDemo('Update quote discount', {
+          defaultValue: 'Update quote discount',
+        }),
         description:
           'Update the discount percentage and review note shown on the current quote. This changes the page preview only and does not save the quote.',
         permission: 'ASK' as const,
@@ -386,11 +511,11 @@ function CustomFrontendToolShowcase() {
         },
       },
     ],
-    [],
+    [translateDemo],
   );
   const quoteContext = useAIPageElementHandle({
     id: 'quote-review-card',
-    title: 'Quote review',
+    title: translateDemo('Quote review', { defaultValue: 'Quote review' }),
     kind: 'record-detail',
     tools,
     getContext: () => ({
@@ -407,13 +532,15 @@ function CustomFrontendToolShowcase() {
   });
   const task = useMemo<AIEmployeeTask>(
     () => ({
-      title: 'Apply review discount',
+      title: translateDemo('Apply review discount', {
+        defaultValue: 'Apply review discount',
+      }),
       message: {
         user: "Update the current quote preview to use a 12% discount and set the review note to 'Approved for the renewal discussion'.",
       },
       autoSend: true,
     }),
-    [],
+    [translateDemo],
   );
 
   return (
@@ -430,13 +557,21 @@ function CustomFrontendToolShowcase() {
                 <CardHeader>
                   <div className='flex flex-wrap items-start justify-between gap-4'>
                     <div>
-                      <CardTitle>Quote review</CardTitle>
+                      <CardTitle>
+                        {translateDemo('Quote review', {
+                          defaultValue: 'Quote review',
+                        })}
+                      </CardTitle>
                       <p className='mt-1 text-xs text-muted-foreground'>
                         QT-2026-1048 · Northwind Studio
                       </p>
                     </div>
                     <div className='flex items-center gap-2'>
-                      <Badge variant='outline'>Custom Tool</Badge>
+                      <Badge variant='outline'>
+                        {translateDemo('Custom Tool', {
+                          defaultValue: 'Custom Tool',
+                        })}
+                      </Badge>
                       <Badge variant='secondary'>ASK</Badge>
                     </div>
                   </div>
@@ -461,15 +596,21 @@ function CustomFrontendToolShowcase() {
                   </div>
                   <div className='rounded-lg border bg-background p-3'>
                     <div className='text-xs text-muted-foreground'>
-                      Review note
+                      {translateDemo('Review note', {
+                        defaultValue: 'Review note',
+                      })}
                     </div>
                     <div className='mt-1 text-sm'>{approvalNote}</div>
                   </div>
                   <div className='flex flex-wrap items-center justify-between gap-3 border-t pt-4'>
                     <p className='max-w-lg text-xs leading-5 text-muted-foreground'>
-                      The page element registers update_quote_discount. Its full
-                      input schema is loaded only when the AI chooses this Tool.
-                      Approval is controlled by the ASK permission.
+                      {translateDemo(
+                        'The page element registers update_quote_discount. Its full input schema is loaded only when the AI chooses this Tool. Approval is controlled by the ASK permission.',
+                        {
+                          defaultValue:
+                            'The page element registers update_quote_discount. Its full input schema is loaded only when the AI chooses this Tool. Approval is controlled by the ASK permission.',
+                        },
+                      )}
                     </p>
                     <AIEmployeeShortcut
                       aiEmployee={employee.username}
@@ -499,6 +640,10 @@ function CustomFrontendToolShowcase() {
 }
 
 function ShortcutTaskContextShowcase() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const { employees } = useAI();
   const employee = employees.filter(isBusinessEmployee)[0]!;
   const controller = useAIChatController();
@@ -510,13 +655,17 @@ function ShortcutTaskContextShowcase() {
     () => ({
       type: 'page-element',
       id: 'selected-support-case',
-      title: 'Selected support case',
+      title: translateDemo('Selected support case', {
+        defaultValue: 'Selected support case',
+      }),
     }),
-    [],
+    [translateDemo],
   );
   const contextRef = useAIPageElement({
     id: 'selected-support-case',
-    title: 'Selected support case',
+    title: translateDemo('Selected support case', {
+      defaultValue: 'Selected support case',
+    }),
     kind: 'editable-record',
     getContext: () => ({
       resource: 'supportTickets',
@@ -526,14 +675,16 @@ function ShortcutTaskContextShowcase() {
 
   const shortcutTask = useMemo<AIEmployeeTask>(
     () => ({
-      title: 'Analyze selected case',
+      title: translateDemo('Analyze selected case', {
+        defaultValue: 'Analyze selected case',
+      }),
       message: {
         user: 'Analyze the selected support case.',
         workContext: [contextReference],
       },
       autoSend: false,
     }),
-    [contextReference],
+    [translateDemo, contextReference],
   );
   return (
     <AIChatProvider
@@ -548,17 +699,33 @@ function ShortcutTaskContextShowcase() {
               <CardHeader>
                 <div className='flex items-start justify-between gap-3'>
                   <div>
-                    <CardTitle>Selected support case</CardTitle>
+                    <CardTitle>
+                      {translateDemo('Selected support case', {
+                        defaultValue: 'Selected support case',
+                      })}
+                    </CardTitle>
                     <p className='mt-1 text-xs text-muted-foreground'>
-                      Change a value before running either task.
+                      {translateDemo(
+                        'Change a value before running either task.',
+                        {
+                          defaultValue:
+                            'Change a value before running either task.',
+                        },
+                      )}
                     </p>
                   </div>
-                  <Badge variant='secondary'>Task context</Badge>
+                  <Badge variant='secondary'>
+                    {translateDemo('Task context', {
+                      defaultValue: 'Task context',
+                    })}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className='space-y-4'>
                 <label className='block space-y-2'>
-                  <Label htmlFor='selected-context-summary'>Summary</Label>
+                  <Label htmlFor='selected-context-summary'>
+                    {translateDemo('Summary', { defaultValue: 'Summary' })}
+                  </Label>
                   <Input
                     id='selected-context-summary'
                     value={summary}
@@ -566,7 +733,9 @@ function ShortcutTaskContextShowcase() {
                   />
                 </label>
                 <label className='block space-y-2'>
-                  <Label>Severity</Label>
+                  <Label>
+                    {translateDemo('Severity', { defaultValue: 'Severity' })}
+                  </Label>
                   <Select
                     value={severity}
                     onValueChange={(value) => value && setSeverity(value)}
@@ -575,9 +744,15 @@ function ShortcutTaskContextShowcase() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value='low'>Low</SelectItem>
-                      <SelectItem value='medium'>Medium</SelectItem>
-                      <SelectItem value='high'>High</SelectItem>
+                      <SelectItem value='low'>
+                        {translateDemo('Low', { defaultValue: 'Low' })}
+                      </SelectItem>
+                      <SelectItem value='medium'>
+                        {translateDemo('Medium', { defaultValue: 'Medium' })}
+                      </SelectItem>
+                      <SelectItem value='high'>
+                        {translateDemo('High', { defaultValue: 'High' })}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </label>
@@ -587,13 +762,26 @@ function ShortcutTaskContextShowcase() {
               <CardHeader>
                 <div className='flex items-start justify-between gap-4'>
                   <div>
-                    <CardTitle>Task shortcut area</CardTitle>
+                    <CardTitle>
+                      {translateDemo('Task shortcut area', {
+                        defaultValue: 'Task shortcut area',
+                      })}
+                    </CardTitle>
                     <p className='mt-1 text-xs leading-5 text-muted-foreground'>
-                      This button is outside the selected page element. Its task
-                      explicitly references “Selected support case”.
+                      {translateDemo(
+                        'This button is outside the selected page element. Its task explicitly references “Selected support case”.',
+                        {
+                          defaultValue:
+                            'This button is outside the selected page element. Its task explicitly references “Selected support case”.',
+                        },
+                      )}
                     </p>
                   </div>
-                  <Badge variant='outline'>Explicit reference</Badge>
+                  <Badge variant='outline'>
+                    {translateDemo('Explicit reference', {
+                      defaultValue: 'Explicit reference',
+                    })}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent>
@@ -601,7 +789,9 @@ function ShortcutTaskContextShowcase() {
                   aiEmployee={employee.username}
                   target={controller}
                   tasks={[shortcutTask]}
-                  label='Analyze selected case'
+                  label={translateDemo('Analyze selected case', {
+                    defaultValue: 'Analyze selected case',
+                  })}
                   size={34}
                 />
               </CardContent>
@@ -620,6 +810,10 @@ function ShortcutTaskContextShowcase() {
 }
 
 function PresetTaskContextShowcase() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const { employees } = useAI();
   const employee = employees.filter(isBusinessEmployee)[0]!;
   const [opportunityName, setOpportunityName] = useState(
@@ -630,13 +824,17 @@ function PresetTaskContextShowcase() {
     () => ({
       type: 'page-element',
       id: 'selected-opportunity',
-      title: 'Selected opportunity',
+      title: translateDemo('Selected opportunity', {
+        defaultValue: 'Selected opportunity',
+      }),
     }),
-    [],
+    [translateDemo],
   );
   const contextRef = useAIPageElement({
     id: 'selected-opportunity',
-    title: 'Selected opportunity',
+    title: translateDemo('Selected opportunity', {
+      defaultValue: 'Selected opportunity',
+    }),
     kind: 'record-detail',
     getContext: () => ({
       resource: 'opportunities',
@@ -645,14 +843,16 @@ function PresetTaskContextShowcase() {
   });
   const presetTask = useMemo<AIEmployeeTask>(
     () => ({
-      title: 'Prepare opportunity brief',
+      title: translateDemo('Prepare opportunity brief', {
+        defaultValue: 'Prepare opportunity brief',
+      }),
       message: {
         user: 'Prepare a brief for the selected opportunity.',
         workContext: [contextReference],
       },
       autoSend: false,
     }),
-    [contextReference],
+    [translateDemo, contextReference],
   );
   const employeeTasks = useMemo<AIEmployeeTasks>(
     () => ({ [employee.username]: [presetTask] }),
@@ -672,18 +872,34 @@ function PresetTaskContextShowcase() {
               <CardHeader>
                 <div className='flex items-start justify-between gap-3'>
                   <div>
-                    <CardTitle>Selected opportunity</CardTitle>
+                    <CardTitle>
+                      {translateDemo('Selected opportunity', {
+                        defaultValue: 'Selected opportunity',
+                      })}
+                    </CardTitle>
                     <p className='mt-1 text-xs text-muted-foreground'>
-                      Change a value, then select the preset task in the chat.
+                      {translateDemo(
+                        'Change a value, then select the preset task in the chat.',
+                        {
+                          defaultValue:
+                            'Change a value, then select the preset task in the chat.',
+                        },
+                      )}
                     </p>
                   </div>
-                  <Badge variant='secondary'>Preset task context</Badge>
+                  <Badge variant='secondary'>
+                    {translateDemo('Preset task context', {
+                      defaultValue: 'Preset task context',
+                    })}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className='space-y-4'>
                 <label className='block space-y-2'>
                   <Label htmlFor='preset-context-opportunity'>
-                    Opportunity
+                    {translateDemo('Opportunity', {
+                      defaultValue: 'Opportunity',
+                    })}
                   </Label>
                   <Input
                     id='preset-context-opportunity'
@@ -692,7 +908,9 @@ function PresetTaskContextShowcase() {
                   />
                 </label>
                 <label className='block space-y-2'>
-                  <Label>Forecast</Label>
+                  <Label>
+                    {translateDemo('Forecast', { defaultValue: 'Forecast' })}
+                  </Label>
                   <Select
                     value={forecast}
                     onValueChange={(value) => value && setForecast(value)}
@@ -701,16 +919,30 @@ function PresetTaskContextShowcase() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value='pipeline'>Pipeline</SelectItem>
-                      <SelectItem value='likely'>Likely</SelectItem>
-                      <SelectItem value='committed'>Committed</SelectItem>
+                      <SelectItem value='pipeline'>
+                        {translateDemo('Pipeline', {
+                          defaultValue: 'Pipeline',
+                        })}
+                      </SelectItem>
+                      <SelectItem value='likely'>
+                        {translateDemo('Likely', { defaultValue: 'Likely' })}
+                      </SelectItem>
+                      <SelectItem value='committed'>
+                        {translateDemo('Committed', {
+                          defaultValue: 'Committed',
+                        })}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </label>
                 <div className='rounded-lg border bg-background p-3 text-xs leading-5 text-muted-foreground'>
-                  No Shortcut is used here. “Prepare opportunity brief” comes
-                  from AIChatProvider.employeeTasks and appears in the
-                  conversation empty state.
+                  {translateDemo(
+                    'No Shortcut is used here. “Prepare opportunity brief” comes from AIChatProvider.employeeTasks and appears in the conversation empty state.',
+                    {
+                      defaultValue:
+                        'No Shortcut is used here. “Prepare opportunity brief” comes from AIChatProvider.employeeTasks and appears in the conversation empty state.',
+                    },
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -728,6 +960,10 @@ function PresetTaskContextShowcase() {
 }
 
 function InheritedContextShowcase() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const { employees } = useAI();
   const employee = employees.filter(isBusinessEmployee)[0]!;
   const controller = useAIChatController();
@@ -737,13 +973,17 @@ function InheritedContextShowcase() {
     () => ({
       type: 'page-element',
       id: 'inherited-renewal-context',
-      title: 'Current account renewal',
+      title: translateDemo('Current account renewal', {
+        defaultValue: 'Current account renewal',
+      }),
     }),
-    [],
+    [translateDemo],
   );
   const contextRef = useAIPageElement({
     id: 'inherited-renewal-context',
-    title: 'Current account renewal',
+    title: translateDemo('Current account renewal', {
+      defaultValue: 'Current account renewal',
+    }),
     kind: 'record-detail',
     getContext: () => ({
       resource: 'accounts',
@@ -752,19 +992,23 @@ function InheritedContextShowcase() {
   });
   const shortcutTask = useMemo<AIEmployeeTask>(
     () => ({
-      title: 'Review current renewal',
+      title: translateDemo('Review current renewal', {
+        defaultValue: 'Review current renewal',
+      }),
       message: { user: 'Review the current account renewal.' },
       autoSend: false,
     }),
-    [],
+    [translateDemo],
   );
   const presetTask = useMemo<AIEmployeeTask>(
     () => ({
-      title: 'Recommend next renewal action',
+      title: translateDemo('Recommend next renewal action', {
+        defaultValue: 'Recommend next renewal action',
+      }),
       message: { user: 'Recommend the next renewal action.' },
       autoSend: false,
     }),
-    [],
+    [translateDemo],
   );
   const employeeTasks = useMemo<AIEmployeeTasks>(
     () => ({ [employee.username]: [presetTask] }),
@@ -786,17 +1030,33 @@ function InheritedContextShowcase() {
                 <CardHeader>
                   <div className='flex items-start justify-between gap-3'>
                     <div>
-                      <CardTitle>Current account renewal</CardTitle>
+                      <CardTitle>
+                        {translateDemo('Current account renewal', {
+                          defaultValue: 'Current account renewal',
+                        })}
+                      </CardTitle>
                       <p className='mt-1 text-xs text-muted-foreground'>
-                        Shortcut and conversation are inside this context scope.
+                        {translateDemo(
+                          'Shortcut and conversation are inside this context scope.',
+                          {
+                            defaultValue:
+                              'Shortcut and conversation are inside this context scope.',
+                          },
+                        )}
                       </p>
                     </div>
-                    <Badge variant='outline'>Inherited</Badge>
+                    <Badge variant='outline'>
+                      {translateDemo('Inherited', {
+                        defaultValue: 'Inherited',
+                      })}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className='space-y-4'>
                   <label className='block space-y-2'>
-                    <Label htmlFor='inherited-account-name'>Account</Label>
+                    <Label htmlFor='inherited-account-name'>
+                      {translateDemo('Account', { defaultValue: 'Account' })}
+                    </Label>
                     <Input
                       id='inherited-account-name'
                       value={accountName}
@@ -804,7 +1064,11 @@ function InheritedContextShowcase() {
                     />
                   </label>
                   <label className='block space-y-2'>
-                    <Label>Renewal stage</Label>
+                    <Label>
+                      {translateDemo('Renewal stage', {
+                        defaultValue: 'Renewal stage',
+                      })}
+                    </Label>
                     <Select
                       value={stage}
                       onValueChange={(value) => value && setStage(value)}
@@ -813,27 +1077,52 @@ function InheritedContextShowcase() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value='discovery'>Discovery</SelectItem>
-                        <SelectItem value='negotiation'>Negotiation</SelectItem>
-                        <SelectItem value='committed'>Committed</SelectItem>
+                        <SelectItem value='discovery'>
+                          {translateDemo('Discovery', {
+                            defaultValue: 'Discovery',
+                          })}
+                        </SelectItem>
+                        <SelectItem value='negotiation'>
+                          {translateDemo('Negotiation', {
+                            defaultValue: 'Negotiation',
+                          })}
+                        </SelectItem>
+                        <SelectItem value='committed'>
+                          {translateDemo('Committed', {
+                            defaultValue: 'Committed',
+                          })}
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </label>
                   <div className='space-y-2 border-t pt-4'>
                     <div className='text-xs text-muted-foreground'>
-                      Shortcut task without message.workContext
+                      {translateDemo(
+                        'Shortcut task without message.workContext',
+                        {
+                          defaultValue:
+                            'Shortcut task without message.workContext',
+                        },
+                      )}
                     </div>
                     <AIEmployeeShortcut
                       aiEmployee={employee.username}
                       target={controller}
                       tasks={[shortcutTask]}
-                      label='Review current renewal'
+                      label={translateDemo('Review current renewal', {
+                        defaultValue: 'Review current renewal',
+                      })}
                       size={34}
                     />
                   </div>
                   <div className='rounded-lg border bg-background p-3 text-xs leading-5 text-muted-foreground'>
-                    The preset task “Recommend next renewal action” also has no
-                    task context, so it inherits this scope.
+                    {translateDemo(
+                      'The preset task “Recommend next renewal action” also has no task context, so it inherits this scope.',
+                      {
+                        defaultValue:
+                          'The preset task “Recommend next renewal action” also has no task context, so it inherits this scope.',
+                      },
+                    )}
                   </div>
                 </CardContent>
               </Card>

@@ -1,4 +1,366 @@
 export default {
+  'Conversation list': '对话列表',
+  'AI employee selector': 'AI 员工选择器',
+  'Model selector': '模型选择器',
+  'Personalized prompt editor': '个性化提示词编辑器',
+  'Upload files': '上传文件',
+  'Panel expand / collapse': '展开 / 收起侧栏',
+  'ChatSurface props': 'ChatSurface 属性',
+  'AIChatWindow props': 'AIChatWindow 属性',
+  '450px · NocoBase default': '450px · NocoBase 默认值',
+  'Sets the width used by the side-panel variant.': '设置侧栏模式的宽度。',
+  'Allows Escape to close the active surface.': '允许使用 Esc 键关闭当前界面。',
+  'Shows an outside close handle for the side-panel variant.':
+    '在侧栏模式外部显示关闭控件。',
+  'Adds layout or sizing classes to the root conversation window.':
+    '为对话窗口根元素添加布局或尺寸类名。',
+  'Adds surface actions such as expand, collapse, or close to the header.':
+    '向标题栏添加展开、收起或关闭等操作。',
+  'Application-specific buttons rendered in the composer toolbar.':
+    '在输入区工具栏中渲染的应用专属按钮。',
+  'Shows the conversation-list control.': '显示对话列表控件。',
+  'Shows the new-conversation action.': '显示新建对话操作。',
+  'Shows the AI employee selector in the composer.':
+    '在输入区显示 AI 员工选择器。',
+  'Shows the model selector in the composer.': '在输入区显示模型选择器。',
+  'Shows the personalized AI employee prompt editor.':
+    '显示个性化 AI 员工提示词编辑器。',
+  'Enables file picker, drag-and-drop, and pasted-image uploads.':
+    '启用文件选择、拖放及粘贴图片上传。',
+  'Places the attachment action at a specific position in the composer toolbar.':
+    '将附件操作放在输入区工具栏的指定位置。',
+  'Observes approve, reject, or edit decisions after AIChatProvider has processed them; use it for application side effects or telemetry.':
+    '在 AIChatProvider 处理后观察批准、拒绝或编辑决定，可用于应用副作用或遥测。',
+  'Composer placeholder text.': '输入区占位文本。',
+  'Customizes or hides the footer disclaimer.': '自定义或隐藏底部免责声明。',
+  'Changes only the outer presentation while keeping the same chat window mounted.':
+    '只改变外层展示方式，保持同一个聊天窗口挂载。',
+  'Controls whether the surface is open.': '控制界面是否打开。',
+  'Receives close requests from Escape, the dialog backdrop, or surface actions.':
+    '接收 Esc 键、对话框遮罩或界面操作发出的关闭请求。',
+  'Chooses the side used by the side-panel variant.':
+    '选择侧栏模式使用的方向。',
+  'No AI employee is available for the current user.':
+    '当前用户没有可用的 AI 员工。',
+  'Inside the page': '页面内',
+  'Dedicated page': '独立页面',
+  'Right side panel': '右侧栏',
+  'Mobile region': '移动端区域',
+  'Push side panel': '推挤式侧栏',
+  'Mobile container': '移动端容器',
+  'Preview block': '预览区域',
+  'Preview page': '预览页面',
+  'Open panel': '打开侧栏',
+  'Open dialog': '打开对话框',
+  'Preview mobile': '预览移动端',
+  'Place chat inside a dashboard, record page, or workspace region.':
+    '将聊天放在仪表盘、记录页面或工作区内。',
+  'Give the conversation a full route and the largest working area.':
+    '为对话提供独立路由和最大的工作区域。',
+  'Keep the page operable while the content narrows for chat.':
+    '为聊天缩窄内容区，同时保持页面可操作。',
+  'Open a focused conversation from an action without changing route.':
+    '通过操作打开专注的对话，无需切换路由。',
+  'Use the same component in a narrow, touch-friendly viewport.':
+    '在适合触控的窄视口中使用相同组件。',
+  'Embed chat in the selected content region.': '将聊天嵌入所选内容区域。',
+  'Create a full route for the AI conversation.': '为 AI 对话创建独立路由。',
+  'Push the page narrower while chat is open.': '聊天打开时缩窄页面。',
+  'Open chat from a button or page action.': '通过按钮或页面操作打开聊天。',
+  'Optimize the embedded container for a narrow viewport.':
+    '针对窄视口优化嵌入式容器。',
+  'Ticket analysis': '工单分析',
+  'Response drafting': '回复起草',
+  'Workflow design': '工作流设计',
+  'Inspect record': '检查记录',
+  'Search records': '搜索记录',
+  'Update record': '更新记录',
+  Suggestions: '建议',
+  'Business report': '业务报告',
+  Chart: '图表',
+  'Sub-agent': '子助手',
+  'Workflow output': '工作流输出',
+  'Pick page element': '选择页面元素',
+  'Fill lead form': '填写线索表单',
+  'Update quote discount': '更新报价折扣',
+  'Apply review discount': '应用评审折扣',
+  'Prepare opportunity brief': '准备商机简报',
+  'Recommend next renewal action': '推荐下一步续约行动',
+  'Loading AI employees and enabled models…': '正在加载 AI 员工和已启用的模型…',
+  'AI employee is not ready': 'AI 员工尚未就绪',
+  'Development instance': '开发实例',
+  "This page uses the Registry UI against the plugin's existing authenticated":
+    '此页面通过 Registry UI 访问插件现有的已认证',
+  'routes. It is excluded from production builds.':
+    '路由。生产构建不包含此页面。',
+  'AI Employee Registry': 'AI 员工 Registry',
+  'AI employee playground': 'AI 员工演示',
+  'Exercise the application-owned AI component library with the current plugin runtime.':
+    '使用当前插件运行时体验应用拥有的 AI 组件库。',
+  'Inline messages': '内联消息',
+  'Standard conversation transcript': '标准对话记录',
+  'This fixed example shows where reasoning, a normal tool call, and the final assistant response appear in one message sequence.':
+    '此固定示例展示了推理、普通工具调用和最终助手回复在同一消息序列中的位置。',
+  Conversations: '对话',
+  'Support workspace review': '支持工作区评审',
+  'New conversation': '新建对话',
+  'Message your AI employee…': '向 AI 员工发送消息…',
+  'Attach file': '添加附件',
+  'Send message': '发送消息',
+  'Compact composer': '紧凑输入区',
+  'Open the transcript only when needed': '仅在需要时打开对话记录',
+  'The compact variant keeps only the chat header and composer. Its history button opens a dialog with conversation switching and the selected transcript.':
+    '紧凑模式仅保留聊天标题栏和输入区。历史按钮会打开对话框，可在其中切换对话并查看选定的记录。',
+  'Pick page context while composing a message': '编写消息时选择页面上下文',
+  'The user can pick any registered page element from the composer. Its current content is added to this message without changing task configuration.':
+    '用户可以在输入区选择任意已注册的页面元素，将其当前内容添加到本条消息中，而无需更改任务配置。',
+  'Reference page context from a Shortcut task': '在快捷任务中引用页面上下文',
+  'The Shortcut task stores a page-element reference in message.workContext and reads its latest content when the user starts the task.':
+    '快捷任务将页面元素引用保存在 message.workContext 中，并在用户启动任务时读取其最新内容。',
+  'Reference page context from a conversation preset task':
+    '在对话预设任务中引用页面上下文',
+  'The AIChatProvider employeeTasks configuration uses the same message.workContext reference, but exposes the task in the conversation empty state instead of through a Shortcut.':
+    'AIChatProvider 的 employeeTasks 配置使用相同的 message.workContext 引用，但在对话空状态中展示任务，而不是通过快捷入口展示。',
+  'Inherit the surrounding page context': '继承周围的页面上下文',
+  'A Shortcut or AIChatProvider inside AIPageContextScope inherits that context. A task-level message.workContext still takes precedence when configured.':
+    'AIPageContextScope 内的 Shortcut 或 AIChatProvider 会继承该上下文。若配置了任务级 message.workContext，则仍优先使用它。',
+  'Fill a registered React form with Form filler':
+    '使用表单填充工具填写已注册的 React 表单',
+  'Form filler is registered once by AIProvider. The form exposes its identifier, field schema, live values, and setter through useAIForm; it is not part of the custom frontend Tool catalog.':
+    '表单填充工具由 AIProvider 统一注册一次。表单通过 useAIForm 提供标识、字段结构、实时值和设置方法，不属于自定义前端工具目录。',
+  'Expose a page-specific action to the AI employee':
+    '向 AI 员工提供页面专属操作',
+  'A registered page element can advertise custom Tools through the NocoBase loadFrontendTool and executeFrontendTool protocol. The example uses ASK permission and updates only the local quote preview.':
+    '已注册的页面元素可以通过 NocoBase 的 loadFrontendTool 和 executeFrontendTool 协议提供自定义工具。本例使用 ASK 权限，仅更新本地报价预览。',
+  'Generate a complete page context scene': '生成完整的页面上下文场景',
+  'Describe the business scene, select the AI employee and task, then generate the full page surface, context binding, conversation layout, and optional frontend capability together.':
+    '描述业务场景，选择 AI 员工和任务，然后一起生成完整页面、上下文绑定、对话布局以及可选的前端能力。',
+  'Source content': '源内容',
+  'Edit this text, then ask the AI employee to fill the registered form below.':
+    '编辑此文本，然后请 AI 员工填写下方已注册的表单。',
+  'Lead intake form': '线索录入表单',
+  'Form filler changes visible values only. It never submits the form.':
+    '表单填充工具只修改可见字段的值，不会提交表单。',
+  Clear: '清空',
+  Company: '公司',
+  'Contact name': '联系人姓名',
+  Email: '电子邮箱',
+  Priority: '优先级',
+  Low: '低',
+  Normal: '普通',
+  High: '高',
+  'Quote review': '报价评审',
+  'Custom Tool': '自定义工具',
+  'Review note': '评审备注',
+  'The page element registers update_quote_discount. Its full input schema is loaded only when the AI chooses this Tool. Approval is controlled by the ASK permission.':
+    '此页面元素注册了 update_quote_discount。只有 AI 选择此工具时才加载完整的输入结构，审批由 ASK 权限控制。',
+  'Selected support case': '选中的支持工单',
+  'Change a value before running either task.':
+    '运行任一任务前，请先修改一个值。',
+  'Task context': '任务上下文',
+  Summary: '摘要',
+  Severity: '严重程度',
+  Medium: '中',
+  'Task shortcut area': '任务快捷区',
+  'This button is outside the selected page element. Its task explicitly references “Selected support case”.':
+    '此按钮位于选中的页面元素之外，其任务显式引用“选中的支持工单”。',
+  'Explicit reference': '显式引用',
+  'Analyze selected case': '分析选中的工单',
+  'Selected opportunity': '选中的商机',
+  'Change a value, then select the preset task in the chat.':
+    '修改一个值，然后在聊天中选择预设任务。',
+  'Preset task context': '预设任务上下文',
+  Opportunity: '商机',
+  Forecast: '预测',
+  Pipeline: '销售漏斗',
+  Likely: '可能成交',
+  Committed: '已承诺',
+  'No Shortcut is used here. “Prepare opportunity brief” comes from AIChatProvider.employeeTasks and appears in the conversation empty state.':
+    '此处未使用 Shortcut。“准备商机简报”来自 AIChatProvider.employeeTasks，显示在对话空状态中。',
+  'Current account renewal': '当前客户续约',
+  'Shortcut and conversation are inside this context scope.':
+    '快捷入口和对话位于此上下文范围内。',
+  Inherited: '已继承',
+  Account: '客户',
+  'Renewal stage': '续约阶段',
+  Discovery: '需求探索',
+  Negotiation: '谈判',
+  'Shortcut task without message.workContext':
+    '未配置 message.workContext 的快捷任务',
+  'Review current renewal': '评审当前续约',
+  'The preset task “Recommend next renewal action” also has no task context, so it inherits this scope.':
+    '预设任务“推荐下一步续约行动”也没有任务上下文，因此会继承此范围。',
+  'Customer workspace': '客户工作区',
+  'The form and detail card are registered page elements.':
+    '表单和详情卡片均已注册为页面元素。',
+  '2 selectable elements': '2 个可选元素',
+  'Customer intake form': '客户录入表单',
+  'Update a value, then pick this form to capture its current state.':
+    '更新一个值，再选择此表单以获取其当前状态。',
+  'Customer name': '客户名称',
+  'Contact email': '联系邮箱',
+  'Customer health summary': '客户健康度摘要',
+  'Floating chat prompt': '悬浮聊天提示词',
+  'Generate the global launcher separately': '单独生成全局入口',
+  'Add a lower-right AI floating entry': '添加右下角 AI 悬浮入口',
+  'This prompt configures the global trigger and its switchable side-panel/dialog surface.':
+    '此提示词配置全局触发按钮及其可切换的侧栏和对话框界面。',
+  'Describe the integration': '描述集成方式',
+  'Choose where chat belongs and which capabilities the target page needs.':
+    '选择聊天的放置位置及目标页面需要的能力。',
+  'Target page or region': '目标页面或区域',
+  'e.g. the ticket detail page': '例如：工单详情页',
+  Placement: '放置位置',
+  'Side panel width': '侧栏宽度',
+  'Message presentation': '消息展示方式',
+  'Full transcript': '完整对话记录',
+  'Compact + history dialog': '紧凑模式 + 历史对话框',
+  Capabilities: '能力',
+  'Capabilities preview': '能力预览',
+  'The selected controls are rendered on the real AIChatWindow.':
+    '所选控件会在实际的 AIChatWindow 中渲染。',
+  'Generated implementation prompt': '生成的实现提示词',
+  'Updates from the selected page, placement, and capabilities.':
+    '根据所选页面、放置位置和能力实时更新。',
+  'Scenario 1 · Multiple tasks': '场景 1 · 多个任务',
+  'Trigger employee tasks from a business record': '从业务记录触发员工任务',
+  'The Shortcut component can still sit in a detail header and provide the current record as work context. Opening it shows the configured analysis and reply tasks below the employee greeting.':
+    'Shortcut 组件仍可放在详情标题栏中，并将当前记录作为工作上下文。打开后会在员工问候语下方显示已配置的分析和回复任务。',
+  Requester: '请求人',
+  Created: '创建时间',
+  Description: '描述',
+  'Scenario 2 · Explicit target': '场景 2 · 指定目标',
+  'Send a shortcut task to a designated embedded chat':
+    '将快捷任务发送到指定的嵌入式聊天',
+  'The shortcut receives the embedded chat Controller directly. Its Provider explicitly configures':
+    '快捷入口直接接收嵌入式聊天的 Controller。其 Provider 显式配置',
+  'and an employee task set. It does not need a global target ID and cannot accidentally trigger another conversation on the same page.':
+    '及员工任务集。无需全局目标 ID，也不会误触发同一页面上的其他对话。',
+  'Risk review workspace': '风险评审工作区',
+  'The embedded chat starts without preset tasks. Clicking the Shortcut injects “Review operational risk” into this specific conversation, where the user can choose it before the request is placed in the composer.':
+    '嵌入式聊天启动时没有预设任务。点击快捷入口会将“评审运营风险”加入此对话，用户可以先选择该任务，再将请求放入输入区。',
+  'Scenario 3 · Chat-bound tasks': '场景 3 · 绑定聊天的任务',
+  'Show tasks when the selected employee changes': '随所选员工变化展示任务',
+  'This conversation window binds task lists directly to business AI employees. Starting a new conversation or switching employees in the composer immediately replaces the empty-state tasks. Employees without a binding keep the normal greeting-only state.':
+    '此对话窗口将任务列表直接绑定到业务 AI 员工。新建对话或在输入区切换员工，会立即替换空状态中的任务。未绑定任务的员工仍仅显示问候语。',
+  'Employee task bindings': '员工任务绑定',
+  'Analyze this ticket': '分析此工单',
+  'Draft a customer reply': '起草客户回复',
+  'Review operational risk': '评审运营风险',
+  'Switch employees from the bottom of the chat to preview each configured task list.':
+    '在聊天底部切换员工，预览各自配置的任务列表。',
+  'The same': '同一个',
+  'parameter works in page, embedded, side-panel, dialog, and mobile containers.':
+    '参数适用于页面、嵌入式区域、侧栏、对话框及移动端容器。',
+  'Employee tasks prompt': '员工任务提示词',
+  'Generate an integration prompt': '生成集成提示词',
+  'Choose whether tasks are exposed through a contextual Shortcut or directly by the selected employee in a chat. Both modes share the same task, model, Web search, Skills, and Tools configuration.':
+    '选择通过上下文快捷入口展示任务，或直接在聊天中按所选员工展示任务。两种模式共用任务、模型、网络搜索、技能和工具配置。',
+  'Employee task configuration': '员工任务配置',
+  Integration: '集成方式',
+  'Contextual Shortcut': '上下文快捷入口',
+  'Tasks inside a chat': '聊天内任务',
+  'AI employee': 'AI 员工',
+  'Select an employee first, then configure the tasks shown in that employee’s new-conversation state.':
+    '先选择员工，再配置该员工新对话状态中显示的任务。',
+  'Chat container': '聊天容器',
+  Page: '页面',
+  'Embedded block': '嵌入式区域',
+  'Side panel': '侧栏',
+  Dialog: '对话框',
+  'Target conversation': '目标对话',
+  'Global side panel': '全局侧栏',
+  'Embedded chat': '嵌入式聊天',
+  Tasks: '任务',
+  'configured task': '个已配置任务',
+  'Add task': '添加任务',
+  Model: '模型',
+  'Use employee default': '使用员工默认值',
+  'Default user message': '默认用户消息',
+  'Auto send': '自动发送',
+  'Otherwise the message is placed in the composer.': '否则将消息放入输入区。',
+  'Work context': '工作上下文',
+  'Select a page context for this task. Without one, the task inherits its surrounding context.':
+    '为此任务选择页面上下文。不选择时，任务会继承周围的上下文。',
+  'Pick context': '选择上下文',
+  'Remove task context': '移除任务上下文',
+  'Advanced task settings': '高级任务设置',
+  'Background, Web search, Skills, and Tools': '背景、网络搜索、技能和工具',
+  Background: '背景',
+  'Web search': '网络搜索',
+  'Subject to the selected LLM service capability.':
+    '取决于所选 LLM 服务的能力。',
+  'Preset inherits the AI employee configuration.':
+    '预设会继承 AI 员工的配置。',
+  Preset: '预设',
+  'Use the same conversation window wherever the product needs it':
+    '在产品需要的任何位置使用同一个对话窗口',
+  'The provider owns conversation state. Page, embedded block, push side panel, dialog, and mobile containers only decide placement and dimensions.':
+    'Provider 管理对话状态。页面、嵌入式区域、推挤式侧栏、对话框和移动端容器只决定位置和尺寸。',
+  'Choose how much conversation history the page should expose':
+    '选择页面展示多少对话历史',
+  'Use the complete transcript for conversational work, or a compact worker surface that opens message history only when the user asks for it.':
+    '对话型工作可使用完整记录；也可使用紧凑界面，仅在用户需要时打开消息历史。',
+  'Describe where chat belongs, then copy an implementation prompt':
+    '描述聊天的放置位置，然后复制实现提示词',
+  'This replaces a generic prop configuration panel with a task-oriented generator: choose the target area, placement mode, and required capabilities.':
+    '此处使用面向任务的生成器：选择目标区域、放置模式和所需能力。',
+  'Use variant as the single presentation switch. The child AIChatWindow remains the same React instance while the surface changes shape.':
+    '使用 variant 作为唯一的展示方式开关。界面形态变化时，子组件 AIChatWindow 保持同一个 React 实例。',
+  'The core window stays reusable while business pages provide placement, composer actions, and tool-approval behavior.':
+    '核心窗口保持可复用，业务页面负责放置位置、输入区操作和工具审批行为。',
+  Prop: '属性',
+  Type: '类型',
+  Default: '默认值',
+  'Scene settings': '场景设置',
+  'Scene title': '场景标题',
+  'Business scene': '业务场景',
+  'Task title': '任务标题',
+  'Task message': '任务消息',
+  'Otherwise fill the composer for review.': '否则填入输入区供用户审核。',
+  'Manual Pick keeps the message in the composer so context can be selected before sending.':
+    '手动选择会将消息保留在输入区，以便发送前选择上下文。',
+  'Context integration': '上下文集成',
+  'Shortcut task': '快捷任务',
+  'Conversation preset task': '对话预设任务',
+  'Scope inheritance': '范围继承',
+  'Manual Pick': '手动选择',
+  'Context id': '上下文 ID',
+  'Context title': '上下文标题',
+  'Page capability': '页面能力',
+  'Context only': '仅上下文',
+  'Built-in Form filler': '内置表单填充工具',
+  'Custom frontend Tool': '自定义前端工具',
+  'Tool name': '工具名称',
+  'Business action': '业务操作',
+  'Complete page context scene prompt': '完整页面上下文场景提示词',
+  'Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene.':
+    '复制此提示词，将业务页面、AI 交互、上下文绑定和可用的对话作为一个完整场景生成。',
+  'Adapt NocoBase tool results to the job they represent':
+    '按工具用途展示 NocoBase 工具结果',
+  "These cards follow the original AI employee patterns while using the starter's shadcn and Base UI component system.":
+    '这些卡片沿用原有 AI 员工模式，并使用模板的 shadcn 和 Base UI 组件体系。',
+  'One shared shell for every normal tool state':
+    '所有普通工具状态共用一个外壳',
+  'Tools without a specialized renderer still use the same compact status, input disclosure, error, and permission behavior.':
+    '没有专用渲染器的工具仍使用相同的紧凑状态展示、输入展开、错误和权限处理。',
+  'Approval required': '需要审批',
+  'Generate an implementation prompt for a specialized Tool Card':
+    '为专用工具卡片生成实现提示词',
+  'Choose the nearest existing renderer and describe the business interaction. The generated prompt tells the coding agent exactly where and how to implement it.':
+    '选择最接近的现有渲染器并描述业务交互。生成的提示词会明确告知编码助手在何处以及如何实现。',
+  'Describe the Tool Card': '描述工具卡片',
+  'The examples above remain the visual reference; these values define the implementation task.':
+    '以上示例作为视觉参考；这些值用于定义实现任务。',
+  'Closest example': '最接近的示例',
+  'Business interaction': '业务交互',
+  'Card owns approval UI': '卡片自行提供审批界面',
+  'Enable for actions such as Approve, Revise, and Reject.':
+    '适用于批准、修改和拒绝等操作。',
+  'Coding prompt': '编码提示词',
+  'Ready to paste into an implementation task.': '可直接粘贴到实现任务中。',
+  'Container preview': '容器预览',
+
   'AI Employee': 'AI 员工',
   'AI settings': 'AI 设置',
   'LLM Service': 'LLM 服务',

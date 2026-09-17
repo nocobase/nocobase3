@@ -1028,6 +1028,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -1426,7 +1429,7 @@ importers:
         version: link:../service-provider
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(supports-color@8.1.1)
+        version: 3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(supports-color@8.1.1)
     devDependencies:
       '@hono/node-server':
         specifier: 'catalog:'
@@ -1487,7 +1490,7 @@ importers:
         version: 1.0.52452
       knex-dm:
         specifier: ^1.0.52452
-        version: 1.0.52452(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))
+        version: 1.0.52452(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
@@ -2281,6 +2284,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -2429,6 +2435,9 @@ importers:
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -2548,6 +2557,9 @@ importers:
 
   packages/plugins/app-plugin-file:
     dependencies:
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -3079,6 +3091,9 @@ importers:
       '@nocobase/app-client':
         specifier: workspace:^
         version: link:../../app/app-client
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -3241,6 +3256,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -22504,7 +22522,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-dm@1.0.52452(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)):
+  knex-dm@1.0.52452(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)):
     dependencies:
       dmdb: 1.0.52452
       knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
@@ -22537,29 +22555,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(supports-color@8.1.1):
-    dependencies:
-      colorette: 2.0.19
-      commander: 10.0.1
-      debug: 4.3.4(supports-color@8.1.1)
-      escalade: 3.2.0
-      esm: 3.2.25
-      get-package-type: 0.1.0
-      getopts: 2.3.0
-      interpret: 2.2.0
-      lodash: 4.18.1
-      pg-connection-string: 2.6.2
-      rechoir: 0.8.0
-      resolve-from: 5.0.0
-      tarn: 3.1.2
-      tildify: 2.0.0
-    optionalDependencies:
-      better-sqlite3: 12.11.1
-      pg: 8.23.0
-      pg-query-stream: 4.17.0(pg@8.23.0)
-    transitivePeerDependencies:
-      - supports-color
-
   knex@3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0):
     dependencies:
       colorette: 2.0.19
@@ -22578,6 +22573,28 @@ snapshots:
       tildify: 2.0.0
     optionalDependencies:
       better-sqlite3: 13.0.3
+      pg: 8.23.0
+      pg-query-stream: 4.17.0(pg@8.23.0)
+    transitivePeerDependencies:
+      - supports-color
+
+  knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(supports-color@8.1.1):
+    dependencies:
+      colorette: 2.0.19
+      commander: 10.0.1
+      debug: 4.3.4(supports-color@8.1.1)
+      escalade: 3.2.0
+      esm: 3.2.25
+      get-package-type: 0.1.0
+      getopts: 2.3.0
+      interpret: 2.2.0
+      lodash: 4.18.1
+      pg-connection-string: 2.6.2
+      rechoir: 0.8.0
+      resolve-from: 5.0.0
+      tarn: 3.1.2
+      tildify: 2.0.0
+    optionalDependencies:
       pg: 8.23.0
       pg-query-stream: 4.17.0(pg@8.23.0)
     transitivePeerDependencies:

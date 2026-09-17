@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button, Input } from '../components/ui.js';
 import {
   useCallback,
@@ -61,13 +62,13 @@ type DetailSection = 'permissions' | 'assignments';
 let nextId = 0;
 const authz = getAuthorizationClient();
 
-export function PermissionSetsPanel({
-  options,
-  users,
-}: {
+export function PermissionSetsPanel(inputProps: {
   options: AuthorizationOptions;
   users: readonly AuthorizationUser[];
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, users } = inputProps;
+
   const [sets, setSets] = useState<readonly PermissionSet[]>([]);
   const [assignments, setAssignments] = useState<
     readonly PermissionSetAssignment[]
@@ -204,7 +205,9 @@ export function PermissionSetsPanel({
           <ManagementToolbar
             search={search}
             onSearch={setSearch}
-            actionLabel='New permission set'
+            actionLabel={t('New permission set', {
+              defaultValue: 'New permission set',
+            })}
             onAction={create}
           />
           {error ? (
@@ -215,10 +218,18 @@ export function PermissionSetsPanel({
           <table className='w-full min-w-[48rem] text-left text-sm'>
             <thead className='border-b bg-muted/30 text-xs tracking-wide text-muted-foreground uppercase'>
               <tr>
-                <th className='px-5 py-3 font-medium'>Permission set</th>
-                <th className='px-5 py-3 font-medium'>Type</th>
-                <th className='px-5 py-3 font-medium'>Permissions</th>
-                <th className='px-5 py-3 font-medium'>Key</th>
+                <th className='px-5 py-3 font-medium'>
+                  {t('Permission set', { defaultValue: 'Permission set' })}
+                </th>
+                <th className='px-5 py-3 font-medium'>
+                  {t('Type', { defaultValue: 'Type' })}
+                </th>
+                <th className='px-5 py-3 font-medium'>
+                  {t('Permissions', { defaultValue: 'Permissions' })}
+                </th>
+                <th className='px-5 py-3 font-medium'>
+                  {t('Key', { defaultValue: 'Key' })}
+                </th>
                 <th className='w-20 px-5 py-3' />
               </tr>
             </thead>
@@ -231,10 +242,10 @@ export function PermissionSetsPanel({
                       type='button'
                       onClick={() => void open(set)}
                     >
-                      {set.title ?? humanize(set.key)}
+                      {set.title ?? humanize(t, set.key)}
                     </button>
                     <p className='mt-0.5 text-xs text-muted-foreground'>
-                      {describeSet(set)}
+                      {describeSet(t, set)}
                     </p>
                   </td>
                   <td className='px-5 py-4'>
@@ -245,7 +256,9 @@ export function PermissionSetsPanel({
                           : 'neutral'
                       }
                     >
-                      {set.key === 'system-administrator' ? 'System' : 'Custom'}
+                      {set.key === 'system-administrator'
+                        ? t('System', { defaultValue: 'System' })
+                        : t('Custom', { defaultValue: 'Custom' })}
                     </Badge>
                   </td>
                   <td className='px-5 py-4 tabular-nums'>
@@ -260,14 +273,16 @@ export function PermissionSetsPanel({
                       variant='ghost'
                       onClick={() => void open(set)}
                     >
-                      View
+                      {t('View', { defaultValue: 'View' })}
                     </Button>
                   </td>
                 </tr>
               ))}
               {visibleSets.length === 0 ? (
                 <EmptyTableRow colSpan={5}>
-                  No permission sets match your search.
+                  {t('No permission sets match your search.', {
+                    defaultValue: 'No permission sets match your search.',
+                  })}
                 </EmptyTableRow>
               ) : null}
             </tbody>
@@ -293,19 +308,29 @@ export function PermissionSetsPanel({
       {error ? <ErrorBox value={error} /> : null}
       <DetailHeader
         onBack={() => setDraft(undefined)}
-        title={draft.title || humanize(draft.key) || 'New permission set'}
-        subtitle={detailSummary(draft, assignments)}
+        title={
+          draft.title ||
+          humanize(t, draft.key) ||
+          t('New permission set', { defaultValue: 'New permission set' })
+        }
+        subtitle={detailSummary(t, draft, assignments)}
         badge={
           protectedSet ? (
-            <Badge tone='protected'>Protected system set</Badge>
+            <Badge tone='protected'>
+              {t('Protected system set', {
+                defaultValue: 'Protected system set',
+              })}
+            </Badge>
           ) : (
-            <Badge tone='neutral'>Custom</Badge>
+            <Badge tone='neutral'>
+              {t('Custom', { defaultValue: 'Custom' })}
+            </Badge>
           )
         }
         actions={
           <>
             <Button variant='outline' onClick={edit}>
-              Edit
+              {t('Edit', { defaultValue: 'Edit' })}
             </Button>
             {draft.originalKey && !protectedSet ? (
               <Button
@@ -314,7 +339,7 @@ export function PermissionSetsPanel({
                 disabled={busy}
                 onClick={() => void remove()}
               >
-                Delete
+                {t('Delete', { defaultValue: 'Delete' })}
               </Button>
             ) : null}
           </>
@@ -322,8 +347,13 @@ export function PermissionSetsPanel({
       />
       {protectedSet ? (
         <div className='rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'>
-          Required administration permissions and assignments are preserved so
-          administrators cannot be locked out.
+          {t(
+            'Required administration permissions and assignments are preserved so administrators cannot be locked out.',
+            {
+              defaultValue:
+                'Required administration permissions and assignments are preserved so administrators cannot be locked out.',
+            },
+          )}
         </div>
       ) : null}
       <DetailTabs
@@ -332,12 +362,12 @@ export function PermissionSetsPanel({
         items={[
           {
             value: 'permissions',
-            label: 'Permissions',
+            label: t('Permissions', { defaultValue: 'Permissions' }),
             count: permissionCountFromDraft(draft),
           },
           {
             value: 'assignments',
-            label: 'Assignments',
+            label: t('Assignments', { defaultValue: 'Assignments' }),
             count: assignments.length,
           },
         ]}
@@ -369,15 +399,14 @@ export function PermissionSetsPanel({
   );
 }
 
-function PermissionsSummary({
-  options,
-  draft,
-  onEdit,
-}: {
+function PermissionsSummary(inputProps: {
   options: AuthorizationOptions;
   draft: Draft;
   onEdit: () => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, draft, onEdit } = inputProps;
+
   const [search, setSearch] = useState('');
   const [type, setType] = useState('all');
   const [selected, setSelected] = useState<number>();
@@ -397,42 +426,61 @@ function PermissionsSummary({
     <ManagementTable>
       <div className='flex flex-col gap-4 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between'>
         <div>
-          <h3 className='font-medium'>Granted permissions</h3>
+          <h3 className='font-medium'>
+            {t('Granted permissions', { defaultValue: 'Granted permissions' })}
+          </h3>
           <p className='text-sm text-muted-foreground'>
-            Search and review resources without expanding every policy.
+            {t('Search and review resources without expanding every policy.', {
+              defaultValue:
+                'Search and review resources without expanding every policy.',
+            })}
           </p>
         </div>
         <div className='flex w-full flex-wrap gap-2 lg:w-auto lg:flex-nowrap'>
           <Input
             className='max-w-72 flex-1 lg:w-72 lg:flex-none'
             type='search'
-            placeholder='Search resources or actions'
+            placeholder={t('Search resources or actions', {
+              defaultValue: 'Search resources or actions',
+            })}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
           <select
-            aria-label='Resource type'
+            aria-label={t('Resource type', { defaultValue: 'Resource type' })}
             className='h-8 min-w-48 rounded-lg border bg-background px-3 text-sm'
             value={type}
             onChange={(event) => setType(event.target.value)}
           >
-            <option value='all'>All resource types</option>
+            <option value='all'>
+              {t('All resource types', { defaultValue: 'All resource types' })}
+            </option>
             {options.resourceTypes.map((item) => (
               <option key={item.value} value={item.value}>
-                {item.label}
+                {t(item.label, { defaultValue: item.label })}
               </option>
             ))}
           </select>
-          <Button onClick={onEdit}>Edit permissions</Button>
+          <Button onClick={onEdit}>
+            {t('Edit permissions', { defaultValue: 'Edit permissions' })}
+          </Button>
         </div>
       </div>
       <table className='w-full min-w-[42rem] text-left text-sm'>
         <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
           <tr>
-            <th className='px-5 py-3 font-medium'>Category</th>
-            <th className='px-5 py-3 font-medium'>Resource</th>
-            <th className='px-5 py-3 font-medium'>Actions</th>
-            <th className='px-5 py-3 font-medium'>Record access</th>
+            <th className='px-5 py-3 font-medium'>
+              {t('Category', { defaultValue: 'Category' })}
+            </th>
+            <th className='px-5 py-3 font-medium'>
+              {t('Resource', { defaultValue: 'Resource' })}
+            </th>
+            <th className='px-5 py-3 font-medium'>
+              {t('Actions', { defaultValue: 'Actions' })}
+            </th>
+            <th className='px-5 py-3 font-medium'>
+              {t('Record access', { defaultValue: 'Record access' })}
+            </th>
           </tr>
         </thead>
         <tbody className='divide-y'>
@@ -443,7 +491,7 @@ function PermissionsSummary({
               onClick={() => setSelected(grant.id)}
             >
               <td className='px-5 py-4'>
-                {resourceTypeLabel(options, grant.resource.type)}
+                {resourceTypeLabel(t, options, grant.resource.type)}
               </td>
               <td className='px-5 py-4 font-medium'>
                 {resourceLabel(options, grant.resource)}
@@ -455,21 +503,23 @@ function PermissionsSummary({
                       className='rounded-md bg-muted px-2 py-1 text-xs font-medium'
                       key={action}
                     >
-                      {humanize(action)}
+                      {humanize(t, action)}
                     </span>
                   ))}
                 </div>
               </td>
               <td className='px-5 py-4 text-muted-foreground'>
                 {grant.resource.type === 'database.collection'
-                  ? databaseAccessSummary(grant)
+                  ? databaseAccessSummary(t, grant)
                   : '—'}
               </td>
             </tr>
           ))}
           {visible.length === 0 ? (
             <EmptyTableRow colSpan={4}>
-              No permissions match these filters.
+              {t('No permissions match these filters.', {
+                defaultValue: 'No permissions match these filters.',
+              })}
             </EmptyTableRow>
           ) : null}
         </tbody>
@@ -477,7 +527,7 @@ function PermissionsSummary({
       {selectedGrant ? (
         <SidePanel
           title={resourceLabel(options, selectedGrant.resource)}
-          description={`${resourceTypeLabel(options, selectedGrant.resource.type)} · ${selectedGrant.resource.id}`}
+          description={`${resourceTypeLabel(t, options, selectedGrant.resource.type)} · ${selectedGrant.resource.id}`}
           onClose={() => setSelected(undefined)}
         >
           <PermissionDetails grant={selectedGrant} />
@@ -487,34 +537,42 @@ function PermissionsSummary({
   );
 }
 
-function PermissionDetails({ grant }: { grant: GrantDraft }): ReactElement {
+function PermissionDetails(inputProps: { grant: GrantDraft }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { grant } = inputProps;
+
   return (
     <div className='space-y-5'>
       <section>
-        <h3 className='text-sm font-medium'>Allowed actions</h3>
+        <h3 className='text-sm font-medium'>
+          {t('Allowed actions', { defaultValue: 'Allowed actions' })}
+        </h3>
         <div className='mt-3 flex flex-wrap gap-2'>
           {grant.actions.map((action) => (
             <span
               className='rounded-md border bg-muted/20 px-3 py-1.5 text-sm'
               key={action}
             >
-              {humanize(action)}
+              {humanize(t, action)}
             </span>
           ))}
         </div>
       </section>
       {grant.resource.type === 'database.collection' ? (
         <section className='border-t pt-5'>
-          <h3 className='text-sm font-medium'>Data access</h3>
+          <h3 className='text-sm font-medium'>
+            {t('Data access', { defaultValue: 'Data access' })}
+          </h3>
           <div className='mt-3 divide-y rounded-lg border'>
             {grant.actions.map((action) => (
               <div
                 className='flex items-start justify-between gap-4 p-4'
                 key={action}
               >
-                <span className='font-medium'>{humanize(action)}</span>
+                <span className='font-medium'>{humanize(t, action)}</span>
                 <span className='text-right text-sm text-muted-foreground'>
                   {databaseActionSummary(
+                    t,
                     action,
                     grant.database[action] ?? defaultDatabaseActionDraft(),
                   )}
@@ -528,14 +586,7 @@ function PermissionDetails({ grant }: { grant: GrantDraft }): ReactElement {
   );
 }
 
-function Assignments({
-  users,
-  assignments,
-  protectedSet,
-  busy,
-  onAssign,
-  onRevoke,
-}: {
+function Assignments(inputProps: {
   users: readonly AuthorizationUser[];
   assignments: readonly PermissionSetAssignment[];
   protectedSet: boolean;
@@ -543,13 +594,17 @@ function Assignments({
   onAssign: (subjects: readonly AuthorizationSubject[]) => Promise<void>;
   onRevoke: (ids: readonly string[]) => Promise<void>;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { users, assignments, protectedSet, busy, onAssign, onRevoke } =
+    inputProps;
+
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState('all');
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const query = search.trim().toLowerCase();
   const visible = assignments.filter((item) => {
-    const label = subjectLabel(item.subject, users).toLowerCase();
+    const label = subjectLabel(t, item.subject, users).toLowerCase();
     const itemKind =
       item.subject.type === 'authenticated' ? 'audience' : 'user';
     return (
@@ -568,19 +623,29 @@ function Assignments({
           <Input
             className='max-w-72 flex-1'
             type='search'
-            placeholder='Search name, username, or email'
+            placeholder={t('Search name, username, or email', {
+              defaultValue: 'Search name, username, or email',
+            })}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
           <select
-            aria-label='Assignment type'
+            aria-label={t('Assignment type', {
+              defaultValue: 'Assignment type',
+            })}
             className='h-8 min-w-44 rounded-lg border bg-background px-3 text-sm'
             value={kind}
             onChange={(event) => setKind(event.target.value)}
           >
-            <option value='all'>All assignments</option>
-            <option value='user'>Users</option>
-            <option value='audience'>Audiences</option>
+            <option value='all'>
+              {t('All assignments', { defaultValue: 'All assignments' })}
+            </option>
+            <option value='user'>
+              {t('Users', { defaultValue: 'Users' })}
+            </option>
+            <option value='audience'>
+              {t('Audiences', { defaultValue: 'Audiences' })}
+            </option>
           </select>
         </div>
         <div className='flex gap-2'>
@@ -592,11 +657,12 @@ function Assignments({
                 void onRevoke(selected).then(() => setSelected([]))
               }
             >
-              Revoke selected ({selected.length})
+              {t('Revoke selected (', { defaultValue: 'Revoke selected (' })}
+              {selected.length})
             </Button>
           ) : null}
           <Button disabled={protectedSet} onClick={() => setAddOpen(true)}>
-            Add assignments
+            {t('Add assignments', { defaultValue: 'Add assignments' })}
           </Button>
         </div>
       </div>
@@ -605,7 +671,9 @@ function Assignments({
           <tr>
             <th className='w-12 px-5 py-3'>
               <input
-                aria-label='Select all visible assignments'
+                aria-label={t('Select all visible assignments', {
+                  defaultValue: 'Select all visible assignments',
+                })}
                 type='checkbox'
                 checked={
                   visible.length > 0 &&
@@ -627,8 +695,12 @@ function Assignments({
                 }
               />
             </th>
-            <th className='px-5 py-3 font-medium'>Assigned to</th>
-            <th className='px-5 py-3 font-medium'>Subject type</th>
+            <th className='px-5 py-3 font-medium'>
+              {t('Assigned to', { defaultValue: 'Assigned to' })}
+            </th>
+            <th className='px-5 py-3 font-medium'>
+              {t('Subject type', { defaultValue: 'Subject type' })}
+            </th>
             <th className='w-24 px-5 py-3' />
           </tr>
         </thead>
@@ -637,17 +709,22 @@ function Assignments({
             <tr key={item.id}>
               <td className='px-5 py-4'>
                 <input
-                  aria-label={`Select ${subjectLabel(item.subject, users)}`}
+                  aria-label={t('selectSubject', {
+                    subject: subjectLabel(t, item.subject, users),
+                    defaultValue: `Select ${subjectLabel(t, item.subject, users)}`,
+                  })}
                   type='checkbox'
                   checked={selected.includes(item.id)}
                   onChange={(event) => toggle(item.id, event.target.checked)}
                 />
               </td>
               <td className='px-5 py-4 font-medium'>
-                {subjectLabel(item.subject, users)}
+                {subjectLabel(t, item.subject, users)}
               </td>
               <td className='px-5 py-4 text-muted-foreground'>
-                {item.subject.type === 'authenticated' ? 'Audience' : 'User'}
+                {item.subject.type === 'authenticated'
+                  ? t('Audience', { defaultValue: 'Audience' })
+                  : t('User', { defaultValue: 'User' })}
               </td>
               <td className='px-5 py-4 text-right'>
                 <Button
@@ -656,7 +733,7 @@ function Assignments({
                   disabled={protectedSet}
                   onClick={() => void onRevoke([item.id])}
                 >
-                  Revoke
+                  {t('Revoke', { defaultValue: 'Revoke' })}
                 </Button>
               </td>
             </tr>
@@ -664,8 +741,12 @@ function Assignments({
           {visible.length === 0 ? (
             <EmptyTableRow colSpan={4}>
               {assignments.length === 0
-                ? 'This permission set has no assignments.'
-                : 'No assignments match these filters.'}
+                ? t('This permission set has no assignments.', {
+                    defaultValue: 'This permission set has no assignments.',
+                  })
+                : t('No assignments match these filters.', {
+                    defaultValue: 'No assignments match these filters.',
+                  })}
             </EmptyTableRow>
           ) : null}
         </tbody>
@@ -685,19 +766,16 @@ function Assignments({
   );
 }
 
-function AssignmentPicker({
-  users,
-  assignments,
-  busy,
-  onClose,
-  onAdd,
-}: {
+function AssignmentPicker(inputProps: {
   users: readonly AuthorizationUser[];
   assignments: readonly PermissionSetAssignment[];
   busy: boolean;
   onClose: () => void;
   onAdd: (subjects: readonly AuthorizationSubject[]) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { users, assignments, busy, onClose, onAdd } = inputProps;
+
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [audience, setAudience] = useState(false);
@@ -729,13 +807,21 @@ function AssignmentPicker({
   }
   return (
     <SidePanel
-      title='Add assignments'
-      description='Find people and assign this permission set in one operation.'
+      title={t('Add assignments', { defaultValue: 'Add assignments' })}
+      description={t(
+        'Find people and assign this permission set in one operation.',
+        {
+          defaultValue:
+            'Find people and assign this permission set in one operation.',
+        },
+      )}
       onClose={onClose}
     >
       <div className='space-y-5'>
         <section>
-          <h3 className='text-sm font-medium'>Audience</h3>
+          <h3 className='text-sm font-medium'>
+            {t('Audience', { defaultValue: 'Audience' })}
+          </h3>
           <label
             className={`mt-3 flex items-start gap-3 rounded-lg border p-4 ${audienceAssigned ? 'opacity-50' : 'cursor-pointer hover:bg-muted/20'}`}
           >
@@ -748,11 +834,18 @@ function AssignmentPicker({
             />
             <span>
               <span className='block text-sm font-medium'>
-                All signed-in users
+                {t('All signed-in users', {
+                  defaultValue: 'All signed-in users',
+                })}
               </span>
               <span className='mt-0.5 block text-xs text-muted-foreground'>
-                Everyone with a valid session. This is managed separately from
-                individual users.
+                {t(
+                  'Everyone with a valid session. This is managed separately from individual users.',
+                  {
+                    defaultValue:
+                      'Everyone with a valid session. This is managed separately from individual users.',
+                  },
+                )}
               </span>
             </span>
           </label>
@@ -760,19 +853,25 @@ function AssignmentPicker({
         <section className='border-t pt-5'>
           <div className='flex items-end justify-between gap-3'>
             <div>
-              <h3 className='text-sm font-medium'>Users</h3>
+              <h3 className='text-sm font-medium'>
+                {t('Users', { defaultValue: 'Users' })}
+              </h3>
               <p className='mt-0.5 text-xs text-muted-foreground'>
-                Already assigned users are hidden.
+                {t('Already assigned users are hidden.', {
+                  defaultValue: 'Already assigned users are hidden.',
+                })}
               </p>
             </div>
             <span className='text-xs text-muted-foreground'>
-              {selected.length} selected
+              {selected.length} {t('selected', { defaultValue: 'selected' })}
             </span>
           </div>
           <Input
             className='mt-3'
             type='search'
-            placeholder='Search name, username, or email'
+            placeholder={t('Search name, username, or email', {
+              defaultValue: 'Search name, username, or email',
+            })}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -799,9 +898,10 @@ function AssignmentPicker({
                   )
                 }
               />
-              Select all results
+
+              {t('Select all results', { defaultValue: 'Select all results' })}
               <span className='ml-auto text-xs font-normal text-muted-foreground'>
-                {visible.length} users
+                {visible.length} {t('users', { defaultValue: 'users' })}
               </span>
             </label>
             <div className='max-h-[24rem] divide-y overflow-y-auto'>
@@ -828,7 +928,9 @@ function AssignmentPicker({
               ))}
               {visible.length === 0 ? (
                 <p className='px-4 py-10 text-center text-sm text-muted-foreground'>
-                  No available users match your search.
+                  {t('No available users match your search.', {
+                    defaultValue: 'No available users match your search.',
+                  })}
                 </p>
               ) : null}
             </div>
@@ -836,18 +938,23 @@ function AssignmentPicker({
         </section>
         <div className='sticky bottom-0 flex items-center justify-between border-t bg-background py-4'>
           <span className='text-sm text-muted-foreground'>
-            {subjects.length} assignment{subjects.length === 1 ? '' : 's'}{' '}
-            selected
+            {t('counts.assignments', {
+              count: subjects.length,
+              defaultValue: `${subjects.length} assignments`,
+            })}{' '}
+            {t('selected', { defaultValue: 'selected' })}
           </span>
           <div className='flex gap-2'>
             <Button variant='outline' onClick={onClose}>
-              Cancel
+              {t('Cancel', { defaultValue: 'Cancel' })}
             </Button>
             <Button
               disabled={busy || subjects.length === 0}
               onClick={() => onAdd(subjects)}
             >
-              {busy ? 'Assigning…' : 'Add assignments'}
+              {busy
+                ? t('Assigning…', { defaultValue: 'Assigning…' })
+                : t('Add assignments', { defaultValue: 'Add assignments' })}
             </Button>
           </div>
         </div>
@@ -856,14 +963,7 @@ function AssignmentPicker({
   );
 }
 
-function PermissionSetEditor({
-  options,
-  draft,
-  busy,
-  onChange,
-  onSave,
-  onClose,
-}: {
+function PermissionSetEditor(inputProps: {
   options: AuthorizationOptions;
   draft: Draft;
   busy: boolean;
@@ -871,6 +971,9 @@ function PermissionSetEditor({
   onSave: (event: FormEvent) => Promise<void>;
   onClose: () => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, draft, busy, onChange, onSave, onClose } = inputProps;
+
   const [pickerOpen, setPickerOpen] = useState(false);
   const [resourceSearch, setResourceSearch] = useState('');
   const [resourceType, setResourceType] = useState('all');
@@ -899,14 +1002,20 @@ function PermissionSetEditor({
   }
   return (
     <SidePanel
-      title={draft.originalKey ? 'Edit permission set' : 'New permission set'}
-      description='Bundle access into a reusable assignment.'
+      title={
+        draft.originalKey
+          ? t('Edit permission set', { defaultValue: 'Edit permission set' })
+          : t('New permission set', { defaultValue: 'New permission set' })
+      }
+      description={t('Bundle access into a reusable assignment.', {
+        defaultValue: 'Bundle access into a reusable assignment.',
+      })}
       onClose={onClose}
       wide
     >
       <form className='space-y-6' onSubmit={(event) => void onSave(event)}>
         <div className='grid gap-4 sm:grid-cols-2'>
-          <Field label='Name'>
+          <Field label={t('Name', { defaultValue: 'Name' })}>
             <Input
               required
               value={draft.title}
@@ -915,7 +1024,12 @@ function PermissionSetEditor({
               }
             />
           </Field>
-          <Field label='Key' hint='Stable identifier used by APIs.'>
+          <Field
+            label={t('Key', { defaultValue: 'Key' })}
+            hint={t('Stable identifier used by APIs.', {
+              defaultValue: 'Stable identifier used by APIs.',
+            })}
+          >
             <Input
               required
               disabled={Boolean(draft.originalKey)}
@@ -928,9 +1042,14 @@ function PermissionSetEditor({
         </div>
         <div className='flex items-center justify-between border-t pt-5'>
           <div>
-            <h3 className='font-medium'>Permissions</h3>
+            <h3 className='font-medium'>
+              {t('Permissions', { defaultValue: 'Permissions' })}
+            </h3>
             <p className='text-sm text-muted-foreground'>
-              Choose resources and the actions this set grants.
+              {t('Choose resources and the actions this set grants.', {
+                defaultValue:
+                  'Choose resources and the actions this set grants.',
+              })}
             </p>
           </div>
           <Button
@@ -939,32 +1058,39 @@ function PermissionSetEditor({
             variant='outline'
             onClick={() => setPickerOpen(true)}
           >
-            Add permission
+            {t('Add permission', { defaultValue: 'Add permission' })}
           </Button>
         </div>
         <div className='flex flex-wrap gap-2 border-b pb-4'>
           <Input
             className='max-w-72 flex-1'
             type='search'
-            placeholder='Search resources or actions'
+            placeholder={t('Search resources or actions', {
+              defaultValue: 'Search resources or actions',
+            })}
             value={resourceSearch}
             onChange={(event) => setResourceSearch(event.target.value)}
           />
           <select
-            aria-label='Permission resource type'
+            aria-label={t('Permission resource type', {
+              defaultValue: 'Permission resource type',
+            })}
             className='h-8 min-w-48 rounded-lg border bg-background px-3 text-sm'
             value={resourceType}
             onChange={(event) => setResourceType(event.target.value)}
           >
-            <option value='all'>All resource types</option>
+            <option value='all'>
+              {t('All resource types', { defaultValue: 'All resource types' })}
+            </option>
             {options.resourceTypes.map((item) => (
               <option key={item.value} value={item.value}>
-                {item.label}
+                {t(item.label, { defaultValue: item.label })}
               </option>
             ))}
           </select>
           <span className='self-center text-xs text-muted-foreground'>
-            {visibleIndexes.length} of {draft.grants.length} resources
+            {visibleIndexes.length} of {draft.grants.length}{' '}
+            {t('resources', { defaultValue: 'resources' })}
           </span>
         </div>
         <div className='space-y-3'>
@@ -986,18 +1112,21 @@ function PermissionSetEditor({
                       {resourceLabel(options, grant.resource)}
                     </span>
                     <span className='rounded-md bg-muted px-2 py-0.5 text-[0.6875rem] text-muted-foreground'>
-                      {resourceTypeLabel(options, grant.resource.type)}
+                      {resourceTypeLabel(t, options, grant.resource.type)}
                     </span>
                   </span>
                   <span className='mt-1 block truncate text-xs text-muted-foreground'>
                     {grant.resource.id} ·{' '}
-                    {grant.actions.map(humanize).join(', ') || 'No actions'}
+                    {grant.actions
+                      .map((value) => humanize(t, value))
+                      .join(', ') ||
+                      t('No actions', { defaultValue: 'No actions' })}
                   </span>
                 </span>
                 <span className='flex shrink-0 items-center gap-3'>
                   {grant.resource.type === 'database.collection' ? (
                     <span className='hidden text-xs text-muted-foreground sm:inline'>
-                      {databaseAccessSummary(grant)}
+                      {databaseAccessSummary(t, grant)}
                     </span>
                   ) : null}
                   <span className='text-muted-foreground'>
@@ -1021,7 +1150,7 @@ function PermissionSetEditor({
                         })
                       }
                     >
-                      Remove
+                      {t('Remove', { defaultValue: 'Remove' })}
                     </Button>
                   </div>
                   <ActionsEditor
@@ -1053,7 +1182,9 @@ function PermissionSetEditor({
           ))}
           {visibleIndexes.length === 0 && draft.grants.length > 0 ? (
             <p className='rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground'>
-              No permissions match these filters.
+              {t('No permissions match these filters.', {
+                defaultValue: 'No permissions match these filters.',
+              })}
             </p>
           ) : null}
           {draft.grants.length === 0 ? (
@@ -1063,20 +1194,29 @@ function PermissionSetEditor({
               onClick={() => setPickerOpen(true)}
             >
               <span className='block text-sm font-medium'>
-                Add the first permission
+                {t('Add the first permission', {
+                  defaultValue: 'Add the first permission',
+                })}
               </span>
               <span className='mt-1 block text-xs text-muted-foreground'>
-                Select resources by type, then configure their actions.
+                {t('Select resources by type, then configure their actions.', {
+                  defaultValue:
+                    'Select resources by type, then configure their actions.',
+                })}
               </span>
             </button>
           ) : null}
         </div>
         <div className='sticky bottom-0 flex justify-end gap-2 border-t bg-background py-4'>
           <Button type='button' variant='outline' onClick={onClose}>
-            Cancel
+            {t('Cancel', { defaultValue: 'Cancel' })}
           </Button>
           <Button disabled={busy} type='submit'>
-            {busy ? 'Saving…' : 'Save permission set'}
+            {busy
+              ? t('Saving…', { defaultValue: 'Saving…' })
+              : t('Save permission set', {
+                  defaultValue: 'Save permission set',
+                })}
           </Button>
         </div>
       </form>
@@ -1098,17 +1238,15 @@ function PermissionSetEditor({
   );
 }
 
-function PermissionResourcePicker({
-  options,
-  grants,
-  onClose,
-  onAdd,
-}: {
+function PermissionResourcePicker(inputProps: {
   options: AuthorizationOptions;
   grants: readonly GrantDraft[];
   onClose: () => void;
   onAdd: (grants: readonly GrantDraft[]) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, grants, onClose, onAdd } = inputProps;
+
   const [type, setType] = useState(options.resourceTypes[0]?.value ?? '');
   const [search, setSearch] = useState('');
   const [pending, setPending] = useState<readonly GrantDraft[]>([]);
@@ -1173,8 +1311,14 @@ function PermissionResourcePicker({
 
   return (
     <SidePanel
-      title='Add permissions'
-      description='Select resources and configure their access in one workspace.'
+      title={t('Add permissions', { defaultValue: 'Add permissions' })}
+      description={t(
+        'Select resources and configure their access in one workspace.',
+        {
+          defaultValue:
+            'Select resources and configure their access in one workspace.',
+        },
+      )}
       onClose={onClose}
       wide
     >
@@ -1182,10 +1326,10 @@ function PermissionResourcePicker({
         <div className='grid min-h-[34rem] grid-cols-[13rem_18rem_minmax(0,1fr)]'>
           <nav
             className='border-r bg-muted/20 py-3'
-            aria-label='Resource types'
+            aria-label={t('Resource types', { defaultValue: 'Resource types' })}
           >
             <p className='px-4 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              Resource types
+              {t('Resource types', { defaultValue: 'Resource types' })}
             </p>
             {options.resourceTypes.map((item) => {
               const count = pending.filter(
@@ -1209,7 +1353,7 @@ function PermissionResourcePicker({
                     );
                   }}
                 >
-                  <span>{item.label}</span>
+                  <span>{t(item.label, { defaultValue: item.label })}</span>
                   {count > 0 ? (
                     <span className='rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary'>
                       {count}
@@ -1224,14 +1368,19 @@ function PermissionResourcePicker({
             <div className='space-y-3 border-b p-3'>
               <div>
                 <h3 className='text-sm font-semibold'>
-                  {resourceType?.label ?? 'Resources'}
+                  {resourceType?.label ??
+                    t('Resources', { defaultValue: 'Resources' })}
                 </h3>
                 <p className='text-xs text-muted-foreground'>
-                  Select a resource to configure it.
+                  {t('Select a resource to configure it.', {
+                    defaultValue: 'Select a resource to configure it.',
+                  })}
                 </p>
               </div>
               <Input
-                placeholder='Search resources'
+                placeholder={t('Search resources', {
+                  defaultValue: 'Search resources',
+                })}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
@@ -1265,11 +1414,11 @@ function PermissionResourcePicker({
                     <span className='min-w-0 flex-1'>
                       <span className='flex items-center gap-2'>
                         <span className='truncate text-sm font-medium'>
-                          {resource.label}
+                          {t(resource.label, { defaultValue: resource.label })}
                         </span>
                         {disabled ? (
                           <span className='rounded-full bg-muted px-2 py-0.5 text-[0.6875rem] text-muted-foreground'>
-                            Added
+                            {t('Added', { defaultValue: 'Added' })}
                           </span>
                         ) : null}
                       </span>
@@ -1287,7 +1436,9 @@ function PermissionResourcePicker({
               })}
               {resources.length === 0 ? (
                 <p className='px-4 py-10 text-center text-sm text-muted-foreground'>
-                  No resources match your search.
+                  {t('No resources match your search.', {
+                    defaultValue: 'No resources match your search.',
+                  })}
                 </p>
               ) : null}
             </div>
@@ -1298,7 +1449,7 @@ function PermissionResourcePicker({
               <div className='space-y-5'>
                 <div className='border-b pb-4'>
                   <p className='text-xs font-medium text-muted-foreground'>
-                    {resourceTypeLabel(options, activeGrant.resource.type)}
+                    {resourceTypeLabel(t, options, activeGrant.resource.type)}
                   </p>
                   <h3 className='mt-1 text-lg font-semibold'>
                     {resourceLabel(options, activeGrant.resource)}
@@ -1335,11 +1486,18 @@ function PermissionResourcePicker({
               <div className='flex h-full items-center justify-center text-center'>
                 <div className='max-w-xs'>
                   <p className='text-sm font-medium'>
-                    Select a resource to configure
+                    {t('Select a resource to configure', {
+                      defaultValue: 'Select a resource to configure',
+                    })}
                   </p>
                   <p className='mt-1 text-xs text-muted-foreground'>
-                    Its actions and resource-specific access settings will
-                    appear here.
+                    {t(
+                      'Its actions and resource-specific access settings will appear here.',
+                      {
+                        defaultValue:
+                          'Its actions and resource-specific access settings will appear here.',
+                      },
+                    )}
                   </p>
                 </div>
               </div>
@@ -1348,22 +1506,24 @@ function PermissionResourcePicker({
         </div>
         <div className='flex items-center justify-between border-t bg-background px-4 py-3'>
           <p className='text-sm text-muted-foreground'>
-            {pending.length} resource{pending.length === 1 ? '' : 's'} ready to
-            add
+            {t('counts.readyResources', {
+              count: pending.length,
+              defaultValue: `${pending.length} resources ready to add`,
+            })}
             {incomplete
               ? ' · Select at least one action for each resource'
               : ''}
           </p>
           <div className='flex gap-2'>
             <Button type='button' variant='outline' onClick={onClose}>
-              Cancel
+              {t('Cancel', { defaultValue: 'Cancel' })}
             </Button>
             <Button
               type='button'
               disabled={pending.length === 0 || incomplete}
               onClick={() => onAdd(pending)}
             >
-              Add permissions
+              {t('Add permissions', { defaultValue: 'Add permissions' })}
             </Button>
           </div>
         </div>
@@ -1372,15 +1532,14 @@ function PermissionResourcePicker({
   );
 }
 
-function DatabasePolicyEditor({
-  options,
-  grant,
-  onChange,
-}: {
+function DatabasePolicyEditor(inputProps: {
   options: AuthorizationOptions;
   grant: GrantDraft;
   onChange: (value: Readonly<Record<string, DatabaseActionDraft>>) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, grant, onChange } = inputProps;
+
   const fields = collectionFields(options, grant.resource.id);
   const [activeAction, setActiveAction] = useState(grant.actions[0] ?? '');
   const currentAction = grant.actions.includes(activeAction)
@@ -1392,9 +1551,13 @@ function DatabasePolicyEditor({
     <section className='rounded-lg border'>
       <header className='flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2.5'>
         <div>
-          <h4 className='text-sm font-medium'>Data access</h4>
+          <h4 className='text-sm font-medium'>
+            {t('Data access', { defaultValue: 'Data access' })}
+          </h4>
           <p className='text-xs text-muted-foreground'>
-            Configure one action at a time
+            {t('Configure one action at a time', {
+              defaultValue: 'Configure one action at a time',
+            })}
           </p>
         </div>
         <div className='flex flex-wrap gap-1 rounded-md border bg-background p-1'>
@@ -1405,7 +1568,7 @@ function DatabasePolicyEditor({
               type='button'
               onClick={() => setActiveAction(action)}
             >
-              {humanize(action)}
+              {humanize(t, action)}
             </button>
           ))}
         </div>
@@ -1422,26 +1585,25 @@ function DatabasePolicyEditor({
         />
       ) : (
         <p className='px-4 py-5 text-sm text-muted-foreground'>
-          Select an action before configuring data access.
+          {t('Select an action before configuring data access.', {
+            defaultValue: 'Select an action before configuring data access.',
+          })}
         </p>
       )}
     </section>
   );
 }
 
-function DatabaseActionPolicyEditor({
-  action,
-  fields,
-  options,
-  value,
-  onChange,
-}: {
+function DatabaseActionPolicyEditor(inputProps: {
   action: string;
   fields: readonly string[];
   options: AuthorizationOptions;
   value: DatabaseActionDraft;
   onChange: (value: DatabaseActionDraft) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { action, fields, options, value, onChange } = inputProps;
+
   const input = action === 'create' || action === 'update';
   const output =
     action === 'create' || action === 'read' || action === 'update';
@@ -1450,20 +1612,22 @@ function DatabaseActionPolicyEditor({
     <div className='space-y-4 p-4'>
       <div className='flex items-center justify-between gap-3'>
         <div>
-          <h5 className='text-sm font-medium'>{humanize(action)} access</h5>
+          <h5 className='text-sm font-medium'>
+            {humanize(t, action)} {t('access', { defaultValue: 'access' })}
+          </h5>
           <p className='text-xs text-muted-foreground'>
-            {databaseActionDescription(action)}
+            {databaseActionDescription(t, action)}
           </p>
         </div>
         <span className='text-xs text-muted-foreground'>
-          {databaseActionSummary(action, value)}
+          {databaseActionSummary(t, action, value)}
         </span>
       </div>
       {input || output ? (
         <div className='grid gap-3 sm:grid-cols-2'>
           {input ? (
             <FieldChecklist
-              label='Writable fields'
+              label={t('Writable fields', { defaultValue: 'Writable fields' })}
               fields={fields}
               value={value.input}
               onChange={(next) => onChange({ ...value, input: next })}
@@ -1471,7 +1635,7 @@ function DatabaseActionPolicyEditor({
           ) : null}
           {output ? (
             <FieldChecklist
-              label='Visible fields'
+              label={t('Visible fields', { defaultValue: 'Visible fields' })}
               fields={fields}
               value={value.output}
               onChange={(next) => onChange({ ...value, output: next })}
@@ -1492,48 +1656,70 @@ function DatabaseActionPolicyEditor({
   );
 }
 
-function databaseActionDescription(action: string): string {
+function databaseActionDescription(
+  t: ReturnType<typeof useTranslation>['t'],
+  action: string,
+): string {
   switch (action) {
     case 'create':
-      return 'Choose fields that can be submitted and returned.';
+      return t('Choose fields that can be submitted and returned.', {
+        defaultValue: 'Choose fields that can be submitted and returned.',
+      });
     case 'read':
-      return 'Choose visible fields and which records can be read.';
+      return t('Choose visible fields and which records can be read.', {
+        defaultValue: 'Choose visible fields and which records can be read.',
+      });
     case 'update':
-      return 'Choose editable fields and which records can be updated.';
+      return t('Choose editable fields and which records can be updated.', {
+        defaultValue:
+          'Choose editable fields and which records can be updated.',
+      });
     case 'delete':
-      return 'Choose which records can be deleted.';
+      return t('Choose which records can be deleted.', {
+        defaultValue: 'Choose which records can be deleted.',
+      });
     default:
-      return 'Configure fields and record access for this action.';
+      return t('Configure fields and record access for this action.', {
+        defaultValue: 'Configure fields and record access for this action.',
+      });
   }
 }
 
 function databaseActionSummary(
+  t: ReturnType<typeof useTranslation>['t'],
   action: string,
   value: DatabaseActionDraft,
 ): string {
   const parts: string[] = [];
   if (action === 'create' || action === 'update')
-    parts.push(`${fieldSelectionLabel(value.input)} writable`);
+    parts.push(
+      t('summary.writable', {
+        fields: fieldSelectionLabel(t, value.input),
+        defaultValue: `${fieldSelectionLabel(t, value.input)} writable`,
+      }),
+    );
   if (action === 'create' || action === 'read' || action === 'update')
-    parts.push(`${fieldSelectionLabel(value.output)} visible`);
+    parts.push(
+      t('summary.visible', {
+        fields: fieldSelectionLabel(t, value.output),
+        defaultValue: `${fieldSelectionLabel(t, value.output)} visible`,
+      }),
+    );
   if (action !== 'create')
-    parts.push(humanize(recordAccessKey(value.recordAccess)));
+    parts.push(humanize(t, recordAccessKey(value.recordAccess)));
   return parts.join(' · ');
 }
 
-function RecordAccessEditor({
-  action,
-  fields,
-  options,
-  value,
-  onChange,
-}: {
+function RecordAccessEditor(inputProps: {
   action: string;
   fields: readonly string[];
   options: AuthorizationOptions;
   value: RecordAccessDraft;
   onChange: (value: RecordAccessDraft) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { action, fields, options, value, onChange } = inputProps;
+
   const key = recordAccessKey(value);
   const conditions = customFilterConditions(value);
   function updateConditions(next: readonly FilterConditionDraft[]): void {
@@ -1544,9 +1730,12 @@ function RecordAccessEditor({
   }
   return (
     <div className='space-y-3'>
-      <Field label='Record access'>
+      <Field label={t('Record access', { defaultValue: 'Record access' })}>
         <select
-          aria-label={`${humanize(action)} record access`}
+          aria-label={t('{{action}} record access', {
+            action: humanize(t, action),
+            defaultValue: `${humanize(t, action)} record access`,
+          })}
           className='h-8 w-full rounded-lg border bg-background px-2.5 text-sm'
           value={key}
           onChange={(event) =>
@@ -1562,7 +1751,7 @@ function RecordAccessEditor({
         >
           {options.recordAccessPolicies.map((policy) => (
             <option key={policy.value} value={policy.value}>
-              {policy.label}
+              {t(policy.label, { defaultValue: policy.label })}
             </option>
           ))}
         </select>
@@ -1571,9 +1760,13 @@ function RecordAccessEditor({
         <div className='space-y-2 rounded-md border bg-muted/10 p-3'>
           <div className='flex items-center justify-between gap-3'>
             <div>
-              <p className='text-xs font-medium'>Filter conditions</p>
+              <p className='text-xs font-medium'>
+                {t('Filter conditions', { defaultValue: 'Filter conditions' })}
+              </p>
               <p className='text-xs text-muted-foreground'>
-                All conditions must match.
+                {t('All conditions must match.', {
+                  defaultValue: 'All conditions must match.',
+                })}
               </p>
             </div>
             <Button
@@ -1592,7 +1785,7 @@ function RecordAccessEditor({
                 ])
               }
             >
-              Add condition
+              {t('Add condition', { defaultValue: 'Add condition' })}
             </Button>
           </div>
           {conditions.map((condition, index) => (
@@ -1601,7 +1794,7 @@ function RecordAccessEditor({
               key={condition.id}
             >
               <select
-                aria-label='Filter field'
+                aria-label={t('Filter field', { defaultValue: 'Filter field' })}
                 className='h-8 rounded-lg border bg-background px-2 text-sm'
                 value={condition.field}
                 onChange={(event) =>
@@ -1621,7 +1814,9 @@ function RecordAccessEditor({
                 ))}
               </select>
               <select
-                aria-label='Filter operator'
+                aria-label={t('Filter operator', {
+                  defaultValue: 'Filter operator',
+                })}
                 className='h-8 rounded-lg border bg-background px-2 text-sm'
                 value={condition.operator}
                 onChange={(event) =>
@@ -1638,17 +1833,31 @@ function RecordAccessEditor({
                   )
                 }
               >
-                <option value='$eq'>Equals</option>
-                <option value='$ne'>Not equal</option>
+                <option value='$eq'>
+                  {t('Equals', { defaultValue: 'Equals' })}
+                </option>
+                <option value='$ne'>
+                  {t('Not equal', { defaultValue: 'Not equal' })}
+                </option>
                 <option value='$in'>In</option>
-                <option value='$notIn'>Not in</option>
-                <option value='$gt'>Greater than</option>
-                <option value='$gte'>At least</option>
-                <option value='$lt'>Less than</option>
-                <option value='$lte'>At most</option>
+                <option value='$notIn'>
+                  {t('Not in', { defaultValue: 'Not in' })}
+                </option>
+                <option value='$gt'>
+                  {t('Greater than', { defaultValue: 'Greater than' })}
+                </option>
+                <option value='$gte'>
+                  {t('At least', { defaultValue: 'At least' })}
+                </option>
+                <option value='$lt'>
+                  {t('Less than', { defaultValue: 'Less than' })}
+                </option>
+                <option value='$lte'>
+                  {t('At most', { defaultValue: 'At most' })}
+                </option>
               </select>
               <Input
-                aria-label='Filter value'
+                aria-label={t('Filter value', { defaultValue: 'Filter value' })}
                 value={condition.value}
                 onChange={(event) =>
                   updateConditions(
@@ -1661,7 +1870,9 @@ function RecordAccessEditor({
                 }
               />
               <Button
-                aria-label='Remove condition'
+                aria-label={t('Remove condition', {
+                  defaultValue: 'Remove condition',
+                })}
                 size='sm'
                 type='button'
                 variant='ghost'
@@ -1671,13 +1882,15 @@ function RecordAccessEditor({
                   )
                 }
               >
-                Remove
+                {t('Remove', { defaultValue: 'Remove' })}
               </Button>
             </div>
           ))}
           {conditions.length === 0 ? (
             <p className='py-2 text-xs text-muted-foreground'>
-              Add at least one condition.
+              {t('Add at least one condition.', {
+                defaultValue: 'Add at least one condition.',
+              })}
             </p>
           ) : null}
         </div>
@@ -1751,21 +1964,27 @@ function filterFromConditions(
   };
 }
 
-function fieldSelectionLabel(value: '*' | readonly string[]): string {
-  return value === '*' ? 'All fields' : `${value.length} fields`;
+function fieldSelectionLabel(
+  t: ReturnType<typeof useTranslation>['t'],
+  value: '*' | readonly string[],
+): string {
+  return value === '*'
+    ? t('All fields', { defaultValue: 'All fields' })
+    : t('counts.fields', {
+        count: value.length,
+        defaultValue: `${value.length} fields`,
+      });
 }
 
-function FieldChecklist({
-  label,
-  fields,
-  value,
-  onChange,
-}: {
+function FieldChecklist(inputProps: {
   label: string;
   fields: readonly string[];
   value: '*' | readonly string[];
   onChange: (value: '*' | readonly string[]) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { label, fields, value, onChange } = inputProps;
+
   return (
     <Field label={label}>
       <div className='rounded-md border bg-background p-2.5'>
@@ -1775,7 +1994,8 @@ function FieldChecklist({
             checked={value === '*'}
             onChange={(event) => onChange(event.target.checked ? '*' : [])}
           />
-          All fields
+
+          {t('All fields', { defaultValue: 'All fields' })}
         </label>
         <div className='mt-2 grid max-h-32 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto'>
           {fields.map((field) => (
@@ -1968,11 +2188,14 @@ function databaseActionFromPolicy(
   };
 }
 
-function databaseAccessSummary(grant: GrantDraft): string {
+function databaseAccessSummary(
+  t: ReturnType<typeof useTranslation>['t'],
+  grant: GrantDraft,
+): string {
   return grant.actions
     .map((action) => {
       const value = grant.database[action] ?? defaultDatabaseActionDraft();
-      return `${humanize(action)}: ${action === 'create' ? 'new records' : humanize(recordAccessKey(value.recordAccess))}`;
+      return `${humanize(t, action)}: ${action === 'create' ? t('new records', { defaultValue: 'new records' }) : humanize(t, recordAccessKey(value.recordAccess))}`;
     })
     .join(', ');
 }
@@ -1994,30 +2217,50 @@ function permissionCount(set: PermissionSet): number {
 function permissionCountFromDraft(draft: Draft): number {
   return draft.grants.reduce((sum, grant) => sum + grant.actions.length, 0);
 }
-function describeSet(set: PermissionSet): string {
+function describeSet(
+  t: ReturnType<typeof useTranslation>['t'],
+  set: PermissionSet,
+): string {
   return set.key === 'system-administrator'
-    ? 'Protected access to Authorization administration'
-    : `${set.grants.length} configured resource${set.grants.length === 1 ? '' : 's'}`;
+    ? t('Protected access to Authorization administration', {
+        defaultValue: 'Protected access to Authorization administration',
+      })
+    : t('counts.resources', {
+        count: set.grants.length,
+        defaultValue: `${set.grants.length} configured resources`,
+      });
 }
 function detailSummary(
+  t: ReturnType<typeof useTranslation>['t'],
   draft: Draft,
   assignments: readonly PermissionSetAssignment[],
 ): string {
   const categories = new Set(draft.grants.map((grant) => grant.resource.type));
-  return `Key: ${draft.key} · ${permissionCountFromDraft(draft)} permissions · ${categories.size} resource ${categories.size === 1 ? 'type' : 'types'} · ${assignments.length} ${assignments.length === 1 ? 'assignment' : 'assignments'}`;
+  return t('summary.details', {
+    key: draft.key,
+    permissions: permissionCountFromDraft(draft),
+    types: categories.size,
+    assignments: assignments.length,
+    defaultValue: `Key: ${draft.key} · ${permissionCountFromDraft(draft)} permissions · ${categories.size} resource types · ${assignments.length} assignments`,
+  });
 }
-function humanize(value: string): string {
-  return value
+function humanize(
+  t: ReturnType<typeof useTranslation>['t'],
+  value: string,
+): string {
+  const label = value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return t(label, { defaultValue: label });
 }
 function resourceTypeLabel(
+  t: ReturnType<typeof useTranslation>['t'],
   options: AuthorizationOptions,
   type: string,
 ): string {
   return (
     options.resourceTypes.find((item) => item.value === type)?.label ??
-    humanize(type)
+    humanize(t, type)
   );
 }
 function resourceLabel(
@@ -2048,12 +2291,14 @@ function readArray(value: unknown): readonly unknown[] | undefined {
   return Array.isArray(value) ? value : undefined;
 }
 function subjectLabel(
+  t: ReturnType<typeof useTranslation>['t'],
   subject: AuthorizationSubject,
   users: readonly AuthorizationUser[],
 ): string {
-  if (subject.type === 'authenticated') return 'All signed-in users';
+  if (subject.type === 'authenticated')
+    return t('All signed-in users', { defaultValue: 'All signed-in users' });
   const user = users.find((item) => item.id === subject.id);
   return user
     ? `${user.name} · ${user.username ?? user.email}`
-    : `User ${subject.id}`;
+    : t('userFallback', { id: subject.id, defaultValue: `User ${subject.id}` });
 }

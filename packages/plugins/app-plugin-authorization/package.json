@@ -95,7 +95,8 @@
     "@nocobase/db": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "lucide-react": "catalog:",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "@nocobase/i18n": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",

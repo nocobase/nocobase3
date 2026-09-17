@@ -1,3 +1,4 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import {
   AIChatCompact,
   AIChatMessageList,
@@ -63,19 +64,34 @@ const compactActions: AIChatComposerAction[] = [
 ];
 
 export function InteractionShowcase() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   return (
     <div className='grid items-start gap-4 xl:grid-cols-2'>
       <Card className='gap-0 py-0'>
         <CardHeader className='border-b py-4'>
           <div className='flex items-center gap-2'>
-            <Badge variant='outline'>Inline messages</Badge>
+            <Badge variant='outline'>
+              {translateDemo('Inline messages', {
+                defaultValue: 'Inline messages',
+              })}
+            </Badge>
             <CardTitle className='text-base'>
-              Standard conversation transcript
+              {translateDemo('Standard conversation transcript', {
+                defaultValue: 'Standard conversation transcript',
+              })}
             </CardTitle>
           </div>
           <p className='text-xs leading-5 text-muted-foreground'>
-            This fixed example shows where reasoning, a normal tool call, and
-            the final assistant response appear in one message sequence.
+            {translateDemo(
+              'This fixed example shows where reasoning, a normal tool call, and the final assistant response appear in one message sequence.',
+              {
+                defaultValue:
+                  'This fixed example shows where reasoning, a normal tool call, and the final assistant response appear in one message sequence.',
+              },
+            )}
           </p>
         </CardHeader>
         <CardContent className='bg-muted/15 p-4'>
@@ -85,17 +101,23 @@ export function InteractionShowcase() {
                 <Button
                   variant='ghost'
                   size='icon-sm'
-                  aria-label='Conversations'
+                  aria-label={translateDemo('Conversations', {
+                    defaultValue: 'Conversations',
+                  })}
                 >
                   <Menu />
                 </Button>
                 <div className='pointer-events-none absolute left-1/2 max-w-[55%] -translate-x-1/2 truncate text-sm font-medium'>
-                  Support workspace review
+                  {translateDemo('Support workspace review', {
+                    defaultValue: 'Support workspace review',
+                  })}
                 </div>
                 <Button
                   variant='ghost'
                   size='icon-sm'
-                  aria-label='New conversation'
+                  aria-label={translateDemo('New conversation', {
+                    defaultValue: 'New conversation',
+                  })}
                 >
                   <PlusCircle />
                 </Button>
@@ -108,17 +130,26 @@ export function InteractionShowcase() {
               <div className='shrink-0 bg-card px-4 pt-2 pb-3'>
                 <div className='rounded-xl border bg-background px-3 py-2.5 shadow-sm'>
                   <div className='min-h-10 text-sm text-muted-foreground'>
-                    Message your AI employee…
+                    {translateDemo('Message your AI employee…', {
+                      defaultValue: 'Message your AI employee…',
+                    })}
                   </div>
                   <div className='flex items-center justify-between'>
                     <Button
                       variant='ghost'
                       size='icon-sm'
-                      aria-label='Attach file'
+                      aria-label={translateDemo('Attach file', {
+                        defaultValue: 'Attach file',
+                      })}
                     >
                       <Paperclip />
                     </Button>
-                    <Button size='icon-sm' aria-label='Send message'>
+                    <Button
+                      size='icon-sm'
+                      aria-label={translateDemo('Send message', {
+                        defaultValue: 'Send message',
+                      })}
+                    >
                       <ArrowUp />
                     </Button>
                   </div>
@@ -132,22 +163,37 @@ export function InteractionShowcase() {
       <Card className='gap-0 py-0'>
         <CardHeader className='border-b py-4'>
           <div className='flex items-center gap-2'>
-            <Badge variant='outline'>Compact composer</Badge>
+            <Badge variant='outline'>
+              {translateDemo('Compact composer', {
+                defaultValue: 'Compact composer',
+              })}
+            </Badge>
             <CardTitle className='text-base'>
-              Open the transcript only when needed
+              {translateDemo('Open the transcript only when needed', {
+                defaultValue: 'Open the transcript only when needed',
+              })}
             </CardTitle>
           </div>
           <p className='text-xs leading-5 text-muted-foreground'>
-            The compact variant keeps only the chat header and composer. Its
-            history button opens a dialog with conversation switching and the
-            selected transcript.
+            {translateDemo(
+              'The compact variant keeps only the chat header and composer. Its history button opens a dialog with conversation switching and the selected transcript.',
+              {
+                defaultValue:
+                  'The compact variant keeps only the chat header and composer. Its history button opens a dialog with conversation switching and the selected transcript.',
+              },
+            )}
           </p>
         </CardHeader>
         <CardContent className='bg-muted/15 p-4'>
           <AIChatProvider id='message-presentation-compact-demo'>
             <AIChatCompact
               className='bg-background'
-              composerActions={compactActions}
+              composerActions={compactActions.map((action) => ({
+                ...action,
+                label: translateDemo(action.label, {
+                  defaultValue: action.label,
+                }),
+              }))}
               showModelSelector={false}
               disclaimer={false}
             />

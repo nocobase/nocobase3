@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement, type ReactNode } from 'react';
 
 import { Input, Label } from './ui.js';
@@ -30,21 +31,19 @@ export function Field({
   );
 }
 
-export function ResourceEditor({
-  options,
-  type,
-  id,
-  onChange,
-}: {
+export function ResourceEditor(inputProps: {
   options: AuthorizationOptions;
   type: string;
   id: string;
   onChange: (value: { type: string; id: string }) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, type, id, onChange } = inputProps;
+
   const selected = options.resourceTypes.find((item) => item.value === type);
   return (
     <>
-      <Field label='Resource type'>
+      <Field label={t('Resource type', { defaultValue: 'Resource type' })}>
         <select
           className={selectClass}
           value={type}
@@ -60,12 +59,12 @@ export function ResourceEditor({
         >
           {options.resourceTypes.map((item) => (
             <option key={item.value} value={item.value}>
-              {item.label}
+              {t(item.label, { defaultValue: item.label })}
             </option>
           ))}
         </select>
       </Field>
-      <Field label='Resource'>
+      <Field label={t('Resource', { defaultValue: 'Resource' })}>
         {selected && selected.resources.length > 0 ? (
           <select
             className={selectClass}
@@ -74,14 +73,14 @@ export function ResourceEditor({
           >
             {selected.resources.map((item) => (
               <option key={item.value} value={item.value}>
-                {item.label}
+                {t(item.label, { defaultValue: item.label })}
               </option>
             ))}
           </select>
         ) : (
           <Input
             required
-            placeholder='Resource ID'
+            placeholder={t('Resource ID', { defaultValue: 'Resource ID' })}
             value={id}
             onChange={(event) => onChange({ type, id: event.target.value })}
           />
@@ -91,19 +90,16 @@ export function ResourceEditor({
   );
 }
 
-export function ActionsEditor({
-  options,
-  resourceType,
-  resourceId,
-  value,
-  onChange,
-}: {
+export function ActionsEditor(inputProps: {
   options: AuthorizationOptions;
   resourceType: string;
   resourceId?: string;
   value: readonly string[];
   onChange: (value: readonly string[]) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, resourceType, resourceId, value, onChange } = inputProps;
+
   const selectedType = options.resourceTypes.find(
     (item) => item.value === resourceType,
   );
@@ -123,7 +119,7 @@ export function ActionsEditor({
   });
   if (actions.length === 0)
     return (
-      <Field label='Actions'>
+      <Field label={t('Actions', { defaultValue: 'Actions' })}>
         <Input
           required
           placeholder='read, create, update'
@@ -133,7 +129,7 @@ export function ActionsEditor({
       </Field>
     );
   return (
-    <Field label='Actions'>
+    <Field label={t('Actions', { defaultValue: 'Actions' })}>
       <div className='flex min-h-9 flex-wrap items-center gap-4 rounded-lg border px-3 py-2'>
         {orderedActions.map((action) => (
           <label className='flex items-center gap-2 text-sm' key={action.value}>
@@ -153,7 +149,7 @@ export function ActionsEditor({
                 );
               }}
             />
-            {action.label}
+            {t(action.label, { defaultValue: action.label })}
           </label>
         ))}
       </div>
@@ -161,18 +157,17 @@ export function ActionsEditor({
   );
 }
 
-export function SubjectEditor({
-  users,
-  value,
-  onChange,
-}: {
+export function SubjectEditor(inputProps: {
   users: readonly AuthorizationUser[];
   value: AuthorizationSubject;
   onChange: (value: AuthorizationSubject) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { users, value, onChange } = inputProps;
+
   return (
     <>
-      <Field label='Who'>
+      <Field label={t('Who', { defaultValue: 'Who' })}>
         <select
           className={selectClass}
           value={value.type}
@@ -184,12 +179,16 @@ export function SubjectEditor({
             )
           }
         >
-          <option value='authenticated'>All signed-in users</option>
-          <option value='user'>Specific user</option>
+          <option value='authenticated'>
+            {t('All signed-in users', { defaultValue: 'All signed-in users' })}
+          </option>
+          <option value='user'>
+            {t('Specific user', { defaultValue: 'Specific user' })}
+          </option>
         </select>
       </Field>
       {value.type === 'user' ? (
-        <Field label='User'>
+        <Field label={t('User', { defaultValue: 'User' })}>
           <select
             className={selectClass}
             required
@@ -198,7 +197,9 @@ export function SubjectEditor({
               onChange({ type: 'user', id: event.target.value })
             }
           >
-            <option value=''>Select a user</option>
+            <option value=''>
+              {t('Select a user', { defaultValue: 'Select a user' })}
+            </option>
             {users.map((user) => (
               <option key={user.id} value={user.id}>
                 {user.name} · {user.username ?? user.email}
@@ -208,22 +209,24 @@ export function SubjectEditor({
         </Field>
       ) : (
         <p className='self-end pb-2 text-xs text-muted-foreground'>
-          Applies to every user with a valid signed-in session.
+          {t('Applies to every user with a valid signed-in session.', {
+            defaultValue:
+              'Applies to every user with a valid signed-in session.',
+          })}
         </p>
       )}
     </>
   );
 }
 
-export function SubjectsEditor({
-  users,
-  value,
-  onChange,
-}: {
+export function SubjectsEditor(inputProps: {
   users: readonly AuthorizationUser[];
   value: readonly AuthorizationSubject[];
   onChange: (value: readonly AuthorizationSubject[]) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { users, value, onChange } = inputProps;
+
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
   const visible = users.filter(
@@ -257,9 +260,13 @@ export function SubjectsEditor({
   return (
     <section className='space-y-3 rounded-lg border p-4'>
       <div>
-        <h4 className='text-sm font-medium'>Assignments</h4>
+        <h4 className='text-sm font-medium'>
+          {t('Assignments', { defaultValue: 'Assignments' })}
+        </h4>
         <p className='text-xs text-muted-foreground'>
-          Choose an audience or multiple users.
+          {t('Choose an audience or multiple users.', {
+            defaultValue: 'Choose an audience or multiple users.',
+          })}
         </p>
       </div>
       <label className='flex items-start gap-3 rounded-md border p-3'>
@@ -270,15 +277,21 @@ export function SubjectsEditor({
           onChange={(event) => setAudience(event.target.checked)}
         />
         <span>
-          <span className='block text-sm font-medium'>All signed-in users</span>
+          <span className='block text-sm font-medium'>
+            {t('All signed-in users', { defaultValue: 'All signed-in users' })}
+          </span>
           <span className='block text-xs text-muted-foreground'>
-            Authenticated audience
+            {t('Authenticated audience', {
+              defaultValue: 'Authenticated audience',
+            })}
           </span>
         </span>
       </label>
       <Input
         type='search'
-        placeholder='Search name, username, or email'
+        placeholder={t('Search name, username, or email', {
+          defaultValue: 'Search name, username, or email',
+        })}
         value={search}
         onChange={(event) => setSearch(event.target.value)}
       />
@@ -306,20 +319,17 @@ export function SubjectsEditor({
         ))}
       </div>
       <p className='text-xs text-muted-foreground'>
-        {value.length} assignment{value.length === 1 ? '' : 's'} selected
+        {t('counts.assignments', {
+          count: value.length,
+          defaultValue: `${value.length} assignments`,
+        })}{' '}
+        {t('selected', { defaultValue: 'selected' })}
       </p>
     </section>
   );
 }
 
-export function ScopeEditor({
-  options,
-  fields = [],
-  allowIds = true,
-  records = [],
-  value,
-  onChange,
-}: {
+export function ScopeEditor(inputProps: {
   options: AuthorizationOptions;
   fields?: readonly string[];
   allowIds?: boolean;
@@ -327,9 +337,19 @@ export function ScopeEditor({
   value: AccessScope;
   onChange: (value: AccessScope) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const {
+    options,
+    fields = [],
+    allowIds = true,
+    records = [],
+    value,
+    onChange,
+  } = inputProps;
+
   return (
     <div className='grid gap-3 md:grid-cols-2'>
-      <Field label='Record scope'>
+      <Field label={t('Record scope', { defaultValue: 'Record scope' })}>
         <select
           className={selectClass}
           value={value.type}
@@ -348,9 +368,21 @@ export function ScopeEditor({
             );
           }}
         >
-          <option value='all'>All records</option>
-          {allowIds ? <option value='ids'>Specific record IDs</option> : null}
-          <option value='database'>Record Access Policy</option>
+          <option value='all'>
+            {t('All records', { defaultValue: 'All records' })}
+          </option>
+          {allowIds ? (
+            <option value='ids'>
+              {t('Specific record IDs', {
+                defaultValue: 'Specific record IDs',
+              })}
+            </option>
+          ) : null}
+          <option value='database'>
+            {t('Record Access Policy', {
+              defaultValue: 'Record Access Policy',
+            })}
+          </option>
         </select>
       </Field>
       {value.type === 'ids' ? (
@@ -362,7 +394,11 @@ export function ScopeEditor({
       ) : null}
       {value.type === 'database' ? (
         <>
-          <Field label='Record Access Policy'>
+          <Field
+            label={t('Record Access Policy', {
+              defaultValue: 'Record Access Policy',
+            })}
+          >
             <select
               className={selectClass}
               value={recordAccessKey(value.recordAccess)}
@@ -381,7 +417,7 @@ export function ScopeEditor({
             >
               {options.recordAccessPolicies.map((policy) => (
                 <option key={policy.value} value={policy.value}>
-                  {policy.label}
+                  {t(policy.label, { defaultValue: policy.label })}
                 </option>
               ))}
             </select>
@@ -418,6 +454,7 @@ export function ActionScopesEditor({
   value: readonly { action: string; scope: AccessScope }[];
   onChange: (value: readonly { action: string; scope: AccessScope }[]) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
   const [active, setActive] = useState(value[0]?.action ?? '');
   const selectedActions = value.map((item) => item.action);
   const current = value.find((item) => item.action === active) ?? value[0];
@@ -451,7 +488,7 @@ export function ActionScopesEditor({
                 type='button'
                 onClick={() => setActive(item.action)}
               >
-                {humanize(item.action)}
+                {humanize(t, item.action)}
               </button>
             ))}
           </div>
@@ -480,15 +517,14 @@ export function ActionScopesEditor({
   );
 }
 
-function RecordScopeEditor({
-  records,
-  value,
-  onChange,
-}: {
+function RecordScopeEditor(inputProps: {
   records: readonly AuthorizationRecordOption[];
   value: readonly string[];
   onChange: (value: readonly string[]) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { records, value, onChange } = inputProps;
+
   const [search, setSearch] = useState('');
   const query = search.trim().toLowerCase();
   const visible = records.filter(
@@ -500,10 +536,10 @@ function RecordScopeEditor({
   );
   return (
     <div className='space-y-2 md:col-span-2'>
-      <Field label='Records'>
+      <Field label={t('Records', { defaultValue: 'Records' })}>
         <Input
           type='search'
-          placeholder='Search records'
+          placeholder={t('Search records', { defaultValue: 'Search records' })}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -538,7 +574,10 @@ function RecordScopeEditor({
         ))}
       </div>
       <p className='text-xs text-muted-foreground'>
-        {value.length} record{value.length === 1 ? '' : 's'} selected
+        {t('counts.selectedRecords', {
+          count: value.length,
+          defaultValue: `${value.length} records selected`,
+        })}
       </p>
     </div>
   );
@@ -552,15 +591,14 @@ interface FilterCondition {
   value: string;
 }
 
-function CustomFilterEditor({
-  fields,
-  value,
-  onChange,
-}: {
+function CustomFilterEditor(inputProps: {
   fields: readonly string[];
   value: string | { key: string; params?: unknown };
   onChange: (value: { key: string; params: unknown }) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { fields, value, onChange } = inputProps;
+
   const conditions = readConditions(value);
   function update(next: readonly FilterCondition[]): void {
     onChange({
@@ -585,7 +623,9 @@ function CustomFilterEditor({
   return (
     <div className='space-y-2 md:col-span-2'>
       <div className='flex items-center justify-between'>
-        <span className='text-xs font-medium'>Filter conditions</span>
+        <span className='text-xs font-medium'>
+          {t('Filter conditions', { defaultValue: 'Filter conditions' })}
+        </span>
         <button
           className='text-xs font-medium text-primary'
           type='button'
@@ -596,7 +636,7 @@ function CustomFilterEditor({
             ])
           }
         >
-          Add condition
+          {t('Add condition', { defaultValue: 'Add condition' })}
         </button>
       </div>
       {conditions.map((condition, index) => (
@@ -639,14 +679,28 @@ function CustomFilterEditor({
               )
             }
           >
-            <option value='$eq'>Equals</option>
-            <option value='$ne'>Not equal</option>
+            <option value='$eq'>
+              {t('Equals', { defaultValue: 'Equals' })}
+            </option>
+            <option value='$ne'>
+              {t('Not equal', { defaultValue: 'Not equal' })}
+            </option>
             <option value='$in'>In</option>
-            <option value='$notIn'>Not in</option>
-            <option value='$gt'>Greater than</option>
-            <option value='$gte'>At least</option>
-            <option value='$lt'>Less than</option>
-            <option value='$lte'>At most</option>
+            <option value='$notIn'>
+              {t('Not in', { defaultValue: 'Not in' })}
+            </option>
+            <option value='$gt'>
+              {t('Greater than', { defaultValue: 'Greater than' })}
+            </option>
+            <option value='$gte'>
+              {t('At least', { defaultValue: 'At least' })}
+            </option>
+            <option value='$lt'>
+              {t('Less than', { defaultValue: 'Less than' })}
+            </option>
+            <option value='$lte'>
+              {t('At most', { defaultValue: 'At most' })}
+            </option>
           </select>
           <Input
             value={condition.value}
@@ -667,7 +721,7 @@ function CustomFilterEditor({
               update(conditions.filter((_item, current) => current !== index))
             }
           >
-            Remove
+            {t('Remove', { defaultValue: 'Remove' })}
           </button>
         </div>
       ))}
@@ -723,10 +777,14 @@ function initialScope(options: AuthorizationOptions): AccessScope {
     : { type: 'all' };
 }
 
-function humanize(value: string): string {
-  return value
+function humanize(
+  t: ReturnType<typeof useTranslation>['t'],
+  value: string,
+): string {
+  const label = value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return t(label, { defaultValue: label });
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

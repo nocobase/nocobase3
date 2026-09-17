@@ -48,6 +48,7 @@ it('builds a business attachment feature from the shipped Skill and materialized
     for (const name of [
       '@nocobase/app-plugin-file',
       '@nocobase/app-client',
+      '@nocobase/i18n',
       '@nocobase/app-server',
       '@nocobase/db',
       '@nocobase/db-sqlite',

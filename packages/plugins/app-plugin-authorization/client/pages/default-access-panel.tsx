@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../components/ui.js';
 import {
   useCallback,
@@ -25,11 +26,12 @@ import { getAuthorizationClient } from '../runtime.js';
 
 const authz = getAuthorizationClient();
 
-export function DefaultAccessPanel({
-  options,
-}: {
+export function DefaultAccessPanel(inputProps: {
   options: AuthorizationOptions;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options } = inputProps;
+
   const [rules, setRules] = useState<readonly DefaultAccessRule[]>([]);
   const [draft, setDraft] = useState<DefaultAccessRule>();
   const [original, setOriginal] = useState<DefaultAccessRule>();
@@ -104,15 +106,25 @@ export function DefaultAccessPanel({
         <ManagementToolbar
           search={search}
           onSearch={setSearch}
-          actionLabel='Set default access'
+          actionLabel={t('Set default access', {
+            defaultValue: 'Set default access',
+          })}
           onAction={() => edit()}
         />
         <table className='w-full min-w-[48rem] text-left text-sm'>
           <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
             <tr>
-              <th className='px-5 py-3 font-medium'>Resource</th>
-              <th className='px-5 py-3 font-medium'>Default record access</th>
-              <th className='px-5 py-3 font-medium'>Allowed actions</th>
+              <th className='px-5 py-3 font-medium'>
+                {t('Resource', { defaultValue: 'Resource' })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('Default record access', {
+                  defaultValue: 'Default record access',
+                })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('Allowed actions', { defaultValue: 'Allowed actions' })}
+              </th>
               <th className='w-24 px-5 py-3' />
             </tr>
           </thead>
@@ -125,25 +137,29 @@ export function DefaultAccessPanel({
                 <td className='px-5 py-4'>
                   <p className='font-medium'>{resourceLabel(options, rule)}</p>
                   <p className='text-xs text-muted-foreground'>
-                    {resourceTypeLabel(options, rule.resource.type)}
+                    {resourceTypeLabel(t, options, rule.resource.type)}
                   </p>
                 </td>
                 <td className='px-5 py-4'>
                   <ScopeBadge actions={rule.actions} options={options} />
                 </td>
                 <td className='px-5 py-4'>
-                  {rule.actions.map((item) => humanize(item.action)).join(', ')}
+                  {rule.actions
+                    .map((item) => humanize(t, item.action))
+                    .join(', ')}
                 </td>
                 <td className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
-                    Edit
+                    {t('Edit', { defaultValue: 'Edit' })}
                   </Button>
                 </td>
               </tr>
             ))}
             {visibleRules.length === 0 ? (
               <EmptyTableRow colSpan={4}>
-                No default access rules match your search.
+                {t('No default access rules match your search.', {
+                  defaultValue: 'No default access rules match your search.',
+                })}
               </EmptyTableRow>
             ) : null}
           </tbody>
@@ -151,8 +167,20 @@ export function DefaultAccessPanel({
       </ManagementTable>
       {draft ? (
         <SidePanel
-          title={original ? 'Edit default access' : 'Set default access'}
-          description='Define the baseline record visibility before sharing and restrictions are applied.'
+          title={
+            original
+              ? t('Edit default access', {
+                  defaultValue: 'Edit default access',
+                })
+              : t('Set default access', { defaultValue: 'Set default access' })
+          }
+          description={t(
+            'Define the baseline record visibility before sharing and restrictions are applied.',
+            {
+              defaultValue:
+                'Define the baseline record visibility before sharing and restrictions are applied.',
+            },
+          )}
           onClose={() => setDraft(undefined)}
           wide
           scrollable={false}
@@ -167,22 +195,34 @@ export function DefaultAccessPanel({
               <>
                 {original ? (
                   <Button variant='outline' onClick={() => void remove()}>
-                    Delete rule
+                    {t('Delete rule', { defaultValue: 'Delete rule' })}
                   </Button>
                 ) : null}
                 <Button variant='outline' onClick={() => setDraft(undefined)}>
-                  Cancel
+                  {t('Cancel', { defaultValue: 'Cancel' })}
                 </Button>
-                <Button onClick={() => void save()}>Save default access</Button>
+                <Button onClick={() => void save()}>
+                  {t('Save default access', {
+                    defaultValue: 'Save default access',
+                  })}
+                </Button>
               </>
             }
           >
             {editorStep === 'resource' ? (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Resource</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('Resource', { defaultValue: 'Resource' })}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Choose the collection whose baseline access is being set.
+                    {t(
+                      'Choose the collection whose baseline access is being set.',
+                      {
+                        defaultValue:
+                          'Choose the collection whose baseline access is being set.',
+                      },
+                    )}
                   </p>
                 </div>
                 <div className='grid gap-4 sm:grid-cols-2'>
@@ -210,9 +250,16 @@ export function DefaultAccessPanel({
             ) : (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Access by action</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('Access by action', {
+                      defaultValue: 'Access by action',
+                    })}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Set the record scope independently for each action.
+                    {t('Set the record scope independently for each action.', {
+                      defaultValue:
+                        'Set the record scope independently for each action.',
+                    })}
                   </p>
                 </div>
                 <ActionScopesEditor
@@ -239,16 +286,17 @@ function collectionFields(
   return options.collections.find((item) => item.name === name)?.fields ?? [];
 }
 
-function ScopeBadge({
-  actions,
-  options,
-}: {
+function ScopeBadge(inputProps: {
   actions: readonly { action: string; scope: AccessScope }[];
   options: AuthorizationOptions;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { actions, options } = inputProps;
+
   const label = actions
     .map(
-      (item) => `${humanize(item.action)}: ${scopeLabel(item.scope, options)}`,
+      (item) =>
+        `${humanize(t, item.action)}: ${scopeLabel(t, item.scope, options)}`,
     )
     .join(' · ');
   return (
@@ -257,9 +305,18 @@ function ScopeBadge({
     </span>
   );
 }
-function scopeLabel(scope: AccessScope, options: AuthorizationOptions): string {
-  if (scope.type === 'all') return 'All records';
-  if (scope.type === 'ids') return `${scope.ids.length} selected records`;
+function scopeLabel(
+  t: ReturnType<typeof useTranslation>['t'],
+  scope: AccessScope,
+  options: AuthorizationOptions,
+): string {
+  if (scope.type === 'all')
+    return t('All records', { defaultValue: 'All records' });
+  if (scope.type === 'ids')
+    return t('counts.selectedRecords', {
+      count: scope.ids.length,
+      defaultValue: `${scope.ids.length} selected records`,
+    });
   if (scope.type === 'database') {
     const key =
       typeof scope.recordAccess === 'string'
@@ -267,10 +324,10 @@ function scopeLabel(scope: AccessScope, options: AuthorizationOptions): string {
         : scope.recordAccess.key;
     return (
       options.recordAccessPolicies.find((item) => item.value === key)?.label ??
-      humanize(key)
+      humanize(t, key)
     );
   }
-  return 'Unknown scope';
+  return t('Unknown scope', { defaultValue: 'Unknown scope' });
 }
 function fresh(options: AuthorizationOptions): DefaultAccessRule {
   const type =
@@ -314,16 +371,21 @@ function resourceLabel(
   );
 }
 function resourceTypeLabel(
+  t: ReturnType<typeof useTranslation>['t'],
   options: AuthorizationOptions,
   type: string,
 ): string {
   return (
     options.resourceTypes.find((item) => item.value === type)?.label ??
-    humanize(type)
+    humanize(t, type)
   );
 }
-function humanize(value: string): string {
-  return value
+function humanize(
+  t: ReturnType<typeof useTranslation>['t'],
+  value: string,
+): string {
+  const label = value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return t(label, { defaultValue: label });
 }

@@ -6,6 +6,11 @@ const enUS = {
     logs: 'Notification logs',
   },
   logs: {
+    deliveryOperations: 'Delivery operations',
+    recipeDescription: 'Trace each channel handoff and every provider attempt.',
+    redacted: 'Message bodies, recipients, and lease tokens are redacted.',
+    providerAttempts: 'Provider attempts',
+
     eyebrow: 'Notifications',
     title: 'Notification logs',
     description:

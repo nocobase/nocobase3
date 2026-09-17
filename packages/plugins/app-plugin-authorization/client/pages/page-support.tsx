@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import type {
   AuthorizationOptions,
@@ -36,14 +37,7 @@ export function useAuthorizationPageData(
   return { options, users, ...(error === undefined ? {} : { error }) };
 }
 
-export function AuthorizationSettingsPage({
-  eyebrow,
-  title,
-  description,
-  error,
-  loading,
-  children,
-}: {
+export function AuthorizationSettingsPage(inputProps: {
   eyebrow: string;
   title: string;
   description: string;
@@ -51,6 +45,9 @@ export function AuthorizationSettingsPage({
   loading: boolean;
   children: ReactNode;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { eyebrow, title, description, error, loading, children } = inputProps;
+
   return (
     <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
       <header className='border-b bg-background px-6 py-7'>
@@ -70,7 +67,7 @@ export function AuthorizationSettingsPage({
         {error ? <ErrorBox value={error} /> : null}
         {loading ? (
           <div className='rounded-xl border bg-card p-8 text-sm text-muted-foreground shadow-sm'>
-            Loading…
+            {t('Loading…', { defaultValue: 'Loading…' })}
           </div>
         ) : (
           children
