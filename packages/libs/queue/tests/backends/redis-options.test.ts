@@ -50,3 +50,31 @@ it('preserves a valid Redis URL without exposing its credentials in validation e
     }
   }
 });
+
+it('rejects all invalid built-in overrides before constructing any backend', async () => {
+  const { createQueueService } = await import('../../src/service.js');
+  const { createInMemoryBackendFactory } =
+    await import('../../src/backends/in-memory/index.js');
+  const service = createQueueService({
+    namespace: 'prevalidation',
+    queueBackend: 'test',
+    queues: {
+      invalid: { queueBackend: 'redis', connection: { unexpected: true } },
+    },
+  });
+  const factory = createInMemoryBackendFactory();
+  let constructed = 0;
+  service.registerBackend('test', (...args) => {
+    constructed++;
+    return factory(...args);
+  });
+  service.producer('valid');
+  try {
+    await expect(service.setup()).rejects.toThrow(
+      'Unsupported connection field',
+    );
+    expect(constructed).toBe(0);
+  } finally {
+    await service.shutdown();
+  }
+});
