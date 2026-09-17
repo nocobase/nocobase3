@@ -1,0 +1,43 @@
+import { createPostgresBackend, createRedisBackend } from 'bullmq';
+import type { BackendFactory } from 'bullmq';
+
+export interface BackendRegistry {
+  register(name: string, factory: BackendFactory): void;
+  freeze(): void;
+  resolve(name: string): BackendFactory;
+}
+
+export function createBackendRegistry(): BackendRegistry {
+  const factories = new Map<string, BackendFactory>([
+    ['redis', createRedisBackend],
+    ['postgres', createPostgresBackend],
+    [
+      'inMemory',
+      () => {
+        throw new Error('InMemory backend implementation is not installed');
+      },
+    ],
+  ]);
+  let frozen = false;
+  return {
+    register(name, factory): void {
+      if (frozen)
+        throw new Error('Backend registration is frozen after setup begins');
+      if (typeof name !== 'string' || !name.trim())
+        throw new TypeError('Backend name must be nonempty');
+      if (typeof factory !== 'function')
+        throw new TypeError('Backend factory must be a function');
+      if (factories.has(name))
+        throw new Error(`Backend ${name} is already registered`);
+      factories.set(name, factory);
+    },
+    freeze(): void {
+      frozen = true;
+    },
+    resolve(name): BackendFactory {
+      const factory = factories.get(name);
+      if (!factory) throw new Error(`Unknown queue backend: ${name}`);
+      return factory;
+    },
+  };
+}
