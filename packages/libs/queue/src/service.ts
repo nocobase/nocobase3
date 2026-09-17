@@ -2,6 +2,7 @@ import { Queue, Worker, WaitingError } from 'bullmq';
 import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
 import { resolveRedisConnection } from './backends/redis.js';
+import { resolvePostgresConnection } from './backends/postgres.js';
 import { resolveQueueConfiguration, resolveQueueTimeouts } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
 import { createQueueProducer } from './producer.js';
@@ -340,6 +341,8 @@ export function createQueueService(
     registry.resolve(defaults.queueBackend);
     if (defaults.queueBackend === 'redis')
       resolveRedisConnection(defaults.connection);
+    if (defaults.queueBackend === 'postgres')
+      resolvePostgresConnection(defaults.connection);
     for (const name of new Set([
       ...Object.keys(options.queues ?? {}),
       ...entries.keys(),
@@ -353,6 +356,8 @@ export function createQueueService(
       registry.resolve(config.queueBackend);
       if (config.queueBackend === 'redis')
         resolveRedisConnection(config.connection);
+      if (config.queueBackend === 'postgres')
+        resolvePostgresConnection(config.connection);
     }
     for (const [name, current] of entries) await initializeEntry(name, current);
     if (stopped) throw new Error('Queue initialization was cancelled');
@@ -440,7 +445,10 @@ export function createQueueService(
         const factory = registry.resolve(config.queueBackend);
         const identity = createQueueIdentity(config.namespace, name);
         // Connection adapters are introduced by the resource/backend slices; never silently discard one.
-        if (config.connection !== undefined && config.queueBackend !== 'redis')
+        if (
+          config.connection !== undefined &&
+          !['redis', 'postgres'].includes(config.queueBackend)
+        )
           throw new Error('Queue connection adaptation is not implemented');
         const physicalName =
           config.queueBackend === 'postgres'
@@ -450,7 +458,9 @@ export function createQueueService(
           connection:
             config.queueBackend === 'redis'
               ? resolveRedisConnection(config.connection)
-              : {},
+              : config.queueBackend === 'postgres'
+                ? resolvePostgresConnection(config.connection)
+                : {},
           prefix: identity.redisPrefix,
         };
         current.queue = new Queue<
