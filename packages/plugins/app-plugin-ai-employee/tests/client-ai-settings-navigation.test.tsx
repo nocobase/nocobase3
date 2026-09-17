@@ -22,7 +22,10 @@ import { withAISettingsShell } from '../client/ai-settings-shell.js';
 import settings from '../client/settings.js';
 
 vi.mock('../client/locales/index.js', () => ({
-  useT: () => (key: string) => key,
+  useT: () => (key: string) => (key === 'tools.title' ? 'Tools' : key),
+}));
+vi.mock('../client/pages/tools-settings-page.js', () => ({
+  default: () => <div>Tools content</div>,
 }));
 vi.mock('../client/pages/skills-settings-page.js', () => ({
   default: () => <div>Skills content</div>,
@@ -73,7 +76,9 @@ function SettingsNavigation({
               matches.some((match) => match.id === node.id) ? 'page' : undefined
             }
           >
-            {node.navigation.title}
+            {node.navigation.title === 'tools.title'
+              ? 'Tools'
+              : node.navigation.title}
           </Link>
         ) : (
           <span>{node.navigation.title}</span>
@@ -164,6 +169,29 @@ async function travel(router: ReturnType<typeof createRouter>, delta: number) {
 }
 
 describe('AI settings page navigation', () => {
+  it.each(['/settings/ai/tools', '/settings/ai/tools/'])(
+    'opens Tools independently at %s and restores sibling navigation',
+    async (path) => {
+      const router = createRouter([`/main${path}`], '/main');
+      render(<RouterProvider router={router} />);
+      expect(await screen.findByText('Tools content')).toBeInTheDocument();
+      expect(screen.queryByText('Employee content')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Tools' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      openMenuPage('Skills');
+      expect(await screen.findByText('Skills content')).toBeInTheDocument();
+      await travel(router, -1);
+      expect(await screen.findByText('Tools content')).toBeInTheDocument();
+      await travel(router, 1);
+      expect(await screen.findByText('Skills content')).toBeInTheDocument();
+      openMenuPage('Tools');
+      expect(await screen.findByText('Tools content')).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe('/main/settings/ai/tools');
+    },
+  );
   it.each(['/settings/ai/skills', '/settings/ai/skills/'])(
     'opens Skills independently at %s',
     async (path) => {
@@ -214,6 +242,7 @@ describe('AI settings page navigation', () => {
     expect(menu.getAllByRole('link').map((link) => link.textContent)).toEqual([
       'AI Employees',
       'Skills',
+      'Tools',
       'Conversations',
       'LLM services',
       'MCP services',

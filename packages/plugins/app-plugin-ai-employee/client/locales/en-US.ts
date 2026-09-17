@@ -1,4 +1,25 @@
 export default {
+  tools: {
+    title: 'Tools',
+    description: 'Browse tools available to AI employees.',
+    search: 'Search tools',
+    loading: 'Loading tools…',
+    error: 'Unable to load tools.',
+    empty: 'No tools are available.',
+    noMatches: 'No tools match your search.',
+    scope: 'Scope',
+    source: 'Source',
+    details: 'Tool details',
+    detailsDescription: 'Read about this tool and review its input schema.',
+    detailsLoading: 'Loading tool details…',
+    detailsError: 'Unable to load tool details.',
+    about: 'About',
+    noAbout: 'No additional documentation is available.',
+    inputSchema: 'Input schema',
+    schemaDescription:
+      'Read-only JSON schema. Viewing a tool does not execute it.',
+    noSchema: 'No input schema is available.',
+  },
   skills: {
     skill: 'Skill',
     description: 'Description',

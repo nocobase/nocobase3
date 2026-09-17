@@ -16,6 +16,40 @@ export interface SkillsManagementActor {
   readonly canReadAllSkills?: boolean;
 }
 
+export interface ToolsManagementActor {
+  readonly id: string | number;
+  readonly canReadAllTools?: boolean;
+}
+
+export interface ManagedToolSummary {
+  name: string;
+  title: string;
+  description: string;
+  scope: string;
+  source: string;
+}
+
+export interface ManagedToolList {
+  rows: ManagedToolSummary[];
+}
+
+export type ManagedToolSchemaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ManagedToolSchemaValue[]
+  | ManagedToolInputSchema;
+
+export interface ManagedToolInputSchema {
+  [key: string]: ManagedToolSchemaValue;
+}
+
+export interface ManagedToolDetail extends ManagedToolSummary {
+  about: string;
+  inputSchema: ManagedToolInputSchema | null;
+}
+
 export interface ManagedSkillTool {
   name: string;
   title: string;

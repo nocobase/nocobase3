@@ -7,6 +7,7 @@ import type { ServiceFactory } from '../factory/service-factory.js';
 import { createAIConversationsRouter } from './ai-conversations.js';
 import { requireConversationManagement } from './conversation-management.js';
 import { requireSkillsManagement } from './skills-management.js';
+import { requireToolsManagement } from './tools-management.js';
 import { createAIEmployeeRouter } from './ai-employees.js';
 import { createAIFilesRouter } from './ai-files.js';
 import { createAIMCPServersRouter } from './ai-mcp-servers.js';
@@ -51,6 +52,14 @@ export function createAIEmployeeRoutes(
       options.authentication.required(),
       options.authorization.middleware(),
       requireSkillsManagement(),
+    );
+  }
+  for (const path of ['/aiTools:listAll', '/aiTools:getDetails']) {
+    routes.use(
+      path,
+      options.authentication.required(),
+      options.authorization.middleware(),
+      requireToolsManagement(),
     );
   }
   routes.use('*', createAIActorMiddleware(options.authentication));

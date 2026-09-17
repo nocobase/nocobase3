@@ -52,6 +52,13 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
         componentLoader: () => import('./pages/skills-settings-page.js'),
       },
       {
+        name: 'aiTools',
+        path: '/ai/tools',
+        navigation: { title: 'tools.title' },
+        access: { resource: 'ai.settings', action: 'read' },
+        componentLoader: () => import('./pages/tools-settings-page.js'),
+      },
+      {
         name: 'aiConversations',
         path: '/ai/conversations',
         navigation: { title: 'Conversations' },

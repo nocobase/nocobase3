@@ -1,6 +1,14 @@
 import type { AIManager } from '@nocobase/ai-employee';
 import type { ToolsEntity, ToolsOptions } from '@nocobase/ai-employee';
 import {
+  forbiddenError,
+  type ManagedToolDetail,
+  type ManagedToolList,
+  type ManagedToolSummary,
+  type ToolsManagementActor,
+} from '../types.js';
+import { serializeToolInputSchema } from './tool-input-schema.js';
+import {
   asRecord,
   badRequest,
   isSerializableObject,
@@ -20,6 +28,51 @@ export class AIToolService {
   public constructor({ ai }: AIToolServiceOptions) {
     this.ai = ai;
   }
+  async listAll({
+    actor,
+  }: {
+    actor: ToolsManagementActor;
+  }): Promise<ManagedToolList> {
+    this.requireManagementAccess(actor);
+    const tools = await this.ai.toolsManager.listTools({});
+    const resolved = new Map<string, ManagedToolSummary>();
+    for (const tool of tools) {
+      // The manager lists static entries first, matching its static-first lookup.
+      if (!resolved.has(tool.definition.name)) {
+        resolved.set(tool.definition.name, summarizeTool(tool));
+      }
+    }
+    return { rows: [...resolved.values()] };
+  }
+
+  async getDetails({
+    actor,
+    name,
+  }: {
+    actor: ToolsManagementActor;
+    name: string;
+  }): Promise<ManagedToolDetail> {
+    this.requireManagementAccess(actor);
+    const key = requiredString(name, 'name');
+    const tool = await this.ai.toolsManager.getTools(key);
+    if (!tool) throw notFound('aiTools', key);
+    return {
+      ...summarizeTool(tool),
+      about: tool.introduction?.about ?? '',
+      inputSchema: serializeToolInputSchema(tool.definition.schema),
+    };
+  }
+
+  private requireManagementAccess(actor: ToolsManagementActor): void {
+    if (
+      actor.id === 'anonymous' ||
+      !String(actor.id).trim() ||
+      actor.canReadAllTools !== true
+    ) {
+      throw forbiddenError('AI settings access is required');
+    }
+  }
+
   async list(_options: {}): Promise<unknown[]> {
     // The employee editor consumes this serialized list as read-only display
     // metadata. Management authorization remains required for get and mutations.
@@ -120,6 +173,16 @@ function normalizeTool(
         status: 'success' as const,
         content: 'Frontend tool call has been dispatched.',
       })),
+  };
+}
+
+function summarizeTool(tool: ToolsEntity): ManagedToolSummary {
+  return {
+    name: tool.definition.name,
+    title: tool.introduction?.title || tool.definition.name,
+    description: tool.definition.description,
+    scope: tool.scope,
+    source: tool.from ?? '',
   };
 }
 

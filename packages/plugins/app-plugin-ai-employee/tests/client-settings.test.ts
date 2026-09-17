@@ -26,6 +26,13 @@ test('groups employees, conversations, and standalone services as sibling pages'
             componentLoader: expect.any(Function),
           },
           {
+            name: 'aiTools',
+            path: '/ai/tools',
+            navigation: { title: 'tools.title' },
+            access: { resource: 'ai.settings', action: 'read' },
+            componentLoader: expect.any(Function),
+          },
+          {
             name: 'aiConversations',
             path: '/ai/conversations',
             navigation: { title: 'Conversations' },
@@ -59,11 +66,11 @@ test('groups employees, conversations, and standalone services as sibling pages'
   expect(settings.routes).toHaveLength(1);
   expect(settings.routes[0]).not.toHaveProperty('path');
   expect(settings.routes[0]).not.toHaveProperty('componentLoader');
-  expect(settings.routes[0]?.children).toHaveLength(6);
+  expect(settings.routes[0]?.children).toHaveLength(7);
   for (const child of settings.routes[0]?.children ?? []) {
     expect(child).not.toHaveProperty('children');
   }
-  expect(settings.routes[0]?.children?.[5]).not.toHaveProperty('navigation');
+  expect(settings.routes[0]?.children?.[6]).not.toHaveProperty('navigation');
 });
 
 test('resolves the AI navigation group without changing page URLs or identities', () => {
@@ -77,6 +84,7 @@ test('resolves the AI navigation group without changing page URLs or identities'
       children: [
         { id: 'ai', path: '/settings/ai' },
         { id: 'aiSkills', path: '/settings/ai/skills' },
+        { id: 'aiTools', path: '/settings/ai/tools' },
         { id: 'aiConversations', path: '/settings/ai/conversations' },
         { id: 'aiLLMServices', path: '/settings/ai/llm-services' },
         { id: 'aiMCPServices', path: '/settings/ai/mcp-services' },
@@ -104,6 +112,13 @@ test('resolves the AI navigation group without changing page URLs or identities'
       id: 'aiSkills',
       path: '/settings/ai/skills',
       title: 'Skills',
+      navigation: true,
+      access: { resource: 'ai.settings', action: 'read' },
+    },
+    {
+      id: 'aiTools',
+      path: '/settings/ai/tools',
+      title: 'tools.title',
       navigation: true,
       access: { resource: 'ai.settings', action: 'read' },
     },

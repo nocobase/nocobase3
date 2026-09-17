@@ -62,6 +62,8 @@ const expectedActions = [
   'aiFiles:create',
   'aiFiles:preview',
   ...managedActions('aiTools'),
+  'aiTools:listAll',
+  'aiTools:getDetails',
   ...managedActions('aiSkills'),
   'aiSkills:listAll',
   'aiSkills:getDetails',

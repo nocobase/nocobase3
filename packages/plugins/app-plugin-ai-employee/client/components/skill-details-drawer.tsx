@@ -1,6 +1,5 @@
-import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { apiClientToken, useService } from '@nocobase/app-client';
-import { CircleAlert, X } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactElement, type RefObject } from 'react';
 import { MarkdownMessage } from '../../registry/nocobase-ai/components/chat/markdown-message.js';
 import {
@@ -8,12 +7,8 @@ import {
   AlertDescription,
 } from '../../registry/nocobase-ai/shared/ui/alert.js';
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
-import {
-  Dialog,
-  DialogDescription,
-  DialogPortal,
-  DialogTitle,
-} from '../../registry/nocobase-ai/shared/ui/dialog.js';
+import { DialogDescription } from '../../registry/nocobase-ai/shared/ui/dialog.js';
+import { CatalogDetailsDrawer } from './catalog-details-drawer.js';
 import {
   Tabs,
   TabsContent,
@@ -221,34 +216,15 @@ export function SkillDetailsDrawer({
 }): ReactElement {
   const t = useT();
   return (
-    <Dialog
+    <CatalogDetailsDrawer
       open={selected !== null}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+      title={t('skills.details')}
+      onClose={onClose}
+      returnFocusRef={returnFocusRef}
     >
       {selected ? (
-        <DialogPortal>
-          <DialogPrimitive.Backdrop className='fixed inset-0 z-50 bg-black/40 transition-opacity duration-200 data-starting-style:opacity-0 data-ending-style:opacity-0 motion-reduce:transition-none' />
-          <DialogPrimitive.Popup
-            finalFocus={returnFocusRef}
-            className='fixed inset-y-0 right-0 z-50 flex h-dvh w-full min-w-0 max-w-2xl flex-col overflow-hidden border-l bg-background text-foreground shadow-xl outline-none transition-transform duration-200 data-starting-style:translate-x-full data-ending-style:translate-x-full motion-reduce:transition-none'
-          >
-            <header className='flex shrink-0 items-center justify-between gap-4 border-b px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-8'>
-              <DialogTitle>{t('skills.details')}</DialogTitle>
-              <DialogPrimitive.Close
-                render={
-                  <Button variant='ghost' size='icon' className='size-11' />
-                }
-                aria-label={t('Close')}
-              >
-                <X aria-hidden='true' />
-              </DialogPrimitive.Close>
-            </header>
-            <SkillDetails key={selected.name} summary={selected} />
-          </DialogPrimitive.Popup>
-        </DialogPortal>
+        <SkillDetails key={selected.name} summary={selected} />
       ) : null}
-    </Dialog>
+    </CatalogDetailsDrawer>
   );
 }
