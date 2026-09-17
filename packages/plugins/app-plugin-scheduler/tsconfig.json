@@ -10,7 +10,6 @@
     "outDir": "dist"
   },
   "include": [
-    "package.ts",
     "cli/**/*.ts",
     "database/**/*.ts",
     "server/**/*.ts",

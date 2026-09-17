@@ -16,6 +16,7 @@
   },
   "files": [
     "README.md",
+    "bin",
     "docs",
     "dist",
     "eslint/README.md",
@@ -148,6 +149,6 @@
     }
   },
   "bin": {
-    "nocobase-db-manifests": "./dist/database/database-manifests-cli.js"
+    "nocobase-db-manifests": "./bin/database-manifests.js"
   }
 }

@@ -1,5 +1,6 @@
 ---
 '@nocobase/db': patch
+'@nocobase/dev-config': patch
 '@nocobase/app-plugin-scheduler': minor
 '@nocobase/queue': minor
 '@nocobase/app-server': minor
@@ -21,3 +22,7 @@ Track idempotent occurrences through the target's final outcome, including async
 Provide an authorized, read-only schedule management page and API with paginated schedules, trigger counts, execution history, and separate schedule and execution statuses. Register `pnpm nocobase schedule sync` as a global CLI command and integrate it into all application templates.
 
 Include application examples for custom task targets and scheduled Workflows, and agent guidance for schedule definition, target selection, asynchronous execution, diagnostics, and recovery.
+
+Keep the database manifest CLI entry available before compilation so fresh workspace installs link the command required by package builds.
+
+Declare the OpenTelemetry dependencies referenced by the upstream queue declarations so consumers can typecheck published Server APIs without enabling tracing or skipping library checks.

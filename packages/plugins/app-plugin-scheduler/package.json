@@ -26,14 +26,6 @@
       "types": "./client/index.ts",
       "import": "./client/index.ts"
     },
-    "./client/plugin": {
-      "types": "./client/plugin.ts",
-      "import": "./client/plugin.ts"
-    },
-    "./client/routes": {
-      "types": "./client/routes.ts",
-      "import": "./client/routes.ts"
-    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -60,14 +52,6 @@
       "./client": {
         "types": "./dist/client/index.d.ts",
         "import": "./dist/client/index.js"
-      },
-      "./client/plugin": {
-        "types": "./dist/client/plugin.d.ts",
-        "import": "./dist/client/plugin.js"
-      },
-      "./client/routes": {
-        "types": "./dist/client/routes.d.ts",
-        "import": "./dist/client/routes.js"
       },
       "./package.json": "./package.json"
     }
