@@ -1,4 +1,4 @@
-import { Queue, Worker } from 'bullmq';
+import { Queue, Worker, WaitingError } from 'bullmq';
 import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
 import { resolveQueueConfiguration } from './config.js';
@@ -153,7 +153,23 @@ export function createQueueService(
       consumer: {
         consume(handler): UnregisterHandler {
           if (stopped) throw new Error('Queue service is shutting down');
-          return handlers.consume(handler);
+          const unregister = handlers.consume(handler);
+          if (ready && current.worker?.isPaused()) {
+            void current.worker.resume().catch((error: unknown) => {
+              dependencies.logger?.error(
+                { error, queue: name },
+                'Queue worker resume failed',
+              );
+            });
+          }
+          return async (): Promise<void> => {
+            const settled = unregister();
+            if (handlers.size() === 0 && current.worker) {
+              await Promise.all([current.worker.pause(true), settled]);
+            } else {
+              await settled;
+            }
+          };
         },
       },
     };
@@ -260,7 +276,11 @@ export function createQueueService(
         if (current.handlers.size()) {
           current.worker = new Worker<unknown, unknown, string, IQueueBackend>(
             physicalName,
-            async (job, _token, signal): Promise<void> => {
+            async (job, token, signal): Promise<void> => {
+              if (current.handlers.size() === 0) {
+                await job.moveToWait(token);
+                throw new WaitingError();
+              }
               if (!signal)
                 throw new Error('Queue Worker did not provide an abort signal');
               await current.handlers.dispatch(
