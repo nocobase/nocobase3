@@ -1,6 +1,9 @@
 // @vitest-environment node
 
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -20,13 +23,24 @@ import {
   type AppQueueConfig,
   type AppSessionConfigInput,
 } from '@nocobase/app-server';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import appRuntime from '../../server/runtime.ts';
 
 const templateRootDir = fileURLToPath(new URL('../..', import.meta.url));
 
 describe('application config', () => {
+  let configRoot: string;
+  let configPath: string;
+  beforeAll(async () => {
+    configRoot = await mkdtemp(path.join(os.tmpdir(), 'app-config-test-'));
+    configPath = path.join(configRoot, 'config.yml');
+    await writeFile(configPath, '{}');
+  });
+  afterAll(async () => {
+    await rm(configRoot, { recursive: true, force: true });
+  });
+
   it('supplies analytics for main-only configs and honors file overrides', async () => {
     const directory = mkdtempSync(
       path.join(tmpdir(), 'examples-analytics-config-'),
@@ -115,6 +129,7 @@ describe('application config', () => {
   it('assembles module defaults in the runtime', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,
+      configPath,
       env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
     });
 
@@ -155,6 +170,7 @@ describe('application config', () => {
   it('reloads a file-backed configuration explicitly', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,
+      configPath,
       env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
     });
 
@@ -165,6 +181,7 @@ describe('application config', () => {
   it('loads only explicit env overrides and restores defaults on reload', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,
+      configPath,
       env: {
         APP_SERVER_PORT: '14001',
         REDIS_HOST: 'ignored',
