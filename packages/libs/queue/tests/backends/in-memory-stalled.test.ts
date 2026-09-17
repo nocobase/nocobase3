@@ -75,4 +75,33 @@ describe('memory stalled recovery', () => {
       await Promise.allSettled([queue.close(), backend.close()]);
     }
   });
+  it('removes the stale scan mark on successful renewal even when that renewal later expires', async () => {
+    vi.useFakeTimers();
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue<
+      unknown,
+      unknown,
+      string,
+      unknown,
+      unknown,
+      string,
+      IQueueBackend
+    >('jobs', { connection: {} }, factory);
+    const backend = factory('jobs', {
+      connection: {},
+      ...{ lockDuration: 20, stalledInterval: 10 },
+    });
+    try {
+      const job = await queue.add('event', {});
+      await backend.moveToActive('owner');
+      await backend.moveStalledJobsToWait();
+      expect(await backend.extendLocks([job.id!], ['owner'], 5)).toEqual([]);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(await backend.moveStalledJobsToWait()).toEqual([]);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(await backend.moveStalledJobsToWait()).toEqual([job.id]);
+    } finally {
+      await Promise.allSettled([queue.close(), backend.close()]);
+    }
+  });
 });

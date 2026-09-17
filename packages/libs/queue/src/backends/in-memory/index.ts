@@ -39,6 +39,8 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     private readonly name: string,
     private readonly prefix: string,
     private readonly lockDuration: number = 30000,
+    private readonly stalledInterval: number = 30000,
+    private readonly maxStalledCount: number = 1,
   ) {
     super();
     const keys = new QueueKeys(prefix);
@@ -242,7 +244,29 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     throw new Error('Memory backend operation is not implemented');
   }
   async moveStalledJobsToWait(): Promise<string[]> {
-    throw new Error('Memory backend operation is not implemented');
+    const now = Date.now();
+    const shared = this.state.worker;
+    if (now < shared.nextStalledCheck) return [];
+    shared.nextStalledCheck = now + this.stalledInterval;
+    const recovered: string[] = [];
+    for (const id of shared.stalled) {
+      const lock = shared.locks.get(id);
+      if (lock && lock.expires > now) continue;
+      const job = this.state.records.get(id);
+      if (!job || !this.state.store.transition(id, 'active', 'waiting'))
+        continue;
+      shared.locks.delete(id);
+      job.stalledCounter = (job.stalledCounter || 0) + 1;
+      if (job.stalledCounter > this.maxStalledCount)
+        job.deferredFailure = 'job stalled more than allowable limit';
+      recovered.push(id);
+    }
+    shared.stalled.clear();
+    for (const id of this.state.records.keys()) {
+      if (this.state.store.get(id)?.state === 'active') shared.stalled.add(id);
+    }
+    if (recovered.length) shared.notify();
+    return recovered;
   }
   async drain(_delayed: boolean): Promise<void> {
     throw new Error('Memory backend operation is not implemented');
@@ -257,11 +281,13 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
       const token = tokens[index];
       if (token === undefined || !this.state.worker.owns(id, token))
         failed.push(id);
-      else
+      else {
         this.state.worker.locks.set(id, {
           token,
           expires: Date.now() + duration,
         });
+        this.state.worker.stalled.delete(id);
+      }
     }
     return failed;
   }
@@ -341,6 +367,23 @@ export function createInMemoryBackendFactory(): BackendFactory {
       'lockDuration' in options && typeof options.lockDuration === 'number'
         ? options.lockDuration
         : 30000;
-    return new InMemoryQueueBackend(state, name, prefix, lockDuration);
+    const stalledInterval =
+      'stalledInterval' in options &&
+      typeof options.stalledInterval === 'number'
+        ? options.stalledInterval
+        : 30000;
+    const maxStalledCount =
+      'maxStalledCount' in options &&
+      typeof options.maxStalledCount === 'number'
+        ? options.maxStalledCount
+        : 1;
+    return new InMemoryQueueBackend(
+      state,
+      name,
+      prefix,
+      lockDuration,
+      stalledInterval,
+      maxStalledCount,
+    );
   };
 }
