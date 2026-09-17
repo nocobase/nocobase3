@@ -357,7 +357,7 @@ describe('Hub publishing key lifecycle and permissions', () => {
       service.verify(secret, 'crm', 'upload-release'),
     ).rejects.toMatchObject({ status: 401 });
   });
-  it('allows only administrators to manage keys and cannot grant missing owner permissions', async () => {
+  it('requires key management and cannot grant missing owner permissions', async () => {
     for (const user of ['operator', 'viewer']) {
       await expect(
         service.create(user, {
@@ -366,7 +366,8 @@ describe('Hub publishing key lifecycle and permissions', () => {
           scopes: ['deploy'],
         }),
       ).rejects.toThrow();
-      await expect(service.list(user)).rejects.toThrow();
+      if (user === 'viewer') await expect(service.list(user)).rejects.toThrow();
+      else expect(await service.list(user)).toEqual([]);
     }
     await authz.permissionSets.create({
       key: 'key-manager',
@@ -662,6 +663,137 @@ describe('Hub publishing key lifecycle and permissions', () => {
   });
 });
 
+describe('Operator publishing key ownership', () => {
+  beforeEach(async () => {
+    await db
+      .connection()
+      .query.updateTable('hubApps')
+      .set({ createdBy: 'operator' })
+      .where('id', '=', 'crm')
+      .execute();
+    await db
+      .connection()
+      .query.updateTable('hubApps')
+      .set({ createdBy: 'viewer' })
+      .where('id', '=', 'erp')
+      .execute();
+    await authz.permissionSets.assign({
+      subject: { type: 'user', id: 'viewer' },
+      permissionSet: 'hub-operator',
+    });
+  });
+
+  it('limits key lists and mutations to the creator while administrators retain revocation access', async () => {
+    const own = await service.create('operator', {
+      name: 'Operator CI',
+      appIds: ['crm'],
+      scopes: ['upload-release'],
+    });
+    const other = await service.create('viewer', {
+      name: 'Other CI',
+      appIds: ['erp'],
+      scopes: ['deploy'],
+    });
+    expect(own.key.createdBy).toBe('operator');
+    expect((await service.list('operator')).map((key) => key.id)).toEqual([
+      own.key.id,
+    ]);
+    expect((await service.list('viewer')).map((key) => key.id)).toEqual([
+      other.key.id,
+    ]);
+    expect(await service.list('admin')).toHaveLength(2);
+    expect(await service.reveal(own.key.id, 'operator')).toBe(own.secret);
+    for (const user of ['operator', 'admin']) {
+      await expect(service.reveal(other.key.id, user)).rejects.toMatchObject({
+        status: 403,
+      });
+    }
+    await expect(
+      service.disable(other.key.id, 'operator'),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.remove(other.key.id, 'operator'),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.verify(other.secret, 'erp', 'deploy'),
+    ).resolves.toHaveProperty('id');
+    await service.disable(own.key.id, 'operator');
+    await service.disable(own.key.id, 'operator');
+    await expect(
+      service.verify(own.secret, 'crm', 'upload-release'),
+    ).rejects.toMatchObject({ status: 401 });
+    await service.remove(own.key.id, 'operator');
+    await service.remove(own.key.id, 'operator');
+    await service.disable(other.key.id, 'admin');
+    await service.remove(other.key.id, 'admin');
+    expect(await service.list('admin')).toEqual([]);
+  });
+
+  it('restricts selectable Apps, creation and use to owned Apps and selected operations', async () => {
+    expect((await service.appOptions('operator')).map((app) => app.id)).toEqual(
+      ['crm'],
+    );
+    await expect(
+      service.create('operator', {
+        name: 'Escalation',
+        appIds: ['crm', 'erp'],
+        scopes: ['deploy'],
+      }),
+    ).rejects.toThrow();
+    expect(await service.list('operator')).toEqual([]);
+    const { secret } = await service.create('operator', {
+      name: 'Upload only',
+      appIds: ['crm'],
+      scopes: ['upload-release'],
+    });
+    await expect(
+      service.verify(secret, 'crm', 'upload-release'),
+    ).resolves.toMatchObject({ createdBy: 'operator' });
+    await expect(service.verify(secret, 'crm', 'deploy')).rejects.toMatchObject(
+      { status: 403 },
+    );
+    await expect(
+      service.verify(secret, 'erp', 'upload-release'),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('keeps all-App keys constrained by current ownership and owner permissions', async () => {
+    const { secret } = await service.create('operator', {
+      name: 'All accessible Apps',
+      allApps: true,
+      appIds: [],
+      scopes: ['deploy'],
+    });
+    await expect(
+      service.verify(secret, 'crm', 'deploy'),
+    ).resolves.toHaveProperty('id');
+    await expect(service.verify(secret, 'erp', 'deploy')).rejects.toThrow();
+    await db
+      .connection()
+      .query.updateTable('hubApps')
+      .set({ createdBy: 'operator' })
+      .where('id', '=', 'erp')
+      .execute();
+    await expect(
+      service.verify(secret, 'erp', 'deploy'),
+    ).resolves.toHaveProperty('id');
+    await db
+      .connection()
+      .query.updateTable('hubApps')
+      .set({ createdBy: 'viewer' })
+      .where('id', '=', 'crm')
+      .execute();
+    await expect(service.verify(secret, 'crm', 'deploy')).rejects.toThrow();
+    await authz.permissionSets.replaceSubjectAssignments({
+      subject: { type: 'user', id: 'operator' },
+      managedPermissionSets: ['hub-operator', 'hub-viewer'],
+      permissionSets: ['hub-viewer'],
+    });
+    await expect(service.verify(secret, 'erp', 'deploy')).rejects.toThrow();
+    await expect(service.list('operator')).rejects.toThrow();
+  });
+});
+
 describe('Hub API Key HTTP boundary', () => {
   async function router(userId?: string, realHub?: HubService) {
     const container = new ServiceContainer();
@@ -946,6 +1078,61 @@ describe('Hub API Key HTTP boundary', () => {
     expect(
       (await send(publishing.secret, '14', 'explicit', 'short')).status,
     ).toBe(400);
+  });
+
+  it('allows an Operator session to manage only its own keys through HTTP', async () => {
+    await db
+      .connection()
+      .query.updateTable('hubApps')
+      .set({ createdBy: 'operator' })
+      .where('id', '=', 'crm')
+      .execute();
+    const adminKey = await create();
+    const { router: operator } = await router('operator');
+    const response = await operator.request('/hub/api-keys', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'CI',
+        appIds: ['crm'],
+        scopes: ['upload-release'],
+        userId: 'admin',
+      }),
+    });
+    expect(response.status).toBe(200);
+    const { data } = (await response.json()) as {
+      data: { key: { id: string; createdBy: string }; secret: string };
+    };
+    expect(data.key.createdBy).toBe('operator');
+    const list = await operator.request('/hub/api-keys');
+    expect(await list.json()).toMatchObject({ data: [{ id: data.key.id }] });
+    const path = `/hub/api-keys/${data.key.id}`;
+    expect(
+      (await operator.request(`${path}/reveal`, { method: 'POST' })).status,
+    ).toBe(200);
+    for (const [suffix, method] of [
+      ['/reveal', 'POST'],
+      ['/disable', 'POST'],
+      ['', 'DELETE'],
+    ]) {
+      expect(
+        (
+          await operator.request(`/hub/api-keys/${adminKey.key.id}${suffix}`, {
+            method,
+          })
+        ).status,
+      ).toBe(403);
+    }
+    expect(
+      (await operator.request(`${path}/disable`, { method: 'POST' })).status,
+    ).toBe(200);
+    expect((await operator.request(path, { method: 'DELETE' })).status).toBe(
+      200,
+    );
+    expect(await service.list('operator')).toEqual([]);
+    await expect(
+      service.verify(adminKey.secret, 'crm', 'upload-release'),
+    ).resolves.toHaveProperty('id');
   });
 
   it('enforces management and owner ACL for credential recovery with no-store', async () => {

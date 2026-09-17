@@ -76,6 +76,7 @@ export class HubApiKeyService {
 
   async list(userId: string): Promise<readonly HubApiKeySummary[]> {
     await this.requirePermission(userId, '*', 'manage-api-keys');
+    const allKeys = await this.canManageAllKeys(userId);
     const rows = await this.query()
       .selectFrom('hubApiKeys')
       .selectAll()
@@ -85,7 +86,7 @@ export class HubApiKeyService {
     const summaries = await Promise.all(
       rows.map(async (row) => {
         const key = await this.apiKeys.get(String(row.id));
-        if (!key) return null;
+        if (!key || (!allKeys && key.referenceId !== userId)) return null;
         const user = await this.query()
           .selectFrom('user')
           .select('name')
@@ -299,6 +300,7 @@ export class HubApiKeyService {
 
   async disable(keyId: string, userId: string): Promise<void> {
     await this.requirePermission(userId, '*', 'manage-api-keys');
+    const allKeys = await this.canManageAllKeys(userId);
     await this.database.transaction(async (connection) => {
       const row = await connection.query
         .selectFrom('hubApiKeys')
@@ -307,6 +309,8 @@ export class HubApiKeyService {
         .executeTakeFirst();
       if (!row)
         throw new HubError('API key not found.', 'API_KEY_NOT_FOUND', 404);
+      const key = await this.apiKeys.withConnection(connection).get(keyId);
+      this.requireKeyOwnerOrAdministrator(key, userId, allKeys);
       await this.apiKeys.withConnection(connection).disable(keyId);
       await connection.query
         .updateTable('hubApiKeys')
@@ -319,14 +323,44 @@ export class HubApiKeyService {
 
   async remove(keyId: string, userId: string): Promise<void> {
     await this.requirePermission(userId, '*', 'manage-api-keys');
+    const allKeys = await this.canManageAllKeys(userId);
     await this.database.transaction(async (connection) => {
       const row = await connection.query
         .selectFrom('hubApiKeys')
         .select('id')
         .where('id', '=', keyId)
         .executeTakeFirst();
-      if (row) await this.apiKeys.withConnection(connection).remove(keyId);
+      if (row) {
+        const key = await this.apiKeys.withConnection(connection).get(keyId);
+        this.requireKeyOwnerOrAdministrator(key, userId, allKeys);
+        await this.apiKeys.withConnection(connection).remove(keyId);
+      }
     });
+  }
+
+  private async canManageAllKeys(userId: string): Promise<boolean> {
+    // read-all is restricted to Hub administrators by the resource handler.
+    return this.authorization
+      .for({
+        principal: { type: 'user', id: userId },
+        subjects: [{ type: 'authenticated', id: '*' }],
+      })
+      .can({ resource: { type: 'hub.app', id: '*' }, action: 'read-all' });
+  }
+
+  private requireKeyOwnerOrAdministrator(
+    key: ServerApiKeySummary | null,
+    userId: string,
+    allKeys: boolean,
+  ): void {
+    if (!key)
+      throw new HubError('API key not found.', 'API_KEY_NOT_FOUND', 404);
+    if (key.referenceId !== userId && !allKeys)
+      throw new HubError(
+        'Only the creator or a Hub administrator can manage this key.',
+        'API_KEY_OWNER_REQUIRED',
+        403,
+      );
   }
 
   /** Removing one App must preserve a shared key's other App bindings. */

@@ -356,7 +356,7 @@ describe('Hub role API permissions', () => {
         });
       }
       expect(await can(routes[1]!.access!)).toEqual({
-        can: role === 'hub-administrator',
+        can: role === 'hub-administrator' || role === 'hub-operator',
       });
       await provider.shutdown();
     },
