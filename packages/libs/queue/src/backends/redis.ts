@@ -94,6 +94,9 @@ export const createServiceRedisBackend: BackendFactory = (
         if (lateFailure) throw lateFailure;
         return result;
       } catch (error) {
+        // A completed Redis error reply is not an abandoned transport operation.
+        if (!failure() && error instanceof Error && error.name === 'ReplyError')
+          throw error;
         invalidated ??= new Error(
           'Redis producer operation failed; connection invalidated',
           { cause: error },
