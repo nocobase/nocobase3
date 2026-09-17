@@ -381,7 +381,15 @@ export function createQueueService(
       );
       const deadline = performance.now() + 5000;
       if (current.worker) {
-        const closing = closeWorker(current.worker, true);
+        const closing = closeWorker(current.worker, true).catch(
+          (error: unknown) => {
+            throw new AggregateError(
+              [timeout, error],
+              'Worker initialization and cleanup failed',
+              { cause: timeout },
+            );
+          },
+        );
         if (!(await settlesWithin(closing, 5000)))
           throw new AggregateError(
             [timeout, new Error('Worker cleanup remains unresolved')],
