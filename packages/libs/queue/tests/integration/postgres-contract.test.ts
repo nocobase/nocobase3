@@ -322,3 +322,60 @@ it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
     }
   },
 );
+
+it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
+  'reconnects PostgreSQL LISTEN sessions and continues consuming',
+  async () => {
+    const { Pool } = await import('pg');
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_PG_PORT),
+      user: 'postgres',
+      password: 'queue-test-only',
+      database: 'postgres',
+    };
+    const namespace = `${process.env.QUEUE_TEST_RUN}-listen`;
+    const service = createQueueService({
+      namespace,
+      queueBackend: 'postgres',
+      connection,
+    });
+    const admin = new Pool(connection);
+    const identity = createQueueIdentity(namespace, 'jobs');
+    const received: unknown[] = [];
+    service.consumer('jobs').consume(async (_channel, message) => {
+      received.push(message);
+    });
+    try {
+      await service.setup();
+      await service.producer('jobs').publish('before', 1);
+      await expect.poll(() => received).toEqual([1]);
+      const sessions = await admin.query<{ pid: number }>(
+        'SELECT pid FROM pg_stat_activity WHERE application_name = left($1, 63)',
+        [identity.postgresQueueName],
+      );
+      expect(sessions.rows.length).toBe(1);
+      await admin.query('SELECT pg_terminate_backend($1)', [
+        sessions.rows[0]!.pid,
+      ]);
+      await service.producer('jobs').publish('after', 2);
+      await expect.poll(() => received, { timeout: 10000 }).toEqual([1, 2]);
+      await expect
+        .poll(
+          async () =>
+            (
+              await admin.query<{ pid: number }>(
+                'SELECT pid FROM pg_stat_activity WHERE application_name = left($1, 63) AND pid <> $2',
+                [identity.postgresQueueName, sessions.rows[0]!.pid],
+              )
+            ).rows.length,
+          { timeout: 5000 },
+        )
+        .toBe(1);
+    } finally {
+      await service.shutdown();
+      await admin.end();
+    }
+  },
+  20000,
+);
