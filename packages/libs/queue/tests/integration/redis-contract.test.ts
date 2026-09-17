@@ -212,3 +212,63 @@ it.skipIf(selectedBackend() !== 'redis')(
     }
   },
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'cancels only the local active dispatch and prevents retries',
+  async () => {
+    const { Queue } = await import('bullmq');
+    const { createQueueIdentity } = await import('../../src/identity.js');
+    const namespace = `${process.env.QUEUE_TEST_RUN}-cancel`;
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_REDIS_PORT),
+    };
+    const options = {
+      namespace,
+      connection,
+      queueBackend: 'redis' as const,
+      attempts: 3,
+    };
+    const owner = createQueueService(options);
+    const remote = createQueueService(options);
+    let signal: AbortSignal | undefined;
+    let calls = 0;
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    owner
+      .consumer('jobs')
+      .consume(async (_channel, _message, currentSignal) => {
+        calls++;
+        signal = currentSignal;
+        await gate;
+      });
+    remote.manager('jobs');
+    const identity = createQueueIdentity(namespace, 'jobs');
+    const observer = new Queue(identity.redisQueueName, {
+      connection,
+      prefix: identity.redisPrefix,
+    });
+    try {
+      await Promise.all([owner.setup(), remote.setup()]);
+      const receipt = await owner.producer('jobs').publish('event', {});
+      await expect.poll(() => calls).toBe(1);
+      expect(remote.manager('jobs').cancelJob(receipt.jobId)).toBe(false);
+      expect(signal?.aborted).toBe(false);
+      expect(owner.manager('jobs').cancelJob(receipt.jobId)).toBe(true);
+      expect(signal?.aborted).toBe(true);
+      release();
+      await expect
+        .poll(() => observer.getJobState(receipt.jobId))
+        .toBe('failed');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(calls).toBe(1);
+      expect(await observer.getJobState(receipt.jobId)).toBe('failed');
+    } finally {
+      release();
+      await Promise.all([owner.shutdown(), remote.shutdown()]);
+      await observer.close();
+    }
+  },
+);
