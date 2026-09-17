@@ -338,6 +338,8 @@ export function createQueueService(
     const defaults = resolveQueueConfiguration(options, '__defaults__');
     validateQueueName(defaults.namespace, 'namespace');
     registry.resolve(defaults.queueBackend);
+    if (defaults.queueBackend === 'redis')
+      resolveRedisConnection(defaults.connection);
     for (const name of new Set([
       ...Object.keys(options.queues ?? {}),
       ...entries.keys(),
@@ -349,6 +351,8 @@ export function createQueueService(
       );
       createQueueIdentity(config.namespace, name);
       registry.resolve(config.queueBackend);
+      if (config.queueBackend === 'redis')
+        resolveRedisConnection(config.connection);
     }
     for (const [name, current] of entries) await initializeEntry(name, current);
     if (stopped) throw new Error('Queue initialization was cancelled');
