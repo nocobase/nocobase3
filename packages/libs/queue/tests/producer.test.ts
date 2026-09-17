@@ -108,4 +108,29 @@ describe('queue producer', () => {
       removeOnComplete: 10,
     });
   });
+  it('preserves official single versus bulk ID validation and rejects before backend writes', async () => {
+    const { queue, producer } = fixture();
+    const writes = vi.spyOn(queue.getBackend(), 'addJobs');
+    await expect(
+      producer.publish('event', {}, { jobIdProducer: () => '0:a:b' }),
+    ).rejects.toThrow();
+    expect(
+      await producer.publishMany([{ channel: 'event', message: {} }], {
+        jobIdProducer: () => '0:a:b',
+      }),
+    ).toEqual([{ jobId: '0:a:b' }]);
+    writes.mockClear();
+    let count = 0;
+    await expect(
+      producer.publishMany(
+        [
+          { channel: 'event', message: {} },
+          { channel: 'event', message: {} },
+        ],
+        { jobIdProducer: () => (++count === 1 ? 'valid' : '123') },
+      ),
+    ).rejects.toThrow();
+    expect(writes).not.toHaveBeenCalled();
+    expect(await queue.getJob('valid')).toBeUndefined();
+  });
 });
