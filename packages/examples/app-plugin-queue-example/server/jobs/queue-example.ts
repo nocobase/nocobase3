@@ -1,4 +1,6 @@
-import { Job, type JobOptions } from '@nocobase/queue';
+import type { ConsumeHandler } from '@nocobase/queue';
+
+import type { QueueExampleService } from '../service.js';
 
 export interface QueueExamplePayload {
   message: string;
@@ -9,43 +11,15 @@ export interface QueueExampleExecution extends QueueExamplePayload {
   executedAt: string;
 }
 
-export const queueExampleExecutions: QueueExampleExecution[] = [];
+export const queueExampleQueue: string = 'default';
+export const queueExampleChannel: string = 'QueueExample';
 
-interface QueueExampleJobDependencies {
-  logger: {
-    info(data: Record<string, unknown>, message: string): void;
+export function createQueueExampleHandler(
+  service: QueueExampleService,
+): ConsumeHandler<QueueExamplePayload> {
+  return async (channel, message, signal): Promise<void> => {
+    if (channel !== queueExampleChannel) return;
+    signal.throwIfAborted();
+    await service.execute(message, signal);
   };
-}
-
-export default class QueueExampleJob extends Job<QueueExamplePayload> {
-  static options: JobOptions = {
-    name: 'QueueExample',
-    queue: 'default',
-  };
-
-  constructor(
-    private readonly dependencies:
-      QueueExampleJobDependencies | undefined = undefined,
-  ) {
-    super();
-  }
-
-  async execute(): Promise<void> {
-    const executedAt = new Date().toISOString();
-
-    this.dependencies?.logger.info(
-      {
-        jobId: this.context.jobId,
-        queue: this.context.queue,
-        attempt: this.context.attempt,
-        payload: this.payload,
-      },
-      'Queue example plugin job executed',
-    );
-
-    queueExampleExecutions.push({
-      ...this.payload,
-      executedAt,
-    });
-  }
 }

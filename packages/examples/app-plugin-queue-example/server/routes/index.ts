@@ -4,31 +4,35 @@ import {
   defineApiRoutes,
   type AppApiRouteContribution,
 } from '@nocobase/app-server/router';
-import { queueManagerToken } from '@nocobase/app-server/queue';
+import { queueServiceToken } from '@nocobase/app-server/queue';
 import { Hono } from 'hono';
 
-import QueueExampleJob, {
-  queueExampleExecutions,
+import {
+  queueExampleChannel,
+  queueExampleQueue,
+  type QueueExamplePayload,
 } from '../jobs/queue-example.js';
 
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
     const router = new Hono();
     const authentication = container.resolve(authenticationToken);
-    const queueManager = container.resolve(queueManagerToken);
+    const producer = container
+      .resolve(queueServiceToken)
+      .producer(queueExampleQueue);
 
     router.use('/queue-example', authentication.required());
     router.get('/queue-example', async (context) => {
-      const result = await queueManager.dispatch(QueueExampleJob, {
+      const payload: QueueExamplePayload = {
         message: 'Hello from the Queue example plugin',
         requestedAt: new Date().toISOString(),
-      });
+      };
+      const result = await producer.publish(queueExampleChannel, payload);
 
       return context.json({
         ...result,
-        job: QueueExampleJob.options.name,
-        queue: QueueExampleJob.options.queue,
-        syncExecutions: queueExampleExecutions.length,
+        channel: queueExampleChannel,
+        queue: queueExampleQueue,
       });
     });
 
