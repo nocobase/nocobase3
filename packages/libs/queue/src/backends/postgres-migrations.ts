@@ -5,6 +5,11 @@ import {
   assertSchemaCompatibility,
 } from 'bullmq';
 import type { PgQueryable, PgQueryResult, PostgresPoolConfig } from 'bullmq';
+import {
+  createBorrowedPostgresPool,
+  isBorrowedPostgresPool,
+  postgresDeadline,
+} from './postgres-pool.js';
 
 export interface PostgresMigrationResource {
   run(): Promise<void>;
@@ -19,17 +24,22 @@ export function createPostgresMigrationResource(
 ): PostgresMigrationResource {
   const sockets = new Set<Socket>();
   let closed = false;
-  const connection = new PostgresConnection({
-    ...config,
-    migrate: false,
-    stream: (): Socket => {
-      if (closed) throw new Error('PostgreSQL migration resource is closed');
-      const socket = new Socket();
-      sockets.add(socket);
-      socket.once('close', () => sockets.delete(socket));
-      return socket;
+  const borrowed = isBorrowedPostgresPool(config.borrowedPool)
+    ? createBorrowedPostgresPool(config.borrowedPool, true)
+    : undefined;
+  const connection = new PostgresConnection(
+    borrowed?.pool ?? {
+      ...config,
+      migrate: false,
+      stream: (): Socket => {
+        if (closed) throw new Error('PostgreSQL migration resource is closed');
+        const socket = new Socket();
+        sockets.add(socket);
+        socket.once('close', () => sockets.delete(socket));
+        return socket;
+      },
     },
-  });
+  );
   connection.pool.on('connect', (client) => {
     // Owned clients can emit an error as well as rejecting their active query.
     client.on('error', () => {});
@@ -39,7 +49,9 @@ export function createPostgresMigrationResource(
   return {
     run: (): Promise<void> =>
       (running ??= (async (): Promise<void> => {
-        const client = await connection.pool.connect();
+        const client = await postgresDeadline.run(deadline, () =>
+          connection.pool.connect(),
+        );
         let primary: unknown;
         const queryable: PgQueryable = {
           async query<R>(
@@ -56,7 +68,9 @@ export function createPostgresMigrationResource(
                   [`${remaining}ms`],
                 );
               }
-              return await client.query<R>(text, params);
+              return await postgresDeadline.run(deadline, () =>
+                client.query<R>(text, params),
+              );
             } catch (error) {
               if (primary !== undefined && primary !== error)
                 throw new AggregateError(
@@ -70,6 +84,15 @@ export function createPostgresMigrationResource(
           },
         };
         try {
+          if (borrowed) {
+            const path = await queryable.query<{ path: string }>(
+              "SELECT current_setting('search_path') AS path",
+            );
+            if (!['bullmq', '"bullmq"'].includes(path.rows[0]?.path ?? ''))
+              throw new Error(
+                'Borrowed PostgreSQL Pool requires dedicated search_path=bullmq',
+              );
+          }
           const identity = await queryable.query<{
             database: string;
             address: string | null;
@@ -96,11 +119,20 @@ export function createPostgresMigrationResource(
             await assertSchemaCompatibility(queryable, config.schema, {
               skipVersionCheck: config.skipVersionCheck,
             });
-            return;
+          } else {
+            await runMigrations(queryable, config.schema, {
+              skipVersionCheck: config.skipVersionCheck,
+            });
           }
-          await runMigrations(queryable, config.schema, {
-            skipVersionCheck: config.skipVersionCheck,
-          });
+          if (borrowed) {
+            const result = await queryable.query<{ schema: string | null }>(
+              'SELECT current_schema() AS schema',
+            );
+            if (result.rows[0]?.schema !== 'bullmq')
+              throw new Error(
+                'Borrowed PostgreSQL Pool must resolve current_schema() to bullmq',
+              );
+          }
           if (key !== undefined) migratedTargets.add(key);
         } finally {
           client.release(true);
@@ -119,6 +151,7 @@ export function createPostgresMigrationResource(
         try {
           await Promise.all([
             connection.close(),
+            borrowed?.close(),
             running?.catch(() => {}),
             ...endings,
           ]);
