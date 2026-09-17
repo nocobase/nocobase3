@@ -23,6 +23,23 @@ function fixture() {
 }
 
 describe('memory worker backend claim and wake protocol', () => {
+  it('claims unprioritized jobs first, then ascending priority with FIFO ties', async () => {
+    const { queue, backend } = fixture();
+    try {
+      const jobs = await queue.addBulk([
+        { name: 'p2-first', data: {}, opts: { priority: 2 } },
+        { name: 'p1', data: {}, opts: { priority: 1 } },
+        { name: 'plain', data: {} },
+        { name: 'p2-last', data: {}, opts: { priority: 2 } },
+      ]);
+      const ids: (string | null)[] = [];
+      for (let i = 0; i < jobs.length; i++)
+        ids.push((await backend.moveToActive(`token-${i}`))[1]);
+      expect(ids).toEqual([jobs[2]?.id, jobs[1]?.id, jobs[0]?.id, jobs[3]?.id]);
+    } finally {
+      await Promise.all([queue.close(), backend.close()]);
+    }
+  });
   it('claims each waiting job only once under concurrent calls', async () => {
     const { queue, backend } = fixture();
     try {
