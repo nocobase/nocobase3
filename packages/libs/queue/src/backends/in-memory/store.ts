@@ -64,6 +64,10 @@ export class InMemoryQueueStore {
     return record === undefined ? undefined : structuredClone(record);
   }
 
+  remove(id: string): void {
+    this.jobs.delete(id);
+  }
+
   drain(delayed: boolean): string[] {
     const removed: string[] = [];
     for (const [id, record] of this.jobs) {
