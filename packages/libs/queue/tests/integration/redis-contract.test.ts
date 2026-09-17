@@ -272,3 +272,58 @@ it.skipIf(selectedBackend() !== 'redis')(
     }
   },
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'validates the entire bulk before Redis writes and deduplicates stable IDs',
+  async () => {
+    const { Queue } = await import('bullmq');
+    const { createQueueIdentity } = await import('../../src/identity.js');
+    const namespace = `${process.env.QUEUE_TEST_RUN}-bulk-validation`;
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_REDIS_PORT),
+    };
+    const service = createQueueService({
+      namespace,
+      connection,
+      queueBackend: 'redis',
+    });
+    const producer = service.producer('jobs');
+    const identity = createQueueIdentity(namespace, 'jobs');
+    const observer = new Queue(identity.redisQueueName, {
+      connection,
+      prefix: identity.redisPrefix,
+    });
+    try {
+      await service.setup();
+      await expect(
+        producer.publishMany([
+          { channel: 'valid', message: {} },
+          { channel: 'invalid', message: 1n },
+        ]),
+      ).rejects.toThrow();
+      expect(
+        await observer.getJobCounts('waiting', 'delayed', 'prioritized'),
+      ).toEqual({ waiting: 0, delayed: 0, prioritized: 0 });
+      const one = await producer.publish(
+        'event',
+        { original: true },
+        { jobIdProducer: () => 'stable' },
+      );
+      const duplicate = await producer.publish(
+        'event',
+        { original: false },
+        { jobIdProducer: () => 'stable' },
+      );
+      expect(duplicate).toEqual(one);
+      expect(await observer.getWaitingCount()).toBe(1);
+      expect((await observer.getJob(one.jobId))?.data).toEqual({
+        version: 1,
+        payload: '{"original":true}',
+      });
+    } finally {
+      await service.shutdown();
+      await observer.close();
+    }
+  },
+);
