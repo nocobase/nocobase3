@@ -109,7 +109,6 @@ tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
 config.yml              Your configuration, generated at setup; gitignored
 config.example.yml       Documented configuration template
-skills/                  In-depth development guides for AI agents
 ```
 
 The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are composition roots: they list what the application is made of. Reading them tells you what is loaded and in what order.
@@ -135,7 +134,7 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
-Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](skills/nocobase-app-development/references/migrations.md).
+Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](.agents/skills/nocobase-app-development/references/migrations.md).
 
 ### Checks
 
@@ -155,13 +154,16 @@ Database tasks support `--connection <name>` and `--all`; no argument targets `d
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                             |
-| ------------------------------- | -------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server  |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                           |
-| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only          |
-| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`       |
+| Script                          | What it does                                                |
+| ------------------------------- | ----------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server     |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                              |
+| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills    |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only             |
+| `pnpm package:remove <name>`    | Remove a direct NocoBase package and its synchronized Skill |
+| `pnpm skills:sync`              | Sync direct NocoBase package Skills into `.agents/skills/`  |
+
+`pnpm plugin:skills:sync` remains an alias for older automation; use `pnpm skills:sync` in new scripts and documentation.
 
 Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
 
@@ -175,6 +177,20 @@ pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
 Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
 
 Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
+
+### Removing a NocoBase package
+
+Before removing a direct `@nocobase/*` dependency, search the application's imports, plugin registrations, routes, services, configuration keys, tests, and build scripts for references to it. Migrate or remove those references first. The removal command updates package metadata and synchronized Skills; it does not rewrite application source or configuration and cannot decide whether the capability is still required.
+
+```bash
+pnpm package:remove @nocobase/example
+pnpm package:remove @nocobase/example --dry-run
+pnpm package:remove @nocobase/example --json
+```
+
+For an ordinary package, the command uses the application's package manager to remove the dependency and update both `package.json` and the lockfile, then removes only the Skill directories recorded as owned by that package. For an `@nocobase/app-plugin-*` package, it reuses the `plugin:unregister` workflow so Client, Server, and CLI registrations are removed together with the dependency and its Skills. `pnpm plugin:unregister <name>` remains available when the task is specifically expressed as unregistering a plugin.
+
+An older application with the new CLI but without the script can run `pnpm nocobase package remove @nocobase/example`. If the installed CLI does not provide `package remove`, update `@nocobase/nb3-cli` first; as a compatibility fallback on a version that already provides `skills:sync`, remove the dependency with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, make sure the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing a package already absent from the manifest to `package:remove` can clean its recorded historical Skill ownership without uninstalling any other package.
 
 ### Diagnostics
 
@@ -310,7 +326,7 @@ Tests live in `tests/`, never beside the source they cover. Put logic and integr
 
 ## Working with an AI agent
 
-`AGENTS.md` describes how to build features here, and `skills/` holds the in-depth references it links to. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keeping these accurate as your application grows is what keeps agent-written code consistent with the rest of it.
+`AGENTS.md` describes how to build features here, and `.agents/skills/` contains package-owned guidance generated by `pnpm skills:sync`. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keep application-specific rules in committed `AGENTS.md` files because synchronization replaces package-owned Skill directories.
 
 ## License
 

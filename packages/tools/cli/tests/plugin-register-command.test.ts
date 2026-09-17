@@ -666,6 +666,41 @@ describe('app plugin register command', () => {
     expect(await readFile(appSkill, 'utf8')).toBe('# App owned\n');
   });
 
+  it('synchronizes one full package name through the general command', async () => {
+    const appRoot = await createAppWithInstalledPlugin();
+    await runCommand(config, 'plugin:register', [
+      'audit-log',
+      '--dir',
+      appRoot,
+      '--no-install',
+    ]);
+
+    const synchronized = await runCommand(config, 'skills:sync', [
+      '--dir',
+      appRoot,
+      '--package',
+      '@nocobase/app-plugin-audit-log',
+      '--dry-run',
+      '--json',
+    ]);
+
+    expect(JSON.parse(synchronized.stdout)).toMatchObject({
+      schemaVersion: 1,
+      ok: true,
+      operation: 'skills:sync',
+      status: 'success',
+      result: {
+        dryRun: true,
+        copies: [
+          {
+            packageName: '@nocobase/app-plugin-audit-log',
+            skillName: 'nocobase-app-plugin-audit-log',
+          },
+        ],
+      },
+    });
+  });
+
   it('prints one JSON error document when Skills synchronization fails', async () => {
     const appRoot = await createAppWithInstalledPlugin();
     const lines: string[] = [];

@@ -7,7 +7,7 @@
 //
 // The plan/apply split exists so `--dry-run` reports exactly what a real run would write, and so a caller that has to
 // roll back knows which files to snapshot before writing.
-import { readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -39,9 +39,8 @@ import {
   type ManualServerPluginEdit,
 } from './server-plugins.ts';
 import {
-  APP_SKILLS_DIRECTORY,
-  isOwnedSkillName,
-  pluginSkillPrefix,
+  planPackageSkillRemovals,
+  removePackageSkills,
 } from './skills-sync.ts';
 
 const PACKAGE_SCOPE = '@nocobase/';
@@ -404,23 +403,12 @@ export async function applyPluginRegistration(
   }
 }
 
-/**
- * Deletes the skill directories a plugin owns. Synchronization only ever writes the prefixes of registered plugins, so
- * it never cleans up after an unregistration; this does.
- */
+/** Deletes a plugin's synchronized skill directories and ownership records. */
 export async function removePluginSkills(
   appRoot: string,
   packageName: string,
 ): Promise<string[]> {
-  const removed = await planPluginSkillRemovals(appRoot, packageName);
-  const skillsRoot = path.join(appRoot, APP_SKILLS_DIRECTORY);
-  for (const skillName of removed) {
-    await rm(path.join(skillsRoot, skillName), {
-      force: true,
-      recursive: true,
-    });
-  }
-  return removed;
+  return removePackageSkills(appRoot, packageName);
 }
 
 /** Lists synchronized Skill directories an unregistration would remove. */
@@ -428,26 +416,7 @@ export async function planPluginSkillRemovals(
   appRoot: string,
   packageName: string,
 ): Promise<string[]> {
-  const skillsRoot = path.join(appRoot, APP_SKILLS_DIRECTORY);
-  const prefix = pluginSkillPrefix(packageName);
-  let entries;
-  try {
-    entries = await readdir(skillsRoot, { withFileTypes: true });
-  } catch (error) {
-    if (isNodeError(error, 'ENOENT') || isNodeError(error, 'ENOTDIR')) {
-      return [];
-    }
-    throw error;
-  }
-
-  const removed: string[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory() || !isOwnedSkillName(prefix, entry.name)) {
-      continue;
-    }
-    removed.push(entry.name);
-  }
-  return removed.sort();
+  return planPackageSkillRemovals(appRoot, packageName);
 }
 
 interface ClientEditPlan {
@@ -760,12 +729,4 @@ function parseJson(contents: string, file: string): Record<string, unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isNodeError(error: unknown, code: string): boolean {
-  return (
-    error !== null &&
-    typeof error === 'object' &&
-    (error as { code?: string }).code === code
-  );
 }

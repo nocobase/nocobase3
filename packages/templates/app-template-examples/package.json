@@ -21,6 +21,7 @@
     "@nocobase/ai-employee": "workspace:^",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-skills": "workspace:*",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
@@ -125,7 +126,6 @@
     "README.MD",
     "AGENTS.md",
     "CLAUDE.md",
-    "skills",
     "playwright.config.ts"
   ],
   "publishConfig": {
@@ -154,6 +154,8 @@
     "plugin:unregister": "nocobase plugin unregister",
     "plugin:update": "nocobase plugin update",
     "plugin:skills:sync": "nocobase plugin skills sync",
+    "skills:sync": "nocobase skills sync",
+    "package:remove": "nocobase package remove",
     "client:inspect": "pnpm nocobase app inspect client",
     "server:inspect": "pnpm nocobase app inspect server",
     "server:deps:retarget": "node ./scripts/utils/retarget-native.mjs",

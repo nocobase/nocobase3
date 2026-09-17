@@ -127,7 +127,7 @@ changing `packages/tools/dev-config`, run
 
 ## Keeping the Application Templates in Sync
 
-`packages/templates/app-template-default`, `packages/templates/app-template-examples`, and `packages/templates/app-template-hub` are three applications built on the same framework. A change to the framework layer of one belongs in all applicable templates by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, the `cli/` command entry, build and dev scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, `README.MD`, the nested `client/AGENTS.md` and `server/AGENTS.md`, and `skills/`.
+`packages/templates/app-template-default`, `packages/templates/app-template-examples`, and `packages/templates/app-template-hub` are three applications built on the same framework. A change to the framework layer of one belongs in all applicable templates by default: the runtime composition roots, the client shell, routing, layouts and theme, the server entry points, the `cli/` command entry, build and dev scripts, tsconfigs, and the agent-facing documentation — `AGENTS.md`, `CLAUDE.md`, `README.MD`, and the nested `client/AGENTS.md` and `server/AGENTS.md`. Shared application Skills live in `packages/app/app-skills` and synchronize into each application from the `@nocobase/app-skills` dependency.
 
 They drift otherwise, and the drift is invisible until someone hits it. Both templates carried a `tsconfig.migrations.base.json` that nothing referenced, and both omitted `database/**/*.ts` from `tsconfig.server.json`, so an application-owned migration ran under `pnpm migrate` but was silently dropped by `pnpm build` — the same defect, twice, because a fix to one was never carried across.
 
@@ -137,9 +137,9 @@ Apply all applicable sides in one change and run each affected template's `check
 
 ## Application Themes and UI Styling
 
-For creating or editing theme presets, read `packages/templates/app-template-default/skills/nocobase-app-development/references/themes.md` (from the repository root). When working on Hub, use the corresponding reference under `packages/templates/app-template-hub/`.
+For creating or editing theme presets, read `packages/app/app-skills/skills/nocobase-app-development/references/themes.md` from the repository root.
 
-For application UI styling, including plugin UI rendered in an App, use the shared color, font, size, spacing, radius and shadow contract in `packages/templates/app-template-default/skills/nocobase-app-development/references/theme-tokens.md` (from the repository root), or the corresponding Hub reference. Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+For application UI styling, including plugin UI rendered in an App, use the shared color, font, size, spacing, radius and shadow contract in `packages/app/app-skills/skills/nocobase-app-development/references/theme-tokens.md` from the repository root. Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
 
 ## Database Migration Development
 

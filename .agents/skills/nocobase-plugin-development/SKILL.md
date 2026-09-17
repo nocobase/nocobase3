@@ -37,10 +37,10 @@ For pages with Tabs or other frontend React Router tasks (`defineAppRoutes()`,
 `defineSettingsRoutes()`, or `defineDevRoutes()`), read the routing references
 in the existing `nocobase-app-development` Skill:
 
-- [Pages, routes, and menus](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-pages-and-routes.md)
-- [Child routes, Tabs, navigation groups, and Outlet](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-child-routes.md)
+- [Pages, routes, and menus](../../../packages/app/app-skills/skills/nocobase-app-development/references/client-pages-and-routes.md)
+- [Child routes, Tabs, navigation groups, and Outlet](../../../packages/app/app-skills/skills/nocobase-app-development/references/client-child-routes.md)
 
-These links use Default as the shared routing reference. When integrating with Examples or Hub, use the same reference files under that target template's `skills/nocobase-app-development/` directory. Reuse the React Router, navigation, and verification guidance; plugin source ownership and registration remain governed by this Skill. In particular, declare plugin routes in the plugin's `client/routes.ts`, not the application's route file. App menus are declared on routes; Refine resources serve CRUD.
+These links use the shared application routing reference published by `@nocobase/app-skills`. Reuse the React Router, navigation, and verification guidance; plugin source ownership and registration remain governed by this Skill. In particular, declare plugin routes in the plugin's `client/routes.ts`, not the application's route file. App menus are declared on routes; Refine resources serve CRUD.
 
 For Client or Server Route tasks, inspect only the matching files in `packages/examples/app-plugin-routes-example` when a runnable reference is needed.
 
