@@ -336,7 +336,19 @@ export function createQueueService(
               ),
             );
             await current.worker.waitUntilReady();
-          })();
+          })().catch(async (error: unknown) => {
+            try {
+              await current.worker?.close();
+              current.worker = undefined;
+            } catch (cleanup) {
+              throw new AggregateError(
+                [error, cleanup],
+                'Queue Worker initialization and cleanup failed',
+                { cause: cleanup },
+              );
+            }
+            throw error;
+          });
           return current.workerInitialization;
         };
         if (current.handlers.size()) await current.initializeWorker();
