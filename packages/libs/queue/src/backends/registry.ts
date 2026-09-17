@@ -1,5 +1,6 @@
 import { createPostgresBackend, createRedisBackend } from 'bullmq';
 import type { BackendFactory } from 'bullmq';
+import { createInMemoryBackendFactory } from './in-memory/index.js';
 
 export interface BackendRegistry {
   register(name: string, factory: BackendFactory): void;
@@ -11,12 +12,7 @@ export function createBackendRegistry(): BackendRegistry {
   const factories = new Map<string, BackendFactory>([
     ['redis', createRedisBackend],
     ['postgres', createPostgresBackend],
-    [
-      'inMemory',
-      () => {
-        throw new Error('InMemory backend implementation is not installed');
-      },
-    ],
+    ['inMemory', createInMemoryBackendFactory()],
   ]);
   let frozen = false;
   return {

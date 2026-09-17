@@ -327,6 +327,11 @@ export function createQueueService(
           ),
         );
         await current.queue.waitUntilReady();
+        if (config.queueBackend === 'inMemory')
+          dependencies.onInMemoryQueueInitialized?.({
+            namespace: config.namespace,
+            queue: name,
+          });
         if (config.rateLimit === null)
           await current.queue.removeGlobalRateLimit();
         else if (config.rateLimit !== undefined)
