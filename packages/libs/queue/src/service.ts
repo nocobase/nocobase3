@@ -106,6 +106,8 @@ export function createQueueService(
   let setupStarted = false;
   let stopped = false;
   let setupPromise: Promise<void> | undefined;
+  let shutdownPromise: Promise<void> | undefined;
+  let producersOpen = true;
 
   function entry(name: string): QueueEntry {
     validateQueueName(name, 'queue');
@@ -171,7 +173,9 @@ export function createQueueService(
       producer: createQueueProducer({
         name,
         async queue(): Promise<ServiceQueue> {
-          await requireReady(name, current);
+          if (!producersOpen) throw new Error('Queue service is closed');
+          if (!stopped) await requireReady(name, current);
+          else if (!ready) throw new Error('Queue is not ready');
           if (!current.queue) throw new Error('Queue is not ready');
           return current.queue;
         },
@@ -445,21 +449,44 @@ export function createQueueService(
       });
       return setupPromise;
     },
-    async shutdown(): Promise<void> {
+    shutdown(): Promise<void> {
+      if (shutdownPromise) return shutdownPromise;
       stopped = true;
-      if (setupPromise) await setupPromise.catch(() => {});
-      await Promise.all(
-        [...entries.values()].map((current) =>
-          current.configurationSettlement(),
-        ),
-      );
-      await resources.settle();
-      await Promise.allSettled(
-        [...entries.values()].flatMap((current) =>
-          current.workerInitialization ? [current.workerInitialization] : [],
-        ),
-      );
-      await closeEntries();
+      shutdownPromise = (async (): Promise<void> => {
+        if (setupPromise) await setupPromise.catch(() => {});
+        await Promise.all(
+          [...entries.values()].map((current) =>
+            current.configurationSettlement(),
+          ),
+        );
+        await resources.settle();
+        await Promise.allSettled(
+          [...entries.values()].flatMap((current) =>
+            current.workerInitialization ? [current.workerInitialization] : [],
+          ),
+        );
+        const workers = [...entries.values()].filter(
+          (current) => current.worker,
+        );
+        const results = await Promise.allSettled(
+          workers.map(async (current) => {
+            await current.worker?.close();
+            current.worker = undefined;
+          }),
+        );
+        producersOpen = false;
+        const errors = results.flatMap((result) =>
+          result.status === 'rejected' ? [result.reason as unknown] : [],
+        );
+        try {
+          await closeEntries();
+        } catch (error) {
+          errors.push(error);
+        }
+        if (errors.length)
+          throw new AggregateError(errors, 'Queue shutdown failed');
+      })();
+      return shutdownPromise;
     },
   };
 }
