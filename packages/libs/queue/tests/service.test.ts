@@ -149,4 +149,26 @@ describe('application-private queue service', () => {
       await producer.publishMany([{ channel: 'event', message: 2 }]),
     ).toHaveLength(1);
   });
+  it('dispatches decoded messages to all registered handlers through one real Worker', async () => {
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const backend = vi.fn(createInMemoryBackendFactory());
+    instance.registerBackend('memory-test', backend);
+    const calls: unknown[] = [];
+    instance.consumer('jobs').consume(async (channel, message, signal) => {
+      calls.push([channel, message, signal.aborted]);
+    });
+    instance.consumer('jobs').consume(async (_channel, message) => {
+      calls.push(message);
+    });
+    await instance.setup();
+    await instance.producer('jobs').publish('event', { value: 1 });
+    await expect.poll(() => calls.length).toBe(2);
+    expect(calls).toContainEqual(['event', { value: 1 }, false]);
+    expect(calls).toContainEqual({ value: 1 });
+    expect(
+      backend.mock.calls.filter((call) => call[2]?.withBlockingConnection),
+    ).toHaveLength(1);
+  });
 });
