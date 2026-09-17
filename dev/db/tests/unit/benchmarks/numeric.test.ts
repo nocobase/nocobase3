@@ -1,13 +1,14 @@
 import { expect, it } from 'vitest';
-import knex from 'knex';
+import { createDatabaseManager } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
+import type { Knex } from 'knex';
 import { measure, median } from '../../../benchmarks/numeric/measure.js';
 
 it('counts executed SQL without including setup, validation, warmups or trace capture', async () => {
-  const client = knex({
-    client: 'better-sqlite3',
-    connection: { filename: ':memory:' },
-    useNullAsDefault: true,
+  const database = createDatabaseManager({
+    connections: { main: sqlite({ filename: ':memory:' }) },
   });
+  const client = await database.connection().client<Knex>();
   let preparations = 0;
   let validations = 0;
   try {
@@ -52,7 +53,7 @@ it('counts executed SQL without including setup, validation, warmups or trace ca
     expect(result.resultPreview).toEqual({ value: 42 });
     expect(client.listenerCount('query')).toBe(0);
   } finally {
-    await client.destroy();
+    await database.destroy();
   }
 });
 

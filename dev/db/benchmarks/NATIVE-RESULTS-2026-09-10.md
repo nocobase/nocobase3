@@ -38,7 +38,7 @@ PG/MySQL 冷查询减少元数据 SQL，PG 创建每条少一次专用回读，�
 从 packages/libs/db 使用 Node 24、启动专用测试服务后运行：
 
 ```sh
-pnpm benchmark:numeric --databases=all --rows=10000 --writes=100 --repeats=5 --warmups=2 --output=benchmarks/results/2026-09-10-native-results
+pnpm db:benchmark --databases=all --rows=10000 --writes=100 --repeats=5 --warmups=2 --output=benchmarks/results/2026-09-10-native-results
 ```
 
 原始数据：[JSON](./results/2026-09-10-native-results/results.json)、[完整报告](./results/2026-09-10-native-results/report.md)。这些结果文件按现有规则不进入 Git；本摘要保留主要结论。对照为 [2026-09-09 基线](./BASELINE-2026-09-09.md) 中 10,000 行这一档。

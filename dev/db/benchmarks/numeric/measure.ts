@@ -41,9 +41,9 @@ export function median(values: number[]): number {
     : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 function resultTypes(result: unknown): Record<string, string> {
-  let sample = Array.isArray(result) ? result[0] : result;
+  let sample: unknown = Array.isArray(result) ? result[0] : result;
   if (sample && typeof sample === 'object' && 'records' in sample) {
-    const records = sample.records;
+    const records: unknown = sample.records;
     sample = Array.isArray(records) ? records[0] : records;
   }
   if (!sample || typeof sample !== 'object') return { value: typeof sample };

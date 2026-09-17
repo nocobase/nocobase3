@@ -49,7 +49,7 @@ SQLite 浮点绕过 JS 精确聚合，PG 浮点 AVG 去掉 numeric 输入转换�
 在 packages/libs/db 下使用 Node 24，启动测试数据库后：
 
 ```sh
-pnpm benchmark:numeric --databases=all --rows=100000 --writes=100 --repeats=5 --warmups=2 --output=benchmarks/results/2026-09-10-native-aggregates
+pnpm db:benchmark --databases=all --rows=100000 --writes=100 --repeats=5 --warmups=2 --output=benchmarks/results/2026-09-10-native-aggregates
 ```
 
 原始产物：[JSON](./results/2026-09-10-native-aggregates/results.json)、[完整报告](./results/2026-09-10-native-aggregates/report.md)。原始结果目录按现有规则不进入 Git，本摘要保留结论。

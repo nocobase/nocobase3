@@ -3,7 +3,7 @@ import type { PostgresConnectionConfig } from '@nocobase/db-postgres';
 import type { MysqlConnectionConfig } from '@nocobase/db-mysql';
 import type { OracleConnectionConfig } from '@nocobase/db-oracle';
 import type { MssqlConnectionConfig } from '@nocobase/db-mssql';
-import type { DatabaseDialect } from '../../src/index.js';
+import type { DatabaseDialect } from '@nocobase/db';
 
 export const dialects: DatabaseDialect[] = [
   'sqlite',
