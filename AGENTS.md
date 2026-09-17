@@ -237,7 +237,7 @@ If yes, it belongs to the rule. In practice that means the package exports at le
 - **A module-level singleton.** A `const` holding a `new` instance or accumulated state, such as `nocobaseClient`, gives each copy its own session, cache, or connection.
 - **A registration into a process-wide registry.** `@nocobase/queue` registers job classes into the `Locator` of `@boringnode/queue`; the second copy registers into a table the first one never reads.
 
-Public classes with private members also carry declaration identity: passing a DatabaseConnection between packages using different db versions can fail type checking even when runtime methods match. Review public object contracts as well as singletons. Ordinary dependencies remain appropriate for implementation details that do not cross the package boundary.
+Public classes with private members also carry declaration identity: passing a DatabaseConnection between packages using different db versions can fail type checking even when runtime methods match. Review public object contracts as well as singletons, including authorization error identity, caching registries, AI employee service tokens, and repository-input filter symbols. Ordinary dependencies remain appropriate for implementation details that do not cross the package boundary.
 
 Two cases need no judgement. Every `@nocobase/app-plugin-*` is covered unconditionally, because plugins export tokens for one another and `isIdentitySensitive` matches them by prefix, so a new plugin is included the day it is created. A type-only import that survives in published declarations still needs a consumer-resolvable dependency contract.
 
@@ -254,10 +254,6 @@ The current entries:
 | `@nocobase/app-portal-sdk`   | Exports `nocobaseClient`, a module-level singleton holding session state                                                                             |
 | `@nocobase/i18n`             | Exports the React contexts backing the i18n runtime                                                                                                  |
 | `@nocobase/queue`            | Registers job classes into the global `Locator` of `@boringnode/queue`                                                                               |
-| `@nocobase/caching`          | Owns the shared cache driver registry and Caching class                                                                                              |
-| `@nocobase/ai-employee`      | Exports fileStorageFactoryToken for application extensions                                                                                           |
-| `@nocobase/authorization`    | Shares Authorization instances and AuthorizationDeniedError identity                                                                                 |
-| `@nocobase/repository-input` | Uses a module-local Symbol on filter nodes shared with db                                                                                            |
 | any `@nocobase/app-plugin-*` | Plugins export tokens for one another, such as `authenticationToken` and `notificationServiceToken`                                                  |
 
 ### Why a second copy is worth this much trouble
@@ -280,24 +276,13 @@ One declaration is enough. pnpm installs a peer and links it into the plugin's o
 
 ### Scope
 
-The rule covers plugins, examples, libraries, application runtimes, and tooling. Libraries that receive host-owned objects are consumers too; a directory name is not an exemption. Only application templates own the production dependency set. `pnpm peers:check` also walks their runtime dependency and peer chains, requiring every non-optional shared server peer in the application's `dependencies`. Browser-only app-client and app-portal-sdk peers are excluded from the production requirement.
+The shared-provider rule also applies to libraries and application runtimes receiving host-owned objects. Applications supply the production dependencies. The current `pnpm peers:check` scans plugins and examples against its recorded package list; review library consumers and required template providers explicitly, because the check does not cover them.
 
-A peer range expresses compatibility; it does not guarantee a global singleton across incompatible peer contexts. Test installed artifacts and old-lockfile upgrades, and keep the host ranges compatible. Deployment sets `autoInstallPeers: false`, so promoting a dependency to a peer must include its production provider in all affected templates. Do not rely on a development dependency or a transitive copy to supply it.
+A peer range expresses compatibility; it does not guarantee a global singleton across incompatible peer contexts. Test installed artifacts and old-lockfile upgrades, and keep the host ranges compatible. Deployment sets `autoInstallPeers: false`, so promoting a dependency to a peer must include its production provider in all affected templates. Do not rely on a development dependency or a transitive copy to supply it. For changes to these contracts, update all affected templates and the lockfile, run peer/runtime checks and the installed-package regression, and document existing-application upgrade requirements in a changeset. Do not hide type conflicts with casts or relaxed checking.
 
 A plugin that contributes CLI commands declares `@oclif/core` as a peer for a related but distinct reason: not module identity, but one shared version, so help rendering and flag parsing behave the same in the plugin and in the application that assembles its commands.
 
 `pnpm plugin:create` emits this shape, so a generated plugin satisfies the rule without further edits. When the list changes, update `packages/tools/create-plugin/src/lib/template.ts` and its tests in the same change — a generator that emits the old shape reintroduces the problem in every plugin created afterwards.
-
-### Required checks when changing dependencies
-
-Apply these checks when adding or moving a dependency, changing its version range, or exporting a new shared class, token, context, registry, or symbol. Inspect the package's public declarations and consumers before choosing a dependency field; do not copy a neighboring manifest without checking its contract.
-
-1. Determine who owns the dependency. Consumers declare shared identity-sensitive packages in `peerDependencies` using the repository's `workspace:` convention; applications provide compatible versions. Keep private implementation dependencies in `dependencies`. Do not move every internal package to peers indiscriminately.
-2. When discovering a new identity-sensitive package, add its failure reason to `IDENTITY_SENSITIVE_PACKAGES` and extend the regression coverage. Check every consumer, including libraries and application runtimes, rather than fixing only the package named by the error.
-3. Update required production providers in every affected default, examples, and Hub template. Keep generated plugin guidance and affected template guidance synchronized. Do not mark a required peer optional to suppress an install warning.
-4. Update the lockfile through pnpm, preserve unrelated resolutions, and verify a frozen install. Run `pnpm peers:check`, `pnpm deps:check`, the focused peer/install regressions, and affected package and application typechecks, tests, and builds.
-5. For dependency-contract changes, inspect `pnpm pack` output and test installed artifacts outside the workspace. Cover both a fresh install and an upgrade retaining the old lockfile; verify production installation with `autoInstallPeers: false` and confirm host and consumers resolve each shared package to the same physical package. A passing workspace build alone is insufficient.
-6. Add a changeset for affected published packages and state which production providers existing applications must add when upgrading. Report unresolved compatibility failures explicitly. Do not use type assertions, `skipLibCheck`, blanket overrides, deletion of the user's lockfile, or relaxed peer checks as a substitute for correcting and verifying the dependency contract.
 
 ## Declaring Dependencies by How They Are Used
 

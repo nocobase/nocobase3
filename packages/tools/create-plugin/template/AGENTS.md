@@ -39,9 +39,7 @@ Before adding a client package, check whether `packages/templates/app-template-d
 
 `@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, `@nocobase/caching`, `@nocobase/ai-employee`, `@nocobase/authorization`, `@nocobase/repository-input`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
 
-Declare each as a `peerDependency` — the published compatibility contract requiring a host-provided package. One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces this. The generator already emits this shape for the capabilities you selected.
-
-When changing dependency contracts, follow the root `AGENTS.md` dependency checklist: update affected application providers and the lockfile, run peer and runtime dependency checks, and verify packed artifacts outside the workspace with both fresh and old-lockfile production installs. Confirm shared package resolution and document upgrade requirements in a changeset. Workspace links can hide duplicate database types and runtime identities; do not suppress these failures with casts, relaxed checks, or blanket overrides.
+Declare each as a `peerDependency` — the published compatibility contract requiring a host-provided package. One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces the packages in its recorded list; review newly identified shared packages explicitly. The generator already emits this shape for the capabilities you selected.
 
 ## Contributing CLI commands
 
