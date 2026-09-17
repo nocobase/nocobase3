@@ -128,3 +128,35 @@ it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
     }
   },
 );
+
+it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
+  'closes owned PostgreSQL sockets after an initial handshake deadline',
+  async () => {
+    const { createTcpProxy } = await import('../helpers/tcp-proxy.js');
+    const proxy = await createTcpProxy(Number(process.env.QUEUE_TEST_PG_PORT));
+    proxy.blackhole(true);
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-handshake`,
+      queueBackend: 'postgres',
+      setupTimeoutMs: 100,
+      connection: {
+        host: '127.0.0.1',
+        port: proxy.port,
+        user: 'postgres',
+        password: 'queue-test-only',
+        database: 'postgres',
+        connectionTimeoutMillis: 1000,
+      },
+    });
+    service.producer('jobs');
+    try {
+      const start = performance.now();
+      await expect(service.setup()).rejects.toThrow();
+      expect(performance.now() - start).toBeLessThan(2500);
+      await expect.poll(() => proxy.sockets.size, { timeout: 1000 }).toBe(0);
+    } finally {
+      await service.shutdown().catch(() => {});
+      await proxy.close();
+    }
+  },
+);
