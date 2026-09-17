@@ -119,6 +119,7 @@ export function createQueueService(
   let producersOpen = true;
   const publishing = new Set<Promise<void>>();
   const migrations = new Set<PostgresMigrationResource>();
+  const migratedPostgresTargets = new Set<string>();
 
   function entry(name: string): QueueEntry {
     validateQueueName(name, 'queue');
@@ -388,6 +389,7 @@ export function createQueueService(
       const resource = createPostgresMigrationResource(
         resolvePostgresConnection(target.connection),
         deadline,
+        migratedPostgresTargets,
       );
       migrations.add(resource);
       try {

@@ -1,5 +1,9 @@
 import { Socket } from 'node:net';
-import { PostgresConnection, runMigrations } from 'bullmq';
+import {
+  PostgresConnection,
+  runMigrations,
+  assertSchemaCompatibility,
+} from 'bullmq';
 import type { PgQueryable, PgQueryResult, PostgresPoolConfig } from 'bullmq';
 
 export interface PostgresMigrationResource {
@@ -11,6 +15,7 @@ export interface PostgresMigrationResource {
 export function createPostgresMigrationResource(
   config: PostgresPoolConfig,
   deadline: number,
+  migratedTargets: Set<string>,
 ): PostgresMigrationResource {
   const sockets = new Set<Socket>();
   let closed = false;
@@ -65,9 +70,38 @@ export function createPostgresMigrationResource(
           },
         };
         try {
+          const identity = await queryable.query<{
+            database: string;
+            address: string | null;
+            port: number | null;
+            started: string;
+          }>(
+            'SELECT current_database() AS database, inet_server_addr()::text AS address, inet_server_port() AS port, pg_postmaster_start_time()::text AS started',
+          );
+          const target = identity.rows[0];
+          if (!target)
+            throw new Error('Missing PostgreSQL migration target identity');
+          // Socket endpoints have no server address; never merge them by database name alone.
+          const key =
+            target.address === null
+              ? undefined
+              : JSON.stringify([
+                  target.address,
+                  target.port,
+                  target.started,
+                  target.database,
+                  config.schema ?? 'bullmq',
+                ]);
+          if (key !== undefined && migratedTargets.has(key)) {
+            await assertSchemaCompatibility(queryable, config.schema, {
+              skipVersionCheck: config.skipVersionCheck,
+            });
+            return;
+          }
           await runMigrations(queryable, config.schema, {
             skipVersionCheck: config.skipVersionCheck,
           });
+          if (key !== undefined) migratedTargets.add(key);
         } finally {
           client.release(true);
         }
