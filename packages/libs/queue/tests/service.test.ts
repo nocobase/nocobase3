@@ -228,4 +228,69 @@ describe('application-private queue service', () => {
     await expect.poll(async () => inspect?.(receipt.jobId)).toBe('waiting');
     expect(handler).not.toHaveBeenCalled();
   });
+  it.each([false, true])(
+    'activates a first post-setup handler (existing queue: %s)',
+    async (existing) => {
+      const instance = service('memory-test');
+      const { createInMemoryBackendFactory } =
+        await import('../src/backends/in-memory/index.js');
+      const backend = vi.fn(createInMemoryBackendFactory());
+      instance.registerBackend('memory-test', backend);
+      if (existing) instance.producer('late');
+      await instance.setup();
+      const handler = vi.fn(async () => {});
+      instance.consumer('late').consume(handler);
+      instance.consumer('late').consume(async () => {});
+      await instance.producer('late').publish('event', 42);
+      await expect.poll(() => handler.mock.calls.length).toBe(1);
+      expect(
+        backend.mock.calls.filter((call) => call[2]?.withBlockingConnection),
+      ).toHaveLength(1);
+    },
+  );
+  it('waits for pending dynamic Worker readiness before closing its resources', async () => {
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const memory = createInMemoryBackendFactory();
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started = false;
+    let ready = false;
+    let closedEarly = false;
+    instance.registerBackend('memory-test', (name, options, metadata) => {
+      const backend = memory(name, options, metadata);
+      if (metadata?.withBlockingConnection) {
+        vi.spyOn(backend, 'waitUntilReady').mockImplementation(async () => {
+          started = true;
+          await gate;
+          ready = true;
+        });
+        const close = backend.close.bind(backend);
+        vi.spyOn(backend, 'close').mockImplementation(async () => {
+          closedEarly = !ready;
+          await close();
+        });
+      }
+      return backend;
+    });
+    instance.producer('late');
+    await instance.setup();
+    instance.consumer('late').consume(async () => {});
+    await expect.poll(() => started).toBe(true);
+    let finished = false;
+    const closing = instance.shutdown().then(() => {
+      finished = true;
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(closedEarly).toBe(false);
+      expect(finished).toBe(false);
+    } finally {
+      release();
+      await closing;
+    }
+  });
 });
