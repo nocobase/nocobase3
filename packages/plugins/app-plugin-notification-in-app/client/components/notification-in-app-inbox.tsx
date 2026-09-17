@@ -280,7 +280,9 @@ function InboxRow({ item, onMutate }: InboxRowProps): ReactElement {
               {!item.readAt ? (
                 <span
                   className='size-2 shrink-0 rounded-full bg-primary'
-                  aria-label='Unread'
+                  aria-label={t('inbox.unreadFilter', {
+                    defaultValue: 'Unread',
+                  })}
                 />
               ) : null}
             </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   GuestAuthentication,
   RequiredAuthentication,
@@ -34,11 +35,10 @@ export interface AppRouterProps {
   readonly clientRoutes: readonly AppClientRegisteredRoute[];
 }
 
-export function AppRouter({
-  settingsRouteTree,
-  devRouteTree,
-  clientRoutes,
-}: AppRouterProps): ReactElement {
+export function AppRouter(inputProps: AppRouterProps): ReactElement {
+  const { t } = useTranslation();
+  const { settingsRouteTree, devRouteTree, clientRoutes } = inputProps;
+
   const settingsRoutes = useMemo(
     () =>
       filterRouteTree(
@@ -88,7 +88,12 @@ export function AppRouter({
           element={
             <Suspense
               fallback={
-                <Loading className='min-h-svh' label='Loading settings' />
+                <Loading
+                  className='min-h-svh'
+                  label={t('status.loadingSettings', {
+                    defaultValue: 'Loading settings',
+                  })}
+                />
               }
             >
               <SettingsLayout
@@ -104,7 +109,12 @@ export function AppRouter({
             element={
               <Suspense
                 fallback={
-                  <Loading className='min-h-svh' label='Loading dev tools' />
+                  <Loading
+                    className='min-h-svh'
+                    label={t('status.loadingDev', {
+                      defaultValue: 'Loading dev tools',
+                    })}
+                  />
                 }
               >
                 <DevLayout routeTree={devRouteTree} routes={devRoutes} />

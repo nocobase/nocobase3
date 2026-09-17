@@ -1,6 +1,7 @@
 import type { UsersResource } from './en-US.js';
 
 const zhCN: UsersResource = {
+  'common.close': '关闭',
   nav: { users: '用户管理' },
   page: {
     title: '用户',

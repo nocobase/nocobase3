@@ -57,6 +57,8 @@ Read the relevant Skill before writing the feature, but treat this table as a ma
 
 Skills synchronization reads direct `@nocobase/*` dependencies from the application manifest and retains compatibility with explicitly registered plugins. It does not make an unregistered runtime plugin active; the composition roots remain the authority for registration and contribution order.
 
+Install plugins with `pnpm plugin:register <name>`. All application plugins belong in `dependencies`, including client-only and disabled plugins, because deployment dependencies come from that field. Plugin frontend libraries remain peers and are not automatically installed in the deployment. Re-registering migrates legacy `devDependencies` entries while preserving the declared range; verify the manifest and lockfile afterward. With an older CLI, use `pnpm add --save-prod <package>@<declared-range>` to correct the declaration; `--no-install` leaves lockfile synchronization to the caller.
+
 To update a registered plugin, use `pnpm plugin:update @nocobase/app-plugin-authentication` (or the short name `authentication`). Omit the name to update all registered plugins; add `--dry-run` to preview. `plugin:update` takes a positional name, not `--plugin`, and re-synchronizes Skills after a successful package update. See the Plugins section of the application's `README.MD` for version-range behavior and examples.
 
 ## Removing a direct NocoBase package
@@ -80,7 +82,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
 | Create a table, alter a column, add an index, write required initial data        | [migrations and seeds](references/migrations.md)                 |
 | Switch the database, register a dialect, add a second connection                 | [database connections](references/database-connections.md)       |
-| Make text translatable, add a locale, reword a plugin's string                   | [internationalization](references/i18n.md)                       |
+| Name translation keys, add a locale, reword a plugin's string                    | [internationalization](references/i18n.md)                       |
 | Add a reusable service, share it across routes, run background or scheduled work | [services and jobs](references/services-and-jobs.md)             |
 | Write tests, choose a test layer, verify before finishing                        | [testing and verification](references/testing.md)                |
 | Understand behavior inherited from an official application template              | [template variants](references/template-variants.md)             |

@@ -1,3 +1,4 @@
+import { Trans } from 'react-i18next';
 import { useTranslation } from '@nocobase/i18n/client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import {
@@ -294,6 +295,7 @@ function SidebarFooter({
 }: {
   readonly collapsed: boolean;
 }): ReactElement {
+  const { t } = useTranslation();
   const templateName =
     typeof __PORTAL_TEMPLATE_NAME__ === 'string'
       ? __PORTAL_TEMPLATE_NAME__
@@ -303,6 +305,16 @@ function SidebarFooter({
       ? __PORTAL_TEMPLATE_VERSION__
       : '0.0.0';
   const templateLabel = `${templateName} v${templateVersion}`;
+  const brandLink = (
+    <a
+      className='rounded-sm font-medium text-sidebar-foreground hover:underline outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring'
+      href='https://www.nocobase.com'
+      rel='noopener noreferrer'
+      target='_blank'
+    >
+      NocoBase
+    </a>
+  );
 
   return (
     <footer className='shrink-0 border-t border-sidebar-border/70'>
@@ -315,18 +327,19 @@ function SidebarFooter({
           className={`min-w-0 text-xs leading-4 ${collapsed ? 'md:hidden' : ''}`}
         >
           <div className='font-semibold text-sidebar-foreground'>
-            AI builds freely.
+            {t('shell.buildFreely', { defaultValue: 'AI builds freely.' })}
           </div>
           <div className='text-sidebar-foreground/80'>
-            <a
-              className='rounded-sm font-medium text-sidebar-foreground hover:underline outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring'
-              href='https://www.nocobase.com'
-              rel='noopener noreferrer'
-              target='_blank'
+            <Trans
+              t={t}
+              i18nKey='shell.reliability'
+              defaults='<brand>NocoBase</brand> keeps it reliable.'
+              components={{
+                brand: brandLink,
+              }}
             >
-              NocoBase
-            </a>{' '}
-            keeps it reliable.
+              {brandLink} keeps it reliable.
+            </Trans>
           </div>
           <div className='mt-1 font-mono text-xs text-sidebar-foreground/70'>
             {templateLabel}

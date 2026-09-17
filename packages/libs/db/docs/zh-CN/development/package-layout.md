@@ -57,15 +57,24 @@ Schema Adapter 执行 Builder 编译出的操作，capability planner 处理方�
 ## 测试布局
 
 ```text
-tests/
+packages/libs/db/tests/
 ├── unit/              纯逻辑、契约、编译结果和 Store 行为
-├── integration/       真实数据库上的 Builder、Query、解析和执行器行为
-├── fixtures/          Resolver、Metadata 和场景测试数据
+├── types/             不依赖具体 dialect 的类型契约
+└── fixtures/          Resolver、Metadata 和场景测试数据
+
+packages/libs/db-testkit/tests/integration/
+                      各 dialect 通过自身 adapter 加载的共享集成测试
+
+dev/db/
 ├── examples/          可运行的示例用例
-└── playground/        本地探索代码，不作为正式断言
+├── playground/        本地探索应用
+├── benchmarks/        数值性能基准
+└── tests/             上述开发入口的测试
 ```
 
-`tests/unit/` 和 `tests/integration/` 可按源码职责继续分目录，但不要在文档中维护完整测试文件名清单。
+核心单元测试和共享集成测试可按源码职责继续分目录，但不要在文档中维护完整测试文件名清单。下表中的 `tests/unit/` 相对于 `packages/libs/db`，`tests/integration/` 相对于 `packages/libs/db-testkit`。
+
+核心包和共享 testkit 不声明具体 dialect 的依赖；真实 driver 的类型和运行时验证放在对应 dialect 包。`dev/db` 的依赖与命令由仓库根 `package.json` 管理，运行 `pnpm db:check` 检查开发入口。
 
 ## 修改与验证对应关系
 

@@ -1,17 +1,10 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import type { ReactElement } from 'react';
 
 import { EMPTY_ARRAY } from '@/lib/constants';
 
 import { SurfaceLayout, type SurfaceCopy } from './surface-layout.js';
-
-const DEV_COPY: SurfaceCopy = {
-  title: 'Dev tools',
-  pathPrefix: '/dev',
-  emptyTitle: 'No dev tools available',
-  emptyDescription:
-    'No enabled plugin contributes a dev page you have access to.',
-};
 
 export interface DevLayoutProps {
   readonly routeTree: readonly AppClientRegisteredRoute[];
@@ -29,7 +22,15 @@ export function DevLayout({
   routeTree,
   routes = EMPTY_ARRAY,
 }: DevLayoutProps): ReactElement {
-  return (
-    <SurfaceLayout copy={DEV_COPY} routes={routes} routeTree={routeTree} />
-  );
+  const { t } = useTranslation();
+  const copy: SurfaceCopy = {
+    pathPrefix: '/dev',
+    title: t('dev.title', { defaultValue: 'Dev tools' }),
+    emptyTitle: t('dev.emptyTitle', { defaultValue: 'No dev tools available' }),
+    emptyDescription: t('dev.emptyDescription', {
+      defaultValue:
+        'No enabled plugin contributes a dev page you have access to.',
+    }),
+  };
+  return <SurfaceLayout copy={copy} routes={routes} routeTree={routeTree} />;
 }

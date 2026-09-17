@@ -9,7 +9,8 @@
       "description": "Application-owned delivery and provider attempt log components backed by the NocoBase notification API.",
       "dependencies": [
         "@nocobase/app-portal-sdk@^0.0.1-beta.1",
-        "lucide-react@^0.487.0"
+        "lucide-react@^0.487.0",
+        "@nocobase/i18n@^1.0.0-beta.4"
       ],
       "registryDependencies": ["alert", "badge", "button", "card", "table"],
       "docs": "Requires @nocobase/app-plugin-notification and its access-controlled /api/notifications/logs route. The plugin now provides /settings/notifications/logs by default; install this application-owned source only when the application needs to maintain a custom log page.",

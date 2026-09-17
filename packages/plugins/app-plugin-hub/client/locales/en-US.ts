@@ -87,6 +87,13 @@ const enUS = {
       'This key will stop working and be permanently removed from the list. This cannot be undone.',
     state: { active: 'Active', disabled: 'Disabled', expired: 'Expired' },
   },
+  'common.close': 'Close',
+  'common.pagination': 'pagination',
+  'common.previous': 'Previous',
+  'common.next': 'Next',
+  'common.previousPage': 'Go to previous page',
+  'common.nextPage': 'Go to next page',
+  'common.morePages': 'More pages',
   navigation: {
     apiKeys: 'API Keys',
     applications: 'Applications',

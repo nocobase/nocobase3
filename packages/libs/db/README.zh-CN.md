@@ -34,8 +34,7 @@ const db = createDatabaseManager({
 });
 ```
 
-也可以直接使用 dialect 工厂。工厂会把 `dialect`、native `driver` 和
-`databaseDriver` descriptor 一起绑定到连接：
+也可以直接使用 dialect 工厂。工厂会把 `dialect`、native `driver` 和 `databaseDriver` descriptor 一起绑定到连接：
 
 ```ts
 const db = createDatabaseManager({
@@ -48,15 +47,9 @@ const db = createDatabaseManager({
 });
 ```
 
-SQLite、MySQL、Oracle 和 SQL Server 分别从
-`@nocobase/db-sqlite`、`@nocobase/db-mysql`、`@nocobase/db-oracle` 和
-`@nocobase/db-mssql` 引入。`@nocobase/db` 不包含任何具体 dialect 的连接、
-Inspector 或 native driver 实现；使用某个方言前必须安装对应的包。
+SQLite、MySQL、Oracle 和 SQL Server 分别从 `@nocobase/db-sqlite`、`@nocobase/db-mysql`、`@nocobase/db-oracle` 和 `@nocobase/db-mssql` 引入。`@nocobase/db` 不包含任何具体 dialect 的连接、 Inspector 或 native driver 实现；使用某个方言前必须安装对应的包。
 
-Dialect 标识是开放的。第三方 Dialect package 可以定义自己的连接字段，并通过
-`ExtensibleDatabaseConfig<TConnection>` 传入 `createDatabaseManager()`；新增 package
-不需要修改 `@nocobase/db` 的 Dialect union、Manager、Query、Repository 或 Schema
-adapter。应用侧只需安装并注册该 package 的 driver。
+Dialect 标识是开放的。第三方 Dialect package 可以定义自己的连接字段，并通过 `ExtensibleDatabaseConfig<TConnection>` 传入 `createDatabaseManager()`；新增 package 不需要修改 `@nocobase/db` 的 Dialect union、Manager、Query、Repository 或 Schema adapter。应用侧只需安装并注册该 package 的 driver。
 
 ```ts
 import sqlite from '@nocobase/db-sqlite';
@@ -79,16 +72,18 @@ await db.destroy();
 
 ## 运行示例
 
+示例位于仓库的 `dev/db/examples`，在仓库根目录执行以下命令。核心包不依赖具体 dialect；这些开发入口由仓库根提供依赖。
+
 Managed Collection 生命周期：
 
 ```bash
-pnpm --filter @nocobase/db example managed
+pnpm db:example managed
 ```
 
 External Schema 与 Module Metadata：
 
 ```bash
-pnpm --filter @nocobase/db example external
+pnpm db:example external
 ```
 
 ## 验证

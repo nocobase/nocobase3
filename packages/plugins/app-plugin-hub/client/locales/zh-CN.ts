@@ -76,6 +76,13 @@ const zhCN: HubResource = {
     deleteDescription: '此密钥将立即失效，并从列表中永久删除。此操作不可撤销。',
     state: { active: '启用', disabled: '已禁用', expired: '已过期' },
   },
+  'common.close': '关闭',
+  'common.pagination': '分页',
+  'common.previous': '上一页',
+  'common.next': '下一页',
+  'common.previousPage': '上一页',
+  'common.nextPage': '下一页',
+  'common.morePages': '更多页',
   navigation: {
     apiKeys: 'API Key',
     applications: '应用管理',

@@ -18,6 +18,8 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 | `nocobase skills sync`        | 同步直接依赖和已注册插件提供的 skills，不升级           |
 | `nocobase plugin skills sync` | `skills sync` 的兼容入口                                |
 
+`pnpm plugin:register` 统一把插件放入 `dependencies`，包括仅客户端插件和通过 `--disabled` 安装的插件，确保插件能进入部署依赖。重复注册时会把旧的 `devDependencies` 声明迁入 `dependencies` 并清除重复声明；普通 App 未指定 `--version` 时沿用已声明的版本范围，两处都有声明时以 `dependencies` 为准。`--no-install` 同样修正 manifest，但不运行包管理器，调用方需要自行安装以同步 lockfile。插件的前端依赖仍按约定声明在 `peerDependencies`，部署产物关闭 peer 自动安装。
+
 `pnpm plugin:update @nocobase/app-plugin-workflow` 更新指定插件，也接受 `workflow` 简写。不传名称时更新全部已注册插件。插件名使用位置参数，与 `plugin:register`、`plugin:unregister` 一致。
 
 `pnpm skills:sync` 扫描 App 在 dependencies、devDependencies 和 optionalDependencies 中直接声明的 `@nocobase/*` 包，并合并已注册插件。`--package @nocobase/app-skills` 可以只同步一个完整包名，兼容参数 `--plugin workflow` 可以只同步一个已注册插件。旧的 `pnpm plugin:skills:sync` script 和 CLI 入口保留，行为与新入口一致。

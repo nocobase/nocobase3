@@ -201,14 +201,12 @@ export async function hasCliPluginEntry(
  */
 export async function planPluginRegistration({
   appRoot,
-  dependencyField = 'devDependencies',
   dependencyRange,
   enabled = true,
   packageName,
   pluginDirectory,
 }: {
   appRoot: string;
-  dependencyField?: 'dependencies' | 'devDependencies';
   dependencyRange: string;
   enabled?: boolean;
   packageName: string;
@@ -219,7 +217,6 @@ export async function planPluginRegistration({
   const manifest = parseJson(originalManifest, manifestPath);
 
   const manifestChanged = registerInManifest({
-    dependencyField,
     dependencyRange,
     manifest,
     manifestPath,
@@ -594,20 +591,24 @@ async function planCliRemoval(
 }
 
 function registerInManifest({
-  dependencyField,
   dependencyRange,
   manifest,
   manifestPath,
   packageName,
 }: {
-  dependencyField: 'dependencies' | 'devDependencies';
   dependencyRange: string;
   manifest: Record<string, unknown>;
   manifestPath: string;
   packageName: string;
 }): boolean {
-  const dependencies = ensureRecord(manifest, dependencyField, manifestPath);
-  const existingDependency = dependencies[packageName];
+  const dependencies = ensureRecord(manifest, 'dependencies', manifestPath);
+  const devDependencies =
+    manifest.devDependencies === undefined
+      ? undefined
+      : ensureRecord(manifest, 'devDependencies', manifestPath);
+  // Preserve the declared runtime range when cleaning up a duplicate development declaration.
+  const existingDependency =
+    dependencies[packageName] ?? devDependencies?.[packageName];
   if (
     existingDependency !== undefined &&
     existingDependency !== dependencyRange
@@ -620,8 +621,12 @@ function registerInManifest({
   }
 
   let changed = false;
-  if (existingDependency === undefined) {
+  if (dependencies[packageName] === undefined) {
     insertSorted(dependencies, packageName, dependencyRange);
+    changed = true;
+  }
+  if (devDependencies && Object.hasOwn(devDependencies, packageName)) {
+    delete devDependencies[packageName];
     changed = true;
   }
   return changed;

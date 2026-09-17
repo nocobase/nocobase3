@@ -1,3 +1,4 @@
+import type { AppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import type {
   AgentContext,
   AgentState,
@@ -27,6 +28,7 @@ import {
 } from './context/ai-employee/frontend-tools.js';
 import type { AppAgentServices } from './contracts.js';
 import type { Actor, Translate } from '../types.js';
+import { createDataServices } from '../service/data-services.js';
 
 export interface AppAgentRepositories {
   aiConversations: AIConversationRepository;
@@ -49,6 +51,7 @@ export interface CreateAgentContextOptions {
   readonly state?: Partial<AgentState>;
   readonly ai: AIManager;
   readonly database: DatabaseManager;
+  readonly authorization?: AppAuthorization;
   readonly logger: Logger;
   readonly repositories: RepositoryFactory;
   readonly aiEmployeesManager: AIEmployeesManager;
@@ -65,6 +68,7 @@ export function createAgentContext({
   state: stateOverrides,
   ai,
   database,
+  authorization,
   logger,
   repositories,
   aiEmployeesManager,
@@ -79,6 +83,14 @@ export function createAgentContext({
     ...stateOverrides,
   };
   const services: AppAgentServices = {
+    data: createDataServices({
+      database,
+      authorization,
+      actor,
+      get timezone() {
+        return state.timezone;
+      },
+    }),
     aiEmployees: {
       resolveModel: (employee, model) =>
         aiEmployeesManager.resolveModel(employee, model),
