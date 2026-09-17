@@ -113,6 +113,13 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     name?: string,
   ): Promise<[JobJson | null, string | null, number, number]> {
     await this.waitUntilReady();
+    return this.claim(token, name);
+  }
+
+  private claim(
+    token: string,
+    name?: string,
+  ): [JobJson | null, string | null, number, number] {
     const id = this.waitingId();
     if (id === undefined) return [null, null, 0, 0];
     const job = this.state.records.get(id);
@@ -127,32 +134,83 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     if (name !== undefined) job.processedBy = name;
     return [structuredClone(job), id, 0, 0];
   }
+  private finish(
+    id: string | undefined,
+    token: string,
+    status: 'completed' | 'failed',
+    value: string,
+    retention: boolean | number | KeepJobs | undefined,
+  ): number {
+    if (retention !== undefined && retention !== false)
+      throw new Error('Memory retention is not implemented');
+    if (id === undefined || !this.state.worker.owns(id, token))
+      throw new Error('Invalid or expired lock token');
+    const record = this.state.records.get(id);
+    if (!record || !this.state.store.transition(id, 'active', status))
+      throw new Error('Job is not active');
+    const finishedOn = Date.now();
+    record.finishedOn = finishedOn;
+    record.attemptsMade = (record.attemptsMade || 0) + 1;
+    if (status === 'completed') record.returnvalue = value;
+    else record.failedReason = value;
+    this.state.worker.locks.delete(id);
+    return finishedOn;
+  }
+
   async moveToCompleted<
     T = MinimalJob['data'],
     R = MinimalJob['returnvalue'],
     N extends string = string,
   >(
-    _job: MinimalJob<T, R, N>,
-    _returnValue: R,
-    _removeOnComplete: boolean | number | KeepJobs,
-    _token: string,
-    _fetchNext: boolean,
+    job: MinimalJob<T, R, N>,
+    returnValue: R,
+    removeOnComplete: boolean | number | KeepJobs,
+    token: string,
+    fetchNext: boolean,
   ): ReturnType<IQueueBackend['moveToCompleted']> {
-    throw new Error('Memory backend operation is not implemented');
+    const value = JSON.stringify(
+      returnValue === undefined ? null : returnValue,
+    );
+    if (value === undefined)
+      throw new TypeError('Job result must serialize to JSON');
+    const finishedOn = this.finish(
+      job.id,
+      token,
+      'completed',
+      value,
+      removeOnComplete,
+    );
+    return {
+      finishedOn,
+      result: fetchNext && !this.closing ? this.claim(token) : undefined,
+    };
   }
+
   async moveToFailed<
     T = MinimalJob['data'],
     R = MinimalJob['returnvalue'],
     N extends string = string,
   >(
-    _job: MinimalJob<T, R, N>,
-    _failedReason: string,
-    _removeOnFail: boolean | number | KeepJobs,
-    _token: string,
-    _fetchNext: boolean,
-    _fieldsToUpdate?: NonNullable<RetryJobOpts['fieldsToUpdate']>,
+    job: MinimalJob<T, R, N>,
+    failedReason: string,
+    removeOnFail: boolean | number | KeepJobs,
+    token: string,
+    fetchNext: boolean,
+    fieldsToUpdate?: NonNullable<RetryJobOpts['fieldsToUpdate']>,
   ): ReturnType<IQueueBackend['moveToFailed']> {
-    throw new Error('Memory backend operation is not implemented');
+    if (fieldsToUpdate && Object.keys(fieldsToUpdate).length)
+      throw new Error('Memory failure field updates are not implemented');
+    const finishedOn = this.finish(
+      job.id,
+      token,
+      'failed',
+      failedReason,
+      removeOnFail,
+    );
+    return {
+      finishedOn,
+      result: fetchNext && !this.closing ? this.claim(token) : undefined,
+    };
   }
   async moveToDelayed(
     _jobId: string,
