@@ -86,7 +86,7 @@ Ticket volume remained stable, but unresolved priority requests increased in the
         },
       ],
     },
-    output: { ready: true },
+    output: undefined,
   },
   chart: {
     type: 'dynamic-tool',
@@ -185,7 +185,16 @@ const specializedCards = [
   [
     'Business report',
     'Open a generated report for preview and export.',
-    tools.report,
+    {
+      ...tools.report,
+      output: {
+        success: true,
+        chartCount: tools.report.input.charts.length,
+        errors: [],
+        warnings: [],
+        report: tools.report.input,
+      },
+    },
   ],
   [
     'Chart',
