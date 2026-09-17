@@ -13,7 +13,7 @@ it('keeps a producer usable while a running handler finishes during shutdown', a
   service.consumer('jobs').consume(async () => {
     entered = true;
     await gate;
-    await producer.publish('follow-up', {});
+    await service.producer('jobs').publish('follow-up', {});
     published = true;
   });
   await service.setup();

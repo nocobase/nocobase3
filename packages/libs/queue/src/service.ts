@@ -442,7 +442,14 @@ export function createQueueService(
   return {
     registerBackend: (name, factory): void => registry.register(name, factory),
     manager: (name): QueueServiceManager => entry(name).manager,
-    producer: (name): QueueProducer => entry(name).producer,
+    producer: (name): QueueProducer => {
+      validateQueueName(name, 'queue');
+      if (stopped && producersOpen) {
+        const existing = entries.get(name);
+        if (existing?.queue) return existing.producer;
+      }
+      return entry(name).producer;
+    },
     consumer: (name): QueueConsumer => entry(name).consumer,
     setup(): Promise<void> {
       if (stopped)
