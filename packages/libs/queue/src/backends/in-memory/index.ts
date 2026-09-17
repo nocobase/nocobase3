@@ -43,6 +43,7 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     private readonly lockDuration: number = 30000,
     private readonly stalledInterval: number = 30000,
     private readonly maxStalledCount: number = 1,
+    private readonly limiter?: { max: number; duration: number },
   ) {
     super();
     const keys = new QueueKeys(prefix);
@@ -176,6 +177,27 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     this.promoteDue();
     const id = this.waitingId();
     if (id === undefined) return [null, null, 0, this.nextDue() ?? 0];
+    const now = Date.now();
+    const max = this.state.metadata.get('max');
+    const duration = this.state.metadata.get('duration');
+    const limiter =
+      typeof max === 'number' && typeof duration === 'number'
+        ? { max, duration }
+        : this.limiter;
+    if (limiter) {
+      if (this.state.worker.rateExpires <= now) {
+        this.state.worker.rateCount = 0;
+        this.state.worker.rateExpires = now + limiter.duration;
+      }
+      if (this.state.worker.rateCount >= limiter.max)
+        return [
+          null,
+          null,
+          this.state.worker.rateExpires - now,
+          this.nextDue() ?? 0,
+        ];
+      this.state.worker.rateCount++;
+    }
     const job = this.state.records.get(id);
     if (!job || !this.state.store.transition(id, 'waiting', 'active'))
       throw new Error('Inconsistent memory claim');
@@ -570,6 +592,16 @@ export function createInMemoryBackendFactory(): BackendFactory {
       typeof options.maxStalledCount === 'number'
         ? options.maxStalledCount
         : 1;
+    const limiter =
+      'limiter' in options &&
+      typeof options.limiter === 'object' &&
+      options.limiter !== null &&
+      'max' in options.limiter &&
+      typeof options.limiter.max === 'number' &&
+      'duration' in options.limiter &&
+      typeof options.limiter.duration === 'number'
+        ? { max: options.limiter.max, duration: options.limiter.duration }
+        : undefined;
     return new InMemoryQueueBackend(
       state,
       name,
@@ -577,6 +609,7 @@ export function createInMemoryBackendFactory(): BackendFactory {
       lockDuration,
       stalledInterval,
       maxStalledCount,
+      limiter,
     );
   };
 }
