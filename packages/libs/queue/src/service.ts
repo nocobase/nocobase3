@@ -94,6 +94,7 @@ interface QueueEntry {
   initializeWorker?: () => Promise<void>;
   workerInitialization?: Promise<void>;
   initializationCancelled?: boolean;
+  workerInitializationCancelled?: boolean;
   runtimeInitialization?: Promise<void>;
   configurationSettlement: () => Promise<void>;
 }
@@ -358,8 +359,45 @@ export function createQueueService(
   ): Promise<void> {
     await requireReady(name, current);
     if (!current.handlers.size()) return;
-    await current.initializeWorker?.();
-    if (stopped || !current.handlers.size()) return;
+    const initialization = current.initializeWorker?.();
+    if (
+      initialization &&
+      !(await settlesWithin(initialization, timeouts.setupTimeoutMs))
+    ) {
+      current.workerInitializationCancelled = true;
+      const timeout = new Error(
+        `Queue ${name} Worker initialization deadline exceeded`,
+      );
+      const deadline = performance.now() + 5000;
+      if (current.worker) {
+        const closing = closeWorker(current.worker, true);
+        if (!(await settlesWithin(closing, 5000)))
+          throw new AggregateError(
+            [timeout, new Error('Worker cleanup remains unresolved')],
+            'Worker initialization failed',
+          );
+      }
+      if (
+        !(await settlesWithin(
+          initialization.then(
+            () => {},
+            () => {},
+          ),
+          Math.max(0, deadline - performance.now()),
+        ))
+      )
+        throw new AggregateError(
+          [timeout, new Error('Worker cancellation is unconfirmed')],
+          'Worker initialization failed',
+        );
+      throw timeout;
+    }
+    if (
+      stopped ||
+      current.workerInitializationCancelled ||
+      !current.handlers.size()
+    )
+      return;
     if (current.worker && !current.worker.isRunning()) {
       void current.worker.run().catch((error: unknown) => {
         dependencies.logger?.error(
@@ -468,6 +506,8 @@ export function createQueueService(
               ),
             );
             await current.worker.waitUntilReady();
+            if (current.workerInitializationCancelled)
+              throw new Error('Queue Worker initialization was cancelled');
           })().catch(async (error: unknown) => {
             try {
               if (current.worker) await closeWorker(current.worker);

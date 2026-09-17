@@ -127,3 +127,52 @@ it('bounds runtime queue initialization without disabling a ready queue', async 
     await service.shutdown();
   }
 });
+
+it.each([false, true])(
+  'cancels late Worker readiness without closing its producer (late success: %s)',
+  async (lateSuccess) => {
+    const report = vi.fn();
+    const service = createQueueService(
+      { namespace: 'late-timeout', queueBackend: 'test', setupTimeoutMs: 20 },
+      { logger: { warn: vi.fn(), error: report } },
+    );
+    const factory = createInMemoryBackendFactory();
+    let interrupt = (): void => {};
+    const blocked = new Promise<void>((resolve, reject) => {
+      interrupt = () =>
+        lateSuccess ? resolve() : reject(new Error('cancelled'));
+    });
+    void blocked.catch(() => {});
+    let workerClosed = false;
+    service.registerBackend('test', (name, options, metadata) => {
+      const backend = factory(name, options, metadata);
+      if (metadata?.withBlockingConnection) {
+        vi.spyOn(backend, 'waitUntilReady').mockImplementation(() => blocked);
+        const close = backend.close.bind(backend);
+        backend.close = async (...args) => {
+          workerClosed = true;
+          interrupt();
+          await close(...args);
+        };
+      }
+      return backend;
+    });
+    const producer = service.producer('jobs');
+    await service.setup();
+    service.consumer('jobs').consume(async () => {});
+    const handler = vi.fn();
+    service.consumer('jobs').consume(handler);
+    try {
+      await expect.poll(() => workerClosed, { timeout: 1000 }).toBe(true);
+      await expect.poll(() => report.mock.calls.length).toBeGreaterThan(0);
+      await expect(producer.publish('event', {})).resolves.toHaveProperty(
+        'jobId',
+      );
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(handler).not.toHaveBeenCalled();
+    } finally {
+      interrupt();
+      await service.shutdown();
+    }
+  },
+);
