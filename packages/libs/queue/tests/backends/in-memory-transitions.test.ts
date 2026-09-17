@@ -4,6 +4,24 @@ import { describe, expect, it, vi } from 'vitest';
 import { createInMemoryBackendFactory } from '../../src/backends/in-memory/index.js';
 
 describe('memory completion protocol', () => {
+  it('promotes a delayed retry behind existing FIFO work', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('retry-order', { connection: {} }, factory);
+    const backend = factory('retry-order', { connection: {} });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(100000);
+    try {
+      await queue.add('a', {}, { jobId: 'a' });
+      await queue.add('b', {}, { jobId: 'b' });
+      expect((await backend.moveToActive('token'))?.[1]).toBe('a');
+      await backend.moveToDelayed('a', 100000, 100, 'token');
+      clock.mockReturnValue(100100);
+      expect((await backend.moveToActive('next'))?.[1]).toBe('b');
+      expect((await backend.moveToActive('last'))?.[1]).toBe('a');
+    } finally {
+      clock.mockRestore();
+      await Promise.all([queue.close(), backend.close()]);
+    }
+  });
   it('keeps prioritized counts and ranges separate from ordinary waiting jobs', async () => {
     const factory = createInMemoryBackendFactory();
     const queue = new Queue('prioritized-ranges', { connection: {} }, factory);

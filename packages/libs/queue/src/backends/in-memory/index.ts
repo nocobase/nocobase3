@@ -122,7 +122,13 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   }
   private promoteDue(): void {
     const now = Date.now();
-    for (const [id, job] of this.state.records) {
+    const due = (id: string, job: JobJson): number =>
+      this.state.worker.due.get(id) ??
+      job.timestamp + (job.delay ?? job.opts.delay ?? 0);
+    const pending = [...this.state.records]
+      .filter(([id]) => this.state.store.get(id)?.state === 'delayed')
+      .sort(([a, first], [b, second]) => due(a, first) - due(b, second));
+    for (const [id, job] of pending) {
       if (
         (this.state.worker.due.get(id) ??
           job.timestamp + (job.delay ?? job.opts.delay ?? 0)) <= now &&
@@ -130,6 +136,8 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
       ) {
         job.delay = 0;
         this.state.worker.due.delete(id);
+        this.state.records.delete(id);
+        this.state.records.set(id, job);
       }
     }
   }
