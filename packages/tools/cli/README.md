@@ -2,7 +2,7 @@
 
 NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 
-它做两件事：提供插件注册命令，以及提供 App 组装自己 CLI 的 runner。作为 devDependency 随 App 分发，由 App 的 `pnpm nocobase` 调用。本仓库根目录也调用同一套实现，加上 `--workspace-root .`。
+它做三件事：提供插件注册命令、同步 NocoBase 包提供的 Agent Skills，以及提供 App 组装自己 CLI 的 runner。作为 devDependency 随 App 分发，由 App 的 `pnpm nocobase` 调用。本仓库根目录也调用同一套实现，加上 `--workspace-root .`。
 
 创建项目不走这里，走 `pnpm create @nocobase/app`。
 
@@ -10,15 +10,25 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 
 | 命令                          | 说明                                                    |
 | ----------------------------- | ------------------------------------------------------- |
+| `nocobase package remove`     | 卸载直接声明的 NocoBase 包并清理该包同步的 skills       |
 | `nocobase plugin register`    | 安装插件并写入 manifest、Client、Server 与 CLI 显式入口 |
 | `nocobase plugin inspect`     | 只读检查插件的静态注册状态和同步 Skills                 |
 | `nocobase plugin unregister`  | 上述的逆操作，并卸载插件包                              |
 | `nocobase plugin update`      | 升级插件包并同步其 skills                               |
-| `nocobase plugin skills sync` | 同步插件 skills，不升级                                 |
+| `nocobase skills sync`        | 同步直接依赖和已注册插件提供的 skills，不升级           |
+| `nocobase plugin skills sync` | `skills sync` 的兼容入口                                |
+
+`pnpm plugin:register` 统一把插件放入 `dependencies`，包括仅客户端插件和通过 `--disabled` 安装的插件，确保插件能进入部署依赖。重复注册时会把旧的 `devDependencies` 声明迁入 `dependencies` 并清除重复声明；普通 App 未指定 `--version` 时沿用已声明的版本范围，两处都有声明时以 `dependencies` 为准。`--no-install` 同样修正 manifest，但不运行包管理器，调用方需要自行安装以同步 lockfile。插件的前端依赖仍按约定声明在 `peerDependencies`，部署产物关闭 peer 自动安装。
 
 `pnpm plugin:update @nocobase/app-plugin-workflow` 更新指定插件，也接受 `workflow` 简写。不传名称时更新全部已注册插件。插件名使用位置参数，与 `plugin:register`、`plugin:unregister` 一致。
 
-实现在 `src/lib/` 下的 `client-plugins.ts`、`server-plugins.ts`、`cli-plugins.ts`、`plugin-registration.ts` 和 `skills-sync.ts`。仓库根目录不再维护第二套 register、unregister 或 skills sync 脚本。
+`pnpm skills:sync` 扫描 App 在 dependencies、devDependencies 和 optionalDependencies 中直接声明的 `@nocobase/*` 包，并合并已注册插件。`--package @nocobase/app-skills` 可以只同步一个完整包名，兼容参数 `--plugin workflow` 可以只同步一个已注册插件。旧的 `pnpm plugin:skills:sync` script 和 CLI 入口保留，行为与新入口一致。
+
+`pnpm package:remove @nocobase/app-skills` 使用项目自己的包管理器卸载 dependencies、devDependencies、optionalDependencies 或 peerDependencies 中直接声明的包，成功后清理该包同步到 `.agents/skills/` 的目录和来源记录。包已经从 manifest 删除时仍会清理来源记录留下的旧副本；仅存在于 `node_modules` 的传递依赖不会交给包管理器误删。插件包会复用完整的 `plugin:unregister` 流程，同时删除 Client、Server 和 CLI 注册。`--dry-run` 只展示卸载命令和待清理 skills，不修改文件。
+
+普通 NocoBase 包的 `skills/` 一级子目录使用 `nocobase-` 开头的 kebab-case 名称；`nocobase-app-plugin-*` 名称保留给对应插件，而插件自身的 Skill 必须使用完整包名对应的前缀。完整同步会把 Skill 与来源包的关系写入 `.agents/.skills-sync.json`，以便依赖移除后清理旧副本；不以 `nocobase-` 开头的 App 自有 Skill 不受影响。
+
+实现在 `src/lib/` 下的 `client-plugins.ts`、`server-plugins.ts`、`cli-plugins.ts`、`plugin-registration.ts` 和 `skills-sync.ts`。仓库根目录不再维护第二套 register、unregister 或 skills sync 实现。
 
 ## 对外导出
 
@@ -27,7 +37,7 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 | `@nocobase/nb3-cli/runtime` | `runAppCli()`，App 的 `cli/index.ts` 用它组装并运行整棵命令树 |
 | `@nocobase/nb3-cli/plugins` | `defineCliPlugin()` / `defineCliPlugins()`，声明命令贡献      |
 
-命令树由三部分合并而成：本包内置的 `plugin *`、App 自己的 `app *`、以及每个插件用自己声明的 topic 贡献的命令。topic 是一个扁平命名空间，冲突在组装时直接报错并点名双方，不静默覆盖。
+命令树由三部分合并而成：本包内置的 `package *`、`plugin *` 和 `skills *`，App 自己的 `app *`，以及每个插件用自己声明的 topic 贡献的命令。topic 是一个扁平命名空间，冲突在组装时直接报错并点名双方，不静默覆盖。
 
 `--workspace-root` 模式从 workspace 选择 App，并默认写入 `workspace:^`；普通 App 模式则从当前 App 的 `node_modules` 解析插件。两个显式入口编辑器都从目标 App 解析 TypeScript 和 Prettier，所以 App 用自己的版本和配置格式化自己的源码，两者缺失也不会让注册失败。
 
@@ -45,7 +55,7 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 
 ## 开发
 
-内置命令源码在 `src/commands/` 下，目录结构即命令结构：`src/commands/plugin/register.ts` 对应 `nocobase plugin register`。它们在 `src/runtime/builtin.ts` 里显式列出——命令面由这份清单决定，不再靠扫目录。
+内置命令源码在 `src/commands/` 下，目录结构即命令结构：`src/commands/plugin/register.ts` 对应 `nocobase plugin register`，`src/commands/package/remove.ts` 对应 `nocobase package remove`，`src/commands/skills/sync.ts` 对应 `nocobase skills sync`。它们在 `src/runtime/builtin.ts` 里显式列出——命令面由这份清单决定，不再靠扫目录。
 
 ```bash
 node ./bin/run.js plugin inspect --help   # 直接跑源码，Node 24 原生擦除类型，无需 loader

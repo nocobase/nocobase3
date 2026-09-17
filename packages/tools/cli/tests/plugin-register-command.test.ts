@@ -13,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { runCommand as runPackageManager } from '../src/lib/run-command.ts';
 import { loadTestConfig, runCommand } from './helpers.ts';
 
 const created: string[] = [];
@@ -184,40 +185,51 @@ describe('app plugin register command', () => {
     );
   });
 
-  it('reports when a register dry run requires installation', async () => {
-    const appRoot = await mkdtemp(
-      path.join(os.tmpdir(), 'nb3-register-command-'),
-    );
-    created.push(appRoot);
-    await writeFile(
-      path.join(appRoot, 'package.json'),
-      `${JSON.stringify({ name: 'demo-app', private: true }, null, 2)}\n`,
-    );
+  it.each([
+    ['pnpm', ['add', '--save-prod']],
+    ['npm', ['install', '--save-prod']],
+    ['yarn', ['add']],
+  ] as const)(
+    'previews a production dependency installation with %s',
+    async (packageManager, installArgs) => {
+      const appRoot = await mkdtemp(
+        path.join(os.tmpdir(), 'nb3-register-command-'),
+      );
+      created.push(appRoot);
+      await writeFile(
+        path.join(appRoot, 'package.json'),
+        JSON.stringify({
+          name: 'demo-app',
+          private: true,
+          packageManager: `${packageManager}@1.0.0`,
+        }),
+      );
 
-    const result = await runCommand(config, 'plugin:register', [
-      'audit-log',
-      '--dir',
-      appRoot,
-      '--dry-run',
-      '--json',
-    ]);
+      const result = await runCommand(config, 'plugin:register', [
+        'audit-log',
+        '--dir',
+        appRoot,
+        '--dry-run',
+        '--json',
+      ]);
 
-    expect(JSON.parse(result.stdout)).toMatchObject({
-      schemaVersion: 1,
-      ok: true,
-      operation: 'plugin:register',
-      status: 'requires-installation',
-      result: {
-        planStatus: 'requires-installation',
-        commands: [
-          {
-            command: 'pnpm',
-            args: ['add', '--save-dev', '@nocobase/app-plugin-audit-log'],
-          },
-        ],
-      },
-    });
-  });
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        schemaVersion: 1,
+        ok: true,
+        operation: 'plugin:register',
+        status: 'requires-installation',
+        result: {
+          planStatus: 'requires-installation',
+          commands: [
+            {
+              command: packageManager,
+              args: [...installArgs, '@nocobase/app-plugin-audit-log'],
+            },
+          ],
+        },
+      });
+    },
+  );
 
   it('reports idempotent register and unregister operations as JSON no-ops', async () => {
     const appRoot = await createAppWithInstalledPlugin();
@@ -453,12 +465,14 @@ describe('app plugin register command', () => {
       const manifest = JSON.parse(
         await readFile(path.join(appRoot, 'package.json'), 'utf8'),
       ) as {
+        dependencies?: Record<string, string>;
         devDependencies?: Record<string, string>;
         nocobase?: { plugins?: Record<string, { enabled: boolean }> };
       };
-      expect(manifest.devDependencies).toEqual({
+      expect(manifest.dependencies).toEqual({
         '@nocobase/app-plugin-audit-log': '^1.0.0',
       });
+      expect(manifest.devDependencies).toBeUndefined();
       expect(manifest.nocobase?.plugins).toBeUndefined();
       expect(existsSync(path.join(appRoot, 'client', 'plugins.ts'))).toBe(
         clientExpected,
@@ -480,6 +494,133 @@ describe('app plugin register command', () => {
     },
   );
 
+  it.each([
+    ['development only', undefined, '~1.0.0', '~1.0.0'],
+    ['matching duplicate', '^1.0.0', '^1.0.0', '^1.0.0'],
+    ['stale development duplicate', '^2.0.0', '^1.0.0', '^2.0.0'],
+  ] as const)(
+    'repairs %s declarations without installing or changing the declared range',
+    async (_name, productionRange, developmentRange, expectedRange) => {
+      const appRoot = await createAppWithInstalledPlugin();
+      const manifestPath = path.join(appRoot, 'package.json');
+      const packageName = '@nocobase/app-plugin-audit-log';
+      const original = JSON.stringify({
+        name: 'demo-app',
+        dependencies: {
+          ...(productionRange ? { [packageName]: productionRange } : {}),
+          'other-runtime': '^1.0.0',
+        },
+        devDependencies: {
+          [packageName]: developmentRange,
+          'other-tool': '^1.0.0',
+        },
+      });
+      await writeFile(manifestPath, original);
+      const args = ['audit-log', '--dir', appRoot, '--no-install'];
+
+      await runCommand(config, 'plugin:register', [...args, '--dry-run']);
+      expect(await readFile(manifestPath, 'utf8')).toBe(original);
+
+      await runCommand(config, 'plugin:register', args);
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+        dependencies: Record<string, string>;
+        devDependencies: Record<string, string>;
+      };
+      expect(manifest.dependencies).toEqual({
+        [packageName]: expectedRange,
+        'other-runtime': '^1.0.0',
+      });
+      expect(manifest.devDependencies).toEqual({ 'other-tool': '^1.0.0' });
+      const repeated = await runCommand(config, 'plugin:register', args);
+      expect(repeated.stdout).toContain('is already registered');
+    },
+  );
+
+  it.each(['npm', 'pnpm'] as const)(
+    'migrates an installed development plugin with %s and synchronizes its lockfile',
+    async (packageManager) => {
+      const appRoot = await mkdtemp(
+        path.join(os.tmpdir(), 'nb3-register-install-'),
+      );
+      created.push(appRoot);
+      const packageName = '@nocobase/app-plugin-audit-log';
+      const range = 'file:vendor/audit-log';
+      const vendorRoot = path.join(appRoot, 'vendor', 'audit-log');
+      await mkdir(vendorRoot, { recursive: true });
+      await writeFile(
+        path.join(vendorRoot, 'package.json'),
+        JSON.stringify({ name: packageName, version: '1.0.0' }),
+      );
+      await writeFile(
+        path.join(appRoot, 'package.json'),
+        JSON.stringify({
+          name: 'demo-app',
+          private: true,
+          ...(packageManager === 'npm' ? { packageManager: 'npm@11.0.0' } : {}),
+        }),
+      );
+      await writeFile(
+        path.join(appRoot, '.npmrc'),
+        'audit=false\nfund=false\nignore-scripts=true\noffline=true\n',
+      );
+      await runPackageManager(
+        packageManager,
+        [
+          packageManager === 'npm' ? 'install' : 'add',
+          '--save-dev',
+          `${packageName}@${range}`,
+        ],
+        { cwd: appRoot },
+      );
+
+      const result = await runCommand(config, 'plugin:register', [
+        'audit-log',
+        '--dir',
+        appRoot,
+        '--json',
+      ]);
+      expect(JSON.parse(result.stdout)).toMatchObject({ ok: true });
+      const manifest = JSON.parse(
+        await readFile(path.join(appRoot, 'package.json'), 'utf8'),
+      ) as {
+        dependencies: Record<string, string>;
+        devDependencies?: Record<string, string>;
+      };
+      expect(manifest.dependencies).toEqual({ [packageName]: range });
+      expect(manifest.devDependencies?.[packageName]).toBeUndefined();
+
+      if (packageManager === 'npm') {
+        const lockfile = JSON.parse(
+          await readFile(path.join(appRoot, 'package-lock.json'), 'utf8'),
+        ) as {
+          packages: Record<
+            string,
+            {
+              dependencies?: Record<string, string>;
+              devDependencies?: Record<string, string>;
+            }
+          >;
+        };
+        expect(lockfile.packages['']?.dependencies).toEqual({
+          [packageName]: range,
+        });
+        expect(lockfile.packages['']?.devDependencies).toBeUndefined();
+      } else {
+        const lockfile = await readFile(
+          path.join(appRoot, 'pnpm-lock.yaml'),
+          'utf8',
+        );
+        expect(lockfile).toContain('dependencies:');
+        expect(lockfile).not.toContain('devDependencies:');
+        expect(lockfile).toContain(`specifier: ${range}`);
+        await runPackageManager('pnpm', ['install', '--frozen-lockfile'], {
+          cwd: appRoot,
+        });
+      }
+    },
+    30_000,
+  );
+
   it('installs a disabled plugin without metadata or runtime entries', async () => {
     const appRoot = await createAppWithInstalledPlugin();
 
@@ -493,7 +634,13 @@ describe('app plugin register command', () => {
 
     const manifest = JSON.parse(
       await readFile(path.join(appRoot, 'package.json'), 'utf8'),
-    ) as { nocobase?: { plugins?: Record<string, { enabled: boolean }> } };
+    ) as {
+      dependencies?: Record<string, string>;
+      nocobase?: { plugins?: Record<string, { enabled: boolean }> };
+    };
+    expect(manifest.dependencies).toEqual({
+      '@nocobase/app-plugin-audit-log': '^1.0.0',
+    });
     expect(manifest.nocobase?.plugins).toBeUndefined();
     expect(existsSync(path.join(appRoot, 'client', 'plugins.ts'))).toBe(false);
     expect(existsSync(path.join(appRoot, 'server', 'plugins.ts'))).toBe(false);
@@ -539,10 +686,10 @@ describe('app plugin register command', () => {
 
     await runCommand(config, 'plugin:unregister', args);
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
-      devDependencies?: Record<string, string>;
+      dependencies?: Record<string, string>;
       nocobase?: { plugins?: Record<string, unknown> };
     };
-    expect(manifest.devDependencies).toEqual({});
+    expect(manifest.dependencies).toEqual({});
     expect(manifest.nocobase?.plugins).toBeUndefined();
     expect(await readFile(clientPath, 'utf8')).not.toContain('audit-log');
     expect(await readFile(serverPath, 'utf8')).not.toContain('audit-log');
@@ -664,6 +811,41 @@ describe('app plugin register command', () => {
       '# Updated upstream\n',
     );
     expect(await readFile(appSkill, 'utf8')).toBe('# App owned\n');
+  });
+
+  it('synchronizes one full package name through the general command', async () => {
+    const appRoot = await createAppWithInstalledPlugin();
+    await runCommand(config, 'plugin:register', [
+      'audit-log',
+      '--dir',
+      appRoot,
+      '--no-install',
+    ]);
+
+    const synchronized = await runCommand(config, 'skills:sync', [
+      '--dir',
+      appRoot,
+      '--package',
+      '@nocobase/app-plugin-audit-log',
+      '--dry-run',
+      '--json',
+    ]);
+
+    expect(JSON.parse(synchronized.stdout)).toMatchObject({
+      schemaVersion: 1,
+      ok: true,
+      operation: 'skills:sync',
+      status: 'success',
+      result: {
+        dryRun: true,
+        copies: [
+          {
+            packageName: '@nocobase/app-plugin-audit-log',
+            skillName: 'nocobase-app-plugin-audit-log',
+          },
+        ],
+      },
+    });
   });
 
   it('prints one JSON error document when Skills synchronization fails', async () => {

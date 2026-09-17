@@ -1,5 +1,30 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.22
+
+### Patch Changes
+
+- 4349a40: Preserve navigation group expansion when switching pages in the application, Settings, and Dev tools.
+- d86f6aa: Synchronize agent skills from direct NocoBase package dependencies with the new skills:sync command while preserving plugin:skills:sync compatibility, and share application development and upgrade skills through @nocobase/app-skills across all application templates.
+
+  Add package:remove to uninstall a NocoBase dependency and clean up its synchronized skills and ownership records, reusing plugin unregistration for plugin packages. Document the removal workflow in application templates and the shared development and upgrade skills.
+
+- 028dd7c: Use host-provided peers for shared database types, authorization errors, service tokens, cache registries, and repository filter metadata. Declare their production providers in all application templates so deployments with automatic peer installation disabled retain the required runtime packages. Document the provider contract for generated plugins.
+
+  Existing applications upgrading these packages must add compatible versions of their required shared peers to production dependencies: @nocobase/db, @nocobase/service-provider, @nocobase/repository-input, @nocobase/authorization, @nocobase/caching, @nocobase/i18n, and @nocobase/queue for the standard server stack, plus @nocobase/ai-employee when using its plugin. Update the lockfile and verify the production install; peer declarations do not remove incompatible historical versions automatically.
+
+- Updated dependencies [d86f6aa]
+- Updated dependencies [028dd7c]
+  - @nocobase/nb3-cli@1.0.0-beta.8
+  - @nocobase/app-plugin-authentication@0.1.0-beta.16
+  - @nocobase/app-plugin-authorization@0.2.0-beta.12
+  - @nocobase/app-plugin-hub@0.1.0-beta.9
+  - @nocobase/app-plugin-users@0.0.2-beta.4
+  - @nocobase/app-server@1.0.0-beta.17
+  - @nocobase/authorization@0.1.0-beta.7
+  - @nocobase/db@1.0.0-beta.8
+  - @nocobase/queue@0.1.0-beta.4
+
 ## 1.0.0-beta.21
 
 ### Patch Changes

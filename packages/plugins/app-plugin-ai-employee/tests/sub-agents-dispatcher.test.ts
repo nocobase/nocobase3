@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 
 import { SubAgentsDispatcher } from '../server/manager/sub-agents/dispatcher.js';
 
@@ -57,6 +58,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
     });
     const resolvedModel = { llmService: 'openai', model: 'gpt-5' };
     const createAIEmployee = vi.fn().mockResolvedValue({ invoke });
+    const has = vi.fn(() => false);
     const dispatcher = new SubAgentsDispatcher({
       ai: {} as never,
       database: {} as never,
@@ -80,6 +82,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
       workContextHandler: {} as never,
       documentLoaders: {} as never,
       container: {
+        has,
         resolve: vi.fn(() => ({ createAIEmployee })),
       } as never,
     });
@@ -114,5 +117,15 @@ describe('SubAgentsDispatcher direct dependencies', () => {
       timezone: 'Asia/Shanghai',
     });
     expect(request.context.agentContext.state.messages).toHaveLength(1);
+    expect(has).toHaveBeenCalledWith(authorizationToken);
+    expect(request.context.agentContext.actor.id).toBe('user-1');
+    expect(createAIEmployee).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: { id: 'user-1', roles: ['member'], isRoot: false },
+      }),
+    );
+    await expect(
+      request.context.agentContext.services.data.getDataSources({}),
+    ).rejects.toThrow('Data access denied');
   });
 });

@@ -5,11 +5,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { getNocoBaseToolCallMetadata } from '../chat/tool-call-card.js';
 import type { AIToolRendererProps } from './tool-renderer-provider.js';
 import {
-  normalizeBusinessReportCharts,
+  getValidatedBusinessReport,
   type BusinessReportData,
 } from './business-report-utils.js';
 import { useBusinessReportDialog } from './business-report-dialog.js';
-import { asRecord, asString } from './tool-renderer-utils.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 function ReportGeneratingProgress() {
@@ -53,37 +52,55 @@ function ReportGeneratingProgress() {
 export function BusinessReportRenderer({ part }: AIToolRendererProps) {
   const t = useAITranslate();
   const reportDialog = useBusinessReportDialog();
-  const input = asRecord(part.input);
-  const title =
-    asString(input.title) ||
-    t('tool.businessReport.defaultTitle', 'Business analysis report');
-  const reportSummary = asString(input.summary);
-  const summary =
-    reportSummary ||
-    t(
-      'tool.businessReport.openHint',
-      'Open the report to review the generated analysis.',
-    );
-  const charts = useMemo(
-    () => normalizeBusinessReportCharts(input.charts),
-    [input.charts],
-  );
-  const report = useMemo<BusinessReportData>(
-    () => ({
-      title,
-      summary: reportSummary || undefined,
-      markdown: asString(input.markdown),
-      charts,
-      fileName: asString(input.fileName) || undefined,
-    }),
-    [charts, input.fileName, input.markdown, reportSummary, title],
+  const output = 'output' in part ? part.output : undefined;
+  const validatedReport = useMemo(
+    () => getValidatedBusinessReport(output),
+    [output],
   );
   const metadata = getNocoBaseToolCallMetadata(part);
-  const ready =
+  const completed =
     part.state === 'output-available' ||
-    (metadata?.status === 'success' &&
-      ['done', 'confirmed'].includes(metadata.invokeStatus ?? ''));
-  const generating = !ready && part.state !== 'output-error';
+    ['done', 'confirmed', 'cancelled', 'rejected', 'error', 'failed'].includes(
+      metadata?.invokeStatus ?? '',
+    );
+  const failed =
+    part.state === 'output-error' ||
+    metadata?.status === 'error' ||
+    ['cancelled', 'rejected', 'error', 'failed'].includes(
+      metadata?.invokeStatus ?? '',
+    );
+  const ready = completed && !failed && validatedReport !== undefined;
+  const generating = !completed && !failed;
+  const defaultTitle = t(
+    'tool.businessReport.defaultTitle',
+    'Business analysis report',
+  );
+  const report = useMemo<BusinessReportData>(
+    () =>
+      ready && validatedReport
+        ? validatedReport
+        : { title: defaultTitle, markdown: '', charts: [] },
+    [defaultTitle, ready, validatedReport],
+  );
+  const { title, charts } = report;
+  const renderFailed =
+    ready && reportDialog.hasRenderError(part.toolCallId, report);
+  const previewReady = ready && !renderFailed;
+  const summary = renderFailed
+    ? t(
+        'tool.businessReport.chartFailed',
+        'Report chart rendering failed. Correct the chart options and retry.',
+      )
+    : !generating && !ready
+      ? t(
+          'tool.businessReport.failed',
+          'Report validation failed. Correct the report and retry.',
+        )
+      : report.summary ||
+        t(
+          'tool.businessReport.openHint',
+          'Open the report to review the generated analysis.',
+        );
   const wasGenerating = useRef(false);
 
   useEffect(() => {
@@ -95,11 +112,11 @@ export function BusinessReportRenderer({ part }: AIToolRendererProps) {
       wasGenerating.current = true;
       return;
     }
-    if (wasGenerating.current && ready) {
-      wasGenerating.current = false;
+    if (wasGenerating.current && previewReady) {
       reportDialog.open(part.toolCallId, report, ready);
     }
-  }, [generating, part.toolCallId, ready, report, reportDialog]);
+    wasGenerating.current = false;
+  }, [generating, part.toolCallId, previewReady, ready, report, reportDialog]);
 
   return (
     <button
@@ -128,16 +145,20 @@ export function BusinessReportRenderer({ part }: AIToolRendererProps) {
             <Badge variant='secondary'>
               {generating
                 ? t('tool.businessReport.generatingBadge', 'Generating')
-                : 'Markdown'}
+                : previewReady
+                  ? 'Markdown'
+                  : t('tool.status.failed', 'Failed')}
             </Badge>
             <Badge variant='outline'>
               {t('tool.businessReport.chartCount', '{{count}} charts', {
                 count: charts.length,
               })}
             </Badge>
-            <Badge variant='outline'>
-              {t('tool.businessReport.previewExport', 'Preview and export')}
-            </Badge>
+            {previewReady ? (
+              <Badge variant='outline'>
+                {t('tool.businessReport.previewExport', 'Preview and export')}
+              </Badge>
+            ) : null}
           </div>
           {generating ? <ReportGeneratingProgress /> : null}
         </div>
