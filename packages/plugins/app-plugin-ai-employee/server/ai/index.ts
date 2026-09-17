@@ -163,8 +163,14 @@ function resolvePackageRootSkillDirectory(): string {
         ) as {
           name?: string;
         };
-        if (packageMetadata.name === '@nocobase/app-plugin-ai-employee') {
-          return path.join(directory, 'ai', 'skills');
+        const skillsDirectory = path.join(directory, 'ai', 'skills');
+        // TypeScript can emit a copy of package.json into dist for JSON imports.
+        // Prefer its copied runtime assets; fall back to root assets in published layouts.
+        if (
+          packageMetadata.name === '@nocobase/app-plugin-ai-employee' &&
+          fs.existsSync(skillsDirectory)
+        ) {
+          return skillsDirectory;
         }
       } catch {
         // Continue toward the package root when an intermediate manifest is invalid.
