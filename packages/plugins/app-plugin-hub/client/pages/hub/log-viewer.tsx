@@ -3,6 +3,14 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
+import { DateTimePicker } from '../../components/date-time-picker.js';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../components/ui/select.js';
 import type { ApiResponse } from './types.js';
 
 interface Entry {
@@ -40,8 +48,8 @@ export function LogViewer({
   const [search, setSearch] = useState('');
   const [level, setLevel] = useState('');
   const [source, setSource] = useState('');
-  const [since, setSince] = useState('');
-  const [until, setUntil] = useState('');
+  const [since, setSince] = useState<Date>();
+  const [until, setUntil] = useState<Date>();
   const [history, setHistory] = useState(false);
   const [nextPage, setNextPage] = useState(0);
   const [downloading, setDownloading] = useState(false);
@@ -52,8 +60,8 @@ export function LogViewer({
       search,
       level,
       source,
-      ...(since ? { since: new Date(since).toISOString() } : {}),
-      ...(until ? { until: new Date(until).toISOString() } : {}),
+      ...(since ? { since: since.toISOString() } : {}),
+      ...(until ? { until: until.toISOString() } : {}),
     }),
     [search, level, source, since, until],
   );
@@ -190,47 +198,61 @@ export function LogViewer({
     <div className='space-y-4'>
       <div className='flex flex-wrap gap-2'>
         <Input
-          className='w-48'
+          className='w-full sm:w-48'
           placeholder={t('logs.search')}
           aria-label={t('logs.search')}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
-        <select
-          className='rounded-md border bg-background px-2 text-sm'
-          aria-label={t('logs.level')}
-          value={level}
-          onChange={(event) => setLevel(event.target.value)}
+        <Select
+          items={[
+            { value: 'all', label: t('logs.allLevels') },
+            ...['trace', 'debug', 'info', 'warn', 'error', 'fatal'].map(
+              (name) => ({ value: name, label: name }),
+            ),
+          ]}
+          value={level || 'all'}
+          onValueChange={(value) =>
+            setLevel(value === 'all' ? '' : (value ?? ''))
+          }
         >
-          <option value=''>{t('logs.allLevels')}</option>
-          {['trace', 'debug', 'info', 'warn', 'error', 'fatal'].map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger
+            aria-label={t('logs.level')}
+            className='min-w-32 data-[size=default]:h-9'
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align='start' alignItemWithTrigger={false}>
+            <SelectItem value='all'>{t('logs.allLevels')}</SelectItem>
+            {['trace', 'debug', 'info', 'warn', 'error', 'fatal'].map(
+              (name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ),
+            )}
+          </SelectContent>
+        </Select>
         {!deploymentId && (
           <Input
-            className='w-40'
+            className='min-w-0 flex-1 sm:w-40 sm:flex-none'
             placeholder={t('logs.source')}
             aria-label={t('logs.source')}
             value={source}
             onChange={(event) => setSource(event.target.value)}
           />
         )}
-        <Input
-          className='w-auto'
-          type='datetime-local'
-          aria-label={t('logs.since')}
+        <DateTimePicker
+          className='w-full sm:w-60'
+          label={t('logs.since')}
           value={since}
-          onChange={(event) => setSince(event.target.value)}
+          onChange={setSince}
         />
-        <Input
-          className='w-auto'
-          type='datetime-local'
-          aria-label={t('logs.until')}
+        <DateTimePicker
+          className='w-full sm:w-60'
+          label={t('logs.until')}
           value={until}
-          onChange={(event) => setUntil(event.target.value)}
+          onChange={setUntil}
         />
       </div>
       <div className='flex flex-wrap items-center gap-2'>

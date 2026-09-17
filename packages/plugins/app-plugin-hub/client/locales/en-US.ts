@@ -228,6 +228,11 @@ const enUS = {
     currentDeployment: 'This is the current deployment.',
     deploymentNotSucceeded: 'Only a succeeded deployment can be rolled back.',
   },
+  dateTime: {
+    time: 'Time',
+    clear: 'Clear',
+    done: 'Done',
+  },
   logs: {
     downloadChanged:
       'Log history changed while downloading. Please retry the download.',

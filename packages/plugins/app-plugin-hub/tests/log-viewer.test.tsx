@@ -8,7 +8,10 @@ vi.mock('@nocobase/app-client', () => ({
   useApiClient: () => client,
 }));
 vi.mock('@nocobase/i18n/client', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'en-US' },
+  }),
 }));
 import { LogViewer } from '../client/pages/hub/log-viewer.js';
 beforeEach(() => request.mockReset());
@@ -36,13 +39,31 @@ it('shows a persisted deployment error and sends filters to the deployment endpo
   expect(request.mock.calls[0]?.[0].path).toBe(
     'hub/apps/app2/deployments/deployment-1/logs',
   );
-  fireEvent.change(screen.getByLabelText('logs.level'), {
-    target: { value: 'error' },
+  fireEvent.click(screen.getByRole('combobox', { name: 'logs.level' }));
+  const errorOption = await screen.findByRole('option', {
+    name: 'error',
+    exact: true,
   });
+  fireEvent.pointerDown(errorOption, { pointerType: 'mouse' });
+  fireEvent.click(errorOption);
   await waitFor(() =>
     expect(request).toHaveBeenLastCalledWith(
       expect.objectContaining({
         query: expect.objectContaining({ level: 'error' }),
+      }),
+    ),
+  );
+  fireEvent.click(screen.getByRole('combobox', { name: 'logs.level' }));
+  const allOption = await screen.findByRole('option', {
+    name: 'logs.allLevels',
+    exact: true,
+  });
+  fireEvent.pointerDown(allOption, { pointerType: 'mouse' });
+  fireEvent.click(allOption);
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({ level: '' }),
       }),
     ),
   );
@@ -183,4 +204,62 @@ it('downloads every page with a stable time boundary and rejects a reset during 
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+it('submits local date-time filters as ISO timestamps and clears them independently', async () => {
+  request.mockResolvedValue(logPage([]));
+  render(<LogViewer appId='app2' />);
+  await screen.findByText('logs.empty');
+  const today = new Date();
+  const dayName = new RegExp(
+    `${today.toLocaleDateString('en-US', { month: 'long' })} ${today.getDate()}(?:st|nd|rd|th)?, ${today.getFullYear()}`,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'logs.since' }));
+  fireEvent.click(await screen.findByRole('button', { name: dayName }));
+  fireEvent.change(screen.getByLabelText('dateTime.time'), {
+    target: { value: '13:45' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'dateTime.done' }));
+  const since = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+    13,
+    45,
+  ).toISOString();
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      expect.objectContaining({ query: expect.objectContaining({ since }) }),
+    ),
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'logs.until' }));
+  fireEvent.click(await screen.findByRole('button', { name: dayName }));
+  fireEvent.change(screen.getByLabelText('dateTime.time'), {
+    target: { value: '23:59' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'dateTime.done' }));
+  const until = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+    23,
+    59,
+  ).toISOString();
+  await waitFor(() =>
+    expect(request).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({ since, until }),
+      }),
+    ),
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'logs.since' }));
+  expect(screen.getByLabelText('dateTime.time')).toHaveValue('13:45');
+  fireEvent.click(screen.getByRole('button', { name: 'dateTime.clear' }));
+  await waitFor(() => {
+    const query = request.mock.lastCall?.[0].query;
+    expect(query).not.toHaveProperty('since');
+    expect(query).toHaveProperty('until', until);
+  });
 });

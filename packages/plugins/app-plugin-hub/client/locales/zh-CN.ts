@@ -208,6 +208,11 @@ const zhCN: HubResource = {
     currentDeployment: '这是当前部署，不能回滚。',
     deploymentNotSucceeded: '只有成功的部署才能回滚。',
   },
+  dateTime: {
+    time: '时间',
+    clear: '清空',
+    done: '完成',
+  },
   logs: {
     downloadChanged: '下载期间日志记录发生变化，请重新下载。',
     next: '加载后续日志',
