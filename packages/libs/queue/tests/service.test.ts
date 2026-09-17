@@ -544,4 +544,29 @@ describe('application-private queue service', () => {
     await first.producer('late').publish('event', {});
     expect(initialized).toHaveBeenCalledTimes(2);
   });
+  it('uses updated concurrency when a producer-only queue gains its first handler', async () => {
+    const instance = createQueueService({ namespace: 'app' });
+    services.push(instance);
+    const producer = instance.producer('late');
+    await instance.setup();
+    await instance.manager('late').configure({ concurrency: 2 });
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started = 0;
+    instance.consumer('late').consume(async () => {
+      started++;
+      await gate;
+    });
+    try {
+      await producer.publishMany([
+        { channel: 'event', message: 1 },
+        { channel: 'event', message: 2 },
+      ]);
+      await expect.poll(() => started).toBe(2);
+    } finally {
+      release();
+    }
+  });
 });
