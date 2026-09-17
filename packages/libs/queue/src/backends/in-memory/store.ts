@@ -48,9 +48,34 @@ export class InMemoryQueueStore {
     return structuredClone(record);
   }
 
+  addMany(inputs: MemoryJobInput[]): MemoryJobRecord[] {
+    const staged = new InMemoryQueueStore();
+    staged.sequence = this.sequence;
+    for (const [id, record] of this.jobs) staged.jobs.set(id, record);
+    const records = inputs.map((input) => staged.add(input));
+    this.jobs.clear();
+    for (const [id, record] of staged.jobs) this.jobs.set(id, record);
+    this.sequence = staged.sequence;
+    return records;
+  }
+
   get(id: string): MemoryJobRecord | undefined {
     const record = this.jobs.get(id);
     return record === undefined ? undefined : structuredClone(record);
+  }
+
+  drain(delayed: boolean): string[] {
+    const removed: string[] = [];
+    for (const [id, record] of this.jobs) {
+      if (
+        record.state === 'waiting' ||
+        (delayed && record.state === 'delayed')
+      ) {
+        this.jobs.delete(id);
+        removed.push(id);
+      }
+    }
+    return removed;
   }
 
   transition(

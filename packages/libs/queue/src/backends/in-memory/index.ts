@@ -1,5 +1,6 @@
 import { QueueKeys } from 'bullmq';
 import { InMemoryQueueStore } from './store.js';
+import { prepareMemoryBatch } from './bulk.js';
 import { assertSupportedJob } from './guards.js';
 import { MemoryWaiter, MemoryWorkerState } from './worker.js';
 
@@ -98,13 +99,25 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     return record.id;
   }
   async addJobs(
-    _entries: {
-      job: JobJson;
-      jobId: string;
-      parentKeyOpts?: ParentKeyOpts;
-    }[],
+    entries: { job: JobJson; jobId: string; parentKeyOpts?: ParentKeyOpts }[],
   ): Promise<string[]> {
-    throw new Error('Memory backend operation is not implemented');
+    await this.waitUntilReady();
+    const prepared = prepareMemoryBatch(entries);
+    const records = this.state.store.addMany(
+      prepared.map((entry) => entry.input),
+    );
+    for (const [index, record] of records.entries()) {
+      const entry = prepared[index];
+      if (entry && !this.state.records.has(record.id)) {
+        this.state.records.set(record.id, {
+          ...entry.job,
+          id: record.id,
+          data: record.data,
+        });
+      }
+    }
+    this.state.worker.notify();
+    return records.map((record) => record.id);
   }
   private waitingId(): string | undefined {
     return [...this.state.records.keys()].find(
@@ -275,8 +288,10 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     if (recovered.length) shared.notify();
     return recovered;
   }
-  async drain(_delayed: boolean): Promise<void> {
-    throw new Error('Memory backend operation is not implemented');
+  async drain(delayed: boolean): Promise<void> {
+    await this.waitUntilReady();
+    for (const id of this.state.store.drain(delayed))
+      this.state.records.delete(id);
   }
   async extendLocks(
     jobIds: string[],
