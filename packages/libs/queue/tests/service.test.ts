@@ -402,4 +402,72 @@ describe('application-private queue service', () => {
       expect(removals).toEqual(rateLimit === null ? [['max', 'duration']] : []);
     },
   );
+  it('updates future publish defaults after setup without rewriting existing jobs', async () => {
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const memory = createInMemoryBackendFactory();
+    let backend: ReturnType<BackendFactory> | undefined;
+    instance.registerBackend('memory-test', (...args) => {
+      backend = memory(...args);
+      return backend;
+    });
+    const producer = instance.producer('jobs');
+    await instance.setup();
+    const first = await producer.publish('event', {});
+    await instance.manager('jobs').configure({ attempts: 4 });
+    const second = await producer.publish('event', {});
+    expect((await backend?.getJobData(first.jobId))?.opts.attempts).toBe(0);
+    expect((await backend?.getJobData(second.jobId))?.opts.attempts).toBe(4);
+    await instance.manager('jobs').configure({ attempts: undefined });
+    const third = await producer.publish('event', {});
+    expect((await backend?.getJobData(third.jobId))?.opts.attempts).toBe(4);
+  });
+  it('serializes rate updates and keeps local defaults after a backend write fails', async () => {
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const memory = createInMemoryBackendFactory();
+    let backend: ReturnType<BackendFactory> | undefined;
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const writes: number[] = [];
+    instance.registerBackend('memory-test', (...args) => {
+      backend = memory(...args);
+      const set = backend.setQueueMeta.bind(backend);
+      vi.spyOn(backend, 'setQueueMeta').mockImplementation(async (values) => {
+        if ('max' in values) {
+          writes.push(Number(values.max));
+          if (values.max === 1) {
+            await gate;
+            throw new Error('write lost');
+          }
+        }
+        return set(values);
+      });
+      return backend;
+    });
+    const producer = instance.producer('jobs');
+    await instance.setup();
+    const first = instance
+      .manager('jobs')
+      .configure({ attempts: 5, rateLimit: { max: 1, duration: 100 } });
+    void first.catch(() => {});
+    const second = instance
+      .manager('jobs')
+      .configure({ rateLimit: { max: 2, duration: 100 } });
+    try {
+      await expect.poll(() => writes.length).toBe(1);
+      expect(writes).toEqual([1]);
+    } finally {
+      release();
+    }
+    await expect(first).rejects.toThrow('write lost');
+    await second;
+    expect(writes).toEqual([1, 2]);
+    const receipt = await producer.publish('event', {});
+    expect((await backend?.getJobData(receipt.jobId))?.opts.attempts).toBe(5);
+  });
 });
