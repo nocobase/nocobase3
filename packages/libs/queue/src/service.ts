@@ -88,6 +88,8 @@ interface QueueEntry {
   manual: QueueRuntimeOptions;
   queue?: ServiceQueue;
   worker?: ServiceWorker;
+  initializeWorker?: () => Promise<void>;
+  workerInitialization?: Promise<void>;
 }
 
 export function createQueueService(
@@ -154,6 +156,14 @@ export function createQueueService(
         consume(handler): UnregisterHandler {
           if (stopped) throw new Error('Queue service is shutting down');
           const unregister = handlers.consume(handler);
+          if (ready && !current.worker) {
+            void activateWorker(name, current).catch((error: unknown) => {
+              dependencies.logger?.error(
+                { error, queue: name },
+                'Queue worker activation failed',
+              );
+            });
+          }
           if (ready && current.worker?.isPaused()) {
             void current.worker.resume().catch((error: unknown) => {
               dependencies.logger?.error(
@@ -239,6 +249,24 @@ export function createQueueService(
     }
   }
 
+  async function activateWorker(
+    name: string,
+    current: QueueEntry,
+  ): Promise<void> {
+    await requireReady(name, current);
+    if (!current.handlers.size()) return;
+    await current.initializeWorker?.();
+    if (stopped || !current.handlers.size()) return;
+    if (current.worker && !current.worker.isRunning()) {
+      void current.worker.run().catch((error: unknown) => {
+        dependencies.logger?.error(
+          { error, queue: name },
+          'Queue worker run failed',
+        );
+      });
+    }
+  }
+
   function initializeEntry(name: string, current: QueueEntry): Promise<void> {
     return resources.initialize(name, async () => {
       if (stopped) throw new Error('Queue service is shutting down');
@@ -273,33 +301,45 @@ export function createQueueService(
           ),
         );
         await current.queue.waitUntilReady();
-        if (current.handlers.size()) {
-          current.worker = new Worker<unknown, unknown, string, IQueueBackend>(
-            physicalName,
-            async (job, token, signal): Promise<void> => {
-              if (current.handlers.size() === 0) {
-                await job.moveToWait(token);
-                throw new WaitingError();
-              }
-              if (!signal)
-                throw new Error('Queue Worker did not provide an abort signal');
-              await current.handlers.dispatch(
-                job.name,
-                decodeQueueMessage(job.data),
-                signal,
-              );
-            },
-            { ...base, autorun: false, concurrency: config.concurrency },
-            factory,
-          );
-          current.worker.on('error', (error: Error) =>
-            dependencies.logger?.error(
-              { error, queue: name },
-              'Queue worker error',
-            ),
-          );
-          await current.worker.waitUntilReady();
-        }
+        current.initializeWorker = (): Promise<void> => {
+          current.workerInitialization ??= (async (): Promise<void> => {
+            if (stopped) throw new Error('Queue service is shutting down');
+            current.worker = new Worker<
+              unknown,
+              unknown,
+              string,
+              IQueueBackend
+            >(
+              physicalName,
+              async (job, token, signal): Promise<void> => {
+                if (current.handlers.size() === 0) {
+                  await job.moveToWait(token);
+                  throw new WaitingError();
+                }
+                if (!signal)
+                  throw new Error(
+                    'Queue Worker did not provide an abort signal',
+                  );
+                await current.handlers.dispatch(
+                  job.name,
+                  decodeQueueMessage(job.data),
+                  signal,
+                );
+              },
+              { ...base, autorun: false, concurrency: config.concurrency },
+              factory,
+            );
+            current.worker.on('error', (error: Error) =>
+              dependencies.logger?.error(
+                { error, queue: name },
+                'Queue worker error',
+              ),
+            );
+            await current.worker.waitUntilReady();
+          })();
+          return current.workerInitialization;
+        };
+        if (current.handlers.size()) await current.initializeWorker();
       } catch (error) {
         try {
           await closeEntries([current]);
@@ -344,6 +384,11 @@ export function createQueueService(
       stopped = true;
       if (setupPromise) await setupPromise.catch(() => {});
       await resources.settle();
+      await Promise.allSettled(
+        [...entries.values()].flatMap((current) =>
+          current.workerInitialization ? [current.workerInitialization] : [],
+        ),
+      );
       await closeEntries();
     },
   };
