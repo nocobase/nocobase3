@@ -75,5 +75,51 @@ export const createServiceRedisBackend: BackendFactory = (
     // All connections in this options-only adapter are owned. No QUIT reply is needed.
     await close(true);
   };
+  if (!worker) {
+    let invalidated: Error | undefined;
+    const failure = (): Error | undefined => invalidated;
+    const execute = async <T>(operation: () => Promise<T>): Promise<T> => {
+      if (invalidated) throw invalidated;
+      const timer = setTimeout(() => {
+        invalidated ??= new Error(
+          'Redis producer deadline exceeded; connection invalidated',
+        );
+        void backend
+          .close()
+          .catch((error: unknown) => backend.emit('error', error));
+      }, 10000);
+      try {
+        const result = await operation();
+        const lateFailure = failure();
+        if (lateFailure) throw lateFailure;
+        return result;
+      } catch (error) {
+        invalidated ??= new Error(
+          'Redis producer operation failed; connection invalidated',
+          { cause: error },
+        );
+        try {
+          await backend.close();
+        } catch (cleanup) {
+          throw new AggregateError(
+            [invalidated, error, cleanup],
+            'Redis producer operation and cleanup failed',
+            { cause: cleanup },
+          );
+        }
+        throw new AggregateError(
+          [invalidated, error],
+          'Redis producer operation failed',
+          { cause: error },
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const addJob = backend.addJob.bind(backend);
+    const addJobs = backend.addJobs.bind(backend);
+    backend.addJob = (...args) => execute(() => addJob(...args));
+    backend.addJobs = (...args) => execute(() => addJobs(...args));
+  }
   return backend;
 };

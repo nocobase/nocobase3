@@ -108,3 +108,41 @@ it.skipIf(selectedBackend() !== 'redis')(
     }
   },
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'closes blackholed producer transport when publication times out',
+  async () => {
+    const { createTcpProxy } = await import('../helpers/tcp-proxy.js');
+    const proxy = await createTcpProxy(
+      Number(process.env.QUEUE_TEST_REDIS_PORT),
+    );
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-publish-blackhole`,
+      queueBackend: 'redis',
+      connection: { host: '127.0.0.1', port: proxy.port },
+    });
+    const producer = service.producer('jobs');
+    try {
+      await service.setup();
+      proxy.blackhole(true);
+      const results = await Promise.allSettled([
+        producer.publish('single-a', {}),
+        producer.publish('single-b', {}),
+        producer.publishMany([{ channel: 'bulk', message: {} }]),
+      ]);
+      expect(results.map((result) => result.status)).toEqual([
+        'rejected',
+        'rejected',
+        'rejected',
+      ]);
+      await expect.poll(() => proxy.sockets.size, { timeout: 2000 }).toBe(0);
+      proxy.blackhole(false);
+      await expect(producer.publish('invalidated', {})).rejects.toThrow();
+      expect(proxy.sockets.size).toBe(0);
+    } finally {
+      await service.shutdown().catch(() => {});
+      await proxy.close();
+    }
+  },
+  20000,
+);
