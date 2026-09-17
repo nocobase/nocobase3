@@ -1,0 +1,208 @@
+import {
+  ClientApplicationContext,
+  type ClientApplication,
+} from '@nocobase/app-client';
+import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
+import { I18nRuntime } from '@nocobase/i18n';
+import { I18nProvider } from '@nocobase/i18n/client';
+import { act, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { MemoryRouter, Route, Routes } from 'react-router';
+import { describe, expect, it, vi } from 'vitest';
+
+import locales from '../../client/locales/index.js';
+import { AppHeader } from '../../client/shell/app-header.js';
+import { AppSidebar } from '../../client/shell/app-sidebar.js';
+import { SettingsLayout } from '../../client/layouts/settings-layout.js';
+import { DevLayout } from '../../client/layouts/dev-layout.js';
+
+vi.mock('../../client/routing/client-route.js', () => ({
+  ClientRoute: () => <p>Preferences content</p>,
+}));
+vi.mock('../../client/theme/index.js', () => ({ ThemeSettings: () => null }));
+vi.mock('../../client/shell/user-menu.js', () => ({ UserMenu: () => null }));
+vi.mock('../../client/routing/route-navigation.js', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../../client/routing/route-navigation.js')
+  >()),
+  useRouteNavigation: (routes: readonly AppClientRegisteredRoute[]) => ({
+    items: routes.map((route) => ({ route, children: [] })),
+    loading: false,
+    denied: new Set<string>(),
+  }),
+}));
+
+const route: AppClientRegisteredRoute = {
+  id: 'preferences',
+  name: 'preferences',
+  path: '/settings/preferences',
+  packageName: 'test',
+  source: 'application',
+  auth: 'optional',
+  navigation: { title: 'Preferences' },
+  componentLoader: async () => ({ default: () => <p>Preferences content</p> }),
+};
+
+async function setup(children: ReactNode, path = '/', defaultLocale = 'en-US') {
+  const runtime = new I18nRuntime({
+    defaultLocale,
+    locales: ['en-US', 'zh-CN', 'es-ES', 'ja-JP'],
+    applicationNamespace: 'test-app',
+  });
+  runtime.registerApplicationNamespace('test-app', {
+    ...locales,
+    // Application-added languages can be partial and must use the configured fallback chain.
+    'es-ES': async () => ({
+      default: { surface: { backToApp: 'Volver a la aplicación' } },
+    }),
+    'ja-JP': async () => ({
+      default: { surface: { backToApp: 'アプリに戻る' } },
+    }),
+  });
+  await runtime.init('en-US');
+  const app = {
+    runtime: { settingsRouteTree: [route] },
+  } as unknown as ClientApplication;
+  render(
+    <I18nProvider runtime={runtime}>
+      <ClientApplicationContext.Provider value={app}>
+        <MemoryRouter initialEntries={[path]}>{children}</MemoryRouter>
+      </ClientApplicationContext.Provider>
+    </I18nProvider>,
+  );
+  return runtime;
+}
+
+describe('shell translations', () => {
+  it('updates header, footer, tooltips and accessible labels without remounting', async () => {
+    const runtime = await setup(
+      <>
+        <AppHeader
+          desktopSidebarCollapsed={false}
+          onOpenSidebar={vi.fn()}
+          onToggleDesktopSidebar={vi.fn()}
+        />
+        <AppSidebar
+          routes={[]}
+          desktopCollapsed={false}
+          mobileOpen={false}
+          onCloseMobile={vi.fn()}
+        />
+      </>,
+    );
+    expect(screen.getByText('AI application workspace')).toBeVisible();
+    expect(screen.getByText('AI builds freely.')).toBeVisible();
+    await act(() => runtime.changeLanguage('zh-CN'));
+    expect(screen.getByText('AI 应用工作区')).toBeVisible();
+    expect(screen.getByText('AI 自由构建。')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'NocoBase' }).parentElement,
+    ).toHaveTextContent('NocoBase 保障可靠。');
+    expect(screen.getByRole('link', { name: 'NocoBase' })).toHaveAttribute(
+      'href',
+      'https://www.nocobase.com',
+    );
+    expect(screen.getByRole('link', { name: '设置' })).toHaveAttribute(
+      'title',
+      '设置',
+    );
+    expect(screen.getByRole('link', { name: '开发工具' })).toHaveAttribute(
+      'title',
+      '开发工具',
+    );
+    await act(() => runtime.changeLanguage('en-US'));
+    expect(screen.getByText('AI application workspace')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'title',
+      'Settings',
+    );
+  });
+
+  it.each([
+    [
+      'settings',
+      SettingsLayout,
+      '暂无可用设置',
+      '没有已启用的插件提供你有权访问的设置页面。',
+    ],
+    [
+      'dev',
+      DevLayout,
+      '暂无可用开发工具',
+      '没有已启用的插件提供你有权访问的开发页面。',
+    ],
+  ] as const)(
+    'translates the %s empty state',
+    async (surface, Layout, title, description) => {
+      const runtime = await setup(<Layout routeTree={[]} />, `/${surface}`);
+      await act(() => runtime.changeLanguage('zh-CN'));
+      expect(screen.getByRole('heading', { name: title })).toBeVisible();
+      expect(screen.getByText(description)).toBeVisible();
+      expect(screen.getByRole('link', { name: '返回应用' })).toHaveAttribute(
+        'href',
+        '/',
+      );
+    },
+  );
+
+  it.each(['es-ES', 'ja-JP'])(
+    'uses %s translations and falls back to the default locale',
+    async (locale) => {
+      const runtime = await setup(
+        <SettingsLayout routeTree={[]} />,
+        '/settings',
+        'zh-CN',
+      );
+      await act(() => runtime.changeLanguage(locale));
+      expect(
+        screen.getByRole('link', {
+          name: locale === 'es-ES' ? 'Volver a la aplicación' : 'アプリに戻る',
+        }),
+      ).toBeVisible();
+      expect(
+        screen.getByRole('heading', { name: '暂无可用设置' }),
+      ).toBeVisible();
+    },
+  );
+
+  it('falls back to English when the configured default also lacks a translation', async () => {
+    const runtime = await setup(
+      <SettingsLayout routeTree={[]} />,
+      '/settings',
+      'es-ES',
+    );
+    await act(() => runtime.changeLanguage('ja-JP'));
+    expect(
+      screen.getByRole('heading', { name: 'No settings available' }),
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'アプリに戻る' })).toBeVisible();
+  });
+
+  it.each(['settings', 'dev'] as const)(
+    'translates the %s page header',
+    async (surface) => {
+      const Layout = surface === 'settings' ? SettingsLayout : DevLayout;
+      const page = { ...route, path: `/${surface}/preferences` };
+      const runtime = await setup(
+        <Routes>
+          <Route
+            path={`/${surface}/*`}
+            element={<Layout routeTree={[page]} />}
+          />
+        </Routes>,
+        page.path,
+      );
+      await screen.findByText('Preferences content');
+      await act(() => runtime.changeLanguage('zh-CN'));
+      expect(screen.getByRole('link', { name: '返回应用' })).toHaveAttribute(
+        'href',
+        '/',
+      );
+      expect(
+        screen.getByRole('navigation', {
+          name: surface === 'settings' ? '设置' : '开发工具',
+        }),
+      ).toBeVisible();
+    },
+  );
+});

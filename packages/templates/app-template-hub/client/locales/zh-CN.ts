@@ -1,6 +1,26 @@
 import type { AppResource } from './en-US.js';
 
 const zhCN: AppResource = {
+  shell: {
+    buildFreely: 'AI 自由构建。',
+    reliability: '<brand>NocoBase</brand> 保障可靠。',
+  },
+  surface: {
+    backToApp: '返回应用',
+    loading: '正在加载{{title}}',
+    navigation: '{{title}}导航',
+    page: '{{title}}页面',
+  },
+  settings: {
+    title: '设置',
+    emptyTitle: '暂无可用设置',
+    emptyDescription: '没有已启用的插件提供你有权访问的设置页面。',
+  },
+  dev: {
+    title: '开发工具',
+    emptyTitle: '暂无可用开发工具',
+    emptyDescription: '没有已启用的插件提供你有权访问的开发页面。',
+  },
   appearance: {
     title: '外观',
     mode: '颜色模式',

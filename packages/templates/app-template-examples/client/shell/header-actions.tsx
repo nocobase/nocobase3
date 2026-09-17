@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { useClientApplication } from '@nocobase/app-client';
 import { MonitorCog, Settings } from 'lucide-react';
 import type { ReactElement } from 'react';
@@ -16,6 +17,7 @@ const ACTION_LINK_CLASS =
 
 /** Keep header entries visible on their destination pages so navigation stays consistent across surfaces. */
 export function HeaderActions(): ReactElement {
+  const { t } = useTranslation();
   const routes = useClientApplication().runtime.settingsRouteTree;
   // Use the same access checks as Settings navigation so the entry never opens an empty surface.
   const { items } = useRouteNavigation(routes, true);
@@ -27,9 +29,9 @@ export function HeaderActions(): ReactElement {
           false and drops the link along with the whole dev surface it points at. */}
       {import.meta.env.DEV ? (
         <Link
-          aria-label='Dev tools'
+          aria-label={t('dev.title', { defaultValue: 'Dev tools' })}
           className={ACTION_LINK_CLASS}
-          title='Dev tools'
+          title={t('dev.title', { defaultValue: 'Dev tools' })}
           to='/dev'
         >
           <MonitorCog className='size-5' />
@@ -37,9 +39,9 @@ export function HeaderActions(): ReactElement {
       ) : null}
       {hasSettings ? (
         <Link
-          aria-label='Settings'
+          aria-label={t('settings.title', { defaultValue: 'Settings' })}
           className={ACTION_LINK_CLASS}
-          title='Settings'
+          title={t('settings.title', { defaultValue: 'Settings' })}
           to='/settings'
         >
           <Settings className='size-5' />

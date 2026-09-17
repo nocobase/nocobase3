@@ -1,6 +1,28 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  shell: {
+    buildFreely: 'AI builds freely.',
+    reliability: '<brand>NocoBase</brand> keeps it reliable.',
+  },
+  surface: {
+    backToApp: 'Back to app',
+    loading: 'Loading {{title}}',
+    navigation: '{{title}} navigation',
+    page: '{{title}} page',
+  },
+  settings: {
+    title: 'Settings',
+    emptyTitle: 'No settings available',
+    emptyDescription:
+      'No enabled plugin contributes a settings page you have access to.',
+  },
+  dev: {
+    title: 'Dev tools',
+    emptyTitle: 'No dev tools available',
+    emptyDescription:
+      'No enabled plugin contributes a dev page you have access to.',
+  },
   appearance: {
     title: 'Appearance',
     mode: 'Color mode',
