@@ -94,7 +94,7 @@ export class HubApiKeyService {
           .executeTakeFirst();
         return summary(
           row,
-          await this.keyApps(String(row.id)),
+          await this.keyApps(String(row.id), userId),
           key,
           typeof user?.name === 'string' ? user.name : key.referenceId,
           userId,
@@ -240,14 +240,28 @@ export class HubApiKeyService {
     return options;
   }
 
-  private async keyApps(keyId: string): Promise<HubApiKeyApp[]> {
-    return this.query()
+  private async keyApps(
+    keyId: string,
+    userId: string,
+  ): Promise<HubApiKeyApp[]> {
+    const apps = await this.query()
       .selectFrom('hubApiKeyApps')
       .innerJoin('hubApps', 'hubApps.id', 'hubApiKeyApps.appId')
       .select(['hubApps.id', 'hubApps.name'])
       .where('keyId', '=', keyId)
       .orderBy('hubApps.id')
       .execute<HubApiKeyApp>();
+    const visible: HubApiKeyApp[] = [];
+    for (const app of apps) {
+      try {
+        // A retained key is not a grant to read Apps after its owner loses access.
+        await this.requirePermission(userId, app.id, 'read');
+        visible.push(app);
+      } catch (error) {
+        if (!(error instanceof AuthorizationDeniedError)) throw error;
+      }
+    }
+    return visible;
   }
 
   async reveal(keyId: string, userId: string): Promise<string> {

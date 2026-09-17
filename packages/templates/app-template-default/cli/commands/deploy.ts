@@ -40,8 +40,10 @@ export default class AppDeploy extends Command {
         'Retry identity; defaults to a digest of App and Release IDs. Use a new key to redeploy.',
     }),
     wait: Flags.boolean({
-      default: false,
-      description: 'Wait for deployment success.',
+      default: true,
+      allowNo: true,
+      description:
+        'Wait for deployment success (default). Use --no-wait to return after acceptance.',
     }),
     timeout: Flags.integer({
       default: 600,

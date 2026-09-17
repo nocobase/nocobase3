@@ -84,6 +84,8 @@ export async function publishToHub(
       'Hub URL must be HTTP(S), without credentials, query or fragment.',
       2,
     );
+  const wait =
+    options.wait ?? (operation === 'deploy' || options.deploy === true);
   const timeout = options.timeout ?? 600;
   if (!Number.isFinite(timeout) || timeout <= 0 || timeout > 86400)
     throw new PublishingError(
@@ -155,9 +157,9 @@ export async function publishToHub(
         3,
       );
     }
-    let payload: { data?: Record<string, unknown>; error?: { code?: string } };
+    let payload: unknown;
     try {
-      payload = (await response.json()) as typeof payload;
+      payload = await response.json();
     } catch {
       throw new PublishingError(
         'INVALID_HUB_RESPONSE',
@@ -166,10 +168,13 @@ export async function publishToHub(
       );
     }
     if (!response.ok) {
+      const error =
+        isRecord(payload) && isRecord(payload.error)
+          ? payload.error
+          : undefined;
       const code =
-        typeof payload.error?.code === 'string' &&
-        /^[A-Z0-9_]+$/.test(payload.error.code)
-          ? payload.error.code
+        typeof error?.code === 'string' && /^[A-Z0-9_]+$/.test(error.code)
+          ? error.code
           : 'HUB_REQUEST_FAILED';
       // Do not echo raw response text: proxies and remote exceptions can contain credentials.
       throw new PublishingError(
@@ -178,10 +183,10 @@ export async function publishToHub(
         1,
       );
     }
-    if (!payload.data || typeof payload.data !== 'object')
+    if (!isRecord(payload) || !isRecord(payload.data))
       throw new PublishingError(
         'INVALID_HUB_RESPONSE',
-        'Hub response is missing its result.',
+        'Hub response is missing its result; the outcome is unknown. Check Hub before retrying with the same idempotency key.',
         3,
       );
     return payload.data;
@@ -237,7 +242,7 @@ export async function publishToHub(
           'x-artifact-sha256': checksum,
           'idempotency-key': requestKey,
           ...(options.deploy ? { 'x-hub-deployment-intent': 'explicit' } : {}),
-          ...(options.wait ? { 'x-hub-wait': 'true' } : {}),
+          ...(wait ? { 'x-hub-wait': 'true' } : {}),
         },
       };
       data = await request('releases', init);
@@ -245,16 +250,22 @@ export async function publishToHub(
       body.destroy();
       stream.destroy();
     }
-    if (typeof data.releaseId !== 'string')
+    if (!isIdentifier(data.releaseId))
       throw new PublishingError(
         'INVALID_HUB_RESPONSE',
         'Hub did not return a Release ID.',
         3,
       );
     if (
-      options.deploy &&
-      (typeof data.operationId !== 'string' || !data.operationId)
+      (options.deploy && data.operationId === undefined) ||
+      (data.operationId != null && !isIdentifier(data.operationId))
     )
+      throw new PublishingError(
+        'INVALID_HUB_RESPONSE',
+        'Hub returned an invalid deployment ID; the result is unknown.',
+        3,
+      );
+    if (options.deploy && data.operationId == null)
       throw new PublishingError(
         'NO_DEPLOYMENT',
         'Hub did not confirm a deployment. Use app deploy --release-id to deploy an existing Release.',
@@ -290,12 +301,13 @@ export async function publishToHub(
         ...(config ? { config } : {}),
       }),
     });
-    if (typeof data.operationId !== 'string')
+    if (!isIdentifier(data.operationId))
       throw new PublishingError(
         'INVALID_HUB_RESPONSE',
         'Hub did not return a deployment ID.',
         3,
       );
+    requireDeploymentStatus(data.status);
     if (data.status === 'failed' || data.status === 'cancelled')
       throw new PublishingError(
         'DEPLOYMENT_FAILED',
@@ -312,7 +324,7 @@ export async function publishToHub(
   // Reusing an operation confirms its identity, not that it can still succeed.
   const checkUploadRetry =
     operation === 'upload' && options.deploy && result.reused === true;
-  if (options.wait || checkUploadRetry) {
+  if (wait || checkUploadRetry) {
     if (typeof result.operationId !== 'string')
       throw new PublishingError(
         'NO_DEPLOYMENT',
@@ -324,6 +336,7 @@ export async function publishToHub(
         `deployments/${encodeURIComponent(result.operationId)}/status`,
         { method: 'GET' },
       );
+      requireDeploymentStatus(state.status);
       result.operationStatus = state.status;
       if (state.status === 'succeeded') break;
       if (state.status === 'failed' || state.status === 'cancelled')
@@ -332,13 +345,7 @@ export async function publishToHub(
           `Deployment ${result.operationId} ${String(state.status)}. Inspect it in Hub.`,
           1,
         );
-      if (state.status !== 'queued' && state.status !== 'deploying')
-        throw new PublishingError(
-          'RESULT_UNKNOWN',
-          'Deployment result cannot be confirmed.',
-          3,
-        );
-      if (!options.wait) break;
+      if (!wait) break;
       try {
         await delay(1000, undefined, { signal });
       } catch {
@@ -351,4 +358,27 @@ export async function publishToHub(
     }
   }
   return result;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]+$/.test(value);
+}
+
+function requireDeploymentStatus(status: unknown): void {
+  if (
+    status !== 'queued' &&
+    status !== 'deploying' &&
+    status !== 'succeeded' &&
+    status !== 'failed' &&
+    status !== 'cancelled'
+  )
+    throw new PublishingError(
+      'RESULT_UNKNOWN',
+      'Deployment result cannot be confirmed. Check the deployment in Hub before retrying with the same idempotency key.',
+      3,
+    );
 }

@@ -591,6 +591,94 @@ describe('Hub publishing key lifecycle and permissions', () => {
     await expect(service.verify(secret, 'erp', 'deploy')).rejects.toThrow();
   });
 
+  it('hides newly renamed foreign Apps on old selected keys after demotion while preserving revocation', async () => {
+    await db
+      .query()
+      .updateTable('hubApps')
+      .set({ createdBy: 'admin' })
+      .where('id', '=', 'crm')
+      .execute();
+    await db
+      .query()
+      .updateTable('hubApps')
+      .set({ createdBy: 'operator' })
+      .where('id', '=', 'erp')
+      .execute();
+    const mixed = await service.create('admin', {
+      name: 'Mixed Apps',
+      appIds: ['crm', 'erp'],
+      scopes: ['upload-release', 'deploy'],
+    });
+    const foreign = await service.create('admin', {
+      name: 'Foreign App',
+      appIds: ['erp'],
+      scopes: ['deploy'],
+    });
+    await authz.permissionSets.replaceSubjectAssignments({
+      subject: { type: 'user', id: 'admin' },
+      managedPermissionSets: ['hub-administrator', 'hub-operator'],
+      permissionSets: ['hub-operator'],
+    });
+    await db
+      .query()
+      .updateTable('hubApps')
+      .set({ name: 'Private name after demotion' })
+      .where('id', '=', 'erp')
+      .execute();
+    const keys = await service.list('admin');
+    expect(keys.find((key) => key.id === mixed.key.id)?.apps).toEqual([
+      { id: 'crm', name: 'crm' },
+    ]);
+    expect(keys.find((key) => key.id === foreign.key.id)?.apps).toEqual([]);
+    expect(JSON.stringify(keys)).not.toContain('Private name after demotion');
+    await expect(
+      service.requirePermission('admin', 'erp', 'read'),
+    ).rejects.toThrow();
+    await expect(
+      service.verify(mixed.secret, 'crm', 'deploy'),
+    ).resolves.toHaveProperty('id');
+    await expect(
+      service.verify(mixed.secret, 'erp', 'deploy'),
+    ).rejects.toThrow();
+    // Visibility does not change stored bindings or destroy a key that the owner must still be able to revoke.
+    expect(
+      await db
+        .query()
+        .selectFrom('hubApiKeyApps')
+        .selectAll()
+        .where('keyId', '=', mixed.key.id)
+        .execute(),
+    ).toHaveLength(2);
+    await service.disable(mixed.key.id, 'admin');
+    await service.disable(mixed.key.id, 'admin');
+    await service.remove(foreign.key.id, 'admin');
+    await service.remove(foreign.key.id, 'admin');
+    await expect(
+      service.verify(mixed.secret, 'crm', 'deploy'),
+    ).rejects.toMatchObject({ status: 401 });
+    expect(await keyService.verify(foreign.secret)).toBeNull();
+  });
+
+  it('propagates authorization service failures instead of returning incomplete App metadata', async () => {
+    await create();
+    const failure = new Error('Authorization storage unavailable');
+    const requirePermission = service.requirePermission.bind(service);
+    const permission = vi
+      .spyOn(service, 'requirePermission')
+      .mockImplementation(async (userId, appId, action) => {
+        if (action === 'read') throw failure;
+        return requirePermission(userId, appId, action);
+      });
+    try {
+      await expect(service.list('admin')).rejects.toBe(failure);
+    } finally {
+      permission.mockRestore();
+    }
+    expect((await service.list('admin'))[0]?.apps).toEqual([
+      { id: 'crm', name: 'crm' },
+    ]);
+  });
+
   it('checks every selected App, rejects old permission names and leaves no partial credential', async () => {
     for (const input of [
       { appIds: [], scopes: ['deploy'] },
@@ -872,6 +960,123 @@ describe('Hub API Key HTTP boundary', () => {
       listReleases,
     };
   }
+  it.each([false, true])(
+    'rechecks role, account and revocation changes through HTTP and CLI (allApps=%s)',
+    async (allApps) => {
+      await db
+        .query()
+        .updateTable('hubApps')
+        .set({ createdBy: 'admin' })
+        .where('id', '=', 'crm')
+        .execute();
+      await db
+        .query()
+        .updateTable('hubApps')
+        .set({ createdBy: 'operator' })
+        .where('id', '=', 'erp')
+        .execute();
+      const publishing = await service.create('admin', {
+        name: 'Transition acceptance',
+        allApps,
+        appIds: allApps ? [] : ['crm', 'erp'],
+        scopes: ['upload-release', 'deploy'],
+      });
+      const { router: api } = await router();
+      const { router: management } = await router('admin');
+      const headers = { authorization: `Bearer ${publishing.secret}` };
+      const status = (appId: string) =>
+        api.request(`/hub/apps/${appId}/deployments/op-1/status`, { headers });
+      const cliRoot = await mkdtemp(
+        path.join(os.tmpdir(), 'hub-acl-transition-'),
+      );
+      vi.stubGlobal('fetch', (url: URL, init: RequestInit) => {
+        const target = new URL(url);
+        target.pathname = target.pathname.replace('/main/api', '');
+        return api.request(new Request(target, init));
+      });
+      const deploy = (appId: string) =>
+        publishToHub(
+          'deploy',
+          {
+            hub: 'http://localhost/main',
+            'app-id': appId,
+            'api-key': publishing.secret,
+            'release-id': 'r1',
+            wait: false,
+          },
+          cliRoot,
+          {},
+        );
+      try {
+        expect((await status('crm')).status).toBe(200);
+        expect((await status('erp')).status).toBe(200);
+        // The stub's domain rejection proves authorized requests reached the deployment service.
+        await expect(deploy('erp')).rejects.toMatchObject({
+          code: 'DEPLOY_REACHED',
+          exitCode: 1,
+        });
+        await authz.permissionSets.replaceSubjectAssignments({
+          subject: { type: 'user', id: 'admin' },
+          managedPermissionSets: ['hub-administrator', 'hub-operator'],
+          permissionSets: ['hub-operator'],
+        });
+        await db
+          .query()
+          .updateTable('hubApps')
+          .set({ name: 'Renamed after role change' })
+          .where('id', '=', 'erp')
+          .execute();
+        expect((await status('crm')).status).toBe(200);
+        expect((await status('erp')).status).toBe(403);
+        await expect(deploy('crm')).rejects.toMatchObject({
+          code: 'DEPLOY_REACHED',
+          exitCode: 1,
+        });
+        await expect(deploy('erp')).rejects.toMatchObject({
+          code: 'FORBIDDEN',
+          exitCode: 1,
+        });
+        const listed = await management.request('/hub/api-keys');
+        expect(listed.status).toBe(200);
+        expect(await listed.text()).not.toContain('Renamed after role change');
+        await db
+          .query()
+          .updateTable('user')
+          .set({ disabledAt: new Date() })
+          .where('id', '=', 'admin')
+          .execute();
+        expect((await status('crm')).status).toBe(401);
+        await expect(deploy('crm')).rejects.toMatchObject({
+          code: 'INVALID_API_KEY',
+          exitCode: 1,
+        });
+        // Even a stale session supplied by the fixture cannot manage keys for a disabled account.
+        expect((await management.request('/hub/api-keys')).status).toBe(401);
+        await db
+          .query()
+          .updateTable('user')
+          .set({ disabledAt: null })
+          .where('id', '=', 'admin')
+          .execute();
+        expect((await status('crm')).status).toBe(200);
+        expect((await status('erp')).status).toBe(403);
+        await service.disable(publishing.key.id, 'admin');
+        await service.disable(publishing.key.id, 'admin');
+        expect((await status('crm')).status).toBe(401);
+        await expect(deploy('crm')).rejects.toMatchObject({
+          code: 'INVALID_API_KEY',
+          exitCode: 1,
+        });
+        await service.remove(publishing.key.id, 'admin');
+        await service.remove(publishing.key.id, 'admin');
+        expect((await status('crm')).status).toBe(401);
+      } finally {
+        vi.unstubAllGlobals();
+        await rm(cliRoot, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('publishes through the real CLI, Bearer boundary, artifact storage and deployment service', async () => {
     const root = await mkdtemp(
       path.join(os.tmpdir(), 'hub-publishing-acceptance-'),
@@ -930,6 +1135,7 @@ describe('Hub API Key HTTP boundary', () => {
         'app-id': 'crm',
         'api-key': publishing.secret,
         deploy: true,
+        wait: false,
       };
       const first = await publishToHub('upload', options, root, {});
       const again = await publishToHub('upload', options, root, {});
@@ -953,7 +1159,7 @@ describe('Hub API Key HTTP boundary', () => {
         ).toBe('failed');
       });
       await expect(
-        publishToHub('upload', { ...options, wait: true }, root, {}),
+        publishToHub('upload', { ...options, wait: undefined }, root, {}),
       ).rejects.toMatchObject({ exitCode: 1, code: 'DEPLOYMENT_FAILED' });
       await expect(
         publishToHub('upload', { ...options, wait: false }, root, {}),

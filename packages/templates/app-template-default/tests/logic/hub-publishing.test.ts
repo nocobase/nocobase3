@@ -35,13 +35,17 @@ describe('Hub publishing client', () => {
         '# Publishing defaults\nHUB_URL="https://file.example/main"\nHUB_APP_ID=from-file # comment\nHUB_API_KEY=\'file-secret#literal\'\nNODE_OPTIONS=--invalid-option\n',
       );
       const processEnvBefore = { ...process.env };
-      const fetcher = vi
-        .fn()
-        .mockImplementation(() =>
-          Promise.resolve(response({ releaseId: 'r1', operationId: 'op-1' })),
-        );
+      const fetcher = vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          response({
+            releaseId: 'r1',
+            operationId: 'op-1',
+            status: 'queued',
+          }),
+        ),
+      );
       vi.stubGlobal('fetch', fetcher);
-      const options = { 'release-id': 'r1' };
+      const options = { 'release-id': 'r1', wait: false };
       const endpoint = operation === 'upload' ? 'releases' : 'deploy';
       const check = (host: string, appId: string, secret: string) => {
         const call = fetcher.mock.lastCall;
@@ -151,7 +155,9 @@ describe('Hub publishing client', () => {
       'https://override.example/console/api/hub/apps/erp/deployments/op-1/status',
     );
     fetcher
-      .mockResolvedValueOnce(response({ operationId: 'op-2' }))
+      .mockResolvedValueOnce(
+        response({ operationId: 'op-2', status: 'queued' }),
+      )
       .mockResolvedValueOnce(response({ status: 'failed' }));
     await expect(
       publishToHub('deploy', { 'release-id': 'r2', wait: true }, root, env),
@@ -165,7 +171,7 @@ describe('Hub publishing client', () => {
         vi.fn(async () => response({ operationId: 'previous-op', status })),
       );
       await expect(
-        publishToHub('deploy', { 'release-id': 'r1' }, root, env),
+        publishToHub('deploy', { 'release-id': 'r1', wait: false }, root, env),
       ).rejects.toMatchObject({ exitCode: 1, code: 'DEPLOYMENT_FAILED' });
     },
   );
@@ -173,24 +179,30 @@ describe('Hub publishing client', () => {
     const fetcher = vi
       .fn()
       .mockImplementation(() =>
-        Promise.resolve(response({ operationId: 'op-1' })),
+        Promise.resolve(response({ operationId: 'op-1', status: 'queued' })),
       );
     vi.stubGlobal('fetch', fetcher);
     const first = await publishToHub(
       'deploy',
-      { 'release-id': 'r1' },
+      { 'release-id': 'r1', wait: false },
       root,
       env,
     );
     expect(
-      (await publishToHub('deploy', { 'release-id': 'r1' }, root, env))
-        .idempotencyKey,
+      (
+        await publishToHub(
+          'deploy',
+          { 'release-id': 'r1', wait: false },
+          root,
+          env,
+        )
+      ).idempotencyKey,
     ).toBe(first.idempotencyKey);
     expect(
       (
         await publishToHub(
           'deploy',
-          { 'release-id': 'r1', 'idempotency-key': 'new-attempt' },
+          { 'release-id': 'r1', 'idempotency-key': 'new-attempt', wait: false },
           root,
           env,
         )
@@ -200,7 +212,9 @@ describe('Hub publishing client', () => {
   it('sends deploy and wait intent on the upload itself', async () => {
     const fetcher = vi
       .fn()
-      .mockResolvedValueOnce(response({ releaseId: 'r1', operationId: 'op-1' }))
+      .mockResolvedValueOnce(
+        response({ releaseId: 'r1', operationId: 'op-1', status: 'queued' }),
+      )
       .mockResolvedValueOnce(response({ status: 'succeeded' }));
     vi.stubGlobal('fetch', fetcher);
     await publishToHub('upload', { deploy: true, wait: true }, root, env);
@@ -248,7 +262,7 @@ describe('Hub publishing client', () => {
     expect(fetcher).not.toHaveBeenCalled();
     fetcher.mockRejectedValue(new Error(env.HUB_API_KEY));
     await expect(
-      publishToHub('deploy', { 'release-id': 'r1' }, root, env),
+      publishToHub('deploy', { 'release-id': 'r1', wait: false }, root, env),
     ).rejects.toMatchObject({ exitCode: 3, code: 'RESULT_UNKNOWN' });
     fetcher.mockResolvedValue(
       new Response(
@@ -259,7 +273,7 @@ describe('Hub publishing client', () => {
       ),
     );
     await expect(
-      publishToHub('deploy', { 'release-id': 'r1' }, root, env),
+      publishToHub('deploy', { 'release-id': 'r1', wait: false }, root, env),
     ).rejects.toMatchObject({
       exitCode: 1,
       message: 'Hub rejected the request (403, FORBIDDEN).',
@@ -271,12 +285,12 @@ describe('Hub publishing client', () => {
     const fetcher = vi
       .fn()
       .mockImplementation(() =>
-        Promise.resolve(response({ operationId: 'op-1' })),
+        Promise.resolve(response({ operationId: 'op-1', status: 'queued' })),
       );
     vi.stubGlobal('fetch', fetcher);
     const first = await publishToHub(
       'deploy',
-      { 'release-id': 'r1', config: 'runtime.yml' },
+      { 'release-id': 'r1', config: 'runtime.yml', wait: false },
       root,
       env,
     );
@@ -288,7 +302,7 @@ describe('Hub publishing client', () => {
     await writeFile(path.join(root, 'runtime.yml'), 'feature: changed\n');
     const second = await publishToHub(
       'deploy',
-      { 'release-id': 'r1', config: 'runtime.yml' },
+      { 'release-id': 'r1', config: 'runtime.yml', wait: false },
       root,
       env,
     );
@@ -306,11 +320,15 @@ describe('Hub publishing client', () => {
       expect(bytes.subarray(0, length).toString()).toBe('feature: changed\n');
       expect(bytes.subarray(length).toString()).toBe('artifact');
       expect(JSON.stringify(init.headers)).not.toContain('feature');
-      return response({ releaseId: 'r1', operationId: 'op-1' });
+      return response({
+        releaseId: 'r1',
+        operationId: 'op-1',
+        status: 'queued',
+      });
     });
     await publishToHub(
       'upload',
-      { deploy: true, config: 'runtime.yml' },
+      { deploy: true, config: 'runtime.yml', wait: false },
       root,
       env,
     );
@@ -334,7 +352,7 @@ describe('Hub publishing client', () => {
     await expect(
       publishToHub(
         'upload',
-        { deploy: true, config: 'runtime.yml' },
+        { deploy: true, config: 'runtime.yml', wait: false },
         root,
         env,
       ),
@@ -347,22 +365,21 @@ describe('Hub publishing client', () => {
       'fetch',
       vi
         .fn()
-        .mockResolvedValueOnce(response({ operationId: 'op-1' }))
+        .mockResolvedValueOnce(
+          response({ operationId: 'op-1', status: 'queued' }),
+        )
         .mockResolvedValueOnce(response({ status: 'queued' })),
     );
     await expect(
-      publishToHub(
-        'deploy',
-        { 'release-id': 'r1', wait: true, timeout: 0.01 },
-        root,
-        env,
-      ),
+      publishToHub('deploy', { 'release-id': 'r1', timeout: 0.01 }, root, env),
     ).rejects.toMatchObject({ exitCode: 3, code: 'WAIT_TIMEOUT' });
     vi.stubGlobal(
       'fetch',
       vi
         .fn()
-        .mockResolvedValueOnce(response({ operationId: 'op-1' }))
+        .mockResolvedValueOnce(
+          response({ operationId: 'op-1', status: 'queued' }),
+        )
         .mockResolvedValueOnce(response({ status: 'unknown' })),
     );
     await expect(
@@ -372,6 +389,82 @@ describe('Hub publishing client', () => {
 });
 
 describe('CLI command output', () => {
+  it.each([
+    ['deploy', [], 'succeeded', true],
+    ['deploy', [], 'failed', true],
+    ['deploy', ['--wait'], 'succeeded', true],
+    ['deploy', ['--no-wait'], 'queued', false],
+    ['upload', ['--deploy'], 'succeeded', true],
+    ['upload', ['--deploy'], 'failed', true],
+    ['upload', ['--deploy', '--wait'], 'succeeded', true],
+    ['upload', ['--deploy', '--no-wait'], 'queued', false],
+    ['upload', [], 'queued', false],
+  ] as const)(
+    '%s %j reports %s with polling=%s',
+    async (operation, flags, status, polls) => {
+      const { Config } = await import('@oclif/core');
+      const { default: AppDeploy } =
+        await import('../../cli/commands/deploy.js');
+      const { default: AppUpload } =
+        await import('../../cli/commands/upload.js');
+      const config = await Config.load({
+        root,
+        pjson: {
+          name: 'publishing-test',
+          version: '0.0.0',
+          oclif: { bin: 'nocobase' },
+        },
+      });
+      const fetcher = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response({ releaseId: 'r1', operationId: 'op-1', status: 'queued' }),
+        )
+        .mockResolvedValueOnce(response({ status }));
+      vi.stubGlobal('fetch', fetcher);
+      const Command = operation === 'deploy' ? AppDeploy : AppUpload;
+      const command = new Command(
+        [
+          '--json',
+          '--hub',
+          env.HUB_URL,
+          '--app-id',
+          env.HUB_APP_ID,
+          '--api-key',
+          env.HUB_API_KEY,
+          ...(operation === 'deploy'
+            ? ['--release-id', 'r1']
+            : ['--file', path.join(root, 'storage/dist.tar.gz')]),
+          ...flags,
+        ],
+        config,
+      );
+      const output = vi
+        .spyOn(command, 'logJson')
+        .mockImplementation(() => undefined);
+      if (status === 'failed') {
+        await expect(command.run()).rejects.toMatchObject({
+          oclif: { exit: 1 },
+        });
+        expect(output.mock.calls[0]?.[0]).toMatchObject({
+          ok: false,
+          error: { code: 'DEPLOYMENT_FAILED' },
+        });
+      } else {
+        await command.run();
+        expect(output.mock.calls[0]?.[0]).toMatchObject({
+          ok: true,
+          ...(polls ? { result: { operationStatus: 'succeeded' } } : {}),
+        });
+      }
+      expect(output).toHaveBeenCalledTimes(1);
+      expect(fetcher).toHaveBeenCalledTimes(polls ? 2 : 1);
+      if (polls)
+        expect(String(fetcher.mock.calls[1]?.[0])).toMatch(
+          /\/deployments\/op-1\/status$/,
+        );
+    },
+  );
   it('prints one JSON envelope and a parameter exit code without echoing secret arguments', async () => {
     const { Config } = await import('@oclif/core');
     const { default: AppDeploy } = await import('../../cli/commands/deploy.js');
@@ -445,7 +538,7 @@ describe('CLI command output', () => {
     });
   });
 
-  it('runs the real deploy flag parser and separates command success from deployment status', async () => {
+  it('allows --no-wait to return the accepted deployment status', async () => {
     const { Config } = await import('@oclif/core');
     const { default: AppDeploy } = await import('../../cli/commands/deploy.js');
     const config = await Config.load({
@@ -474,6 +567,7 @@ describe('CLI command output', () => {
         env.HUB_API_KEY,
         '--release-id',
         'r1',
+        '--no-wait',
         '--config',
         path.join(root, 'runtime.yml'),
       ],

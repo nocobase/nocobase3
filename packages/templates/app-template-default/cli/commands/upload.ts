@@ -12,7 +12,7 @@ export default class AppUpload extends Command {
     file: Interfaces.OptionFlag<string>;
     'idempotency-key': Interfaces.OptionFlag<string | undefined>;
     deploy: Interfaces.BooleanFlag<boolean>;
-    wait: Interfaces.BooleanFlag<boolean>;
+    wait: Interfaces.BooleanFlag<boolean | undefined>;
     timeout: Interfaces.OptionFlag<number>;
     json: Interfaces.BooleanFlag<boolean>;
   } = {
@@ -44,8 +44,9 @@ export default class AppUpload extends Command {
       description: 'Upload and accept one deployment atomically.',
     }),
     wait: Flags.boolean({
-      default: false,
-      description: 'Wait for deployment success. Requires --deploy.',
+      allowNo: true,
+      description:
+        'Wait for deployment success by default with --deploy. Use --no-wait to return after acceptance.',
     }),
     timeout: Flags.integer({
       default: 600,
