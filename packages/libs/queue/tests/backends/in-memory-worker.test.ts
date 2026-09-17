@@ -23,6 +23,33 @@ function fixture() {
 }
 
 describe('memory worker backend claim and wake protocol', () => {
+  it('keeps delayed jobs unavailable until due and wakes a blocked Worker', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('delayed', { connection: {} }, factory);
+    const times: number[] = [];
+    const worker = new Worker(
+      'delayed',
+      async () => {
+        times.push(Date.now());
+      },
+      { connection: {}, autorun: false },
+      factory,
+    );
+    worker.on('error', () => {});
+    let running: Promise<void> | undefined;
+    try {
+      const job = await queue.add('event', {}, { delay: 150 });
+      expect(await queue.getJobState(job.id!)).toBe('delayed');
+      running = worker.run();
+      await expect.poll(() => queue.getJobState(job.id!)).toBe('completed');
+      expect(times).toHaveLength(1);
+      expect(times[0]! - job.timestamp).toBeGreaterThanOrEqual(150);
+    } finally {
+      await worker.close(true);
+      await running;
+      await queue.close();
+    }
+  });
   it.each([false, true])(
     'places an immediate retry at the expected end (lifo: %s)',
     async (lifo) => {

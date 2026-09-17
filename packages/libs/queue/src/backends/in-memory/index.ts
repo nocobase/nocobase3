@@ -119,6 +119,29 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     this.state.worker.notify();
     return records.map((record) => record.id);
   }
+  private promoteDue(): void {
+    const now = Date.now();
+    for (const [id, job] of this.state.records) {
+      if (
+        job.timestamp + (job.delay ?? job.opts.delay ?? 0) <= now &&
+        this.state.store.transition(id, 'delayed', 'waiting')
+      )
+        job.delay = 0;
+    }
+  }
+
+  private nextDue(): number | undefined {
+    let next = Infinity;
+    for (const [id, job] of this.state.records) {
+      if (this.state.store.get(id)?.state === 'delayed')
+        next = Math.min(
+          next,
+          job.timestamp + (job.delay ?? job.opts.delay ?? 0),
+        );
+    }
+    return next === Infinity ? undefined : next;
+  }
+
   private waitingId(): string | undefined {
     let selected: string | undefined;
     let priority = Infinity;
@@ -146,8 +169,9 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     token: string,
     name?: string,
   ): [JobJson | null, string | null, number, number] {
+    this.promoteDue();
     const id = this.waitingId();
-    if (id === undefined) return [null, null, 0, 0];
+    if (id === undefined) return [null, null, 0, this.nextDue() ?? 0];
     const job = this.state.records.get(id);
     if (!job || !this.state.store.transition(id, 'waiting', 'active'))
       throw new Error('Inconsistent memory claim');
@@ -392,7 +416,14 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   async waitForJob(
     blockTimeout: number,
   ): ReturnType<IQueueBackend['waitForJob']> {
-    return this.waiter.wait(blockTimeout, () => this.waitingId());
+    return this.waiter.wait(
+      blockTimeout,
+      () => {
+        this.promoteDue();
+        return this.waitingId();
+      },
+      () => this.nextDue(),
+    );
   }
   async disconnectBlocking(_wait?: boolean): Promise<void> {
     this.waiter.disconnect();
