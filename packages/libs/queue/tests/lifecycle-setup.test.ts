@@ -267,3 +267,55 @@ it('does not create a Worker after runtime cancellation during rate metadata ini
     await service.shutdown().catch(() => {});
   }
 });
+
+it('retains the late Worker timeout when its backend cleanup fails', async () => {
+  const errors: unknown[] = [];
+  const service = createQueueService(
+    { namespace: 'worker-errors', queueBackend: 'test', setupTimeoutMs: 20 },
+    {
+      logger: {
+        warn: () => {},
+        error: (details) => {
+          errors.push(details.error);
+        },
+      },
+    },
+  );
+  const factory = createInMemoryBackendFactory();
+  const cleanupError = new Error('worker cleanup failed');
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  service.registerBackend('test', (name, options, metadata) => {
+    const backend = factory(name, options, metadata);
+    if (metadata?.withBlockingConnection) {
+      backend.waitUntilReady = async () => gate;
+      const close = backend.close.bind(backend);
+      backend.close = async (...args) => {
+        release();
+        await close(...args);
+        throw cleanupError;
+      };
+    }
+    return backend;
+  });
+  service.producer('jobs');
+  await service.setup();
+  const messages = (error: unknown): string[] =>
+    error instanceof AggregateError
+      ? [error.message, ...error.errors.flatMap(messages)]
+      : error instanceof Error
+        ? [error.message]
+        : [];
+  service.consumer('jobs').consume(async () => {});
+  try {
+    await expect
+      .poll(() => errors.flatMap(messages))
+      .toContain('Queue jobs Worker initialization deadline exceeded');
+    expect(errors.flatMap(messages)).toContain(cleanupError.message);
+  } finally {
+    release();
+    await service.shutdown().catch(() => {});
+  }
+});
