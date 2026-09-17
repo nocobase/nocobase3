@@ -2,11 +2,11 @@
 pageType: home
 pageName: home
 title: 'NocoBase 3 Documentation'
-description: 'NocoBase 3 is a foundation for building business systems with AI. One command generates application source code you own, you state what you want and AI writes it, and capabilities such as authentication, permissions, workflow and notifications are ready to install.'
-keywords: 'NocoBase,NocoBase 3,AI development,business systems,low-code,open source'
+description: 'NocoBase 3 is a foundation for building business systems with an AI Agent. One command generates application source code you own, you state what you want and your AI Agent writes it, and capabilities such as authentication, permissions, workflow and notifications are ready to install.'
+keywords: 'NocoBase,NocoBase 3,AI Agent development,business systems,low-code,open source'
 hero:
   name: 'NocoBase 3 Documentation'
-  text: 'Build dependable business systems together with AI'
+  text: 'Build dependable business systems together with an AI Agent'
   actions:
     - theme: brand
       text: 'Get started'
@@ -17,32 +17,32 @@ hero:
 
 features:
   - title: 'Getting Started'
-    details: 'Up and running in ten minutes, and see AI build a feature with your own eyes.'
+    details: 'Create an application and build your first business feature with an AI Agent.'
     items:
       - title: 'What is NocoBase 3'
-        details: 'One command generates application source code that belongs to you. You say what you want, AI writes it.'
-        link: /get-started/what-is-nocobase
+        details: 'One command generates application source code that belongs to you. You say what you want, your AI Agent writes it.'
+        link: /get-started/
       - title: 'Create an application'
         details: 'Run one command to generate the project, pick a database, and start it.'
         link: /get-started/create-app
-      - title: 'Let AI build your first feature'
-        details: 'Say "add order management" and watch AI build the table, the API and the page together.'
+      - title: 'Let your AI Agent build your first feature'
+        details: 'Say "add order management" and watch your AI Agent build the table, the API and the page together.'
         link: /get-started/first-feature
 
-  - title: 'Working with AI'
-    details: 'How to phrase requirements for AI, and how to check what it produced.'
+  - title: 'Working with an AI Agent'
+    details: 'How to phrase requirements for your AI Agent, and how to check what it produced.'
     items:
       - title: 'Writing requirements'
-        details: 'How to phrase a request so AI gets it right, with side-by-side examples.'
+        details: 'How to phrase a request so your AI Agent gets it right, with side-by-side examples.'
         link: /ai/writing-requirements
-      - title: 'Reviewing what AI produced'
+      - title: 'Reviewing what AI Agent produced'
         details: 'Which places to look at, and which commands to run.'
         link: /ai/reviewing-output
       - title: 'Building complex features'
         details: 'How to break a requirement that does not fit in one sentence into several rounds.'
         link: /ai/complex-features
       - title: "Adding your team's conventions"
-        details: "Write your team's rules into the project and AI will follow them."
+        details: "Write your team's rules into the project and your AI Agent will follow them."
         link: /ai/team-conventions
 
   - title: 'Application development'
