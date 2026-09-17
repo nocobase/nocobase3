@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-hub",
   "displayName": "Application Hub",
   "description": "Create, configure, release, and deploy applications through a managed app host.",
-  "version": "0.1.0-beta.8",
+  "version": "0.1.0-beta.9",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -76,7 +76,6 @@
   },
   "dependencies": {
     "@nocobase/app-host": "workspace:^",
-    "@nocobase/authorization": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "hono": "catalog:",
@@ -103,7 +102,8 @@
     "lucide-react": "catalog:",
     "react": "^19.0.0",
     "react-router": "catalog:",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@nocobase/authorization": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",

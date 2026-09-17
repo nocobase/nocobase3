@@ -27,7 +27,7 @@ Where a package goes depends on who has to resolve the import, and there are thr
 
 Do not mark such a peer `optional`. An optional peer is not auto-installed anywhere, including in the application that needs it, which is the failure this arrangement exists to prevent. `optional` means the consumer may legitimately not need the package at all.
 
-So `hono` in `server/routes/` is a `dependency`, and `sonner` in `client/` is a peer. A dynamic `import()` counts as a value import; `import type` does not, wherever it appears.
+So `hono` in `server/routes/` is a `dependency`, and `sonner` in `client/` is a peer. Shared runtime packages follow the peer rule below even in server code. A dynamic `import()` counts as a value import. A type-only import is erased from JavaScript but can survive in published declarations; if consumers must resolve it, declare the dependency or shared peer instead of relying on a devDependency.
 
 `registry/` is the exception: it is source the application copies into itself and compiles there, against that application's own `react` and `@/` alias. This plugin never resolves those imports at all, so declaring them would claim dependencies it does not have.
 
@@ -37,9 +37,9 @@ Before adding a client package, check whether `packages/templates/app-template-d
 
 ### Runtime packages are peers, never dependencies
 
-`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
+`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, `@nocobase/caching`, `@nocobase/ai-employee`, `@nocobase/authorization`, `@nocobase/repository-input`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
 
-Declare each as a `peerDependency` — the published contract: "provide this, and provide exactly one". One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces this. The generator already emits this shape for the capabilities you selected.
+Declare each as a `peerDependency` — the published compatibility contract requiring a host-provided package. One declaration is enough; pnpm installs a peer and links it into this package's own `node_modules`, so lint, tests, and the build resolve it without a second entry to keep in step. `pnpm peers:check` enforces the packages in its recorded list; review newly identified shared packages explicitly. The generator already emits this shape for the capabilities you selected.
 
 ## Contributing CLI commands
 
@@ -75,3 +75,5 @@ The repository root `AGENTS.md` covers the rest — package publishing, test lay
 Every Server plugin declaration requires an absolute `baseDir`. In `server/plugin.ts`, calculate it with `path.resolve(import.meta.dirname, '..')` using `node:path`. Migrations, Seeds, and Jobs resolve only relative to this directory; the same declaration under `dist/server` resolves compiled resources. Keep source and published exports aligned.
 
 After compiling database tasks and finishing JavaScript rewriting, run `nocobase-db-manifests` from `@nocobase/dev-config`. Publish the generated `.manifest.json` alongside the marked JavaScript in each migrations and seeds directory. Do not edit historical migration sources or bypass checksums to accommodate compilation differences.
+
+The application must explicitly provide required shared server peers in its production dependencies because deployment disables automatic peer installation. Peer ranges must be compatible; the declaration alone does not guarantee one module across incompatible installed versions.

@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-examples",
   "displayName": "NocoBase Examples",
-  "version": "0.1.0-beta.13",
+  "version": "0.1.0-beta.14",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "0.1.0-beta.13"
+    "defaultTemplateVersion": "0.1.0-beta.14"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -18,19 +18,16 @@
     "@dicebear/core": "^9.4.3",
     "@gchust/agent-annotations": "0.1.8",
     "@hookform/resolvers": "^5.0.1",
-    "@nocobase/ai-employee": "workspace:^",
     "@nocobase/ai-employee-avatars": "^1.0.2",
     "@nocobase/app-client": "workspace:^",
+    "@nocobase/app-skills": "workspace:*",
     "@nocobase/app-plugin-notification-provider": "workspace:^",
     "@nocobase/app-portal-sdk": "workspace:^",
     "@nocobase/app-websocket": "workspace:^",
-    "@nocobase/caching": "workspace:^",
     "@nocobase/cron": "workspace:^",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/drive": "workspace:^",
-    "@nocobase/i18n": "workspace:^",
     "@nocobase/logging": "workspace:^",
-    "@nocobase/queue": "workspace:^",
     "@nocobase/session": "workspace:^",
     "@playwright/test": "catalog:",
     "@refinedev/cli": "^2.16.48",
@@ -125,7 +122,6 @@
     "README.MD",
     "AGENTS.md",
     "CLAUDE.md",
-    "skills",
     "playwright.config.ts"
   ],
   "publishConfig": {
@@ -154,6 +150,8 @@
     "plugin:unregister": "nocobase plugin unregister",
     "plugin:update": "nocobase plugin update",
     "plugin:skills:sync": "nocobase plugin skills sync",
+    "skills:sync": "nocobase skills sync",
+    "package:remove": "nocobase package remove",
     "client:inspect": "pnpm nocobase app inspect client",
     "server:inspect": "pnpm nocobase app inspect server",
     "server:deps:retarget": "node ./scripts/utils/retarget-native.mjs",
@@ -215,7 +213,13 @@
     "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
     "better-auth": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "@nocobase/repository-input": "workspace:^",
+    "@nocobase/authorization": "workspace:^",
+    "@nocobase/queue": "workspace:^",
+    "@nocobase/i18n": "workspace:^",
+    "@nocobase/caching": "workspace:^",
+    "@nocobase/ai-employee": "workspace:^"
   },
   "description": "Runnable NocoBase 3 examples for application development.",
   "license": "Apache-2.0"

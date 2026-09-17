@@ -411,9 +411,6 @@ importers:
       '@nocobase/realtime':
         specifier: workspace:^
         version: link:../../libs/realtime
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
@@ -421,6 +418,9 @@ importers:
       '@nocobase/i18n':
         specifier: workspace:*
         version: link:../../libs/i18n
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
       '@refinedev/core':
         specifier: 'catalog:'
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -627,6 +627,15 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/app/app-skills:
+    devDependencies:
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
 
   packages/app/app-websocket:
     dependencies:
@@ -3407,6 +3416,9 @@ importers:
 
   packages/templates/app-template-default:
     dependencies:
+      '@nocobase/ai-employee':
+        specifier: workspace:^
+        version: link:../../libs/ai-employee
       '@nocobase/app-plugin-ai-employee':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-ai-employee
@@ -3449,6 +3461,12 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/authorization':
+        specifier: workspace:^
+        version: link:../../libs/authorization
+      '@nocobase/caching':
+        specifier: workspace:^
+        version: link:../../libs/caching
       '@nocobase/config':
         specifier: workspace:^
         version: link:../../libs/config
@@ -3458,9 +3476,18 @@ importers:
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
+      '@nocobase/queue':
+        specifier: workspace:^
+        version: link:../../libs/queue
+      '@nocobase/repository-input':
+        specifier: workspace:^
+        version: link:../../libs/repository-input
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -3489,9 +3516,6 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@4.6.5)
-      '@nocobase/ai-employee':
-        specifier: workspace:^
-        version: link:../../libs/ai-employee
       '@nocobase/ai-employee-avatars':
         specifier: ^1.0.2
         version: 1.0.2(@dicebear/core@9.4.3)
@@ -3504,12 +3528,12 @@ importers:
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../../app/app-portal-sdk
+      '@nocobase/app-skills':
+        specifier: workspace:*
+        version: link:../../app/app-skills
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
-      '@nocobase/caching':
-        specifier: workspace:^
-        version: link:../../libs/caching
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
@@ -3519,15 +3543,9 @@ importers:
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
-      '@nocobase/i18n':
-        specifier: workspace:^
-        version: link:../../libs/i18n
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../../libs/logging
-      '@nocobase/queue':
-        specifier: workspace:^
-        version: link:../../libs/queue
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
@@ -3744,6 +3762,9 @@ importers:
 
   packages/templates/app-template-examples:
     dependencies:
+      '@nocobase/ai-employee':
+        specifier: workspace:^
+        version: link:../../libs/ai-employee
       '@nocobase/app-plugin-ai-employee':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-ai-employee
@@ -3813,6 +3834,12 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/authorization':
+        specifier: workspace:^
+        version: link:../../libs/authorization
+      '@nocobase/caching':
+        specifier: workspace:^
+        version: link:../../libs/caching
       '@nocobase/config':
         specifier: workspace:^
         version: link:../../libs/config
@@ -3831,9 +3858,18 @@ importers:
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
+      '@nocobase/queue':
+        specifier: workspace:^
+        version: link:../../libs/queue
+      '@nocobase/repository-input':
+        specifier: workspace:^
+        version: link:../../libs/repository-input
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -3865,9 +3901,6 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@4.6.5)
-      '@nocobase/ai-employee':
-        specifier: workspace:^
-        version: link:../../libs/ai-employee
       '@nocobase/ai-employee-avatars':
         specifier: ^1.0.2
         version: 1.0.2(@dicebear/core@9.4.3)
@@ -3880,12 +3913,12 @@ importers:
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../../app/app-portal-sdk
+      '@nocobase/app-skills':
+        specifier: workspace:*
+        version: link:../../app/app-skills
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
-      '@nocobase/caching':
-        specifier: workspace:^
-        version: link:../../libs/caching
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
@@ -3895,15 +3928,9 @@ importers:
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
-      '@nocobase/i18n':
-        specifier: workspace:^
-        version: link:../../libs/i18n
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../../libs/logging
-      '@nocobase/queue':
-        specifier: workspace:^
-        version: link:../../libs/queue
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
@@ -4141,6 +4168,12 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/authorization':
+        specifier: workspace:^
+        version: link:../../libs/authorization
+      '@nocobase/caching':
+        specifier: workspace:^
+        version: link:../../libs/caching
       '@nocobase/config':
         specifier: workspace:^
         version: link:../../libs/config
@@ -4150,9 +4183,18 @@ importers:
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
+      '@nocobase/queue':
+        specifier: workspace:^
+        version: link:../../libs/queue
+      '@nocobase/repository-input':
+        specifier: workspace:^
+        version: link:../../libs/repository-input
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -4193,27 +4235,21 @@ importers:
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../../app/app-portal-sdk
+      '@nocobase/app-skills':
+        specifier: workspace:*
+        version: link:../../app/app-skills
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
-      '@nocobase/caching':
-        specifier: workspace:^
-        version: link:../../libs/caching
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
-      '@nocobase/i18n':
-        specifier: workspace:^
-        version: link:../../libs/i18n
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../../libs/logging
-      '@nocobase/queue':
-        specifier: workspace:^
-        version: link:../../libs/queue
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session

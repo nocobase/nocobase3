@@ -3,7 +3,7 @@ import { buildConfigFile } from './lib/config-file.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
 import {
   installDependencies,
-  syncPluginSkills,
+  syncSkills,
   verifyDriver,
 } from './lib/install.ts';
 import { ensureAllowBuilds } from './lib/pnpm-workspace.ts';
@@ -185,17 +185,19 @@ async function run(input: ParsedInput): Promise<void> {
     log.warn(verification.reason);
   }
 
-  // Runs only after the install, because the sync reads the plugins out of `node_modules`.
+  // Runs only after the install, because the sync reads NocoBase packages out of `node_modules`.
   const skills = spinner();
-  skills.start('Synchronizing plugin skills');
+  skills.start('Synchronizing NocoBase package skills');
 
-  const synchronized = await syncPluginSkills(targetDirectory);
+  const synchronized = await syncSkills(targetDirectory);
 
   if (synchronized.ok) {
-    skills.stop('Synchronized plugin skills.');
+    skills.stop('Synchronized NocoBase package skills.');
   } else {
-    skills.stop('Synchronizing plugin skills failed.');
-    log.warn(synchronized.reason ?? 'Could not synchronize plugin skills.');
+    skills.stop('Synchronizing NocoBase package skills failed.');
+    log.warn(
+      synchronized.reason ?? 'Could not synchronize NocoBase package skills.',
+    );
   }
 
   finish(name, { installed: true, kind });

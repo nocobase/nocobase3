@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-users",
   "displayName": "User Management",
   "description": "Reusable user administration APIs and pages for NocoBase applications.",
-  "version": "0.0.2-beta.3",
+  "version": "0.0.2-beta.4",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -84,7 +84,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/authorization": "workspace:^",
     "hono": "catalog:"
   },
   "peerDependencies": {
@@ -100,7 +99,8 @@
     "clsx": "catalog:",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@nocobase/authorization": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",
