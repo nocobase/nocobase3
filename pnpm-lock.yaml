@@ -111,6 +111,9 @@ catalogs:
     bloom-filters:
       specifier: ^3.0.4
       version: 3.0.4
+    bullmq:
+      specifier: 6.3.6
+      version: 6.3.6
     class-variance-authority:
       specifier: ^0.7.1
       version: 0.7.1
@@ -1910,19 +1913,22 @@ importers:
     dependencies:
       '@boringnode/queue':
         specifier: 'catalog:'
-        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)
+        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3))(kysely@0.29.5)
       '@nocobase/db':
         specifier: workspace:^
         version: link:../db
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging
+      bullmq:
+        specifier: 'catalog:'
+        version: 6.3.6(ioredis@5.11.1)(pg@8.16.3)
       ioredis:
         specifier: 'catalog:'
         version: 5.11.1
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
+        version: 3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3)
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
@@ -1930,9 +1936,15 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
+      pg:
+        specifier: 8.16.3
+        version: 8.16.3
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -6532,6 +6544,36 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
+  '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4':
+    resolution: {integrity: sha512-LCkGo6JDfaBhgST7UpPWgNgLINpcpabaHfyz5OBx75nUYxBsaEPxjnyNjWpeb/xBup/682QnBfRBy2/LvPutZQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@msgpackr-extract/msgpackr-extract-darwin-x64@3.0.4':
+    resolution: {integrity: sha512-zExlW9zUJKZH/tOtVMttwjKa4Xm/3KcNjnE3dPN92uCktwavMxpgCA3MoJK/DOnTWsQgo224OaST27/mPNAf+w==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@msgpackr-extract/msgpackr-extract-linux-arm64@3.0.4':
+    resolution: {integrity: sha512-dgX0P/9wGPJeHFBG+ZmhgE6bmtMt7NP5CRBGyyktpopdk/mW4POnrpQsSLtKI1dwpc+pPLuXHDh6vvskyQE/sw==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@msgpackr-extract/msgpackr-extract-linux-arm@3.0.4':
+    resolution: {integrity: sha512-Tg3yX65f5GbtXLkrYEHE5oibZG9epyYWas7FogTTEJeDEF9JlXJzKgXaNhT3UXlTOeA+AfZpYZYZ0uPj7Cfquw==}
+    cpu: [arm]
+    os: [linux]
+
+  '@msgpackr-extract/msgpackr-extract-linux-x64@3.0.4':
+    resolution: {integrity: sha512-8TNXMEjJc3QEy7R/x1INhgiU+XakDAFUzBhaz7+Rbrs8NH5UQeHQxxmzsSBJGyV6I1jW79undiQm8tOI+D+8FQ==}
+    cpu: [x64]
+    os: [linux]
+
+  '@msgpackr-extract/msgpackr-extract-win32-x64@3.0.4':
+    resolution: {integrity: sha512-CmCXPQrkbwExx3j946/PtHWHbYJiCRBRDl4BlkRQcJB/YOwQxJRTpoo7aTsortjgoJ1x7opzTSxn7C+ASSLVjQ==}
+    cpu: [x64]
+    os: [win32]
+
   '@napi-rs/canvas-android-arm64@0.1.100':
     resolution: {integrity: sha512-hjhCKhntPv9+t4ckHymdx0phYNcVW+GKQR6Lzw2zE+pOVjOplSmtx9nNNknTjbEDLcuLZqA1y8ufKg1XfgftzQ==}
     engines: {node: '>= 10'}
@@ -8004,6 +8046,9 @@ packages:
   '@types/nodemailer@8.0.1':
     resolution: {integrity: sha512-PxpaInm8V1JQDd4j0ds5HfvWQk8JupS1C0Picb96QJsrrRDjBH+DlK7L4ZdNSqNULhiZRQHc40nLVShaGxXAMw==}
 
+  '@types/pg@8.23.1':
+    resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
+
   '@types/pluralize@0.0.33':
     resolution: {integrity: sha512-JOqsl+ZoCpP4e8TDke9W79FDcSgPAR0l6pixx2JHkhnRjvShyYiAYw2LVsnA7K08Y6DeOnaU6ujmENO4os/cYg==}
 
@@ -8703,6 +8748,24 @@ packages:
   builtin-status-codes@3.0.0:
     resolution: {integrity: sha512-HpGFw18DgFWlncDfjTa2rcQ4W88O1mC8e8yZ2AvQY5KDaktSTwo+KRf6nHK6FRI5FyRyb/5T6+TSxfP7QyGsmQ==}
 
+  bullmq@6.3.6:
+    resolution: {integrity: sha512-+T6T6jeONZ5AvCj4xDkjuqdXI+/Kezvi/PvNS2YrIiO3HZNS4MgI+397ORyfO3Mx6jP127jowte6fNOxAfUN2w==}
+    engines: {node: '>=14.17.0'}
+    peerDependencies:
+      bullmq-otel: '>=2.0.0'
+      ioredis: '>=5.0.0'
+      pg: '>=8.0.0'
+      redis: '>=5.0.0'
+    peerDependenciesMeta:
+      bullmq-otel:
+        optional: true
+      ioredis:
+        optional: true
+      pg:
+        optional: true
+      redis:
+        optional: true
+
   bundle-name@4.1.0:
     resolution: {integrity: sha512-tjwM5exMg6BGRI+kNmTntNsvdZS1X8BFYS6tnJ2hdH0kVxM6/eVZ2xy+FqStSWvYmtfFMDLIxurorHwDKfDz5Q==}
     engines: {node: '>=18'}
@@ -9108,6 +9171,10 @@ packages:
 
   cron-parser@5.10.0:
     resolution: {integrity: sha512-izNAxJyRWUP8ljBoDSub5WyrVOUlT4SLGShswE7eoRBpp6QUsSycYxLBMJlbshgPBMcPT/nrfgjNY2918ayv2A==}
+    engines: {node: '>=18'}
+
+  cron-parser@5.10.1:
+    resolution: {integrity: sha512-pKRrRagItwk9rGIStcUyMxFX34x56zoX3KDf9HJ4ttwkXIK1qxK63EvXvEDmlxI9AdPJ+Y7TEKRftRlW5eSS7A==}
     engines: {node: '>=18'}
 
   cron@4.4.0:
@@ -11915,6 +11982,13 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
+  msgpackr-extract@3.0.4:
+    resolution: {integrity: sha512-4kmO/MdyUIkLIvTPr8VHLil4AtoKIoniWPIEk5+CDy0xnWC84azhSFmuJ7PxZdsYtiP5kEeQsORAVIeMgxT+Hw==}
+    hasBin: true
+
+  msgpackr@2.1.0:
+    resolution: {integrity: sha512-p/pBCVO63CsvvpkomUnNNag6+n38rULuDA6HHe70o2gtC8ODI52foF/4ko2qQcp6OiErJXTmrZeXmsGGHsIQNQ==}
+
   mustache@4.2.0:
     resolution: {integrity: sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ==}
     hasBin: true
@@ -11986,6 +12060,9 @@ packages:
     resolution: {integrity: sha512-W5ZNO5KRPB5TkYmGVD9F6YqhsglXJzE6etpbmT+f6EQElhiX/UTG551cnsRGvLG3fyZEg9HwaDmNmj5nwJ4z9g==}
     engines: {node: '>=10'}
 
+  node-abort-controller@3.1.1:
+    resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
+
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
 
@@ -12020,6 +12097,10 @@ packages:
     peerDependenciesMeta:
       encoding:
         optional: true
+
+  node-gyp-build-optional-packages@5.2.2:
+    resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
+    hasBin: true
 
   node-gyp@9.4.1:
     resolution: {integrity: sha512-OQkWKbjQKbGkMf/xqI1jjy3oCTgMKJac58G2+bjZb3fza6gW2YrCSdMQYaoTb70crvE//Gngr4f0AgVHmqHvBQ==}
@@ -12465,6 +12546,15 @@ packages:
   pg-types@2.2.0:
     resolution: {integrity: sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==}
     engines: {node: '>=4'}
+
+  pg@8.16.3:
+    resolution: {integrity: sha512-enxc1h0jA/aq5oSDMvqyW3q89ra6XIIDZgCX9vkMrnz5DFTw/Ny3Li2lFQ+pt3L6MCgm/5o2o8HW9hiJji+xvw==}
+    engines: {node: '>= 16.0.0'}
+    peerDependencies:
+      pg-native: '>=3.0.1'
+    peerDependenciesMeta:
+      pg-native:
+        optional: true
 
   pg@8.23.0:
     resolution: {integrity: sha512-Ip2EQCngowJLGOfCwkFhPXU7/ljlhn6Rxlmy4XYfL2Y+vyRM59+8uR2xqRWKdYmbXmxCFOAmKxBuSUCdF34qLg==}
@@ -15755,7 +15845,7 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
-  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)':
+  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3))(kysely@0.29.5)':
     dependencies:
       '@lukeed/ms': 2.0.2
       '@poppinss/utils': 7.0.1
@@ -15763,7 +15853,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       ioredis: 5.11.1
-      knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
+      knex: 3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3)
       kysely: 0.29.5
 
   '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)':
@@ -16914,6 +17004,24 @@ snapshots:
       '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
       - supports-color
+
+  '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4':
+    optional: true
+
+  '@msgpackr-extract/msgpackr-extract-darwin-x64@3.0.4':
+    optional: true
+
+  '@msgpackr-extract/msgpackr-extract-linux-arm64@3.0.4':
+    optional: true
+
+  '@msgpackr-extract/msgpackr-extract-linux-arm@3.0.4':
+    optional: true
+
+  '@msgpackr-extract/msgpackr-extract-linux-x64@3.0.4':
+    optional: true
+
+  '@msgpackr-extract/msgpackr-extract-win32-x64@3.0.4':
+    optional: true
 
   '@napi-rs/canvas-android-arm64@0.1.100':
     optional: true
@@ -18449,6 +18557,12 @@ snapshots:
     dependencies:
       '@types/node': 22.20.1
 
+  '@types/pg@8.23.1':
+    dependencies:
+      '@types/node': 22.20.1
+      pg-protocol: 1.16.0
+      pg-types: 2.2.0
+
   '@types/pluralize@0.0.33': {}
 
   '@types/q@1.5.8': {}
@@ -19348,6 +19462,17 @@ snapshots:
 
   builtin-status-codes@3.0.0: {}
 
+  bullmq@6.3.6(ioredis@5.11.1)(pg@8.16.3):
+    dependencies:
+      cron-parser: 5.10.1
+      msgpackr: 2.1.0
+      node-abort-controller: 3.1.1
+      semver: 7.8.5
+      tslib: 2.8.1
+    optionalDependencies:
+      ioredis: 5.11.1
+      pg: 8.16.3
+
   bundle-name@4.1.0:
     dependencies:
       run-applescript: 7.1.0
@@ -19771,6 +19896,10 @@ snapshots:
   crelt@1.0.7: {}
 
   cron-parser@5.10.0:
+    dependencies:
+      luxon: 3.7.2
+
+  cron-parser@5.10.1:
     dependencies:
       luxon: 3.7.2
 
@@ -22314,6 +22443,29 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.16.3))(pg@8.16.3):
+    dependencies:
+      colorette: 2.0.19
+      commander: 10.0.1
+      debug: 4.3.4(supports-color@8.1.1)
+      escalade: 3.2.0
+      esm: 3.2.25
+      get-package-type: 0.1.0
+      getopts: 2.3.0
+      interpret: 2.2.0
+      lodash: 4.18.1
+      pg-connection-string: 2.6.2
+      rechoir: 0.8.0
+      resolve-from: 5.0.0
+      tarn: 3.1.2
+      tildify: 2.0.0
+    optionalDependencies:
+      better-sqlite3: 12.11.1
+      pg: 8.16.3
+      pg-query-stream: 4.17.0(pg@8.16.3)
+    transitivePeerDependencies:
+      - supports-color
+
   knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(supports-color@8.1.1):
     dependencies:
       colorette: 2.0.19
@@ -23339,6 +23491,22 @@ snapshots:
 
   ms@2.1.3: {}
 
+  msgpackr-extract@3.0.4:
+    dependencies:
+      node-gyp-build-optional-packages: 5.2.2
+    optionalDependencies:
+      '@msgpackr-extract/msgpackr-extract-darwin-arm64': 3.0.4
+      '@msgpackr-extract/msgpackr-extract-darwin-x64': 3.0.4
+      '@msgpackr-extract/msgpackr-extract-linux-arm': 3.0.4
+      '@msgpackr-extract/msgpackr-extract-linux-arm64': 3.0.4
+      '@msgpackr-extract/msgpackr-extract-linux-x64': 3.0.4
+      '@msgpackr-extract/msgpackr-extract-win32-x64': 3.0.4
+    optional: true
+
+  msgpackr@2.1.0:
+    optionalDependencies:
+      msgpackr-extract: 3.0.4
+
   mustache@4.2.0: {}
 
   mute-stream@0.0.8: {}
@@ -23401,6 +23569,8 @@ snapshots:
     dependencies:
       semver: 7.8.5
 
+  node-abort-controller@3.1.1: {}
+
   node-addon-api@7.1.1:
     optional: true
 
@@ -23426,6 +23596,11 @@ snapshots:
       whatwg-url: 5.0.0
     optionalDependencies:
       encoding: 0.1.13
+
+  node-gyp-build-optional-packages@5.2.2:
+    dependencies:
+      detect-libc: 2.1.2
+    optional: true
 
   node-gyp@9.4.1(bluebird@3.4.7)(supports-color@8.1.1):
     dependencies:
@@ -23885,17 +24060,32 @@ snapshots:
 
   pg-connection-string@2.6.2: {}
 
+  pg-cursor@2.22.0(pg@8.16.3):
+    dependencies:
+      pg: 8.16.3
+    optional: true
+
   pg-cursor@2.22.0(pg@8.23.0):
     dependencies:
       pg: 8.23.0
 
   pg-int8@1.0.1: {}
 
+  pg-pool@3.14.0(pg@8.16.3):
+    dependencies:
+      pg: 8.16.3
+
   pg-pool@3.14.0(pg@8.23.0):
     dependencies:
       pg: 8.23.0
 
   pg-protocol@1.16.0: {}
+
+  pg-query-stream@4.17.0(pg@8.16.3):
+    dependencies:
+      pg: 8.16.3
+      pg-cursor: 2.22.0(pg@8.16.3)
+    optional: true
 
   pg-query-stream@4.17.0(pg@8.23.0):
     dependencies:
@@ -23909,6 +24099,16 @@ snapshots:
       postgres-bytea: 1.0.1
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
+
+  pg@8.16.3:
+    dependencies:
+      pg-connection-string: 2.14.0
+      pg-pool: 3.14.0(pg@8.16.3)
+      pg-protocol: 1.16.0
+      pg-types: 2.2.0
+      pgpass: 1.0.5
+    optionalDependencies:
+      pg-cloudflare: 1.4.0
 
   pg@8.23.0:
     dependencies:

@@ -42,15 +42,26 @@
     "@boringnode/queue": "catalog:",
     "@nocobase/db": "workspace:^",
     "@nocobase/logging": "workspace:^",
+    "bullmq": "catalog:",
     "ioredis": "catalog:",
     "knex": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
+    "@types/pg": "8.23.1",
     "eslint": "catalog:",
+    "pg": "8.16.3",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "pg": ">=8.16.3 <9"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    }
   }
 }

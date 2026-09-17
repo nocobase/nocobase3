@@ -48,6 +48,7 @@ catalog:
   better-auth: ^1.7.1
   better-sqlite3: ^12.11.1
   bloom-filters: ^3.0.4
+  bullmq: 6.3.6
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   cron: ^4.4.0
@@ -100,6 +101,8 @@ allowBuilds:
   oracledb: true
   esbuild: true
   tesseract.js: false
+  # BullMQ's msgpackr uses its JavaScript fallback; the optional native accelerator is not required.
+  msgpackr-extract: false
   # Pulled in by @iconscout/unicons, the icon font the documentation site uses. Its build script only runs when
   # unicons regenerates its own fonts; the .woff2 files ship in the published package, so compiling the native addon
   # at install time produces nothing anything reads.
