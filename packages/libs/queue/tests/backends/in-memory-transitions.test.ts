@@ -4,6 +4,45 @@ import { describe, expect, it, vi } from 'vitest';
 import { createInMemoryBackendFactory } from '../../src/backends/in-memory/index.js';
 
 describe('memory completion protocol', () => {
+  it('keeps prioritized counts and ranges separate from ordinary waiting jobs', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('prioritized-ranges', { connection: {} }, factory);
+    const backend = factory('prioritized-ranges', { connection: {} });
+    try {
+      const low = await queue.add('low', {}, { priority: 4 });
+      const high = await queue.add('high', {}, { priority: 1 });
+      const plain = await queue.add('plain', {});
+      expect(await backend.getCounts(['wait', 'prioritized'])).toEqual([1, 2]);
+      expect(
+        (await queue.getJobs(['prioritized'], 0, -1, true)).map(
+          (job) => job.id,
+        ),
+      ).toEqual([high.id, low.id]);
+      expect(
+        (await queue.getJobs(['waiting'], 0, -1, true)).map((job) => job.id),
+      ).toEqual([plain.id]);
+    } finally {
+      await Promise.all([queue.close(), backend.close()]);
+    }
+  });
+  it('reads empty and paginated waiting ranges through the real Queue getter', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('ranges', { connection: {} }, factory);
+    try {
+      expect(await queue.getJobs(['waiting'])).toEqual([]);
+      const jobs = await queue.addBulk(
+        ['a', 'b', 'c'].map((name) => ({ name, data: {} })),
+      );
+      expect(
+        (await queue.getJobs(['waiting'], 0, -1, true)).map((job) => job.id),
+      ).toEqual(jobs.map((job) => job.id));
+      expect(
+        (await queue.getJobs(['waiting'], 1, 1, false)).map((job) => job.id),
+      ).toEqual([jobs[1]?.id]);
+    } finally {
+      await queue.close();
+    }
+  });
   it('retains the last two completions when three finish in one millisecond', async () => {
     const factory = createInMemoryBackendFactory();
     const queue = new Queue('ties', { connection: {} }, factory);

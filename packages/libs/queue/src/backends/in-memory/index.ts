@@ -450,18 +450,58 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   async getCounts(types: JobType[]): Promise<number[]> {
     return types.map((type) => {
       const state = type === 'wait' ? 'waiting' : type;
-      return [...this.state.records.keys()].filter(
-        (id) => this.state.store.get(id)?.state === state,
-      ).length;
+      return [...this.state.records.entries()].filter(([id, job]) => {
+        const actual = this.state.store.get(id)?.state;
+        if (type === 'prioritized')
+          return actual === 'waiting' && (job.opts.priority ?? 0) > 0;
+        return (
+          actual === state &&
+          (state !== 'waiting' || (job.opts.priority ?? 0) === 0)
+        );
+      }).length;
     });
   }
   async getRanges(
-    _types: JobType[],
-    _start?: number,
-    _end?: number,
-    _asc?: boolean,
+    types: JobType[],
+    start: number = 0,
+    end: number = -1,
+    asc: boolean = false,
   ): Promise<[string][]> {
-    throw new Error('Memory backend operation is not implemented');
+    return types.map((type) => {
+      const state = type === 'wait' ? 'waiting' : type;
+      const list = type === 'wait' || type === 'waiting' || type === 'active';
+      const entries = [...this.state.records.entries()].filter(([id, job]) => {
+        const actual = this.state.store.get(id)?.state;
+        if (type === 'prioritized')
+          return actual === 'waiting' && (job.opts.priority ?? 0) > 0;
+        return (
+          actual === state &&
+          (state !== 'waiting' || (job.opts.priority ?? 0) === 0)
+        );
+      });
+      if (!list) {
+        entries.sort(([a, x], [b, y]) => {
+          const score = (id: string, job: JobJson): number =>
+            type === 'delayed'
+              ? (this.state.worker.due.get(id) ??
+                job.timestamp + (job.delay ?? job.opts.delay ?? 0))
+              : type === 'prioritized'
+                ? (job.opts.priority ?? 0)
+                : (job.finishedOn ?? 0);
+          return score(a, x) - score(b, y);
+        });
+      }
+      if (!asc) entries.reverse();
+      const from = start < 0 ? Math.max(0, entries.length + start) : start;
+      const to = end < 0 ? entries.length + end : end;
+      let ids = to < from ? [] : entries.slice(from, to + 1).map(([id]) => id);
+      if (list && asc) ids = ids.reverse();
+      // Upstream declares a singleton tuple, but its runtime returns variable-length arrays per state.
+      // Mutate through the declared Array API to preserve that public signature without a cast.
+      const result: [string] = [''];
+      result.splice(0, 1, ...ids);
+      return result;
+    });
   }
   async setQueueMeta(values: Record<string, string | number>): Promise<number> {
     let added = 0;
