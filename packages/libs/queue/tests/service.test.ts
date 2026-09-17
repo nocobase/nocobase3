@@ -470,4 +470,49 @@ describe('application-private queue service', () => {
     const receipt = await producer.publish('event', {});
     expect((await backend?.getJobData(receipt.jobId))?.opts.attempts).toBe(5);
   });
+  it('settles an in-flight configuration write before closing its queue', async () => {
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const memory = createInMemoryBackendFactory();
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let began = false;
+    let written = false;
+    let closedBeforeWrite = false;
+    instance.registerBackend('memory-test', (...args) => {
+      const backend = memory(...args);
+      const set = backend.setQueueMeta.bind(backend);
+      const close = backend.close.bind(backend);
+      vi.spyOn(backend, 'setQueueMeta').mockImplementation(async (values) => {
+        if ('max' in values) {
+          began = true;
+          await gate;
+          written = true;
+        }
+        return set(values);
+      });
+      vi.spyOn(backend, 'close').mockImplementation(async () => {
+        closedBeforeWrite = !written;
+        await close();
+      });
+      return backend;
+    });
+    instance.producer('jobs');
+    await instance.setup();
+    const updating = instance
+      .manager('jobs')
+      .configure({ rateLimit: { max: 1, duration: 100 } });
+    await expect.poll(() => began).toBe(true);
+    const closing = instance.shutdown();
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(closedBeforeWrite).toBe(false);
+    } finally {
+      release();
+      await Promise.all([updating, closing]);
+    }
+  });
 });

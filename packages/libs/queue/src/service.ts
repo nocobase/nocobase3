@@ -92,6 +92,7 @@ interface QueueEntry {
   worker?: ServiceWorker;
   initializeWorker?: () => Promise<void>;
   workerInitialization?: Promise<void>;
+  configurationSettlement: () => Promise<void>;
 }
 
 export function createQueueService(
@@ -117,6 +118,7 @@ export function createQueueService(
     const current: QueueEntry = {
       handlers,
       cancellation,
+      configurationSettlement: () => configureTail,
       manual: {},
       manager: {
         configure(update): Promise<void> {
@@ -433,6 +435,11 @@ export function createQueueService(
     async shutdown(): Promise<void> {
       stopped = true;
       if (setupPromise) await setupPromise.catch(() => {});
+      await Promise.all(
+        [...entries.values()].map((current) =>
+          current.configurationSettlement(),
+        ),
+      );
       await resources.settle();
       await Promise.allSettled(
         [...entries.values()].flatMap((current) =>
