@@ -37,22 +37,16 @@
   "scripts": {
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
     "prepack": "pnpm build",
-    "example": "tsx ./examples/command.ts",
-    "benchmark:numeric": "tsx ./benchmarks/numeric/run.ts",
-    "typecheck:benchmarks": "tsc -p benchmarks/tsconfig.json --noEmit",
-    "playground": "tsx ./playground/command.ts",
     "test": "vitest run tests --exclude **/tests/integration/**",
     "test:coverage": "vitest run --coverage",
     "api:check": "node ./scripts/check-public-api.mjs",
     "api:update": "node ./scripts/check-public-api.mjs --write",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "typecheck:examples": "tsc -p examples/tsconfig.json --noEmit",
-    "typecheck:playground": "tsc -p playground/tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm api:check && pnpm typecheck:examples && pnpm typecheck:playground && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm api:check && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
@@ -61,22 +55,12 @@
     "@nocobase/repository-input": "workspace:^"
   },
   "devDependencies": {
-    "@hono/node-server": "catalog:",
-    "@nocobase/db-sqlite": "workspace:*",
-    "@nocobase/db-dameng": "workspace:*",
-    "@nocobase/db-testkit": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:",
-    "hono": "catalog:",
     "prettier": "catalog:",
-    "tsx": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@nocobase/db-postgres": "workspace:*",
-    "@nocobase/db-mysql": "workspace:*",
-    "@nocobase/db-oracle": "workspace:*",
-    "@nocobase/db-mssql": "workspace:*"
+    "vitest": "catalog:"
   }
 }

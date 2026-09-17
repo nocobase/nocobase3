@@ -76,7 +76,7 @@ export async function runExampleCommand(
     ];
   }
   throw new Error(
-    `Unknown database example "${command}". Run "pnpm --filter @nocobase/db example list".`,
+    `Unknown database example "${command}". Run "pnpm db:example list".`,
   );
 }
 

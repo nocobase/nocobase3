@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
+// Internal SQL controls measure the same numeric expressions as the public APIs.
 import {
   aggregateProjection,
   aggregateSql,
-} from '../../src/numeric/aggregate.js';
+} from '../../../../packages/libs/db/src/numeric/aggregate.js';
 import type { Knex } from 'knex';
-import type { DatabaseConnection } from '../../src/index.js';
+import type { DatabaseConnection } from '@nocobase/db';
 import type { Scenario } from './measure.js';
 
 const values = ['intv', 'bigv', 'decv', 'floatv', 'doublev'] as const;
@@ -86,9 +87,9 @@ export function scenarios(
             name: `read/${selection}/${page}/${cache}`,
             api,
             prepare: cache === 'cold' ? cold : warm,
-            run: async () => {
+            run: async (): Promise<unknown> => {
               if (api === 'knex')
-                return await client(`${prefix}numeric`)
+                return await client<Record<string, unknown>>(`${prefix}numeric`)
                   .select(fields)
                   .where('id', '>=', 0)
                   .orderBy('id')
@@ -136,7 +137,7 @@ export function scenarios(
       name: 'aggregate/count',
       api,
       prepare: warm,
-      run: async () => {
+      run: async (): Promise<unknown> => {
         if (api === 'knex')
           return await client(`${prefix}numeric`).count({ total: '*' });
         if (api === 'query')
@@ -171,7 +172,7 @@ export function scenarios(
           };
         },
         prepare: warm,
-        run: async () => {
+        run: async (): Promise<unknown> => {
           if (api === 'knex')
             return await client(`${prefix}numeric`)
               .sum({ total: field })
@@ -225,7 +226,7 @@ export function scenarios(
         name: `group-sort/${group}`,
         api,
         prepare: warm,
-        run: async () => {
+        run: async (): Promise<unknown> => {
           if (api === 'knex')
             return await client(`${prefix}numeric`)
               .select(group)
@@ -283,7 +284,7 @@ export function scenarios(
           await client(`${prefix}${name}`).delete();
           await connection.collections.get(name);
         },
-        run: async () =>
+        run: async (): Promise<unknown> =>
           await connection.repository(name).createMany({
             values: [input[0], ...input.slice(1)],
             select: (s) => s.fields('code', 'value'),
@@ -305,7 +306,7 @@ export function scenarios(
     name: 'control/count-projection',
     api: 'knex',
     prepare: warm,
-    run: async () =>
+    run: async (): Promise<unknown> =>
       await client(`${prefix}numeric`).select(
         client.raw('? as ??', [
           aggregateProjection(client, aggregateSql(client, 'count', '*')),
@@ -318,7 +319,7 @@ export function scenarios(
     name: 'control/integer-page-null-order',
     api: 'knex',
     prepare: warm,
-    run: async () =>
+    run: async (): Promise<unknown> =>
       await client(`${prefix}numeric`)
         .select('id', 'intv')
         .where('id', '>=', 0)

@@ -88,7 +88,7 @@ function unexpected(argument: string | undefined): never {
 }
 
 function printHelp(): void {
-  console.log('Usage: pnpm --filter @nocobase/db playground [options]');
+  console.log('Usage: pnpm db:playground [options]');
   console.log('');
   console.log('  --reset       Recreate and seed both SQLite databases.');
   console.log('  --port <port> HTTP port (default: 3100).');

@@ -7,13 +7,13 @@ import { execFileSync } from 'node:child_process';
 import {
   createDatabaseManager,
   InMemoryCollectionMetadataStore,
-} from '../../src/index.js';
+} from '@nocobase/db';
 import postgres from '@nocobase/db-postgres';
 import mysql from '@nocobase/db-mysql';
 import sqlite from '@nocobase/db-sqlite';
 import oracle from '@nocobase/db-oracle';
 import mssql from '@nocobase/db-mssql';
-import type { DatabaseDialect } from '../../src/index.js';
+import type { DatabaseDialect } from '@nocobase/db';
 import type { Knex } from 'knex';
 import { connectionConfig, dialects } from './config.js';
 import { measure, type Measurement } from './measure.js';
@@ -22,7 +22,7 @@ import { setup, scenarios, fixtureNames } from './scenarios.js';
 const args = process.argv.slice(2);
 if (args.includes('--help')) {
   console.log(
-    'pnpm benchmark:numeric [--databases=all|sqlite,postgres,...] [--rows=10000,100000] [--writes=100,1000] [--repeats=5] [--warmups=2] [--output=/absolute/directory] [--match=regex]',
+    'pnpm db:benchmark [--databases=all|sqlite,postgres,...] [--rows=10000,100000] [--writes=100,1000] [--repeats=5] [--warmups=2] [--output=/absolute/directory] [--match=regex]',
   );
   process.exit(0);
 }
@@ -65,14 +65,24 @@ const sourceFiles = [
   'src/query/internal/knex/adapter.ts',
   'src/repository/internal/knex-execution-adapter.ts',
 ];
-const sourceHashes = Object.fromEntries(
+const sourceHashes: Record<string, string> = Object.fromEntries(
   await Promise.all(
-    sourceFiles.map(async (file) => [
-      file,
-      createHash('sha256')
-        .update(await readFile(new URL(`../../${file}`, import.meta.url)))
-        .digest('hex'),
-    ]),
+    sourceFiles.map(
+      async (file) =>
+        [
+          file,
+          createHash('sha256')
+            .update(
+              await readFile(
+                new URL(
+                  `../../../../packages/libs/db/${file}`,
+                  import.meta.url,
+                ),
+              ),
+            )
+            .digest('hex'),
+        ] as const,
+    ),
   ),
 );
 const require = createRequire(import.meta.url);
