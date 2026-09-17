@@ -363,6 +363,13 @@ it.skipIf(selectedBackend() !== 'redis')(
       expect(await observer.exists(key('before'))).toBe(1);
       expect(await observer.exists(key('after'))).toBe(1);
       expect(await observer.get(key('wrong-type'))).toBe('occupied');
+      await observer.del(key('wrong-type'));
+      const recovered = await producer.publish(
+        'recovered',
+        {},
+        { jobIdProducer: () => 'recovered' },
+      );
+      expect(await observer.exists(key(recovered.jobId))).toBe(1);
     } finally {
       await service.shutdown();
       await observer.quit();
