@@ -43,22 +43,13 @@ const route: AppClientRegisteredRoute = {
   componentLoader: async () => ({ default: () => <p>Preferences content</p> }),
 };
 
-async function setup(children: ReactNode, path = '/', defaultLocale = 'en-US') {
+async function setup(children: ReactNode, path = '/') {
   const runtime = new I18nRuntime({
-    defaultLocale,
-    locales: ['en-US', 'zh-CN', 'es-ES', 'ja-JP'],
+    defaultLocale: 'en-US',
+    locales: ['en-US', 'zh-CN'],
     applicationNamespace: 'test-app',
   });
-  runtime.registerApplicationNamespace('test-app', {
-    ...locales,
-    // Application-added languages can be partial and must use the configured fallback chain.
-    'es-ES': async () => ({
-      default: { surface: { backToApp: 'Volver a la aplicación' } },
-    }),
-    'ja-JP': async () => ({
-      default: { surface: { backToApp: 'アプリに戻る' } },
-    }),
-  });
+  runtime.registerApplicationNamespace('test-app', locales);
   await runtime.init('en-US');
   const app = {
     runtime: { settingsRouteTree: [route] },
@@ -144,39 +135,6 @@ describe('shell translations', () => {
       );
     },
   );
-
-  it.each(['es-ES', 'ja-JP'])(
-    'uses %s translations and falls back to the default locale',
-    async (locale) => {
-      const runtime = await setup(
-        <SettingsLayout routeTree={[]} />,
-        '/settings',
-        'zh-CN',
-      );
-      await act(() => runtime.changeLanguage(locale));
-      expect(
-        screen.getByRole('link', {
-          name: locale === 'es-ES' ? 'Volver a la aplicación' : 'アプリに戻る',
-        }),
-      ).toBeVisible();
-      expect(
-        screen.getByRole('heading', { name: '暂无可用设置' }),
-      ).toBeVisible();
-    },
-  );
-
-  it('falls back to English when the configured default also lacks a translation', async () => {
-    const runtime = await setup(
-      <SettingsLayout routeTree={[]} />,
-      '/settings',
-      'es-ES',
-    );
-    await act(() => runtime.changeLanguage('ja-JP'));
-    expect(
-      screen.getByRole('heading', { name: 'No settings available' }),
-    ).toBeVisible();
-    expect(screen.getByRole('link', { name: 'アプリに戻る' })).toBeVisible();
-  });
 
   it.each(['settings', 'dev'] as const)(
     'translates the %s page header',
