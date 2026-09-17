@@ -28,6 +28,13 @@ describe('owned PostgreSQL connection options', () => {
       resolvePostgresConnection({ skipVersionCheck: true }).skipVersionCheck,
     ).toBe(true);
   });
+  it('preserves explicit session options and application identity', () => {
+    const input = Object.freeze({
+      options: '-c timezone=UTC',
+      application_name: 'queue-app',
+    });
+    expect(resolvePostgresConnection(input)).toMatchObject(input);
+  });
   it.each([
     { schema: 'bad-name' },
     { skipVersionCheck: 'true' },
