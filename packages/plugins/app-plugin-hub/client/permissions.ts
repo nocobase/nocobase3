@@ -36,8 +36,8 @@ export function visibleHubDetailTabs(
     ...(!state.hasReleases && capabilities['upload-release']
       ? (['development'] as const)
       : []),
-    ...(capabilities['read-deployment'] ? (['deployments'] as const) : []),
     ...(capabilities['read-release'] ? (['releases'] as const) : []),
+    ...(capabilities['read-deployment'] ? (['deployments'] as const) : []),
     ...(capabilities['read-config'] ? (['resources'] as const) : []),
     ...(state.deployed && capabilities['read-config']
       ? (['configuration'] as const)
@@ -48,6 +48,19 @@ export function visibleHubDetailTabs(
   ];
 }
 
+export function defaultHubDetailTab(
+  state: { readonly hasReleases: boolean; readonly deployed: boolean },
+  capabilities: HubCapabilities,
+): DetailTab | undefined {
+  const visible = visibleHubDetailTabs(state, capabilities);
+  const preferred = state.deployed
+    ? 'deployments'
+    : state.hasReleases
+      ? 'releases'
+      : 'development';
+  return visible.includes(preferred) ? preferred : visible[0];
+}
+
 export function resolveHubDetailTab(
   requested: DetailTab,
   state: { readonly hasReleases: boolean; readonly deployed: boolean },
@@ -56,7 +69,7 @@ export function resolveHubDetailTab(
   const visible = visibleHubDetailTabs(state, capabilities);
   return visible.includes(requested)
     ? requested
-    : (visible[0] ?? 'deployments');
+    : (defaultHubDetailTab(state, capabilities) ?? 'deployments');
 }
 
 export async function loadHubCapabilities(
