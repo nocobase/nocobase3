@@ -68,6 +68,18 @@ it.skipIf(selectedBackend() !== 'cluster')(
         keys.map((key) => owner.cluster('KEYSLOT', key)),
       );
       expect(new Set(slots).size).toBe(1);
+      const queueSlots = new Set<unknown>(slots);
+      for (const name of ['other-a', 'other-b', 'other-c']) {
+        const receipt = await service.producer(name).publish('event', {});
+        const other = createQueueIdentity(
+          `${harness.namespace}-应用{one}`,
+          name,
+        );
+        const jobKey = `${other.redisPrefix}:${other.redisQueueName}:${receipt.jobId}`;
+        expect(await owner.exists(jobKey)).toBe(1);
+        queueSlots.add(await owner.cluster('KEYSLOT', jobKey));
+      }
+      expect(queueSlots.size).toBeGreaterThan(1);
       await service.shutdown();
       await expect.poll(clientIds, { timeout: 5000 }).toEqual(before);
       expect(await owner.ping()).toBe('PONG');
