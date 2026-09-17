@@ -234,9 +234,11 @@ If yes, it belongs to the rule. In practice that means the package exports at le
 - **A value used as a key by identity.** `createServiceToken` returns a frozen object and `ServiceContainer` keys its `Map` by that object, so two tokens with the same `name` are two different keys. Anything compared with `===`, or used as a `Map`/`Set`/`WeakMap` key across a module boundary, has this property.
 - **A React context.** `createContext` returns a new object each call, and `useContext` only matches the provider created from the same one.
 - **A module-level singleton.** A `const` holding a `new` instance or accumulated state, such as `nocobaseClient`, gives each copy its own session, cache, or connection.
-- **A registration into a process-wide registry.** `@nocobase/queue` registers job classes into the `Locator` of `@boringnode/queue`; the second copy registers into a table the first one never reads.
+- **A registration into a process-wide registry.** A module that registers values into a shared locator requires one identity for that locator. The old queue Job API had this property; instance-owned QueueService handler registries do not.
 
 A package that exports only classes, functions, and types holds nothing a second copy could split. Constructing two instances of a class is what callers already do, and a duplicated pure function behaves identically. `@nocobase/drive`, `@nocobase/caching`, `@nocobase/logging`, `@nocobase/session`, and `@nocobase/snowflake` are in this group today and stay ordinary dependencies. They move only if they gain one of the exports above — adding a token or a context to any of them is the moment to revisit the entry, not a later release.
+
+`@nocobase/queue` now exposes factories, per-service state, and types rather than a global Job locator or service token. It is not intrinsically identity-sensitive. Plugins may still declare it as an application-provided peer to align the host queue contract; type-only uses require only development dependencies. The identity-sensitive `queueServiceToken` is exported by `@nocobase/app-server/queue`, and plugins must resolve that original token instead of creating another token with the same name.
 
 Two cases need no judgement. Every `@nocobase/app-plugin-*` is covered unconditionally, because plugins export tokens for one another and `isIdentitySensitive` matches them by prefix, so a new plugin is included the day it is created. And a package that only ever appears in `import type` needs no runtime declaration at all.
 
@@ -247,12 +249,11 @@ The current entries:
 | Package                      | What breaks when a second copy exists                                                                                                                |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@nocobase/service-provider` | `ServiceContainer` keys its `Map` by the token object itself, so two `createServiceToken` calls with the same name produce two keys that never match |
-| `@nocobase/app-server`       | Exports the tokens every server plugin resolves against, such as `queueManagerToken` and `driveManagerToken`                                         |
+| `@nocobase/app-server`       | Exports the tokens every server plugin resolves against, such as `queueServiceToken` and `driveManagerToken`                                         |
 | `@nocobase/db`               | Exports `databaseManagerToken` and migration identity                                                                                                |
 | `@nocobase/app-client`       | Exports React contexts plus the identity-keyed `apiClientToken` and `realtimeClientToken`                                                            |
 | `@nocobase/app-portal-sdk`   | Exports `nocobaseClient`, a module-level singleton holding session state                                                                             |
 | `@nocobase/i18n`             | Exports the React contexts backing the i18n runtime                                                                                                  |
-| `@nocobase/queue`            | Registers job classes into the global `Locator` of `@boringnode/queue`                                                                               |
 | any `@nocobase/app-plugin-*` | Plugins export tokens for one another, such as `authenticationToken` and `notificationServiceToken`                                                  |
 
 ### Why a second copy is worth this much trouble
