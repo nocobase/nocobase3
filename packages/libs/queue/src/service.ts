@@ -307,6 +307,7 @@ export function createQueueService(
       registry.resolve(config.queueBackend);
     }
     for (const [name, current] of entries) await initializeEntry(name, current);
+    if (stopped) throw new Error('Queue initialization was cancelled');
     ready = true;
     for (const [name, current] of entries) {
       if (current.worker) {
@@ -372,6 +373,7 @@ export function createQueueService(
           ),
         );
         await current.queue.waitUntilReady();
+        if (stopped) throw new Error('Queue initialization was cancelled');
         if (config.queueBackend === 'inMemory')
           dependencies.onInMemoryQueueInitialized?.({
             namespace: config.namespace,
@@ -483,7 +485,50 @@ export function createQueueService(
       if (setupPromise) return setupPromise;
       setupStarted = true;
       registry.freeze();
-      setupPromise = initialize().catch(async (error: unknown) => {
+      const initialization = initialize();
+      setupPromise = (async (): Promise<void> => {
+        if (await settlesWithin(initialization, timeouts.setupTimeoutMs))
+          return;
+        stopped = true;
+        producersOpen = false;
+        const timeout = new Error('Queue setup deadline exceeded');
+        const cleanupDeadline = performance.now() + 5000;
+        const cleanup = closeEntries();
+        if (!(await settlesWithin(cleanup, 5000))) {
+          dependencies.logger?.error(
+            { error: timeout },
+            'Queue setup cleanup remains unresolved',
+          );
+          throw new AggregateError(
+            [timeout, new Error('Queue setup cleanup deadline exceeded')],
+            'Queue setup failed',
+          );
+        }
+        const settlement = initialization.then(
+          () => {},
+          () => {},
+        );
+        if (
+          !(await settlesWithin(
+            settlement,
+            Math.max(0, cleanupDeadline - performance.now()),
+          ))
+        ) {
+          dependencies.logger?.error(
+            { error: timeout },
+            'Queue initialization remains unresolved after cleanup',
+          );
+          throw new AggregateError(
+            [
+              timeout,
+              new Error('Queue initialization cancellation is unconfirmed'),
+            ],
+            'Queue setup failed',
+          );
+        }
+        throw timeout;
+      })().catch(async (error: unknown) => {
+        if (stopped) throw error;
         try {
           await closeEntries();
         } catch (cleanup) {
