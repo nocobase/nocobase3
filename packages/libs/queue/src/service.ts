@@ -467,6 +467,8 @@ export function createQueueService(
             config.rateLimit.max,
             config.rateLimit.duration,
           );
+        if (stopped || current.initializationCancelled)
+          throw new Error('Queue initialization was cancelled');
         current.initializeWorker = (): Promise<void> => {
           current.workerInitialization ??= (async (): Promise<void> => {
             if (stopped) throw new Error('Queue service is shutting down');

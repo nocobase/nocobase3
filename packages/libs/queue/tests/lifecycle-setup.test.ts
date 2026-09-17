@@ -226,3 +226,44 @@ it.each([false, true])(
     }
   },
 );
+
+it('does not create a Worker after runtime cancellation during rate metadata initialization', async () => {
+  const service = createQueueService({
+    namespace: 'late-meta',
+    queueBackend: 'test',
+    setupTimeoutMs: 20,
+    rateLimit: { max: 1, duration: 100 },
+  });
+  const factory = createInMemoryBackendFactory();
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let workers = 0;
+  service.registerBackend('test', (name, options, metadata) => {
+    const backend = factory(name, options, metadata);
+    if (metadata?.withBlockingConnection) workers++;
+    const setMeta = backend.setQueueMeta.bind(backend);
+    backend.setQueueMeta = async (values) => {
+      if (values.max !== undefined) await gate;
+      return setMeta(values);
+    };
+    const close = backend.close.bind(backend);
+    backend.close = async (...args) => {
+      release();
+      await close(...args);
+    };
+    return backend;
+  });
+  await service.setup();
+  service.consumer('jobs').consume(async () => {});
+  try {
+    await expect(
+      service.producer('jobs').publish('event', {}),
+    ).rejects.toThrow();
+    expect(workers).toBe(0);
+  } finally {
+    release();
+    await service.shutdown().catch(() => {});
+  }
+});
