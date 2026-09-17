@@ -1,3 +1,4 @@
+import { messageKey } from '../../lib/message-key.js';
 import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import {
   AIChatWindow,
@@ -100,10 +101,12 @@ export function ContainerShowcase({
                   <Icon className='size-4 text-muted-foreground' />
                 </div>
                 <CardTitle className='text-sm'>
-                  {translateDemo(option.title, { defaultValue: option.title })}
+                  {translateDemo(messageKey(option.title), {
+                    defaultValue: option.title,
+                  })}
                 </CardTitle>
                 <p className='min-h-15 text-xs leading-5 text-muted-foreground'>
-                  {translateDemo(option.description, {
+                  {translateDemo(messageKey(option.description), {
                     defaultValue: option.description,
                   })}
                 </p>
@@ -115,7 +118,7 @@ export function ContainerShowcase({
                   className='w-full'
                   onClick={() => onValueChange(option.value)}
                 >
-                  {translateDemo(option.action, {
+                  {translateDemo(messageKey(option.action), {
                     defaultValue: option.action,
                   })}
                 </Button>
@@ -129,14 +132,16 @@ export function ContainerShowcase({
         <div className='flex min-h-12 items-center justify-between border-b px-4'>
           <div>
             <div className='text-sm font-medium'>
-              {translateDemo('Container preview', {
+              {translateDemo('demo.containerPreview', {
                 defaultValue: 'Container preview',
               })}
             </div>
             <div className='text-xs text-muted-foreground'>
               {translateDemo(
-                containerOptions.find((option) => option.value === value)
-                  ?.title ?? '',
+                messageKey(
+                  containerOptions.find((option) => option.value === value)
+                    ?.title ?? '',
+                ),
                 {
                   defaultValue:
                     containerOptions.find((option) => option.value === value)

@@ -38,7 +38,7 @@ function AIEmployeeDevScene({
     return (
       <DevPageShell>
         <div className='flex min-h-[32rem] items-center justify-center text-sm text-muted-foreground'>
-          {translateDemo('Loading AI employees and enabled models…', {
+          {translateDemo('demo.loadingConfiguration', {
             defaultValue: 'Loading AI employees and enabled models…',
           })}
         </div>
@@ -55,19 +55,16 @@ function AIEmployeeDevScene({
           </span>
           <div>
             <h2 className='text-lg font-semibold'>
-              {translateDemo('AI employee is not ready', {
+              {translateDemo('demo.configurationNotReady', {
                 defaultValue: 'AI employee is not ready',
               })}
             </h2>
             <p className='mt-1 text-sm text-muted-foreground'>
               {ai.configurationError?.message ??
-                translateDemo(
-                  'No AI employee is available for the current user.',
-                  {
-                    defaultValue:
-                      'No AI employee is available for the current user.',
-                  },
-                )}
+                translateDemo('demo.noEmployee', {
+                  defaultValue:
+                    'No AI employee is available for the current user.',
+                })}
             </p>
           </div>
           <Button variant='outline' onClick={onRetry}>
@@ -104,23 +101,20 @@ function AIEmployeeDevScene({
             <div className='flex items-center gap-2 font-medium'>
               <Sparkles className='h-4 w-4 text-primary' aria-hidden='true' />
 
-              {translateDemo('Development instance', {
+              {translateDemo('demo.developmentInstance', {
                 defaultValue: 'Development instance',
               })}
             </div>
             <p className='mt-2 text-muted-foreground'>
-              {translateDemo(
-                "This page uses the Registry UI against the plugin's existing authenticated",
-                {
-                  defaultValue:
-                    "This page uses the Registry UI against the plugin's existing authenticated",
-                },
-              )}
+              {translateDemo('demo.developmentDescription', {
+                defaultValue:
+                  "This page uses the Registry UI against the plugin's existing authenticated",
+              })}
               <code className='mx-1 rounded bg-muted px-1 py-0.5 text-xs'>
                 /api/ai
               </code>
 
-              {translateDemo('routes. It is excluded from production builds.', {
+              {translateDemo('demo.developmentOnly', {
                 defaultValue: 'routes. It is excluded from production builds.',
               })}
             </p>
@@ -145,23 +139,20 @@ function DevPageShell({
       <div className='mx-auto max-w-7xl'>
         <header className='mb-5'>
           <p className='text-xs font-semibold uppercase tracking-[0.2em] text-primary'>
-            {translateDemo('AI Employee Registry', {
+            {translateDemo('demo.aiEmployeeRegistry', {
               defaultValue: 'AI Employee Registry',
             })}
           </p>
           <h1 className='mt-2 text-2xl font-semibold tracking-tight'>
-            {translateDemo('AI employee playground', {
+            {translateDemo('demo.aiEmployeePlayground', {
               defaultValue: 'AI employee playground',
             })}
           </h1>
           <p className='mt-1 text-sm text-muted-foreground'>
-            {translateDemo(
-              'Exercise the application-owned AI component library with the current plugin runtime.',
-              {
-                defaultValue:
-                  'Exercise the application-owned AI component library with the current plugin runtime.',
-              },
-            )}
+            {translateDemo('demo.playgroundDescription', {
+              defaultValue:
+                'Exercise the application-owned AI component library with the current plugin runtime.',
+            })}
           </p>
         </header>
         {children}

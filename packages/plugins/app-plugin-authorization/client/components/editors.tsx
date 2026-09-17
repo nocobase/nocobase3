@@ -1,3 +1,4 @@
+import { messageKey } from '../lib/message-key.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement, type ReactNode } from 'react';
 
@@ -43,7 +44,7 @@ export function ResourceEditor(inputProps: {
   const selected = options.resourceTypes.find((item) => item.value === type);
   return (
     <>
-      <Field label={t('Resource type', { defaultValue: 'Resource type' })}>
+      <Field label={t('resourceType', { defaultValue: 'Resource type' })}>
         <select
           className={selectClass}
           value={type}
@@ -59,12 +60,12 @@ export function ResourceEditor(inputProps: {
         >
           {options.resourceTypes.map((item) => (
             <option key={item.value} value={item.value}>
-              {t(item.label, { defaultValue: item.label })}
+              {t(messageKey(item.label), { defaultValue: item.label })}
             </option>
           ))}
         </select>
       </Field>
-      <Field label={t('Resource', { defaultValue: 'Resource' })}>
+      <Field label={t('resourceLabel', { defaultValue: 'Resource' })}>
         {selected && selected.resources.length > 0 ? (
           <select
             className={selectClass}
@@ -73,14 +74,14 @@ export function ResourceEditor(inputProps: {
           >
             {selected.resources.map((item) => (
               <option key={item.value} value={item.value}>
-                {t(item.label, { defaultValue: item.label })}
+                {t(messageKey(item.label), { defaultValue: item.label })}
               </option>
             ))}
           </select>
         ) : (
           <Input
             required
-            placeholder={t('Resource ID', { defaultValue: 'Resource ID' })}
+            placeholder={t('resourceId', { defaultValue: 'Resource ID' })}
             value={id}
             onChange={(event) => onChange({ type, id: event.target.value })}
           />
@@ -119,7 +120,7 @@ export function ActionsEditor(inputProps: {
   });
   if (actions.length === 0)
     return (
-      <Field label={t('Actions', { defaultValue: 'Actions' })}>
+      <Field label={t('actions', { defaultValue: 'Actions' })}>
         <Input
           required
           placeholder='read, create, update'
@@ -129,7 +130,7 @@ export function ActionsEditor(inputProps: {
       </Field>
     );
   return (
-    <Field label={t('Actions', { defaultValue: 'Actions' })}>
+    <Field label={t('actions', { defaultValue: 'Actions' })}>
       <div className='flex min-h-9 flex-wrap items-center gap-4 rounded-lg border px-3 py-2'>
         {orderedActions.map((action) => (
           <label className='flex items-center gap-2 text-sm' key={action.value}>
@@ -149,7 +150,7 @@ export function ActionsEditor(inputProps: {
                 );
               }}
             />
-            {t(action.label, { defaultValue: action.label })}
+            {t(messageKey(action.label), { defaultValue: action.label })}
           </label>
         ))}
       </div>
@@ -167,7 +168,7 @@ export function SubjectEditor(inputProps: {
 
   return (
     <>
-      <Field label={t('Who', { defaultValue: 'Who' })}>
+      <Field label={t('who', { defaultValue: 'Who' })}>
         <select
           className={selectClass}
           value={value.type}
@@ -180,15 +181,15 @@ export function SubjectEditor(inputProps: {
           }
         >
           <option value='authenticated'>
-            {t('All signed-in users', { defaultValue: 'All signed-in users' })}
+            {t('allSignedInUsers', { defaultValue: 'All signed-in users' })}
           </option>
           <option value='user'>
-            {t('Specific user', { defaultValue: 'Specific user' })}
+            {t('specificUser', { defaultValue: 'Specific user' })}
           </option>
         </select>
       </Field>
       {value.type === 'user' ? (
-        <Field label={t('User', { defaultValue: 'User' })}>
+        <Field label={t('user', { defaultValue: 'User' })}>
           <select
             className={selectClass}
             required
@@ -198,7 +199,7 @@ export function SubjectEditor(inputProps: {
             }
           >
             <option value=''>
-              {t('Select a user', { defaultValue: 'Select a user' })}
+              {t('selectAUser', { defaultValue: 'Select a user' })}
             </option>
             {users.map((user) => (
               <option key={user.id} value={user.id}>
@@ -209,7 +210,7 @@ export function SubjectEditor(inputProps: {
         </Field>
       ) : (
         <p className='self-end pb-2 text-xs text-muted-foreground'>
-          {t('Applies to every user with a valid signed-in session.', {
+          {t('signedInAudienceHint', {
             defaultValue:
               'Applies to every user with a valid signed-in session.',
           })}
@@ -261,10 +262,10 @@ export function SubjectsEditor(inputProps: {
     <section className='space-y-3 rounded-lg border p-4'>
       <div>
         <h4 className='text-sm font-medium'>
-          {t('Assignments', { defaultValue: 'Assignments' })}
+          {t('assignments', { defaultValue: 'Assignments' })}
         </h4>
         <p className='text-xs text-muted-foreground'>
-          {t('Choose an audience or multiple users.', {
+          {t('audienceSelectionHint', {
             defaultValue: 'Choose an audience or multiple users.',
           })}
         </p>
@@ -278,10 +279,10 @@ export function SubjectsEditor(inputProps: {
         />
         <span>
           <span className='block text-sm font-medium'>
-            {t('All signed-in users', { defaultValue: 'All signed-in users' })}
+            {t('allSignedInUsers', { defaultValue: 'All signed-in users' })}
           </span>
           <span className='block text-xs text-muted-foreground'>
-            {t('Authenticated audience', {
+            {t('authenticatedAudience', {
               defaultValue: 'Authenticated audience',
             })}
           </span>
@@ -289,7 +290,7 @@ export function SubjectsEditor(inputProps: {
       </label>
       <Input
         type='search'
-        placeholder={t('Search name, username, or email', {
+        placeholder={t('assigneeSearch', {
           defaultValue: 'Search name, username, or email',
         })}
         value={search}
@@ -349,7 +350,7 @@ export function ScopeEditor(inputProps: {
 
   return (
     <div className='grid gap-3 md:grid-cols-2'>
-      <Field label={t('Record scope', { defaultValue: 'Record scope' })}>
+      <Field label={t('recordScope', { defaultValue: 'Record scope' })}>
         <select
           className={selectClass}
           value={value.type}
@@ -369,17 +370,17 @@ export function ScopeEditor(inputProps: {
           }}
         >
           <option value='all'>
-            {t('All records', { defaultValue: 'All records' })}
+            {t('allRecords', { defaultValue: 'All records' })}
           </option>
           {allowIds ? (
             <option value='ids'>
-              {t('Specific record IDs', {
+              {t('specificRecordIds', {
                 defaultValue: 'Specific record IDs',
               })}
             </option>
           ) : null}
           <option value='database'>
-            {t('Record Access Policy', {
+            {t('recordAccessPolicy', {
               defaultValue: 'Record Access Policy',
             })}
           </option>
@@ -395,7 +396,7 @@ export function ScopeEditor(inputProps: {
       {value.type === 'database' ? (
         <>
           <Field
-            label={t('Record Access Policy', {
+            label={t('recordAccessPolicy', {
               defaultValue: 'Record Access Policy',
             })}
           >
@@ -417,7 +418,7 @@ export function ScopeEditor(inputProps: {
             >
               {options.recordAccessPolicies.map((policy) => (
                 <option key={policy.value} value={policy.value}>
-                  {t(policy.label, { defaultValue: policy.label })}
+                  {t(messageKey(policy.label), { defaultValue: policy.label })}
                 </option>
               ))}
             </select>
@@ -536,10 +537,10 @@ function RecordScopeEditor(inputProps: {
   );
   return (
     <div className='space-y-2 md:col-span-2'>
-      <Field label={t('Records', { defaultValue: 'Records' })}>
+      <Field label={t('records', { defaultValue: 'Records' })}>
         <Input
           type='search'
-          placeholder={t('Search records', { defaultValue: 'Search records' })}
+          placeholder={t('searchRecords', { defaultValue: 'Search records' })}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -624,7 +625,7 @@ function CustomFilterEditor(inputProps: {
     <div className='space-y-2 md:col-span-2'>
       <div className='flex items-center justify-between'>
         <span className='text-xs font-medium'>
-          {t('Filter conditions', { defaultValue: 'Filter conditions' })}
+          {t('filterConditions', { defaultValue: 'Filter conditions' })}
         </span>
         <button
           className='text-xs font-medium text-primary'
@@ -636,7 +637,7 @@ function CustomFilterEditor(inputProps: {
             ])
           }
         >
-          {t('Add condition', { defaultValue: 'Add condition' })}
+          {t('addCondition', { defaultValue: 'Add condition' })}
         </button>
       </div>
       {conditions.map((condition, index) => (
@@ -680,26 +681,26 @@ function CustomFilterEditor(inputProps: {
             }
           >
             <option value='$eq'>
-              {t('Equals', { defaultValue: 'Equals' })}
+              {t('equals', { defaultValue: 'Equals' })}
             </option>
             <option value='$ne'>
-              {t('Not equal', { defaultValue: 'Not equal' })}
+              {t('notEqual', { defaultValue: 'Not equal' })}
             </option>
             <option value='$in'>In</option>
             <option value='$notIn'>
-              {t('Not in', { defaultValue: 'Not in' })}
+              {t('notIn', { defaultValue: 'Not in' })}
             </option>
             <option value='$gt'>
-              {t('Greater than', { defaultValue: 'Greater than' })}
+              {t('greaterThan', { defaultValue: 'Greater than' })}
             </option>
             <option value='$gte'>
-              {t('At least', { defaultValue: 'At least' })}
+              {t('atLeast', { defaultValue: 'At least' })}
             </option>
             <option value='$lt'>
-              {t('Less than', { defaultValue: 'Less than' })}
+              {t('lessThan', { defaultValue: 'Less than' })}
             </option>
             <option value='$lte'>
-              {t('At most', { defaultValue: 'At most' })}
+              {t('atMost', { defaultValue: 'At most' })}
             </option>
           </select>
           <Input
@@ -721,7 +722,7 @@ function CustomFilterEditor(inputProps: {
               update(conditions.filter((_item, current) => current !== index))
             }
           >
-            {t('Remove', { defaultValue: 'Remove' })}
+            {t('remove', { defaultValue: 'Remove' })}
           </button>
         </div>
       ))}
@@ -784,7 +785,7 @@ function humanize(
   const label = value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-  return t(label, { defaultValue: label });
+  return t(messageKey(label), { defaultValue: label });
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

@@ -45,7 +45,12 @@ export function SkillsExampleNotice({
   if (error) {
     return (
       <p className='text-sm text-destructive'>
-        {translateDemo(error, { defaultValue: error })}
+        {translateDemo(
+          error === 'Unable to load the plugin notice.'
+            ? 'noticeLoadError'
+            : error,
+          { defaultValue: error },
+        )}
       </p>
     );
   }
@@ -53,7 +58,7 @@ export function SkillsExampleNotice({
   if (!notice) {
     return (
       <p className='text-sm text-muted-foreground'>
-        {translateDemo('Loading notice…', { defaultValue: 'Loading notice…' })}
+        {translateDemo('noticeLoading', { defaultValue: 'Loading notice…' })}
       </p>
     );
   }

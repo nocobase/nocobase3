@@ -1,3 +1,4 @@
+import { messageKey } from '../lib/message-key.js';
 import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import { useNotification } from '@refinedev/core';
 import { useState, type ReactElement } from 'react';
@@ -16,23 +17,20 @@ export default function NotificationDemoPage(): ReactElement {
     <section className='mx-auto flex w-full max-w-3xl flex-col px-6 py-10'>
       <header className='space-y-2 border-b pb-6'>
         <p className='text-sm text-muted-foreground'>
-          {translateDemo('Client route example', {
+          {translateDemo('clientRouteExample', {
             defaultValue: 'Client route example',
           })}
         </p>
         <h1 className='text-2xl font-semibold'>
-          {translateDemo('Notification provider', {
+          {translateDemo('notificationProvider', {
             defaultValue: 'Notification provider',
           })}
         </h1>
         <p className='text-sm text-muted-foreground'>
-          {translateDemo(
-            "These actions use Refine's notification API and the enabled Sonner-backed notification provider plugin.",
-            {
-              defaultValue:
-                "These actions use Refine's notification API and the enabled Sonner-backed notification provider plugin.",
-            },
-          )}
+          {translateDemo('description', {
+            defaultValue:
+              "These actions use Refine's notification API and the enabled Sonner-backed notification provider plugin.",
+          })}
         </p>
       </header>
 
@@ -41,27 +39,25 @@ export default function NotificationDemoPage(): ReactElement {
           <Button
             onClick={() =>
               open?.({
-                description: translateDemo(
-                  'The operation completed successfully.',
-                  { defaultValue: 'The operation completed successfully.' },
-                ),
-                message: translateDemo('Success notification', {
+                description: translateDemo('successDescription', {
+                  defaultValue: 'The operation completed successfully.',
+                }),
+                message: translateDemo('successNotification', {
                   defaultValue: 'Success notification',
                 }),
                 type: 'success',
               })
             }
           >
-            {translateDemo('Show success', { defaultValue: 'Show success' })}
+            {translateDemo('showSuccess', { defaultValue: 'Show success' })}
           </Button>
           <Button
             onClick={() =>
               open?.({
-                description: translateDemo(
-                  'The operation could not be completed.',
-                  { defaultValue: 'The operation could not be completed.' },
-                ),
-                message: translateDemo('Error notification', {
+                description: translateDemo('errorDescription', {
+                  defaultValue: 'The operation could not be completed.',
+                }),
+                message: translateDemo('errorNotification', {
                   defaultValue: 'Error notification',
                 }),
                 type: 'error',
@@ -69,18 +65,17 @@ export default function NotificationDemoPage(): ReactElement {
             }
             variant='outline'
           >
-            {translateDemo('Show error', { defaultValue: 'Show error' })}
+            {translateDemo('showError', { defaultValue: 'Show error' })}
           </Button>
           <Button
             onClick={() => {
               setUndoStatus('Waiting for an undo request.');
               open?.({
                 cancelMutation: () => setUndoStatus('Undo requested.'),
-                description: translateDemo(
-                  'Use Undo before the notification closes.',
-                  { defaultValue: 'Use Undo before the notification closes.' },
-                ),
-                message: translateDemo('Undoable notification', {
+                description: translateDemo('undoHint', {
+                  defaultValue: 'Use Undo before the notification closes.',
+                }),
+                message: translateDemo('undoableNotification', {
                   defaultValue: 'Undoable notification',
                 }),
                 type: 'progress',
@@ -89,18 +84,20 @@ export default function NotificationDemoPage(): ReactElement {
             }}
             variant='outline'
           >
-            {translateDemo('Show undoable', { defaultValue: 'Show undoable' })}
+            {translateDemo('showUndoable', { defaultValue: 'Show undoable' })}
           </Button>
         </div>
 
         <div className='rounded-xl border p-5'>
           <p className='text-sm text-muted-foreground'>
-            {translateDemo('Undo callback status', {
+            {translateDemo('undoCallbackStatus', {
               defaultValue: 'Undo callback status',
             })}
           </p>
           <p className='mt-1 font-medium' role='status'>
-            {translateDemo(undoStatus, { defaultValue: undoStatus })}
+            {translateDemo(messageKey(undoStatus), {
+              defaultValue: undoStatus,
+            })}
           </p>
         </div>
       </section>

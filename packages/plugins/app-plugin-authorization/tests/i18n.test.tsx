@@ -57,7 +57,7 @@ describe('authorization translations', () => {
     expect(output).toContain('选择一个数据表。');
     expect(output).toContain('请填写完整规则后再保存。');
     expect(output).toContain('Custom action');
-    expect(runtime.i18n.t('Permission Sets', { ns: plugin.packageName })).toBe(
+    expect(runtime.i18n.t('permissionSets', { ns: plugin.packageName })).toBe(
       '权限集',
     );
   });

@@ -15,4 +15,4 @@
 "@nocobase/app-template-hub": patch
 ---
 
-Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples.
+Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations.

@@ -1,3 +1,4 @@
+import { messageKey } from '../lib/message-key.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../components/ui.js';
 import {
@@ -106,7 +107,7 @@ export function DefaultAccessPanel(inputProps: {
         <ManagementToolbar
           search={search}
           onSearch={setSearch}
-          actionLabel={t('Set default access', {
+          actionLabel={t('setDefaultAccess', {
             defaultValue: 'Set default access',
           })}
           onAction={() => edit()}
@@ -115,15 +116,15 @@ export function DefaultAccessPanel(inputProps: {
           <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
             <tr>
               <th className='px-5 py-3 font-medium'>
-                {t('Resource', { defaultValue: 'Resource' })}
+                {t('resourceLabel', { defaultValue: 'Resource' })}
               </th>
               <th className='px-5 py-3 font-medium'>
-                {t('Default record access', {
+                {t('defaultRecordAccess', {
                   defaultValue: 'Default record access',
                 })}
               </th>
               <th className='px-5 py-3 font-medium'>
-                {t('Allowed actions', { defaultValue: 'Allowed actions' })}
+                {t('allowedActions', { defaultValue: 'Allowed actions' })}
               </th>
               <th className='w-24 px-5 py-3' />
             </tr>
@@ -150,14 +151,14 @@ export function DefaultAccessPanel(inputProps: {
                 </td>
                 <td className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
-                    {t('Edit', { defaultValue: 'Edit' })}
+                    {t('edit', { defaultValue: 'Edit' })}
                   </Button>
                 </td>
               </tr>
             ))}
             {visibleRules.length === 0 ? (
               <EmptyTableRow colSpan={4}>
-                {t('No default access rules match your search.', {
+                {t('noDefaultAccessRules', {
                   defaultValue: 'No default access rules match your search.',
                 })}
               </EmptyTableRow>
@@ -169,18 +170,15 @@ export function DefaultAccessPanel(inputProps: {
         <SidePanel
           title={
             original
-              ? t('Edit default access', {
+              ? t('editDefaultAccess', {
                   defaultValue: 'Edit default access',
                 })
-              : t('Set default access', { defaultValue: 'Set default access' })
+              : t('setDefaultAccess', { defaultValue: 'Set default access' })
           }
-          description={t(
-            'Define the baseline record visibility before sharing and restrictions are applied.',
-            {
-              defaultValue:
-                'Define the baseline record visibility before sharing and restrictions are applied.',
-            },
-          )}
+          description={t('defaultAccessRuleDescription', {
+            defaultValue:
+              'Define the baseline record visibility before sharing and restrictions are applied.',
+          })}
           onClose={() => setDraft(undefined)}
           wide
           scrollable={false}
@@ -195,14 +193,14 @@ export function DefaultAccessPanel(inputProps: {
               <>
                 {original ? (
                   <Button variant='outline' onClick={() => void remove()}>
-                    {t('Delete rule', { defaultValue: 'Delete rule' })}
+                    {t('deleteRule', { defaultValue: 'Delete rule' })}
                   </Button>
                 ) : null}
                 <Button variant='outline' onClick={() => setDraft(undefined)}>
-                  {t('Cancel', { defaultValue: 'Cancel' })}
+                  {t('cancel', { defaultValue: 'Cancel' })}
                 </Button>
                 <Button onClick={() => void save()}>
-                  {t('Save default access', {
+                  {t('saveDefaultAccess', {
                     defaultValue: 'Save default access',
                   })}
                 </Button>
@@ -213,16 +211,13 @@ export function DefaultAccessPanel(inputProps: {
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
-                    {t('Resource', { defaultValue: 'Resource' })}
+                    {t('resourceLabel', { defaultValue: 'Resource' })}
                   </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    {t(
-                      'Choose the collection whose baseline access is being set.',
-                      {
-                        defaultValue:
-                          'Choose the collection whose baseline access is being set.',
-                      },
-                    )}
+                    {t('defaultCollectionHint', {
+                      defaultValue:
+                        'Choose the collection whose baseline access is being set.',
+                    })}
                   </p>
                 </div>
                 <div className='grid gap-4 sm:grid-cols-2'>
@@ -251,12 +246,12 @@ export function DefaultAccessPanel(inputProps: {
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
-                    {t('Access by action', {
+                    {t('accessByAction', {
                       defaultValue: 'Access by action',
                     })}
                   </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    {t('Set the record scope independently for each action.', {
+                    {t('defaultActionsHint', {
                       defaultValue:
                         'Set the record scope independently for each action.',
                     })}
@@ -311,7 +306,7 @@ function scopeLabel(
   options: AuthorizationOptions,
 ): string {
   if (scope.type === 'all')
-    return t('All records', { defaultValue: 'All records' });
+    return t('allRecords', { defaultValue: 'All records' });
   if (scope.type === 'ids')
     return t('counts.selectedRecords', {
       count: scope.ids.length,
@@ -327,7 +322,7 @@ function scopeLabel(
       humanize(t, key)
     );
   }
-  return t('Unknown scope', { defaultValue: 'Unknown scope' });
+  return t('unknownScope', { defaultValue: 'Unknown scope' });
 }
 function fresh(options: AuthorizationOptions): DefaultAccessRule {
   const type =
@@ -387,5 +382,5 @@ function humanize(
   const label = value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-  return t(label, { defaultValue: label });
+  return t(messageKey(label), { defaultValue: label });
 }

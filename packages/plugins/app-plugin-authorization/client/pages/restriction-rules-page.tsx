@@ -15,15 +15,12 @@ export default function RestrictionRulesPage(): ReactElement {
   );
   return (
     <AuthorizationSettingsPage
-      eyebrow={t('Record access', { defaultValue: 'Record access' })}
-      title={t('Restriction Rules', { defaultValue: 'Restriction Rules' })}
-      description={t(
-        'Narrow the records available to selected users without granting access by itself.',
-        {
-          defaultValue:
-            'Narrow the records available to selected users without granting access by itself.',
-        },
-      )}
+      eyebrow={t('recordAccess', { defaultValue: 'Record access' })}
+      title={t('restrictionRules', { defaultValue: 'Restriction Rules' })}
+      description={t('restrictionRulesDescription', {
+        defaultValue:
+          'Narrow the records available to selected users without granting access by itself.',
+      })}
       error={error}
       loading={!options}
     >

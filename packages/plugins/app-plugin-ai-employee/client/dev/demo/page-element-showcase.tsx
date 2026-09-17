@@ -88,7 +88,7 @@ function PageElementShowcaseContent() {
 
   const formRef = useAIPageElement({
     id: 'customer-intake-form',
-    title: translateDemo('Customer intake form', {
+    title: translateDemo('demo.customerIntakeForm', {
       defaultValue: 'Customer intake form',
     }),
     kind: 'form',
@@ -99,7 +99,7 @@ function PageElementShowcaseContent() {
   });
   const detailRef = useAIPageElement({
     id: 'customer-health-summary',
-    title: translateDemo('Customer health summary', {
+    title: translateDemo('demo.customerHealthSummary', {
       defaultValue: 'Customer health summary',
     }),
     kind: 'record-detail',
@@ -122,22 +122,19 @@ function PageElementShowcaseContent() {
           <div className='flex flex-wrap items-center justify-between gap-3'>
             <div>
               <div className='text-sm font-medium'>
-                {translateDemo('Customer workspace', {
+                {translateDemo('demo.customerWorkspace', {
                   defaultValue: 'Customer workspace',
                 })}
               </div>
               <div className='text-xs text-muted-foreground'>
-                {translateDemo(
-                  'The form and detail card are registered page elements.',
-                  {
-                    defaultValue:
-                      'The form and detail card are registered page elements.',
-                  },
-                )}
+                {translateDemo('demo.pageElementsHint', {
+                  defaultValue:
+                    'The form and detail card are registered page elements.',
+                })}
               </div>
             </div>
             <Badge variant='outline'>
-              {translateDemo('2 selectable elements', {
+              {translateDemo('demo.selectableElements', {
                 defaultValue: '2 selectable elements',
               })}
             </Badge>
@@ -146,24 +143,21 @@ function PageElementShowcaseContent() {
           <Card ref={formRef} className='transition-shadow'>
             <CardHeader>
               <CardTitle>
-                {translateDemo('Customer intake form', {
+                {translateDemo('demo.customerIntakeForm', {
                   defaultValue: 'Customer intake form',
                 })}
               </CardTitle>
               <p className='text-xs leading-5 text-muted-foreground'>
-                {translateDemo(
-                  'Update a value, then pick this form to capture its current state.',
-                  {
-                    defaultValue:
-                      'Update a value, then pick this form to capture its current state.',
-                  },
-                )}
+                {translateDemo('demo.customerFormHint', {
+                  defaultValue:
+                    'Update a value, then pick this form to capture its current state.',
+                })}
               </p>
             </CardHeader>
             <CardContent className='grid gap-4 sm:grid-cols-2'>
               <div className='space-y-2 sm:col-span-2'>
                 <Label htmlFor='page-context-customer-name'>
-                  {translateDemo('Customer name', {
+                  {translateDemo('demo.customerName', {
                     defaultValue: 'Customer name',
                   })}
                 </Label>
@@ -175,7 +169,7 @@ function PageElementShowcaseContent() {
               </div>
               <div className='space-y-2'>
                 <Label htmlFor='page-context-contact-email'>
-                  {translateDemo('Contact email', {
+                  {translateDemo('demo.contactEmail', {
                     defaultValue: 'Contact email',
                   })}
                 </Label>
@@ -187,7 +181,7 @@ function PageElementShowcaseContent() {
               </div>
               <div className='space-y-2'>
                 <Label>
-                  {translateDemo('Priority', { defaultValue: 'Priority' })}
+                  {translateDemo('demo.priority', { defaultValue: 'Priority' })}
                 </Label>
                 <Select
                   value={priority}
@@ -198,13 +192,13 @@ function PageElementShowcaseContent() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value='low'>
-                      {translateDemo('Low', { defaultValue: 'Low' })}
+                      {translateDemo('demo.low', { defaultValue: 'Low' })}
                     </SelectItem>
                     <SelectItem value='normal'>
-                      {translateDemo('Normal', { defaultValue: 'Normal' })}
+                      {translateDemo('demo.normal', { defaultValue: 'Normal' })}
                     </SelectItem>
                     <SelectItem value='high'>
-                      {translateDemo('High', { defaultValue: 'High' })}
+                      {translateDemo('demo.high', { defaultValue: 'High' })}
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -215,7 +209,7 @@ function PageElementShowcaseContent() {
           <Card ref={detailRef} className='transition-shadow'>
             <CardHeader>
               <CardTitle>
-                {translateDemo('Customer health summary', {
+                {translateDemo('demo.customerHealthSummary', {
                   defaultValue: 'Customer health summary',
                 })}
               </CardTitle>

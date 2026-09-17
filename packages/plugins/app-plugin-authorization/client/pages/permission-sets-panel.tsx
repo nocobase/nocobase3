@@ -1,3 +1,4 @@
+import { messageKey } from '../lib/message-key.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Button, Input } from '../components/ui.js';
 import {
@@ -205,7 +206,7 @@ export function PermissionSetsPanel(inputProps: {
           <ManagementToolbar
             search={search}
             onSearch={setSearch}
-            actionLabel={t('New permission set', {
+            actionLabel={t('newPermissionSet', {
               defaultValue: 'New permission set',
             })}
             onAction={create}
@@ -219,16 +220,16 @@ export function PermissionSetsPanel(inputProps: {
             <thead className='border-b bg-muted/30 text-xs tracking-wide text-muted-foreground uppercase'>
               <tr>
                 <th className='px-5 py-3 font-medium'>
-                  {t('Permission set', { defaultValue: 'Permission set' })}
+                  {t('permissionSet', { defaultValue: 'Permission set' })}
                 </th>
                 <th className='px-5 py-3 font-medium'>
-                  {t('Type', { defaultValue: 'Type' })}
+                  {t('type', { defaultValue: 'Type' })}
                 </th>
                 <th className='px-5 py-3 font-medium'>
-                  {t('Permissions', { defaultValue: 'Permissions' })}
+                  {t('permissions', { defaultValue: 'Permissions' })}
                 </th>
                 <th className='px-5 py-3 font-medium'>
-                  {t('Key', { defaultValue: 'Key' })}
+                  {t('key', { defaultValue: 'Key' })}
                 </th>
                 <th className='w-20 px-5 py-3' />
               </tr>
@@ -257,8 +258,8 @@ export function PermissionSetsPanel(inputProps: {
                       }
                     >
                       {set.key === 'system-administrator'
-                        ? t('System', { defaultValue: 'System' })
-                        : t('Custom', { defaultValue: 'Custom' })}
+                        ? t('system', { defaultValue: 'System' })
+                        : t('custom', { defaultValue: 'Custom' })}
                     </Badge>
                   </td>
                   <td className='px-5 py-4 tabular-nums'>
@@ -273,14 +274,14 @@ export function PermissionSetsPanel(inputProps: {
                       variant='ghost'
                       onClick={() => void open(set)}
                     >
-                      {t('View', { defaultValue: 'View' })}
+                      {t('view', { defaultValue: 'View' })}
                     </Button>
                   </td>
                 </tr>
               ))}
               {visibleSets.length === 0 ? (
                 <EmptyTableRow colSpan={5}>
-                  {t('No permission sets match your search.', {
+                  {t('noPermissionSets', {
                     defaultValue: 'No permission sets match your search.',
                   })}
                 </EmptyTableRow>
@@ -311,26 +312,26 @@ export function PermissionSetsPanel(inputProps: {
         title={
           draft.title ||
           humanize(t, draft.key) ||
-          t('New permission set', { defaultValue: 'New permission set' })
+          t('newPermissionSet', { defaultValue: 'New permission set' })
         }
         subtitle={detailSummary(t, draft, assignments)}
         badge={
           protectedSet ? (
             <Badge tone='protected'>
-              {t('Protected system set', {
+              {t('protectedSystemSet', {
                 defaultValue: 'Protected system set',
               })}
             </Badge>
           ) : (
             <Badge tone='neutral'>
-              {t('Custom', { defaultValue: 'Custom' })}
+              {t('custom', { defaultValue: 'Custom' })}
             </Badge>
           )
         }
         actions={
           <>
             <Button variant='outline' onClick={edit}>
-              {t('Edit', { defaultValue: 'Edit' })}
+              {t('edit', { defaultValue: 'Edit' })}
             </Button>
             {draft.originalKey && !protectedSet ? (
               <Button
@@ -339,7 +340,7 @@ export function PermissionSetsPanel(inputProps: {
                 disabled={busy}
                 onClick={() => void remove()}
               >
-                {t('Delete', { defaultValue: 'Delete' })}
+                {t('delete', { defaultValue: 'Delete' })}
               </Button>
             ) : null}
           </>
@@ -347,13 +348,10 @@ export function PermissionSetsPanel(inputProps: {
       />
       {protectedSet ? (
         <div className='rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900'>
-          {t(
-            'Required administration permissions and assignments are preserved so administrators cannot be locked out.',
-            {
-              defaultValue:
-                'Required administration permissions and assignments are preserved so administrators cannot be locked out.',
-            },
-          )}
+          {t('protectedSetDescription', {
+            defaultValue:
+              'Required administration permissions and assignments are preserved so administrators cannot be locked out.',
+          })}
         </div>
       ) : null}
       <DetailTabs
@@ -362,12 +360,12 @@ export function PermissionSetsPanel(inputProps: {
         items={[
           {
             value: 'permissions',
-            label: t('Permissions', { defaultValue: 'Permissions' }),
+            label: t('permissions', { defaultValue: 'Permissions' }),
             count: permissionCountFromDraft(draft),
           },
           {
             value: 'assignments',
-            label: t('Assignments', { defaultValue: 'Assignments' }),
+            label: t('assignments', { defaultValue: 'Assignments' }),
             count: assignments.length,
           },
         ]}
@@ -427,10 +425,10 @@ function PermissionsSummary(inputProps: {
       <div className='flex flex-col gap-4 border-b px-5 py-4 lg:flex-row lg:items-center lg:justify-between'>
         <div>
           <h3 className='font-medium'>
-            {t('Granted permissions', { defaultValue: 'Granted permissions' })}
+            {t('grantedPermissions', { defaultValue: 'Granted permissions' })}
           </h3>
           <p className='text-sm text-muted-foreground'>
-            {t('Search and review resources without expanding every policy.', {
+            {t('grantedPermissionsDescription', {
               defaultValue:
                 'Search and review resources without expanding every policy.',
             })}
@@ -440,29 +438,29 @@ function PermissionsSummary(inputProps: {
           <Input
             className='max-w-72 flex-1 lg:w-72 lg:flex-none'
             type='search'
-            placeholder={t('Search resources or actions', {
+            placeholder={t('resourceActionSearch', {
               defaultValue: 'Search resources or actions',
             })}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
           <select
-            aria-label={t('Resource type', { defaultValue: 'Resource type' })}
+            aria-label={t('resourceType', { defaultValue: 'Resource type' })}
             className='h-8 min-w-48 rounded-lg border bg-background px-3 text-sm'
             value={type}
             onChange={(event) => setType(event.target.value)}
           >
             <option value='all'>
-              {t('All resource types', { defaultValue: 'All resource types' })}
+              {t('allResourceTypes', { defaultValue: 'All resource types' })}
             </option>
             {options.resourceTypes.map((item) => (
               <option key={item.value} value={item.value}>
-                {t(item.label, { defaultValue: item.label })}
+                {t(messageKey(item.label), { defaultValue: item.label })}
               </option>
             ))}
           </select>
           <Button onClick={onEdit}>
-            {t('Edit permissions', { defaultValue: 'Edit permissions' })}
+            {t('editPermissions', { defaultValue: 'Edit permissions' })}
           </Button>
         </div>
       </div>
@@ -470,16 +468,16 @@ function PermissionsSummary(inputProps: {
         <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
           <tr>
             <th className='px-5 py-3 font-medium'>
-              {t('Category', { defaultValue: 'Category' })}
+              {t('category', { defaultValue: 'Category' })}
             </th>
             <th className='px-5 py-3 font-medium'>
-              {t('Resource', { defaultValue: 'Resource' })}
+              {t('resourceLabel', { defaultValue: 'Resource' })}
             </th>
             <th className='px-5 py-3 font-medium'>
-              {t('Actions', { defaultValue: 'Actions' })}
+              {t('actions', { defaultValue: 'Actions' })}
             </th>
             <th className='px-5 py-3 font-medium'>
-              {t('Record access', { defaultValue: 'Record access' })}
+              {t('recordAccess', { defaultValue: 'Record access' })}
             </th>
           </tr>
         </thead>
@@ -517,7 +515,7 @@ function PermissionsSummary(inputProps: {
           ))}
           {visible.length === 0 ? (
             <EmptyTableRow colSpan={4}>
-              {t('No permissions match these filters.', {
+              {t('noPermissions', {
                 defaultValue: 'No permissions match these filters.',
               })}
             </EmptyTableRow>
@@ -545,7 +543,7 @@ function PermissionDetails(inputProps: { grant: GrantDraft }): ReactElement {
     <div className='space-y-5'>
       <section>
         <h3 className='text-sm font-medium'>
-          {t('Allowed actions', { defaultValue: 'Allowed actions' })}
+          {t('allowedActions', { defaultValue: 'Allowed actions' })}
         </h3>
         <div className='mt-3 flex flex-wrap gap-2'>
           {grant.actions.map((action) => (
@@ -561,7 +559,7 @@ function PermissionDetails(inputProps: { grant: GrantDraft }): ReactElement {
       {grant.resource.type === 'database.collection' ? (
         <section className='border-t pt-5'>
           <h3 className='text-sm font-medium'>
-            {t('Data access', { defaultValue: 'Data access' })}
+            {t('dataAccess', { defaultValue: 'Data access' })}
           </h3>
           <div className='mt-3 divide-y rounded-lg border'>
             {grant.actions.map((action) => (
@@ -623,14 +621,14 @@ function Assignments(inputProps: {
           <Input
             className='max-w-72 flex-1'
             type='search'
-            placeholder={t('Search name, username, or email', {
+            placeholder={t('assigneeSearch', {
               defaultValue: 'Search name, username, or email',
             })}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
           <select
-            aria-label={t('Assignment type', {
+            aria-label={t('assignmentType', {
               defaultValue: 'Assignment type',
             })}
             className='h-8 min-w-44 rounded-lg border bg-background px-3 text-sm'
@@ -638,13 +636,13 @@ function Assignments(inputProps: {
             onChange={(event) => setKind(event.target.value)}
           >
             <option value='all'>
-              {t('All assignments', { defaultValue: 'All assignments' })}
+              {t('allAssignments', { defaultValue: 'All assignments' })}
             </option>
             <option value='user'>
-              {t('Users', { defaultValue: 'Users' })}
+              {t('usersLabel', { defaultValue: 'Users' })}
             </option>
             <option value='audience'>
-              {t('Audiences', { defaultValue: 'Audiences' })}
+              {t('audiences', { defaultValue: 'Audiences' })}
             </option>
           </select>
         </div>
@@ -657,12 +655,12 @@ function Assignments(inputProps: {
                 void onRevoke(selected).then(() => setSelected([]))
               }
             >
-              {t('Revoke selected (', { defaultValue: 'Revoke selected (' })}
+              {t('revokeSelected', { defaultValue: 'Revoke selected (' })}
               {selected.length})
             </Button>
           ) : null}
           <Button disabled={protectedSet} onClick={() => setAddOpen(true)}>
-            {t('Add assignments', { defaultValue: 'Add assignments' })}
+            {t('addAssignments', { defaultValue: 'Add assignments' })}
           </Button>
         </div>
       </div>
@@ -671,7 +669,7 @@ function Assignments(inputProps: {
           <tr>
             <th className='w-12 px-5 py-3'>
               <input
-                aria-label={t('Select all visible assignments', {
+                aria-label={t('selectVisibleAssignments', {
                   defaultValue: 'Select all visible assignments',
                 })}
                 type='checkbox'
@@ -696,10 +694,10 @@ function Assignments(inputProps: {
               />
             </th>
             <th className='px-5 py-3 font-medium'>
-              {t('Assigned to', { defaultValue: 'Assigned to' })}
+              {t('assignedTo', { defaultValue: 'Assigned to' })}
             </th>
             <th className='px-5 py-3 font-medium'>
-              {t('Subject type', { defaultValue: 'Subject type' })}
+              {t('subjectType', { defaultValue: 'Subject type' })}
             </th>
             <th className='w-24 px-5 py-3' />
           </tr>
@@ -723,8 +721,8 @@ function Assignments(inputProps: {
               </td>
               <td className='px-5 py-4 text-muted-foreground'>
                 {item.subject.type === 'authenticated'
-                  ? t('Audience', { defaultValue: 'Audience' })
-                  : t('User', { defaultValue: 'User' })}
+                  ? t('audience', { defaultValue: 'Audience' })
+                  : t('user', { defaultValue: 'User' })}
               </td>
               <td className='px-5 py-4 text-right'>
                 <Button
@@ -733,7 +731,7 @@ function Assignments(inputProps: {
                   disabled={protectedSet}
                   onClick={() => void onRevoke([item.id])}
                 >
-                  {t('Revoke', { defaultValue: 'Revoke' })}
+                  {t('revoke', { defaultValue: 'Revoke' })}
                 </Button>
               </td>
             </tr>
@@ -741,10 +739,10 @@ function Assignments(inputProps: {
           {visible.length === 0 ? (
             <EmptyTableRow colSpan={4}>
               {assignments.length === 0
-                ? t('This permission set has no assignments.', {
+                ? t('noAssignments', {
                     defaultValue: 'This permission set has no assignments.',
                   })
-                : t('No assignments match these filters.', {
+                : t('noMatchingAssignments', {
                     defaultValue: 'No assignments match these filters.',
                   })}
             </EmptyTableRow>
@@ -807,20 +805,17 @@ function AssignmentPicker(inputProps: {
   }
   return (
     <SidePanel
-      title={t('Add assignments', { defaultValue: 'Add assignments' })}
-      description={t(
-        'Find people and assign this permission set in one operation.',
-        {
-          defaultValue:
-            'Find people and assign this permission set in one operation.',
-        },
-      )}
+      title={t('addAssignments', { defaultValue: 'Add assignments' })}
+      description={t('assignmentsDescription', {
+        defaultValue:
+          'Find people and assign this permission set in one operation.',
+      })}
       onClose={onClose}
     >
       <div className='space-y-5'>
         <section>
           <h3 className='text-sm font-medium'>
-            {t('Audience', { defaultValue: 'Audience' })}
+            {t('audience', { defaultValue: 'Audience' })}
           </h3>
           <label
             className={`mt-3 flex items-start gap-3 rounded-lg border p-4 ${audienceAssigned ? 'opacity-50' : 'cursor-pointer hover:bg-muted/20'}`}
@@ -834,18 +829,15 @@ function AssignmentPicker(inputProps: {
             />
             <span>
               <span className='block text-sm font-medium'>
-                {t('All signed-in users', {
+                {t('allSignedInUsers', {
                   defaultValue: 'All signed-in users',
                 })}
               </span>
               <span className='mt-0.5 block text-xs text-muted-foreground'>
-                {t(
-                  'Everyone with a valid session. This is managed separately from individual users.',
-                  {
-                    defaultValue:
-                      'Everyone with a valid session. This is managed separately from individual users.',
-                  },
-                )}
+                {t('signedInUsersDescription', {
+                  defaultValue:
+                    'Everyone with a valid session. This is managed separately from individual users.',
+                })}
               </span>
             </span>
           </label>
@@ -854,10 +846,10 @@ function AssignmentPicker(inputProps: {
           <div className='flex items-end justify-between gap-3'>
             <div>
               <h3 className='text-sm font-medium'>
-                {t('Users', { defaultValue: 'Users' })}
+                {t('usersLabel', { defaultValue: 'Users' })}
               </h3>
               <p className='mt-0.5 text-xs text-muted-foreground'>
-                {t('Already assigned users are hidden.', {
+                {t('assignedUsersHint', {
                   defaultValue: 'Already assigned users are hidden.',
                 })}
               </p>
@@ -869,7 +861,7 @@ function AssignmentPicker(inputProps: {
           <Input
             className='mt-3'
             type='search'
-            placeholder={t('Search name, username, or email', {
+            placeholder={t('assigneeSearch', {
               defaultValue: 'Search name, username, or email',
             })}
             value={search}
@@ -899,7 +891,7 @@ function AssignmentPicker(inputProps: {
                 }
               />
 
-              {t('Select all results', { defaultValue: 'Select all results' })}
+              {t('selectAllResults', { defaultValue: 'Select all results' })}
               <span className='ml-auto text-xs font-normal text-muted-foreground'>
                 {visible.length} {t('users', { defaultValue: 'users' })}
               </span>
@@ -928,7 +920,7 @@ function AssignmentPicker(inputProps: {
               ))}
               {visible.length === 0 ? (
                 <p className='px-4 py-10 text-center text-sm text-muted-foreground'>
-                  {t('No available users match your search.', {
+                  {t('noAvailableUsers', {
                     defaultValue: 'No available users match your search.',
                   })}
                 </p>
@@ -946,15 +938,15 @@ function AssignmentPicker(inputProps: {
           </span>
           <div className='flex gap-2'>
             <Button variant='outline' onClick={onClose}>
-              {t('Cancel', { defaultValue: 'Cancel' })}
+              {t('cancel', { defaultValue: 'Cancel' })}
             </Button>
             <Button
               disabled={busy || subjects.length === 0}
               onClick={() => onAdd(subjects)}
             >
               {busy
-                ? t('Assigning…', { defaultValue: 'Assigning…' })
-                : t('Add assignments', { defaultValue: 'Add assignments' })}
+                ? t('assigning', { defaultValue: 'Assigning…' })
+                : t('addAssignments', { defaultValue: 'Add assignments' })}
             </Button>
           </div>
         </div>
@@ -1004,10 +996,10 @@ function PermissionSetEditor(inputProps: {
     <SidePanel
       title={
         draft.originalKey
-          ? t('Edit permission set', { defaultValue: 'Edit permission set' })
-          : t('New permission set', { defaultValue: 'New permission set' })
+          ? t('editPermissionSet', { defaultValue: 'Edit permission set' })
+          : t('newPermissionSet', { defaultValue: 'New permission set' })
       }
-      description={t('Bundle access into a reusable assignment.', {
+      description={t('permissionSetDescription', {
         defaultValue: 'Bundle access into a reusable assignment.',
       })}
       onClose={onClose}
@@ -1015,7 +1007,7 @@ function PermissionSetEditor(inputProps: {
     >
       <form className='space-y-6' onSubmit={(event) => void onSave(event)}>
         <div className='grid gap-4 sm:grid-cols-2'>
-          <Field label={t('Name', { defaultValue: 'Name' })}>
+          <Field label={t('name', { defaultValue: 'Name' })}>
             <Input
               required
               value={draft.title}
@@ -1025,8 +1017,8 @@ function PermissionSetEditor(inputProps: {
             />
           </Field>
           <Field
-            label={t('Key', { defaultValue: 'Key' })}
-            hint={t('Stable identifier used by APIs.', {
+            label={t('key', { defaultValue: 'Key' })}
+            hint={t('keyHint', {
               defaultValue: 'Stable identifier used by APIs.',
             })}
           >
@@ -1043,10 +1035,10 @@ function PermissionSetEditor(inputProps: {
         <div className='flex items-center justify-between border-t pt-5'>
           <div>
             <h3 className='font-medium'>
-              {t('Permissions', { defaultValue: 'Permissions' })}
+              {t('permissions', { defaultValue: 'Permissions' })}
             </h3>
             <p className='text-sm text-muted-foreground'>
-              {t('Choose resources and the actions this set grants.', {
+              {t('permissionsDescription', {
                 defaultValue:
                   'Choose resources and the actions this set grants.',
               })}
@@ -1058,21 +1050,21 @@ function PermissionSetEditor(inputProps: {
             variant='outline'
             onClick={() => setPickerOpen(true)}
           >
-            {t('Add permission', { defaultValue: 'Add permission' })}
+            {t('addPermission', { defaultValue: 'Add permission' })}
           </Button>
         </div>
         <div className='flex flex-wrap gap-2 border-b pb-4'>
           <Input
             className='max-w-72 flex-1'
             type='search'
-            placeholder={t('Search resources or actions', {
+            placeholder={t('resourceActionSearch', {
               defaultValue: 'Search resources or actions',
             })}
             value={resourceSearch}
             onChange={(event) => setResourceSearch(event.target.value)}
           />
           <select
-            aria-label={t('Permission resource type', {
+            aria-label={t('permissionResourceType', {
               defaultValue: 'Permission resource type',
             })}
             className='h-8 min-w-48 rounded-lg border bg-background px-3 text-sm'
@@ -1080,11 +1072,11 @@ function PermissionSetEditor(inputProps: {
             onChange={(event) => setResourceType(event.target.value)}
           >
             <option value='all'>
-              {t('All resource types', { defaultValue: 'All resource types' })}
+              {t('allResourceTypes', { defaultValue: 'All resource types' })}
             </option>
             {options.resourceTypes.map((item) => (
               <option key={item.value} value={item.value}>
-                {t(item.label, { defaultValue: item.label })}
+                {t(messageKey(item.label), { defaultValue: item.label })}
               </option>
             ))}
           </select>
@@ -1120,7 +1112,7 @@ function PermissionSetEditor(inputProps: {
                     {grant.actions
                       .map((value) => humanize(t, value))
                       .join(', ') ||
-                      t('No actions', { defaultValue: 'No actions' })}
+                      t('noActions', { defaultValue: 'No actions' })}
                   </span>
                 </span>
                 <span className='flex shrink-0 items-center gap-3'>
@@ -1150,7 +1142,7 @@ function PermissionSetEditor(inputProps: {
                         })
                       }
                     >
-                      {t('Remove', { defaultValue: 'Remove' })}
+                      {t('remove', { defaultValue: 'Remove' })}
                     </Button>
                   </div>
                   <ActionsEditor
@@ -1182,7 +1174,7 @@ function PermissionSetEditor(inputProps: {
           ))}
           {visibleIndexes.length === 0 && draft.grants.length > 0 ? (
             <p className='rounded-lg border border-dashed px-4 py-8 text-center text-sm text-muted-foreground'>
-              {t('No permissions match these filters.', {
+              {t('noPermissions', {
                 defaultValue: 'No permissions match these filters.',
               })}
             </p>
@@ -1194,12 +1186,12 @@ function PermissionSetEditor(inputProps: {
               onClick={() => setPickerOpen(true)}
             >
               <span className='block text-sm font-medium'>
-                {t('Add the first permission', {
+                {t('firstPermission', {
                   defaultValue: 'Add the first permission',
                 })}
               </span>
               <span className='mt-1 block text-xs text-muted-foreground'>
-                {t('Select resources by type, then configure their actions.', {
+                {t('resourceSelectionHint', {
                   defaultValue:
                     'Select resources by type, then configure their actions.',
                 })}
@@ -1209,12 +1201,12 @@ function PermissionSetEditor(inputProps: {
         </div>
         <div className='sticky bottom-0 flex justify-end gap-2 border-t bg-background py-4'>
           <Button type='button' variant='outline' onClick={onClose}>
-            {t('Cancel', { defaultValue: 'Cancel' })}
+            {t('cancel', { defaultValue: 'Cancel' })}
           </Button>
           <Button disabled={busy} type='submit'>
             {busy
-              ? t('Saving…', { defaultValue: 'Saving…' })
-              : t('Save permission set', {
+              ? t('saving', { defaultValue: 'Saving…' })
+              : t('savePermissionSet', {
                   defaultValue: 'Save permission set',
                 })}
           </Button>
@@ -1259,7 +1251,7 @@ function PermissionResourcePicker(inputProps: {
     (resource) =>
       !query ||
       [
-        t(resource.label, { defaultValue: resource.label }),
+        t(messageKey(resource.label), { defaultValue: resource.label }),
         resource.label,
         resource.value,
         resource.description,
@@ -1314,14 +1306,11 @@ function PermissionResourcePicker(inputProps: {
 
   return (
     <SidePanel
-      title={t('Add permissions', { defaultValue: 'Add permissions' })}
-      description={t(
-        'Select resources and configure their access in one workspace.',
-        {
-          defaultValue:
-            'Select resources and configure their access in one workspace.',
-        },
-      )}
+      title={t('addPermissions', { defaultValue: 'Add permissions' })}
+      description={t('resourcePickerDescription', {
+        defaultValue:
+          'Select resources and configure their access in one workspace.',
+      })}
       onClose={onClose}
       wide
     >
@@ -1329,10 +1318,10 @@ function PermissionResourcePicker(inputProps: {
         <div className='grid min-h-[34rem] grid-cols-[13rem_18rem_minmax(0,1fr)]'>
           <nav
             className='border-r bg-muted/20 py-3'
-            aria-label={t('Resource types', { defaultValue: 'Resource types' })}
+            aria-label={t('resourceTypes', { defaultValue: 'Resource types' })}
           >
             <p className='px-4 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-              {t('Resource types', { defaultValue: 'Resource types' })}
+              {t('resourceTypes', { defaultValue: 'Resource types' })}
             </p>
             {options.resourceTypes.map((item) => {
               const count = pending.filter(
@@ -1356,7 +1345,9 @@ function PermissionResourcePicker(inputProps: {
                     );
                   }}
                 >
-                  <span>{t(item.label, { defaultValue: item.label })}</span>
+                  <span>
+                    {t(messageKey(item.label), { defaultValue: item.label })}
+                  </span>
                   {count > 0 ? (
                     <span className='rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary'>
                       {count}
@@ -1372,16 +1363,16 @@ function PermissionResourcePicker(inputProps: {
               <div>
                 <h3 className='text-sm font-semibold'>
                   {resourceType?.label ??
-                    t('Resources', { defaultValue: 'Resources' })}
+                    t('resourcesLabel', { defaultValue: 'Resources' })}
                 </h3>
                 <p className='text-xs text-muted-foreground'>
-                  {t('Select a resource to configure it.', {
+                  {t('selectResourceHint', {
                     defaultValue: 'Select a resource to configure it.',
                   })}
                 </p>
               </div>
               <Input
-                placeholder={t('Search resources', {
+                placeholder={t('searchResources', {
                   defaultValue: 'Search resources',
                 })}
                 value={search}
@@ -1417,11 +1408,13 @@ function PermissionResourcePicker(inputProps: {
                     <span className='min-w-0 flex-1'>
                       <span className='flex items-center gap-2'>
                         <span className='truncate text-sm font-medium'>
-                          {t(resource.label, { defaultValue: resource.label })}
+                          {t(messageKey(resource.label), {
+                            defaultValue: resource.label,
+                          })}
                         </span>
                         {disabled ? (
                           <span className='rounded-full bg-muted px-2 py-0.5 text-[0.6875rem] text-muted-foreground'>
-                            {t('Added', { defaultValue: 'Added' })}
+                            {t('added', { defaultValue: 'Added' })}
                           </span>
                         ) : null}
                       </span>
@@ -1439,7 +1432,7 @@ function PermissionResourcePicker(inputProps: {
               })}
               {resources.length === 0 ? (
                 <p className='px-4 py-10 text-center text-sm text-muted-foreground'>
-                  {t('No resources match your search.', {
+                  {t('noResources', {
                     defaultValue: 'No resources match your search.',
                   })}
                 </p>
@@ -1489,18 +1482,15 @@ function PermissionResourcePicker(inputProps: {
               <div className='flex h-full items-center justify-center text-center'>
                 <div className='max-w-xs'>
                   <p className='text-sm font-medium'>
-                    {t('Select a resource to configure', {
+                    {t('selectResource', {
                       defaultValue: 'Select a resource to configure',
                     })}
                   </p>
                   <p className='mt-1 text-xs text-muted-foreground'>
-                    {t(
-                      'Its actions and resource-specific access settings will appear here.',
-                      {
-                        defaultValue:
-                          'Its actions and resource-specific access settings will appear here.',
-                      },
-                    )}
+                    {t('resourceSettingsHint', {
+                      defaultValue:
+                        'Its actions and resource-specific access settings will appear here.',
+                    })}
                   </p>
                 </div>
               </div>
@@ -1519,14 +1509,14 @@ function PermissionResourcePicker(inputProps: {
           </p>
           <div className='flex gap-2'>
             <Button type='button' variant='outline' onClick={onClose}>
-              {t('Cancel', { defaultValue: 'Cancel' })}
+              {t('cancel', { defaultValue: 'Cancel' })}
             </Button>
             <Button
               type='button'
               disabled={pending.length === 0 || incomplete}
               onClick={() => onAdd(pending)}
             >
-              {t('Add permissions', { defaultValue: 'Add permissions' })}
+              {t('addPermissions', { defaultValue: 'Add permissions' })}
             </Button>
           </div>
         </div>
@@ -1555,10 +1545,10 @@ function DatabasePolicyEditor(inputProps: {
       <header className='flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-3 py-2.5'>
         <div>
           <h4 className='text-sm font-medium'>
-            {t('Data access', { defaultValue: 'Data access' })}
+            {t('dataAccess', { defaultValue: 'Data access' })}
           </h4>
           <p className='text-xs text-muted-foreground'>
-            {t('Configure one action at a time', {
+            {t('actionConfigurationTitle', {
               defaultValue: 'Configure one action at a time',
             })}
           </p>
@@ -1588,7 +1578,7 @@ function DatabasePolicyEditor(inputProps: {
         />
       ) : (
         <p className='px-4 py-5 text-sm text-muted-foreground'>
-          {t('Select an action before configuring data access.', {
+          {t('selectActionHint', {
             defaultValue: 'Select an action before configuring data access.',
           })}
         </p>
@@ -1630,7 +1620,7 @@ function DatabaseActionPolicyEditor(inputProps: {
         <div className='grid gap-3 sm:grid-cols-2'>
           {input ? (
             <FieldChecklist
-              label={t('Writable fields', { defaultValue: 'Writable fields' })}
+              label={t('writableFields', { defaultValue: 'Writable fields' })}
               fields={fields}
               value={value.input}
               onChange={(next) => onChange({ ...value, input: next })}
@@ -1638,7 +1628,7 @@ function DatabaseActionPolicyEditor(inputProps: {
           ) : null}
           {output ? (
             <FieldChecklist
-              label={t('Visible fields', { defaultValue: 'Visible fields' })}
+              label={t('visibleFields', { defaultValue: 'Visible fields' })}
               fields={fields}
               value={value.output}
               onChange={(next) => onChange({ ...value, output: next })}
@@ -1665,24 +1655,24 @@ function databaseActionDescription(
 ): string {
   switch (action) {
     case 'create':
-      return t('Choose fields that can be submitted and returned.', {
+      return t('createFieldsHint', {
         defaultValue: 'Choose fields that can be submitted and returned.',
       });
     case 'read':
-      return t('Choose visible fields and which records can be read.', {
+      return t('readFieldsHint', {
         defaultValue: 'Choose visible fields and which records can be read.',
       });
     case 'update':
-      return t('Choose editable fields and which records can be updated.', {
+      return t('updateFieldsHint', {
         defaultValue:
           'Choose editable fields and which records can be updated.',
       });
     case 'delete':
-      return t('Choose which records can be deleted.', {
+      return t('deleteScopeHint', {
         defaultValue: 'Choose which records can be deleted.',
       });
     default:
-      return t('Configure fields and record access for this action.', {
+      return t('actionSettingsHint', {
         defaultValue: 'Configure fields and record access for this action.',
       });
   }
@@ -1733,9 +1723,9 @@ function RecordAccessEditor(inputProps: {
   }
   return (
     <div className='space-y-3'>
-      <Field label={t('Record access', { defaultValue: 'Record access' })}>
+      <Field label={t('recordAccess', { defaultValue: 'Record access' })}>
         <select
-          aria-label={t('{{action}} record access', {
+          aria-label={t('actionRecordAccess', {
             action: humanize(t, action),
             defaultValue: `${humanize(t, action)} record access`,
           })}
@@ -1754,7 +1744,7 @@ function RecordAccessEditor(inputProps: {
         >
           {options.recordAccessPolicies.map((policy) => (
             <option key={policy.value} value={policy.value}>
-              {t(policy.label, { defaultValue: policy.label })}
+              {t(messageKey(policy.label), { defaultValue: policy.label })}
             </option>
           ))}
         </select>
@@ -1764,10 +1754,10 @@ function RecordAccessEditor(inputProps: {
           <div className='flex items-center justify-between gap-3'>
             <div>
               <p className='text-xs font-medium'>
-                {t('Filter conditions', { defaultValue: 'Filter conditions' })}
+                {t('filterConditions', { defaultValue: 'Filter conditions' })}
               </p>
               <p className='text-xs text-muted-foreground'>
-                {t('All conditions must match.', {
+                {t('filterMatchHint', {
                   defaultValue: 'All conditions must match.',
                 })}
               </p>
@@ -1788,7 +1778,7 @@ function RecordAccessEditor(inputProps: {
                 ])
               }
             >
-              {t('Add condition', { defaultValue: 'Add condition' })}
+              {t('addCondition', { defaultValue: 'Add condition' })}
             </Button>
           </div>
           {conditions.map((condition, index) => (
@@ -1797,7 +1787,7 @@ function RecordAccessEditor(inputProps: {
               key={condition.id}
             >
               <select
-                aria-label={t('Filter field', { defaultValue: 'Filter field' })}
+                aria-label={t('filterField', { defaultValue: 'Filter field' })}
                 className='h-8 rounded-lg border bg-background px-2 text-sm'
                 value={condition.field}
                 onChange={(event) =>
@@ -1817,7 +1807,7 @@ function RecordAccessEditor(inputProps: {
                 ))}
               </select>
               <select
-                aria-label={t('Filter operator', {
+                aria-label={t('filterOperator', {
                   defaultValue: 'Filter operator',
                 })}
                 className='h-8 rounded-lg border bg-background px-2 text-sm'
@@ -1837,30 +1827,30 @@ function RecordAccessEditor(inputProps: {
                 }
               >
                 <option value='$eq'>
-                  {t('Equals', { defaultValue: 'Equals' })}
+                  {t('equals', { defaultValue: 'Equals' })}
                 </option>
                 <option value='$ne'>
-                  {t('Not equal', { defaultValue: 'Not equal' })}
+                  {t('notEqual', { defaultValue: 'Not equal' })}
                 </option>
                 <option value='$in'>In</option>
                 <option value='$notIn'>
-                  {t('Not in', { defaultValue: 'Not in' })}
+                  {t('notIn', { defaultValue: 'Not in' })}
                 </option>
                 <option value='$gt'>
-                  {t('Greater than', { defaultValue: 'Greater than' })}
+                  {t('greaterThan', { defaultValue: 'Greater than' })}
                 </option>
                 <option value='$gte'>
-                  {t('At least', { defaultValue: 'At least' })}
+                  {t('atLeast', { defaultValue: 'At least' })}
                 </option>
                 <option value='$lt'>
-                  {t('Less than', { defaultValue: 'Less than' })}
+                  {t('lessThan', { defaultValue: 'Less than' })}
                 </option>
                 <option value='$lte'>
-                  {t('At most', { defaultValue: 'At most' })}
+                  {t('atMost', { defaultValue: 'At most' })}
                 </option>
               </select>
               <Input
-                aria-label={t('Filter value', { defaultValue: 'Filter value' })}
+                aria-label={t('filterValue', { defaultValue: 'Filter value' })}
                 value={condition.value}
                 onChange={(event) =>
                   updateConditions(
@@ -1873,7 +1863,7 @@ function RecordAccessEditor(inputProps: {
                 }
               />
               <Button
-                aria-label={t('Remove condition', {
+                aria-label={t('removeCondition', {
                   defaultValue: 'Remove condition',
                 })}
                 size='sm'
@@ -1885,13 +1875,13 @@ function RecordAccessEditor(inputProps: {
                   )
                 }
               >
-                {t('Remove', { defaultValue: 'Remove' })}
+                {t('remove', { defaultValue: 'Remove' })}
               </Button>
             </div>
           ))}
           {conditions.length === 0 ? (
             <p className='py-2 text-xs text-muted-foreground'>
-              {t('Add at least one condition.', {
+              {t('conditionRequired', {
                 defaultValue: 'Add at least one condition.',
               })}
             </p>
@@ -1972,7 +1962,7 @@ function fieldSelectionLabel(
   value: '*' | readonly string[],
 ): string {
   return value === '*'
-    ? t('All fields', { defaultValue: 'All fields' })
+    ? t('allFields', { defaultValue: 'All fields' })
     : t('counts.fields', {
         count: value.length,
         defaultValue: `${value.length} fields`,
@@ -1998,7 +1988,7 @@ function FieldChecklist(inputProps: {
             onChange={(event) => onChange(event.target.checked ? '*' : [])}
           />
 
-          {t('All fields', { defaultValue: 'All fields' })}
+          {t('allFields', { defaultValue: 'All fields' })}
         </label>
         <div className='mt-2 grid max-h-32 grid-cols-2 gap-x-3 gap-y-1 overflow-y-auto'>
           {fields.map((field) => (
@@ -2198,7 +2188,7 @@ function databaseAccessSummary(
   return grant.actions
     .map((action) => {
       const value = grant.database[action] ?? defaultDatabaseActionDraft();
-      return `${humanize(t, action)}: ${action === 'create' ? t('new records', { defaultValue: 'new records' }) : humanize(t, recordAccessKey(value.recordAccess))}`;
+      return `${humanize(t, action)}: ${action === 'create' ? t('newRecords', { defaultValue: 'new records' }) : humanize(t, recordAccessKey(value.recordAccess))}`;
     })
     .join(', ');
 }
@@ -2225,7 +2215,7 @@ function describeSet(
   set: PermissionSet,
 ): string {
   return set.key === 'system-administrator'
-    ? t('Protected access to Authorization administration', {
+    ? t('protectedAuthorizationAccess', {
         defaultValue: 'Protected access to Authorization administration',
       })
     : t('counts.resources', {
@@ -2254,7 +2244,7 @@ function humanize(
   const label = value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-  return t(label, { defaultValue: label });
+  return t(messageKey(label), { defaultValue: label });
 }
 function resourceTypeLabel(
   t: ReturnType<typeof useTranslation>['t'],
@@ -2299,7 +2289,7 @@ function subjectLabel(
   users: readonly AuthorizationUser[],
 ): string {
   if (subject.type === 'authenticated')
-    return t('All signed-in users', { defaultValue: 'All signed-in users' });
+    return t('allSignedInUsers', { defaultValue: 'All signed-in users' });
   const user = users.find((item) => item.id === subject.id);
   return user
     ? `${user.name} · ${user.username ?? user.email}`

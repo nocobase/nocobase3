@@ -1,3 +1,4 @@
+import { messageKey } from '../../lib/message-key.js';
 import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import {
   AIChatCompact,
@@ -74,24 +75,21 @@ export function InteractionShowcase() {
         <CardHeader className='border-b py-4'>
           <div className='flex items-center gap-2'>
             <Badge variant='outline'>
-              {translateDemo('Inline messages', {
+              {translateDemo('demo.inlineMessages', {
                 defaultValue: 'Inline messages',
               })}
             </Badge>
             <CardTitle className='text-base'>
-              {translateDemo('Standard conversation transcript', {
+              {translateDemo('demo.standardConversationTranscript', {
                 defaultValue: 'Standard conversation transcript',
               })}
             </CardTitle>
           </div>
           <p className='text-xs leading-5 text-muted-foreground'>
-            {translateDemo(
-              'This fixed example shows where reasoning, a normal tool call, and the final assistant response appear in one message sequence.',
-              {
-                defaultValue:
-                  'This fixed example shows where reasoning, a normal tool call, and the final assistant response appear in one message sequence.',
-              },
-            )}
+            {translateDemo('demo.transcriptDescription', {
+              defaultValue:
+                'This fixed example shows where reasoning, a normal tool call, and the final assistant response appear in one message sequence.',
+            })}
           </p>
         </CardHeader>
         <CardContent className='bg-muted/15 p-4'>
@@ -101,21 +99,21 @@ export function InteractionShowcase() {
                 <Button
                   variant='ghost'
                   size='icon-sm'
-                  aria-label={translateDemo('Conversations', {
+                  aria-label={translateDemo('demo.conversations', {
                     defaultValue: 'Conversations',
                   })}
                 >
                   <Menu />
                 </Button>
                 <div className='pointer-events-none absolute left-1/2 max-w-[55%] -translate-x-1/2 truncate text-sm font-medium'>
-                  {translateDemo('Support workspace review', {
+                  {translateDemo('demo.supportWorkspaceReview', {
                     defaultValue: 'Support workspace review',
                   })}
                 </div>
                 <Button
                   variant='ghost'
                   size='icon-sm'
-                  aria-label={translateDemo('New conversation', {
+                  aria-label={translateDemo('demo.newConversation', {
                     defaultValue: 'New conversation',
                   })}
                 >
@@ -130,7 +128,7 @@ export function InteractionShowcase() {
               <div className='shrink-0 bg-card px-4 pt-2 pb-3'>
                 <div className='rounded-xl border bg-background px-3 py-2.5 shadow-sm'>
                   <div className='min-h-10 text-sm text-muted-foreground'>
-                    {translateDemo('Message your AI employee…', {
+                    {translateDemo('demo.messagePlaceholder', {
                       defaultValue: 'Message your AI employee…',
                     })}
                   </div>
@@ -138,7 +136,7 @@ export function InteractionShowcase() {
                     <Button
                       variant='ghost'
                       size='icon-sm'
-                      aria-label={translateDemo('Attach file', {
+                      aria-label={translateDemo('demo.attachFile', {
                         defaultValue: 'Attach file',
                       })}
                     >
@@ -146,7 +144,7 @@ export function InteractionShowcase() {
                     </Button>
                     <Button
                       size='icon-sm'
-                      aria-label={translateDemo('Send message', {
+                      aria-label={translateDemo('demo.sendMessage', {
                         defaultValue: 'Send message',
                       })}
                     >
@@ -164,24 +162,21 @@ export function InteractionShowcase() {
         <CardHeader className='border-b py-4'>
           <div className='flex items-center gap-2'>
             <Badge variant='outline'>
-              {translateDemo('Compact composer', {
+              {translateDemo('demo.compactComposer', {
                 defaultValue: 'Compact composer',
               })}
             </Badge>
             <CardTitle className='text-base'>
-              {translateDemo('Open the transcript only when needed', {
+              {translateDemo('demo.compactTitle', {
                 defaultValue: 'Open the transcript only when needed',
               })}
             </CardTitle>
           </div>
           <p className='text-xs leading-5 text-muted-foreground'>
-            {translateDemo(
-              'The compact variant keeps only the chat header and composer. Its history button opens a dialog with conversation switching and the selected transcript.',
-              {
-                defaultValue:
-                  'The compact variant keeps only the chat header and composer. Its history button opens a dialog with conversation switching and the selected transcript.',
-              },
-            )}
+            {translateDemo('demo.compactDescription', {
+              defaultValue:
+                'The compact variant keeps only the chat header and composer. Its history button opens a dialog with conversation switching and the selected transcript.',
+            })}
           </p>
         </CardHeader>
         <CardContent className='bg-muted/15 p-4'>
@@ -190,7 +185,7 @@ export function InteractionShowcase() {
               className='bg-background'
               composerActions={compactActions.map((action) => ({
                 ...action,
-                label: translateDemo(action.label, {
+                label: translateDemo(messageKey(action.label), {
                   defaultValue: action.label,
                 }),
               }))}

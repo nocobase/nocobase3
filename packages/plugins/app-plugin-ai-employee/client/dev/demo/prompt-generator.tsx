@@ -1,3 +1,4 @@
+import { messageKey } from '../../lib/message-key.js';
 import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import {
   AIChatCompact,
@@ -114,7 +115,7 @@ function PromptGeneratorContent() {
     if (capabilities.pageElement) {
       actions.push({
         key: 'pick-page-element',
-        label: translateDemo('Pick page element', {
+        label: translateDemo('demo.pickPageElement', {
           defaultValue: 'Pick page element',
         }),
         icon: <MousePointer2 />,
@@ -132,7 +133,7 @@ function PromptGeneratorContent() {
     if (capabilities.webSearch) {
       actions.push({
         key: 'web-search',
-        label: translateDemo('Web search', { defaultValue: 'Web search' }),
+        label: translateDemo('demo.webSearch', { defaultValue: 'Web search' }),
         icon: <Globe2 />,
       });
     }
@@ -294,24 +295,21 @@ Implementation requirements:
       <Card className='gap-0 py-0'>
         <CardHeader className='border-b py-4'>
           <CardTitle className='text-base'>
-            {translateDemo('Describe the integration', {
+            {translateDemo('demo.describeTheIntegration', {
               defaultValue: 'Describe the integration',
             })}
           </CardTitle>
           <p className='text-xs leading-5 text-muted-foreground'>
-            {translateDemo(
-              'Choose where chat belongs and which capabilities the target page needs.',
-              {
-                defaultValue:
-                  'Choose where chat belongs and which capabilities the target page needs.',
-              },
-            )}
+            {translateDemo('demo.integrationHint', {
+              defaultValue:
+                'Choose where chat belongs and which capabilities the target page needs.',
+            })}
           </p>
         </CardHeader>
         <CardContent className='space-y-5 p-4'>
           <div className='space-y-2'>
             <label className='text-xs font-medium' htmlFor='ai-chat-target'>
-              {translateDemo('Target page or region', {
+              {translateDemo('demo.targetRegion', {
                 defaultValue: 'Target page or region',
               })}
             </label>
@@ -319,7 +317,7 @@ Implementation requirements:
               id='ai-chat-target'
               value={target}
               onChange={(event) => setTarget(event.target.value)}
-              placeholder={translateDemo('e.g. the ticket detail page', {
+              placeholder={translateDemo('demo.targetPlaceholder', {
                 defaultValue: 'e.g. the ticket detail page',
               })}
             />
@@ -327,7 +325,7 @@ Implementation requirements:
 
           <div className='space-y-2'>
             <div className='text-xs font-medium'>
-              {translateDemo('Placement', { defaultValue: 'Placement' })}
+              {translateDemo('demo.placement', { defaultValue: 'Placement' })}
             </div>
             <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-1'>
               {placements.map((option) => (
@@ -339,12 +337,12 @@ Implementation requirements:
                   onClick={() => setPlacement(option.value)}
                 >
                   <span className='block text-sm font-medium'>
-                    {translateDemo(option.label, {
+                    {translateDemo(messageKey(option.label), {
                       defaultValue: option.label,
                     })}
                   </span>
                   <span className='mt-0.5 block text-xs leading-5 text-muted-foreground'>
-                    {translateDemo(option.description, {
+                    {translateDemo(messageKey(option.description), {
                       defaultValue: option.description,
                     })}
                   </span>
@@ -356,7 +354,7 @@ Implementation requirements:
           {placement === 'side-panel' ? (
             <div className='space-y-2'>
               <div className='text-xs font-medium'>
-                {translateDemo('Side panel width', {
+                {translateDemo('demo.sidePanelWidth', {
                   defaultValue: 'Side panel width',
                 })}
               </div>
@@ -370,7 +368,7 @@ Implementation requirements:
                 <SelectContent>
                   <SelectItem value='400'>400px</SelectItem>
                   <SelectItem value='450'>
-                    {translateDemo('450px · NocoBase default', {
+                    {translateDemo('demo.panelWidthDefault', {
                       defaultValue: '450px · NocoBase default',
                     })}
                   </SelectItem>
@@ -382,7 +380,7 @@ Implementation requirements:
 
           <div className='space-y-2'>
             <div className='text-xs font-medium'>
-              {translateDemo('Message presentation', {
+              {translateDemo('demo.messagePresentation', {
                 defaultValue: 'Message presentation',
               })}
             </div>
@@ -401,12 +399,12 @@ Implementation requirements:
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value='transcript'>
-                  {translateDemo('Full transcript', {
+                  {translateDemo('demo.fullTranscript', {
                     defaultValue: 'Full transcript',
                   })}
                 </SelectItem>
                 <SelectItem value='compact-history-dialog'>
-                  {translateDemo('Compact + history dialog', {
+                  {translateDemo('demo.compactHistory', {
                     defaultValue: 'Compact + history dialog',
                   })}
                 </SelectItem>
@@ -416,7 +414,9 @@ Implementation requirements:
 
           <div className='space-y-1 border-t pt-4'>
             <div className='mb-2 text-xs font-medium'>
-              {translateDemo('Capabilities', { defaultValue: 'Capabilities' })}
+              {translateDemo('demo.capabilities', {
+                defaultValue: 'Capabilities',
+              })}
             </div>
             {(Object.keys(capabilities) as Array<keyof PromptCapabilities>).map(
               (key) => (
@@ -426,7 +426,7 @@ Implementation requirements:
                 >
                   <span className='min-w-0'>
                     <span className='block'>
-                      {translateDemo(capabilityLabel(key), {
+                      {translateDemo(messageKey(capabilityLabel(key)), {
                         defaultValue: capabilityLabel(key),
                       })}
                     </span>
@@ -450,22 +450,19 @@ Implementation requirements:
           <div className='flex items-center justify-between border-b px-4 py-3'>
             <div>
               <div className='text-sm font-medium'>
-                {translateDemo('Capabilities preview', {
+                {translateDemo('demo.capabilitiesPreview', {
                   defaultValue: 'Capabilities preview',
                 })}
               </div>
               <div className='text-xs text-muted-foreground'>
-                {translateDemo(
-                  'The selected controls are rendered on the real AIChatWindow.',
-                  {
-                    defaultValue:
-                      'The selected controls are rendered on the real AIChatWindow.',
-                  },
-                )}
+                {translateDemo('demo.capabilitiesHint', {
+                  defaultValue:
+                    'The selected controls are rendered on the real AIChatWindow.',
+                })}
               </div>
             </div>
             <code className='rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground'>
-              {translateDemo(placementLabel(placement), {
+              {translateDemo(messageKey(placementLabel(placement)), {
                 defaultValue: placementLabel(placement),
               })}
             </code>
@@ -476,16 +473,13 @@ Implementation requirements:
         </Card>
 
         <PromptOutput
-          title={translateDemo('Generated implementation prompt', {
+          title={translateDemo('demo.generatedImplementationPrompt', {
             defaultValue: 'Generated implementation prompt',
           })}
-          description={translateDemo(
-            'Updates from the selected page, placement, and capabilities.',
-            {
-              defaultValue:
-                'Updates from the selected page, placement, and capabilities.',
-            },
-          )}
+          description={translateDemo('demo.promptHint', {
+            defaultValue:
+              'Updates from the selected page, placement, and capabilities.',
+          })}
           prompt={prompt}
           promptClassName='max-h-[760px] min-h-[520px]'
         />

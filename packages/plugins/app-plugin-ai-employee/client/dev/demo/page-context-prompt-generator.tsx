@@ -169,7 +169,7 @@ Implementation requirements
       <Card className='gap-0 py-0'>
         <CardHeader className='border-b py-4'>
           <CardTitle>
-            {translateDemo('Scene settings', {
+            {translateDemo('demo.sceneSettings', {
               defaultValue: 'Scene settings',
             })}
           </CardTitle>
@@ -177,7 +177,9 @@ Implementation requirements
         <CardContent className='space-y-5 py-5'>
           <div className='space-y-2'>
             <Label htmlFor='context-generator-scene-title'>
-              {translateDemo('Scene title', { defaultValue: 'Scene title' })}
+              {translateDemo('demo.sceneTitle', {
+                defaultValue: 'Scene title',
+              })}
             </Label>
             <Input
               id='context-generator-scene-title'
@@ -187,7 +189,7 @@ Implementation requirements
           </div>
           <div className='space-y-2'>
             <Label htmlFor='context-generator-scene-brief'>
-              {translateDemo('Business scene', {
+              {translateDemo('demo.businessScene', {
                 defaultValue: 'Business scene',
               })}
             </Label>
@@ -201,7 +203,9 @@ Implementation requirements
 
           <div className='space-y-2'>
             <Label>
-              {translateDemo('AI employee', { defaultValue: 'AI employee' })}
+              {translateDemo('demo.aiEmployee', {
+                defaultValue: 'AI employee',
+              })}
             </Label>
             <Select
               value={employeeUsername}
@@ -225,7 +229,7 @@ Implementation requirements
 
           <div className='space-y-2'>
             <Label htmlFor='context-generator-task-title'>
-              {translateDemo('Task title', { defaultValue: 'Task title' })}
+              {translateDemo('demo.taskTitle', { defaultValue: 'Task title' })}
             </Label>
             <Input
               id='context-generator-task-title'
@@ -235,7 +239,9 @@ Implementation requirements
           </div>
           <div className='space-y-2'>
             <Label htmlFor='context-generator-task-message'>
-              {translateDemo('Task message', { defaultValue: 'Task message' })}
+              {translateDemo('demo.taskMessage', {
+                defaultValue: 'Task message',
+              })}
             </Label>
             <Textarea
               id='context-generator-task-message'
@@ -247,10 +253,10 @@ Implementation requirements
           <label className='flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5'>
             <span>
               <span className='block text-sm font-medium'>
-                {translateDemo('Auto send', { defaultValue: 'Auto send' })}
+                {translateDemo('demo.autoSend', { defaultValue: 'Auto send' })}
               </span>
               <span className='block text-xs text-muted-foreground'>
-                {translateDemo('Otherwise fill the composer for review.', {
+                {translateDemo('demo.sceneAutoSendHint', {
                   defaultValue: 'Otherwise fill the composer for review.',
                 })}
               </span>
@@ -263,19 +269,16 @@ Implementation requirements
           </label>
           {pattern === 'manual' ? (
             <p className='-mt-3 text-xs leading-5 text-muted-foreground'>
-              {translateDemo(
-                'Manual Pick keeps the message in the composer so context can be selected before sending.',
-                {
-                  defaultValue:
-                    'Manual Pick keeps the message in the composer so context can be selected before sending.',
-                },
-              )}
+              {translateDemo('demo.manualPickHint', {
+                defaultValue:
+                  'Manual Pick keeps the message in the composer so context can be selected before sending.',
+              })}
             </p>
           ) : null}
 
           <div className='space-y-2'>
             <Label>
-              {translateDemo('Context integration', {
+              {translateDemo('demo.contextIntegration', {
                 defaultValue: 'Context integration',
               })}
             </Label>
@@ -290,22 +293,22 @@ Implementation requirements
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value='shortcut'>
-                  {translateDemo('Shortcut task', {
+                  {translateDemo('demo.shortcutTask', {
                     defaultValue: 'Shortcut task',
                   })}
                 </SelectItem>
                 <SelectItem value='preset'>
-                  {translateDemo('Conversation preset task', {
+                  {translateDemo('demo.conversationPresetTask', {
                     defaultValue: 'Conversation preset task',
                   })}
                 </SelectItem>
                 <SelectItem value='scope'>
-                  {translateDemo('Scope inheritance', {
+                  {translateDemo('demo.scopeInheritance', {
                     defaultValue: 'Scope inheritance',
                   })}
                 </SelectItem>
                 <SelectItem value='manual'>
-                  {translateDemo('Manual Pick', {
+                  {translateDemo('demo.manualPick', {
                     defaultValue: 'Manual Pick',
                   })}
                 </SelectItem>
@@ -316,7 +319,9 @@ Implementation requirements
           <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-1'>
             <div className='space-y-2'>
               <Label htmlFor='context-generator-id'>
-                {translateDemo('Context id', { defaultValue: 'Context id' })}
+                {translateDemo('demo.contextId', {
+                  defaultValue: 'Context id',
+                })}
               </Label>
               <Input
                 id='context-generator-id'
@@ -326,7 +331,7 @@ Implementation requirements
             </div>
             <div className='space-y-2'>
               <Label htmlFor='context-generator-title'>
-                {translateDemo('Context title', {
+                {translateDemo('demo.contextTitle', {
                   defaultValue: 'Context title',
                 })}
               </Label>
@@ -340,7 +345,7 @@ Implementation requirements
 
           <div className='space-y-2'>
             <Label>
-              {translateDemo('Page capability', {
+              {translateDemo('demo.pageCapability', {
                 defaultValue: 'Page capability',
               })}
             </Label>
@@ -355,17 +360,17 @@ Implementation requirements
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value='context'>
-                  {translateDemo('Context only', {
+                  {translateDemo('demo.contextOnly', {
                     defaultValue: 'Context only',
                   })}
                 </SelectItem>
                 <SelectItem value='form-filler'>
-                  {translateDemo('Built-in Form filler', {
+                  {translateDemo('demo.formFiller', {
                     defaultValue: 'Built-in Form filler',
                   })}
                 </SelectItem>
                 <SelectItem value='custom-tool'>
-                  {translateDemo('Custom frontend Tool', {
+                  {translateDemo('demo.frontendTool', {
                     defaultValue: 'Custom frontend Tool',
                   })}
                 </SelectItem>
@@ -377,7 +382,9 @@ Implementation requirements
             <div className='space-y-4 rounded-lg border p-3'>
               <div className='space-y-2'>
                 <Label htmlFor='context-generator-tool-name'>
-                  {translateDemo('Tool name', { defaultValue: 'Tool name' })}
+                  {translateDemo('demo.toolName', {
+                    defaultValue: 'Tool name',
+                  })}
                 </Label>
                 <Input
                   id='context-generator-tool-name'
@@ -387,7 +394,7 @@ Implementation requirements
               </div>
               <div className='space-y-2'>
                 <Label htmlFor='context-generator-tool-action'>
-                  {translateDemo('Business action', {
+                  {translateDemo('demo.businessAction', {
                     defaultValue: 'Business action',
                   })}
                 </Label>
@@ -423,16 +430,13 @@ Implementation requirements
       </Card>
 
       <PromptCard
-        title={translateDemo('Complete page context scene prompt', {
+        title={translateDemo('demo.scenePrompt', {
           defaultValue: 'Complete page context scene prompt',
         })}
-        description={translateDemo(
-          'Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene.',
-          {
-            defaultValue:
-              'Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene.',
-          },
-        )}
+        description={translateDemo('demo.scenePromptHint', {
+          defaultValue:
+            'Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene.',
+        })}
         prompt={prompt}
       />
     </div>

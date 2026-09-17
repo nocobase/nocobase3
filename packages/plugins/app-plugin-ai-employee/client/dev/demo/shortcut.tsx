@@ -1,3 +1,4 @@
+import { messageKey } from '../../lib/message-key.js';
 import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import { PageHeader } from '../../components/page-header.js';
 import {
@@ -179,23 +180,20 @@ function ShortcutPageContent() {
       <section className='space-y-5'>
         <div>
           <p className='text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-            {translateDemo('Scenario 1 · Multiple tasks', {
+            {translateDemo('demo.multipleTasksScenario', {
               defaultValue: 'Scenario 1 · Multiple tasks',
             })}
           </p>
           <h2 className='mt-2 text-xl font-semibold tracking-tight'>
-            {translateDemo('Trigger employee tasks from a business record', {
+            {translateDemo('demo.multipleTasksTitle', {
               defaultValue: 'Trigger employee tasks from a business record',
             })}
           </h2>
           <p className='mt-1.5 max-w-3xl text-sm leading-6 text-muted-foreground'>
-            {translateDemo(
-              'The Shortcut component can still sit in a detail header and provide the current record as work context. Opening it shows the configured analysis and reply tasks below the employee greeting.',
-              {
-                defaultValue:
-                  'The Shortcut component can still sit in a detail header and provide the current record as work context. Opening it shows the configured analysis and reply tasks below the employee greeting.',
-              },
-            )}
+            {translateDemo('demo.multipleTasksDescription', {
+              defaultValue:
+                'The Shortcut component can still sit in a detail header and provide the current record as work context. Opening it shows the configured analysis and reply tasks below the employee greeting.',
+            })}
           </p>
         </div>
         <AIPageContextScope
@@ -228,7 +226,9 @@ function ShortcutPageContent() {
             <div className='grid gap-5 p-5 sm:grid-cols-2'>
               <div>
                 <div className='text-xs text-muted-foreground'>
-                  {translateDemo('Requester', { defaultValue: 'Requester' })}
+                  {translateDemo('demo.requester', {
+                    defaultValue: 'Requester',
+                  })}
                 </div>
                 <div className='mt-1 text-sm font-medium'>
                   {ticketDetail.requester}
@@ -236,7 +236,7 @@ function ShortcutPageContent() {
               </div>
               <div>
                 <div className='text-xs text-muted-foreground'>
-                  {translateDemo('Created', { defaultValue: 'Created' })}
+                  {translateDemo('demo.created', { defaultValue: 'Created' })}
                 </div>
                 <div className='mt-1 text-sm font-medium'>
                   {ticketDetail.createdAt}
@@ -245,7 +245,9 @@ function ShortcutPageContent() {
             </div>
             <div className='border-t p-5'>
               <div className='text-xs text-muted-foreground'>
-                {translateDemo('Description', { defaultValue: 'Description' })}
+                {translateDemo('demo.description', {
+                  defaultValue: 'Description',
+                })}
               </div>
               <p className='mt-2 max-w-3xl text-sm leading-6'>
                 {ticketDetail.description}
@@ -258,35 +260,26 @@ function ShortcutPageContent() {
       <section className='space-y-5'>
         <div>
           <p className='text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-            {translateDemo('Scenario 2 · Explicit target', {
+            {translateDemo('demo.explicitTargetScenario', {
               defaultValue: 'Scenario 2 · Explicit target',
             })}
           </p>
           <h2 className='mt-2 text-xl font-semibold tracking-tight'>
-            {translateDemo(
-              'Send a shortcut task to a designated embedded chat',
-              {
-                defaultValue:
-                  'Send a shortcut task to a designated embedded chat',
-              },
-            )}
+            {translateDemo('demo.explicitTargetTitle', {
+              defaultValue:
+                'Send a shortcut task to a designated embedded chat',
+            })}
           </h2>
           <p className='mt-1.5 max-w-3xl text-sm leading-6 text-muted-foreground'>
-            {translateDemo(
-              'The shortcut receives the embedded chat Controller directly. Its Provider explicitly configures',
-              {
-                defaultValue:
-                  'The shortcut receives the embedded chat Controller directly. Its Provider explicitly configures',
-              },
-            )}{' '}
+            {translateDemo('demo.explicitTargetDescription', {
+              defaultValue:
+                'The shortcut receives the embedded chat Controller directly. Its Provider explicitly configures',
+            })}{' '}
             {embeddedEmployee.nickname}{' '}
-            {translateDemo(
-              'and an employee task set. It does not need a global target ID and cannot accidentally trigger another conversation on the same page.',
-              {
-                defaultValue:
-                  'and an employee task set. It does not need a global target ID and cannot accidentally trigger another conversation on the same page.',
-              },
-            )}
+            {translateDemo('demo.explicitTargetHint', {
+              defaultValue:
+                'and an employee task set. It does not need a global target ID and cannot accidentally trigger another conversation on the same page.',
+            })}
           </p>
         </div>
         <AIChatProvider
@@ -298,20 +291,17 @@ function ShortcutPageContent() {
             <Card>
               <CardHeader>
                 <CardTitle className='text-base'>
-                  {translateDemo('Risk review workspace', {
+                  {translateDemo('demo.riskReviewWorkspace', {
                     defaultValue: 'Risk review workspace',
                   })}
                 </CardTitle>
               </CardHeader>
               <CardContent className='space-y-5'>
                 <p className='text-sm leading-6 text-muted-foreground'>
-                  {translateDemo(
-                    'The embedded chat starts without preset tasks. Clicking the Shortcut injects “Review operational risk” into this specific conversation, where the user can choose it before the request is placed in the composer.',
-                    {
-                      defaultValue:
-                        'The embedded chat starts without preset tasks. Clicking the Shortcut injects “Review operational risk” into this specific conversation, where the user can choose it before the request is placed in the composer.',
-                    },
-                  )}
+                  {translateDemo('demo.riskReviewHint', {
+                    defaultValue:
+                      'The embedded chat starts without preset tasks. Clicking the Shortcut injects “Review operational risk” into this specific conversation, where the user can choose it before the request is placed in the composer.',
+                  })}
                 </p>
                 <AIEmployeeShortcut
                   aiEmployee={embeddedEmployee.username}
@@ -340,30 +330,27 @@ function ShortcutPageContent() {
       <section className='space-y-5'>
         <div>
           <p className='text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-            {translateDemo('Scenario 3 · Chat-bound tasks', {
+            {translateDemo('demo.chatTasksScenario', {
               defaultValue: 'Scenario 3 · Chat-bound tasks',
             })}
           </p>
           <h2 className='mt-2 text-xl font-semibold tracking-tight'>
-            {translateDemo('Show tasks when the selected employee changes', {
+            {translateDemo('demo.chatTasksTitle', {
               defaultValue: 'Show tasks when the selected employee changes',
             })}
           </h2>
           <p className='mt-1.5 max-w-3xl text-sm leading-6 text-muted-foreground'>
-            {translateDemo(
-              'This conversation window binds task lists directly to business AI employees. Starting a new conversation or switching employees in the composer immediately replaces the empty-state tasks. Employees without a binding keep the normal greeting-only state.',
-              {
-                defaultValue:
-                  'This conversation window binds task lists directly to business AI employees. Starting a new conversation or switching employees in the composer immediately replaces the empty-state tasks. Employees without a binding keep the normal greeting-only state.',
-              },
-            )}
+            {translateDemo('demo.chatTasksDescription', {
+              defaultValue:
+                'This conversation window binds task lists directly to business AI employees. Starting a new conversation or switching employees in the composer immediately replaces the empty-state tasks. Employees without a binding keep the normal greeting-only state.',
+            })}
           </p>
         </div>
         <div className='grid items-stretch gap-5 xl:grid-cols-[320px_minmax(0,1fr)]'>
           <Card>
             <CardHeader>
               <CardTitle className='text-base'>
-                {translateDemo('Employee task bindings', {
+                {translateDemo('demo.employeeTaskBindings', {
                   defaultValue: 'Employee task bindings',
                 })}
               </CardTitle>
@@ -372,12 +359,12 @@ function ShortcutPageContent() {
               <div className='rounded-lg border bg-muted/25 p-3 font-mono text-xs leading-5'>
                 <div>{primaryEmployee.username}</div>
                 <div className='pl-4'>
-                  {translateDemo('Analyze this ticket', {
+                  {translateDemo('demo.analyzeThisTicket', {
                     defaultValue: 'Analyze this ticket',
                   })}
                 </div>
                 <div className='pl-4'>
-                  {translateDemo('Draft a customer reply', {
+                  {translateDemo('demo.draftACustomerReply', {
                     defaultValue: 'Draft a customer reply',
                   })}
                 </div>
@@ -385,7 +372,7 @@ function ShortcutPageContent() {
                   <>
                     <div className='mt-2'>{secondaryEmployee.username}</div>
                     <div className='pl-4'>
-                      {translateDemo('Review operational risk', {
+                      {translateDemo('demo.reviewOperationalRisk', {
                         defaultValue: 'Review operational risk',
                       })}
                     </div>
@@ -393,24 +380,20 @@ function ShortcutPageContent() {
                 ) : null}
               </div>
               <p>
-                {translateDemo(
-                  'Switch employees from the bottom of the chat to preview each configured task list.',
-                  {
-                    defaultValue:
-                      'Switch employees from the bottom of the chat to preview each configured task list.',
-                  },
-                )}
+                {translateDemo('demo.employeeSwitchHint', {
+                  defaultValue:
+                    'Switch employees from the bottom of the chat to preview each configured task list.',
+                })}
               </p>
               <p>
-                {translateDemo('The same', { defaultValue: 'The same' })}{' '}
+                {translateDemo('demo.taskParameterPrefix', {
+                  defaultValue: 'The same',
+                })}{' '}
                 <code>employeeTasks</code>{' '}
-                {translateDemo(
-                  'parameter works in page, embedded, side-panel, dialog, and mobile containers.',
-                  {
-                    defaultValue:
-                      'parameter works in page, embedded, side-panel, dialog, and mobile containers.',
-                  },
-                )}
+                {translateDemo('demo.taskParameterSuffix', {
+                  defaultValue:
+                    'parameter works in page, embedded, side-panel, dialog, and mobile containers.',
+                })}
               </p>
             </CardContent>
           </Card>
@@ -746,30 +729,27 @@ Implementation requirements:
     <section className='space-y-5'>
       <div>
         <p className='text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-          {translateDemo('Employee tasks prompt', {
+          {translateDemo('demo.employeeTasksPrompt', {
             defaultValue: 'Employee tasks prompt',
           })}
         </p>
         <h2 className='mt-2 text-xl font-semibold tracking-tight'>
-          {translateDemo('Generate an integration prompt', {
+          {translateDemo('demo.generateAnIntegrationPrompt', {
             defaultValue: 'Generate an integration prompt',
           })}
         </h2>
         <p className='mt-1.5 max-w-3xl text-sm leading-6 text-muted-foreground'>
-          {translateDemo(
-            'Choose whether tasks are exposed through a contextual Shortcut or directly by the selected employee in a chat. Both modes share the same task, model, Web search, Skills, and Tools configuration.',
-            {
-              defaultValue:
-                'Choose whether tasks are exposed through a contextual Shortcut or directly by the selected employee in a chat. Both modes share the same task, model, Web search, Skills, and Tools configuration.',
-            },
-          )}
+          {translateDemo('demo.taskPromptDescription', {
+            defaultValue:
+              'Choose whether tasks are exposed through a contextual Shortcut or directly by the selected employee in a chat. Both modes share the same task, model, Web search, Skills, and Tools configuration.',
+          })}
         </p>
       </div>
       <div className='grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]'>
         <Card className='gap-0 py-0'>
           <CardHeader className='py-4'>
             <CardTitle className='text-base'>
-              {translateDemo('Employee task configuration', {
+              {translateDemo('demo.employeeTaskConfiguration', {
                 defaultValue: 'Employee task configuration',
               })}
             </CardTitle>
@@ -777,7 +757,9 @@ Implementation requirements:
           <CardContent className='space-y-4 pb-4'>
             <label className='block space-y-2 text-xs font-medium'>
               <span>
-                {translateDemo('Integration', { defaultValue: 'Integration' })}
+                {translateDemo('demo.integration', {
+                  defaultValue: 'Integration',
+                })}
               </span>
               <Select
                 value={integrationMode}
@@ -806,12 +788,12 @@ Implementation requirements:
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value='shortcut'>
-                    {translateDemo('Contextual Shortcut', {
+                    {translateDemo('demo.contextualShortcut', {
                       defaultValue: 'Contextual Shortcut',
                     })}
                   </SelectItem>
                   <SelectItem value='chat-tasks'>
-                    {translateDemo('Tasks inside a chat', {
+                    {translateDemo('demo.tasksInsideAChat', {
                       defaultValue: 'Tasks inside a chat',
                     })}
                   </SelectItem>
@@ -821,7 +803,7 @@ Implementation requirements:
             {integrationMode === 'chat-tasks' ? (
               <label className='block space-y-2 border-t pt-4 text-xs font-medium'>
                 <span>
-                  {translateDemo('AI employee', {
+                  {translateDemo('demo.aiEmployee', {
                     defaultValue: 'AI employee',
                   })}
                 </span>
@@ -851,13 +833,10 @@ Implementation requirements:
                   </SelectContent>
                 </Select>
                 <span className='block font-normal leading-5 text-muted-foreground'>
-                  {translateDemo(
-                    'Select an employee first, then configure the tasks shown in that employee’s new-conversation state.',
-                    {
-                      defaultValue:
-                        'Select an employee first, then configure the tasks shown in that employee’s new-conversation state.',
-                    },
-                  )}
+                  {translateDemo('demo.employeeSelectionHint', {
+                    defaultValue:
+                      'Select an employee first, then configure the tasks shown in that employee’s new-conversation state.',
+                  })}
                 </span>
               </label>
             ) : null}
@@ -866,7 +845,7 @@ Implementation requirements:
               {integrationMode === 'shortcut' ? (
                 <label className='block space-y-2 text-xs font-medium'>
                   <span>
-                    {translateDemo('AI employee', {
+                    {translateDemo('demo.aiEmployee', {
                       defaultValue: 'AI employee',
                     })}
                   </span>
@@ -893,7 +872,9 @@ Implementation requirements:
               ) : null}
               <label className='block space-y-2 text-xs font-medium'>
                 <span>
-                  {translateDemo('Placement', { defaultValue: 'Placement' })}
+                  {translateDemo('demo.placement', {
+                    defaultValue: 'Placement',
+                  })}
                 </span>
                 <Input
                   value={location}
@@ -903,7 +884,7 @@ Implementation requirements:
               {integrationMode === 'chat-tasks' ? (
                 <label className='block space-y-2 text-xs font-medium'>
                   <span>
-                    {translateDemo('Chat container', {
+                    {translateDemo('demo.chatContainer', {
                       defaultValue: 'Chat container',
                     })}
                   </span>
@@ -927,20 +908,22 @@ Implementation requirements:
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value='page'>
-                        {translateDemo('Page', { defaultValue: 'Page' })}
+                        {translateDemo('demo.page', { defaultValue: 'Page' })}
                       </SelectItem>
                       <SelectItem value='embedded'>
-                        {translateDemo('Embedded block', {
+                        {translateDemo('demo.embeddedBlock', {
                           defaultValue: 'Embedded block',
                         })}
                       </SelectItem>
                       <SelectItem value='side-panel'>
-                        {translateDemo('Side panel', {
+                        {translateDemo('demo.sidePanel', {
                           defaultValue: 'Side panel',
                         })}
                       </SelectItem>
                       <SelectItem value='dialog'>
-                        {translateDemo('Dialog', { defaultValue: 'Dialog' })}
+                        {translateDemo('demo.dialog', {
+                          defaultValue: 'Dialog',
+                        })}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -951,7 +934,7 @@ Implementation requirements:
             {integrationMode === 'shortcut' ? (
               <label className='block space-y-2 text-xs font-medium'>
                 <span>
-                  {translateDemo('Target conversation', {
+                  {translateDemo('demo.targetConversation', {
                     defaultValue: 'Target conversation',
                   })}
                 </span>
@@ -971,12 +954,12 @@ Implementation requirements:
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value='global-side-panel'>
-                      {translateDemo('Global side panel', {
+                      {translateDemo('demo.globalSidePanel', {
                         defaultValue: 'Global side panel',
                       })}
                     </SelectItem>
                     <SelectItem value='embedded'>
-                      {translateDemo('Embedded chat', {
+                      {translateDemo('demo.embeddedChat', {
                         defaultValue: 'Embedded chat',
                       })}
                     </SelectItem>
@@ -989,11 +972,11 @@ Implementation requirements:
               <div className='flex items-center justify-between gap-3'>
                 <div>
                   <div className='text-sm font-medium'>
-                    {translateDemo('Tasks', { defaultValue: 'Tasks' })}
+                    {translateDemo('demo.tasks', { defaultValue: 'Tasks' })}
                   </div>
                   <div className='text-xs text-muted-foreground'>
                     {visibleTasks.length}{' '}
-                    {translateDemo('configured task', {
+                    {translateDemo('demo.configuredTask', {
                       defaultValue: 'configured task',
                     })}
                     {visibleTasks.length === 1 ? '' : 's'}
@@ -1004,7 +987,7 @@ Implementation requirements:
                 </div>
                 <Button variant='outline' size='sm' onClick={addTask}>
                   <Plus />{' '}
-                  {translateDemo('Add task', { defaultValue: 'Add task' })}
+                  {translateDemo('demo.addTask', { defaultValue: 'Add task' })}
                 </Button>
               </div>
               <div className='grid gap-2 sm:grid-cols-2'>
@@ -1061,7 +1044,7 @@ Implementation requirements:
                   </label>
                   <label className='block space-y-2 text-xs font-medium'>
                     <span>
-                      {translateDemo('Model', { defaultValue: 'Model' })}
+                      {translateDemo('demo.model', { defaultValue: 'Model' })}
                     </span>
                     <Select
                       value={selectedTask.model}
@@ -1089,7 +1072,7 @@ Implementation requirements:
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value='default'>
-                          {translateDemo('Use employee default', {
+                          {translateDemo('demo.useEmployeeDefault', {
                             defaultValue: 'Use employee default',
                           })}
                         </SelectItem>
@@ -1101,7 +1084,7 @@ Implementation requirements:
                 </div>
                 <label className='block space-y-2 text-xs font-medium'>
                   <span>
-                    {translateDemo('Default user message', {
+                    {translateDemo('demo.defaultUserMessage', {
                       defaultValue: 'Default user message',
                     })}
                   </span>
@@ -1116,18 +1099,15 @@ Implementation requirements:
                 <label className='flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5 text-sm'>
                   <span>
                     <span className='block font-medium'>
-                      {translateDemo('Auto send', {
+                      {translateDemo('demo.autoSend', {
                         defaultValue: 'Auto send',
                       })}
                     </span>
                     <span className='block text-xs text-muted-foreground'>
-                      {translateDemo(
-                        'Otherwise the message is placed in the composer.',
-                        {
-                          defaultValue:
-                            'Otherwise the message is placed in the composer.',
-                        },
-                      )}
+                      {translateDemo('demo.autoSendHint', {
+                        defaultValue:
+                          'Otherwise the message is placed in the composer.',
+                      })}
                     </span>
                   </span>
                   <Switch
@@ -1142,18 +1122,15 @@ Implementation requirements:
                   <div className='flex items-start justify-between gap-3'>
                     <span>
                       <span className='block text-sm font-medium'>
-                        {translateDemo('Work context', {
+                        {translateDemo('demo.workContext', {
                           defaultValue: 'Work context',
                         })}
                       </span>
                       <span className='block text-xs text-muted-foreground'>
-                        {translateDemo(
-                          'Select a page context for this task. Without one, the task inherits its surrounding context.',
-                          {
-                            defaultValue:
-                              'Select a page context for this task. Without one, the task inherits its surrounding context.',
-                          },
-                        )}
+                        {translateDemo('demo.workContextHint', {
+                          defaultValue:
+                            'Select a page context for this task. Without one, the task inherits its surrounding context.',
+                        })}
                       </span>
                     </span>
                     <Button
@@ -1177,7 +1154,7 @@ Implementation requirements:
                       }
                     >
                       <MousePointer2 />{' '}
-                      {translateDemo('Pick context', {
+                      {translateDemo('demo.pickContext', {
                         defaultValue: 'Pick context',
                       })}
                     </Button>
@@ -1193,7 +1170,7 @@ Implementation requirements:
                       <Button
                         variant='ghost'
                         size='icon-xs'
-                        aria-label={translateDemo('Remove task context', {
+                        aria-label={translateDemo('demo.removeTaskContext', {
                           defaultValue: 'Remove task context',
                         })}
                         onClick={() => updateSelectedTask({ workContext: [] })}
@@ -1212,25 +1189,22 @@ Implementation requirements:
                     <AccordionTrigger className='no-underline hover:no-underline'>
                       <span>
                         <span className='block'>
-                          {translateDemo('Advanced task settings', {
+                          {translateDemo('demo.advancedTaskSettings', {
                             defaultValue: 'Advanced task settings',
                           })}
                         </span>
                         <span className='block text-xs font-normal text-muted-foreground'>
-                          {translateDemo(
-                            'Background, Web search, Skills, and Tools',
-                            {
-                              defaultValue:
-                                'Background, Web search, Skills, and Tools',
-                            },
-                          )}
+                          {translateDemo('demo.advancedSettingsHint', {
+                            defaultValue:
+                              'Background, Web search, Skills, and Tools',
+                          })}
                         </span>
                       </span>
                     </AccordionTrigger>
                     <AccordionContent className='space-y-4 pt-1'>
                       <label className='block space-y-2 text-xs font-medium'>
                         <span>
-                          {translateDemo('Background', {
+                          {translateDemo('demo.background', {
                             defaultValue: 'Background',
                           })}
                         </span>
@@ -1247,18 +1221,15 @@ Implementation requirements:
                       <label className='flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5 text-sm'>
                         <span>
                           <span className='block font-medium'>
-                            {translateDemo('Web search', {
+                            {translateDemo('demo.webSearch', {
                               defaultValue: 'Web search',
                             })}
                           </span>
                           <span className='block text-xs text-muted-foreground'>
-                            {translateDemo(
-                              'Subject to the selected LLM service capability.',
-                              {
-                                defaultValue:
-                                  'Subject to the selected LLM service capability.',
-                              },
-                            )}
+                            {translateDemo('demo.webSearchHint', {
+                              defaultValue:
+                                'Subject to the selected LLM service capability.',
+                            })}
                           </span>
                         </span>
                         <Switch
@@ -1376,7 +1347,7 @@ function CapabilityEditor({
         <div>
           <div className='text-sm font-medium'>{title}</div>
           <div className='text-xs text-muted-foreground'>
-            {translateDemo('Preset inherits the AI employee configuration.', {
+            {translateDemo('demo.presetHint', {
               defaultValue: 'Preset inherits the AI employee configuration.',
             })}
           </div>
@@ -1392,7 +1363,7 @@ function CapabilityEditor({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value='preset'>
-              {translateDemo('Preset', { defaultValue: 'Preset' })}
+              {translateDemo('demo.preset', { defaultValue: 'Preset' })}
             </SelectItem>
             <SelectItem value='custom'>
               {translateDemo('Custom', { defaultValue: 'Custom' })}
@@ -1412,7 +1383,9 @@ function CapabilityEditor({
                 onCheckedChange={(checked) => onToggle(option.value, checked)}
               />
               <span>
-                {translateDemo(option.label, { defaultValue: option.label })}
+                {translateDemo(messageKey(option.label), {
+                  defaultValue: option.label,
+                })}
               </span>
             </label>
           ))}

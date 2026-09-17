@@ -67,7 +67,7 @@ export function AuthorizationSettingsPage(inputProps: {
         {error ? <ErrorBox value={error} /> : null}
         {loading ? (
           <div className='rounded-xl border bg-card p-8 text-sm text-muted-foreground shadow-sm'>
-            {t('Loading…', { defaultValue: 'Loading…' })}
+            {t('loading', { defaultValue: 'Loading…' })}
           </div>
         ) : (
           children

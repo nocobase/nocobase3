@@ -1,3 +1,4 @@
+import { messageKey } from '../../lib/message-key.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import type { FileRecord } from '../../types';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
@@ -39,7 +40,10 @@ export function FilePreviewContent(
       />
     );
   }
-  if (error) return <div role='alert'>{t(error, { defaultValue: error })}</div>;
+  if (error)
+    return (
+      <div role='alert'>{t(messageKey(error), { defaultValue: error })}</div>
+    );
   if (!url && kind !== 'unsupported')
     return (
       <div role='status'>
@@ -145,7 +149,7 @@ function OfficePreview(inputProps: {
       <DownloadFallback
         file={file}
         message={
-          (error ? t(error, { defaultValue: error }) : undefined) ??
+          (error ? t(messageKey(error), { defaultValue: error }) : undefined) ??
           (failed
             ? t('files.officeFailed', {
                 defaultValue: 'Office Online could not load this file.',

@@ -1,3 +1,4 @@
+import { messageKey } from '../lib/message-key.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Button, Input } from '../components/ui.js';
 import {
@@ -111,7 +112,7 @@ export function SharingRulesPanel(inputProps: {
         <ManagementToolbar
           search={search}
           onSearch={setSearch}
-          actionLabel={t('New sharing rule', {
+          actionLabel={t('newSharingRule', {
             defaultValue: 'New sharing rule',
           })}
           onAction={() => edit()}
@@ -120,19 +121,19 @@ export function SharingRulesPanel(inputProps: {
           <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
             <tr>
               <th className='px-5 py-3 font-medium'>
-                {t('Rule', { defaultValue: 'Rule' })}
+                {t('rule', { defaultValue: 'Rule' })}
               </th>
               <th className='px-5 py-3 font-medium'>
-                {t('Resource', { defaultValue: 'Resource' })}
+                {t('resourceLabel', { defaultValue: 'Resource' })}
               </th>
               <th className='px-5 py-3 font-medium'>
-                {t('Records shared', { defaultValue: 'Records shared' })}
+                {t('recordsShared', { defaultValue: 'Records shared' })}
               </th>
               <th className='px-5 py-3 font-medium'>
-                {t('Shared with', { defaultValue: 'Shared with' })}
+                {t('sharedWith', { defaultValue: 'Shared with' })}
               </th>
               <th className='px-5 py-3 font-medium'>
-                {t('Access', { defaultValue: 'Access' })}
+                {t('accessLabel', { defaultValue: 'Access' })}
               </th>
               <th className='w-20 px-5 py-3' />
             </tr>
@@ -160,14 +161,14 @@ export function SharingRulesPanel(inputProps: {
                 </td>
                 <td className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
-                    {t('Edit', { defaultValue: 'Edit' })}
+                    {t('edit', { defaultValue: 'Edit' })}
                   </Button>
                 </td>
               </tr>
             ))}
             {visibleRules.length === 0 ? (
               <EmptyTableRow colSpan={6}>
-                {t('No sharing rules match your search.', {
+                {t('noSharingRules', {
                   defaultValue: 'No sharing rules match your search.',
                 })}
               </EmptyTableRow>
@@ -179,10 +180,10 @@ export function SharingRulesPanel(inputProps: {
         <SidePanel
           title={
             originalKey
-              ? t('Edit sharing rule', { defaultValue: 'Edit sharing rule' })
-              : t('New sharing rule', { defaultValue: 'New sharing rule' })
+              ? t('editSharingRule', { defaultValue: 'Edit sharing rule' })
+              : t('newSharingRule', { defaultValue: 'New sharing rule' })
           }
-          description={t('Open access to selected records for an audience.', {
+          description={t('sharingRuleDescription', {
             defaultValue: 'Open access to selected records for an audience.',
           })}
           onClose={() => setDraft(undefined)}
@@ -199,14 +200,14 @@ export function SharingRulesPanel(inputProps: {
               <>
                 {originalKey ? (
                   <Button variant='outline' onClick={() => void remove()}>
-                    {t('Delete rule', { defaultValue: 'Delete rule' })}
+                    {t('deleteRule', { defaultValue: 'Delete rule' })}
                   </Button>
                 ) : null}
                 <Button variant='outline' onClick={() => setDraft(undefined)}>
-                  {t('Cancel', { defaultValue: 'Cancel' })}
+                  {t('cancel', { defaultValue: 'Cancel' })}
                 </Button>
                 <Button onClick={() => void save()}>
-                  {t('Save sharing rule', {
+                  {t('saveSharingRule', {
                     defaultValue: 'Save sharing rule',
                   })}
                 </Button>
@@ -217,17 +218,17 @@ export function SharingRulesPanel(inputProps: {
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
-                    {t('Rule details', { defaultValue: 'Rule details' })}
+                    {t('ruleDetails', { defaultValue: 'Rule details' })}
                   </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    {t('Name the rule and choose the collection to share.', {
+                    {t('sharingRuleDetailsHint', {
                       defaultValue:
                         'Name the rule and choose the collection to share.',
                     })}
                   </p>
                 </div>
                 <div className='grid gap-4 sm:grid-cols-2'>
-                  <Field label={t('Rule name', { defaultValue: 'Rule name' })}>
+                  <Field label={t('ruleName', { defaultValue: 'Rule name' })}>
                     <Input
                       value={draft.title ?? ''}
                       onChange={(event) =>
@@ -236,8 +237,8 @@ export function SharingRulesPanel(inputProps: {
                     />
                   </Field>
                   <Field
-                    label={t('Key', { defaultValue: 'Key' })}
-                    hint={t('Stable identifier used by APIs.', {
+                    label={t('key', { defaultValue: 'Key' })}
+                    hint={t('keyHint', {
                       defaultValue: 'Stable identifier used by APIs.',
                     })}
                   >
@@ -278,12 +279,12 @@ export function SharingRulesPanel(inputProps: {
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
-                    {t('Records to share', {
+                    {t('recordsToShare', {
                       defaultValue: 'Records to share',
                     })}
                   </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    {t('Choose records independently for each action.', {
+                    {t('sharingActionsHint', {
                       defaultValue:
                         'Choose records independently for each action.',
                     })}
@@ -302,10 +303,10 @@ export function SharingRulesPanel(inputProps: {
               <section className='space-y-5'>
                 <div>
                   <h3 className='text-base font-semibold'>
-                    {t('Assignments', { defaultValue: 'Assignments' })}
+                    {t('assignments', { defaultValue: 'Assignments' })}
                   </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    {t('Choose who receives the additional access.', {
+                    {t('sharingAudienceHint', {
                       defaultValue:
                         'Choose who receives the additional access.',
                     })}
@@ -317,7 +318,7 @@ export function SharingRulesPanel(inputProps: {
                   onChange={(subjects) => setDraft({ ...draft, subjects })}
                 />
                 <Field
-                  label={t('Description', { defaultValue: 'Description' })}
+                  label={t('description', { defaultValue: 'Description' })}
                 >
                   <Input
                     value={draft.reason ?? ''}
@@ -435,7 +436,7 @@ function SharingActionsEditor(inputProps: {
           </div>
           <div className='space-y-4 p-4'>
             <Field
-              label={t('Records to share', {
+              label={t('recordsToShare', {
                 defaultValue: 'Records to share',
               })}
             >
@@ -454,10 +455,10 @@ function SharingActionsEditor(inputProps: {
                 }
               >
                 <option value='records'>
-                  {t('Selected records', { defaultValue: 'Selected records' })}
+                  {t('selectedRecords', { defaultValue: 'Selected records' })}
                 </option>
                 <option value='policy'>
-                  {t('Records matching a policy', {
+                  {t('policyRecordsOption', {
                     defaultValue: 'Records matching a policy',
                   })}
                 </option>
@@ -516,10 +517,10 @@ function RecordPicker(inputProps: {
   );
   return (
     <div className='space-y-2'>
-      <Field label={t('Records', { defaultValue: 'Records' })}>
+      <Field label={t('records', { defaultValue: 'Records' })}>
         <Input
           type='search'
-          placeholder={t('Search records', { defaultValue: 'Search records' })}
+          placeholder={t('searchRecords', { defaultValue: 'Search records' })}
           value={search}
           onChange={(event) => onSearch(event.target.value)}
         />
@@ -554,7 +555,7 @@ function RecordPicker(inputProps: {
         ))}
         {visible.length === 0 ? (
           <p className='p-6 text-center text-sm text-muted-foreground'>
-            {t('No records found.', { defaultValue: 'No records found.' })}
+            {t('noRecords', { defaultValue: 'No records found.' })}
           </p>
         ) : null}
       </div>
@@ -631,7 +632,7 @@ function selectionLabel(
   return rule.actions
     .map(
       (item) =>
-        `${humanize(t, item.action)}: ${item.selection.type === 'records' ? t('counts.selectedRecords', { count: item.selection.ids.length, defaultValue: `${item.selection.ids.length} selected records` }) : t('Records matching policy', { defaultValue: 'Records matching policy' })}`,
+        `${humanize(t, item.action)}: ${item.selection.type === 'records' ? t('counts.selectedRecords', { count: item.selection.ids.length, defaultValue: `${item.selection.ids.length} selected records` }) : t('policyRecords', { defaultValue: 'Records matching policy' })}`,
     )
     .join(' · ');
 }
@@ -642,7 +643,7 @@ function subjectLabel(
 ): string {
   const subject = rule.subjects[0];
   if (!subject || subject.type === 'authenticated')
-    return t('All signed-in users', { defaultValue: 'All signed-in users' });
+    return t('allSignedInUsers', { defaultValue: 'All signed-in users' });
   return (
     users.find((user) => user.id === subject.id)?.name ??
     t('userFallback', { id: subject.id, defaultValue: `User ${subject.id}` })
@@ -655,5 +656,5 @@ function humanize(
   const label = value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-  return t(label, { defaultValue: label });
+  return t(messageKey(label), { defaultValue: label });
 }

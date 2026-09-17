@@ -14,15 +14,12 @@ export default function DefaultAccessPage(): ReactElement {
   );
   return (
     <AuthorizationSettingsPage
-      eyebrow={t('Record access', { defaultValue: 'Record access' })}
-      title={t('Default Access', { defaultValue: 'Default Access' })}
-      description={t(
-        'Set the baseline record scope before sharing and restriction rules are evaluated.',
-        {
-          defaultValue:
-            'Set the baseline record scope before sharing and restriction rules are evaluated.',
-        },
-      )}
+      eyebrow={t('recordAccess', { defaultValue: 'Record access' })}
+      title={t('defaultAccess', { defaultValue: 'Default Access' })}
+      description={t('defaultAccessDescription', {
+        defaultValue:
+          'Set the baseline record scope before sharing and restriction rules are evaluated.',
+      })}
       error={error}
       loading={!options}
     >

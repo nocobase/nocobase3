@@ -1,8 +1,8 @@
 import type { AppResource } from './en-US.js';
 
 const zhCN: AppResource = {
-  'Loading notice…': '正在加载通知…',
-  'Unable to load the plugin notice.': '无法加载插件通知。',
+  noticeLoading: '正在加载通知…',
+  noticeLoadError: '无法加载插件通知。',
   'auth.welcome': '欢迎回来',
   'auth.loginDescription': '使用用户名或邮箱和密码登录。',
   'auth.registerTitle': '创建账户',

@@ -1,3 +1,4 @@
+import { messageKey } from '../lib/message-key.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement, ReactNode } from 'react';
 
@@ -17,7 +18,7 @@ export function ManagementToolbar(inputProps: {
       <Input
         className='w-full sm:w-96 sm:flex-none'
         type='search'
-        placeholder={t('Search', { defaultValue: 'Search' })}
+        placeholder={t('search', { defaultValue: 'Search' })}
         value={search}
         onChange={(event) => onSearch(event.target.value)}
       />
@@ -74,7 +75,7 @@ export function DetailHeader(inputProps: {
         type='button'
         onClick={onBack}
       >
-        {t('← Back to list', { defaultValue: '← Back to list' })}
+        {t('backToList', { defaultValue: '← Back to list' })}
       </button>
       <div className='flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between'>
         <div>
@@ -103,7 +104,7 @@ export function DetailTabs(inputProps: {
   return (
     <nav
       className='flex gap-6 border-b px-1'
-      aria-label={t('Detail sections', { defaultValue: 'Detail sections' })}
+      aria-label={t('detailSections', { defaultValue: 'Detail sections' })}
     >
       {items.map((item) => (
         <button
@@ -112,7 +113,7 @@ export function DetailTabs(inputProps: {
           className={`border-b-2 px-1 py-3 text-sm font-medium ${value === item.value ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
           onClick={() => onChange(item.value)}
         >
-          {t(item.label, { defaultValue: item.label })}
+          {t(messageKey(item.label), { defaultValue: item.label })}
           {item.count === undefined ? null : (
             <span className='ml-2 rounded-full bg-muted px-2 py-0.5 text-xs'>
               {item.count}
@@ -165,7 +166,7 @@ export function SidePanel(inputProps: {
             ) : null}
           </div>
           <Button size='sm' variant='ghost' onClick={onClose}>
-            {t('Close', { defaultValue: 'Close' })}
+            {t('close', { defaultValue: 'Close' })}
           </Button>
         </header>
         <div
@@ -193,7 +194,7 @@ export function RuleEditorLayout(inputProps: {
       <div className='grid min-h-0 flex-1 md:grid-cols-[14rem_minmax(0,1fr)]'>
         <nav
           className='border-b bg-muted/20 p-4 md:border-r md:border-b-0'
-          aria-label={t('Rule sections', { defaultValue: 'Rule sections' })}
+          aria-label={t('ruleSections', { defaultValue: 'Rule sections' })}
         >
           <div className='grid gap-1 sm:grid-cols-3 md:grid-cols-1'>
             {steps.map((step, index) => (
@@ -209,10 +210,12 @@ export function RuleEditorLayout(inputProps: {
                   >
                     {index + 1}
                   </span>
-                  {t(step.label, { defaultValue: step.label })}
+                  {t(messageKey(step.label), { defaultValue: step.label })}
                 </span>
                 <span className='mt-1 block pl-7 text-xs leading-5 text-muted-foreground'>
-                  {t(step.description, { defaultValue: step.description })}
+                  {t(messageKey(step.description), {
+                    defaultValue: step.description,
+                  })}
                 </span>
               </button>
             ))}

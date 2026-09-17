@@ -1,6 +1,6 @@
 import type { RepositoryExampleResource } from './en-US.js';
 const zhCN: RepositoryExampleResource = {
-  Close: '关闭',
+  closeDialog: '关闭',
   sortTitle: 'Sort 排序示例',
   sortIntro:
     '通过 Repository HTTP 客户端运行只读排序示例，展示 Builder、实际序列化请求及按服务端顺序排列的表格。查询最多返回 10 条主记录，复用现有 CRM 与关系种子数据。',

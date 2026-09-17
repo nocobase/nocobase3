@@ -1,3 +1,4 @@
+import { messageKey } from '../lib/message-key.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import { LoaderCircle, RotateCcw, Trash2, UploadCloud, X } from 'lucide-react';
 import {
@@ -168,7 +169,7 @@ export function FileUploadField(
     if (files.length + (multiple ? value.length : 0) + items.length > maximum) {
       onError?.(
         new Error(
-          t('The maximum number of files has been reached.', {
+          t('fileLimitReached', {
             defaultValue: 'The maximum number of files has been reached.',
           }),
         ),
@@ -179,7 +180,7 @@ export function FileUploadField(
       if (maxSize !== undefined && file.size > maxSize) {
         onError?.(
           new Error(
-            t('File exceeds the maximum size.', {
+            t('fileTooLarge', {
               defaultValue: 'File exceeds the maximum size.',
             }),
           ),
@@ -189,7 +190,7 @@ export function FileUploadField(
       if (!accepts(file, accept)) {
         onError?.(
           new Error(
-            t('File type is not allowed.', {
+            t('fileTypeNotAllowed', {
               defaultValue: 'File type is not allowed.',
             }),
           ),
@@ -216,7 +217,7 @@ export function FileUploadField(
           error instanceof Error
             ? error
             : new Error(
-                t('File removal failed.', {
+                t('removalFailed', {
                   defaultValue: 'File removal failed.',
                 }),
               ),
@@ -304,7 +305,7 @@ export function FileUploadField(
             <div className='text-xs text-muted-foreground'>
               {item.status === 'error'
                 ? ((item.error
-                    ? t(item.error.message, {
+                    ? t(messageKey(item.error.message), {
                         defaultValue: item.error.message,
                       })
                     : undefined) ??

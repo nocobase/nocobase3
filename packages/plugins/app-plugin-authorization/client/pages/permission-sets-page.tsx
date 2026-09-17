@@ -15,15 +15,12 @@ export default function PermissionSetsPage(): ReactElement {
   );
   return (
     <AuthorizationSettingsPage
-      eyebrow={t('Authorization', { defaultValue: 'Authorization' })}
-      title={t('Permission Sets', { defaultValue: 'Permission Sets' })}
-      description={t(
-        'Create reusable permission bundles and assign them to users.',
-        {
-          defaultValue:
-            'Create reusable permission bundles and assign them to users.',
-        },
-      )}
+      eyebrow={t('authorization', { defaultValue: 'Authorization' })}
+      title={t('permissionSets', { defaultValue: 'Permission Sets' })}
+      description={t('permissionSetsDescription', {
+        defaultValue:
+          'Create reusable permission bundles and assign them to users.',
+      })}
       error={error}
       loading={!options}
     >

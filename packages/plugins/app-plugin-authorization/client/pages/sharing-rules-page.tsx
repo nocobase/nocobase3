@@ -15,15 +15,12 @@ export default function SharingRulesPage(): ReactElement {
   );
   return (
     <AuthorizationSettingsPage
-      eyebrow={t('Record access', { defaultValue: 'Record access' })}
-      title={t('Sharing Rules', { defaultValue: 'Sharing Rules' })}
-      description={t(
-        'Grant selected users access to specific records or a reusable record scope.',
-        {
-          defaultValue:
-            'Grant selected users access to specific records or a reusable record scope.',
-        },
-      )}
+      eyebrow={t('recordAccess', { defaultValue: 'Record access' })}
+      title={t('sharingRules', { defaultValue: 'Sharing Rules' })}
+      description={t('sharingRulesDescription', {
+        defaultValue:
+          'Grant selected users access to specific records or a reusable record scope.',
+      })}
       error={error}
       loading={!options}
     >

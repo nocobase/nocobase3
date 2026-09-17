@@ -133,27 +133,24 @@ function FloatingChatPageContent() {
           <section className='space-y-5'>
             <div>
               <p className='text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                {translateDemo('Floating chat prompt', {
+                {translateDemo('demo.floatingChatPrompt', {
                   defaultValue: 'Floating chat prompt',
                 })}
               </p>
               <h2 className='mt-2 text-xl font-semibold tracking-tight'>
-                {translateDemo('Generate the global launcher separately', {
+                {translateDemo('demo.launcherTitle', {
                   defaultValue: 'Generate the global launcher separately',
                 })}
               </h2>
             </div>
             <PromptCard
-              title={translateDemo('Add a lower-right AI floating entry', {
+              title={translateDemo('demo.launcherAction', {
                 defaultValue: 'Add a lower-right AI floating entry',
               })}
-              description={translateDemo(
-                'This prompt configures the global trigger and its switchable side-panel/dialog surface.',
-                {
-                  defaultValue:
-                    'This prompt configures the global trigger and its switchable side-panel/dialog surface.',
-                },
-              )}
+              description={translateDemo('demo.launcherDescription', {
+                defaultValue:
+                  'This prompt configures the global trigger and its switchable side-panel/dialog surface.',
+              })}
               prompt={floatingPrompt}
             />
           </section>

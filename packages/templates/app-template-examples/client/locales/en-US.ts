@@ -1,8 +1,8 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
-  'Loading notice…': 'Loading notice…',
-  'Unable to load the plugin notice.': 'Unable to load the plugin notice.',
+  noticeLoading: 'Loading notice…',
+  noticeLoadError: 'Unable to load the plugin notice.',
   'auth.welcome': 'Welcome back',
   'auth.loginDescription': 'Sign in with your username or email and password.',
   'auth.registerTitle': 'Create an account',

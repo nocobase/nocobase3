@@ -56,7 +56,7 @@ export function FileList(inputProps: FileListProps): ReactElement {
       const url = raw ? resolveSafeFileUrl(raw) : undefined;
       if (!url)
         throw new Error(
-          t('File URL is not allowed.', {
+          t('urlNotAllowed', {
             defaultValue: 'File URL is not allowed.',
           }),
         );
@@ -66,7 +66,7 @@ export function FileList(inputProps: FileListProps): ReactElement {
         error instanceof Error
           ? error
           : new Error(
-              t('File download failed.', {
+              t('downloadFailed', {
                 defaultValue: 'File download failed.',
               }),
             ),

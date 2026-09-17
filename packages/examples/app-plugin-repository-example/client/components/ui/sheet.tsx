@@ -84,7 +84,7 @@ function SheetContent({
           >
             <XIcon />
             <span className='sr-only'>
-              {translateDemo('Close', { defaultValue: 'Close' })}
+              {translateDemo('closeDialog', { defaultValue: 'Close' })}
             </span>
           </SheetPrimitive.Close>
         )}
