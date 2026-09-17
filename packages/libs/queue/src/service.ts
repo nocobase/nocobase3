@@ -261,6 +261,7 @@ export function createQueueService(
 
   async function closeEntries(
     targets: Iterable<QueueEntry> = entries.values(),
+    force: boolean = false,
   ): Promise<void> {
     const errors: unknown[] = [];
     await Promise.all(
@@ -271,7 +272,7 @@ export function createQueueService(
             if (!resource) return;
             try {
               if (key === 'worker' && current.worker)
-                await closeWorker(current.worker);
+                await closeWorker(current.worker, force);
               else await resource.close();
               if (current[key] === resource) current[key] = undefined;
             } catch (error) {
@@ -671,16 +672,30 @@ export function createQueueService(
         }
         producersOpen = false;
         await Promise.all([...publishing]);
-        const closed = await Promise.allSettled(
-          workers.map(async (current) => {
-            await closeWorker(current.worker!, !settled);
-            current.worker = undefined;
-          }),
-        );
-        for (const result of closed)
-          if (result.status === 'rejected') errors.push(result.reason);
+        const cleanup = closeEntries(entries.values(), !settled);
         try {
-          await closeEntries();
+          if (!(await settlesWithin(cleanup, 5000))) {
+            const error = new Error(
+              'Queue resource cleanup deadline exceeded; resources remain unresolved',
+            );
+            errors.push(error);
+            dependencies.logger?.error(
+              { error },
+              'Queue shutdown has unresolved resources',
+            );
+            void cleanup.then(
+              () =>
+                dependencies.logger?.warn(
+                  {},
+                  'Previously unresolved queue resources have closed',
+                ),
+              (error: unknown) =>
+                dependencies.logger?.error(
+                  { error },
+                  'Previously unresolved queue cleanup failed',
+                ),
+            );
+          }
         } catch (error) {
           errors.push(error);
         }

@@ -153,3 +153,63 @@ it('attempts every Queue cleanup even while another Queue close is pending', asy
     await closing;
   }
 });
+
+it('reports unresolved resource cleanup within its cleanup budget and observes late settlement', async () => {
+  const { vi } = await import('vitest');
+  const { createInMemoryBackendFactory } =
+    await import('../src/backends/in-memory/index.js');
+  const factory = createInMemoryBackendFactory();
+  const error = vi.fn();
+  const warn = vi.fn();
+  const service = createQueueService(
+    { namespace: 'cleanup-budget', queueBackend: 'test' },
+    { logger: { error, warn } },
+  );
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered = false;
+  let ended = false;
+  service.registerBackend('test', (...args) => {
+    const backend = factory(...args);
+    const close = backend.close.bind(backend);
+    backend.close = async (...values) => {
+      entered = true;
+      await gate;
+      await close(...values);
+      ended = true;
+    };
+    return backend;
+  });
+  service.producer('jobs');
+  await service.setup();
+  vi.useFakeTimers();
+  let failure: unknown;
+  let finished = false;
+  const closing = service
+    .shutdown()
+    .catch((reason: unknown) => {
+      failure = reason;
+    })
+    .finally(() => {
+      finished = true;
+    });
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    expect(entered).toBe(true);
+    await vi.advanceTimersByTimeAsync(5001);
+    expect(finished).toBe(true);
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(error).toHaveBeenCalled();
+    expect(ended).toBe(false);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ended).toBe(true);
+    expect(warn).toHaveBeenCalled();
+  } finally {
+    release();
+    await closing;
+    vi.useRealTimers();
+  }
+});
