@@ -453,14 +453,15 @@ const enUS = {
     allowed: 'Allowed',
     notAllowed: 'Not allowed',
     names: {
-      'hub-administrator': 'Administrator',
-      'hub-operator': 'Operator',
+      'hub-administrator': 'Platform Administrator',
+      'hub-operator': 'Application Administrator',
       'hub-viewer': 'Viewer (legacy)',
     },
     descriptions: {
-      'hub-administrator': 'Full access to applications and user management',
+      'hub-administrator':
+        'Manage all applications, publishing API Keys, and user permissions',
       'hub-operator':
-        'Create, configure, deploy, and operate your own applications',
+        'Manage applications you create and your own publishing API Keys',
       'hub-viewer':
         'Read-only access to permitted applications and runtime status',
     },

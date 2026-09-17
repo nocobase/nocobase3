@@ -77,3 +77,17 @@ export class ApiKeyService {
     });
   }
 }
+
+/** Remove database-backed user credentials in the caller's deletion transaction. */
+export async function removeUserApiKeys(
+  connection: DatabaseConnection,
+  userId: string,
+  configIds: readonly string[],
+): Promise<void> {
+  if (!configIds.length) return;
+  await connection.query
+    .deleteFrom('apikey')
+    .where('referenceId', '=', userId)
+    .where('configId', 'in', [...configIds])
+    .execute();
+}

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import configFingerprintMigration from '../database/migrations/202609160007_release_config_fingerprint.js';
 import removeDeploymentMode from '../database/migrations/202609160006_remove_deployment_mode.js';
 import publishingMigration from '../database/migrations/202609160005_release_publishing.js';
@@ -21,6 +22,7 @@ import type {
 } from '@nocobase/app-host/management';
 import {
   createDatabaseManager,
+  createMigrator,
   InMemoryCollectionMetadataStore,
   type DatabaseManager,
 } from '@nocobase/db';
@@ -52,6 +54,29 @@ describe('@nocobase/app-plugin-hub service', () => {
       metadataStore: new InMemoryCollectionMetadataStore(),
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
+    const authenticationDirectory =
+      '../../app-plugin-authentication/database/migrations';
+    await createMigrator({
+      database,
+      packageName: '@nocobase/app-plugin-authentication',
+      directory: fileURLToPath(
+        new URL(authenticationDirectory, import.meta.url),
+      ),
+    }).latest();
+    for (const id of ['alice', 'bob']) {
+      await database
+        .query()
+        .insertInto('user')
+        .values({
+          id,
+          name: id,
+          email: `${id}@example.com`,
+          emailVerified: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .execute();
+    }
     const connection = database.connection();
     await migration.up({
       builder: connection.builder,

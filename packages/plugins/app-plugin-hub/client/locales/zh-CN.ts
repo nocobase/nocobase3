@@ -415,13 +415,13 @@ const zhCN: HubResource = {
     allowed: '允许',
     notAllowed: '不允许',
     names: {
-      'hub-administrator': '管理员',
-      'hub-operator': '运维人员',
+      'hub-administrator': '平台管理员',
+      'hub-operator': '应用管理员',
       'hub-viewer': '查看者（历史角色）',
     },
     descriptions: {
-      'hub-administrator': '完整管理应用、运维操作和用户权限',
-      'hub-operator': '创建、配置、发布和运维自己创建的应用',
+      'hub-administrator': '管理全部应用、发布 API Key 和用户权限',
+      'hub-operator': '管理自己创建的应用及自己的发布 API Key',
       'hub-viewer': '仅可查看有权限的应用及运行状态',
     },
     groups: {

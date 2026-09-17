@@ -1,3 +1,4 @@
+import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
 import { encryptKey, decryptKey } from './key-secret.js';
 import type {
   ApiKeyService,
@@ -163,6 +164,18 @@ export class HubApiKeyService {
         await this.requirePermission(userId, appId, scope);
     }
     return this.database.transaction(async (connection) => {
+      await lockUserForAdministration(connection, userId);
+      const owner = await connection.query
+        .selectFrom('user')
+        .select('disabledAt')
+        .where('id', '=', userId)
+        .executeTakeFirst();
+      if (!owner || owner.disabledAt != null)
+        throw new HubError(
+          'The credential owner is unavailable.',
+          'INVALID_API_KEY',
+          401,
+        );
       const { key, secret } = await this.apiKeys
         .withConnection(connection)
         .create({

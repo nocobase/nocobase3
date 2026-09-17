@@ -10,6 +10,32 @@ export function hubApiKeyAuthentication(): BetterAuthPlugin[] {
     {
       id: 'hub-publishing-key-policy',
       hooks: {
+        after: [
+          {
+            matcher: (context) => context.path === '/api-key/create',
+            handler: createAuthMiddleware(async (context) => {
+              const created: unknown = context.context.returned;
+              if (!created || typeof created !== 'object') return;
+              const id: unknown = Reflect.get(created, 'id');
+              const referenceId: unknown = Reflect.get(created, 'referenceId');
+              if (typeof id !== 'string' || typeof referenceId !== 'string')
+                return;
+              // Recheck after persistence: a request authenticated before deletion
+              // must not leave a credential behind when it finishes afterward.
+              const user =
+                await context.context.internalAdapter.findUserById(referenceId);
+              if (user && Reflect.get(user, 'disabledAt') == null) return;
+              await context.context.adapter.deleteMany({
+                model: 'apikey',
+                where: [{ field: 'id', value: id }],
+              });
+              throw APIError.from('FORBIDDEN', {
+                code: 'ACCOUNT_DISABLED',
+                message: 'This account is disabled.',
+              });
+            }),
+          },
+        ],
         before: [
           {
             matcher: (context) =>

@@ -1,3 +1,6 @@
+import { removeUserApiKeys } from '@nocobase/app-plugin-api-keys/server';
+import { HUB_API_KEY_CONFIG_ID } from './api-key-auth.js';
+import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
 import { HUB_RELEASE_ACTIONS } from '../shared/permissions.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
@@ -151,17 +154,19 @@ export function createHubUserRoleScope(
       Promise.resolve([
         {
           value: 'hub-administrator',
-          label: 'Administrator',
+          label: 'Platform Administrator',
           labelI18nKey: 'roles.names.hub-administrator',
           labelI18nNs: '@nocobase/app-plugin-hub',
-          description: 'Manage applications, operations, users, and roles.',
+          description:
+            'Manage all applications, publishing API Keys, and user permissions',
         },
         {
           value: 'hub-operator',
-          label: 'Operator',
+          label: 'Application Administrator',
           labelI18nKey: 'roles.names.hub-operator',
           labelI18nNs: '@nocobase/app-plugin-hub',
-          description: 'Create, deploy, and operate your own applications.',
+          description:
+            'Manage applications you create and your own publishing API Keys',
         },
         {
           value: 'hub-viewer',
@@ -237,6 +242,45 @@ export function createHubUserRoleScope(
           permissionSets: [role],
         });
     },
+    onDelete: (userId, connection) =>
+      removeUserApiKeys(connection, userId, ['default', HUB_API_KEY_CONFIG_ID]),
+    async assertCanDelete(userId, actorId, connection) {
+      await lockAdministratorRole(connection);
+      const actor = await connection.query
+        .selectFrom('user')
+        .select('disabledAt')
+        .where('id', '=', actorId)
+        .executeTakeFirst();
+      if (
+        !actor ||
+        actor.disabledAt != null ||
+        (await currentHubRole(authorization, actorId, connection)) !==
+          HUB_ADMINISTRATOR
+      ) {
+        throw new UserRoleScopeError(
+          'HUB_ADMIN_REQUIRED',
+          'Only a platform administrator can delete users.',
+          409,
+        );
+      }
+      if (
+        (await currentHubRole(authorization, userId, connection)) ===
+        HUB_ADMINISTRATOR
+      )
+        await assertAdministratorCanBeRemoved(userId, connection);
+      await lockUserForAdministration(connection, userId);
+      const app = await connection.query
+        .selectFrom('hubApps')
+        .select('id')
+        .where('createdBy', '=', userId)
+        .executeTakeFirst();
+      if (app)
+        throw new UserRoleScopeError(
+          'USER_HAS_APPS',
+          'Transfer or delete this user’s applications before deleting the user.',
+          409,
+        );
+    },
     async assertCanDisable(userId, connection) {
       await lockAdministratorRole(connection);
       const current = await currentHubRole(authorization, userId, connection);
@@ -301,7 +345,7 @@ async function assertAdministratorCanBeRemoved(
   if (count <= 1) {
     throw new UserRoleScopeError(
       'LAST_HUB_ADMIN',
-      'The last enabled Hub Administrator cannot be disabled or assigned another role',
+      'The last active platform administrator cannot be deleted, disabled, or assigned another role',
       409,
     );
   }

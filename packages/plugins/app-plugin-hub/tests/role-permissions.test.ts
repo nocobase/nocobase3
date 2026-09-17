@@ -693,6 +693,7 @@ function createUserService(): UserManagementService {
     enable: vi.fn(() => Promise.resolve(user)),
     replaceRoleScope: vi.fn(() => Promise.resolve(user)),
     resetPassword: vi.fn(() => Promise.resolve()),
+    remove: vi.fn(() => Promise.resolve()),
     revokeSessions: vi.fn(() => Promise.resolve()),
   };
 }

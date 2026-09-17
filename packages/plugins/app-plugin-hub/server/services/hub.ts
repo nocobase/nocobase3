@@ -1,3 +1,4 @@
+import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
 import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { receiveArtifact, validateIdempotencyKey } from './artifact-upload.js';
@@ -374,10 +375,26 @@ export class DefaultHubService implements HubService {
       updatedAt: now,
     };
     try {
-      await this.query()
-        .insertInto('hubApps')
-        .values({ ...encodeApp(app), createdBy: createdBy ?? null })
-        .execute();
+      await this.options.database.transaction(async (connection) => {
+        if (createdBy) {
+          await lockUserForAdministration(connection, createdBy);
+          const owner = await connection.query
+            .selectFrom('user')
+            .select('disabledAt')
+            .where('id', '=', createdBy)
+            .executeTakeFirst();
+          if (!owner || owner.disabledAt != null)
+            throw new HubError(
+              'The application owner is unavailable.',
+              'APP_OWNER_UNAVAILABLE',
+              409,
+            );
+        }
+        await connection.query
+          .insertInto('hubApps')
+          .values({ ...encodeApp(app), createdBy: createdBy ?? null })
+          .execute();
+      });
     } catch (reason) {
       // A concurrent creator can claim the same ID after the initial check.
       if (await this.findApp(id)) {

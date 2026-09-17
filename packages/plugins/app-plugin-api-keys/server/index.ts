@@ -20,6 +20,7 @@ export type {
 } from '@better-auth/api-key';
 export {
   ApiKeyService,
+  removeUserApiKeys,
   type ServerApiKeySummary,
   type CreateServerApiKeyInput,
 } from './service.js';

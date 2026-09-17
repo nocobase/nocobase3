@@ -99,6 +99,7 @@ export const HUB_ROLE_CAPABILITIES: readonly HubRoleCapability[] = [
         'assign-role',
         'reset-password',
         'revoke-sessions',
+        'delete',
       ),
     ],
   },

@@ -46,3 +46,5 @@ pnpm --filter @nocobase/app-plugin-authentication typecheck
 pnpm --filter @nocobase/app-plugin-authentication test
 pnpm --filter @nocobase/app-plugin-authentication build
 ```
+
+用户管理 `remove(userId, actorId)` 在事务内永久停用并隐藏账号，保留 `deletedAt`、`deletedBy` 与原身份用于历史归属，删除登录账户和会话。删除前业务资源检查与 API Key 清理由上层生命周期服务负责；不可直接把底层方法暴露为无授权接口。已删除账号不能重新启用，用户名和邮箱仍保留。

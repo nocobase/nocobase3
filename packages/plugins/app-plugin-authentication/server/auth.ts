@@ -65,6 +65,8 @@ export class Auth {
         ...config.user,
         additionalFields: {
           ...config.user?.additionalFields,
+          deletedAt: { type: 'date', required: false, input: false },
+          deletedBy: { type: 'string', required: false, input: false },
           disabledAt: {
             type: 'date',
             required: false,
@@ -78,6 +80,30 @@ export class Auth {
           ...config.databaseHooks?.session,
           create: {
             ...configuredSessionCreate,
+            after: async (session, context) => {
+              await configuredSessionCreate?.after?.(session, context);
+              const user = context
+                ? await context.context.internalAdapter.findUserById(
+                    session.userId,
+                  )
+                : await connection.query
+                    .selectFrom('user')
+                    .select('disabledAt')
+                    .where('id', '=', session.userId)
+                    .executeTakeFirst();
+              if (!user || Reflect.get(user, 'disabledAt') != null) {
+                // A login already in flight may persist after user deletion.
+                // Remove its new session before returning it to the caller.
+                const adapter =
+                  context?.context.internalAdapter ??
+                  (await this.auth.$context).internalAdapter;
+                await adapter.deleteSession(session.token);
+                throw APIError.from('FORBIDDEN', {
+                  code: 'ACCOUNT_DISABLED',
+                  message: 'This account is disabled.',
+                });
+              }
+            },
             before: async (session, context) => {
               const configuredResult = await configuredSessionCreate?.before?.(
                 session,

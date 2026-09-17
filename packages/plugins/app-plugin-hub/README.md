@@ -27,7 +27,7 @@ a control-plane console. The Hub template uses
 `/apps`, `/users`, and `/roles`; the roles page is a read-only product view of
 the Hub-owned grants rather than the generic Permission Set editor.
 
-Hub offers two roles: `hub-administrator` and `hub-operator`. The protected `hub-viewer` Permission Set remains for existing read-only accounts, but cannot be newly assigned and is omitted from the role matrix. Existing Viewers retain their permissions until an administrator explicitly changes their role. Every management API checks a `hub.app`, `hub.host`, or `user` resource action on the server rather than checking a role name. Administrators manage applications and users, Operators manage application releases and runtime operations, can delete their own Apps after confirmation, and Viewers have read-only access without raw configuration or configuration templates. Existing System Administrators receive the Hub Administrator role during upgrade, but the two roles do not implicitly inherit from one another at runtime.
+Hub offers two roles: **Platform Administrator** (`hub-administrator`, 平台管理员) and **Application Administrator** (`hub-operator`, 应用管理员). These display names describe platform-wide management and management of applications created by the user, respectively; the role identifiers remain unchanged. The protected `hub-viewer` Permission Set remains for existing read-only accounts, but cannot be newly assigned and is omitted from the role matrix. Existing Viewers retain their permissions until an administrator explicitly changes their role. Every management API checks a `hub.app`, `hub.host`, or `user` resource action on the server rather than checking a role name. Administrators manage applications and users, Operators manage application releases and runtime operations, can delete their own Apps after confirmation, and Viewers have read-only access without raw configuration or configuration templates. Existing System Administrators receive the Hub Administrator role during upgrade, but the two roles do not implicitly inherit from one another at runtime.
 Application ownership is enforced on the server in addition to action grants. Hub Administrators can access all Apps. Operators and Viewers can access only Apps whose `createdBy` matches their authenticated user ID, subject to their existing action permissions; Viewers still cannot create or modify Apps. The server records the creator when an App is created and ignores client-supplied ownership. Catalog search, totals, pagination, detail APIs, publishing credentials, and Host deployment status use the same boundary. Existing Apps without reliable ownership remain visible only to Hub Administrators until their ownership is explicitly established; upgrading does not guess or reassign creators. This controls Hub management access, while each hosted App retains its own business-data authentication and authorization.
 
 The Hub template redirects its root and legacy `/hub` route to `/apps` and uses
@@ -119,7 +119,7 @@ Default applications provide `pnpm nocobase app upload` and `app deploy`. Set `H
 
 ```bash
 pnpm build --target linux-x64 --tar
-pnpm nocobase app upload --deploy --wait --json
+pnpm nocobase app upload --deploy --json
 pnpm nocobase app deploy --release-id <releaseId> --idempotency-key <ci-run-id> --wait --json
 ```
 
@@ -144,3 +144,7 @@ Configured uploads use `Content-Type: application/vnd.nocobase.release-upload.v1
 Application names may be repeated across users and edited in Settings by an authorized owner or Hub Administrator. Renaming preserves the App ID, URL, releases, configuration, and runtime. The creation form generates an editable ID with an eight-character random hexadecimal suffix; IDs remain globally unique because they identify shared URLs, deployment records, and storage paths. Manual ID conflicts return `APP_EXISTS` without disclosing another application's owner. Hub operation failures use the shared top-right notification host, including failures while a dialog is open; they preserve form input and keep technical details collapsed.
 
 Deployment commands (`app deploy` and `app upload --deploy`) wait for the final result by default. Use `--no-wait` to return after acceptance; acceptance does not mean deployment succeeded. Explicit `--wait` remains supported. Upload without `--deploy` only waits for the upload. `--timeout` defaults to 600 seconds; a timeout leaves the deployment outcome unconfirmed and does not cancel it.
+
+### Delete a Hub user
+
+Only Platform Administrators can delete users, after confirmation. Deleting the current user or the last enabled Platform Administrator is prohibited. Any App owned by the target blocks deletion until it is transferred or removed; deletion never removes Apps. Session/account cleanup and removal of the user's default and Hub publishing API Keys occur in one transaction. An inactive user identity, deletion time and actor remain for historical attribution. Application creation and publishing key creation lock and recheck the owner so a deleted user cannot acquire new resources. Existing users are not deleted by the upgrade migrations.
