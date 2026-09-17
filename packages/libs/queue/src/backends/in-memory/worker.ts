@@ -8,6 +8,7 @@ export class MemoryWorkerState {
   readonly locks: Map<string, MemoryLock> = new Map();
   readonly listeners: Set<() => void> = new Set();
   readonly stalled: Set<string> = new Set();
+  readonly due: Map<string, number> = new Map();
   nextStalledCheck: number = 0;
 
   notify(): void {
