@@ -28,7 +28,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && nocobase-db-manifests src/database dist/database",
+    "clean": "node scripts/clean-dist.mjs",
+    "build": "pnpm clean && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json",
     "test": "vitest run",
     "test:integration": "node scripts/test-integration.mjs",
@@ -41,13 +42,8 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@boringnode/queue": "catalog:",
-    "@nocobase/logging": "workspace:^",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/instrumentation": "^0.200.0",
     "bullmq": "catalog:",
-    "ioredis": "catalog:",
-    "knex": "catalog:"
+    "ioredis": "catalog:"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",

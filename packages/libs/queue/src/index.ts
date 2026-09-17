@@ -1,30 +1,25 @@
-export {
-  Job,
-  Locator,
+export { createQueueService } from './service.js';
+export { withChannel } from './consumer.js';
+export type {
+  ConsumeHandler,
+  PublishReceipt,
+  QueueConsumer,
   QueueManager,
-  Schedule,
-  Worker,
-} from '@boringnode/queue';
+  QueueProducer,
+  QueueService,
+  UnregisterHandler,
+} from './service.js';
 export type {
-  DispatchManyResult,
-  DispatchResult,
-  JobContext,
-  JobOptions,
-  RetryConfig,
-  WorkerCycle,
-} from '@boringnode/queue/types';
-export type {
-  NocoBaseQueueJobClass as JobClass,
-  NocoBaseQueueJobFactory as JobFactory,
+  Channel,
+  JobIdProducer,
+  PostgresConnectionOptions,
+  PublishOptions,
+  QueueBackendConnections,
+  QueueConnectionOptions,
+  QueueDefaults,
+  QueueLocalRuntimeOptions,
+  QueueOptions,
+  QueueOverrides,
+  QueueRuntimeOptions,
+  RateLimitOptions,
 } from './types.js';
-
-export * from './config.js';
-export * from './drivers.js';
-export * from './manager.js';
-export * from './types.js';
-
-export * from './database/index.js';
-
-export { createDatabaseQueueAdapterFactory } from './database-adapter.js';
-export type { DatabaseQueueAdapterOptions } from './database-adapter.js';
-export * from './service.js';

@@ -1,4 +1,17 @@
-import type { QueueConsumer } from './service.js';
+import type { ConsumeHandler, QueueConsumer } from './service.js';
+import type { Channel } from './types.js';
+
+export function withChannel<T = unknown>(
+  channels: Channel | readonly Channel[],
+  handler: ConsumeHandler<T>,
+): ConsumeHandler<T> {
+  const accepted = new Set(
+    typeof channels === 'string' ? [channels] : channels,
+  );
+  return async (channel, message, signal): Promise<void> => {
+    if (accepted.has(channel)) await handler(channel, message, signal);
+  };
+}
 
 export interface QueueHandlerRegistry extends QueueConsumer {
   size(): number;
