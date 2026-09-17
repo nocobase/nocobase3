@@ -293,4 +293,44 @@ describe('application-private queue service', () => {
       await closing;
     }
   });
+  it('closes a failed dynamic Worker immediately without closing its healthy producer', async () => {
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const memory = createInMemoryBackendFactory();
+    let workerClosed = 0;
+    let producerClosed = 0;
+    let workers = 0;
+    instance.registerBackend('memory-test', (name, options, metadata) => {
+      const backend = memory(name, options, metadata);
+      const close = backend.close.bind(backend);
+      if (metadata?.withBlockingConnection) {
+        workers++;
+        vi.spyOn(backend, 'waitUntilReady').mockRejectedValue(
+          new Error('readiness failed'),
+        );
+        vi.spyOn(backend, 'close').mockImplementation(async () => {
+          workerClosed++;
+          await close();
+        });
+      } else {
+        vi.spyOn(backend, 'close').mockImplementation(async () => {
+          producerClosed++;
+          await close();
+        });
+      }
+      return backend;
+    });
+    instance.producer('late');
+    await instance.setup();
+    instance.consumer('late').consume(async () => {});
+    await expect.poll(() => workerClosed).toBe(1);
+    expect(producerClosed).toBe(0);
+    await expect(
+      instance.producer('late').publish('event', {}),
+    ).resolves.toHaveProperty('jobId');
+    instance.consumer('late').consume(async () => {});
+    await Promise.resolve();
+    expect(workers).toBe(1);
+  });
 });
