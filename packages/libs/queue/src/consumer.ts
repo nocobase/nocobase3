@@ -2,6 +2,7 @@ import type { QueueConsumer } from './service.js';
 
 export interface QueueHandlerRegistry extends QueueConsumer {
   size(): number;
+  settle(): Promise<void>;
   dispatch(
     channel: string,
     message: unknown,
@@ -19,8 +20,12 @@ export function createQueueHandlerRegistry(): QueueHandlerRegistry {
     pending: Set<Promise<void>>;
   }
   const registrations = new Set<Registration>();
+  const active = new Set<Promise<void>>();
   return {
     size: (): number => registrations.size,
+    async settle(): Promise<void> {
+      await Promise.allSettled([...active]);
+    },
     consume<T>(
       handler: (
         channel: string,
@@ -47,6 +52,11 @@ export function createQueueHandlerRegistry(): QueueHandlerRegistry {
           registration.invoke(channel, message, signal),
         );
         registration.pending.add(invocation);
+        active.add(invocation);
+        void invocation.then(
+          () => active.delete(invocation),
+          () => active.delete(invocation),
+        );
         void invocation.then(
           () => registration.pending.delete(invocation),
           () => registration.pending.delete(invocation),
