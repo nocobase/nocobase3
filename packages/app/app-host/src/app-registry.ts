@@ -398,9 +398,9 @@ export class AppRuntimeRegistry {
     });
   }
 
-  // This remains stop-first until queue managers and job registries are
-  // isolated per App Runtime. Starting both runtimes concurrently can make
-  // @boringnode/queue process-level state cross runtime boundaries.
+  // Preserve the stop-first replacement contract and rollback ordering.
+  // App-scoped queue handlers no longer require this ordering for isolation;
+  // concurrent rolling replacement needs a separate lifecycle design.
   private async replaceRuntimeStopFirst(options: {
     id: string;
     currentDefinition: AppDefinition | undefined;

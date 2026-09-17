@@ -9,6 +9,13 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppConfig } from '@nocobase/app-server/config';
+import { createConfigPaths } from '@nocobase/app-server/config';
+import { Application } from '@nocobase/app-server';
+import { LoggingProvider } from '@nocobase/app-server/logging';
+import {
+  QueueServiceProvider,
+  queueServiceToken,
+} from '@nocobase/app-server/queue';
 
 import { AppRuntimeRegistry } from '../dist/app-registry.js';
 
@@ -40,6 +47,58 @@ function createRegistry(events: string[]): AppRuntimeRegistry {
 }
 
 describe('AppRuntimeRegistry runtime replacement', () => {
+  it('isolates live application queues when another runtime is destroyed', async () => {
+    const apps = new Map<string, Application>();
+    const received = new Map<string, unknown[]>();
+    const registry = new AppRuntimeRegistry({
+      startEvictionLoop: false,
+      resolveFactory: () => async (scope) => {
+        const config = new AppConfig();
+        await config.loadAll();
+        config.mergeDefaults({
+          app: { name: scope.id, publicBasePath: scope.basePath },
+          logging: { level: 'silent', pretty: false },
+          queue: { environment: 'develop' },
+        });
+        const app = new Application({
+          config,
+          paths: createConfigPaths({ rootDir: '/tmp/queue-host-test' }),
+        });
+        app.addServiceProvider(LoggingProvider);
+        app.addServiceProvider(QueueServiceProvider);
+        await app.start();
+        const queue = app.container.resolve(queueServiceToken);
+        const messages: unknown[] = [];
+        received.set(scope.id, messages);
+        const off = queue
+          .consumer('same-name')
+          .consume(async (_channel, message) => {
+            messages.push(message);
+          });
+        scope.registerDisposer('application queue', async () => {
+          await off();
+          await app.shutdown();
+        });
+        apps.set(scope.id, app);
+        return { fetch: app.fetch, config };
+      },
+    });
+    registries.push(registry);
+    await registry.create('first');
+    await registry.create('second');
+    const first = apps.get('first')!.container.resolve(queueServiceToken);
+    const second = apps.get('second')!.container.resolve(queueServiceToken);
+    await first.producer('same-name').publish('task', 1);
+    await second.producer('same-name').publish('task', 2);
+    await expect
+      .poll(() => [received.get('first'), received.get('second')])
+      .toEqual([[1], [2]]);
+    await registry.destroy('first');
+    expect(() => first.producer('same-name')).toThrow('shutting down');
+    await second.producer('same-name').publish('task', 3);
+    await expect.poll(() => received.get('second')).toEqual([2, 3]);
+  });
+
   it('reloads only the active App configuration without replacing its runtime', async () => {
     const config = new AppConfig();
     const reload = vi
