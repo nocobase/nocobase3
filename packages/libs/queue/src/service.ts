@@ -93,6 +93,8 @@ interface QueueEntry {
   worker?: ServiceWorker;
   initializeWorker?: () => Promise<void>;
   workerInitialization?: Promise<void>;
+  initializationCancelled?: boolean;
+  runtimeInitialization?: Promise<void>;
   configurationSettlement: () => Promise<void>;
 }
 
@@ -286,7 +288,36 @@ export function createQueueService(
     if (!setupPromise) throw new Error('Queue is not ready');
     await setupPromise;
     if (!ready || stopped) throw new Error('Queue is not ready');
-    await initializeEntry(name, current);
+    current.runtimeInitialization ??= (async (): Promise<void> => {
+      const initialization = initializeEntry(name, current);
+      if (await settlesWithin(initialization, timeouts.setupTimeoutMs)) return;
+      current.initializationCancelled = true;
+      const timeout = new Error(
+        `Queue ${name} initialization deadline exceeded`,
+      );
+      const cleanupDeadline = performance.now() + 5000;
+      const cleanup = closeEntries([current]);
+      if (!(await settlesWithin(cleanup, 5000)))
+        throw new AggregateError(
+          [timeout, new Error('Queue cleanup remains unresolved')],
+          'Queue initialization failed',
+        );
+      if (
+        !(await settlesWithin(
+          initialization.then(
+            () => {},
+            () => {},
+          ),
+          Math.max(0, cleanupDeadline - performance.now()),
+        ))
+      )
+        throw new AggregateError(
+          [timeout, new Error('Queue cancellation is unconfirmed')],
+          'Queue initialization failed',
+        );
+      throw timeout;
+    })();
+    await current.runtimeInitialization;
     if (stopped) throw new Error('Queue service is shutting down');
   }
 
@@ -373,7 +404,8 @@ export function createQueueService(
           ),
         );
         await current.queue.waitUntilReady();
-        if (stopped) throw new Error('Queue initialization was cancelled');
+        if (stopped || current.initializationCancelled)
+          throw new Error('Queue initialization was cancelled');
         if (config.queueBackend === 'inMemory')
           dependencies.onInMemoryQueueInitialized?.({
             namespace: config.namespace,
