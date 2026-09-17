@@ -1,32 +1,23 @@
-import {
-  Job,
-  type JobOptions,
-  type NocoBaseQueueDispatchableJobClass,
-} from '@nocobase/queue';
-
 import type { ChannelManager } from './channel-manager.js';
+
+export const NOTIFICATION_QUEUE_NAME = 'notification';
+export const NOTIFICATION_DELIVERY_CHANNEL = 'NotificationDelivery';
 
 export interface DeliveryJobPayload {
   readonly deliveryId: string;
 }
 
-export type DeliveryJobClass = NocoBaseQueueDispatchableJobClass<
-  Job<DeliveryJobPayload>
->;
+export type DeliveryHandler = (
+  channel: string,
+  payload: DeliveryJobPayload,
+) => Promise<void>;
 
-export function createDeliveryJob(
-  channelManager: ChannelManager,
-): DeliveryJobClass {
-  class DeliveryJob extends Job<DeliveryJobPayload> {
-    static options: JobOptions = {
-      name: 'NotificationDelivery',
-      queue: 'default',
-    };
-
-    async execute(): Promise<void> {
-      await channelManager.send(this.payload.deliveryId);
-    }
-  }
-
-  return DeliveryJob;
+/** Captures only this application's delivery manager, never a global job locator. */
+export function createDeliveryHandler(
+  channelManager: Pick<ChannelManager, 'send'>,
+): DeliveryHandler {
+  return async (channel, payload): Promise<void> => {
+    if (channel !== NOTIFICATION_DELIVERY_CHANNEL) return;
+    await channelManager.send(payload.deliveryId);
+  };
 }

@@ -4,9 +4,10 @@ import {
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
-import { queueManagerToken } from '@nocobase/app-server/queue';
+import { queueServiceToken } from '@nocobase/app-server/queue';
 import { createLogger, type Logging } from '@nocobase/logging';
-import type { NocoBaseQueueManager } from '@nocobase/queue';
+import { createQueueService } from '@nocobase/queue';
+import { randomUUID } from 'node:crypto';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -68,18 +69,19 @@ describe('@nocobase/app-plugin-notification provider', () => {
     const activate = vi.spyOn(notification, 'activate');
     const start = vi.spyOn(notification, 'start');
     const close = vi.spyOn(notification, 'close');
-    const registerJob = vi.spyOn(
-      container.resolve(queueManagerToken),
-      'registerJob',
-    );
+    const queue = container.resolve(queueServiceToken);
+    const consume = vi.spyOn(queue.consumer('notification'), 'consume');
 
     await provider.boot();
+    expect(consume).toHaveBeenCalledOnce();
+    await queue.setup();
     await provider.start();
     await provider.shutdown();
 
     expect(activate).toHaveBeenCalledOnce();
     expect(start).not.toHaveBeenCalled();
-    expect(registerJob).toHaveBeenCalledOnce();
+    expect(consume).toHaveBeenCalledOnce();
+    await queue.shutdown();
     expect(close).toHaveBeenCalledOnce();
     const authorization = container.resolve(authorizationToken);
     expect(authorization.resources.add).toHaveBeenCalledOnce();
@@ -136,9 +138,10 @@ function createContainer(withDatabase: boolean): ServiceContainer {
   container.instance(loggingToken, {
     getLogger: () => createLogger({ level: 'silent' }),
   } as Logging);
-  container.instance(queueManagerToken, {
-    registerJob: vi.fn(),
-  } as unknown as NocoBaseQueueManager);
+  container.instance(
+    queueServiceToken,
+    createQueueService({ namespace: `notification-provider-${randomUUID()}` }),
+  );
   container.instance(authorizationToken, {
     resources: { add: vi.fn() },
   } as unknown as AppAuthorization);

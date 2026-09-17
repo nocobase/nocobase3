@@ -1,6 +1,6 @@
 import type { Logger } from '@nocobase/logging';
 import type { DatabaseManager } from '@nocobase/db';
-import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { QueueService } from '@nocobase/queue';
 import { AppI18nError } from '@nocobase/i18n/server';
 import type { NotificationDeliveryStatus, NotificationStore } from './store.js';
 import type { NotificationRegistry } from './registry.js';
@@ -450,7 +450,7 @@ export interface NotificationManagerOptions<
   },
 > {
   readonly database: DatabaseManager;
-  readonly queue: NocoBaseQueueManager;
+  readonly queue: QueueService;
   readonly logger: Logger;
   readonly config: NotificationConfig;
   readonly registry?: NotificationRegistry;

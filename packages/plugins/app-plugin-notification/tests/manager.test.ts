@@ -1,5 +1,6 @@
 import { createLogger, type DestinationStream } from '@nocobase/logging';
-import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
+import { randomUUID } from 'node:crypto';
+import { createQueueService } from '@nocobase/queue';
 import type { DatabaseManager } from '@nocobase/db';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +11,7 @@ import type {
 } from '../server/store.js';
 import type {
   NotificationProviderCapabilities,
+  NotificationStatusSnapshot,
   NotificationProviderSendInput,
   ProviderSendResult,
 } from '../server/types.js';
@@ -18,7 +20,10 @@ import { FakeNotificationStore } from './helpers/fake-notification-store.js';
 
 describe('NotificationManager registration', () => {
   it('does not activate persistence or queue resources without enabled Channels', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const store = new FakeNotificationStore();
     const listReady = vi.spyOn(store, 'listReady');
     const manager = createNotificationManager({
@@ -33,11 +38,14 @@ describe('NotificationManager registration', () => {
 
     expect(listReady).not.toHaveBeenCalled();
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('closes Providers when a later Provider fails during startup', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const close = vi.fn(async () => undefined);
     const manager = createNotificationManager({
@@ -92,14 +100,17 @@ describe('NotificationManager registration', () => {
     await expect(manager.start()).rejects.toThrow('startup failed');
     expect(close).toHaveBeenCalledOnce();
 
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('emits structured lifecycle logs without notification content', async () => {
     const output = createMemoryDestination();
     const resolvedProviders: object[] = [];
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const manager = createNotificationManager({
       database,
@@ -160,6 +171,7 @@ describe('NotificationManager registration', () => {
       channels: ['email'],
       content: { title: 'private subject', body: 'private body' },
     });
+    await waitForTerminalNotification(manager, result.notificationId);
     const details = await manager.logs.get(result.notificationId);
     expect(resolvedProviders).toEqual([{ name: 'secondary', type: 'fake' }]);
     expect(details?.log).not.toHaveProperty('messageSnapshot');
@@ -200,12 +212,15 @@ describe('NotificationManager registration', () => {
     expect(JSON.stringify(records)).not.toContain('private@example.com');
     expect(JSON.stringify(records)).not.toContain('private subject');
 
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('selects a non-primary Provider by name with the default single strategy', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const store = new FakeNotificationStore();
     const manager = createNotificationManager({
@@ -269,21 +284,26 @@ describe('NotificationManager registration', () => {
       },
       content: { body: 'Review it.' },
     });
-    await expect(store.listDeliveries(result.notificationId)).resolves.toEqual([
-      expect.objectContaining({
-        providerName: 'secondary',
-        status: 'accepted',
-        recipientSnapshot: { providerName: 'secondary' },
-      }),
-    ]);
+    await expect
+      .poll(() => store.listDeliveries(result.notificationId))
+      .toEqual([
+        expect.objectContaining({
+          providerName: 'secondary',
+          status: 'accepted',
+          recipientSnapshot: { providerName: 'secondary' },
+        }),
+      ]);
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('routes to all enabled Providers as independent Deliveries', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const store = new FakeNotificationStore();
     const send = vi.fn(async () => ({ status: 'accepted' }) as const);
@@ -337,6 +357,7 @@ describe('NotificationManager registration', () => {
       routing: { im: { providers: { strategy: 'all' } } },
       content: { body: 'Send it everywhere.' },
     });
+    await waitForTerminalNotification(manager, result.notificationId);
     const deliveries = await store.listDeliveries(result.notificationId);
 
     expect(deliveries).toEqual([
@@ -382,24 +403,27 @@ describe('NotificationManager registration', () => {
       },
       content: { body: 'Send it to the selected Provider.' },
     });
-    await expect(
-      store.listDeliveries(selectedResult.notificationId),
-    ).resolves.toEqual([
-      expect.objectContaining({
-        providerName: 'dingtalk',
-        providerType: 'dingtalk-webhook',
-        status: 'accepted',
-      }),
-    ]);
+    await expect
+      .poll(() => store.listDeliveries(selectedResult.notificationId))
+      .toEqual([
+        expect.objectContaining({
+          providerName: 'dingtalk',
+          providerType: 'dingtalk-webhook',
+          status: 'accepted',
+        }),
+      ]);
     expect(send).toHaveBeenCalledTimes(3);
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('rejects an explicitly routed Provider that is not enabled', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const manager = createNotificationManager({
       database,
@@ -463,12 +487,15 @@ describe('NotificationManager registration', () => {
     );
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('expands shared content across recipients and Channels', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const store = new FakeNotificationStore();
     const manager = createNotificationManager({
@@ -543,6 +570,7 @@ describe('NotificationManager registration', () => {
       content: { title: 'Approval complete', body: 'Review the result.' },
       channelOverrides: { email: { title: 'Email subject' } },
     });
+    await waitForTerminalNotification(manager, result.notificationId);
     const deliveries = await store.listDeliveries(result.notificationId);
 
     expect(deliveries).toHaveLength(4);
@@ -581,10 +609,13 @@ describe('NotificationManager registration', () => {
       channels: ['in-app', 'email'],
       content: { body: 'Mixed recipient support.' },
     });
+    await waitForTerminalNotification(manager, partialResult.notificationId);
     const partialDeliveries = await store.listDeliveries(
       partialResult.notificationId,
     );
-    expect(partialResult.status).toBe('partial');
+    expect(
+      (await manager.getNotification(partialResult.notificationId))?.status,
+    ).toBe('partial');
     expect(partialDeliveries).toEqual([
       expect.objectContaining({
         channel: 'in-app',
@@ -666,12 +697,15 @@ describe('NotificationManager registration', () => {
     ]);
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('registers Channel and Provider definitions independently', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const manager = createNotificationManager({
       database,
@@ -726,12 +760,15 @@ describe('NotificationManager registration', () => {
     ).not.toThrow();
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('rejects duplicate Provider definitions within one Channel', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const manager = createNotificationManager({
       database,
@@ -753,12 +790,15 @@ describe('NotificationManager registration', () => {
       manager.registry.registerProvider('email', definition),
     ).toThrow('already registered for Channel "email"');
 
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('rejects a Provider Runtime type that differs from its config', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const manager = createNotificationManager({
       database,
@@ -802,12 +842,15 @@ describe('NotificationManager registration', () => {
     await expect(manager.start()).rejects.toThrow(
       'must match configured type "configured"',
     );
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('can retry start after reconciliation fails without retaining Providers', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const database = await createNotificationTestDatabase();
     const store = new FlakyReconcileStore();
     const close = vi.fn(async (): Promise<void> => undefined);
@@ -867,13 +910,13 @@ describe('NotificationManager registration', () => {
     await manager.close();
     expect(close).toHaveBeenCalledTimes(2);
 
-    await queue.close();
+    await queue.shutdown();
     await database.destroy();
   });
 
   it('deduplicates repeated sends and rejects reuse with different content', async () => {
     const send = vi.fn(async () => ({ status: 'accepted' }) as const);
-    const { manager, queue } = createEmailManagerHarness({ send });
+    const { manager, queue } = await createEmailManagerHarness({ send });
     const input = {
       idempotencyKey: 'order-won:42:user-7:email',
       to: { type: 'email', address: 'buyer@example.com' } as const,
@@ -882,6 +925,7 @@ describe('NotificationManager registration', () => {
     };
 
     const first = await manager.send(input);
+    await waitForTerminalNotification(manager, first.notificationId);
     const repeated = await manager.send(input);
 
     expect(first.deduplicated).toBe(false);
@@ -907,12 +951,12 @@ describe('NotificationManager registration', () => {
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_KEY_CONFLICT' });
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('derives a self-consistent status snapshot from one Delivery read', async () => {
     const store = new StaleLogStatusNotificationStore();
-    const { manager, queue } = createEmailManagerHarness({
+    const { manager, queue } = await createEmailManagerHarness({
       store,
       send: async () => ({ status: 'accepted' }),
     });
@@ -924,21 +968,21 @@ describe('NotificationManager registration', () => {
       content: { body: 'Consistent status.' },
     });
 
-    await expect(
-      manager.getNotification(sent.notificationId),
-    ).resolves.toMatchObject({
-      status: 'completed',
-      terminal: true,
-      summary: { accepted: 1, pending: 0 },
-      deliveries: [{ status: 'accepted' }],
-    });
+    await expect
+      .poll(() => manager.getNotification(sent.notificationId))
+      .toMatchObject({
+        status: 'completed',
+        terminal: true,
+        summary: { accepted: 1, pending: 0 },
+        deliveries: [{ status: 'accepted' }],
+      });
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('emits process-local status events without awaiting listener work', async () => {
-    const { manager, queue } = createEmailManagerHarness({
+    const { manager, queue } = await createEmailManagerHarness({
       send: async () => ({ status: 'accepted' }),
     });
     const listener = vi.fn(async () => new Promise<void>(() => undefined));
@@ -953,9 +997,15 @@ describe('NotificationManager registration', () => {
       channels: ['email'],
       content: { body: 'Status event.' },
     });
-    await vi.waitFor(() => expect(listener).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'completed', terminal: true }),
+      ),
+    );
 
-    expect(result.status).toBe('completed');
+    expect((await manager.getNotification(result.notificationId))?.status).toBe(
+      'completed',
+    );
     expect(listener).toHaveBeenCalledWith(
       expect.objectContaining({
         idempotencyKey: 'status-event-1',
@@ -964,7 +1014,7 @@ describe('NotificationManager registration', () => {
     );
     unsubscribe();
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('does not emit an older status snapshot after a newer one', async () => {
@@ -979,13 +1029,16 @@ describe('NotificationManager registration', () => {
         error: { message: 'rejected', category: 'provider' },
       })
       .mockResolvedValueOnce({ status: 'accepted' });
-    const { manager, queue } = createEmailManagerHarness({ send, store });
+    const { manager, queue } = await createEmailManagerHarness({ send, store });
     const sent = await manager.send({
       idempotencyKey: 'status-event-order-1',
       to: { type: 'email', address: 'buyer@example.com' },
       channels: ['email'],
       content: { body: 'Ordered status event.' },
     });
+    await expect
+      .poll(() => manager.getNotification(sent.notificationId))
+      .toMatchObject({ status: 'failed', terminal: true });
     const gate = store.delayNextLogRead();
     const statuses: string[] = [];
     const unsubscribe = manager.onStatusChanged(
@@ -1007,7 +1060,7 @@ describe('NotificationManager registration', () => {
     expect(statuses.at(-1)).toBe('completed');
     unsubscribe();
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('retries terminal failed Deliveries and records the retry resolution', async () => {
@@ -1021,7 +1074,7 @@ describe('NotificationManager registration', () => {
         error: { message: 'rejected', category: 'provider' },
       })
       .mockResolvedValueOnce({ status: 'accepted' });
-    const { manager, queue, store } = createEmailManagerHarness({ send });
+    const { manager, queue, store } = await createEmailManagerHarness({ send });
     const sent = await manager.send({
       idempotencyKey: 'retry-failed-1',
       to: { type: 'email', address: 'buyer@example.com' },
@@ -1029,7 +1082,10 @@ describe('NotificationManager registration', () => {
       content: { body: 'Retry failure.' },
     });
 
-    expect(sent.deliveries[0]).toMatchObject({
+    expect(
+      (await waitForTerminalNotification(manager, sent.notificationId))
+        .deliveries[0],
+    ).toMatchObject({
       status: 'failed',
       retry: { allowed: true, mode: 'safe' },
     });
@@ -1042,12 +1098,13 @@ describe('NotificationManager registration', () => {
       code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
       message: expect.stringContaining('reason'),
     });
-    await expect(
-      manager.retryDelivery({
-        deliveryId: sent.deliveries[0]!.id,
-        reason: 'Retry after correcting the terminal failure.',
-      }),
-    ).resolves.toMatchObject({ status: 'accepted', attemptCount: 2 });
+    await manager.retryDelivery({
+      deliveryId: sent.deliveries[0]!.id,
+      reason: 'Retry after correcting the terminal failure.',
+    });
+    await expect
+      .poll(() => manager.store.getDelivery(sent.deliveries[0]!.id))
+      .toMatchObject({ status: 'accepted', attemptCount: 2 });
     await expect(
       store.listAttempts(sent.deliveries[0]!.id),
     ).resolves.toMatchObject([
@@ -1059,7 +1116,7 @@ describe('NotificationManager registration', () => {
     ]);
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('requires a reason before retrying an unsafe unknown Delivery', async () => {
@@ -1072,7 +1129,7 @@ describe('NotificationManager registration', () => {
         error: { message: 'connection lost', category: 'network' },
       })
       .mockResolvedValueOnce({ status: 'accepted' });
-    const { manager, queue, store } = createEmailManagerHarness({ send });
+    const { manager, queue, store } = await createEmailManagerHarness({ send });
     const sent = await manager.send({
       idempotencyKey: 'retry-unknown-unsafe-1',
       to: { type: 'email', address: 'buyer@example.com' },
@@ -1081,7 +1138,10 @@ describe('NotificationManager registration', () => {
     });
     const deliveryId = sent.deliveries[0]!.id;
 
-    expect(sent.deliveries[0]).toMatchObject({
+    expect(
+      (await waitForTerminalNotification(manager, sent.notificationId))
+        .deliveries[0],
+    ).toMatchObject({
       status: 'unknown',
       retry: {
         allowed: true,
@@ -1093,13 +1153,13 @@ describe('NotificationManager registration', () => {
     ).rejects.toMatchObject({
       code: 'NOTIFICATION_DELIVERY_RETRY_NOT_ALLOWED',
     });
-    await expect(
-      manager.retryDelivery({
-        deliveryId,
-        reason:
-          'The business owner prefers a possible duplicate to an omission.',
-      }),
-    ).resolves.toMatchObject({ status: 'accepted', attemptCount: 2 });
+    await manager.retryDelivery({
+      deliveryId,
+      reason: 'The business owner prefers a possible duplicate to an omission.',
+    });
+    await expect
+      .poll(() => manager.store.getDelivery(deliveryId))
+      .toMatchObject({ status: 'accepted', attemptCount: 2 });
     await expect(store.listAttempts(deliveryId)).resolves.toMatchObject([
       { sequence: 1 },
       {
@@ -1109,7 +1169,7 @@ describe('NotificationManager registration', () => {
     ]);
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('safely retries an unknown Delivery when the Provider reuses deliveryId', async () => {
@@ -1125,7 +1185,7 @@ describe('NotificationManager registration', () => {
     const capabilities = {
       idempotency: { supported: true },
     } as const satisfies NotificationProviderCapabilities;
-    const { manager, queue } = createEmailManagerHarness({
+    const { manager, queue } = await createEmailManagerHarness({
       send,
       capabilities,
     });
@@ -1137,23 +1197,27 @@ describe('NotificationManager registration', () => {
     });
     const deliveryId = sent.deliveries[0]!.id;
 
-    expect(sent.deliveries[0]?.retry).toMatchObject({
+    expect(
+      (await waitForTerminalNotification(manager, sent.notificationId))
+        .deliveries[0]?.retry,
+    ).toMatchObject({
       allowed: true,
       mode: 'safe',
     });
-    await expect(
-      manager.retryDelivery({
-        deliveryId,
-        reason: 'Retry within the Provider idempotency window.',
-      }),
-    ).resolves.toMatchObject({ status: 'accepted' });
+    await manager.retryDelivery({
+      deliveryId,
+      reason: 'Retry within the Provider idempotency window.',
+    });
+    await expect
+      .poll(() => manager.store.getDelivery(deliveryId))
+      .toMatchObject({ status: 'accepted' });
     expect(send.mock.calls.map(([input]) => input.deliveryId)).toEqual([
       deliveryId,
       deliveryId,
     ]);
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('does not extend a bounded Provider idempotency window on each retry', async () => {
@@ -1168,7 +1232,7 @@ describe('NotificationManager registration', () => {
         status: 'submission_unknown',
         error: { message: 'response lost', category: 'network' },
       });
-    const { manager, queue } = createEmailManagerHarness({
+    const { manager, queue } = await createEmailManagerHarness({
       send,
       store,
       capabilities: {
@@ -1186,13 +1250,15 @@ describe('NotificationManager registration', () => {
     });
     const deliveryId = sent.deliveries[0]!.id;
 
+    await waitForTerminalNotification(manager, sent.notificationId);
     store.setNow('2026-09-01T23:00:00.000Z');
-    await expect(
-      manager.retryDelivery({
-        deliveryId,
-        reason: 'Retry within the Provider idempotency window.',
-      }),
-    ).resolves.toMatchObject({ status: 'unknown', attemptCount: 2 });
+    await manager.retryDelivery({
+      deliveryId,
+      reason: 'Retry within the Provider idempotency window.',
+    });
+    await expect
+      .poll(() => manager.store.getDelivery(deliveryId))
+      .toMatchObject({ status: 'unknown', attemptCount: 2 });
     store.setNow('2026-09-02T01:00:00.000Z');
 
     await expect(
@@ -1210,7 +1276,7 @@ describe('NotificationManager registration', () => {
     expect(send).toHaveBeenCalledTimes(2);
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('submits an accepted-risk retry when its Provider idempotency window expires during preparation', async () => {
@@ -1227,7 +1293,7 @@ describe('NotificationManager registration', () => {
       })
       .mockResolvedValueOnce({ status: 'accepted' });
     let prepareCount = 0;
-    const { manager, queue } = createEmailManagerHarness({
+    const { manager, queue } = await createEmailManagerHarness({
       send,
       store,
       prepare(message) {
@@ -1249,17 +1315,19 @@ describe('NotificationManager registration', () => {
       content: { body: 'Slow preparation.' },
     });
     const deliveryId = sent.deliveries[0]!.id;
+    await waitForTerminalNotification(manager, sent.notificationId);
     store.setNow('2026-09-01T00:00:00.900Z');
 
-    await expect(
-      manager.retryDelivery({
-        deliveryId,
-        reason: 'Retry while the Provider idempotency window is active.',
-      }),
-    ).resolves.toMatchObject({
-      status: 'accepted',
-      attemptCount: 2,
+    await manager.retryDelivery({
+      deliveryId,
+      reason: 'Retry while the Provider idempotency window is active.',
     });
+    await expect
+      .poll(() => manager.store.getDelivery(deliveryId))
+      .toMatchObject({
+        status: 'accepted',
+        attemptCount: 2,
+      });
     expect(send).toHaveBeenCalledTimes(2);
     await expect(store.listAttempts(deliveryId)).resolves.toMatchObject([
       { sequence: 1, retryResolution: undefined },
@@ -1279,7 +1347,7 @@ describe('NotificationManager registration', () => {
     ]);
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('rechecks Provider idempotency after persisting the retry Attempt', async () => {
@@ -1296,7 +1364,7 @@ describe('NotificationManager registration', () => {
         error: { message: 'response lost', category: 'network' },
       })
       .mockResolvedValueOnce({ status: 'accepted' });
-    const { manager, queue } = createEmailManagerHarness({
+    const { manager, queue } = await createEmailManagerHarness({
       send,
       store,
       capabilities: {
@@ -1313,14 +1381,16 @@ describe('NotificationManager registration', () => {
       content: { body: 'Slow persistence.' },
     });
     const deliveryId = sent.deliveries[0]!.id;
+    await waitForTerminalNotification(manager, sent.notificationId);
     store.setNow('2026-09-01T00:00:00.900Z');
 
-    await expect(
-      manager.retryDelivery({
-        deliveryId,
-        reason: 'Retry while the Provider idempotency window is active.',
-      }),
-    ).resolves.toMatchObject({ status: 'accepted', attemptCount: 2 });
+    await manager.retryDelivery({
+      deliveryId,
+      reason: 'Retry while the Provider idempotency window is active.',
+    });
+    await expect
+      .poll(() => manager.store.getDelivery(deliveryId))
+      .toMatchObject({ status: 'accepted', attemptCount: 2 });
     expect(send).toHaveBeenCalledTimes(2);
     await expect(store.listAttempts(deliveryId)).resolves.toMatchObject([
       { sequence: 1, retryResolution: undefined },
@@ -1334,7 +1404,7 @@ describe('NotificationManager registration', () => {
     ]);
 
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('does not infer idempotency for an old unknown attempt from new Provider capabilities', async () => {
@@ -1343,20 +1413,23 @@ describe('NotificationManager registration', () => {
       status: 'submission_unknown',
       error: { message: 'response lost', category: 'network' },
     }));
-    const first = createEmailManagerHarness({ send: firstSend, store });
+    const first = await createEmailManagerHarness({ send: firstSend, store });
     const sent = await first.manager.send({
       idempotencyKey: 'retry-unknown-capability-upgrade-1',
       to: { type: 'email', address: 'buyer@example.com' },
       channels: ['email'],
       content: { body: 'Capability changes after submission.' },
     });
+    await expect
+      .poll(() => first.manager.getNotification(sent.notificationId))
+      .toMatchObject({ status: 'unknown', terminal: true });
     await first.manager.close();
-    await first.queue.close();
+    await first.queue.shutdown();
 
     const upgradedSend = vi.fn(async (): Promise<ProviderSendResult> => ({
       status: 'accepted',
     }));
-    const upgraded = createEmailManagerHarness({
+    const upgraded = await createEmailManagerHarness({
       send: upgradedSend,
       store,
       capabilities: {
@@ -1379,12 +1452,12 @@ describe('NotificationManager registration', () => {
     expect(upgradedSend).not.toHaveBeenCalled();
 
     await upgraded.manager.close();
-    await upgraded.queue.close();
+    await upgraded.queue.shutdown();
   });
 
   it('does not use persisted idempotency evidence after the Provider drops that capability', async () => {
     const store = new FakeNotificationStore();
-    const first = createEmailManagerHarness({
+    const first = await createEmailManagerHarness({
       store,
       send: async () => ({
         status: 'submission_unknown',
@@ -1400,13 +1473,19 @@ describe('NotificationManager registration', () => {
       channels: ['email'],
       content: { body: 'Capability removed after submission.' },
     });
+    await expect
+      .poll(() => first.manager.getNotification(sent.notificationId))
+      .toMatchObject({ status: 'unknown', terminal: true });
     await first.manager.close();
-    await first.queue.close();
+    await first.queue.shutdown();
 
     const currentSend = vi.fn(async (): Promise<ProviderSendResult> => ({
       status: 'accepted',
     }));
-    const current = createEmailManagerHarness({ send: currentSend, store });
+    const current = await createEmailManagerHarness({
+      send: currentSend,
+      store,
+    });
 
     await expect(
       current.manager.getNotification(sent.notificationId),
@@ -1423,11 +1502,28 @@ describe('NotificationManager registration', () => {
     expect(currentSend).not.toHaveBeenCalled();
 
     await current.manager.close();
-    await current.queue.close();
+    await current.queue.shutdown();
   });
 });
 
-function createEmailManagerHarness(input: {
+async function waitForTerminalNotification(
+  manager: {
+    getNotification(
+      id: string,
+    ): Promise<NotificationStatusSnapshot | undefined>;
+  },
+  notificationId: string,
+): Promise<NotificationStatusSnapshot> {
+  return vi.waitFor(async () => {
+    const snapshot = await manager.getNotification(notificationId);
+    if (!snapshot)
+      throw new Error(`Notification "${notificationId}" was not found.`);
+    expect(snapshot.terminal).toBe(true);
+    return snapshot;
+  });
+}
+
+async function createEmailManagerHarness(input: {
   readonly send: (
     input: NotificationProviderSendInput,
   ) => Promise<ProviderSendResult>;
@@ -1435,7 +1531,10 @@ function createEmailManagerHarness(input: {
   readonly store?: FakeNotificationStore;
   readonly prepare?: (message: object) => object | Promise<object>;
 }) {
-  const queue = createQueueManager(createSyncQueueConfig());
+  const queue = createQueueService({
+    namespace: `notification-test-${randomUUID()}`,
+  });
+  await queue.setup();
   const store = input.store ?? new FakeNotificationStore();
   const manager = createNotificationManager({
     database: {} as DatabaseManager,

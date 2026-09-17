@@ -4,7 +4,7 @@ import {
   type AppAuthorization,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
-import { queueManagerToken } from '@nocobase/app-server/queue';
+import { queueServiceToken } from '@nocobase/app-server/queue';
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 
@@ -37,9 +37,9 @@ export class NotificationProvider<
       throw new Error(
         'Notification core requires the database manager dependency.',
       );
-    if (!this.app.container.has(queueManagerToken))
+    if (!this.app.container.has(queueServiceToken))
       throw new Error(
-        'Notification core requires the queue manager dependency.',
+        'Notification core requires the queue service dependency.',
       );
     if (!this.app.container.has(loggingToken))
       throw new Error('Notification core requires the logging dependency.');
@@ -48,7 +48,7 @@ export class NotificationProvider<
     this.app.container.singleton(notificationRuntimeToken, (container) =>
       createNotificationManager<NotificationChannelMap>({
         database: container.resolve(databaseManagerToken),
-        queue: container.resolve(queueManagerToken),
+        queue: container.resolve(queueServiceToken),
         logger: container.resolve(loggingToken).getLogger().child({
           module: 'notification',
         }),
@@ -70,6 +70,10 @@ export class NotificationProvider<
     registerNotificationAuthorization(
       this.app.container.resolve(authorizationToken),
     );
+    // Registration is database-free; queue startup and reconciliation come later.
+    this.app.container
+      .resolve(notificationRuntimeToken)
+      .registerDeliveryHandler();
   }
 
   public override async start(): Promise<void> {

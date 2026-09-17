@@ -3,7 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 
 import { ChannelManager } from './channel-manager.js';
-import { createDeliveryJob, type DeliveryJobClass } from './delivery-job.js';
+import {
+  createDeliveryHandler,
+  NOTIFICATION_QUEUE_NAME,
+  NOTIFICATION_DELIVERY_CHANNEL,
+} from './delivery-job.js';
 import { NotificationLogs } from './logs.js';
 import { NotificationReconcileJob } from './notification-reconcile-job.js';
 import {
@@ -96,7 +100,7 @@ export class NotificationManager<
   readonly registry: NotificationRegistry;
   private readonly channelManager: ChannelManager;
 
-  private readonly queueJob: DeliveryJobClass;
+  private unregisterDelivery?: () => Promise<void>;
   private readonly reconcileJob: NotificationReconcileJob;
   private readonly runtimePromises = new Map<string, Promise<void>>();
   private readonly statusSubscriptions = new Map<string, StatusSubscription>();
@@ -122,12 +126,23 @@ export class NotificationManager<
         this.scheduleStatusChanged(delivery.notificationId);
       },
     });
-    this.queueJob = createDeliveryJob(this.channelManager);
     this.reconcileJob = new NotificationReconcileJob({
       intervalMs: options.reconcileIntervalMs ?? 30_000,
       logger: options.logger,
       execute: async (): Promise<void> => this.reconcile(),
     });
+  }
+
+  registerDeliveryHandler(): void {
+    if (
+      this.unregisterDelivery ||
+      !this.options.config.channels.some((config) => config.enabled)
+    )
+      return;
+    this.registry.validate(this.options.config);
+    this.unregisterDelivery = this.options.queue
+      .consumer(NOTIFICATION_QUEUE_NAME)
+      .consume(createDeliveryHandler(this.channelManager));
   }
 
   activate(): void {
@@ -136,8 +151,7 @@ export class NotificationManager<
       !this.options.config.channels.some((config) => config.enabled)
     )
       return;
-    this.registry.validate(this.options.config);
-    this.options.queue.registerJob(this.queueJob);
+    this.registerDeliveryHandler();
     this.activated = true;
     this.reconcileJob.start();
   }
@@ -311,6 +325,8 @@ export class NotificationManager<
     } catch (error) {
       await this.reconcileJob.stop();
       this.started = false;
+      await this.unregisterDelivery?.();
+      this.unregisterDelivery = undefined;
       await this.channelManager.close();
       this.runtimePromises.clear();
       this.activated = false;
@@ -626,6 +642,8 @@ export class NotificationManager<
     await this.startPromise?.catch(() => undefined);
     const wasActive = this.activated;
     await this.reconcileJob.stop();
+    await this.unregisterDelivery?.();
+    this.unregisterDelivery = undefined;
     await this.channelManager.close();
     this.runtimePromises.clear();
     this.activated = false;
@@ -641,7 +659,9 @@ export class NotificationManager<
 
   private async dispatch(deliveryId: string): Promise<void> {
     try {
-      await this.options.queue.dispatch(this.queueJob, { deliveryId });
+      await this.options.queue
+        .producer(NOTIFICATION_QUEUE_NAME)
+        .publish(NOTIFICATION_DELIVERY_CHANNEL, { deliveryId });
     } catch (error) {
       this.options.logger.warn(
         {

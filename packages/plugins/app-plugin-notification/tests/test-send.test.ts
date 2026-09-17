@@ -1,6 +1,7 @@
 import type { DatabaseManager } from '@nocobase/db';
 import { createLogger } from '@nocobase/logging';
-import { createQueueManager, createSyncQueueConfig } from '@nocobase/queue';
+import { randomUUID } from 'node:crypto';
+import { createQueueService } from '@nocobase/queue';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createNotificationManager } from '../server/manager.js';
@@ -86,7 +87,10 @@ describe('notification test sending', () => {
   });
 
   it('converts adapter values into the normal send interface', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const manager = createNotificationManager({
       database: {} as DatabaseManager,
       queue,
@@ -159,11 +163,14 @@ describe('notification test sending', () => {
       source: { type: 'notification-test', referenceId: 'user-1' },
     });
     await manager.close();
-    await queue.close();
+    await queue.shutdown();
   });
 
   it('returns test status only to the actor that created it', async () => {
-    const queue = createQueueManager(createSyncQueueConfig());
+    const queue = createQueueService({
+      namespace: `notification-test-${randomUUID()}`,
+    });
+    await queue.setup();
     const store = new FakeNotificationStore();
     await store.create({
       log: {
@@ -196,6 +203,6 @@ describe('notification test sending', () => {
       manager.getTestStatus('test-1', { userId: 'user-2' }),
     ).resolves.toBeUndefined();
 
-    await queue.close();
+    await queue.shutdown();
   });
 });
