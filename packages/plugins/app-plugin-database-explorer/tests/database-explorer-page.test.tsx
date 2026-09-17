@@ -21,7 +21,6 @@ const api = vi.hoisted(() => ({ request: vi.fn() }));
 const translation = vi.hoisted(() => ({ t: (key: string) => key }));
 
 vi.mock('@nocobase/app-client', () => ({
-  apiClientToken: Symbol('apiClient'),
   useApiClient: () => api,
 }));
 

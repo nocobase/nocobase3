@@ -7,7 +7,6 @@ import locales from '../client/locales/index.js';
 import MCPPage from '../client/pages/mcp-page.js';
 
 vi.mock('@nocobase/app-client', () => ({
-  apiClientToken: {},
   useApiClient: () => api,
 }));
 const api = {};

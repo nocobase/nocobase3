@@ -17,7 +17,6 @@ import type {
 } from '../client/pages/hub/types.js';
 
 const mocks = vi.hoisted(() => ({
-  apiClientToken: Symbol('api-client'),
   authorizationClientToken: Symbol('authorization-client'),
   client: {
     request: vi.fn(),
@@ -31,11 +30,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@nocobase/app-client', () => ({
   ApiClientError: class ApiClientError extends Error {},
-  apiClientToken: mocks.apiClientToken,
   resolveAppUrl: (value: string) => value,
   useApiClient: () => mocks.client,
-  useService: (token: unknown) =>
-    token === mocks.apiClientToken ? mocks.client : mocks.authorization,
+  useService: (token: unknown) => {
+    expect(token).toBe(mocks.authorizationClientToken);
+    return mocks.authorization;
+  },
 }));
 
 vi.mock('@nocobase/app-plugin-authorization/client', () => ({
