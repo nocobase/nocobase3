@@ -261,3 +261,64 @@ it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
     }
   },
 );
+
+it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
+  'permanently fails local cancellation without cancelling remote dispatch',
+  async () => {
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_PG_PORT),
+      user: 'postgres',
+      password: 'queue-test-only',
+      database: 'postgres',
+    };
+    const options = {
+      namespace: `${process.env.QUEUE_TEST_RUN}-cancel`,
+      queueBackend: 'postgres',
+      connection,
+      attempts: 3,
+    };
+    const owner = createQueueService(options);
+    const remote = createQueueService(options);
+    let calls = 0;
+    let signal: AbortSignal | undefined;
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    owner
+      .consumer('jobs')
+      .consume(async (_channel, _message, currentSignal) => {
+        calls++;
+        signal = currentSignal;
+        await gate;
+      });
+    const { createPostgresBackend } = await import('bullmq');
+    const identity = createQueueIdentity(options.namespace, 'jobs');
+    const observer = new Queue(
+      identity.postgresQueueName,
+      { connection },
+      createPostgresBackend,
+    );
+    try {
+      await Promise.all([owner.setup(), remote.setup()]);
+      const receipt = await owner.producer('jobs').publish('work', {});
+      await expect.poll(() => calls).toBe(1);
+      expect(remote.manager('jobs').cancelJob(receipt.jobId)).toBe(false);
+      expect(signal?.aborted).toBe(false);
+      expect(owner.manager('jobs').cancelJob(receipt.jobId)).toBe(true);
+      expect(signal?.aborted).toBe(true);
+      release();
+      await expect
+        .poll(() => observer.getJobState(receipt.jobId))
+        .toBe('failed');
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(calls).toBe(1);
+      expect(await observer.getJobState(receipt.jobId)).toBe('failed');
+    } finally {
+      release();
+      await Promise.all([owner.shutdown(), remote.shutdown()]);
+      await observer.close();
+    }
+  },
+);
