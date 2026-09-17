@@ -184,3 +184,80 @@ it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
     }
   },
 );
+
+it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
+  'shares PostgreSQL global rate limits across services',
+  async () => {
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_PG_PORT),
+      user: 'postgres',
+      password: 'queue-test-only',
+      database: 'postgres',
+    };
+    const options = {
+      namespace: `${process.env.QUEUE_TEST_RUN}-rate`,
+      queueBackend: 'postgres',
+      connection,
+      rateLimit: { max: 1, duration: 250 },
+    };
+    const first = createQueueService(options);
+    const second = createQueueService(options);
+    const starts: number[] = [];
+    for (const service of [first, second])
+      service.consumer('jobs').consume(async () => {
+        starts.push(performance.now());
+      });
+    try {
+      await Promise.all([first.setup(), second.setup()]);
+      await first.producer('jobs').publishMany(
+        Array.from({ length: 4 }, (_, message) => ({
+          channel: 'event',
+          message,
+        })),
+      );
+      await expect.poll(() => starts.length, { timeout: 5000 }).toBe(4);
+      for (let i = 1; i < starts.length; i++)
+        expect(starts[i]! - starts[i - 1]!).toBeGreaterThanOrEqual(210);
+    } finally {
+      await Promise.all([first.shutdown(), second.shutdown()]);
+    }
+  },
+);
+
+it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
+  'resumes PostgreSQL waiting and delayed jobs after service recreation',
+  async () => {
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_PG_PORT),
+      user: 'postgres',
+      password: 'queue-test-only',
+      database: 'postgres',
+    };
+    const options = {
+      namespace: `${process.env.QUEUE_TEST_RUN}-recreation`,
+      queueBackend: 'postgres',
+      connection,
+    };
+    const first = createQueueService(options);
+    const second = createQueueService(options);
+    const received: unknown[] = [];
+    second.consumer('jobs').consume(async (_channel, value) => {
+      received.push(value);
+    });
+    try {
+      await first.setup();
+      await first.producer('jobs').publish('event', 'waiting');
+      await first.producer('jobs').publish('event', 'delayed', { delay: 200 });
+      await first.shutdown();
+      await second.setup();
+      await expect
+        .poll(() => received.sort(), { timeout: 5000 })
+        .toEqual(['delayed', 'waiting']);
+    } finally {
+      await first.shutdown();
+      await second.shutdown();
+    }
+  },
+);
