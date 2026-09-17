@@ -62,4 +62,19 @@ describe('memory bulk commit', () => {
       await q.close();
     }
   });
+  it('allows drained IDs to be reused without deleting active jobs', async () => {
+    const q = queue();
+    try {
+      const active = await q.add('active', {}, { jobId: 'active' });
+      await q.getBackend().moveToActive('owner');
+      await q.addBulk([{ name: 'old', data: 1, opts: { jobId: 'reuse' } }]);
+      await q.drain();
+      expect(await q.getJobState(active.id!)).toBe('active');
+      expect(await q.getJob('reuse')).toBeUndefined();
+      await q.addBulk([{ name: 'new', data: 2, opts: { jobId: 'reuse' } }]);
+      expect((await q.getJob('reuse'))?.data).toBe(2);
+    } finally {
+      await q.close();
+    }
+  });
 });
