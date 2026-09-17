@@ -239,3 +239,49 @@ it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
     }
   },
 );
+
+it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
+  'preserves session options while pinning a custom schema',
+  async () => {
+    const { Pool } = await import('pg');
+    const connection = {
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_PG_PORT),
+      user: 'postgres',
+      password: 'queue-test-only',
+      database: 'postgres',
+    };
+    const admin = new Pool(connection);
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-options`,
+      queueBackend: 'postgres',
+      connection: {
+        ...connection,
+        schema: 'session_fixture',
+        options: '-c timezone=UTC -c search_path=public',
+        application_name: 'queue-session-fixture',
+      },
+    });
+    try {
+      await service.setup();
+      await admin.query(
+        "CREATE FUNCTION session_fixture.assert_session() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF current_setting('TimeZone') <> 'UTC' OR current_schema() <> 'session_fixture' OR current_setting('application_name') <> 'queue-session-fixture' THEN RAISE EXCEPTION 'Unexpected producer session settings'; END IF; RETURN NEW; END $$",
+      );
+      await admin.query(
+        'CREATE TRIGGER assert_session BEFORE INSERT ON session_fixture.job FOR EACH ROW EXECUTE FUNCTION session_fixture.assert_session()',
+      );
+      const result = await service.producer('jobs').publish('event', {});
+      expect(
+        (
+          await admin.query(
+            'SELECT count(*)::int AS count FROM session_fixture.job WHERE id=$1',
+            [result.jobId],
+          )
+        ).rows,
+      ).toEqual([{ count: 1 }]);
+    } finally {
+      await service.shutdown();
+      await admin.end();
+    }
+  },
+);
