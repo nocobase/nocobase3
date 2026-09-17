@@ -1,6 +1,13 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  'common.close': 'Close',
+  'common.pagination': 'pagination',
+  'common.previous': 'Previous',
+  'common.next': 'Next',
+  'common.previousPage': 'Go to previous page',
+  'common.nextPage': 'Go to next page',
+  'common.morePages': 'More pages',
   navigation: {
     applications: 'Applications',
     userAccess: 'Users & permissions',

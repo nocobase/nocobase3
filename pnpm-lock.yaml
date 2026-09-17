@@ -1037,6 +1037,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -2293,6 +2296,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -2441,6 +2447,9 @@ importers:
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -2560,6 +2569,9 @@ importers:
 
   packages/plugins/app-plugin-file:
     dependencies:
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -3091,6 +3103,9 @@ importers:
       '@nocobase/app-client':
         specifier: workspace:^
         version: link:../../app/app-client
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -3253,6 +3268,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3

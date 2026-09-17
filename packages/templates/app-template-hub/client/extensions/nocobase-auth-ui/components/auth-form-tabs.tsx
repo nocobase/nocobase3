@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement, type ReactNode } from 'react';
 
 export interface AuthFormTab {
@@ -10,7 +11,12 @@ export interface AuthFormTabsProps {
   readonly tabs: readonly AuthFormTab[];
 }
 
-export function AuthFormTabs({ tabs }: AuthFormTabsProps): ReactElement | null {
+export function AuthFormTabs(
+  inputProps: AuthFormTabsProps,
+): ReactElement | null {
+  const { t } = useTranslation();
+  const { tabs } = inputProps;
+
   const [activeId, setActiveId] = useState(tabs[0]?.id);
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
 
@@ -19,7 +25,9 @@ export function AuthFormTabs({ tabs }: AuthFormTabsProps): ReactElement | null {
   return (
     <div className='space-y-6'>
       <div
-        aria-label='Authentication methods'
+        aria-label={t('auth.methods', {
+          defaultValue: 'Authentication methods',
+        })}
         className='grid grid-flow-col auto-cols-fr rounded-lg bg-muted p-1'
         role='tablist'
       >

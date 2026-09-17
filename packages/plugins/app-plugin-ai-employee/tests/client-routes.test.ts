@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 import routes from '../client/routes.ts';
 
 const expectedDemoRoutes = [
-  ['ai-chat-window', '/chat', 'Chat window'],
-  ['ai-floating-chat', '/floating', 'Floating chat'],
-  ['ai-employee-tasks', '/tasks', 'Employee tasks'],
-  ['ai-page-context', '/context', 'Page context'],
-  ['ai-tool-cards', '/tools', 'Tool cards'],
+  ['ai-chat-window', '/chat', 'demo.navigation.chat'],
+  ['ai-floating-chat', '/floating', 'demo.navigation.floating'],
+  ['ai-employee-tasks', '/tasks', 'demo.navigation.tasks'],
+  ['ai-page-context', '/context', 'demo.navigation.context'],
+  ['ai-tool-cards', '/tools', 'demo.navigation.tools'],
 ] as const;
 
 describe('AI Employee client routes', () => {
@@ -24,7 +24,7 @@ describe('AI Employee client routes', () => {
         {
           name: 'ai-components',
           path: '/ai-components',
-          navigation: { title: 'AI Components' },
+          navigation: { title: 'demo.navigation.group' },
           children: expectedDemoRoutes.map(([name, path, title]) => ({
             name,
             path,

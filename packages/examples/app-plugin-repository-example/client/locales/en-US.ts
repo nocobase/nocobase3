@@ -1,5 +1,6 @@
 import type { LocaleResource } from '@nocobase/i18n';
 const enUS = {
+  closeDialog: 'Close',
   sortTitle: 'Sort examples',
   sortIntro:
     'Run read-only sorting examples using the Repository HTTP client. Builder snippets accompany the actual serialized requests; tables preserve server response order. Queries return at most 10 roots and reuse the existing CRM and relationship seeds.',
