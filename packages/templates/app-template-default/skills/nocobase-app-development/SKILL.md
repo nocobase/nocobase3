@@ -171,6 +171,8 @@ After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i1
 
 Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the interface offers is not configured — `client/locales/` is that list, while `server/locales/` independently defines the server's translated languages. See the i18n and themes references.
 
+Navigation groups retain their expanded or collapsed state while the navigation tree stays mounted. Selecting a new page expands its ancestor groups without collapsing other groups; users can still collapse the active group manually. Keep this behavior aligned across the application, Settings, and Dev tools navigation.
+
 ## Publish application releases
 
 Use `pnpm build --tar`, then `pnpm nocobase app upload` with `HUB_URL`, `HUB_APP_ID`, and `HUB_API_KEY`. The Hub URL includes the application's mount path. Both commands read the App root `.env` with per-value precedence: command flags > terminal/CI environment > `.env`. Keep `.env` gitignored; no `.env.local` or mode-specific files are loaded. Upload and deploy with `app upload --deploy --wait`; upload only with `app upload`. Automation belongs in the caller’s script; Hub has no deployment-mode setting. For an existing Release use `app deploy --release-id <id> --wait`. Add `--json` in CI, check `ok` and the process exit code, and preserve the idempotency key on network retries. A fresh deployment key requests a new deployment of the same Release. Never print API keys or put them in committed configuration. See README.MD for arguments, limits, and exit codes.

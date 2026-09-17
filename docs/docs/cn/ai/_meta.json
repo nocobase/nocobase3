@@ -2,7 +2,7 @@
   {
     "type": "file",
     "name": "index",
-    "label": "和 AI 协作"
+    "label": "和 AI Agent 协作"
   },
   {
     "type": "file",
@@ -12,7 +12,7 @@
   {
     "type": "file",
     "name": "reviewing-output",
-    "label": "检查 AI 的产出"
+    "label": "检查 AI Agent 的产出"
   },
   {
     "type": "file",
