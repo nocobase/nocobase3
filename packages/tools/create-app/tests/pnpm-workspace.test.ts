@@ -56,6 +56,13 @@ describe('ALLOWED_BUILDS', () => {
       ALLOWED_BUILDS.find((entry) => entry.name === 'tesseract.js')?.allowed,
     ).toBe(false);
   });
+
+  it('explicitly disables the optional BullMQ native accelerator', () => {
+    expect(
+      ALLOWED_BUILDS.find((entry) => entry.name === 'msgpackr-extract'),
+    ).toEqual({ name: 'msgpackr-extract', allowed: false });
+    expect(buildWorkspaceYaml()).toContain('  msgpackr-extract: false');
+  });
 });
 
 describe('buildAllowBuildsYaml', () => {
