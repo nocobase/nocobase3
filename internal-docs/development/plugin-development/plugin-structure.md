@@ -66,7 +66,7 @@ Locale resources 也必须显式选择：`client.locales` 只生成 Client local
 | `client/`      | Browser runtime contributions         | 仅 Client 插件需要                 |
 | `server/`      | Server runtime contributions          | 仅 Server 插件需要                 |
 | `database/`    | Migrations 和 Seeds                   | 需要持久化 schema 或初始数据时使用 |
-| `server/jobs/` | Queue Jobs                            | 需要异步任务时使用                 |
+| `server/jobs/` | Queue handlers                        | Provider 显式导入，不自动发现      |
 | `skills/`      | 插件向 App Agent 提供的能力与集成指南 | App Agent 需要发现插件能力时维护   |
 | `registry/`    | 安装后归 App 所有的可编辑源码         | 可选；第一版不属于核心路径         |
 | `tests/`       | 插件行为和集成契约测试                | 修改行为时必须维护                 |
@@ -151,13 +151,13 @@ package.json
 | 文件                | 权威职责                                                           |
 | ------------------- | ------------------------------------------------------------------ |
 | `server/index.ts`   | 公开导出 Server plugin definition                                  |
-| `server/plugin.ts`  | 组合 ServiceProviders、Routes、Database、Queue 和 locale resources |
+| `server/plugin.ts`  | 组合 ServiceProviders、Routes、Database 和 locale resources；队列由 Provider 注册 |
 | `server/locales/`   | Server namespace 的 lazy locale resources                          |
 | `server/services/`  | 不依赖 HTTP 边界的领域行为默认实现                                 |
 | `server/tokens.ts`  | 稳定服务接口和 ServiceToken                                        |
 | `server/providers/` | 服务注册和生命周期                                                 |
 | `server/routes/`    | API 和 Root Route contributions                                    |
-| `server/jobs/`      | Queue Job definitions                                              |
+| `server/jobs/`      | 显式导入的 Queue handler，生命周期由 Provider 管理                   |
 
 推荐职责链：
 
@@ -257,7 +257,7 @@ exports["./server"]
 - `client.service-providers` 提供 Client Provider constructors 和生命周期测试；
 - `client.react-providers` 提供 React Context、Wrapper declaration 和行为测试；
 - `database` 提供 disabled Migration/Seed examples；
-- `server.jobs` 提供最小 Job 结构和测试；
+- `server.jobs` 提供最小 channel handler、Provider 注册/注销结构和测试，不生成 Job 子类或 `queue.jobs` contribution；
 - `client.locales`、`server.locales` 分别提供独立的 lazy locale resource 骨架；
 - `registry` 提供 Registry 构建、发布和所有权链路；
 - `skills` 提供 development draft，注册前必须改成真实 App-facing 契约。
@@ -283,7 +283,7 @@ source file
 | 纯 Server 插件        | `server/` 和 `./server` export      |
 | 全栈插件              | `client/`、`server/` 和两类 exports |
 | 数据插件              | Server + `database/`                |
-| Queue 插件            | Server + `server/jobs/`             |
+| Queue 插件            | Server + Provider + 显式 handler   |
 | 带 App 集成知识的插件 | 真实能力 + 持续维护的 `skills/`     |
 | Registry 插件         | 可选的 `registry/` canonical source |
 

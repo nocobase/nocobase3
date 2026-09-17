@@ -132,6 +132,10 @@ A webhook that a third party calls cannot use a login session, so it is delibera
 
 Keep HTTP concerns in the route and domain logic in a service under `server/providers/`.
 
+### Background work
+
+Use the App-owned `QueueService` through the original `queueServiceToken` from `@nocobase/app-server/queue`. Register handlers in a provider's `boot()` without I/O, and await the returned unregister function in `shutdown()` before releasing their dependencies. The core `QueueServiceProvider` owns setup at App start and final shutdown; plugins do not own its Workers. `server/jobs/` is not auto-discovered, and the retired `queue.jobs` contribution is rejected. Publishing returns a receipt, not completion; the default private `inMemory` backend is asynchronous and loses jobs on restart. See `skills/nocobase-app-development/references/services-and-jobs.md` for the provider example, numeric millisecond delays, backend selection, and lifecycle boundaries.
+
 ### Database
 
 Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.

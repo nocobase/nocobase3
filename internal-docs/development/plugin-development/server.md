@@ -47,7 +47,6 @@ const plugin: AppServerPlugin = defineServerPlugin({
   locales: () => import('./locales/index.js'),
   serviceProviders,
   routes,
-  queue: { jobs: ['./server/jobs'] },
   database: {
     migrations: './database/migrations',
     seeds: './database/seeds',
@@ -57,13 +56,13 @@ const plugin: AppServerPlugin = defineServerPlugin({
 export default plugin;
 ```
 
-只声明真实能力。Routes 和 Provider constructors 是直接 contributions；Jobs、Migrations 和 Seeds 使用 package-relative locations。`server/index.ts` re-export 这个 definition，目标 App 通过 `server/plugins.ts` 显式注册 `exports["./server"]`。
+只声明真实能力。Routes 和 Provider constructors 是直接 contributions；队列 handler 由 Provider 在 `boot()` 显式注册，`queue.jobs` 已退役并被拒绝。只有 Migrations 和 Seeds 使用 package-relative locations。`server/index.ts` re-export 这个 definition，目标 App 通过 `server/plugins.ts` 显式注册 `exports["./server"]`。
 
 ## 所有权边界
 
 - Service 不读取 Hono Context、不返回 HTTP status，也不决定 Queue retry；
 - Route 处理 HTTP、输入输出和自己的安全策略，然后调用 Service；
-- Job 校验可序列化 payload、处理重试/幂等边界，并调用可复用领域操作；默认 Job factory 不注入 ServiceContainer；
+- Queue handler 过滤 channel、校验可序列化 payload、处理重试/幂等边界，并调用 Provider 从当前 App container 解析后显式注入的领域能力；
 - Provider 注册依赖和管理资源生命周期，不承载 Route handler；
 - Token 由能力所有者创建和公开，消费者不得重建同名 Token；
 - Migration 是不可变 schema 历史，Seed 不创建结构。
@@ -90,7 +89,8 @@ Inspector 只提供 Server composition、Route scopes 和配置 locations 的只
 - 领域、HTTP、异步调度和生命周期职责分离；
 - 所有消费者 import 能力所有者的原始 Token；
 - Route 安全不依赖 composition order；
-- Jobs 使用稳定 identity 和可序列化 payload；
+- Queue 使用稳定 namespace、queue/channel 和可序列化 payload；使用原始 `queueServiceToken`，不创建全局 dispatcher；
+- boot 注册无 I/O，App start 才 setup；shutdown 等注销完成后释放依赖，发布回执不等于执行完成；
 - Migration/Seed 路径、历史和测试正确；
 - declarations、exports、App registration 和行为测试一致；
 - App-facing 服务、接口、Job 或数据前置条件变化已更新 Plugin Skill。

@@ -23,7 +23,7 @@ description: 在 NocoBase source workspace 中按显式 capability 创建 App �
 | `database`                 | Database 能力；内部包含 migrations 和 seeds 结构               |
 | `server.service-providers` | Server Provider 能力；内部包含 ServiceProvider、Service、Token |
 | `server.routes`            | Server Route contribution；支持 API Routes 和 Root Routes      |
-| `server.jobs`              | Queue Jobs                                                     |
+| `server.jobs`              | Queue channel handler + Provider 注册/注销，不使用目录发现      |
 | `server.locales`           | Server 翻译资源声明                                            |
 | `client.routes`            | Client Route contribution；支持 App Routes 和 Settings Routes  |
 | `client.components`        | 插件拥有的 React components                                    |

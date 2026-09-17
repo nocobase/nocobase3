@@ -137,9 +137,6 @@ const auditLogPlugin: AppServerPlugin = defineServerPlugin({
     migrations: './database/migrations',
     seeds: './database/seeds',
   },
-  queue: {
-    jobs: ['./server/jobs'],
-  },
 });
 
 export default auditLogPlugin;
@@ -153,10 +150,9 @@ export default auditLogPlugin;
 | `routes`              | API 和 Root Route contributions |
 | `database.migrations` | 插件 Migration 目录             |
 | `database.seeds`      | 插件 Seed 目录                  |
-| `queue.jobs`          | Job 文件或目录位置              |
 | `locales`             | package namespace 的翻译资源    |
 
-Server Routes 和 ServiceProviders 都是直接静态 contributions，不写成 module loader。Database/Job location 必须是以 `./` 开头的安全 package-relative path。
+Server Routes 和 ServiceProviders 都是直接静态 contributions，不写成 module loader。Database location 必须是以 `./` 开头的安全 package-relative path。队列通过 `serviceProviders` 中的 Provider 解析原始 `queueServiceToken`，在 `boot()` 注册 handler，在 `shutdown()` 等待注销；没有 Job location 扫描，旧 `queue.jobs` 声明被拒绝。详见 [Server Jobs](./server-jobs.md)。
 
 ## Package exports
 

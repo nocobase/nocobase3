@@ -18,7 +18,7 @@ description: 根据 NocoBase 插件的 Client、Server、Database、Queue、I18n
 | Client ServiceProvider    | Service/Refine 注册、options、lifecycle、失败清理和副作用    |
 | Service/Provider          | Token、惰性单例、生命周期、错误清理                          |
 | API/Root Route            | 真实 router 请求、状态码、响应、权限、base path              |
-| Server plugin             | serviceProviders/routes/database/queue composition           |
+| Server plugin             | serviceProviders/routes/database composition 和退役 queue.jobs 拒绝           |
 | Migration/Seed            | 真实数据库的 schema、metadata、up/down、数据结果             |
 | Queue Job                 | handler、payload、Service、重试/幂等和可观察结果             |
 | Plugin I18n               | key 结构、namespace、双语言渲染、请求/外发语言和 lazy chunks |
@@ -52,7 +52,9 @@ composition 快照；目标 App
 
 ## Database 和 Queue 测试
 
-Migration 使用真实测试数据库验证物理 schema 和 metadata，执行 `up`，可逆时执行 `down`。Seed 验证已有数据和重复执行策略。Queue 测试不要只断言 job 文件被发现；应执行 handler，验证 payload、服务调用、重试/失败和持久结果。
+Migration 使用真实测试数据库验证物理 schema 和 metadata，执行 `up`，可逆时执行 `down`。Seed 验证已有数据和重复执行策略。Queue 没有 job 文件自动发现；测试显式 Provider 注册的 handler，验证 channel、payload、signal、服务调用、重试/失败和可观察结果。
+
+Queue integration 使用真实异步 `inMemory` 服务验证 boot 只注册、App start 后消费、publish 返回回执后另行等待完成，以及 shutdown 等待注销后才释放领域依赖。用可控 barrier 而非固定 sleep，验证两个 App 相同 queue/channel 不共享 handler 状态；持久化与跨实例竞争另用实际后端验证。`server:inspect` 不运行 handler，也不替代启动/关闭测试。完整边界见 [Server Jobs](./server-jobs.md)。
 
 ## Registry 测试
 

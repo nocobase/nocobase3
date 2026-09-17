@@ -28,7 +28,7 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 | 可复用 UI 构件               | Component       | `client/components/`                 |
 | 页面共享状态                 | React Provider  | `client/react-providers/`            |
 | Client Service 或初始化      | ServiceProvider | `client/providers/`                  |
-| 操作异步执行                 | Queue Job       | `server/jobs/`                       |
+| 操作异步执行                 | Queue handler   | `server/providers/` 显式注册，可从 `server/jobs/` 导入 |
 | Client/Server 文案或外发消息 | I18n            | `client/locales/`、`server/locales/` |
 | App Agent 需要组合插件能力   | Plugin Skills   | `skills/`                            |
 | 安装可编辑 Client 源码       | Registry        | `registry/`                          |
@@ -65,7 +65,7 @@ description: 将业务需求拆分为 NocoBase 插件的 Client、Server、Datab
 → App 注册和集成
 ```
 
-这样每一层都能依赖已经定义的稳定契约。Service 保持领域逻辑，Route 只处理 HTTP 边界，Job 只编排异步执行；默认 Job factory 不注入 ServiceContainer，需要共享领域能力时使用明确依赖或插件拥有的 adapter。Settings 页面不能代替服务端授权。
+这样每一层都能依赖已经定义的稳定契约。Service 保持领域逻辑，Route 只处理 HTTP 边界，Queue handler 只编排异步执行；Provider 从当前 App container 解析原始 Token，在 boot 无 I/O 地注册 handler 并显式注入领域依赖，在 shutdown 等待注销后释放资源。Settings 页面不能代替服务端授权。
 
 ## 5. 同步更新声明和包契约
 

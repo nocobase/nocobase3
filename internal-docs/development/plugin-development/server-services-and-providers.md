@@ -5,7 +5,7 @@ description: 为 NocoBase v3 插件设计 Service contract、稳定 ServiceToken
 
 # Server Services、Tokens 与 ServiceProviders
 
-这四个角色组成一条依赖链：Service contract 描述能力，Token 提供稳定 identity，Service 实现领域行为，ServiceProvider 把实现注册进 App container。拥有 container 的 Route、Provider 或其他 Server 模块通过能力所有者导出的原始 Token 消费它；默认 Queue Job 不直接获得 container，详见 [Server Jobs](./server-jobs.md)。
+这四个角色组成一条依赖链：Service contract 描述能力，Token 提供稳定 identity，Service 实现领域行为，ServiceProvider 把实现注册进 App container。拥有 container 的 Route、Provider 或其他 Server 模块通过能力所有者导出的原始 Token 消费它；Queue handler 由 Provider 在 `boot()` 注册，通过闭包或显式参数接收从当前 App container 解析的依赖，详见 [Server Jobs](./server-jobs.md)。
 
 ```text
 Service contract → Token → implementation → ServiceProvider → consumer

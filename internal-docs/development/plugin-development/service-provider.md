@@ -166,7 +166,7 @@ export default plugin;
 
 Route factory 从 App container 解析 Token，但 Route 自己负责 HTTP method、path、authentication、authorization、输入和响应。不要让 Provider 注册 Route，也不要在 Route 中 `new` 第二份 Service。
 
-默认 Queue Job factory 不直接获得 `ServiceContainer`。需要复用 Service 时，创建由 Provider 管理的明确 adapter，或者让 Job 调用独立、可注入的领域函数；不要依赖模块级 container。
+Queue handler 通过 Provider 在 `boot()` 解析原始 `queueServiceToken` 并调用 `consumer(queue).consume(handler)` 显式注册；领域 Service 由该 Provider 从当前 App container 解析后捕获到闭包中，不使用默认 Job factory 或模块级 container。boot 只登记而不 I/O，App 的 QueueServiceProvider 在 start 等待 setup；插件 shutdown 必须等待返回的 async unregister 后才释放依赖，不关闭共享 Worker。详见 [Server Jobs](./server-jobs.md)。
 
 ## 测试生命周期行为
 

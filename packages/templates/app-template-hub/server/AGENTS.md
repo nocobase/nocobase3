@@ -13,7 +13,7 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 - `app.ts` assembles the application and its core providers and middleware.
 - `standalone.ts` is the Node entry point; `embedded.ts` is the entry point when a host process mounts this application. Both resolve the same runtime.
 - `plugins.ts` lists the plugins the server loads. Let `pnpm plugin:register` and `pnpm plugin:unregister` edit it.
-- `jobs/` holds background jobs, discovered automatically.
+- `jobs/` may hold queue handlers explicitly imported by a provider; it is not auto-discovered. Register consumers through `serviceProviders`, never the retired `queue.jobs` contribution, which is rejected.
 
 ## Rules
 
@@ -24,6 +24,9 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 - Keep HTTP in the route and domain logic in a service. A service does not read a Hono context, return status codes, or decide retry behavior.
 - Bind services to tokens in a provider's `register()`. Import a token from where it is defined; two `createServiceToken` calls with the same name are two different keys.
 - Declaration modules are imported by `server:inspect`. Nothing at module top level may connect to a database, start a worker, or execute a route factory. Long-lived resources belong in `start()` and are released in `shutdown()`.
+- Resolve the original `queueServiceToken` from `@nocobase/app-server/queue`. In `boot()`, register with `queue.consumer(name).consume(handler)` without I/O and retain its async unregister function. Await it in `shutdown()` before releasing handler dependencies; never await it from inside its own handler.
+- The App's core `QueueServiceProvider` owns `createQueueService()`, `setup()` in `start()`, and final shutdown after consumer providers. Do not create or stop shared Workers in application or plugin providers. Make domain dependencies ready before consumption begins.
+- Publish with `queue.producer(name).publish(channel, payload, { delay: 1_000 })`; delay is numeric milliseconds and the receipt is not completion. Default `inMemory` is asynchronous, App-private, and loses jobs on restart; persistence requires explicit backend configuration. Read the services-and-jobs reference for identity, retries, and shutdown boundaries.
 - Read configuration through the typed config, not `process.env`, inside providers and routes.
 - Schema changes are migrations in `../database/main/migrations/`, spelled out explicitly and never importing an evolving definition.
 

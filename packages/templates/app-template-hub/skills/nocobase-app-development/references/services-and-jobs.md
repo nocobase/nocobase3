@@ -54,12 +54,12 @@ Keep the layers apart: a service should not read a Hono context, return HTTP sta
 
 ## Provider lifecycle
 
-| Method       | Runs                             | For                                              |
-| ------------ | -------------------------------- | ------------------------------------------------ |
-| `register()` | Assembly, before anything starts | Binding tokens. Do not connect or start anything |
-| `boot()`     | After all providers registered   | Work needing other services                      |
-| `start()`    | Application start                | Long-lived resources: listeners, pollers         |
-| `shutdown()` | Application stop                 | Releasing what `start()` acquired                |
+| Method       | Runs                             | For                                                          |
+| ------------ | -------------------------------- | ------------------------------------------------------------ |
+| `register()` | Assembly, before anything starts | Binding tokens. Do not connect or start anything             |
+| `boot()`     | After all providers registered   | Resolve dependencies and register queue handlers without I/O |
+| `start()`    | Application start                | Long-lived resources: listeners, pollers                     |
+| `shutdown()` | Application stop, reverse order  | Await handler unregistration before releasing dependencies   |
 
 Declaration modules are imported by `server:inspect`, so nothing at module top level may connect to a database or start a worker.
 
@@ -74,57 +74,87 @@ const realtime = useService(realtimeClientToken);
 
 ## Background jobs
 
-Work that should not block a response — sending mail, calling a slow third party, batch processing — belongs in a job under `server/jobs/`:
+Work that should not block a response — sending mail, calling a slow third party, batch processing — uses the App's `QueueService`. Import `queueServiceToken` from `@nocobase/app-server/queue`; never recreate the token or put a service, dispatcher, or handler registry in module-global state. Each App owns its service. `server/jobs/` is an optional home for explicitly imported handlers, not an auto-discovery directory. The retired plugin contribution `queue.jobs` is rejected; do not declare it.
+
+The core `QueueServiceProvider` binds a lazy singleton created with `createQueueService()` from `@nocobase/queue`. Register custom backend factories before setup begins. Construction, provider registration, and handler registration during `boot()` do not connect or consume. The App owns `setup()` through the core provider's `start()`, and owns `shutdown()` after application and plugin providers have unsubscribed. A consumer provider must not create or close a shared Worker or call the shared service's lifecycle methods.
+
+### Register a handler through a provider
+
+This example assumes an application-owned `searchServiceToken` exported from `server/providers/search.ts`, whose service implements `rebuildIndex(collection: string, signal: AbortSignal): Promise<void>`. Register that service's provider before this consumer so reverse shutdown keeps it alive until unregistration completes.
 
 ```ts
-// server/jobs/rebuild-index.ts
-import { Job, type JobOptions } from '@nocobase/queue';
+// server/providers/rebuild-index.ts
+import type { Application } from '@nocobase/app-server/application';
+import { queueServiceToken } from '@nocobase/app-server/queue';
+import type { UnregisterHandler } from '@nocobase/queue';
+import { ServiceProvider } from '@nocobase/service-provider';
+import { searchServiceToken } from './search.js';
 
-export interface RebuildIndexPayload {
-  readonly collection: string;
-  readonly requestedAt: string;
-}
+export default class RebuildIndexProvider extends ServiceProvider<Application> {
+  public readonly name: string = 'app/rebuild-index-provider';
+  private unregister: UnregisterHandler | undefined;
 
-export default class RebuildIndexJob extends Job<RebuildIndexPayload> {
-  public static options: JobOptions = {
-    name: 'app/rebuild-index',
-    queue: 'default',
-  };
+  public override async boot(): Promise<void> {
+    const queue = this.app.container.resolve(queueServiceToken);
+    const search = this.app.container.resolve(searchServiceToken);
 
-  public async execute(): Promise<void> {
-    // Validate the payload, then call a reusable domain operation.
+    this.unregister = queue
+      .consumer('app/search')
+      .consume(async (channel, payload, signal): Promise<void> => {
+        if (channel !== 'rebuild-index') return;
+        if (
+          typeof payload !== 'object' ||
+          payload === null ||
+          !('collection' in payload) ||
+          typeof payload.collection !== 'string'
+        ) {
+          throw new Error('Invalid rebuild-index payload');
+        }
+        signal.throwIfAborted();
+        await search.rebuildIndex(payload.collection, signal);
+      });
+  }
+
+  public override async shutdown(): Promise<void> {
+    await this.unregister?.();
+    this.unregister = undefined;
   }
 }
 ```
 
-Jobs in `server/jobs/` are discovered automatically; `pnpm server:inspect --json` lists the plugins that contribute them.
+Add this provider to `server/providers/index.ts`. For a published plugin, contribute the provider through `serviceProviders` instead. Resolve database, logging, i18n, and other domain dependencies from their original tokens in the provider and capture them in the handler closure; there is no Job factory injecting a container or dependencies. Keep constructors and dependency resolution free of startup I/O. If the domain service needs asynchronous readiness, establish it before consumption can begin, rather than assuming a later plugin `start()` runs before the core queue provider starts.
 
-Dispatch by resolving the queue manager:
+`consume(handler)` returns an async unregister function immediately; it does not return a Worker. Await that function in `shutdown()` before releasing handler dependencies. Unregistration excludes the registration from new execution snapshots and waits for its existing invocations; it does not cancel them. Never await a handler's own unregister function from inside that handler, or await shared service shutdown from a handler: either can wait on itself. The last unregister pauses only this service's local consumer, not other instances.
+
+### Publish and observe completion
+
+After the App has started, a route or service resolves the same token and publishes to an explicit logical queue and channel:
 
 ```ts
-const queue = app.container.resolve(queueManagerToken);
+import { queueServiceToken } from '@nocobase/app-server/queue';
 
-await queue.dispatch(RebuildIndexJob, {
-  collection: 'orders',
-  requestedAt: new Date().toISOString(),
-});
+const queue = app.container.resolve(queueServiceToken);
+const receipt = await queue
+  .producer('app/search')
+  .publish('rebuild-index', { collection: 'orders' }, { delay: 1_000 });
+// receipt.jobId identifies the queued work, not a completed domain result.
 ```
 
-### What a payload may contain
+`delay` is a non-negative number of milliseconds, not a duration object. Publishing returns a `{ jobId }` receipt, not the handler's result. Even the default `inMemory` backend runs asynchronously; wait for a persisted result or another explicit completion signal in tests and user-facing flows. A publish timeout or lost response does not prove that nothing was written. HTTP producers still enforce their own authentication and authorization.
 
-Only serializable data. A worker may run in another process and rebuilds the payload from storage, so a service instance, a database connection, a request context, a function, or a secret cannot survive the trip. Pass an ID and resolve the object inside `execute()`.
+### Payload, identity, and backend selection
 
-`options.name` is the stable identity of queued work. Do not rely on the class name — a rename would orphan everything already queued.
+Publish JSON-serializable data, preferably business IDs, and validate it in the handler. Do not publish service instances, database connections, request contexts, functions, or secrets. Circular references and BigInt fail serialization. Resolve records through the captured domain service when the handler runs, and account for older payload versions still in a durable queue.
 
-### Retries and idempotency
+The logical queue name and namespace determine queue identity; the channel selects work within that queue, not a separate consumer subscription. Keep both queue and channel names stable. All handlers in a local execution snapshot run, so filter channels explicitly; an unmatched handler returns successfully. If all handlers skip, the job completes. Shared persistent queues distribute jobs between instances rather than broadcasting every job to every App. Use different logical queues for independent delivery requirements.
 
-A job may run more than once: a retry after a transient failure, or a duplicate delivery. Anything with an external side effect — mail, payment, a file write — needs a stable business key or persisted execution state so a second run is harmless.
+Configure `QueueOptions` in `server/config/queue.ts` and deployment overrides in `config.yml`. The default backend is private `inMemory`, with the App name as the default namespace; it neither connects to localhost Redis nor persists work across restart. Select `redis` or `postgres` and their connection settings explicitly for persistence. A configured backend failure is an error, not a reason to fall back to memory. Persistent deployments sharing a backend target, namespace, and queue intentionally compete; give unrelated Apps distinct namespaces. In-memory services remain isolated even with identical names.
 
-Distinguish a transient failure worth retrying from a bad-input failure that never will be. Do not keep completion state in a module-level variable; another process will not see it.
+### Retries, shutdown, and idempotency
 
-By default the job factory supplies `database` and `logger`, not the service container. Do not assume `container.resolve()` inside a job. Extract shared logic into a function taking explicit dependencies, and construct it from what the job has.
+A job may run more than once after a retry or duplicate delivery. If one handler fails, a retry reruns the whole handler snapshot selected for that attempt, not only the failed operation. Configure `attempts` and fixed or exponential `backoff` deliberately; attempts includes the initial execution, and backoff delays use milliseconds. Retention age uses seconds. Use persisted business keys or execution state to make external side effects harmless on repetition. A custom `jobIdProducer` only deduplicates while the job is retained; it is not permanent business idempotency.
 
-The default queue connection is `sync`, which runs jobs inline — convenient in development, and the reason a job that appears to work locally may behave differently against a real queue.
+Normal service shutdown stops claiming work and waits for handlers, retaining producer access during that wait. It does not promise to drain waiting or delayed work. Handlers should cooperate with their `AbortSignal`; a shutdown timeout followed by an exhausted cancellation grace period is a failure, not proof that application code stopped. Plugin shutdown must await unregistration before releasing dependencies, and the App shuts down its QueueService afterwards. Queue publication is not automatically part of a business database transaction; use an explicit outbox or reconciliation strategy when the two must stay consistent.
 
 ## Work that runs on a schedule
 
@@ -169,7 +199,9 @@ Two things to decide before shipping one:
 
 - The service resolves from the token and behaves correctly in isolation.
 - Provider lifecycle releases in `shutdown()` what `start()` acquired.
-- The job runs with a realistic payload, and running it twice is harmless.
+- A handler registered in `boot()` does not run before App start; publication returns a receipt and the test separately waits for observable completion.
+- The handler validates a realistic payload, filters channels, and running it twice is harmless.
+- Shutdown awaits unregistration before releasing domain dependencies; two Apps do not share handler state.
 - A failure retries or terminates as intended.
 - A scheduled tick's work is tested directly, and running it on more than one instance does not duplicate its effect.
 

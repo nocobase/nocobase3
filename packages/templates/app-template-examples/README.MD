@@ -457,6 +457,12 @@ Two settings decide where the application is reachable:
 
 Configuration is resolved from the file, environment variables, and defaults in that order of precedence.
 
+### Background queues
+
+`QueueServiceProvider` owns an independent QueueService for this application. It binds the service without connecting, starts it with the App, and shuts it down after consumer providers have awaited their handler unregistration. The default backend is private, asynchronous `inMemory`: no Redis connection is implicit, and jobs are lost on restart. Configure `queue` explicitly for Redis or PostgreSQL persistence; the default namespace is the App name, and unrelated applications sharing a backend need distinct namespaces.
+
+Resolve `queueServiceToken` from `@nocobase/app-server/queue`, register consumers in provider `boot()`, and publish through `producer(queue).publish(channel, payload, { delay: 1_000 })`. Delay is numeric milliseconds; the `{ jobId }` receipt confirms publication, not handler completion. There is no job-directory discovery, and the retired `queue.jobs` plugin contribution is rejected. See [services and background jobs](skills/nocobase-app-development/references/services-and-jobs.md) for the complete lifecycle and dependency pattern.
+
 ## Testing
 
 Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.

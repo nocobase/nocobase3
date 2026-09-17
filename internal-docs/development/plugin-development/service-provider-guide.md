@@ -31,7 +31,7 @@ ServiceProvider 负责把插件能力接入应用，并管理这些能力的生�
 | 共享服务、替代实现、跨插件消费 | Service contract + Token | Token 由能力所有者创建，消费者导入原对象 |
 | 注册实现、组装依赖、启动和停止资源 | ServiceProvider | 使用当前 App 的 container，不维护全局实例 |
 | HTTP 路径、请求校验、认证与授权 | Route contribution | Provider 不直接注册 Route；每条 Route 自己拥有安全边界 |
-| 异步任务、重试、调度与并发控制 | Queue Job | 默认 Job factory 不直接获得 container，见 [Jobs](./server-jobs.md) |
+| 异步任务、重试、调度与并发控制 | QueueService + handler | Provider 在 boot 注册并显式注入领域依赖，shutdown 等待注销；见 [Jobs](./server-jobs.md) |
 | 表、字段、索引和必要初始数据 | Migration / Seed | Provider 不代替数据库迁移和种子任务 |
 
 Container 决定依赖从哪里来；生命周期决定何时注册、准备、启动和释放它。两者不能互相替代：解析成功只说明服务已构造，不代表它已经完成异步初始化。
