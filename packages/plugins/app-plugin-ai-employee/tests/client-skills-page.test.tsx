@@ -86,9 +86,9 @@ beforeEach(() => {
 });
 
 describe('Skills settings page', () => {
-  it('uses the settings shell and a read-only table with actual tool names, loading details only on open', async () => {
+  it('uses the settings shell and responsive cards with tool badges in an icon-first footer, loading details only on open', async () => {
     await renderPage();
-    const table = await screen.findByRole('table', { name: 'Skills' });
+    const list = await screen.findByRole('list', { name: 'Skills' });
     const heading = screen.getByRole('heading', { name: 'Skills', level: 1 });
     expect(heading.closest('header')?.parentElement).toHaveClass(
       'w-full',
@@ -99,20 +99,52 @@ describe('Skills settings page', () => {
     expect(
       screen.getByText('Browse skills available to AI employees.'),
     ).toBeVisible();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(list).toHaveClass(
+      'grid',
+      'grid-cols-1',
+      'md:grid-cols-2',
+      'xl:grid-cols-3',
+    );
+    const cards = within(list).getAllByRole('listitem');
+    expect(cards).toHaveLength(2);
+    const card = cards[0].querySelector('[data-slot="card"]')!;
+    expect(card).toHaveClass('h-full', 'min-w-0', 'focus-within:ring-ring');
     expect(
-      within(table)
-        .getAllByRole('columnheader')
-        .map((node) => node.textContent),
-    ).toEqual(['Skill', 'Description', 'Tools']);
-    const row = within(table)
-      .getByRole('button', { name: 'Data analysis' })
-      .closest('tr')!;
-    expect(within(row).getAllByRole('cell')[2]).toHaveTextContent(
+      Array.from(card.children).map((node) => node.getAttribute('data-slot')),
+    ).toEqual(['card-header', 'card-content', 'card-footer']);
+    const header = card.querySelector('[data-slot="card-header"]')!;
+    expect(
+      within(header).getByRole('heading', { name: 'Data analysis', level: 2 }),
+    ).toBeVisible();
+    expect(within(header).getByText('analyze-data')).toBeVisible();
+    expect(card.querySelector('[data-slot="card-content"]')).toHaveTextContent(
+      'Summarize trends',
+    );
+    const footer = within(cards[0]).getByRole('group', { name: 'Tools' });
+    expect(footer).toHaveAttribute('data-slot', 'card-footer');
+    expect(footer).toHaveClass('mt-auto', 'flex-wrap', 'gap-2');
+    expect(footer.firstElementChild).toHaveClass('lucide-wrench');
+    expect(footer.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+    const badges = Array.from(footer.querySelectorAll('[data-slot="badge"]'));
+    expect(badges.map((badge) => badge.textContent)).toEqual([
       'queryRecords',
-    );
-    expect(within(row).getAllByRole('cell')[2]).toHaveTextContent(
       'missingTool',
-    );
+    ]);
+    expect(Array.from(footer.children).slice(1)).toEqual(badges);
+    for (const badge of badges) {
+      expect(badge).toHaveAttribute('data-variant', 'secondary');
+      expect(badge).toHaveClass(
+        'h-auto',
+        'max-w-full',
+        'whitespace-normal',
+        'break-all',
+      );
+    }
+    const emptyFooter = within(cards[1]).getByRole('group', { name: 'Tools' });
+    expect(emptyFooter.firstElementChild).toHaveClass('lucide-wrench');
+    expect(emptyFooter).toHaveTextContent('No tools');
+    expect(emptyFooter.querySelector('[data-slot="badge"]')).toBeNull();
     expect(screen.getByText('analyze-data')).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'draft-document' }),
@@ -128,9 +160,44 @@ describe('Skills settings page', () => {
     });
   });
 
+  it('wraps long card metadata and tool names without hiding tools, and opens from a footer badge', async () => {
+    const longSkill = {
+      ...skills[0],
+      title: 'LongTitle'.repeat(40),
+      name: 'long-identity'.repeat(40),
+      description: 'LongDescription'.repeat(80),
+      tools: Array.from({ length: 12 }, (_, index) => ({
+        ...skills[0].tools[0],
+        name: `tool-${index}-${'long-name'.repeat(30)}`,
+      })),
+    };
+    mocks.api.request
+      .mockResolvedValueOnce({ rows: [longSkill] })
+      .mockResolvedValueOnce({ ...longSkill, content: '' });
+    await renderPage();
+    const list = await screen.findByRole('list', { name: 'Skills' });
+    const trigger = within(list).getByRole('button', { name: longSkill.title });
+    expect(trigger).toHaveClass(
+      'whitespace-normal',
+      '[overflow-wrap:anywhere]',
+    );
+    expect(within(list).getByText(longSkill.name)).toHaveClass('break-all');
+    expect(within(list).getByText(longSkill.description)).toHaveClass(
+      '[overflow-wrap:anywhere]',
+    );
+    const footer = within(list).getByRole('group', { name: 'Tools' });
+    expect(footer.querySelectorAll('[data-slot="badge"]')).toHaveLength(12);
+    fireEvent.click(within(footer).getByText(longSkill.tools[11].name));
+    const dialog = await screen.findByRole('dialog', { name: 'Skill details' });
+    await within(dialog).findByText('No instructions are available.');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(mocks.api.request).toHaveBeenCalledTimes(2);
+  });
+
   it('searches skill metadata and tool names locally', async () => {
     await renderPage();
-    await screen.findByRole('table');
+    await screen.findByRole('list', { name: 'Skills' });
     const search = screen.getByRole('searchbox', { name: 'Search skills' });
     for (const query of [
       ' DATA ANALYSIS ',
@@ -140,7 +207,7 @@ describe('Skills settings page', () => {
       'Query records',
     ]) {
       fireEvent.change(search, { target: { value: query } });
-      expect(screen.getAllByRole('row')).toHaveLength(2);
+      expect(screen.getAllByRole('listitem')).toHaveLength(1);
       expect(
         screen.getByRole('button', { name: 'Data analysis' }),
       ).toBeVisible();
@@ -150,7 +217,7 @@ describe('Skills settings page', () => {
       'No skills match your search.',
     );
     fireEvent.change(search, { target: { value: '' } });
-    expect(screen.getAllByRole('row')).toHaveLength(3);
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
     expect(mocks.api.request).toHaveBeenCalledTimes(1);
   });
 
@@ -168,13 +235,13 @@ describe('Skills settings page', () => {
     expect(await screen.findByText('No skills are available.')).toBeVisible();
   });
 
-  it('opens from the row, renders safe Markdown and descriptive tools, and closes with Escape', async () => {
+  it('opens from the card, renders safe Markdown and descriptive tools, and closes with Escape', async () => {
     mocks.api.request
       .mockResolvedValueOnce({ rows: skills })
       .mockResolvedValueOnce(detail);
     await renderPage();
     const title = await screen.findByRole('button', { name: 'Data analysis' });
-    fireEvent.click(title.closest('tr')!);
+    fireEvent.click(title.closest('[data-slot="card"]')!);
     const dialog = await screen.findByRole('dialog', { name: 'Skill details' });
     expect(
       within(dialog).getByRole('heading', { name: 'Data analysis' }),
@@ -250,8 +317,12 @@ describe('Skills settings page', () => {
     const trigger = await screen.findByRole('button', {
       name: 'Data analysis',
     });
+    expect(trigger.tagName).toBe('BUTTON');
+    expect(trigger).toHaveAttribute('type', 'button');
+    expect(trigger.tabIndex).toBe(0);
     trigger.focus();
-    fireEvent.click(trigger);
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger, { detail: 0 });
     const dialog = screen.getByRole('dialog', { name: 'Skill details' });
     const close = within(dialog).getByRole('button', { name: 'Close' });
     await waitFor(() => expect(close).toHaveFocus());
@@ -440,7 +511,9 @@ describe('Skills settings page', () => {
     view.unmount();
     expect(signal.aborted).toBe(true);
     await act(async () => pending.resolve({ rows: skills }));
-    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('list', { name: 'Skills' }),
+    ).not.toBeInTheDocument();
   });
 
   it('starts fresh when reopening the same skill and ignores the previous response', async () => {
@@ -472,16 +545,18 @@ describe('Skills settings page', () => {
     ).toBeVisible();
   });
 
-  it('renders Chinese table, dialog loading, error and tool statuses', async () => {
+  it('renders Chinese card footers, dialog loading, error and tool statuses', async () => {
     const pending = deferred<ManagedSkillDetail>();
     mocks.api.request
       .mockResolvedValueOnce({ rows: skills })
       .mockReturnValueOnce(pending.promise)
       .mockResolvedValueOnce(detail);
     await renderPage('zh-CN');
-    expect(
-      await screen.findByRole('columnheader', { name: '工具' }),
-    ).toBeVisible();
+    const list = await screen.findByRole('list', { name: '技能' });
+    expect(within(list).getAllByRole('group', { name: '工具' })).toHaveLength(
+      2,
+    );
+    expect(within(list).getByText('无工具')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Data analysis' }));
     expect(screen.getByRole('status')).toHaveTextContent('正在加载技能详情…');
     await act(async () => pending.reject(new Error('Unavailable')));

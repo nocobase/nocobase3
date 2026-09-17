@@ -1,19 +1,21 @@
 import { apiClientToken, useService } from '@nocobase/app-client';
+import { Wrench } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   Alert,
   AlertDescription,
 } from '../../registry/nocobase-ai/shared/ui/alert.js';
+import { Badge } from '../../registry/nocobase-ai/shared/ui/badge.js';
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
-import { Input } from '../../registry/nocobase-ai/shared/ui/input.js';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../registry/nocobase-ai/shared/ui/table.js';
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '../../registry/nocobase-ai/shared/ui/card.js';
+import { Input } from '../../registry/nocobase-ai/shared/ui/input.js';
 import { SkillDetailsDrawer } from '../components/skill-details-drawer.js';
 import { useT } from '../locales/index.js';
 import { SettingsShell } from '../settings-shell.js';
@@ -115,32 +117,27 @@ export default function SkillsSettingsPage(): ReactElement {
             )}
           </p>
         ) : (
-          <div className='min-w-0 rounded-lg border bg-card text-card-foreground'>
-            <Table aria-label={t('Skills')} className='table-fixed'>
-              <TableHeader>
-                <TableRow>
-                  <TableHead scope='col'>{t('skills.skill')}</TableHead>
-                  <TableHead scope='col'>{t('skills.description')}</TableHead>
-                  <TableHead scope='col'>{t('skills.tools')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {skills.map((skill) => (
-                  <TableRow
-                    key={skill.name}
-                    className='cursor-pointer'
-                    onClick={(event) =>
-                      openSkill(
-                        skill,
-                        event.currentTarget.querySelector('button'),
-                      )
-                    }
-                  >
-                    <TableCell className='whitespace-normal align-top'>
+          <ul
+            aria-label={t('Skills')}
+            className='grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'
+          >
+            {skills.map((skill) => (
+              <li key={skill.name} className='min-w-0'>
+                <Card
+                  className='h-full min-w-0 cursor-pointer hover:ring-ring focus-within:ring-2 focus-within:ring-ring'
+                  onClick={(event) =>
+                    openSkill(
+                      skill,
+                      event.currentTarget.querySelector('button'),
+                    )
+                  }
+                >
+                  <CardHeader className='min-w-0'>
+                    <CardTitle role='heading' aria-level={2}>
                       <Button
                         variant='link'
                         aria-haspopup='dialog'
-                        className='h-auto max-w-full justify-start whitespace-normal break-words px-0 text-left'
+                        className='h-auto min-h-11 max-w-full justify-start whitespace-normal px-0 text-left [overflow-wrap:anywhere]'
                         onClick={(event) => {
                           event.stopPropagation();
                           openSkill(skill, event.currentTarget);
@@ -148,36 +145,51 @@ export default function SkillsSettingsPage(): ReactElement {
                       >
                         {skill.title.trim() || skill.name}
                       </Button>
-                      <p className='break-all font-mono text-xs text-muted-foreground'>
+                    </CardTitle>
+                    <CardDescription>
+                      <span
+                        translate='no'
+                        className='break-all font-mono text-xs'
+                      >
                         {skill.name}
-                      </p>
-                    </TableCell>
-                    <TableCell className='whitespace-pre-wrap break-words align-top'>
+                      </span>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className='min-w-0'>
+                    <p className='whitespace-pre-wrap [overflow-wrap:anywhere]'>
                       {skill.description}
-                    </TableCell>
-                    <TableCell className='whitespace-normal align-top'>
-                      {skill.tools.length ? (
-                        <ul className='flex flex-col gap-1'>
-                          {skill.tools.map((tool) => (
-                            <li
-                              key={tool.name}
-                              className='break-all font-mono text-xs'
-                            >
-                              {tool.name}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <span className='text-muted-foreground'>
-                          {t('skills.noTools')}
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                    </p>
+                  </CardContent>
+                  <CardFooter
+                    role='group'
+                    aria-label={t('skills.tools')}
+                    className='mt-auto min-w-0 flex-wrap gap-2'
+                  >
+                    <Wrench
+                      aria-hidden='true'
+                      className='size-4 shrink-0 text-muted-foreground'
+                    />
+                    {skill.tools.length ? (
+                      skill.tools.map((tool) => (
+                        <Badge
+                          key={tool.name}
+                          variant='secondary'
+                          translate='no'
+                          className='h-auto max-w-full whitespace-normal break-all'
+                        >
+                          {tool.name}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className='text-muted-foreground'>
+                        {t('skills.noTools')}
+                      </span>
+                    )}
+                  </CardFooter>
+                </Card>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
       <SkillDetailsDrawer
