@@ -460,7 +460,13 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     return failed;
   }
   async getState(jobId: string): Promise<JobState | 'unknown'> {
-    return this.state.store.get(jobId)?.state ?? 'unknown';
+    const state = this.state.store.get(jobId)?.state ?? 'unknown';
+    if (
+      state === 'waiting' &&
+      (this.state.store.get(jobId)?.options.priority ?? 0) > 0
+    )
+      return 'prioritized';
+    return state;
   }
   async isJobInState(state: string, jobId: string): Promise<boolean> {
     return (await this.getState(jobId)) === state;
