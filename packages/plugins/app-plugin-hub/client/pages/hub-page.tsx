@@ -1,3 +1,4 @@
+import { PageContainer } from '../components/page-container.js';
 import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import {
@@ -151,7 +152,7 @@ export function ApplicationsCatalog(): ReactElement {
   };
   return (
     <main className='min-h-[calc(100svh-4rem)] bg-muted/20 [&_button:not(:disabled)]:cursor-pointer'>
-      <div className='mx-auto max-w-[1400px] px-5 py-8 sm:px-8'>
+      <PageContainer>
         {error ? (
           <ErrorNotification
             error={error}
@@ -192,7 +193,7 @@ export function ApplicationsCatalog(): ReactElement {
           onSelect={goToApp}
           onPage={(page) => setPagination((current) => ({ ...current, page }))}
         />
-      </div>
+      </PageContainer>
       {createOpen && capabilities.create ? (
         <CreateDialog
           busy={busy}
