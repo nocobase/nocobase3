@@ -19,6 +19,10 @@ export interface MigrationConnection {
 
 /** Services available while applying or rolling back a migration. */
 export interface MigrationContext {
+  /** Runtime configuration for applicability; excluded from history identity. */
+  readonly configuration?: readonly Readonly<Record<string, unknown>>[];
+  /** Immutable target parameters declared by this migration source. */
+  readonly parameters?: Readonly<Record<string, string>>;
   readonly builder: CollectionBuilder;
   readonly query: QueryAdapter;
   readonly connection: MigrationConnection;
@@ -29,11 +33,16 @@ export interface MigrationDefinition {
   readonly name: string;
   readonly transaction?: MigrationTransactionMode;
   readonly irreversible?: boolean;
+  /** Evaluated for pending migrations under the migration lock. False does not record history. */
+  shouldRun?(context: MigrationContext): boolean | Promise<boolean>;
   up(context: MigrationContext): Promise<void>;
   down?(context: MigrationContext): Promise<void>;
 }
 
 export interface LoadedMigration {
+  /** Runtime configuration for applicability; excluded from history identity. */
+  readonly configuration?: readonly Readonly<Record<string, unknown>>[];
+  readonly parameters?: Readonly<Record<string, string>>;
   readonly packageName: string;
   readonly name: string;
   readonly filePath: string;
@@ -46,6 +55,10 @@ export interface LoadedMigration {
 
 /** Filesystem source containing migration definition modules. */
 export interface MigrationSource {
+  /** Runtime configuration for applicability; excluded from history identity. */
+  readonly configuration?: readonly Readonly<Record<string, unknown>>[];
+  /** Distinct parameter sets receive distinct migration history identities. */
+  readonly parameters?: Readonly<Record<string, string>>;
   readonly packageName: string;
   readonly directory: string;
   readonly extensions?: readonly string[];

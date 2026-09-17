@@ -2,7 +2,7 @@ import { defineMigration, type MigrationDefinition } from '@nocobase/db';
 
 const migration: MigrationDefinition = defineMigration({
   name: '202609020001_scheduler_create_definitions',
-  async up({ builder, connection }) {
+  async up({ builder }) {
     await builder.createCollection('scheduleSyncLocks', (collection) => {
       collection.string('appName', { primaryKey: true, nullable: false });
       collection.datetimeTz('createdAt', { nullable: false });
@@ -39,74 +39,6 @@ const migration: MigrationDefinition = defineMigration({
       collection.datetimeTz('createdAt', { nullable: false });
       collection.datetimeTz('updatedAt', { nullable: false });
       collection.unique(['appName', 'key'], { mode: 'index' });
-    });
-    await builder.createCollection('queueJobs', (collection) => {
-      collection.string('id', { length: 255, nullable: false });
-      collection.string('queue', { length: 255, nullable: false });
-      collection.string('status', { length: 20, nullable: false });
-      collection.text('data', { nullable: false });
-      collection.bigInt('score', { unsigned: true });
-      collection.string('workerId', { length: 255 });
-      collection.bigInt('acquiredAt', { unsigned: true });
-      collection.bigInt('executeAt', { unsigned: true });
-      collection.bigInt('finishedAt', { unsigned: true });
-      collection.text('error');
-      collection.string('dedupId', { length: 510 });
-      collection.bigInt('dedupAt', { unsigned: true });
-      collection.bigInt('dedupTtl', { unsigned: true });
-      collection.primary(['id', 'queue'], { name: 'queue_jobs_primary' });
-      collection.index(['queue', 'status', 'score'], {
-        name: 'queue_jobs_status_score_idx',
-      });
-      collection.index(['queue', 'status', 'executeAt'], {
-        name: 'queue_jobs_status_execute_idx',
-      });
-      collection.index(['queue', 'status', 'finishedAt'], {
-        name: 'queue_jobs_status_finished_idx',
-      });
-      collection.index(['queue', 'dedupId'], {
-        name: 'queue_jobs_queue_dedup_idx',
-      });
-    });
-    if (connection.dialect === 'sqlite' || connection.dialect === 'postgres') {
-      const client = await connection.client<{
-        raw(sql: string): Promise<unknown>;
-      }>();
-      await client.raw(
-        `CREATE UNIQUE INDEX IF NOT EXISTS "queue_jobs_dedup_active_uidx"
-         ON "queue_jobs" ("queue", "dedup_id")
-         WHERE "dedup_id" IS NOT NULL
-           AND "status" IN ('pending', 'delayed')`,
-      );
-    }
-    await builder.createCollection('queueSchedules', (collection) => {
-      collection.string('id').primary().notNull();
-      collection.string('status').notNull().defaultTo('active');
-      collection.string('name').notNull();
-      collection.text('payload').notNull();
-      collection.string('cronExpression');
-      collection.bigInt('everyMs');
-      collection.string('timezone').notNull().defaultTo('UTC');
-      // Knex binds SQLite Dates as epoch milliseconds. Numeric columns preserve
-      // that representation; TEXT would turn them into unparseable date strings.
-      // Use doubles because the driver reads bigint as text to preserve precision.
-      // Every valid Date millisecond value is an exactly representable integer.
-      if (connection.dialect === 'sqlite') {
-        collection.double('fromDate');
-        collection.double('toDate');
-        collection.double('nextRunAt');
-        collection.double('lastRunAt');
-        collection.double('createdAt').notNull();
-      } else {
-        collection.native('fromDate', 'timestamp');
-        collection.native('toDate', 'timestamp');
-        collection.native('nextRunAt', 'timestamp');
-        collection.native('lastRunAt', 'timestamp');
-        collection.native('createdAt', 'timestamp').notNull();
-      }
-      collection.integer('runLimit');
-      collection.integer('runCount').notNull().defaultTo(0);
-      collection.index(['status', 'nextRunAt']);
     });
     await builder.createCollection('scheduleOccurrences', (collection) => {
       collection.string('id', { primaryKey: true, nullable: false });
@@ -145,8 +77,6 @@ const migration: MigrationDefinition = defineMigration({
   },
   async down({ builder }) {
     await builder.dropCollection('scheduleOccurrences');
-    await builder.dropCollection('queueSchedules');
-    await builder.dropCollection('queueJobs');
     await builder.dropCollection('scheduleDefinitions');
     await builder.dropCollection('scheduleSyncLocks');
   },

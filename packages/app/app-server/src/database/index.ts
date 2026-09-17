@@ -48,6 +48,9 @@ export {
 } from './tasks.js';
 export {
   planAppDatabaseTasks,
+  planAppRuntimeDatabaseTasks,
+  type AppRuntimeDatabaseTaskPlanOptions,
+  type AppDatabaseMigrationSource,
   type AppDatabaseTask,
   type AppDatabaseTaskKind,
   type AppDatabaseTaskPlanOptions,

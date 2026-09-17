@@ -20,8 +20,6 @@ interface SqliteClient {
 const TABLES = [
   'schedule_sync_locks',
   'schedule_definitions',
-  'queue_jobs',
-  'queue_schedules',
   'schedule_occurrences',
 ] as const;
 
@@ -71,30 +69,12 @@ describe('@nocobase/app-plugin-scheduler database', () => {
     ).resolves.toEqual(
       expect.arrayContaining([expect.objectContaining({ unique: 1 })]),
     );
-    await expect(
-      client.raw('PRAGMA index_list(queue_schedules)'),
-    ).resolves.toEqual(expect.arrayContaining([expect.objectContaining({})]));
-    await expect(
-      client.raw('PRAGMA table_info(queue_schedules)'),
-    ).resolves.toEqual(
-      expect.arrayContaining(
-        [
-          'from_date',
-          'to_date',
-          'next_run_at',
-          'last_run_at',
-          'created_at',
-        ].map((name) => expect.objectContaining({ name, type: 'float' })),
-      ),
+    await expect(client.schema.hasTable('queue_jobs')).resolves.toBe(false);
+    await expect(client.schema.hasTable('queue_schedules')).resolves.toBe(
+      false,
     );
-    await expect(metadataStore.get('queueSchedules')).resolves.toMatchObject({
-      document: {
-        fields: {
-          nextRunAt: { type: 'double' },
-          lastRunAt: { type: 'double' },
-        },
-      },
-    });
+    await expect(metadataStore.get('queueSchedules')).resolves.toBeUndefined();
+    await expect(metadataStore.get('queueJobs')).resolves.toBeUndefined();
     for (const [name, fields] of Object.entries({
       scheduleSyncLocks: ['createdAt', 'updatedAt'],
       scheduleDefinitions: [
@@ -138,30 +118,6 @@ describe('@nocobase/app-plugin-scheduler database', () => {
       createdAt: '2026-09-17T00:00:00.123Z',
       updatedAt: '2026-09-17T00:00:00.123Z',
     });
-    await expect(client.raw('PRAGMA table_info(queue_jobs)')).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'id', notnull: 1, pk: 1 }),
-        expect.objectContaining({ name: 'queue', notnull: 1, pk: 2 }),
-        expect.objectContaining({ name: 'status', notnull: 1 }),
-        expect.objectContaining({ name: 'data', notnull: 1 }),
-        expect.objectContaining({ name: 'dedup_id' }),
-        expect.objectContaining({ name: 'dedup_at' }),
-        expect.objectContaining({ name: 'dedup_ttl' }),
-      ]),
-    );
-    await expect(client.raw('PRAGMA index_list(queue_jobs)')).resolves.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'queue_jobs_status_score_idx' }),
-        expect.objectContaining({ name: 'queue_jobs_status_execute_idx' }),
-        expect.objectContaining({ name: 'queue_jobs_status_finished_idx' }),
-        expect.objectContaining({ name: 'queue_jobs_queue_dedup_idx' }),
-        expect.objectContaining({
-          name: 'queue_jobs_dedup_active_uidx',
-          unique: 1,
-          partial: 1,
-        }),
-      ]),
-    );
     await expect(
       client.raw('PRAGMA foreign_key_list(schedule_occurrences)'),
     ).resolves.toEqual([

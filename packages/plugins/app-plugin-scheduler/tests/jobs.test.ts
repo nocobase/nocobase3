@@ -1,3 +1,4 @@
+import { queueMigrationSource } from '@nocobase/queue';
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,6 +23,20 @@ describe('@nocobase/app-plugin-scheduler', () => {
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     const connection = database.connection();
+    await database
+      .createMigrator({
+        sources: [
+          {
+            ...queueMigrationSource,
+            parameters: {
+              jobsTable: 'queue_jobs',
+              schedulesTable: 'queue_schedules',
+            },
+            configuration: [{ driver: 'database' }],
+          },
+        ],
+      })
+      .latest();
     await migration.up({
       builder: connection.builder,
       query: connection.query,

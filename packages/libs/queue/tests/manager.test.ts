@@ -1,4 +1,3 @@
-import { createSchedules } from './schedule-fixture.js';
 import { Job, QueueSchemaService } from '@boringnode/queue';
 import { createDatabaseManager } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
@@ -93,7 +92,7 @@ describe('createQueueManager', () => {
     const client = await connection.client<Knex>();
     const schema = new QueueSchemaService(client);
     await schema.createJobsTable('queue_jobs');
-    await createSchedules(database.connection());
+    await schema.createSchedulesTable('queue_schedules');
     const dueAt = new Date(Date.now() - 1_000);
     let captured:
       InstanceType<typeof ScheduleContextJob>['context'] | undefined;
@@ -166,7 +165,7 @@ describe('createQueueManager', () => {
       const client = await (await database.connect()).client<Knex>();
       const schema = new QueueSchemaService(client);
       await schema.createJobsTable('queue_jobs');
-      await createSchedules(database.connection());
+      await schema.createSchedulesTable('queue_schedules');
       const queueManager = createQueueManager(
         {
           default: 'sync',

@@ -1,3 +1,4 @@
+import { queueMigrationSource } from '@nocobase/queue';
 import type { Adapter } from '@boringnode/queue/types';
 import { createDatabaseManager } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
@@ -14,6 +15,20 @@ it('reads SQLite schedule dates for reads and claims without extra queries', asy
   });
   const connection = await database.connect();
   const client = await connection.client<Knex>();
+  await database
+    .createMigrator({
+      sources: [
+        {
+          ...queueMigrationSource,
+          parameters: {
+            jobsTable: 'queue_jobs',
+            schedulesTable: 'queue_schedules',
+          },
+          configuration: [{ driver: 'database' }],
+        },
+      ],
+    })
+    .latest();
   await migration.up({
     builder: connection.builder,
     query: connection.query,

@@ -6,7 +6,7 @@ import {
 } from '@nocobase/queue';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import schedulerMigration from '../../app-plugin-scheduler/database/migrations/202609020001_scheduler_create_definitions.js';
+import { queueMigrationSource } from '@nocobase/queue';
 
 import {
   createWorkflowQueueAdapter,
@@ -42,12 +42,20 @@ function databaseQueueConfig(): AppQueueConfig {
 }
 
 async function createQueueTables(database: DatabaseManager): Promise<void> {
-  const connection = await database.connect();
-  await schedulerMigration.up({
-    connection,
-    builder: connection.builder,
-    query: connection.query,
-  });
+  await database
+    .createMigrator({
+      sources: [
+        {
+          ...queueMigrationSource,
+          parameters: {
+            jobsTable: 'queue_jobs',
+            schedulesTable: 'queue_schedules',
+          },
+          configuration: [{ driver: 'database' }],
+        },
+      ],
+    })
+    .latest();
 }
 
 async function countPendingJobs(database: DatabaseManager): Promise<number> {
