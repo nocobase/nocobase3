@@ -1,6 +1,6 @@
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
@@ -110,7 +110,7 @@ function ExamplePanel(props: ExamplePanelProps): ReactElement {
 }
 
 export default function FindManyPage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const repository = useMemo(() => findManyRepository(api), [api]);
   const { t } = useTranslation(NS);
   const runRef = useRef(0);

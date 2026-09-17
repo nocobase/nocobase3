@@ -1,8 +1,4 @@
-import {
-  apiClientToken,
-  useService,
-  type ApiClient,
-} from '@nocobase/app-client';
+import { useApiClient, type ApiClient } from '@nocobase/app-client';
 import { CircleAlert, Server, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
@@ -38,7 +34,7 @@ const transportColors: Record<MCPTransport, string> = {
 };
 
 export default function MCPPage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const t = useT();
   const [servers, setServers] = useState<MCPRecord[]>([]);
   const [tools, setTools] = useState<Record<string, MCPToolEntry[]>>({});

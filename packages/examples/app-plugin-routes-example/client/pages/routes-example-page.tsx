@@ -1,5 +1,5 @@
 import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 import { Button } from '../components/ui/button.js';
@@ -17,7 +17,7 @@ export default function RoutesExamplePage(): ReactElement {
   );
 
   // The Application's own API client, so the route follows whatever `api.baseURL` the Application is configured with.
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { description } = useRoutesExample();
   const [result, setResult] = useState<RoutesExampleResponse>();
   const [error, setError] = useState<string>();

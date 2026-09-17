@@ -1,6 +1,6 @@
 import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
@@ -61,7 +61,7 @@ const emptyForm = {
 };
 
 export default function ArticlesPage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t, i18n } = useTranslation();
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');

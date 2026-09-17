@@ -1,6 +1,6 @@
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Database, Search } from 'lucide-react';
 import {
@@ -53,7 +53,7 @@ function readSelection(key: string): readonly [string, string] {
 
 export default function DatabaseExplorerPage(): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-database-explorer');
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const explorer = useMemo(() => new DatabaseExplorerClient(api), [api]);
 
   // Selection lives in the URL so a view can be linked to and restored.

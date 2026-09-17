@@ -1,3 +1,4 @@
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, FileClock, RefreshCw } from 'lucide-react';
@@ -28,6 +29,7 @@ import {
 } from './api.js';
 
 export function NotificationLogsPage(): React.ReactElement {
+  const api = useApiClient();
   const { t } = useTranslation('@nocobase/app-plugin-notification');
 
   const [logs, setLogs] = useState<readonly NotificationLogDetails[]>([]);
@@ -43,14 +45,14 @@ export function NotificationLogsPage(): React.ReactElement {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchNotificationLogs(controller.signal)
+    fetchNotificationLogs(api, controller.signal)
       .then(setLogs)
       .catch((reason: Error) => {
         if (reason.name !== 'AbortError') setError(reason.message);
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, [revision]);
+  }, [api, revision]);
 
   const totals = useMemo(
     () => ({

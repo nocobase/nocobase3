@@ -65,7 +65,7 @@ await profiles.updateOne({
 
 - `POST /api/fileExampleProfiles:<action>`、`POST /api/fileExampleOrders:<action>`。
 
-内容入口属于根路由，不在 `/api` 下。部署前缀由宿主添加一次，例如 `/main/uploads/profile-avatars/...`。页面直接使用响应中的 `contentUrl`；业务表通过 `findMany()` 读取后与文件表的 `profileId`、`orderId` 在前端分组。Client 从核心插件导入 `clientFileRepositoryManagerToken` 调用文件仓库，从 `apiClientToken` 调用业务仓库。
+内容入口属于根路由，不在 `/api` 下。部署前缀由宿主添加一次，例如 `/main/uploads/profile-avatars/...`。页面直接使用响应中的 `contentUrl`；业务表通过 `findMany()` 读取后与文件表的 `profileId`、`orderId` 在前端分组。React 页面从核心插件导入 `clientFileRepositoryManagerToken`，通过 `useService(clientFileRepositoryManagerToken)` 获取文件仓库管理器；通过 `@nocobase/app-client` 的 `useApiClient()` 获取宿主 HTTP 客户端，再调用 `api.repository()` 访问业务仓库。
 
 这套表和路由仅是示例，不是核心插件的默认约定。业务应用可只启用核心插件，使用自己的 collection、disk、accessPath 和 actions。
 

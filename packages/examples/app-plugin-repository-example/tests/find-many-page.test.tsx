@@ -18,7 +18,7 @@ const state = vi.hoisted(() => ({ api: undefined as ApiClient | undefined }));
 
 vi.mock('@nocobase/app-client', async (original) => ({
   ...(await original<typeof import('@nocobase/app-client')>()),
-  useService: () => state.api,
+  useApiClient: () => state.api,
 }));
 
 import FindManyPage from '../client/pages/find-many-page.js';

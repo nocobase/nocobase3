@@ -1,6 +1,6 @@
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useId, useState, type ReactElement } from 'react';
 import { Badge } from '../components/ui/badge.js';
@@ -57,7 +57,7 @@ function OperationCard({
 }: {
   readonly operation: RelationOperation;
 }): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t } = useTranslation(NS);
   const formId = useId();
   const [relation, setRelation] = useState<LabRelation>('tasks');

@@ -1,8 +1,4 @@
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import {
   useCallback,
@@ -30,7 +26,7 @@ export default function HubPage(): ReactElement {
 }
 
 export function ApplicationsCatalog(): ReactElement {
-  const client = useService(apiClientToken);
+  const client = useApiClient();
   const authorization = useService(authorizationClientToken);
   const navigate = useNavigate();
   const parentPath = useResolvedPath('.');
