@@ -333,4 +333,36 @@ describe('application-private queue service', () => {
     await Promise.resolve();
     expect(workers).toBe(1);
   });
+  it('permanently fails a cancelled dispatch even when its handler returns normally', async () => {
+    const instance = service('memory-test');
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const memory = createInMemoryBackendFactory();
+    let inspect: ((id: string) => Promise<string>) | undefined;
+    instance.registerBackend('memory-test', (name, options, metadata) => {
+      const backend = memory(name, options, metadata);
+      inspect = (id) => backend.getState(id);
+      return backend;
+    });
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let signal: AbortSignal | undefined;
+    instance.consumer('jobs').consume(async (_channel, _message, received) => {
+      signal = received;
+      await gate;
+    });
+    await instance.setup();
+    const { jobId } = await instance.producer('jobs').publish('event', {});
+    try {
+      await expect.poll(() => signal !== undefined).toBe(true);
+      expect(instance.manager('jobs').cancelJob(jobId)).toBe(true);
+      expect(signal?.aborted).toBe(true);
+    } finally {
+      release();
+    }
+    await expect.poll(() => inspect?.(jobId)).toBe('failed');
+    expect(instance.manager('jobs').cancelJob(jobId)).toBe(false);
+  });
 });

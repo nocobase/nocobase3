@@ -4,6 +4,7 @@ import { createBackendRegistry } from './backends/registry.js';
 import { resolveQueueConfiguration } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
 import { createQueueProducer } from './producer.js';
+import { QueueCancellation } from './cancellation.js';
 import { createQueueHandlerRegistry } from './consumer.js';
 import type { QueueHandlerRegistry } from './consumer.js';
 import { decodeQueueMessage } from './serialization.js';
@@ -85,6 +86,7 @@ interface QueueEntry {
   producer: QueueProducer;
   consumer: QueueConsumer;
   handlers: QueueHandlerRegistry;
+  cancellation: QueueCancellation;
   manual: QueueRuntimeOptions;
   queue?: ServiceQueue;
   worker?: ServiceWorker;
@@ -110,8 +112,10 @@ export function createQueueService(
     const previous = entries.get(name);
     if (previous) return previous;
     const handlers = createQueueHandlerRegistry();
+    const cancellation = new QueueCancellation();
     const current: QueueEntry = {
       handlers,
+      cancellation,
       manual: {},
       manager: {
         async configure(update): Promise<void> {
@@ -136,10 +140,10 @@ export function createQueueService(
           await current.queue.drain(drainOptions?.delayed);
         },
         cancelJob(jobId, reason): boolean {
-          return current.worker?.cancelJob(jobId, reason) ?? false;
+          return cancellation.cancelJob(jobId, reason);
         },
         cancelAllJobs(reason): void {
-          current.worker?.cancelAllJobs(reason);
+          cancellation.cancelAllJobs(reason);
         },
       },
       producer: createQueueProducer({
@@ -320,10 +324,17 @@ export function createQueueService(
                   throw new Error(
                     'Queue Worker did not provide an abort signal',
                   );
-                await current.handlers.dispatch(
-                  job.name,
-                  decodeQueueMessage(job.data),
+                if (job.id === undefined)
+                  throw new Error('Queue job has no ID');
+                await current.cancellation.run(
+                  job.id,
                   signal,
+                  (dispatchSignal) =>
+                    current.handlers.dispatch(
+                      job.name,
+                      decodeQueueMessage(job.data),
+                      dispatchSignal,
+                    ),
                 );
               },
               { ...base, autorun: false, concurrency: config.concurrency },
