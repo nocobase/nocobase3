@@ -1,6 +1,6 @@
 import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -77,7 +77,7 @@ function Value({ value }: { value: NumericValue }): ReactElement {
 }
 
 export default function NumericExamplesPage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t } = useTranslation();
   const [source, setSource] = useState<'query' | 'repository'>('query');
   const [sample, setSample] = useState<'all' | 'null' | 'empty'>('all');

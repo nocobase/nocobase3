@@ -1,10 +1,6 @@
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
@@ -97,7 +93,7 @@ const EMPTY_PAGE: ManagedUserPage = {
 
 export default function UsersPage(): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-users');
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const authorization = useService(authorizationClientToken);
   const users = useMemo(() => new UsersClient(api), [api]);
   const [options, setOptions] = useState<UsersOptions>({ roleScopes: [] });

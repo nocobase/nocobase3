@@ -8,7 +8,7 @@ import MCPPage from '../client/pages/mcp-page.js';
 
 vi.mock('@nocobase/app-client', () => ({
   apiClientToken: {},
-  useService: () => api,
+  useApiClient: () => api,
 }));
 const api = {};
 vi.mock('../client/mcp-service.js', () => ({

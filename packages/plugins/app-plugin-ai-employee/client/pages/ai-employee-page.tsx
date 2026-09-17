@@ -1,4 +1,4 @@
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import {
   Check,
   ChevronDown,
@@ -467,7 +467,7 @@ function ModelMultiSelect({
 }
 
 export default function AIEmployeePage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const t = useT();
   const { open } = useNotification();
   const [employees, setEmployees] = useState<AIEmployeeRecord[]>([]);

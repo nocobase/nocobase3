@@ -65,10 +65,10 @@ Declaration modules are imported by `server:inspect`, so nothing at module top l
 
 ## Client-side services
 
-The client has the same pattern. `client/service-provider.ts` holds application startup logic, and services are resolved with `useService`:
+The client has the same pattern. `client/service-provider.ts` holds application startup logic. In React components and custom Hooks, use `useApiClient()` to resolve the application's HTTP client and `useService(token)` to resolve other services:
 
 ```tsx
-const api = useService(apiClientToken);
+const api = useApiClient();
 const realtime = useService(realtimeClientToken);
 ```
 

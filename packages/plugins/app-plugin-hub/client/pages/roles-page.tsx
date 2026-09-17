@@ -1,4 +1,4 @@
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Check, CircleMinus, LoaderCircle } from 'lucide-react';
 import {
@@ -32,7 +32,7 @@ interface HubRolesResponse {
 
 export default function RolesPage(): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const [roles, setRoles] = useState<readonly HubRoleDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);

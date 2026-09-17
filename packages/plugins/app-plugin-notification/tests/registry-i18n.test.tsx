@@ -16,10 +16,7 @@ vi.mock('@nocobase/app-client', async (importOriginal) => {
   });
   return {
     ...actual,
-    useService: (token: unknown) => {
-      expect(token).toBe(actual.apiClientToken);
-      return api;
-    },
+    useApiClient: () => api,
   };
 });
 

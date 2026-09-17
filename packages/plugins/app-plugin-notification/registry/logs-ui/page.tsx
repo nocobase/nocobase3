@@ -1,4 +1,4 @@
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, FileClock, RefreshCw } from 'lucide-react';
@@ -29,7 +29,7 @@ import {
 } from './api.js';
 
 export function NotificationLogsPage(): React.ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t } = useTranslation('@nocobase/app-plugin-notification');
 
   const [logs, setLogs] = useState<readonly NotificationLogDetails[]>([]);

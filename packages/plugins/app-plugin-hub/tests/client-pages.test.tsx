@@ -33,6 +33,7 @@ vi.mock('@nocobase/app-client', () => ({
   ApiClientError: class ApiClientError extends Error {},
   apiClientToken: mocks.apiClientToken,
   resolveAppUrl: (value: string) => value,
+  useApiClient: () => mocks.client,
   useService: (token: unknown) =>
     token === mocks.apiClientToken ? mocks.client : mocks.authorization,
 }));

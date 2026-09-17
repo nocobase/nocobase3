@@ -1,9 +1,5 @@
 import { LoaderCircle } from 'lucide-react';
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import {
   createContext,
@@ -97,7 +93,7 @@ export default function AppPage(): ReactElement {
 
 function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
-  const client = useService(apiClientToken);
+  const client = useApiClient();
   const authorization = useService(authorizationClientToken);
   const navigate = useNavigate();
   const location = useLocation();
