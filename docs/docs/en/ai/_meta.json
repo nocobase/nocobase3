@@ -2,7 +2,7 @@
   {
     "type": "file",
     "name": "index",
-    "label": "Working with AI"
+    "label": "Working with an AI Agent"
   },
   {
     "type": "file",
@@ -12,7 +12,7 @@
   {
     "type": "file",
     "name": "reviewing-output",
-    "label": "Reviewing what AI produced"
+    "label": "Reviewing what AI Agent produced"
   },
   {
     "type": "file",

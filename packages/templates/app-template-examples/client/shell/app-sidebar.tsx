@@ -125,8 +125,14 @@ export function NavigationTree({
     key: selectedKey,
     expanded: selected,
   });
-  const expanded =
-    disclosure.key === selectedKey ? disclosure.expanded : selected;
+  // Reveal the selected route without discarding other groups' disclosure state.
+  if (disclosure.key !== selectedKey) {
+    setDisclosure({
+      key: selectedKey,
+      expanded: selected || disclosure.expanded,
+    });
+  }
+  const expanded = disclosure.expanded;
 
   if (children.length > 0 && item.route.componentLoader) {
     return (
@@ -175,8 +181,12 @@ export function NavigationTree({
 
   if (children.length > 0) {
     return (
-      <details className='group' open={containsSelection(item, selectedKey)}>
+      <details className='group' open={expanded}>
         <summary
+          onClick={(event) => {
+            event.preventDefault();
+            setDisclosure({ key: selectedKey, expanded: !expanded });
+          }}
           className={`flex cursor-pointer list-none items-center rounded-lg px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&::-webkit-details-marker]:hidden ${collapsed ? 'md:justify-center md:px-2' : 'justify-between'}`}
           title={collapsed ? label : undefined}
         >
