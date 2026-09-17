@@ -538,6 +538,15 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const offset = optionalInteger(context.req.query('offset'), 'offset');
       const limit = optionalInteger(context.req.query('limit'), 'limit');
       validateLogPagination(offset ?? 0, limit ?? 100);
+      if (optionalBoolean(context.req.query('withTotal'), 'withTotal')) {
+        return context.json({
+          data: await mail.listSyncRunsPage(
+            operationContext(context),
+            offset,
+            limit,
+          ),
+        });
+      }
       return context.json({
         data: await mail.listSyncRuns(operationContext(context), offset, limit),
       });
@@ -562,6 +571,17 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const offset = optionalInteger(context.req.query('offset'), 'offset');
       const limit = optionalInteger(context.req.query('limit'), 'limit');
       validateLogPagination(offset ?? 0, limit ?? 100);
+      if (optionalBoolean(context.req.query('withTotal'), 'withTotal')) {
+        return context.json({
+          data: await mail.listSubmissionsPage(
+            operationContext(context),
+            context.req.query('bulkOnly') === 'true',
+            offset,
+            context.req.query('groupByBatch') === 'true',
+            limit,
+          ),
+        });
+      }
       return context.json({
         data: await mail.listSubmissions(
           operationContext(context),
@@ -623,6 +643,8 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         conversationId: context.req.query('conversationId'),
         query: context.req.query('query'),
         cursor: context.req.query('cursor'),
+        offset: optionalInteger(context.req.query('offset'), 'offset'),
+        withTotal: optionalBoolean(context.req.query('withTotal'), 'withTotal'),
         limit: optionalInteger(context.req.query('limit'), 'limit'),
         unread: optionalBoolean(context.req.query('unread'), 'unread'),
         starred: optionalBoolean(context.req.query('starred'), 'starred'),
@@ -640,6 +662,8 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
           : undefined,
         query: context.req.query('query'),
         cursor: context.req.query('cursor'),
+        offset: optionalInteger(context.req.query('offset'), 'offset'),
+        withTotal: optionalBoolean(context.req.query('withTotal'), 'withTotal'),
         limit: optionalInteger(context.req.query('limit'), 'limit'),
         unread: optionalBoolean(context.req.query('unread'), 'unread'),
         starred: optionalBoolean(context.req.query('starred'), 'starred'),

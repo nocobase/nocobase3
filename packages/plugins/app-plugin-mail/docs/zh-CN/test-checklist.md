@@ -29,24 +29,23 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 - [ ] 准备 0 MB、25 MB、超过 25 MB 和多附件总量超过限制的附件
 - [ ] 准备 Provider 认证失败、游标过期、404、5xx、超时、网络中断和重复回调场景
 
-| 页面           | 当前地址                        | 当前验证范围                               |
-| -------------- | ------------------------------- | ------------------------------------------ |
-| 开发工作台     | `/dev/mail/center`              | 邮件工作台能力                             |
-| 账号管理       | `/dev/mail/accounts`            | Provider、账号、签名、标签和模板           |
-| 邮件管理       | `/dev/mail/management`          | 独立权限下查看全部账号邮件、筛选和批量操作 |
-| 批量发件       | `/dev/mail/bulk-send`           | 收件人解析、预览、逐收件人发送和失败重试   |
-| 发送调试页     | `/dev/mail/send`                | 单封发送接口和基本参数                     |
-| 用户同步日志   | `/dev/mail/sync-logs`           | 当前用户同步记录                           |
-| 用户发送日志   | `/dev/mail/send-logs`           | 当前用户发送记录                           |
-| 管理员账号     | `/settings/mail/accounts`       | 全部用户账号的只读查看                     |
-| 管理员操作日志 | `/settings/mail/operation-logs` | 全部用户同步和发送操作                     |
+| 页面         | 当前地址                  | 当前验证范围                               |
+| ------------ | ------------------------- | ------------------------------------------ |
+| 开发工作台   | `/dev/mail/center`        | 邮件工作台能力                             |
+| 账号管理     | `/dev/mail/accounts`      | Provider、账号、签名、标签和模板           |
+| 邮件管理     | `/dev/mail/management`    | 独立权限下查看全部账号邮件、筛选和批量操作 |
+| 批量发件     | `/dev/mail/bulk-send`     | 收件人解析、预览、逐收件人发送和失败重试   |
+| 发送调试页   | `/dev/mail/send`          | 单封发送接口和基本参数                     |
+| 用户同步日志 | `/dev/mail/sync-logs`     | 当前用户同步记录                           |
+| 用户发送日志 | `/dev/mail/send-logs`     | 当前用户发送记录                           |
+| 管理员账号   | `/settings/mail/accounts` | 全部用户账号的只读查看                     |
 
 ## 二、[UI][SEC] 路由、权限与通用页面状态
 
 - [ ] [P0][UI] MAIL-ROUTE-001：插件启用后当前页面范围内的所有路由均能加载，懒加载页面无报错
 - [ ] [P0][SEC] MAIL-ROUTE-002：未登录在浏览器访问邮件页面时跳转登录，未登录直接调用邮件接口时返回 401
 - [ ] [P0][SEC] MAIL-ROUTE-003：没有 `mail.workspace` 权限访问 `/dev/mail/center`、`/dev/mail/accounts` 和 `/dev/mail/send` 时返回 403
-- [ ] [P0][SEC] MAIL-ROUTE-004：没有 `mail.admin` 权限访问 `/settings/mail/accounts` 和当前管理员操作日志页，或没有 `mail.management` 权限访问 `/dev/mail/management` 时返回 403
+- [ ] [P0][SEC] MAIL-ROUTE-004：没有 `mail.admin` 权限访问 `/settings/mail/accounts`，或没有 `mail.management` 权限访问 `/dev/mail/management` 时返回 403
 - [ ] [P0][SEC] MAIL-ROUTE-005：用户 A 无法查看或操作用户 B 的账号、邮件、草稿、附件、标签、模板和日志
 - [ ] [P0][UI] MAIL-UI-001：页面加载中、空数据、接口失败、重试和刷新状态显示正确
 - [ ] [P0][SEC] MAIL-UI-002：接口错误显示安全的本地化错误信息，不暴露凭据、游标、租约和内部堆栈
@@ -167,11 +166,8 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 - [ ] [P1][SEC] MAIL-USER-SYNCLOG-002：用户同步日志不暴露同步游标、lease 和 Provider 原始错误信息
 - [ ] [P1][UI] MAIL-USER-SENDLOG-001：用户发送日志只显示当前用户记录，展示账号、状态、submissionId、providerMessageId、时间和错误码
 - [ ] [P1][UI] MAIL-USER-SENDLOG-002：accepted、failed、unknown、pending 和 cancelled 状态以及定时发送前后变化显示正确
-- [ ] [P0][SEC] MAIL-ADMIN-LOG-001：管理员当前操作日志页可查看所有用户的同步和发送操作，普通用户访问被拒绝
-- [ ] [P1][UI] MAIL-ADMIN-LOG-002：管理员操作日志统计卡片、Sync/Send 标签页、数量和列表数据正确
-- [ ] [P1][UI] MAIL-ADMIN-LOG-003：管理员操作日志支持按 operation ID、账号、用户、Provider、状态和时间组合筛选，清除筛选后恢复完整列表
-- [ ] [P1][UI][SRV] MAIL-ADMIN-LOG-004：failed 或 cancelled 同步显示 Retry，pending 或 running 同步显示 Cancel，其他状态不显示这两个操作；操作后不产生重复同步
-- [ ] [P0][SEC] MAIL-ADMIN-LOG-005：管理员日志中的错误只显示公开错误码和安全摘要，日志页不能发送、删除或修改普通用户邮件
+- [ ] [P0][API][SEC] MAIL-ADMIN-LOG-001：管理员操作日志 API 可查询所有用户的同步和发送操作，普通用户访问被拒绝
+- [ ] [P0][API][SEC] MAIL-ADMIN-LOG-005：管理员操作日志 API 中的错误只返回公开错误码和安全摘要
 
 ## 八、[API][SEC] 接口、OAuth 与安全
 

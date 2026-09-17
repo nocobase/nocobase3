@@ -74,10 +74,11 @@ export class MailMessagesStore {
   public async listAllMessages(
     input: MailListMessagesInput,
   ): Promise<MailPage<MailMessageSummary>> {
-    return this.listMessagesForAccounts(
-      await this.accounts.listAllAccounts(),
-      input,
-    );
+    const accounts = await this.accounts.listAllAccounts();
+    const requested = input.accountIds
+      ? accounts.filter((account) => input.accountIds?.includes(account.id))
+      : accounts;
+    return this.listMessagesForAccounts(requested, input);
   }
 
   private async listMessagesForAccounts(
@@ -85,7 +86,15 @@ export class MailMessagesStore {
     input: MailListMessagesInput,
     draftsOnlyInDraftFolders = false,
   ): Promise<MailPage<MailMessageSummary>> {
-    if (requested.length === 0) return { items: [] };
+    if (
+      input.offset !== undefined &&
+      (!Number.isSafeInteger(input.offset) || input.offset < 0)
+    )
+      throw new TypeError('Mail message offset must be a nonnegative integer.');
+    if (input.offset !== undefined && input.cursor !== undefined)
+      throw new TypeError('Mail message offset and cursor cannot be combined.');
+    if (requested.length === 0)
+      return { items: [], ...(input.withTotal ? { total: 0 } : {}) };
     const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
     const cursor = parseMessageCursor(input.cursor);
     let query = this.database
@@ -211,6 +220,15 @@ export class MailMessagesStore {
           builder.eb('mailMessages.recipients', 'like', `%${input.query}%`),
         ]),
       );
+    const count = input.withTotal
+      ? await query
+          .clearSelect()
+          .select(({ fn }) => [
+            fn.count('mailMessages.id').distinct().as('count'),
+          ])
+          .executeTakeFirst<{ readonly count: number | string }>()
+      : undefined;
+    const total = input.withTotal ? Number(count?.count ?? 0) : undefined;
     if (cursor) {
       query = query.where((builder) =>
         builder.eb.or([
@@ -222,6 +240,7 @@ export class MailMessagesStore {
         ]),
       );
     }
+    if (input.offset !== undefined) query = query.offset(input.offset);
     const rows = await query
       .orderBy('mailMessages.sortAt', 'desc')
       .orderBy('mailMessages.id', 'desc')
@@ -237,6 +256,7 @@ export class MailMessagesStore {
       items,
     );
     return {
+      ...(total === undefined ? {} : { total }),
       items: loaded.map((message) => ({
         ...message,
         ...(message.conversationId

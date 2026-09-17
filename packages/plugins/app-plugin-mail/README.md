@@ -9,10 +9,8 @@ The first runnable vertical slice provides:
 - authenticated Mail API routes for sending, starting sync, reading sync
   status, and reading synchronized messages;
 - authenticated OAuth start plus a public one-time-state callback;
-- a permission-protected Mail Settings group with `/settings/mail/accounts`
-  for read-only all-user account visibility, plus `/settings/mail/operation-logs` for all-user synchronization and delivery operation logs;
-- a separately permissioned `/dev/mail/management` table for all-user message
-  search and per-message batch actions;
+- a permission-protected Mail Settings group with `/settings/mail/accounts` for read-only all-user account visibility; owners display their username, falling back to their name or user ID when unavailable;
+- a separately permissioned `/dev/mail/management` table for all-user message search and per-message batch actions; moving messages to a folder is available only in the personal Mail center;
 - a development Mail center at `/dev/mail/center`, account connection under `/dev/mail/accounts`, and development diagnostics under `/dev/mail`; `/dev/mail/accounts` defaults to a connected-account table and also exposes account association (including the initial sync date), signature and NocoBase-owned label management, and reusable-template management;
 - an all-account workspace view with account and folder filtering, refresh, message search, conversation detail, account connection, synchronization controls, sending, synchronization logs, and delivery submission logs; the composer remembers its last selected account in browser storage and the default synchronization action covers every active account;
 - database-backed OAuth credential storage with token-rotation support;
@@ -57,8 +55,8 @@ The first runnable vertical slice provides:
   session-scoped recovery after a page reload;
 - a Mail center at `/dev/mail/center` with a cross-account unread badge that
   refreshes on user-scoped realtime mail invalidations and WebSocket recovery;
-- filterable operation logs with safe synchronization cancellation and retry;
-- bounded bulk delivery as separate per-recipient submissions, with expandable batch parents, recipient details, pagination of 20 complete batches, automatic status refresh, batch-scoped retries for failed deliveries, and cancellation before a worker claims sending;
+- personal synchronization and delivery logs;
+- bounded bulk delivery as separate per-recipient submissions, with expandable batch parents, recipient details, pagination of complete batches, automatic status refresh, batch-scoped retries for failed deliveries, and cancellation before a worker claims sending;
 - current-user account selection, account deactivation/reactivation, and removal with local data cleanup;
 - Provider contracts, registry, adapter resolver, database storage, and an
   explicit migration.
@@ -232,4 +230,6 @@ The workspace uses a desktop three-pane layout with mailbox navigation, the mess
 
 ### Development sending and logs
 
-The development Compose mail page (`/dev/mail/send`) uses one Mail center composer with Send and Send separately actions in its footer. Both actions share recipients, content, attachments, signatures, templates, and scheduling; ordinary sending supports Cc/Bcc, while separate sending requires those fields to be empty and deduplicates up to 100 recipients. Draft saving and recovery are shared. Mail logs (`/dev/mail/logs`) brings sending, batch delivery, and synchronization into one page with directly accessible child views; the former standalone URLs redirect to their corresponding views.
+The development Compose mail page (`/dev/mail/send`) uses one Mail center composer with Send and Send separately actions in its footer. Both actions share recipients, content, attachments, signatures, templates, and scheduling; ordinary sending supports Cc/Bcc, while separate sending requires those fields to be empty and deduplicates up to 100 recipients. Draft saving and recovery are shared. The From address selector lists sendable addresses across accounts, including aliases, without a separate account selector; each account retains its own unfinished message while the page remains open. The inline composer has no cancel or close action and opens a fresh message after sending or saving a draft. Mail logs (`/dev/mail/logs`) brings sending, batch delivery, and synchronization into one page with directly accessible child views; the former standalone URLs redirect to their corresponding views.
+
+Mail account tables, the management message table, and log views share page buttons, direct page entry, previous/next navigation, and a page-size selector (20, 50, or 100; default 20). Changing filters or page size resets the view to the first page. Personal sending and synchronization histories request bounded pages from the server; bulk history paginates complete batches with expandable recipient results. Administration logs paginate the filtered recent-history results. The shared controls include the last page number. Message queries with `withTotal=true` return the matching message count; synchronization and submission history queries with `withTotal=true` return `{ items, total }`, with bulk history totals counting batches. The Mail center retains its original cursor pagination and 50-message page size. Message APIs accept a nonnegative `offset` for direct page selection, mutually exclusive with `cursor`; existing cursor consumers remain supported.

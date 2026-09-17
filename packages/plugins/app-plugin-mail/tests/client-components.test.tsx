@@ -845,7 +845,9 @@ describe('[UI][SEC] mail client components and capability states', () => {
     const more = screen.getByRole('button', { name: 'More actions' });
     expect(more).toHaveAttribute('title', 'More actions');
     fireEvent.click(more);
-    const todo = await screen.findByRole('menuitemcheckbox', { name: 'To do' });
+    const todo = await screen.findByRole('menuitemcheckbox', {
+      name: 'Mark as to do',
+    });
     expect(todo).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(todo);
     expect(toggleTodo).toHaveBeenCalledWith(message);

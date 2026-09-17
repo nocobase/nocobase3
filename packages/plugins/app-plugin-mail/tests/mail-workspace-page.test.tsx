@@ -423,6 +423,55 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     expect(mail.listMessages.mock.lastCall?.[0]).not.toHaveProperty('cursor');
   });
 
+  it.each([['management', MailManagementPage, 'listManagedMessages']] as const)(
+    'jumps directly to unvisited %s pages, rejects empty pages, and resets page size',
+    async (_name, Page, method) => {
+      const first = createUnreadMessage('First page');
+      const fourth = createUnreadMessage('Fourth page');
+      mail[method].mockImplementation(async (input) => ({
+        items:
+          input.offset === 80 ? [] : [input.offset === 60 ? fourth : first],
+        nextCursor: input.offset === 80 ? undefined : 'next',
+      }));
+      render(<Page />);
+      await screen.findByText(first.subject);
+      fireEvent.change(screen.getByRole('spinbutton', { name: 'Go to page' }), {
+        target: { value: '4' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Go', exact: true }));
+      await screen.findByText(fourth.subject);
+      expect(mail[method]).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 60, limit: 20 }),
+      );
+      expect(screen.getByRole('button', { name: 'Page 4' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      mail[method].mockResolvedValueOnce({ items: [] });
+      fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+      await screen.findByText(
+        'This page has no records. Choose another page or refresh.',
+      );
+      expect(screen.getByText(fourth.subject)).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Page 4' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+      fireEvent.change(
+        screen.getByRole('combobox', { name: 'Rows per page' }),
+        { target: { value: '50' } },
+      );
+      await screen.findByText(first.subject);
+      expect(mail[method]).toHaveBeenLastCalledWith(
+        expect.objectContaining({ limit: 50 }),
+      );
+      expect(screen.getByRole('button', { name: 'Page 1' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
+    },
+  );
+
   it('ignores a pending page response after switching mailbox filters', async () => {
     mail.listMessages.mockResolvedValueOnce({
       items: [],
@@ -665,15 +714,15 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
 
-    expect(document.getElementById('mail-compose-cc')).not.toBeInTheDocument();
-    expect(document.getElementById('mail-compose-bcc')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('CC')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('BCC')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cc' }));
-    expect(document.getElementById('mail-compose-cc')).toBeInTheDocument();
-    expect(document.getElementById('mail-compose-bcc')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('CC')).toBeInTheDocument();
+    expect(screen.queryByLabelText('BCC')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Bcc' }));
-    expect(document.getElementById('mail-compose-bcc')).toBeInTheDocument();
+    expect(screen.queryByLabelText('BCC')).toBeInTheDocument();
   });
 
   it('shows the scheduled time only after enabling scheduled send', async () => {
@@ -694,7 +743,7 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     fireEvent.input(editor);
 
     expect(
-      document.getElementById('mail-compose-scheduled-at'),
+      screen.queryByLabelText('Send later (optional)'),
     ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Schedule send' }));
@@ -1852,10 +1901,39 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
       accountId: undefined,
       query: undefined,
       limit: 20,
+      withTotal: true,
     });
-    expect(
-      screen.getByRole('combobox', { name: 'Messages per page' }),
-    ).toHaveValue('20');
+    expect(screen.getByRole('combobox', { name: 'Rows per page' })).toHaveValue(
+      '20',
+    );
+  });
+
+  it('opens the last management page and updates its last page number after filtering', async () => {
+    mail.listManagedMessages.mockImplementation(async ({ offset, query }) => ({
+      items: [createUnreadMessage(`Message at ${offset ?? 0}`)],
+      total: query ? 25 : 205,
+      nextCursor: offset === 200 ? undefined : 'next',
+    }));
+    render(<MailManagementPage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Page 11' }));
+    expect(await screen.findByText('Message at 200')).toBeVisible();
+    expect(mail.listManagedMessages).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 200, limit: 20, withTotal: true }),
+    );
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('textbox', { name: /Search/i }), {
+      target: { value: 'filtered' },
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Page 11' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Page 2' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Page 1' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 
   it('replaces management rows when paging and clears selection when returning', async () => {
@@ -1873,7 +1951,7 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     await screen.findByText(second.subject);
     expect(screen.queryByText(first.subject)).not.toBeInTheDocument();
-    expect(screen.getByText('Page 2')).toBeInTheDocument();
+    expect(screen.getByText('Page 2 · 20 per page')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
     expect(screen.getAllByRole('checkbox')[1]).not.toBeChecked();
     expect(mail.listManagedMessages).toHaveBeenLastCalledWith({
@@ -1881,12 +1959,13 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
       query: undefined,
       cursor: 'page-2',
       limit: 20,
+      withTotal: true,
     });
     fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
     await screen.findByText(first.subject);
     expect(screen.queryByText(second.subject)).not.toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')[1]).not.toBeChecked();
-    expect(screen.getByText('Page 1')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 · 20 per page')).toBeInTheDocument();
   });
 
   it('keeps the management page on a failed request and resets pagination for filters and refresh', async () => {
@@ -1902,7 +1981,7 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     await screen.findByText('Page unavailable');
-    expect(screen.getByText('Page 1')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 · 20 per page')).toBeInTheDocument();
     expect(screen.getByText(first.subject)).toBeInTheDocument();
     for (const reset of [
       () =>
@@ -1918,7 +1997,7 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
       ...['50', '100'].map(
         (size) => () =>
           fireEvent.change(
-            screen.getByRole('combobox', { name: 'Messages per page' }),
+            screen.getByRole('combobox', { name: 'Rows per page' }),
             {
               target: { value: size },
             },
@@ -1927,12 +2006,15 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     ]) {
       fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
       await screen.findByText(second.subject);
-      expect(screen.getByText('Page 2')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Page 2' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
       expect(mail.listManagedMessages.mock.lastCall?.[0].limit).toBe(
         Number(
           (
             screen.getByRole('combobox', {
-              name: 'Messages per page',
+              name: 'Rows per page',
             }) as HTMLSelectElement
           ).value,
         ),
@@ -1940,7 +2022,10 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
       fireEvent.click(screen.getAllByRole('checkbox')[1]);
       reset();
       await screen.findByText(first.subject);
-      expect(screen.getByText('Page 1')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Page 1' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      );
       expect(screen.getAllByRole('checkbox')[1]).not.toBeChecked();
       expect(
         screen.getByRole('button', { name: 'Previous page' }),
@@ -1953,6 +2038,7 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
       accountId: 'account-1',
       query: 'search',
       limit: 100,
+      withTotal: true,
     });
   });
 
@@ -1981,7 +2067,7 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
       resolvePage({ items: [stale] });
     });
     expect(screen.queryByText(stale.subject)).not.toBeInTheDocument();
-    expect(screen.getByText('Page 1')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 · 20 per page')).toBeInTheDocument();
   });
 
   it('refreshes batch results on the current management page and keeps failures selected', async () => {
@@ -2009,13 +2095,14 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
         expect(mail.listManagedMessages).toHaveBeenCalledTimes(3),
       );
       await screen.findByText(second.subject);
-      expect(screen.getByText('Page 2')).toBeInTheDocument();
+      expect(screen.getByText('Page 2 · 20 per page')).toBeInTheDocument();
       expect(screen.getAllByRole('checkbox')[1]).toBeChecked();
       expect(mail.listManagedMessages).toHaveBeenLastCalledWith({
         accountId: undefined,
         query: undefined,
         cursor: 'page-2',
         limit: 20,
+        withTotal: true,
       });
     } finally {
       confirm.mockRestore();

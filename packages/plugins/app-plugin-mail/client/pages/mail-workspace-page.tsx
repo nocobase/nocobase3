@@ -1204,24 +1204,32 @@ export default function MailWorkspacePage({
           providers={providers}
           templateVariables={templateVariables}
           onClose={() => setComposerRequest(undefined)}
-          onComplete={(result) => {
+          onComplete={(result, rejectedRecipients) => {
             setReloadVersion((version) => version + 1);
             setNotice(
-              result === 'unknown'
-                ? t('workspace.submissionUnknown', {
+              result === 'partial'
+                ? t('workspace.submissionPartial', {
+                    recipients: rejectedRecipients?.join(', '),
                     defaultValue:
-                      'Delivery could not be confirmed. Check your provider before sending again.',
+                      'Some recipients were rejected: {{recipients}}. The other recipients were accepted. Resend only to the rejected addresses.',
                   })
-                : result === 'failed'
-                  ? t('workspace.submissionFailed', {
+                : result === 'unknown'
+                  ? t('workspace.submissionUnknown', {
                       defaultValue:
-                        'One or more messages could not be sent. Check the delivery result before retrying.',
+                        'Delivery could not be confirmed. Check your provider before sending again.',
                     })
-                  : result === 'draft'
-                    ? t('workspace.draftSaved', { defaultValue: 'Draft saved' })
-                    : t('workspace.accepted', {
-                        defaultValue: 'Message queued for delivery.',
-                      }),
+                  : result === 'failed'
+                    ? t('workspace.submissionFailed', {
+                        defaultValue:
+                          'One or more messages could not be sent. Check the delivery result before retrying.',
+                      })
+                    : result === 'draft'
+                      ? t('workspace.draftSaved', {
+                          defaultValue: 'Draft saved',
+                        })
+                      : t('workspace.accepted', {
+                          defaultValue: 'Message queued for delivery.',
+                        }),
             );
           }}
         />

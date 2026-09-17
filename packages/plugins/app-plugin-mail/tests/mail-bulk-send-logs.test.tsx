@@ -11,6 +11,7 @@ import type { MailSubmissionLogView } from '../client/mail-client.js';
 
 const mail = vi.hoisted(() => ({
   listSubmissions: vi.fn(),
+  listSubmissionsPage: vi.fn(),
   retrySubmission: vi.fn(),
   cancelSubmission: vi.fn(),
 }));
@@ -29,8 +30,39 @@ const pending: MailSubmissionLogView = {
 };
 
 describe('bulk send history', () => {
+  let fixtureTotal: number | undefined;
   beforeEach(() => {
     for (const mock of Object.values(mail)) mock.mockReset();
+    fixtureTotal = undefined;
+    mail.listSubmissionsPage.mockImplementation(
+      async (bulkOnly, offset, groupByBatch, limit) => {
+        let rows: readonly MailSubmissionLogView[] = await mail.listSubmissions(
+          bulkOnly,
+          offset,
+          groupByBatch,
+          Math.min(limit + 1, 100),
+        );
+        if (
+          limit === 100 &&
+          new Set(rows.map((row) => row.batchId ?? row.id)).size === 100
+        )
+          rows = [
+            ...rows,
+            ...(await mail.listSubmissions(
+              bulkOnly,
+              offset + limit,
+              groupByBatch,
+              1,
+            )),
+          ];
+        const ids = [...new Set(rows.map((row) => row.batchId ?? row.id))];
+        const visibleIds = new Set(ids.slice(0, limit));
+        return {
+          items: rows.filter((row) => visibleIds.has(row.batchId ?? row.id)),
+          total: fixtureTotal ?? offset + ids.length,
+        };
+      },
+    );
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -175,7 +207,7 @@ describe('bulk send history', () => {
   it('allows older logs to be reached without mixing normal mail into the query', async () => {
     mail.listSubmissions
       .mockResolvedValueOnce(
-        Array.from({ length: 20 }, (_, index) => ({
+        Array.from({ length: 21 }, (_, index) => ({
           ...pending,
           id: `sent-${index}`,
           status: 'accepted',
@@ -195,9 +227,78 @@ describe('bulk send history', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled(),
     );
+    expect(
+      screen.getAllByRole('button', { name: /^Expand batch:/ }),
+    ).toHaveLength(20);
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(await screen.findByText('Older batch')).toBeInTheDocument();
-    expect(mail.listSubmissions).toHaveBeenLastCalledWith(true, 20, true);
+    expect(mail.listSubmissions).toHaveBeenLastCalledWith(true, 20, true, 21);
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
+  });
+  it('shows the last batch page instead of counting recipient rows as pages', async () => {
+    mail.listSubmissionsPage.mockImplementation(async (_bulk, offset) => ({
+      items: Array.from({ length: 3 }, (_, index) => ({
+        ...pending,
+        id: `recipient-${index}`,
+        batchId: `batch-${offset}`,
+        status: 'accepted',
+        subject: `Batch at ${offset}`,
+        canCancel: false,
+      })),
+      total: 125,
+    }));
+    render(<MailBulkSendLogs />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Page 7' }));
+    expect(await screen.findByText('Batch at 120')).toBeVisible();
+    expect(mail.listSubmissionsPage).toHaveBeenLastCalledWith(
+      true,
+      120,
+      true,
+      20,
+    );
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+  });
+
+  it('jumps between complete batches and supports 100 batches without exceeding the API limit', async () => {
+    const batches = Array.from({ length: 105 }, (_, index) =>
+      Array.from({ length: 2 }, (_, child) => ({
+        ...pending,
+        id: `batch-${index}-${child}`,
+        batchId: `batch-${index}`,
+        subject: `Batch ${index}`,
+        status: 'accepted',
+        canCancel: false,
+      })),
+    );
+    fixtureTotal = batches.length;
+    mail.listSubmissions.mockImplementation(
+      async (_bulkOnly, offset, _groupByBatch, limit) => {
+        expect(limit).toBeLessThanOrEqual(100);
+        return batches.slice(offset, offset + limit).flat();
+      },
+    );
+    render(<MailBulkSendLogs />);
+    await screen.findByText('Batch 0');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Go to page' }), {
+      target: { value: '4' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Go', exact: true }));
+    await screen.findByText('Batch 60');
+    expect(
+      screen.getAllByRole('button', { name: /^Expand batch:/ }),
+    ).toHaveLength(20);
+    fireEvent.change(screen.getByRole('combobox', { name: 'Rows per page' }), {
+      target: { value: '100' },
+    });
+    await screen.findByText('Batch 0');
+    expect(
+      screen.getAllByRole('button', { name: /^Expand batch:/ }),
+    ).toHaveLength(100);
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await screen.findByText('Batch 100');
+    expect(
+      screen.getAllByRole('button', { name: /^Expand batch:/ }),
+    ).toHaveLength(5);
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
   });
 });

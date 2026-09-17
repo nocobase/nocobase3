@@ -13,6 +13,8 @@ import {
   mailErrorMessage,
   type MailManagedAccountView,
 } from '../mail-client.js';
+import { MailPagination } from '../components/mail-pagination.js';
+import { useMailTablePage } from '../hooks/use-mail-table-page.js';
 import { useMailClient } from '../runtime.js';
 import { Button } from '../components/ui/button.js';
 
@@ -22,6 +24,7 @@ export default function MailSettingsPage(): ReactElement {
   const [accounts, setAccounts] = useState<readonly MailManagedAccountView[]>(
     [],
   );
+  const accountPage = useMailTablePage(accounts);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
@@ -136,12 +139,13 @@ export default function MailSettingsPage(): ReactElement {
                     </tr>
                   </thead>
                   <tbody className='divide-y'>
-                    {accounts.map((account) => (
+                    {accountPage.rows.map((account) => (
                       <ManagedAccountRow account={account} key={account.id} />
                     ))}
                   </tbody>
                 </table>
               </div>
+              <MailPagination {...accountPage} disabled={loading} />
             </Card>
           )}
         </section>
@@ -193,10 +197,11 @@ function ManagedAccountRow({
         />
       </td>
       <td className='whitespace-nowrap px-4 py-4 text-muted-foreground'>
-        {t('settings.accounts.owner', {
-          defaultValue: 'User ID: {{userId}}',
-          userId: account.userId,
-        })}
+        {account.ownerName ||
+          t('settings.accounts.owner', {
+            defaultValue: 'User ID: {{userId}}',
+            userId: account.userId,
+          })}
       </td>
       <td className='px-4 py-4'>
         {account.initialSyncReceivedAfter ? (

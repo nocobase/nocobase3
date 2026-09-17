@@ -1,6 +1,21 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  pagination: {
+    unavailable: 'This page has no records. Choose another page or refresh.',
+    label: 'Pagination',
+    page: 'Page {{page}} · {{pageSize}} per page',
+    total: '{{count}} records',
+    pageSize: 'Rows per page',
+    perPage: '{{count}} per page',
+    selectPage: 'Page {{page}}',
+    jumpTo: 'Go to page',
+    go: 'Go',
+  },
+  logs: {
+    pagination: 'Log pagination',
+    page: 'Page {{page}} · {{pageSize}} per page',
+  },
   nav: {
     devLogs: 'Mail logs',
     myAccounts: 'My mailboxes',
@@ -10,7 +25,6 @@ const enUS = {
     accounts: 'Mail accounts',
     syncLogs: 'Sync logs',
     sendLogs: 'Send logs',
-    operationLogs: 'Operation logs',
     dev: 'Mail components',
     devAccounts: 'Mail accounts',
     devCenter: 'Mail center',
@@ -30,6 +44,8 @@ const enUS = {
     pageMessageCount: '{{count}} on this page',
     submissionUnknown:
       'Delivery could not be confirmed. Check your provider before sending again.',
+    submissionPartial:
+      'Some recipients were rejected: {{recipients}}. The other recipients were accepted. Resend only to the rejected addresses.',
     submissionFailed:
       'One or more messages could not be sent. Check the delivery result before retrying.',
     keepEditing: 'Keep editing',
@@ -350,6 +366,8 @@ const enUS = {
       unknownAccount: 'Unknown account',
     },
     sendLogs: {
+      acceptedRecipients: 'Accepted recipients',
+      rejectedRecipients: 'Rejected recipients',
       eyebrow: 'Mail',
       title: 'Send logs',
       description: 'Review recent mail delivery submissions and results.',
@@ -363,31 +381,6 @@ const enUS = {
       updatedAt: 'Updated at',
       error: 'Error',
       unknownAccount: 'Unknown account',
-    },
-    operationLogs: {
-      eyebrow: 'Mail administration',
-      title: 'Operation logs',
-      description:
-        'Review synchronization and delivery operations across every connected user account.',
-      loading: 'Loading operation logs…',
-      type: 'Operation type',
-      accounts: 'Connected accounts',
-      syncOperations: 'Sync operations',
-      sendOperations: 'Send operations',
-      syncTab: 'Synchronization',
-      sendTab: 'Sending',
-      user: 'User ID',
-      unknownAccount: 'Unknown account',
-      search: 'Search operations',
-      accountFilter: 'Filter by account',
-      statusFilter: 'Filter by status',
-      startedAfter: 'Started after',
-      startedBefore: 'Started before',
-      allAccounts: 'All accounts',
-      allStatuses: 'All statuses',
-      actions: 'Actions',
-      retry: 'Retry',
-      cancel: 'Cancel',
     },
   },
   dev: {
@@ -404,8 +397,6 @@ const enUS = {
       compose: 'Compose',
       bulk: 'Bulk send',
       bulkSubmitted: 'Batch submitted. View delivery progress in Mail logs.',
-      accountHelp:
-        'Close or save the current message before switching accounts.',
     },
     logsHub: {
       title: 'Mail logs',
@@ -473,8 +464,6 @@ const enUS = {
       selectAll: 'Select all messages on this page',
       selectedCount: '{{count}} selected',
       selectMessage: 'Select message',
-      selectFolder: 'Select a destination folder first.',
-      moveFolder: 'Move to folder…',
       confirmAction: 'Apply “{{action}}” to {{count}} selected messages?',
       confirmPermanentDelete:
         'This permanently deletes the selected messages from Trash and cannot be undone. Continue?',
@@ -502,7 +491,6 @@ const enUS = {
         archive: 'Archive',
         delete: 'Delete',
         permanentDelete: 'Permanently delete',
-        move: 'Move',
       },
     },
     bulkSend: {
@@ -630,6 +618,7 @@ const enUS = {
       cancelled: 'Cancelled',
     },
     submission: {
+      partial: 'Partially sent',
       cancelled: 'Cancelled',
 
       pending: 'Pending',

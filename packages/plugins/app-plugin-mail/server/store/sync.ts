@@ -157,6 +157,24 @@ export class MailSyncStore {
     return row ? fromSyncRunRow(row) : undefined;
   }
 
+  public async countSyncRuns(userId: string): Promise<number> {
+    const accounts = await this.accounts.listAccounts(userId);
+    if (accounts.length === 0) return 0;
+    const query = this.database
+      .query()
+      .selectFrom<SyncRunRow>('mailSyncRuns')
+      .select(({ fn }) => [fn.countAll().as('count')])
+      .where(
+        'accountId',
+        'in',
+        accounts.map((account) => account.id),
+      );
+    const row = await query.executeTakeFirst<{
+      readonly count: number | string;
+    }>();
+    return Number(row?.count ?? 0);
+  }
+
   public async listSyncRuns(
     userId: string,
     offset = 0,

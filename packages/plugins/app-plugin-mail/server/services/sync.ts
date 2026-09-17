@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   type MailOperationContext,
+  type MailOffsetPage,
   type MailStartSyncInput,
   type MailSyncRun,
   type MailSyncRunView,
@@ -64,6 +65,18 @@ export class MailSyncService {
     if (!run) return undefined;
     const account = await this.dependencies.store.getAccount(run.accountId);
     return account?.userId === context.actorId ? toSyncRunView(run) : undefined;
+  }
+
+  public async listSyncRunsPage(
+    context: MailOperationContext,
+    offset = 0,
+    limit = 20,
+  ): Promise<MailOffsetPage<MailSyncRunView>> {
+    const [items, total] = await Promise.all([
+      this.listSyncRuns(context, offset, limit),
+      this.dependencies.store.countSyncRuns(context.actorId),
+    ]);
+    return { items, total };
   }
 
   public async listSyncRuns(

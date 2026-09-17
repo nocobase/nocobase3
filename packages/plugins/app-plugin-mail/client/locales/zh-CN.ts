@@ -1,6 +1,21 @@
 import type { MailResource } from './en-US.js';
 
 const zhCN: MailResource = {
+  pagination: {
+    unavailable: '该页没有记录，请选择其他页码或刷新。',
+    label: '分页',
+    page: '第 {{page}} 页 · 每页 {{pageSize}} 条',
+    total: '共 {{count}} 条',
+    pageSize: '每页条数',
+    perPage: '每页 {{count}} 条',
+    selectPage: '第 {{page}} 页',
+    jumpTo: '跳转页码',
+    go: '跳转',
+  },
+  logs: {
+    pagination: '日志分页',
+    page: '第 {{page}} 页 · 每页 {{pageSize}} 条',
+  },
   nav: {
     devLogs: '邮件日志',
     myAccounts: '我的邮箱',
@@ -10,7 +25,6 @@ const zhCN: MailResource = {
     accounts: '邮件账户',
     syncLogs: '同步日志',
     sendLogs: '发送日志',
-    operationLogs: '操作日志',
     dev: '邮件组件',
     devAccounts: '邮件账户',
     devCenter: '邮件中心',
@@ -30,6 +44,8 @@ const zhCN: MailResource = {
     pageMessageCount: '本页 {{count}} 封',
     submissionUnknown:
       '暂时无法确认发送结果，请先在邮箱服务商处核实，避免重复发送。',
+    submissionPartial:
+      '以下收件人被拒绝：{{recipients}}。其他收件人已接受投递，请仅向被拒绝的地址重新发送。',
     submissionFailed: '部分或全部邮件发送失败，请核实发送结果后再重试。',
     keepEditing: '继续编辑',
     closeDraftTitle: '关闭这封邮件？',
@@ -339,6 +355,8 @@ const zhCN: MailResource = {
       unknownAccount: '未知账户',
     },
     sendLogs: {
+      acceptedRecipients: '已接受收件人',
+      rejectedRecipients: '被拒绝收件人',
       eyebrow: '邮件',
       title: '发送日志',
       description: '查看最近的邮件发送提交记录和发送结果。',
@@ -353,30 +371,6 @@ const zhCN: MailResource = {
       error: '错误',
       unknownAccount: '未知账户',
     },
-    operationLogs: {
-      eyebrow: '邮件管理',
-      title: '操作日志',
-      description: '查看所有用户邮件账户的同步、发送等操作记录。',
-      loading: '正在加载操作日志…',
-      type: '操作类型',
-      accounts: '已接入账户',
-      syncOperations: '同步操作',
-      sendOperations: '发送操作',
-      syncTab: '同步日志',
-      sendTab: '发送日志',
-      user: '用户 ID',
-      unknownAccount: '未知账户',
-      search: '搜索操作',
-      accountFilter: '按账户筛选',
-      statusFilter: '按状态筛选',
-      startedAfter: '开始时间晚于',
-      startedBefore: '开始时间早于',
-      allAccounts: '全部账户',
-      allStatuses: '全部状态',
-      actions: '操作',
-      retry: '重试',
-      cancel: '取消',
-    },
   },
   dev: {
     sendHub: {
@@ -390,7 +384,6 @@ const zhCN: MailResource = {
       compose: '普通发送',
       bulk: '批量发送',
       bulkSubmitted: '批次已提交，可在邮件日志中查看发送进度。',
-      accountHelp: '切换账号前，请先关闭或保存当前邮件。',
     },
     logsHub: {
       title: '邮件日志',
@@ -452,8 +445,6 @@ const zhCN: MailResource = {
       selectAll: '选择当前页全部邮件',
       selectedCount: '已选择 {{count}} 封',
       selectMessage: '选择邮件',
-      selectFolder: '请先选择目标文件夹。',
-      moveFolder: '移动到文件夹…',
       confirmAction: '确定将“{{action}}”应用于已选择的 {{count}} 封邮件吗？',
       confirmPermanentDelete:
         '这会从垃圾箱永久删除所选邮件且无法撤销，确定继续吗？',
@@ -481,7 +472,6 @@ const zhCN: MailResource = {
         archive: '归档',
         delete: '删除',
         permanentDelete: '永久删除',
-        move: '移动',
       },
     },
     bulkSend: {
@@ -601,6 +591,7 @@ const zhCN: MailResource = {
       cancelled: '已取消',
     },
     submission: {
+      partial: '部分发送',
       cancelled: '已取消',
 
       pending: '等待中',

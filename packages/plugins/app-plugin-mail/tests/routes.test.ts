@@ -175,7 +175,7 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
     await router.request('/api/mail/management/accounts');
     await router.request('/api/mail/management/accounts/account%2F1/folders');
     await router.request(
-      '/api/mail/management/messages?accountId=account%2F1&folderId=folder%2F1&query=alice&limit=20',
+      '/api/mail/management/messages?accountId=account%2F1&folderId=folder%2F1&query=alice&offset=60&limit=20&withTotal=true',
     );
 
     expect(listManagedAccounts).toHaveBeenCalledWith(
@@ -192,10 +192,47 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
         folderIds: ['folder/1'],
         query: 'alice',
         cursor: undefined,
+        offset: 60,
+        withTotal: true,
         limit: 20,
         unread: undefined,
         starred: undefined,
       },
+    );
+  });
+
+  it('returns counted log pages only when requested and keeps the actor scope', async () => {
+    const listSyncRunsPage = vi.fn<MailService['listSyncRunsPage']>(
+      async () => ({ items: [], total: 125 }),
+    );
+    const listSubmissionsPage = vi.fn<MailService['listSubmissionsPage']>(
+      async () => ({ items: [], total: 205 }),
+    );
+    const router = await createRouter(
+      true,
+      service({ listSyncRunsPage, listSubmissionsPage }),
+    );
+    const sync = await router.request(
+      '/api/mail/sync-runs?offset=120&limit=20&withTotal=true',
+    );
+    expect(await sync.json()).toEqual({ data: { items: [], total: 125 } });
+    expect(listSyncRunsPage).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      120,
+      20,
+    );
+    const submissions = await router.request(
+      '/api/mail/submissions?offset=200&limit=20&bulkOnly=true&groupByBatch=true&withTotal=true',
+    );
+    expect(await submissions.json()).toEqual({
+      data: { items: [], total: 205 },
+    });
+    expect(listSubmissionsPage).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      true,
+      200,
+      true,
+      20,
     );
   });
 
@@ -394,6 +431,8 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
     expect(response.status).toBe(200);
     expect(listSyncRuns).toHaveBeenCalledWith(
       expect.objectContaining({ actorId: 'user-1' }),
+      undefined,
+      undefined,
     );
     expect(await response.json()).toMatchObject({
       data: [{ id: 'sync-1', accountId: 'account-1' }],
@@ -558,10 +597,60 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
     );
     expect(await response.json()).toMatchObject({
       data: [{ id: 'submission-1', accountId: 'account-1' }],
     });
+  });
+
+  it('forwards log offsets and limits and rejects invalid pagination', async () => {
+    const listSyncRuns = vi.fn<MailService['listSyncRuns']>(async () => []);
+    const listSubmissions = vi.fn<MailService['listSubmissions']>(
+      async () => [],
+    );
+    const router = await createRouter(
+      true,
+      service({ listSyncRuns, listSubmissions }),
+    );
+    expect(
+      (await router.request('/api/mail/sync-runs?offset=20&limit=21')).status,
+    ).toBe(200);
+    expect(listSyncRuns).toHaveBeenLastCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      20,
+      21,
+    );
+    expect(
+      (
+        await router.request(
+          '/api/mail/submissions?bulkOnly=true&groupByBatch=true&offset=40&limit=21',
+        )
+      ).status,
+    ).toBe(200);
+    expect(listSubmissions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      true,
+      40,
+      true,
+      21,
+    );
+    for (const endpoint of ['sync-runs', 'submissions']) {
+      for (const query of [
+        'offset=-1',
+        'offset=1.5',
+        'offset=NaN',
+        'limit=0',
+        'limit=101',
+        'limit=1.5',
+      ]) {
+        expect(
+          (await router.request(`/api/mail/${endpoint}?${query}`)).status,
+        ).toBe(400);
+      }
+    }
+    expect(listSyncRuns).toHaveBeenCalledTimes(1);
+    expect(listSubmissions).toHaveBeenCalledTimes(1);
   });
 
   it('starts OAuth with the configured public callback URL', async () => {
@@ -705,7 +794,7 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
 
     await router.request('/api/mail/accounts/account-1/folders');
     await router.request(
-      '/api/mail/messages?accountId=account-1&folderId=inbox&labelId=label-1&conversationId=thread-1&unread=true&limit=25',
+      '/api/mail/messages?accountId=account-1&folderId=inbox&labelId=label-1&conversationId=thread-1&unread=true&offset=50&limit=25&withTotal=true',
     );
     await router.request(
       '/api/mail/accounts/account-1/conversations/thread-1/messages?cursor=25&limit=25',
@@ -724,6 +813,8 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
         conversationId: 'thread-1',
         query: undefined,
         cursor: undefined,
+        offset: 50,
+        withTotal: true,
         limit: 25,
         unread: true,
         starred: undefined,
@@ -1220,6 +1311,8 @@ function service(overrides: Partial<MailService> = {}): MailService {
     startSync: async (_context, input) => syncRun(input.accountId, 'user-1'),
     getSyncRun: async () => undefined,
     listSyncRuns: async () => [],
+    listSyncRunsPage: async () => ({ items: [], total: 0 }),
+    listSubmissionsPage: async () => ({ items: [], total: 0 }),
     retrySyncRun: async () => syncRun('account-1', 'user-1'),
     cancelSyncRun: async () => ({
       ...syncRun('account-1', 'user-1'),

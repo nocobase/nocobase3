@@ -892,6 +892,47 @@ describe('IMAP/SMTP mail Provider', () => {
     expect(mocks.sendMail).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves partial SMTP acceptance and rejected recipients without enabling whole-message retries', async () => {
+    mocks.sendMail.mockResolvedValue({
+      messageId: '<partial@example.com>',
+      accepted: ['recipient@example.com'],
+      rejected: [{ address: 'rejected@example.com' }],
+      rejectedErrors: [
+        { message: 'Private SMTP diagnostic', responseCode: 550 },
+      ],
+    });
+    const adapter = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const input = sentInput();
+    const result = await adapter.sendMessage!({
+      ...input,
+      message: {
+        ...input.message,
+        to: [
+          { address: 'recipient@example.com' },
+          { address: 'rejected@example.com' },
+        ],
+      },
+    });
+    expect(result).toMatchObject({
+      status: 'accepted',
+      recipientError: {
+        code: 'SMTP_RECIPIENTS_REJECTED',
+        category: 'recipient',
+        retryable: false,
+        recipients: {
+          accepted: ['recipient@example.com'],
+          rejected: ['rejected@example.com'],
+        },
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('Private SMTP diagnostic');
+    expect(mocks.sendMail).toHaveBeenCalledTimes(1);
+  });
+
   it('maps Mail send input to SMTP headers and returns the provider message id', async () => {
     mocks.sendMail.mockResolvedValueOnce({ messageId: '<sent@example.com>' });
     const adapter = await imapSmtpMailProviderDefinition.createAdapter(

@@ -22,13 +22,6 @@ describe('Mail client routes', () => {
               access: { resource: 'mail.admin', action: 'access' },
               componentLoader: expect.any(Function),
             },
-            {
-              name: 'operation-logs',
-              path: '/operation-logs',
-              navigation: { title: 'nav.operationLogs' },
-              access: { resource: 'mail.admin', action: 'access' },
-              componentLoader: expect.any(Function),
-            },
           ],
         },
       ],
@@ -98,9 +91,6 @@ describe('Mail client routes', () => {
       settings.routes[0]?.children?.[0]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
     await expect(
-      settings.routes[0]?.children?.[1]?.componentLoader(),
-    ).resolves.toMatchObject({ default: expect.any(Function) });
-    await expect(
       dev.routes[0]?.children?.[0]?.componentLoader(),
     ).resolves.toMatchObject({ default: expect.any(Function) });
     await expect(
@@ -141,7 +131,6 @@ describe('Mail client routes', () => {
     ]);
     expect(resolved.settings.map((route) => route.path)).toEqual([
       '/settings/mail/accounts',
-      '/settings/mail/operation-logs',
     ]);
     expect(resolved.devRoutes.map((route) => route.path)).toEqual([
       '/dev/mail/accounts',

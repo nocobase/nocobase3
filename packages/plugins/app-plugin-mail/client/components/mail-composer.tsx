@@ -5,6 +5,7 @@ import { Paperclip, X } from 'lucide-react';
 import {
   type ReactElement,
   type ReactNode,
+  useId,
   useRef,
   useSyncExternalStore,
 } from 'react';
@@ -43,6 +44,7 @@ export type { MailComposerRequest } from '../hooks/use-mail-composer.js';
 export function MailComposer(
   props: MailComposerProps & { readonly inline?: boolean },
 ): ReactElement {
+  const fieldId = useId();
   const Surface = props.inline ? 'section' : DialogPrimitive.Popup;
   const Title = props.inline ? 'h2' : DialogPrimitive.Title;
   const { templateVariables } = props;
@@ -102,6 +104,12 @@ export function MailComposer(
     composerHasRequiredContent,
     composerHasUnsavedChanges,
   } = useMailComposer(props);
+  const senderOptions =
+    props.senderSelection?.options ??
+    sendableComposerIdentities.map((identity) => ({
+      accountId: composerAccountId,
+      identity,
+    }));
   return (
     <>
       <ComposerFrame
@@ -149,17 +157,19 @@ export function MailComposer(
                           : 'New message',
                 })}
               </Title>
-              <Button
-                aria-label={t('workspace.closeComposer', {
-                  defaultValue: 'Close composer',
-                })}
-                className='ml-auto size-8 px-0'
-                disabled={sending || autoSaving || uploading}
-                onClick={() => closeComposer()}
-                variant='ghost'
-              >
-                <X />
-              </Button>
+              {!props.inline ? (
+                <Button
+                  aria-label={t('workspace.closeComposer', {
+                    defaultValue: 'Close composer',
+                  })}
+                  className='ml-auto size-8 px-0'
+                  disabled={sending || autoSaving || uploading}
+                  onClick={() => closeComposer()}
+                  variant='ghost'
+                >
+                  <X />
+                </Button>
+              ) : null}
             </header>
             {error ? (
               <div
@@ -277,19 +287,44 @@ export function MailComposer(
                 <label className='grid min-w-0 flex-1 gap-2 text-sm font-medium'>
                   {t('workspace.from', { defaultValue: 'From address' })}
                   <NativeSelect
-                    disabled={sendableComposerIdentities.length === 0}
-                    onChange={(event) => setIdentityId(event.target.value)}
-                    value={identityId}
+                    disabled={senderOptions.length === 0}
+                    onChange={(event) => {
+                      const selected = senderOptions.find(
+                        ({ accountId, identity }) =>
+                          (props.senderSelection
+                            ? JSON.stringify([accountId, identity.id])
+                            : identity.id) === event.target.value,
+                      );
+                      if (!selected) return;
+                      if (props.senderSelection) {
+                        props.senderSelection.onChange(
+                          selected.accountId,
+                          selected.identity.id,
+                        );
+                      } else setIdentityId(selected.identity.id);
+                    }}
+                    value={
+                      props.senderSelection && identityId
+                        ? JSON.stringify([composerAccountId, identityId])
+                        : identityId
+                    }
                   >
-                    {sendableComposerIdentities.length === 0 ? (
+                    {senderOptions.length === 0 ? (
                       <option value=''>
                         {t('workspace.noSenders', {
                           defaultValue: 'No sendable addresses',
                         })}
                       </option>
                     ) : null}
-                    {sendableComposerIdentities.map((identity) => (
-                      <option key={identity.id} value={identity.id}>
+                    {senderOptions.map(({ accountId, identity }) => (
+                      <option
+                        key={JSON.stringify([accountId, identity.id])}
+                        value={
+                          props.senderSelection
+                            ? JSON.stringify([accountId, identity.id])
+                            : identity.id
+                        }
+                      >
                         {formatIdentity(identity)}
                       </option>
                     ))}
@@ -301,7 +336,7 @@ export function MailComposer(
                   <Input
                     aria-label={t('workspace.to', { defaultValue: 'TO' })}
                     className='min-w-0 flex-1'
-                    id='mail-compose-to'
+                    id={`${fieldId}-to`}
                     ref={recipientInputRef}
                     onChange={(event) =>
                       setComposer((current) =>
@@ -315,7 +350,7 @@ export function MailComposer(
                   />
                   <div className='flex shrink-0 items-center gap-1'>
                     <Button
-                      aria-controls='mail-compose-cc'
+                      aria-controls={`${fieldId}-cc`}
                       aria-expanded={ccVisible}
                       aria-pressed={ccVisible}
                       className='h-9 px-1.5 text-sm font-normal text-muted-foreground'
@@ -326,7 +361,7 @@ export function MailComposer(
                       {t('workspace.showCc', { defaultValue: 'Cc' })}
                     </Button>
                     <Button
-                      aria-controls='mail-compose-bcc'
+                      aria-controls={`${fieldId}-bcc`}
                       aria-expanded={bccVisible}
                       aria-pressed={bccVisible}
                       className='h-9 px-1.5 text-sm font-normal text-muted-foreground'
@@ -341,7 +376,7 @@ export function MailComposer(
                 {ccVisible ? (
                   <Input
                     aria-label={t('workspace.cc', { defaultValue: 'CC' })}
-                    id='mail-compose-cc'
+                    id={`${fieldId}-cc`}
                     onChange={(event) =>
                       setComposer((current) =>
                         current
@@ -356,7 +391,7 @@ export function MailComposer(
                 {bccVisible ? (
                   <Input
                     aria-label={t('workspace.bcc', { defaultValue: 'BCC' })}
-                    id='mail-compose-bcc'
+                    id={`${fieldId}-bcc`}
                     onChange={(event) =>
                       setComposer((current) =>
                         current
@@ -619,7 +654,7 @@ export function MailComposer(
                 {scheduleEnabled ? (
                   <label
                     className='grid gap-2 text-xs text-muted-foreground'
-                    htmlFor='mail-compose-scheduled-at'
+                    htmlFor={`${fieldId}-scheduled-at`}
                   >
                     <span>
                       {t('workspace.scheduledAt', {
@@ -627,7 +662,7 @@ export function MailComposer(
                       })}
                     </span>
                     <Input
-                      id='mail-compose-scheduled-at'
+                      id={`${fieldId}-scheduled-at`}
                       min={localDateTimeMinimum()}
                       onChange={(event) => {
                         setDraftSaveStatus('idle');
@@ -674,13 +709,15 @@ export function MailComposer(
                   {t('workspace.saveDraft', { defaultValue: 'Save draft' })}
                 </Button>
               ) : null}
-              <Button
-                disabled={sending || autoSaving || uploading}
-                onClick={() => closeComposer()}
-                variant='outline'
-              >
-                {t('workspace.cancel', { defaultValue: 'Cancel' })}
-              </Button>
+              {!props.inline ? (
+                <Button
+                  disabled={sending || autoSaving || uploading}
+                  onClick={() => closeComposer()}
+                  variant='outline'
+                >
+                  {t('workspace.cancel', { defaultValue: 'Cancel' })}
+                </Button>
+              ) : null}
               <Button
                 disabled={
                   !composerCanSend ||

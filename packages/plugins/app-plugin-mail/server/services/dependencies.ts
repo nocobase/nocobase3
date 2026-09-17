@@ -1,3 +1,4 @@
+import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
 import { type MailMessageChangeNotifier } from '../realtime.js';
 import {
   type MailCredentialVault,
@@ -14,6 +15,7 @@ export interface MailOutboxPublisher {
 }
 
 export interface DefaultMailServiceDependencies {
+  readonly users?: Pick<UserAdministrationService, 'list'>;
   readonly store: MailStore;
   readonly adapters: MailProviderAdapterResolver;
   readonly outbox: MailOutboxPublisher;

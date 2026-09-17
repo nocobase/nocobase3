@@ -1,50 +1,37 @@
 import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
 import { MailStatusBadge } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
-import {
-  mailErrorMessage,
-  type MailAccountView,
-  type MailSyncRunView,
-} from '../mail-client.js';
+import { type MailSyncRunView } from '../mail-client.js';
+import { useMailLogPage } from '../hooks/use-mail-log-page.js';
+import { MailPagination } from '../components/mail-pagination.js';
 import { useMailClient } from '../runtime.js';
 
 export default function MailSyncLogsPage(): ReactElement {
   const mail = useMailClient();
   const { t } = useTranslation();
-  const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
-  const [runs, setRuns] = useState<readonly MailSyncRunView[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>();
-
-  const refresh = useCallback((): void => {
-    setLoading(true);
-    setError(undefined);
-    void Promise.all([mail.listAccounts(), mail.listSyncRuns()])
-      .then(([nextAccounts, nextRuns]) => {
-        setAccounts(nextAccounts);
-        setRuns(nextRuns);
-      })
-      .catch((cause: unknown) => {
-        setError(
-          mailErrorMessage(
-            cause,
-            t('errors.requestFailed', {
-              defaultValue: 'Mail request failed.',
-            }),
-          ),
-        );
-      })
-      .finally(() => setLoading(false));
-  }, [mail, t]);
-
-  useEffect(() => {
-    void Promise.resolve().then(refresh);
-  }, [refresh]);
+  const load = useCallback(
+    (offset: number, limit: number) =>
+      Promise.all([mail.listAccounts(), mail.listSyncRunsPage(offset, limit)]),
+    [mail],
+  );
+  const {
+    accounts,
+    rows: runs,
+    loading,
+    error,
+    refresh,
+    page,
+    changePage,
+    pageSize,
+    changePageSize,
+    hasNext,
+    total,
+  } = useMailLogPage<MailSyncRunView>(load);
 
   const accountLabels = useMemo(
     () => new Map(accounts.map((account) => [account.id, account.address])),
@@ -180,8 +167,14 @@ export default function MailSyncLogsPage(): ReactElement {
                               defaultValue: '—',
                             })}
                       </td>
-                      <td className='max-w-64 px-4 py-3 text-xs text-destructive'>
-                        {run.error?.code ?? '—'}
+                      <td className='max-w-64 px-4 py-3 text-xs text-muted-foreground'>
+                        {run.error?.code ? (
+                          <span className='text-destructive'>
+                            {run.error.code}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -189,6 +182,15 @@ export default function MailSyncLogsPage(): ReactElement {
               </table>
             </div>
           )}
+          <MailPagination
+            page={page}
+            total={total}
+            pageSize={pageSize}
+            onPageSizeChange={changePageSize}
+            hasNext={hasNext}
+            disabled={loading}
+            onPageChange={changePage}
+          />
         </Card>
       </div>
     </section>

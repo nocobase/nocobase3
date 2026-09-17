@@ -518,6 +518,18 @@ export class DatabaseMailStore implements MailStore {
     return this.sync.getSyncRun(syncRunId);
   }
 
+  public countSyncRuns(userId: string): Promise<number> {
+    return this.sync.countSyncRuns(userId);
+  }
+
+  public countSubmissions(
+    userId: string,
+    bulkOnly = false,
+    groupByBatch = false,
+  ): Promise<number> {
+    return this.submissions.countSubmissions(userId, bulkOnly, groupByBatch);
+  }
+
   public async listSyncRuns(
     userId: string,
     offset = 0,
@@ -594,7 +606,7 @@ export class DatabaseMailStore implements MailStore {
     bulkOnly = false,
     offset = 0,
     groupByBatch = false,
-    limit = groupByBatch ? 20 : 100,
+    limit: number = groupByBatch ? 20 : 100,
   ): Promise<readonly MailStoredSubmission[]> {
     return this.submissions.listSubmissions(
       userId,

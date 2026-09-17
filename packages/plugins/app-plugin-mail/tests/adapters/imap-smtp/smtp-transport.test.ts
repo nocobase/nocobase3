@@ -28,7 +28,9 @@ describe('SMTP adapter over a real local TCP connection', () => {
     messages.length = 0;
   });
 
-  async function start(recipientCode = 250): Promise<ImapSmtpAdapter> {
+  async function start(
+    recipientCode: number | ((command: string) => number) = 250,
+  ): Promise<ImapSmtpAdapter> {
     server = createServer((socket) => {
       sockets.add(socket);
       socket.on('close', () => sockets.delete(socket));
@@ -59,7 +61,9 @@ describe('SMTP adapter over a real local TCP connection', () => {
           else if (line.startsWith('MAIL FROM:'))
             socket.write('250 2.1.0 sender accepted\r\n');
           else if (line.startsWith('RCPT TO:'))
-            socket.write(`${recipientCode} recipient response\r\n`);
+            socket.write(
+              `${typeof recipientCode === 'function' ? recipientCode(line) : recipientCode} recipient response\r\n`,
+            );
           else if (line === 'DATA') {
             data = [];
             socket.write('354 End with dot\r\n');
@@ -121,6 +125,27 @@ describe('SMTP adapter over a real local TCP connection', () => {
     expect(parsed.attachments).toHaveLength(1);
     expect(parsed.attachments[0].filename).toBe('report.txt');
     expect(parsed.attachments[0].content.toString()).toBe('report');
+  });
+
+  it('reports partial acceptance over SMTP while keeping rejected Bcc recipients out of MIME', async () => {
+    const transport = await start((command) =>
+      command.includes('hidden@example.com') ? 550 : 250,
+    );
+    const result = await transport.sendMessage(input());
+    expect(result).toMatchObject({
+      status: 'accepted',
+      recipientError: {
+        code: 'SMTP_RECIPIENTS_REJECTED',
+        retryable: false,
+        recipients: {
+          accepted: ['recipient@example.com'],
+          rejected: ['hidden@example.com'],
+        },
+      },
+    });
+    expect(messages).toHaveLength(1);
+    const parsed = await simpleParser(messages[0]);
+    expect(parsed.bcc).toBeUndefined();
   });
 
   it.each([

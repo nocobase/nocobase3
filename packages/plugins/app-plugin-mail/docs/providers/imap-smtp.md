@@ -27,6 +27,32 @@ mail:
 
 Users enter the mailbox address, username, and password in the Mail account screen. Credentials are stored through Mail's credential vault; they are not stored in application configuration or returned by the API.
 
+## Gmail with an app password
+
+Add a separate Provider instance alongside any existing entries in `mail.providers`:
+
+```yaml
+mail:
+  providers:
+    gmail-imap:
+      type: imap-smtp
+      imap:
+        host: imap.gmail.com
+        port: 993
+        secure: true
+      smtp:
+        host: smtp.gmail.com
+        port: 465
+        secure: true
+      sentCopyMode: server
+```
+
+Restart the application after changing configuration. On `/dev/mail/accounts`, select `IMAP / SMTP · gmail-imap`, enter the full Gmail address as both the mailbox address and username, and enter a Google app password in the password field. Enable Google Account 2-Step Verification first, then [create an app password](https://myaccount.google.com/apppasswords); enter its 16 characters without the display spaces. Do not use the ordinary Google Account password or put account credentials in `config.yml`.
+
+App passwords may be unavailable for managed accounts, security-key-only 2-Step Verification, or Advanced Protection. If unavailable, use the existing [Gmail OAuth Provider](gmail.md); managed accounts also require the administrator to allow IMAP access. See [Google's app password requirements](https://support.google.com/accounts/answer/185833).
+
+Gmail automatically saves messages sent through SMTP, so keep `sentCopyMode: server` to avoid extra sent copies. See [Google's IMAP client settings](https://support.google.com/mail/answer/78892) and [IMAP/SMTP endpoints](https://developers.google.com/workspace/gmail/imap/imap-smtp). This instance uses the generic adapter's capabilities and periodic synchronization; Gmail API and Pub/Sub features still require `type: gmail`.
+
 ## MVP behavior
 
 - manual account connection with IMAP and SMTP credential verification;
@@ -56,3 +82,7 @@ Accepted sends durably request a mailbox refresh immediately and again after 5 a
 `sentCopyMode` defaults to `server`: the SMTP service owns saving the sent copy. For a server that does not save copies, configure `sentCopyMode: client`; Mail appends the message, including its attachments and Bcc header, to the existing IMAP folder selected by `sentFolder` or the server's `\Sent` special-use flag. It checks that folder for the same Message-ID before appending. Use `server` when the provider saves asynchronously, because a check cannot detect a copy that has not appeared yet.
 
 A failed IMAP append preserves the accepted delivery status and records `IMAP_SENT_COPY_FAILED` in the submission log. It does not resend or automatically retry an ambiguous append. Correct the folder or connection configuration before subsequent sends; ordinary synchronization cannot recover a copy that was never saved remotely.
+
+## Partial SMTP delivery
+
+If SMTP accepts some recipients and rejects others, the submission remains `accepted` to prevent duplicate delivery to the accepted recipients. Its error has code `SMTP_RECIPIENTS_REJECTED`, `retryable: false`, and `recipients.accepted` / `recipients.rejected` address lists. The composer and delivery logs show partial delivery; only rejected addresses should be used for a new send. Raw SMTP diagnostics are not included in public responses.

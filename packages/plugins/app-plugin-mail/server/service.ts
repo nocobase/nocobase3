@@ -279,6 +279,14 @@ export class DefaultMailService implements MailService {
     return this.sync.getSyncRun(context, syncRunId);
   }
 
+  public listSyncRunsPage(
+    context: MailOperationContext,
+    offset = 0,
+    limit = 20,
+  ): Promise<import('./types.js').MailOffsetPage<MailSyncRunView>> {
+    return this.sync.listSyncRunsPage(context, offset, limit);
+  }
+
   public async listSyncRuns(
     context: MailOperationContext,
     offset = 0,
@@ -323,12 +331,28 @@ export class DefaultMailService implements MailService {
     );
   }
 
+  public listSubmissionsPage(
+    context: MailOperationContext,
+    bulkOnly = false,
+    offset = 0,
+    groupByBatch = false,
+    limit = 20,
+  ): Promise<import('./types.js').MailOffsetPage<MailSubmissionLogView>> {
+    return this.submissions.listSubmissionsPage(
+      context,
+      bulkOnly,
+      offset,
+      groupByBatch,
+      limit,
+    );
+  }
+
   public async listSubmissions(
     context: MailOperationContext,
     bulkOnly = false,
     offset = 0,
     groupByBatch = false,
-    limit = groupByBatch ? 20 : 100,
+    limit: number = groupByBatch ? 20 : 100,
   ): Promise<readonly MailSubmissionLogView[]> {
     return this.submissions.listSubmissions(
       context,

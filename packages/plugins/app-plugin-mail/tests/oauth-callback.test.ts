@@ -167,6 +167,8 @@ function service(overrides: Partial<MailService> = {}): MailService {
     },
     getSyncRun: async () => undefined,
     listSyncRuns: async () => [],
+    listSyncRunsPage: async () => ({ items: [], total: 0 }),
+    listSubmissionsPage: async () => ({ items: [], total: 0 }),
     listSubmissions: async () => [],
     listMessages: async () => ({ items: [] }),
     getMessage: async () => undefined,

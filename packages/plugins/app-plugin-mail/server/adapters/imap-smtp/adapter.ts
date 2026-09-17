@@ -14,6 +14,7 @@ import type {
   MailAttachmentContent,
   MailProviderAdapter,
   MailProviderContext,
+  MailProviderError,
   MailProviderFolderPage,
   MailProviderListChangesInput,
   MailProviderListFoldersInput,
@@ -487,7 +488,28 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
       submissionStarted = true;
       const info = (await this.smtpTransport.sendMail(mail)) as {
         messageId?: string;
+        accepted?: readonly (string | { address: string })[];
+        rejected?: readonly (string | { address: string })[];
       };
+      const recipientError: MailProviderError | undefined = info.rejected
+        ?.length
+        ? {
+            code: 'SMTP_RECIPIENTS_REJECTED',
+            message:
+              'The SMTP server rejected some recipients after accepting others.',
+            category: 'recipient',
+            // Retrying the entire submission would duplicate accepted deliveries.
+            retryable: false,
+            recipients: {
+              accepted: (info.accepted ?? []).map((recipient) =>
+                typeof recipient === 'string' ? recipient : recipient.address,
+              ),
+              rejected: info.rejected.map((recipient) =>
+                typeof recipient === 'string' ? recipient : recipient.address,
+              ),
+            },
+          }
+        : undefined;
       const internetMessageId = info.messageId ?? mail.messageId;
       let sentCopyError;
       if (sentCopy) {
@@ -529,6 +551,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
         providerMessageId: internetMessageId,
         internetMessageId,
         ...(sentCopyError ? { sentCopyError } : {}),
+        ...(recipientError ? { recipientError } : {}),
       };
     } catch (error) {
       const classified = classifyError(error, 'SMTP_SEND');

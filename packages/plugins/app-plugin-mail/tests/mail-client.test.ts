@@ -82,6 +82,25 @@ describe('MailClient', () => {
     });
   });
 
+  it('requests counted log pages without changing legacy array methods', async () => {
+    const request = vi.fn(async () => ({ data: { items: [], total: 205 } }));
+    const client = new MailClient(appClient(request));
+    expect(await client.listSyncRunsPage(200, 20)).toEqual({
+      items: [],
+      total: 205,
+    });
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/sync-runs?offset=200&limit=20&withTotal=true',
+    });
+    expect(await client.listSubmissionsPage(true, 200, true, 20)).toEqual({
+      items: [],
+      total: 205,
+    });
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/submissions?bulkOnly=true&offset=200&groupByBatch=true&limit=20&withTotal=true',
+    });
+  });
+
   it('encodes message queries and sync requests', async () => {
     const request = vi.fn(async () => ({
       data: { items: [], id: 'sync-1', status: 'pending' },
@@ -94,21 +113,23 @@ describe('MailClient', () => {
       folderId: 'inbox',
       labelId: 'label/1',
       conversationId: 'thread/1',
+      offset: 60,
       unread: true,
       limit: 20,
     });
     expect(request).toHaveBeenLastCalledWith({
-      path: 'mail/messages?accountId=account%2F1&query=from%3Aalice&folderId=inbox&labelId=label%2F1&conversationId=thread%2F1&unread=true&limit=20',
+      path: 'mail/messages?accountId=account%2F1&query=from%3Aalice&folderId=inbox&labelId=label%2F1&conversationId=thread%2F1&offset=60&unread=true&limit=20',
     });
 
     await client.listManagedMessages({
       accountId: 'account/1',
       query: 'alice@example.com',
       folderId: 'folder/1',
+      offset: 40,
       limit: 20,
     });
     expect(request).toHaveBeenLastCalledWith({
-      path: 'mail/management/messages?accountId=account%2F1&query=alice%40example.com&folderId=folder%2F1&limit=20',
+      path: 'mail/management/messages?accountId=account%2F1&query=alice%40example.com&folderId=folder%2F1&offset=40&limit=20',
     });
 
     await client.manageMessages({
@@ -147,6 +168,18 @@ describe('MailClient', () => {
 
     await client.listSubmissions();
     expect(request).toHaveBeenLastCalledWith({ path: 'mail/submissions' });
+    await client.listSyncRuns(20, 21);
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/sync-runs?offset=20&limit=21',
+    });
+    await client.listSubmissions(false, 40, false, 21);
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/submissions?bulkOnly=false&offset=40&limit=21',
+    });
+    await client.listSubmissions(true, 20, true, 21);
+    expect(request).toHaveBeenLastCalledWith({
+      path: 'mail/submissions?bulkOnly=true&offset=20&groupByBatch=true&limit=21',
+    });
   });
 
   it('maps P1 mailbox-management calls onto encoded Mail API paths', async () => {

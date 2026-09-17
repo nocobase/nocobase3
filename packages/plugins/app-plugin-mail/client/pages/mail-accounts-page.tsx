@@ -38,6 +38,8 @@ import {
   type MailProviderView,
   type MailSyncRunView,
 } from '../mail-client.js';
+import { MailPagination } from '../components/mail-pagination.js';
+import { useMailTablePage } from '../hooks/use-mail-table-page.js';
 import { useMailClient } from '../runtime.js';
 
 export default function MailAccountsPage(): ReactElement {
@@ -45,6 +47,7 @@ export default function MailAccountsPage(): ReactElement {
   const { t } = useTranslation();
   const [providers, setProviders] = useState<readonly MailProviderView[]>([]);
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
+  const accountPage = useMailTablePage(accounts);
   const [loading, setLoading] = useState(true);
   const [connectingProviderName, setConnectingProviderName] =
     useState<string>();
@@ -438,7 +441,7 @@ export default function MailAccountsPage(): ReactElement {
                   </tr>
                 </thead>
                 <tbody className='block divide-y @5xl/accounts:table-row-group'>
-                  {accounts.map((account) => {
+                  {accountPage.rows.map((account) => {
                     const run = syncRuns[account.id];
                     return (
                       <Fragment key={account.id}>
@@ -504,6 +507,14 @@ export default function MailAccountsPage(): ReactElement {
               </table>
             </div>
           )}
+          <MailPagination
+            {...accountPage}
+            disabled={
+              loading ||
+              Boolean(removingAccountId) ||
+              Boolean(updatingAccountId)
+            }
+          />
         </Card>
       </div>
 

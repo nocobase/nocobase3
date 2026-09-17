@@ -23,6 +23,7 @@ import type {
   MailMoveMessageInput,
   MailUpdateMessageLabelsInput,
   MailPage,
+  MailOffsetPage,
   MailProviderView,
   MailStartSyncInput,
   MailSubmissionLogView,
@@ -61,6 +62,7 @@ export type {
   MailMessage,
   MailMessageSummary,
   MailPage,
+  MailOffsetPage,
   MailProviderCapabilities,
   MailProviderView,
   MailStartSyncInput,
@@ -100,7 +102,7 @@ export type MailConnectAccountRequest = Omit<
 
 export interface MailMessagesQuery extends Pick<
   MailListMessagesInput,
-  'query' | 'cursor' | 'limit' | 'conversationId'
+  'query' | 'cursor' | 'offset' | 'limit' | 'conversationId' | 'withTotal'
 > {
   readonly accountId?: string;
   readonly folderId?: string;
@@ -306,6 +308,30 @@ export class MailClient {
     return this.client
       .request<DataResponse<MailSyncRunView>>({
         path: `mail/sync-runs/${encodeURIComponent(syncRunId)}`,
+      })
+      .then((response) => response.data);
+  }
+
+  public listSyncRunsPage(
+    offset = 0,
+    limit = 20,
+  ): Promise<MailOffsetPage<MailSyncRunView>> {
+    return this.client
+      .request<DataResponse<MailOffsetPage<MailSyncRunView>>>({
+        path: `mail/sync-runs?offset=${offset}&limit=${limit}&withTotal=true`,
+      })
+      .then((response) => response.data);
+  }
+
+  public listSubmissionsPage(
+    bulkOnly = false,
+    offset = 0,
+    groupByBatch = false,
+    limit = 20,
+  ): Promise<MailOffsetPage<MailSubmissionLogView>> {
+    return this.client
+      .request<DataResponse<MailOffsetPage<MailSubmissionLogView>>>({
+        path: `mail/submissions?bulkOnly=${String(bulkOnly)}&offset=${offset}&groupByBatch=${String(groupByBatch)}&limit=${limit}&withTotal=true`,
       })
       .then((response) => response.data);
   }

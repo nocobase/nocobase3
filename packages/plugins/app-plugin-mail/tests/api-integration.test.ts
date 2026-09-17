@@ -156,6 +156,21 @@ describe('MailClient → HTTP routes → service → database and queue', () => 
       queueName: 'mail:integration',
     });
     const service = new DefaultMailService({
+      users: {
+        async list(input) {
+          const items = (input?.userIds ?? []).map((id) => ({
+            id,
+            name: `${id} name`,
+            username: `${id}.username`,
+            email: `${id}@private.example.com`,
+            emailVerified: true,
+            disabledAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }));
+          return { items, total: items.length, page: 1, pageSize: 100 };
+        },
+      },
       store,
       adapters,
       outbox: { kick() {} },
@@ -492,6 +507,16 @@ describe('MailClient → HTTP routes → service → database and queue', () => 
       expect.objectContaining({ id: first.id, status: 'accepted' }),
     ]);
     expect(await bob.listAccounts()).toEqual([]);
+    await expect(alice.listManagedAccounts()).rejects.toMatchObject({
+      status: 403,
+    });
+    const managedAccounts = await client('admin').listManagedAccounts();
+    expect(managedAccounts).toEqual([
+      expect.objectContaining({ userId: 'alice', ownerName: 'alice.username' }),
+    ]);
+    expect(JSON.stringify(managedAccounts)).not.toContain(
+      'private.example.com',
+    );
     expect((await bob.listMessages({})).items).toEqual([]);
     expect(await bob.listSubmissions()).toEqual([]);
     await expect(bob.sendMessage(compose)).rejects.toMatchObject({

@@ -110,6 +110,7 @@ export type MailAccountView = Omit<
 >;
 
 export interface MailManagedAccountView extends MailAccountView {
+  readonly ownerName?: string;
   readonly canMoveMessages?: boolean;
   readonly canSync: boolean;
 }
@@ -381,7 +382,15 @@ export interface MailCommand {
   readonly createdAt: string;
 }
 
+/** A bounded offset page. For grouped submissions, total counts batches. */
+export interface MailOffsetPage<T> {
+  readonly items: readonly T[];
+  readonly total: number;
+}
+
 export interface MailPage<T> {
+  /** Total matching messages before cursor or offset pagination. */
+  readonly total?: number;
   readonly items: readonly T[];
   readonly nextCursor?: string;
 }
@@ -437,6 +446,10 @@ export interface MailAuthorizationCallbackInput {
 }
 
 export interface MailListMessagesInput {
+  /** Include the total matching message count for numbered pagination. */
+  readonly withTotal?: boolean;
+  /** Zero-based row offset for direct page selection; mutually exclusive with cursor. */
+  readonly offset?: number;
   readonly accountIds?: readonly string[];
   readonly folderIds?: readonly string[];
   readonly labelIds?: readonly string[];
@@ -756,6 +769,18 @@ export interface MailService {
     context: MailOperationContext,
     syncRunId: string,
   ): Promise<MailSyncRunView | undefined>;
+  listSyncRunsPage(
+    context: MailOperationContext,
+    offset?: number,
+    limit?: number,
+  ): Promise<MailOffsetPage<MailSyncRunView>>;
+  listSubmissionsPage(
+    context: MailOperationContext,
+    bulkOnly?: boolean,
+    offset?: number,
+    groupByBatch?: boolean,
+    limit?: number,
+  ): Promise<MailOffsetPage<MailSubmissionLogView>>;
   listSyncRuns(
     context: MailOperationContext,
     offset?: number,
@@ -881,6 +906,11 @@ export interface MailProviderError {
   readonly category: MailProviderErrorCategory;
   readonly retryable: boolean;
   readonly retryAfterMs?: number;
+  /** SMTP envelope results after a message was accepted for some recipients. */
+  readonly recipients?: {
+    readonly accepted: readonly string[];
+    readonly rejected: readonly string[];
+  };
 }
 
 export type MailProviderResult<T> =
@@ -1126,6 +1156,7 @@ export type MailProviderSendResult =
       readonly providerMessageId?: string;
       readonly internetMessageId?: string;
       readonly sentCopyError?: MailProviderError;
+      readonly recipientError?: MailProviderError;
     }
   | {
       readonly status: 'failed';
@@ -1595,6 +1626,12 @@ export interface MailStore {
   createSyncRun(input: MailCreateSyncRunInput): Promise<MailSyncRun>;
   findActiveSyncRun(accountId: string): Promise<MailSyncRun | undefined>;
   getSyncRun(syncRunId: string): Promise<MailSyncRun | undefined>;
+  countSyncRuns(userId: string): Promise<number>;
+  countSubmissions(
+    userId: string,
+    bulkOnly?: boolean,
+    groupByBatch?: boolean,
+  ): Promise<number>;
   listSyncRuns(
     userId: string,
     offset?: number,

@@ -53,5 +53,6 @@ export function toPublicError(
     category: error.category,
     retryable: error.retryable,
     retryAfterMs: error.retryAfterMs,
+    ...(error.recipients ? { recipients: error.recipients } : {}),
   };
 }

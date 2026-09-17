@@ -85,8 +85,7 @@ keywords: 'NocoBase,邮件插件,待实现,批量发件,邮件管理,权限'
 
 ## 八、路由和页面命名
 
-- [x] [P1][UI] MAIL-PENDING-ROUTE-001：管理员操作日志页面按产品命名调整为 `/settings/mail/operation-logs`，并与导航标题、页面组件和测试清单一致
-- [x] [P1][UI] MAIL-PENDING-ROUTE-002：邮件管理页、批量发件页和管理员操作日志页的导航标题、权限提示和空状态文案清晰区分
+- [x] [P1][UI] MAIL-PENDING-ROUTE-002：邮件管理页和批量发件页的导航标题、权限提示和空状态文案清晰区分
 
 ## 九、暂不纳入当前清单
 

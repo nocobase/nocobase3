@@ -33,12 +33,36 @@ export class MailSubmissionsStore {
     return row ? fromSubmissionRow(row) : undefined;
   }
 
+  public async countSubmissions(
+    userId: string,
+    bulkOnly = false,
+    groupByBatch = false,
+  ): Promise<number> {
+    const accounts = await this.accounts.listAccounts(userId);
+    if (accounts.length === 0) return 0;
+    let query = this.database
+      .query()
+      .selectFrom<SubmissionRow>('mailSubmissions')
+      .select(({ fn }) => [fn.countAll().as('count')])
+      .where(
+        'accountId',
+        'in',
+        accounts.map((account) => account.id),
+      );
+    if (groupByBatch) query = query.where('idempotencyKey', 'like', 'bulk:%:0');
+    else if (bulkOnly) query = query.where('idempotencyKey', 'like', 'bulk:%');
+    const row = await query.executeTakeFirst<{
+      readonly count: number | string;
+    }>();
+    return Number(row?.count ?? 0);
+  }
+
   public async listSubmissions(
     userId: string,
     bulkOnly = false,
     offset = 0,
     groupByBatch = false,
-    limit = groupByBatch ? 20 : 100,
+    limit: number = groupByBatch ? 20 : 100,
   ): Promise<readonly MailStoredSubmission[]> {
     validateLogPagination(offset, limit);
     const accounts = await this.accounts.listAccounts(userId);

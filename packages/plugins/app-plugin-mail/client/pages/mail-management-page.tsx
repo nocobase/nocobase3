@@ -1,4 +1,8 @@
-import { ChevronLeft, ChevronRight, RefreshCw, Search } from 'lucide-react';
+import {
+  MailPagination,
+  MAIL_PAGE_SIZE,
+} from '../components/mail-pagination.js';
+import { RefreshCw, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -18,8 +22,6 @@ import {
   type MailMessageSummary,
 } from '../mail-client.js';
 import { useMailClient } from '../runtime.js';
-
-const PAGE_SIZES = [20, 50, 100] as const;
 
 interface ManagedFolderOption extends Pick<MailFolder, 'name' | 'type'> {
   readonly accountId: string;
@@ -43,9 +45,10 @@ export default function MailManagementPage(): ReactElement {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [messages, setMessages] = useState<readonly MailMessageSummary[]>([]);
   const [detailMessage, setDetailMessage] = useState<MailMessageSummary>();
+  const [total, setTotal] = useState<number>();
   const [nextCursor, setNextCursor] = useState<string>();
   const [pageIndex, setPageIndex] = useState(0);
-  const [pageSize, setPageSize] = useState<number>(20);
+  const [pageSize, setPageSize] = useState<number>(MAIL_PAGE_SIZE);
   const [pageCursors, setPageCursors] = useState<
     readonly (string | undefined)[]
   >([undefined]);
@@ -55,7 +58,6 @@ export default function MailManagementPage(): ReactElement {
   const [selectedKeys, setSelectedKeys] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [selectedFolderId, setSelectedFolderId] = useState('');
   const [actionBusy, setActionBusy] = useState<MailManagementMessageAction>();
   const [reloadVersion, setReloadVersion] = useState(0);
   const requestIdRef = useRef(0);
@@ -133,16 +135,19 @@ export default function MailManagementPage(): ReactElement {
         setPageIndex(0);
         setPageCursors([undefined]);
         setNextCursor(undefined);
+        setTotal(undefined);
         return mail.listManagedMessages({
           accountId: accountId || undefined,
           query: debouncedQuery.trim() || undefined,
           limit: pageSize,
+          withTotal: true,
         });
       })
       .then((page) => {
         if (!page || requestIdRef.current !== requestId) return;
         setMessages(page.items);
         setNextCursor(page.nextCursor);
+        setTotal(page.total);
       })
       .catch((cause: unknown) => {
         if (requestIdRef.current === requestId) reportError(cause);
@@ -170,15 +175,6 @@ export default function MailManagementPage(): ReactElement {
   const allSelected =
     messages.length > 0 && selectedMessages.length === messages.length;
   const someSelected = selectedMessages.length > 0 && !allSelected;
-  const folderOptionsById = useMemo(() => {
-    const options = new Map<string, ManagedFolderOption>();
-    for (const folder of folderOptions) {
-      if (!options.has(folder.providerFolderId)) {
-        options.set(folder.providerFolderId, folder);
-      }
-    }
-    return [...options.values()];
-  }, [folderOptions]);
   const canSoftDelete =
     selectedMessages.length > 0 &&
     selectedMessages.every((message) => {
@@ -221,10 +217,9 @@ export default function MailManagementPage(): ReactElement {
   };
 
   const runAction = (
-    action: MailManagementMessageAction,
+    action: Exclude<MailManagementMessageAction, 'move'>,
     options: {
       readonly permanently?: boolean;
-      readonly folderId?: string;
     } = {},
   ): void => {
     const actionMessages =
@@ -232,14 +227,6 @@ export default function MailManagementPage(): ReactElement {
         ? selectedNonDraftMessages
         : selectedMessages;
     if (actionMessages.length === 0 || actionBusy || loading) return;
-    if (action === 'move' && !options.folderId) {
-      setActionError(
-        t('dev.management.selectFolder', {
-          defaultValue: 'Select a destination folder first.',
-        }),
-      );
-      return;
-    }
     const actionLabel = managementActionLabel(action);
     if (
       !window.confirm(
@@ -273,7 +260,6 @@ export default function MailManagementPage(): ReactElement {
           accountId: message.accountId,
           messageId: message.id,
         })),
-        ...(options.folderId ? { providerFolderId: options.folderId } : {}),
         ...(action === 'delete'
           ? { permanently: options.permanently ?? false }
           : {}),
@@ -305,15 +291,11 @@ export default function MailManagementPage(): ReactElement {
   };
 
   const changePage = (targetIndex: number, clearSelection = true): void => {
-    if (
-      loading ||
-      targetIndex < 0 ||
-      targetIndex > pageIndex + 1 ||
-      (targetIndex > pageIndex && !nextCursor)
-    )
+    if (loading || targetIndex < 0 || !Number.isSafeInteger(targetIndex))
       return;
     const cursor =
-      targetIndex > pageIndex ? nextCursor : pageCursors[targetIndex];
+      targetIndex === pageIndex + 1 ? nextCursor : pageCursors[targetIndex];
+    const position = cursor ? { cursor } : { offset: targetIndex * pageSize };
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setError(undefined);
@@ -325,15 +307,28 @@ export default function MailManagementPage(): ReactElement {
       .listManagedMessages({
         accountId: accountId || undefined,
         query: debouncedQuery.trim() || undefined,
-        cursor,
+        ...position,
         limit: pageSize,
+        withTotal: true,
       })
       .then((page) => {
         if (requestIdRef.current !== requestId) return;
+        if (targetIndex > 0 && page.items.length === 0)
+          throw new Error(
+            t('pagination.unavailable', {
+              defaultValue:
+                'This page has no records. Choose another page or refresh.',
+            }),
+          );
         setMessages(page.items);
         setNextCursor(page.nextCursor);
+        setTotal(page.total);
         setPageIndex(targetIndex);
-        setPageCursors((current) => [...current.slice(0, targetIndex), cursor]);
+        setPageCursors((current) => {
+          const next = current.slice(0, targetIndex + 1);
+          next[targetIndex] = cursor;
+          return next;
+        });
         setSelectedKeys(
           (current) =>
             new Set(
@@ -512,42 +507,6 @@ export default function MailManagementPage(): ReactElement {
                   })}
                 </Button>
               ) : null}
-              <NativeSelect
-                aria-label={t('dev.management.moveFolder', {
-                  defaultValue: 'Destination folder',
-                })}
-                className='min-w-48'
-                disabled={selectedMessages.length === 0 || Boolean(actionBusy)}
-                onChange={(event) => setSelectedFolderId(event.target.value)}
-                value={selectedFolderId}
-              >
-                <option value=''>
-                  {t('dev.management.moveFolder', {
-                    defaultValue: 'Move to folder…',
-                  })}
-                </option>
-                {folderOptionsById.map((folder) => (
-                  <option
-                    key={folder.providerFolderId}
-                    value={folder.providerFolderId}
-                  >
-                    {folder.name}
-                  </option>
-                ))}
-              </NativeSelect>
-              <Button
-                disabled={
-                  selectedMessages.length === 0 ||
-                  !selectedFolderId ||
-                  Boolean(actionBusy)
-                }
-                onClick={() =>
-                  runAction('move', { folderId: selectedFolderId })
-                }
-                variant='outline'
-              >
-                {t('dev.management.actions.move', { defaultValue: 'Move' })}
-              </Button>
             </div>
           </section>
         ) : null}
@@ -695,62 +654,19 @@ export default function MailManagementPage(): ReactElement {
               </table>
             </div>
           )}
-          <nav
-            aria-label={t('workspace.pagination', {
-              defaultValue: 'Message pages',
-            })}
-            className='flex flex-wrap items-center justify-between gap-3 border-t p-3'
-          >
-            <span
-              aria-live='polite'
-              className='text-sm tabular-nums text-muted-foreground'
-            >
-              {t('workspace.pageNumber', {
-                page: pageIndex + 1,
-                defaultValue: `Page ${pageIndex + 1}`,
-              })}
-            </span>
-            <div className='flex items-center gap-2'>
-              <NativeSelect
-                aria-label={t('dev.management.pageSize', {
-                  defaultValue: 'Messages per page',
-                })}
-                className='w-auto'
-                disabled={loading || Boolean(actionBusy)}
-                onChange={(event) => {
-                  setSelectedKeys(new Set());
-                  setActionError(undefined);
-                  setPageSize(Number(event.target.value));
-                }}
-                value={pageSize}
-              >
-                {PAGE_SIZES.map((size) => (
-                  <option key={size} value={size}>
-                    {t('dev.management.perPage', {
-                      count: size,
-                      defaultValue: `${size} per page`,
-                    })}
-                  </option>
-                ))}
-              </NativeSelect>
-              <Button
-                disabled={loading || Boolean(actionBusy) || pageIndex === 0}
-                onClick={() => changePage(pageIndex - 1)}
-                variant='outline'
-              >
-                <ChevronLeft aria-hidden='true' className='size-4' />
-                {t('workspace.previousPage', { defaultValue: 'Previous page' })}
-              </Button>
-              <Button
-                disabled={loading || Boolean(actionBusy) || !nextCursor}
-                onClick={() => changePage(pageIndex + 1)}
-                variant='outline'
-              >
-                {t('workspace.nextPage', { defaultValue: 'Next page' })}
-                <ChevronRight aria-hidden='true' className='size-4' />
-              </Button>
-            </div>
-          </nav>
+          <MailPagination
+            page={pageIndex + 1}
+            total={total}
+            pageSize={pageSize}
+            hasNext={Boolean(nextCursor)}
+            disabled={loading || Boolean(actionBusy)}
+            onPageChange={(page) => changePage(page - 1)}
+            onPageSizeChange={(size) => {
+              setSelectedKeys(new Set());
+              setActionError(undefined);
+              setPageSize(size);
+            }}
+          />
         </Card>
       </div>
       {detailMessage ? (
@@ -806,7 +722,9 @@ function messageKey(message: MailMessageSummary): string {
   return `${message.accountId}:${message.id}`;
 }
 
-function managementActionLabel(action: MailManagementMessageAction): string {
+function managementActionLabel(
+  action: Exclude<MailManagementMessageAction, 'move'>,
+): string {
   switch (action) {
     case 'markRead':
       return 'Mark read';
@@ -818,8 +736,6 @@ function managementActionLabel(action: MailManagementMessageAction): string {
       return 'Remove star';
     case 'archive':
       return 'Archive';
-    case 'move':
-      return 'Move';
     case 'delete':
       return 'Delete';
   }

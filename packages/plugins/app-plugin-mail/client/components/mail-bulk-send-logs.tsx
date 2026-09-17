@@ -1,3 +1,5 @@
+import { MailSubmissionStatus } from './mail-submission-status.js';
+import { MailPagination, MAIL_PAGE_SIZE } from './mail-pagination.js';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
   Fragment,
@@ -24,6 +26,13 @@ export function MailBulkSendLogs(): ReactElement {
     () => new Set(),
   );
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(MAIL_PAGE_SIZE);
+  const [visiblePage, setVisiblePage] = useState({
+    page: 1,
+    pageSize: MAIL_PAGE_SIZE,
+  });
+  const [total, setTotal] = useState<number>();
+  const [hasNext, setHasNext] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [refresh, setRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -37,9 +46,27 @@ export function MailBulkSendLogs(): ReactElement {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const load = async (): Promise<void> => {
       try {
-        const next = await mail.listSubmissions(true, offset, true);
+        const result = await mail.listSubmissionsPage(
+          true,
+          offset,
+          true,
+          pageSize,
+        );
         if (!active) return;
-        setLogs(next);
+        const next = result.items;
+        if (offset > 0 && next.length === 0)
+          throw new Error(
+            t('pagination.unavailable', {
+              defaultValue:
+                'This page has no records. Choose another page or refresh.',
+            }),
+          );
+        setVisiblePage({ page: offset / pageSize + 1, pageSize });
+        const batchIds = [...new Set(next.map((log) => log.batchId ?? log.id))];
+        const visibleIds = new Set(batchIds.slice(0, pageSize));
+        setTotal(result.total);
+        setHasNext(offset + pageSize < result.total);
+        setLogs(next.filter((log) => visibleIds.has(log.batchId ?? log.id)));
         setError(undefined);
         if (
           next.some(
@@ -69,7 +96,7 @@ export function MailBulkSendLogs(): ReactElement {
       active = false;
       clearTimeout(timer);
     };
-  }, [mail, refresh, offset, busy, t]);
+  }, [mail, refresh, offset, pageSize, busy, t]);
 
   const act = async (
     action: 'retry' | 'cancel',
@@ -287,19 +314,7 @@ export function MailBulkSendLogs(): ReactElement {
                               <span className='text-muted-foreground'>—</span>
                             </td>
                             <td className='px-3 py-3'>
-                              <MailStatusBadge
-                                label={t(`status.submission.${log.status}`, {
-                                  defaultValue: log.status,
-                                })}
-                                tone={
-                                  log.status === 'accepted'
-                                    ? 'success'
-                                    : log.status === 'failed' ||
-                                        log.status === 'unknown'
-                                      ? 'danger'
-                                      : 'info'
-                                }
-                              />
+                              <MailSubmissionStatus submission={log} />
                             </td>
                             <td className='px-3 py-3 text-xs text-muted-foreground'>
                               {new Date(log.updatedAt).toLocaleString()}
@@ -361,28 +376,30 @@ export function MailBulkSendLogs(): ReactElement {
           </table>
         </div>
       )}
-      <div className='mt-4 flex justify-end gap-2'>
-        <Button
-          variant='outline'
-          disabled={busy || loading || offset === 0}
-          onClick={() => {
-            setLoading(true);
-            setOffset((value) => Math.max(0, value - 20));
-          }}
-        >
-          {t('dev.bulkSend.previousLogs', { defaultValue: 'Previous page' })}
-        </Button>
-        <Button
-          variant='outline'
-          disabled={busy || loading || batches.size < 20}
-          onClick={() => {
-            setLoading(true);
-            setOffset((value) => value + 20);
-          }}
-        >
-          {t('dev.bulkSend.nextLogs', { defaultValue: 'Next page' })}
-        </Button>
-      </div>
+      <MailPagination
+        page={visiblePage.page}
+        total={total}
+        pageSize={visiblePage.pageSize}
+        onPageSizeChange={(size) => {
+          setLoading(true);
+          setExpanded(new Set());
+          setActionError(undefined);
+          setError(undefined);
+          setPageSize(size);
+          setOffset(0);
+          setRefresh((value) => value + 1);
+        }}
+        hasNext={hasNext}
+        disabled={busy || loading}
+        onPageChange={(page) => {
+          setLoading(true);
+          setExpanded(new Set());
+          setActionError(undefined);
+          setPageSize(visiblePage.pageSize);
+          setOffset((page - 1) * visiblePage.pageSize);
+          setRefresh((value) => value + 1);
+        }}
+      />
     </Card>
   );
 }

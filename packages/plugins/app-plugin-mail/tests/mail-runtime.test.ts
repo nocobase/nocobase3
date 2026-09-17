@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
 
 import {
   createDatabaseManager,
@@ -73,6 +74,229 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     await database.destroy();
   });
 
+  it('resolves account owner usernames in batches with name and missing-user fallbacks', async () => {
+    for (let index = 0; index < 102; index += 1) {
+      await store.saveAccount({
+        ...account(),
+        id: `owned-${index}`,
+        userId: `owner-${index}`,
+        address: `owned-${index}@example.com`,
+      });
+    }
+    await store.saveAccount({
+      ...account(),
+      id: 'same-owner',
+      userId: 'owner-0',
+      address: 'same-owner@example.com',
+    });
+    const list = vi.fn<UserAdministrationService['list']>(async (input) => ({
+      items: (input?.userIds ?? [])
+        .filter((id) => id !== 'owner-101')
+        .map((id) => ({
+          id,
+          name: `Name ${id}`,
+          username: id === 'owner-0' ? 'alice' : undefined,
+          email: `${id}@private.example.com`,
+          emailVerified: true,
+          disabledAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+      total: input?.userIds?.length ?? 0,
+      page: 1,
+      pageSize: 100,
+    }));
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+      users: { list },
+    });
+    const accounts = await service.listManagedAccounts({
+      actorId: 'administrator',
+    });
+    expect(accounts.find((item) => item.id === 'owned-0')?.ownerName).toBe(
+      'alice',
+    );
+    expect(accounts.find((item) => item.id === 'same-owner')?.ownerName).toBe(
+      'alice',
+    );
+    expect(accounts.find((item) => item.id === 'owned-100')?.ownerName).toBe(
+      'Name owner-100',
+    );
+    expect(
+      accounts.find((item) => item.id === 'owned-101')?.ownerName,
+    ).toBeUndefined();
+    expect(list).toHaveBeenCalledTimes(2);
+    const ids = list.mock.calls.flatMap(([input]) => input?.userIds ?? []);
+    expect(ids).toHaveLength(103);
+    expect(new Set(ids).size).toBe(103);
+    expect(JSON.stringify(accounts)).not.toContain('private.example.com');
+  });
+
+  it('paginates delivery history beyond the recent-record limit without crossing owners', async () => {
+    await store.saveAccount({
+      ...account(),
+      id: 'other-account',
+      userId: 'other-user',
+      address: 'other@example.com',
+    });
+    for (let index = 0; index < 125; index += 1) {
+      await store.createSubmission(
+        {
+          id: `paged-${String(index).padStart(3, '0')}`,
+          accountId: 'account-1',
+          status: 'accepted',
+        },
+        `paged-${index}`,
+        'fingerprint',
+      );
+    }
+    await store.createSubmission(
+      {
+        id: 'other-submission',
+        accountId: 'other-account',
+        status: 'accepted',
+      },
+      'other-submission',
+      'fingerprint',
+    );
+    await database
+      .query()
+      .updateTable('mailSubmissions')
+      .set({ createdAt: '2026-09-01T00:00:00.000Z' })
+      .allowAllRows()
+      .execute();
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+    });
+    const pages = [];
+    for (let offset = 0; offset < 125; offset += 20) {
+      const page = await service.listSubmissions(
+        { actorId: 'user-1' },
+        false,
+        offset,
+        false,
+        20,
+      );
+      expect(page).toHaveLength(Math.min(20, 125 - offset));
+      pages.push(...page);
+    }
+    expect(pages.map((row) => row.id)).toEqual(
+      Array.from(
+        { length: 125 },
+        (_, index) => `paged-${String(124 - index).padStart(3, '0')}`,
+      ),
+    );
+    const counted = await service.listSubmissionsPage(
+      { actorId: 'user-1' },
+      false,
+      120,
+      false,
+      20,
+    );
+    expect(counted.total).toBe(125);
+    expect(counted.items).toHaveLength(5);
+    expect(
+      (await service.listSubmissionsPage({ actorId: 'other-user' })).total,
+    ).toBe(1);
+    expect(
+      (await service.listSubmissionsPage({ actorId: 'unknown-user' })).total,
+    ).toBe(0);
+    await expect(
+      service.listSubmissions({ actorId: 'user-1' }, false, 140, false, 20),
+    ).resolves.toEqual([]);
+    await expect(
+      store.listSubmissions('user-1', false, -1, false, 20),
+    ).rejects.toThrow('offset');
+    await expect(
+      store.listSubmissions('user-1', false, 0, false, 101),
+    ).rejects.toThrow('limit');
+  });
+
+  it('paginates synchronization logs stably when creation times match', async () => {
+    for (let index = 0; index < 25; index += 1) {
+      const id = `paged-sync-${String(index).padStart(2, '0')}`;
+      await store.createSyncRun({
+        id,
+        accountId: 'account-1',
+        requestedBy: 'user-1',
+        mode: 'incremental',
+        policy: {},
+      });
+      await store.cancelSyncRun(id);
+    }
+    await database
+      .query()
+      .updateTable('mailSyncRuns')
+      .set({ createdAt: '2026-09-01T00:00:00.000Z' })
+      .allowAllRows()
+      .execute();
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+    });
+    const first = await service.listSyncRuns({ actorId: 'user-1' }, 0, 20);
+    const second = await service.listSyncRuns({ actorId: 'user-1' }, 20, 20);
+    expect(first).toHaveLength(20);
+    expect(second).toHaveLength(5);
+    const counted = await service.listSyncRunsPage(
+      { actorId: 'user-1' },
+      20,
+      20,
+    );
+    expect(counted.total).toBe(25);
+    expect(counted.items).toEqual(second);
+    expect(
+      (await service.listSyncRunsPage({ actorId: 'other-user' })).total,
+    ).toBe(0);
+    expect([...first, ...second].map((row) => row.id)).toEqual(
+      Array.from(
+        { length: 25 },
+        (_, index) => `paged-sync-${String(24 - index).padStart(2, '0')}`,
+      ),
+    );
+    await expect(
+      service.listSyncRuns({ actorId: 'other-user' }, 0, 20),
+    ).resolves.toEqual([]);
+    await expect(store.listSyncRuns('user-1', 0, 0)).rejects.toThrow('limit');
+  });
+
+  it('paginates whole batches while preserving all recipient rows and a lookahead batch', async () => {
+    for (let batch = 0; batch < 22; batch += 1) {
+      for (let recipient = 0; recipient < 3; recipient += 1) {
+        const key = `bulk:page-${String(batch).padStart(2, '0')}:${recipient}`;
+        await store.createSubmission(
+          { id: key, accountId: 'account-1', status: 'accepted' },
+          key,
+          'fingerprint',
+        );
+      }
+    }
+    await database
+      .query()
+      .updateTable('mailSubmissions')
+      .set({ createdAt: '2026-09-01T00:00:00.000Z' })
+      .allowAllRows()
+      .execute();
+    const first = await store.listSubmissions('user-1', true, 0, true, 21);
+    const second = await store.listSubmissions('user-1', true, 20, true, 21);
+    expect(await store.countSubmissions('user-1', true, true)).toBe(22);
+    expect(await store.countSubmissions('user-1', true, false)).toBe(66);
+    expect(await store.countSubmissions('other-user', true, true)).toBe(0);
+    expect(first).toHaveLength(63);
+    expect(second).toHaveLength(6);
+    expect(first.slice(0, 3).map((row) => row.id)).toEqual([
+      'bulk:page-21:0',
+      'bulk:page-21:1',
+      'bulk:page-21:2',
+    ]);
+    expect(
+      new Set([...first.slice(0, 60), ...second].map((row) => row.id)).size,
+    ).toBe(66);
+  });
+
   // MAIL-SEND-009/010 and MAIL-BULK-003: idempotent and scheduled delivery.
   it('sends once for a repeated idempotency key', async () => {
     const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
@@ -117,6 +341,63 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
         updatedAt: expect.any(String),
       },
     ]);
+  });
+
+  it('persists partial acceptance in scheduled-send history and never resends accepted recipients', async () => {
+    const recipientError = {
+      code: 'SMTP_RECIPIENTS_REJECTED',
+      message: 'Private server detail',
+      category: 'recipient' as const,
+      retryable: false,
+      recipients: {
+        accepted: ['first@example.com'],
+        rejected: ['second@example.com'],
+      },
+    };
+    const sendMessage = vi
+      .fn<NonNullable<MailProviderAdapter['sendMessage']>>()
+      .mockResolvedValue({
+        status: 'accepted',
+        providerMessageId: 'partial-id',
+        recipientError,
+      });
+    const adapters = resolver({ ...baseAdapter(), sendMessage });
+    const service = new DefaultMailService({ store, adapters });
+    const input = {
+      accountId: 'account-1',
+      identityId: 'identity-1',
+      to: [{ address: 'first@example.com' }, { address: 'second@example.com' }],
+      subject: 'Partial',
+      text: 'Body',
+      idempotencyKey: 'partial',
+      scheduledAt: '2099-01-01T00:00:00Z',
+    };
+    const queued = await service.sendMessage({ actorId: 'user-1' }, input);
+    const scheduled = await store.getScheduledSubmission(queued.id);
+    await new SendMailOperation({ store, adapters }).execute(
+      { actorId: 'user-1' },
+      scheduled!.input,
+      { scheduledDelivery: true },
+    );
+    const retried = await service.sendMessage({ actorId: 'user-1' }, input);
+    expect(retried).toMatchObject({
+      status: 'accepted',
+      error: {
+        code: 'SMTP_RECIPIENTS_REJECTED',
+        recipients: recipientError.recipients,
+      },
+    });
+    expect(retried.error).not.toHaveProperty('message');
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const [log] = await service.listSubmissions({ actorId: 'user-1' });
+    expect(log).toMatchObject({
+      status: 'accepted',
+      canRetry: false,
+      error: { retryable: false, recipients: recipientError.recipients },
+    });
+    await expect(
+      service.retrySubmission({ actorId: 'user-1' }, queued.id),
+    ).rejects.toThrow();
   });
 
   it('reuses persisted schedule times when a bulk request is retried', async () => {
@@ -1549,7 +1830,18 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
         nextCursor: { value: 'cursor-1' },
       });
 
-      const page = await store.listMessages('user-1', { folderIds, limit: 1 });
+      const page = await store.listMessages('user-1', {
+        folderIds,
+        limit: 1,
+        withTotal: true,
+      });
+      expect(page.total).toBe(1);
+      const managed = await store.listAllMessages({
+        folderIds,
+        limit: 1,
+        withTotal: true,
+      });
+      expect(managed.total).toBe(3);
       expect(page.items.map((item) => item.providerMessageId)).toEqual([
         'received',
       ]);
@@ -2848,6 +3140,62 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
       mailboxFirst.items[0].providerMessageId,
       mailboxSecond.items[0].providerMessageId,
     ]).toEqual(['thread-message-3', 'thread-message-2']);
+    const mailboxThird = await store.listMessages('user-1', {
+      accountIds: ['account-1'],
+      offset: 2,
+      limit: 1,
+    });
+    expect(mailboxThird.items.map((item) => item.providerMessageId)).toEqual([
+      'thread-message-1',
+    ]);
+    expect(mailboxThird.nextCursor).toBeUndefined();
+    expect(mailboxFirst.total).toBeUndefined();
+    const counted = await store.listAllMessages({
+      offset: 2,
+      limit: 1,
+      withTotal: true,
+    });
+    expect(counted.total).toBe(3);
+    expect(
+      await store.listAllMessages({
+        accountIds: ['missing-account'],
+        withTotal: true,
+      }),
+    ).toEqual({ items: [], total: 0 });
+    expect(counted.items).toEqual(mailboxThird.items);
+    expect(
+      (await store.listMessages('another-user', { withTotal: true })).total,
+    ).toBe(0);
+    expect(
+      (await store.listMessages('user-1', { query: 'Re:', withTotal: true }))
+        .total,
+    ).toBe(2);
+    expect(
+      (
+        await store.listMessages('user-1', {
+          cursor: mailboxFirst.nextCursor,
+          withTotal: true,
+        })
+      ).total,
+    ).toBe(3);
+    const allSecond = await store.listAllMessages({ offset: 1, limit: 1 });
+    expect(allSecond.items.map((item) => item.id)).toEqual(
+      mailboxSecond.items.map((item) => item.id),
+    );
+    expect(
+      (await store.listMessages('another-user', { offset: 1, limit: 1 })).items,
+    ).toEqual([]);
+    for (const offset of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
+      await expect(store.listMessages('user-1', { offset })).rejects.toThrow(
+        TypeError,
+      );
+    }
+    await expect(
+      store.listMessages('user-1', {
+        offset: 0,
+        cursor: mailboxFirst.nextCursor,
+      }),
+    ).rejects.toThrow(TypeError);
     expect(mailboxFirst.items[0].subjectCount).toBe(3);
     expect(mailboxSecond.items[0].subjectCount).toBe(3);
     expect([

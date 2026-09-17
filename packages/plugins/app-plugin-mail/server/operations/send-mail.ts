@@ -227,7 +227,7 @@ export class SendMailOperation {
             ...submission,
             status: 'accepted',
             providerMessageId: result.providerMessageId,
-            error: result.sentCopyError,
+            error: result.recipientError ?? result.sentCopyError,
           },
           leaseToken,
         );

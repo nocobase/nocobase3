@@ -19,13 +19,6 @@ const routes: readonly AppClientRouteContribution[] = [
           access: { resource: 'mail.admin', action: 'access' },
           componentLoader: () => import('./pages/mail-settings-page.js'),
         },
-        {
-          name: 'operation-logs',
-          path: '/operation-logs',
-          navigation: { title: 'nav.operationLogs', icon: History },
-          access: { resource: 'mail.admin', action: 'access' },
-          componentLoader: () => import('./pages/mail-operation-logs-page.js'),
-        },
       ],
     },
   ]),

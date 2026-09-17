@@ -1,52 +1,40 @@
+import { MailSubmissionStatus } from '../components/mail-submission-status.js';
 import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
-import { MailStatusBadge } from '../components/index.js';
 import { Button } from '../components/ui/button.js';
 import { Card } from '../components/ui/card.js';
-import {
-  mailErrorMessage,
-  type MailAccountView,
-  type MailSubmissionLogView,
-} from '../mail-client.js';
+import { type MailSubmissionLogView } from '../mail-client.js';
+import { useMailLogPage } from '../hooks/use-mail-log-page.js';
+import { MailPagination } from '../components/mail-pagination.js';
 import { useMailClient } from '../runtime.js';
 
 export default function MailSendLogsPage(): ReactElement {
   const mail = useMailClient();
   const { t } = useTranslation();
-  const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
-  const [submissions, setSubmissions] = useState<
-    readonly MailSubmissionLogView[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>();
-
-  const refresh = useCallback((): void => {
-    setLoading(true);
-    setError(undefined);
-    void Promise.all([mail.listAccounts(), mail.listSubmissions()])
-      .then(([nextAccounts, nextSubmissions]) => {
-        setAccounts(nextAccounts);
-        setSubmissions(nextSubmissions);
-      })
-      .catch((cause: unknown) => {
-        setError(
-          mailErrorMessage(
-            cause,
-            t('errors.requestFailed', {
-              defaultValue: 'Mail request failed.',
-            }),
-          ),
-        );
-      })
-      .finally(() => setLoading(false));
-  }, [mail, t]);
-
-  useEffect(() => {
-    void Promise.resolve().then(refresh);
-  }, [refresh]);
+  const load = useCallback(
+    (offset: number, limit: number) =>
+      Promise.all([
+        mail.listAccounts(),
+        mail.listSubmissionsPage(false, offset, false, limit),
+      ]),
+    [mail],
+  );
+  const {
+    accounts,
+    rows: submissions,
+    loading,
+    error,
+    refresh,
+    page,
+    changePage,
+    pageSize,
+    changePageSize,
+    hasNext,
+    total,
+  } = useMailLogPage<MailSubmissionLogView>(load);
 
   const accountLabels = useMemo(
     () => new Map(accounts.map((account) => [account.id, account.address])),
@@ -142,12 +130,7 @@ export default function MailSendLogsPage(): ReactElement {
                           })}
                       </td>
                       <td className='px-4 py-3'>
-                        <MailStatusBadge
-                          label={t(`status.submission.${submission.status}`, {
-                            defaultValue: submission.status,
-                          })}
-                          tone={submissionStatusTone(submission.status)}
-                        />
+                        <MailSubmissionStatus submission={submission} />
                       </td>
                       <td className='max-w-56 break-all px-4 py-3 text-xs text-muted-foreground'>
                         {submission.id}
@@ -161,8 +144,14 @@ export default function MailSendLogsPage(): ReactElement {
                       <td className='px-4 py-3 text-muted-foreground'>
                         {formatTimestamp(submission.updatedAt)}
                       </td>
-                      <td className='max-w-64 px-4 py-3 text-xs text-destructive'>
-                        {submission.error?.code ?? '—'}
+                      <td className='max-w-64 px-4 py-3 text-xs text-muted-foreground'>
+                        {submission.error?.code ? (
+                          <span className='text-destructive'>
+                            {submission.error.code}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -170,18 +159,19 @@ export default function MailSendLogsPage(): ReactElement {
               </table>
             </div>
           )}
+          <MailPagination
+            page={page}
+            total={total}
+            pageSize={pageSize}
+            onPageSizeChange={changePageSize}
+            hasNext={hasNext}
+            disabled={loading}
+            onPageChange={changePage}
+          />
         </Card>
       </div>
     </section>
   );
-}
-
-function submissionStatusTone(
-  status: MailSubmissionLogView['status'],
-): 'success' | 'danger' | 'info' {
-  if (status === 'accepted') return 'success';
-  if (status === 'failed' || status === 'unknown') return 'danger';
-  return 'info';
 }
 
 function formatTimestamp(value: string): string {

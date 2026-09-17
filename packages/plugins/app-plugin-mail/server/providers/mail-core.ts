@@ -1,4 +1,5 @@
 import { ServiceProvider } from '@nocobase/service-provider';
+import { userAdministrationServiceToken } from '@nocobase/app-plugin-authentication';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
 import { loggingToken } from '@nocobase/app-server/logging';
@@ -108,6 +109,7 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
       mailServiceToken,
       (container) =>
         new DefaultMailService({
+          users: container.resolve(userAdministrationServiceToken),
           store: container.resolve(mailStoreToken),
           adapters: container.resolve(mailProviderAdapterResolverToken),
           outbox: container.resolve(mailRuntimeToken),

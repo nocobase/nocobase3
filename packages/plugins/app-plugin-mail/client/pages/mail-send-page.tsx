@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
-import { MailComposer } from '../components/mail-composer.js';
+import {
+  MailComposer,
+  type MailComposerRequest,
+} from '../components/mail-composer.js';
 import { Button } from '../components/ui/button.js';
-import { NativeSelect } from '../components/ui/native-select.js';
 import {
   EMPTY_COMPOSER,
   findProviderCapabilities,
@@ -10,6 +12,7 @@ import {
 import {
   mailErrorMessage,
   type MailAccountView,
+  type MailIdentity,
   type MailProviderView,
 } from '../mail-client.js';
 import { useMailClient } from '../runtime.js';
@@ -20,29 +23,76 @@ export default function MailSendPage(): ReactElement {
   const [accounts, setAccounts] = useState<readonly MailAccountView[]>([]);
   const [providers, setProviders] = useState<readonly MailProviderView[]>([]);
   const [accountId, setAccountId] = useState('');
-  const [editing, setEditing] = useState(false);
+  const [senderOptions, setSenderOptions] = useState<
+    readonly { accountId: string; identity: MailIdentity }[]
+  >([]);
+  const [selectedIdentities, setSelectedIdentities] = useState<
+    Record<string, string>
+  >({});
+  const [sessions, setSessions] = useState<readonly ComposerSession[]>([]);
+  const editing = sessions.some((session) => session.accountId === accountId);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
-  const [notice, setNotice] = useState<string>();
-  const request = useMemo(
-    () => ({ accountId, value: EMPTY_COMPOSER, attachments: [] }),
-    [accountId],
+  const [notices, setNotices] = useState<Record<string, string | undefined>>(
+    {},
   );
+  const notice = notices[accountId];
+  const selectSender = (id: string, identityId: string): void => {
+    setAccountId(id);
+    setSelectedIdentities((current) => ({ ...current, [id]: identityId }));
+    setSessions((current) =>
+      current.some((session) => session.accountId === id)
+        ? current
+        : [...current, createComposerSession(id)],
+    );
+  };
   useEffect(() => {
     let active = true;
     void Promise.all([mail.listAccounts(), mail.listProviders()])
-      .then(([items, definitions]) => {
+      .then(async ([items, definitions]) => {
         if (!active) return;
         const sendable = items.filter(
           (account) =>
             account.status === 'active' &&
             findProviderCapabilities(account, definitions)?.send,
         );
+        const identityGroups = await Promise.all(
+          sendable.map(async (account) => ({
+            accountId: account.id,
+            identities: await mail.listIdentities(account.id),
+          })),
+        );
+        if (!active) return;
+        const options = identityGroups.flatMap(({ accountId, identities }) =>
+          identities
+            .filter((identity) => identity.canSend)
+            .map((identity) => ({ accountId, identity })),
+        );
+        setSenderOptions(options);
+        setSelectedIdentities(
+          Object.fromEntries(
+            identityGroups.map(({ accountId, identities }) => [
+              accountId,
+              identities.find(
+                (identity) => identity.canSend && identity.isPrimary,
+              )?.id ??
+                identities.find((identity) => identity.canSend)?.id ??
+                '',
+            ]),
+          ),
+        );
         setAccounts(sendable);
         setProviders(definitions);
-        setAccountId(sendable[0]?.id ?? '');
-        setEditing(sendable.length > 0);
+        const firstAccountId = options[0]?.accountId ?? sendable[0]?.id;
+        setAccountId(firstAccountId ?? '');
+        if (firstAccountId) {
+          setSessions((current) =>
+            current.some((session) => session.accountId === firstAccountId)
+              ? current
+              : [...current, createComposerSession(firstAccountId)],
+          );
+        }
       })
       .catch((cause: unknown) => {
         if (active)
@@ -74,67 +124,60 @@ export default function MailSendPage(): ReactElement {
           {notice}
         </p>
       ) : null}
-      <label className='grid gap-2 text-sm font-medium'>
-        {t('dev.account', { defaultValue: 'Account' })}
-        <NativeSelect
-          disabled={editing || loading}
-          value={accountId}
-          onChange={(event) => setAccountId(event.target.value)}
-        >
-          {accounts.length === 0 ? (
-            <option value=''>
-              {t('dev.noAccounts', { defaultValue: 'No connected accounts' })}
-            </option>
-          ) : null}
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.address}
-            </option>
-          ))}
-        </NativeSelect>
-      </label>
-      {editing && accountId ? (
-        <>
-          <p className='text-xs text-muted-foreground'>
-            {t('dev.sendHub.accountHelp', {
-              defaultValue:
-                'Close or save the current message before switching accounts.',
-            })}
-          </p>
+      {!loading && accounts.length === 0 ? (
+        <p className='text-sm text-muted-foreground'>
+          {t('dev.noAccounts', { defaultValue: 'No connected accounts' })}
+        </p>
+      ) : null}
+      {sessions.map((request) => (
+        <div key={request.key} hidden={request.accountId !== accountId}>
           <MailComposer
             inline
             allowBulkSend
+            senderSelection={{
+              identityId: selectedIdentities[request.accountId] ?? '',
+              options: senderOptions,
+              onChange: selectSender,
+            }}
             request={request}
             accounts={accounts}
             providers={providers}
             templateVariables={{}}
-            onClose={() => setEditing(false)}
-            onComplete={(result) => {
-              setNotice(
-                t(
-                  result === 'accepted'
-                    ? 'workspace.accepted'
-                    : result === 'draft'
-                      ? 'workspace.draftSaved'
-                      : result === 'unknown'
-                        ? 'workspace.submissionUnknown'
-                        : 'workspace.submissionFailed',
+            onClose={() =>
+              setSessions((current) =>
+                current.map((session) =>
+                  session === request
+                    ? createComposerSession(request.accountId)
+                    : session,
                 ),
-              );
+              )
+            }
+            onComplete={(result, rejectedRecipients) => {
+              setNotices((current) => ({
+                ...current,
+                [request.accountId]:
+                  result === 'partial'
+                    ? t('workspace.submissionPartial', {
+                        recipients: rejectedRecipients?.join(', '),
+                        defaultValue:
+                          'Some recipients were rejected: {{recipients}}. The other recipients were accepted. Resend only to the rejected addresses.',
+                      })
+                    : t(
+                        result === 'accepted'
+                          ? 'workspace.accepted'
+                          : result === 'draft'
+                            ? 'workspace.draftSaved'
+                            : result === 'unknown'
+                              ? 'workspace.submissionUnknown'
+                              : 'workspace.submissionFailed',
+                      ),
+              }));
             }}
           />
-        </>
-      ) : (
+        </div>
+      ))}
+      {!editing ? (
         <div className='flex gap-2'>
-          <Button
-            disabled={!accountId || loading}
-            onClick={() => {
-              setNotice(undefined);
-              setEditing(true);
-            }}
-          >
-            {t('workspace.compose', { defaultValue: 'Compose' })}
-          </Button>
           <Button
             disabled={loading}
             variant='outline'
@@ -147,7 +190,20 @@ export default function MailSendPage(): ReactElement {
             {t('actions.reloadAccounts', { defaultValue: 'Reload accounts' })}
           </Button>
         </div>
-      )}
+      ) : null}
     </div>
   );
+}
+
+interface ComposerSession extends MailComposerRequest {
+  readonly key: string;
+}
+
+function createComposerSession(accountId: string): ComposerSession {
+  return {
+    key: crypto.randomUUID(),
+    accountId,
+    value: EMPTY_COMPOSER,
+    attachments: [],
+  };
 }

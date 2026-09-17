@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { SendMailOperation } from '../operations/send-mail.js';
 import {
   type MailOperationContext,
+  type MailOffsetPage,
   type MailSubmissionLogView,
   type MailSubmissionView,
 } from '../types.js';
@@ -17,12 +18,30 @@ export class MailSubmissionsService {
     private readonly sendMail: SendMailOperation,
   ) {}
 
+  public async listSubmissionsPage(
+    context: MailOperationContext,
+    bulkOnly = false,
+    offset = 0,
+    groupByBatch = false,
+    limit = 20,
+  ): Promise<MailOffsetPage<MailSubmissionLogView>> {
+    const [items, total] = await Promise.all([
+      this.listSubmissions(context, bulkOnly, offset, groupByBatch, limit),
+      this.dependencies.store.countSubmissions(
+        context.actorId,
+        bulkOnly,
+        groupByBatch,
+      ),
+    ]);
+    return { items, total };
+  }
+
   public async listSubmissions(
     context: MailOperationContext,
     bulkOnly = false,
     offset = 0,
     groupByBatch = false,
-    limit = groupByBatch ? 20 : 100,
+    limit: number = groupByBatch ? 20 : 100,
   ): Promise<readonly MailSubmissionLogView[]> {
     return (
       await this.dependencies.store.listSubmissions(

@@ -37,13 +37,22 @@ export interface MailComposerRequest {
 }
 export interface MailComposerProps {
   readonly allowBulkSend?: boolean;
+  readonly senderSelection?: {
+    readonly identityId: string;
+    readonly options: readonly {
+      readonly accountId: string;
+      readonly identity: MailIdentity;
+    }[];
+    readonly onChange: (accountId: string, identityId: string) => void;
+  };
   readonly request: MailComposerRequest;
   readonly accounts: readonly MailAccountView[];
   readonly providers: readonly MailProviderView[];
   readonly templateVariables: MailTemplateVariables;
   readonly onClose: () => void;
   readonly onComplete: (
-    result: 'accepted' | 'draft' | 'unknown' | 'failed',
+    result: 'accepted' | 'draft' | 'unknown' | 'failed' | 'partial',
+    rejectedRecipients?: readonly string[],
   ) => void;
 }
 
@@ -51,6 +60,7 @@ const AUTO_SAVE_DELAY_MS = 1_000;
 export function useMailComposer({
   request,
   allowBulkSend = false,
+  senderSelection,
   accounts,
   providers,
   onClose,
@@ -72,7 +82,12 @@ export function useMailComposer({
   const [composerIdentities, setComposerIdentities] = useState<
     readonly MailIdentity[]
   >([]);
-  const [identityId, setIdentityId] = useState('');
+  const [localIdentityId, setLocalIdentityId] = useState('');
+  const identityId = senderSelection?.identityId ?? localIdentityId;
+  const setIdentityId = (id: string): void => {
+    if (senderSelection) senderSelection.onChange(composerAccountId, id);
+    else setLocalIdentityId(id);
+  };
   const [ccVisible, setCcVisible] = useState(Boolean(request.value.cc.trim()));
   const [bccVisible, setBccVisible] = useState(
     Boolean(request.value.bcc.trim()),
@@ -111,6 +126,13 @@ export function useMailComposer({
   const composerSessionRef = useRef(0);
   const bulkRequestRef = useRef<
     { fingerprint: string; key: string } | undefined
+  >(undefined);
+  const sendRequestRef = useRef<
+    | {
+        fingerprint: string;
+        input: ReturnType<typeof buildComposerInput>;
+      }
+    | undefined
   >(undefined);
   const copiedAttachmentsRef = useRef(new Map<string, string>());
   const requestError = useCallback(
@@ -193,7 +215,7 @@ export function useMailComposer({
             ?.id ??
           items.find((identity) => identity.canSend)?.id ??
           '';
-        setIdentityId(nextIdentityId);
+        setLocalIdentityId(nextIdentityId);
         if (!recovery) {
           setLastSavedFingerprint(
             composerFingerprint(
@@ -381,19 +403,47 @@ export function useMailComposer({
         idempotencyKey: bulkRequestRef.current.key,
       });
     };
-    const operation =
-      mode === 'bulk'
-        ? sendBulk()
-        : mail.sendMessage(input).then((result) => [result]);
+    const sendSingle = () => {
+      // Autosave can replace upload IDs with draft attachment IDs. Compare the
+      // logical content, then reuse the original wire request after a lost response.
+      const fingerprint = JSON.stringify({
+        ...input,
+        idempotencyKey: undefined,
+        draftMessageId: undefined,
+        attachmentIds: [
+          ...new Set([
+            ...(input.attachmentIds ?? []),
+            ...retainedAttachments.map(
+              (attachment) =>
+                attachment.outboundAttachmentId ??
+                attachment.providerAttachmentId,
+            ),
+          ]),
+        ].sort(),
+        retainedAttachmentIds: undefined,
+      });
+      if (sendRequestRef.current?.fingerprint !== fingerprint) {
+        sendRequestRef.current = { fingerprint, input };
+      }
+      return mail
+        .sendMessage(sendRequestRef.current.input)
+        .then((result) => [result]);
+    };
+    const operation = mode === 'bulk' ? sendBulk() : sendSingle();
     void operation
       .then((results) => {
+        const rejectedRecipients = results.flatMap(
+          (result) => result.error?.recipients?.rejected ?? [],
+        );
         const outcome = results.some((result) => result.status === 'unknown')
           ? 'unknown'
           : results.some((result) => result.status === 'failed')
             ? 'failed'
-            : 'accepted';
+            : rejectedRecipients.length > 0
+              ? 'partial'
+              : 'accepted';
         closeComposer(true);
-        onComplete(outcome);
+        onComplete(outcome, rejectedRecipients);
       })
       .catch(requestError)
       .finally(() => setSending(false));
@@ -736,7 +786,7 @@ export interface MailComposerController {
   readonly setComposer: Dispatch<SetStateAction<ComposerState | undefined>>;
   readonly composerAccountId: string;
   readonly identityId: string;
-  readonly setIdentityId: Dispatch<SetStateAction<string>>;
+  readonly setIdentityId: (id: string) => void;
   readonly ccVisible: boolean;
   readonly setCcVisible: Dispatch<SetStateAction<boolean>>;
   readonly bccVisible: boolean;

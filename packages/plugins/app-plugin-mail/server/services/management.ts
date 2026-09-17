@@ -27,15 +27,30 @@ export class MailManagementService {
   public constructor(
     private readonly dependencies: Pick<
       DefaultMailServiceDependencies,
-      'store' | 'adapters' | 'messageChangeNotifier' | 'registry'
+      'store' | 'adapters' | 'messageChangeNotifier' | 'registry' | 'users'
     >,
   ) {}
 
   public async listManagedAccounts(
     context: MailOperationContext,
   ): Promise<readonly MailManagedAccountView[]> {
-    return (await this.dependencies.store.listAllAccounts()).map((account) => ({
+    const accounts = await this.dependencies.store.listAllAccounts();
+    const ownerNames = new Map<string, string>();
+    if (this.dependencies.users) {
+      const userIds = [...new Set(accounts.map((account) => account.userId))];
+      for (let offset = 0; offset < userIds.length; offset += 100) {
+        const { items } = await this.dependencies.users.list({
+          userIds: userIds.slice(offset, offset + 100),
+          pageSize: 100,
+        });
+        for (const user of items) {
+          ownerNames.set(user.id, user.username?.trim() || user.name);
+        }
+      }
+    }
+    return accounts.map((account) => ({
       ...toMailAccountView(account),
+      ownerName: ownerNames.get(account.userId),
       canSync: account.userId === context.actorId,
       canMoveMessages:
         this.dependencies.registry?.definition(account.provider.type)

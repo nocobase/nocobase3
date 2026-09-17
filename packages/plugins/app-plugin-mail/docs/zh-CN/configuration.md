@@ -251,7 +251,7 @@ mail:
    预期响应为 `200`、`Content-Type: text/plain`，正文为 `mail-webhook-check`。此检查只证明回调可达且验证分支正常，不代表已成功创建 Graph subscription。浏览器地址栏发出的是 GET 请求，不能用它判断 POST webhook 是否工作。
 
 4. 从另一个邮箱发送一封新邮件到已关联账户。Gmail 若配置了 `pushLabelIds: [INBOX]`，应让测试邮件进入收件箱。
-5. 检查 Gmail Pub/Sub 的订阅投递指标，以及应用或代理的 webhook POST 状态码。当前插件接受普通通知后返回 `202` 和 `{"accepted":true}`；再到 `/dev/mail/sync-logs` 检查同步结果，并在邮件中心确认邮件出现。管理员也可在 `/settings/mail/operation-logs` 查看跨用户操作日志。
+5. 检查 Gmail Pub/Sub 的订阅投递指标，以及应用或代理的 webhook POST 状态码。当前插件接受普通通知后返回 `202` 和 `{"accepted":true}`；再到 `/dev/mail/sync-logs` 检查同步结果，并在邮件中心确认邮件出现。
 
 仅看到邮件出现不能证明 Push 成功，因为定时同步也会导入邮件；需要结合云端投递和应用 callback 请求记录判断。`202` 只表示通知已接受，不表示邮件已同步完成，也不保证通知匹配到了活跃账户。收到重复通知或已有同步任务运行时，Mail Core 会合并或延后处理，无需期待每次通知都产生一条独立同步记录。
 
@@ -401,6 +401,32 @@ Provider 级别的文件夹配置：
 | `draftsFolder` | 否   | 自动识别 | IMAP Drafts 文件夹路径提示。                                                                                     |
 
 IMAP / SMTP MVP 不支持 Push、Provider-native label、草稿、别名和移动到文件夹。`pushWebhookUrl` 和 `pushWebhookSecret` 对这个 Provider 不生效。
+
+### Gmail 通过 IMAP / SMTP 接入
+
+在现有 `mail.providers` 下增加 `gmail-imap` 实例，可以与 Gmail OAuth、163 等配置同时使用：
+
+```yaml
+mail:
+  providers:
+    gmail-imap:
+      type: imap-smtp
+      imap:
+        host: imap.gmail.com
+        port: 993
+        secure: true
+      smtp:
+        host: smtp.gmail.com
+        port: 465
+        secure: true
+      sentCopyMode: server
+```
+
+修改配置后重启应用，在 `/dev/mail/accounts` 选择 `IMAP / SMTP · gmail-imap`。邮箱地址和用户名均填写完整 Gmail 地址；密码填写 Google 的应用专用密码，去掉显示时用于分组的空格，不要填写 Google 账户登录密码，也不要把凭据写入 `config.yml`。
+
+先开启 Google 账户的两步验证，再到 [应用专用密码](https://myaccount.google.com/apppasswords) 页面生成 16 位密码。组织账户、仅使用安全密钥的两步验证或高级保护可能不提供此选项；此时使用上面的 Gmail OAuth 接入。Google Workspace 还需要管理员允许 IMAP 访问。具体限制见 [Google 应用专用密码说明](https://support.google.com/accounts/answer/185833?hl=zh-Hans)。
+
+Gmail SMTP 会自动保存已发送邮件，因此保持 `sentCopyMode: server`，避免重复保存，见 [Google IMAP 客户端设置](https://support.google.com/mail/answer/78892?hl=zh-Hans)。此配置使用通用 IMAP/SMTP 的定期同步和能力；Gmail API、原生标签及 Pub/Sub Push 仍需使用 `type: gmail`。
 
 ## 环境变量
 
