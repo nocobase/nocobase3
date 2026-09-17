@@ -1,3 +1,12 @@
+import { QueueKeys } from 'bullmq';
+import { InMemoryQueueStore } from './store.js';
+
+interface MemoryBackendState {
+  store: InMemoryQueueStore;
+  records: Map<string, JobJson>;
+  metadata: Map<string, string | number>;
+}
+
 import type {
   IQueueBackend,
   JobJson,
@@ -15,35 +24,67 @@ import { InMemoryBackendBoundary } from './unsupported.js';
 import type { BackendFactory } from 'bullmq';
 
 export class InMemoryQueueBackend extends InMemoryBackendBoundary {
+  closing: Promise<void> | undefined;
+  readonly minimumBlockTimeout: number = 0.001;
+  readonly maximumBlockTimeout: number = 10;
+  readonly keys: KeysMap;
+  readonly qualifiedName: string;
+  private displayName: string;
+
+  constructor(
+    private readonly state: MemoryBackendState,
+    private readonly name: string,
+    private readonly prefix: string,
+  ) {
+    super();
+    const keys = new QueueKeys(prefix);
+    this.qualifiedName = keys.getQueueQualifiedName(name);
+    this.keys = keys.getKeys(name);
+    this.displayName = name;
+  }
+
   async waitUntilReady(): Promise<void> {
-    throw new Error('Memory backend operation is not implemented');
+    if (this.closing) throw new Error('Memory backend is closed');
   }
-  async close(_force?: boolean): Promise<void> {
-    throw new Error('Memory backend operation is not implemented');
+  close(_force?: boolean): Promise<void> {
+    if (!this.closing) {
+      this.closing = Promise.resolve();
+      this.emit('close');
+    }
+    return this.closing;
   }
-  readonly closing: Promise<void> | undefined = undefined;
   async disconnect(): Promise<void> {
-    throw new Error('Memory backend operation is not implemented');
+    await this.close();
   }
-  async setName(_name: string): Promise<void> {
-    throw new Error('Memory backend operation is not implemented');
+  async setName(name: string): Promise<void> {
+    this.displayName = name;
   }
-  readonly minimumBlockTimeout: number = 0;
-  readonly maximumBlockTimeout?: number = undefined;
-  readonly qualifiedName: string = '';
-  readonly keys: KeysMap = {};
-  toKey(_type: string): string {
-    throw new Error('Memory backend operation is not implemented');
+  toKey(type: string): string {
+    return new QueueKeys(this.prefix).toKey(this.name, type);
   }
-  clientName(_suffix?: string): string {
-    throw new Error('Memory backend operation is not implemented');
+  clientName(suffix: string = ''): string {
+    return `${this.displayName}${suffix}`;
   }
+
   async addJob(
-    _job: JobJson,
-    _jobId: string,
+    job: JobJson,
+    jobId: string,
     _parentKeyOpts?: ParentKeyOpts,
   ): Promise<string> {
-    throw new Error('Memory backend operation is not implemented');
+    await this.waitUntilReady();
+    const data: unknown = JSON.parse(job.data);
+    const record = this.state.store.add({
+      id: jobId || undefined,
+      name: job.name,
+      data,
+      options: job.opts,
+    });
+    if (!this.state.records.has(record.id))
+      this.state.records.set(
+        record.id,
+        structuredClone({ ...job, id: record.id, data: record.data }),
+      );
+    return record.id;
   }
   async addJobs(
     _entries: {
@@ -123,17 +164,23 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   ): Promise<string[]> {
     throw new Error('Memory backend operation is not implemented');
   }
-  async getState(_jobId: string): Promise<JobState | 'unknown'> {
-    throw new Error('Memory backend operation is not implemented');
+  async getState(jobId: string): Promise<JobState | 'unknown'> {
+    return this.state.store.get(jobId)?.state ?? 'unknown';
   }
-  async isJobInState(_state: string, _jobId: string): Promise<boolean> {
-    throw new Error('Memory backend operation is not implemented');
+  async isJobInState(state: string, jobId: string): Promise<boolean> {
+    return (await this.getState(jobId)) === state;
   }
-  async getJobData(_jobId: string): Promise<JobJson | undefined> {
-    throw new Error('Memory backend operation is not implemented');
+  async getJobData(jobId: string): Promise<JobJson | undefined> {
+    const job = this.state.records.get(jobId);
+    return job === undefined ? undefined : structuredClone(job);
   }
-  async getCounts(_types: JobType[]): Promise<number[]> {
-    throw new Error('Memory backend operation is not implemented');
+  async getCounts(types: JobType[]): Promise<number[]> {
+    return types.map((type) => {
+      const state = type === 'wait' ? 'waiting' : type;
+      return [...this.state.records.keys()].filter(
+        (id) => this.state.store.get(id)?.state === state,
+      ).length;
+    });
   }
   async getRanges(
     _types: JobType[],
@@ -143,13 +190,19 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
   ): Promise<[string][]> {
     throw new Error('Memory backend operation is not implemented');
   }
-  async setQueueMeta(
-    _values: Record<string, string | number>,
-  ): Promise<number> {
-    throw new Error('Memory backend operation is not implemented');
+  async setQueueMeta(values: Record<string, string | number>): Promise<number> {
+    let added = 0;
+    for (const [key, value] of Object.entries(values)) {
+      if (!this.state.metadata.has(key)) added++;
+      this.state.metadata.set(key, value);
+    }
+    return added;
   }
-  async removeQueueMetaFields(_fields: string[]): Promise<number> {
-    throw new Error('Memory backend operation is not implemented');
+  async removeQueueMetaFields(fields: string[]): Promise<number> {
+    return fields.reduce(
+      (total, field) => total + Number(this.state.metadata.delete(field)),
+      0,
+    );
   }
   async waitForJob(
     _blockTimeout: number,
@@ -165,5 +218,22 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
 }
 
 export function createInMemoryBackendFactory(): BackendFactory {
-  return () => new InMemoryQueueBackend();
+  const states = new Map<string, MemoryBackendState>();
+  return (name, options): InMemoryQueueBackend => {
+    const prefix =
+      'prefix' in options && typeof options.prefix === 'string'
+        ? options.prefix
+        : 'bull';
+    const key = JSON.stringify([prefix, name]);
+    let state = states.get(key);
+    if (!state) {
+      state = {
+        store: new InMemoryQueueStore(),
+        records: new Map(),
+        metadata: new Map(),
+      };
+      states.set(key, state);
+    }
+    return new InMemoryQueueBackend(state, name, prefix);
+  };
 }
