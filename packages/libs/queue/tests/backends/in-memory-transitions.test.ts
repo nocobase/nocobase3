@@ -1,9 +1,82 @@
 import { Queue } from 'bullmq';
 import type { IQueueBackend } from 'bullmq';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createInMemoryBackendFactory } from '../../src/backends/in-memory/index.js';
 
 describe('memory completion protocol', () => {
+  it('retains the last two completions when three finish in one millisecond', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('ties', { connection: {} }, factory);
+    const backend = factory('ties', { connection: {} });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(10000);
+    try {
+      const jobs = await queue.addBulk(
+        ['a', 'b', 'c'].map((name) => ({ name, data: {} })),
+      );
+      for (const job of jobs) {
+        await backend.moveToActive('token');
+        await backend.moveToCompleted(job, {}, 2, 'token', false);
+      }
+      expect(await queue.getJob(jobs[0]!.id!)).toBeUndefined();
+      expect(await queue.getJobState(jobs[1]!.id!)).toBe('completed');
+      expect(await queue.getJobState(jobs[2]!.id!)).toBe('completed');
+    } finally {
+      clock.mockRestore();
+      await Promise.all([queue.close(), backend.close()]);
+    }
+  });
+  it('applies age retention lazily on completion without pruning the failed partition', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('age', { connection: {} }, factory);
+    const backend = factory('age', { connection: {} });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(10000);
+    try {
+      const old = await queue.add('old', {});
+      await backend.moveToActive('token');
+      await backend.moveToCompleted(old, {}, false, 'token', false);
+      const failed = await queue.add('failed', {});
+      await backend.moveToActive('token');
+      await backend.moveToFailed(failed, 'failure', false, 'token', false);
+      clock.mockReturnValue(12001);
+      expect(await queue.getJobState(old.id!)).toBe('completed');
+      const fresh = await queue.add('fresh', {});
+      await backend.moveToActive('token');
+      await backend.moveToCompleted(fresh, {}, { age: 1 }, 'token', false);
+      expect(await queue.getJob(old.id!)).toBeUndefined();
+      expect(await queue.getJobState(fresh.id!)).toBe('completed');
+      expect(await queue.getJobState(failed.id!)).toBe('failed');
+    } finally {
+      clock.mockRestore();
+      await Promise.all([queue.close(), backend.close()]);
+    }
+  });
+  it.each([true, 0, 1])(
+    'applies completion retention %s without removing waiting jobs',
+    async (retention) => {
+      const factory = createInMemoryBackendFactory();
+      const queue = new Queue('retention', { connection: {} }, factory);
+      const backend = factory('retention', { connection: {} });
+      try {
+        const first = await queue.add('first', {}, { jobId: 'first' });
+        const second = await queue.add('second', {});
+        const waiting = await queue.add('waiting', {});
+        await backend.moveToActive('token');
+        await backend.moveToCompleted(first, {}, retention, 'token', false);
+        await backend.moveToActive('token');
+        await backend.moveToCompleted(second, {}, retention, 'token', false);
+        expect(await queue.getJob(first.id!)).toBeUndefined();
+        expect(await queue.getJobState(second.id!)).toBe(
+          retention === 1 ? 'completed' : 'unknown',
+        );
+        expect(await queue.getJobState(waiting.id!)).toBe('waiting');
+        expect((await queue.add('reused', {}, { jobId: 'first' })).id).toBe(
+          'first',
+        );
+      } finally {
+        await Promise.all([queue.close(), backend.close()]);
+      }
+    },
+  );
   it.each([false, true])(
     'finishes with persisted result and fetchNext=%s',
     async (fetchNext) => {

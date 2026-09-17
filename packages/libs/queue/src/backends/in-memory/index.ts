@@ -188,6 +188,13 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     if (name !== undefined) job.processedBy = name;
     return [structuredClone(job), id, 0, 0];
   }
+  private removeFinished(id: string): void {
+    this.state.records.delete(id);
+    this.state.store.remove(id);
+    this.state.worker.due.delete(id);
+    this.state.worker.stalled.delete(id);
+    this.state.worker.locks.delete(id);
+  }
   private finish(
     id: string | undefined,
     token: string,
@@ -195,8 +202,12 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     value: string,
     retention: boolean | number | KeepJobs | undefined,
   ): number {
-    if (retention !== undefined && retention !== false)
-      throw new Error('Memory retention is not implemented');
+    const keep =
+      typeof retention === 'number'
+        ? { count: retention }
+        : typeof retention === 'object'
+          ? retention
+          : undefined;
     if (id === undefined || !this.state.worker.owns(id, token))
       throw new Error('Invalid or expired lock token');
     const record = this.state.records.get(id);
@@ -208,6 +219,23 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
     if (status === 'completed') record.returnvalue = value;
     else record.failedReason = value;
     this.state.worker.locks.delete(id);
+    this.state.records.delete(id);
+    this.state.records.set(id, record);
+    if (retention === true || retention === 0) this.removeFinished(id);
+    else if (keep) {
+      const completed = [...this.state.records.entries()]
+        .reverse()
+        .filter(([key]) => this.state.store.get(key)?.state === status);
+      for (const [index, [key, job]] of completed.entries()) {
+        if (
+          (keep.count !== undefined && index >= keep.count) ||
+          ('age' in keep &&
+            keep.age !== undefined &&
+            (job.finishedOn ?? 0) < finishedOn - keep.age * 1000)
+        )
+          this.removeFinished(key);
+      }
+    }
     return finishedOn;
   }
 
