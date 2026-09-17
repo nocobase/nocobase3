@@ -13,6 +13,9 @@ describe('memory completion protocol', () => {
       const high = await queue.add('high', {}, { priority: 1 });
       const plain = await queue.add('plain', {});
       expect(await backend.getCounts(['wait', 'prioritized'])).toEqual([1, 2]);
+      expect(await high.getState()).toBe('prioritized');
+      expect(await backend.isJobInState('prioritized', high.id!)).toBe(true);
+      expect(await backend.isJobInState('waiting', high.id!)).toBe(false);
       expect(
         (await queue.getJobs(['prioritized'], 0, -1, true)).map(
           (job) => job.id,
