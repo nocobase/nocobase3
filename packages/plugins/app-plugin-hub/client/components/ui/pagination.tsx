@@ -19,7 +19,7 @@ function Pagination(
     <nav
       role='navigation'
       aria-label={t('common.pagination', { defaultValue: 'pagination' })}
-      data-slot={t('common.pagination', { defaultValue: 'pagination' })}
+      data-slot='pagination'
       className={cn('mx-auto flex w-full justify-center', className)}
       {...props}
     />

@@ -41,3 +41,31 @@ it('translates dialog controls in the plugin namespace', async () => {
     cleanup();
   }
 });
+
+it('keeps the pagination slot stable when changing language', async () => {
+  const { Pagination } = await import('../client/components/ui/pagination.js');
+  const runtime = new I18nRuntime({
+    applicationNamespace: 'app',
+    defaultLocale: 'en-US',
+    locales: ['en-US', 'zh-CN'],
+  });
+  runtime.registerApplicationNamespace('app', {
+    'en-US': async () => ({ default: {} }),
+  });
+  runtime.registerNamespace('@nocobase/app-plugin-hub', locales);
+  await runtime.init('zh-CN');
+  const view = render(
+    <I18nProvider runtime={runtime}>
+      <Pagination />
+    </I18nProvider>,
+  );
+  expect(view.getByRole('navigation', { name: '分页' })).toHaveAttribute(
+    'data-slot',
+    'pagination',
+  );
+  await act(() => runtime.changeLanguage('en-US'));
+  expect(view.getByRole('navigation', { name: 'pagination' })).toHaveAttribute(
+    'data-slot',
+    'pagination',
+  );
+});

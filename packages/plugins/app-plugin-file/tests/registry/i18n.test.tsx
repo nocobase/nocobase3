@@ -74,3 +74,40 @@ it('translates stored preview errors and preserves unknown server messages', asy
   );
   expect(screen.getByRole('alert')).toHaveTextContent('Custom server error');
 });
+
+it('retranslates a stored generic upload error after changing language', async () => {
+  const { fireEvent } = await import('@testing-library/react');
+  const { FileUploadField } =
+    await import('../../registry/component-ui/components/file-upload-field.js');
+  const runtime = new I18nRuntime({
+    applicationNamespace: 'app',
+    defaultLocale: 'en-US',
+    locales: ['en-US', 'zh-CN'],
+  });
+  runtime.registerApplicationNamespace('app', {
+    'en-US': async () => ({ default: {} }),
+  });
+  runtime.registerNamespace(plugin().packageName, plugin().locales ?? {});
+  await runtime.init('zh-CN');
+  const { ClientFileRepositoryManager } =
+    await import('../../client/manager.js');
+  const manager = new ClientFileRepositoryManager({
+    repository: () => ({}),
+    request: () => Promise.reject(null),
+  } as never);
+  render(
+    <I18nProvider runtime={runtime}>
+      <FileUploadField
+        repository={manager.repository('files')}
+        value={[]}
+        onChange={() => {}}
+      />
+    </I18nProvider>,
+  );
+  fireEvent.change(screen.getByLabelText('选择文件', { selector: 'input' }), {
+    target: { files: [new File(['x'], 'x.txt', { type: 'text/plain' })] },
+  });
+  expect(await screen.findByText('文件上传失败。')).toBeVisible();
+  await act(() => runtime.changeLanguage('en-US'));
+  expect(screen.getByText('File upload failed.')).toBeVisible();
+});

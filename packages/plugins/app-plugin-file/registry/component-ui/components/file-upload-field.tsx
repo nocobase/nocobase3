@@ -151,11 +151,7 @@ export function FileUploadField(
       }
       if (!mountedRef.current) return;
       const uploadError =
-        error instanceof Error
-          ? error
-          : new Error(
-              t('File upload failed.', { defaultValue: 'File upload failed.' }),
-            );
+        error instanceof Error ? error : new Error('File upload failed.');
       setItems((current) =>
         current.map((candidate) =>
           candidate.key === item.key

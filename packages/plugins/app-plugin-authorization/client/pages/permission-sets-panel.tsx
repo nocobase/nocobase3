@@ -1258,9 +1258,12 @@ function PermissionResourcePicker(inputProps: {
   const resources = (resourceType?.resources ?? []).filter(
     (resource) =>
       !query ||
-      [resource.label, resource.value, resource.description].some((value) =>
-        value?.toLowerCase().includes(query),
-      ),
+      [
+        t(resource.label, { defaultValue: resource.label }),
+        resource.label,
+        resource.value,
+        resource.description,
+      ].some((value) => value?.toLowerCase().includes(query)),
   );
   const existing = new Set(
     grants.map((grant) => resourceKey(grant.resource.type, grant.resource.id)),
