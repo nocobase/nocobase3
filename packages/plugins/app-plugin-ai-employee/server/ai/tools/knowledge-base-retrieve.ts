@@ -14,7 +14,6 @@ import type {
 } from '../../repository/index.js';
 import type { AgentKnowledgeBaseService } from '../../agent/contracts.js';
 import { z } from 'zod';
-import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 type KnowledgeBaseContext = AgentContext<
   {
@@ -28,8 +27,8 @@ export default defineTools<KnowledgeBaseContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
-    title: `{{t("Knowledge base retrieval", { ns: "${packageMetadata.name}" })}}`,
-    about: `{{t("Retrieve relevant content from the knowledge base.", { ns: "${packageMetadata.name}" })}}`,
+    title: 'Knowledge base retrieval',
+    about: 'Retrieve relevant content from the knowledge base.',
   },
   definition: {
     name: 'knowledge-base-retrieve',

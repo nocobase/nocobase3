@@ -1,5 +1,7 @@
 ---
 name: data-metadata
+introduction:
+  title: Data metadata
 scope: GENERAL
 description: Discover accessible database connections, collections, fields, and relationships before querying business data.
 tools:

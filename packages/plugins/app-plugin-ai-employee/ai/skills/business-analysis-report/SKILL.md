@@ -1,5 +1,7 @@
 ---
 name: business-analysis-report
+introduction:
+  title: Business analysis report
 scope: GENERAL
 description: Build a validated Markdown business report with optional inline charts from freshly queried, authorized data.
 tools:

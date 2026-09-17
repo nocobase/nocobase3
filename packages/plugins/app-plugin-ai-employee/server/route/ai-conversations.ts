@@ -2,7 +2,8 @@ import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Context as HonoContext, Hono } from 'hono';
 import type { ConversationExecution } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
-import { identityTranslate } from '../types.js';
+import { identityTranslate, ResourceActionError } from '../types.js';
+import { requireConversationReadAccess } from '../service/utils.js';
 import { createAISSEStreamResponse, requiredString } from './utils.js';
 
 export function createAIConversationsRouter(
@@ -17,6 +18,29 @@ export function createAIConversationsRouter(
       options: {
         keyword: context.req.query('keyword') || undefined,
       },
+    });
+    return context.json(result as never);
+  });
+
+  app.get('/aiConversations:listAll', async (context) => {
+    requireConversationReadAccess(context.var.conversationManagementActor);
+    validateSingleQueries(context, ['keyword', 'page', 'pageSize']);
+    const result = await services.conversationService.listAll({
+      actor: context.var.conversationManagementActor,
+      keyword: context.req.query('keyword'),
+      page: paginationQuery(context, 'page', 1),
+      pageSize: paginationQuery(context, 'pageSize', 20),
+    });
+    return context.json(result as never);
+  });
+
+  app.get('/aiConversations:getAllMessages', async (context) => {
+    requireConversationReadAccess(context.var.conversationManagementActor);
+    validateSingleQueries(context, ['sessionId', 'cursor']);
+    const result = await services.conversationService.getAllMessages({
+      actor: context.var.conversationManagementActor,
+      sessionId: requiredQuery(context, 'sessionId'),
+      cursor: context.req.query('cursor'),
     });
     return context.json(result as never);
   });
@@ -203,6 +227,27 @@ async function jsonObject(context: HonoContext): Promise<Record<string, any>> {
 
 function requiredQuery(context: HonoContext, name: string): string {
   return requiredString(context.req.query(name), name);
+}
+
+function validateSingleQueries(context: HonoContext, names: string[]): void {
+  for (const name of names) {
+    if ((context.req.queries(name)?.length ?? 0) > 1) {
+      throw new ResourceActionError(400, `Invalid ${name}`);
+    }
+  }
+}
+
+function paginationQuery(
+  context: HonoContext,
+  name: string,
+  fallback: number,
+): number {
+  const value = context.req.query(name);
+  if (value === undefined) return fallback;
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new ResourceActionError(400, `Invalid ${name}`);
+  }
+  return Number(value);
 }
 
 function execution(

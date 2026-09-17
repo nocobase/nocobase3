@@ -3,6 +3,8 @@ import {
   Check,
   ChevronDown,
   CircleAlert,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   RefreshCw,
   Save,
@@ -11,8 +13,21 @@ import {
   X,
 } from 'lucide-react';
 import { useNotification } from '@refinedev/core';
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
 
+import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../../registry/nocobase-ai/shared/ui/collapsible.js';
 import {
   buildEditableValues,
   getAIEmployee,
@@ -471,6 +486,38 @@ export default function AIEmployeePage(): ReactElement {
   const t = useT();
   const { open } = useNotification();
   const [employees, setEmployees] = useState<AIEmployeeRecord[]>([]);
+  const [employeeListOpen, setEmployeeListOpen] = useState(false);
+  const employeeListId = useId();
+  const employeeDividerRef = useRef<HTMLDivElement>(null);
+  const alignEmployeeToggle = useCallback((header: HTMLElement | null) => {
+    const divider = employeeDividerRef.current;
+    if (!header || !divider) return;
+
+    const measure = (): void => {
+      const bounds = header.getBoundingClientRect();
+      if (!bounds.height) return;
+      // Include the detail padding, but not the height of the editor or sidebar.
+      divider.style.setProperty(
+        '--employee-header-midpoint',
+        `${bounds.top + bounds.height / 2 - divider.getBoundingClientRect().top}px`,
+      );
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(measure);
+    observer?.observe(header, { box: 'border-box' });
+    observer?.observe(divider, { box: 'border-box' });
+    const section = header.closest('section');
+    if (section) observer?.observe(section);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      divider.style.removeProperty('--employee-header-midpoint');
+    };
+  }, []);
   const [selectedUsername, setSelectedUsername] = useState<string>();
   const [selected, setSelected] = useState<AIEmployeeRecord>();
   const [draft, setDraft] = useState<AIEmployeeEditableValues>();
@@ -504,7 +551,7 @@ export default function AIEmployeePage(): ReactElement {
           listAIEmployees(controller.signal, api),
           listEnabledModels(controller.signal, api),
           listEnabledKnowledgeBases(controller.signal, api).catch(() => []),
-          listAISkills(controller.signal, api),
+          listAISkills(controller.signal, api).catch(() => []),
           listAITools(controller.signal, api),
         ]);
       setEmployees(employeeRows);
@@ -725,8 +772,18 @@ export default function AIEmployeePage(): ReactElement {
   );
 
   return (
-    <main className='grid min-h-[calc(100vh-9rem)] grid-cols-1 lg:grid-cols-[19rem_minmax(0,1fr)]'>
-      <aside className='border-b p-4 lg:border-b-0 lg:border-r'>
+    <Collapsible
+      open={employeeListOpen}
+      onOpenChange={setEmployeeListOpen}
+      render={<main />}
+      className={`grid min-h-[calc(100vh-9rem)] grid-cols-[44px_minmax(0,1fr)] ${employeeListOpen ? 'lg:grid-cols-[19rem_32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[19rem_44px_minmax(0,1fr)]' : 'lg:grid-cols-[32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]'}`}
+    >
+      <CollapsibleContent
+        keepMounted
+        id={employeeListId}
+        render={<aside aria-label={t('AI Employees')} />}
+        className='col-span-2 min-w-0 border-b p-4 lg:col-span-1 lg:border-b-0'
+      >
         <div className='max-h-[calc(100vh-13rem)] space-y-2 overflow-y-auto pr-1'>
           {employees.map((employee) => {
             const active = employee.username === selectedUsername;
@@ -770,16 +827,54 @@ export default function AIEmployeePage(): ReactElement {
             </p>
           ) : null}
         </div>
-      </aside>
+      </CollapsibleContent>
+
+      {/* Reserve the pointer target's width so the divider never covers either panel. */}
+      <div ref={employeeDividerRef} className='relative min-h-11 self-stretch'>
+        <div
+          aria-hidden='true'
+          className='absolute inset-y-0 left-1/2 border-l'
+        />
+        {employees.length > 1 ? (
+          <CollapsibleTrigger
+            render={<Button variant='outline' size='icon' />}
+            aria-controls={employeeListId}
+            aria-label={
+              employeeListOpen
+                ? t('Collapse employee list')
+                : t('Expand employee list')
+            }
+            title={
+              employeeListOpen
+                ? t('Collapse employee list')
+                : t('Expand employee list')
+            }
+            style={{ top: 'var(--employee-header-midpoint, 3rem)' }}
+            className='absolute left-1/2 size-[44px] -translate-x-1/2 -translate-y-1/2 text-muted-foreground transition-colors active:not-aria-[haspopup]:-translate-y-1/2 lg:size-[32px] lg:pointer-coarse:size-[44px]'
+          >
+            {employeeListOpen ? (
+              <ChevronLeft className='size-4' aria-hidden='true' />
+            ) : (
+              <ChevronRight className='size-4' aria-hidden='true' />
+            )}
+          </CollapsibleTrigger>
+        ) : null}
+      </div>
 
       <section className='min-w-0 p-4 sm:p-6 lg:p-8'>
         {detailLoading || !selected || !draft ? (
-          <p className='text-sm text-muted-foreground'>
+          <p
+            ref={alignEmployeeToggle}
+            className='text-sm text-muted-foreground'
+          >
             {t('Loading employee details…')}
           </p>
         ) : (
           <div className='flex min-h-[calc(100vh-9rem)] flex-col gap-6'>
-            <header className='flex flex-col gap-4 rounded-xl border p-5 sm:flex-row sm:items-center'>
+            <header
+              ref={alignEmployeeToggle}
+              className='flex flex-col gap-4 rounded-xl border p-5 sm:flex-row sm:items-center'
+            >
               <AIEmployeeAvatar
                 src={selected.avatar}
                 name={selected.nickname}
@@ -1414,6 +1509,6 @@ export default function AIEmployeePage(): ReactElement {
           }
         }}
       />
-    </main>
+    </Collapsible>
   );
 }

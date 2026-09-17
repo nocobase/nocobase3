@@ -6,6 +6,38 @@ export interface Actor {
   readonly scope?: string;
 }
 
+export interface ConversationManagementActor {
+  readonly id: string | number;
+  readonly canReadAllConversations?: boolean;
+}
+
+export interface SkillsManagementActor {
+  readonly id: string | number;
+  readonly canReadAllSkills?: boolean;
+}
+
+export interface ManagedSkillTool {
+  name: string;
+  title: string;
+  description: string;
+  available: boolean;
+}
+
+export interface ManagedSkillSummary {
+  name: string;
+  title: string;
+  description: string;
+  tools: ManagedSkillTool[];
+}
+
+export interface ManagedSkillList {
+  rows: ManagedSkillSummary[];
+}
+
+export interface ManagedSkillDetail extends ManagedSkillSummary {
+  content: string;
+}
+
 export interface ModelRef {
   readonly llmService: string;
   readonly model: string;

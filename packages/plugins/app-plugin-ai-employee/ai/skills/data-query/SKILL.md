@@ -1,5 +1,7 @@
 ---
 name: data-query
+introduction:
+  title: Data query
 scope: GENERAL
 description: Query current authorized business records, counts, aggregates, and grouped summaries using bounded NocoBase 3 Repository queries.
 tools:

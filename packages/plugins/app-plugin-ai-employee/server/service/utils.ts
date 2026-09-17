@@ -1,4 +1,17 @@
-import { notFoundError, validationError } from '../types.js';
+import { forbiddenError, notFoundError, validationError } from '../types.js';
+import type { ConversationManagementActor } from '../types.js';
+
+export function requireConversationReadAccess(
+  actor: ConversationManagementActor,
+): void {
+  if (
+    actor.id === 'anonymous' ||
+    !String(actor.id) ||
+    actor.canReadAllConversations !== true
+  ) {
+    throw forbiddenError('AI settings access is required');
+  }
+}
 
 export type ResourceInput = Record<string, any>;
 

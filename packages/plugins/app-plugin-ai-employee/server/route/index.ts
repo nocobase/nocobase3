@@ -1,9 +1,12 @@
 import type { Auth } from '@nocobase/app-plugin-authentication';
+import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
 import type { Logger } from '@nocobase/logging';
 import { Hono } from 'hono';
 
 import type { ServiceFactory } from '../factory/service-factory.js';
 import { createAIConversationsRouter } from './ai-conversations.js';
+import { requireConversationManagement } from './conversation-management.js';
+import { requireSkillsManagement } from './skills-management.js';
 import { createAIEmployeeRouter } from './ai-employees.js';
 import { createAIFilesRouter } from './ai-files.js';
 import { createAIMCPServersRouter } from './ai-mcp-servers.js';
@@ -21,6 +24,7 @@ export * from './contracts.js';
 
 export interface CreateAIEmployeeRoutesOptions {
   readonly authentication: Auth;
+  readonly authorization: AppAuthorization;
   readonly services: ServiceFactory;
   readonly logger: Logger;
 }
@@ -30,6 +34,25 @@ export function createAIEmployeeRoutes(
 ): Hono {
   const routes = new Hono();
   routes.onError((error) => errorResponse(error));
+  for (const path of [
+    '/aiConversations:listAll',
+    '/aiConversations:getAllMessages',
+  ]) {
+    routes.use(
+      path,
+      options.authentication.required(),
+      options.authorization.middleware(),
+      requireConversationManagement(),
+    );
+  }
+  for (const path of ['/aiSkills:listAll', '/aiSkills:getDetails']) {
+    routes.use(
+      path,
+      options.authentication.required(),
+      options.authorization.middleware(),
+      requireSkillsManagement(),
+    );
+  }
   routes.use('*', createAIActorMiddleware(options.authentication));
   routes.use(
     '*',

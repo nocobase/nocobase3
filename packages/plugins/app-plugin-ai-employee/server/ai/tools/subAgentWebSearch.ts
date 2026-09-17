@@ -14,9 +14,9 @@ export default defineTools<AgentContext<{}, {}>>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   introduction: {
-    title: '{{t("Web search")}}',
+    title: 'Web search',
     about:
-      '{{t("Use web search to quickly find up-to-date information from the internet.")}}',
+      'Use web search to quickly find up-to-date information from the internet.',
   },
   definition: {
     name: 'subAgentWebSearch',

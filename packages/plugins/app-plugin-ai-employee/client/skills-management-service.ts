@@ -1,0 +1,46 @@
+import type { ApiClient } from '@nocobase/app-client';
+import { requestAIAction } from './api-client.js';
+
+export interface ManagedSkillTool {
+  name: string;
+  title: string;
+  description: string;
+  available: boolean;
+}
+
+export interface ManagedSkillSummary {
+  name: string;
+  title: string;
+  description: string;
+  tools: ManagedSkillTool[];
+}
+
+export interface ManagedSkillDetail extends ManagedSkillSummary {
+  content: string;
+}
+
+export async function listManagedSkills(
+  api: ApiClient,
+  signal?: AbortSignal,
+): Promise<ManagedSkillSummary[]> {
+  const result = await requestAIAction<{ rows: ManagedSkillSummary[] }>(
+    'aiSkills',
+    'listAll',
+    { signal },
+    api,
+  );
+  return result.rows;
+}
+
+export function getManagedSkillDetails(
+  api: ApiClient,
+  name: string,
+  signal?: AbortSignal,
+): Promise<ManagedSkillDetail> {
+  return requestAIAction(
+    'aiSkills',
+    'getDetails',
+    { query: { name }, signal },
+    api,
+  );
+}

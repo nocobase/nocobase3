@@ -1,6 +1,6 @@
 import type {
   AppClientRouteComponentLoader,
-  AppClientSettingsRoutePageDefinition,
+  AppClientSettingsRouteGroupDefinition,
 } from '@nocobase/app-client/plugins';
 import { Bot } from 'lucide-react';
 
@@ -15,16 +15,6 @@ const coreTabs: readonly AISettingsTabDefinition[] = [
     key: 'ai-employee',
     labelKey: 'AI Employee',
     pageLoader: () => import('./pages/ai-employee-page.js'),
-  },
-  {
-    key: 'llm-service',
-    labelKey: 'LLM Service',
-    pageLoader: () => import('./pages/llm-service-page.js'),
-  },
-  {
-    key: 'mcp',
-    labelKey: 'MCP',
-    pageLoader: () => import('./pages/mcp-page.js'),
   },
 ];
 const contributedTabs = new Map<string, AISettingsTabDefinition>();
@@ -42,12 +32,53 @@ export function getAISettingsTabs(): readonly AISettingsTabDefinition[] {
   return cachedTabs;
 }
 
-export function createAISettings(): AppClientSettingsRoutePageDefinition {
+export function createAISettings(): AppClientSettingsRouteGroupDefinition {
   return {
-    name: 'ai',
-    path: '/ai',
-    navigation: { title: 'AI Employee', icon: Bot },
-    authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
-    componentLoader: () => import('./pages/settings-page.js'),
+    name: 'aiGroup',
+    navigation: { title: 'AI', icon: Bot },
+    children: [
+      {
+        name: 'ai',
+        path: '/ai',
+        navigation: { title: 'AI Employees' },
+        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        componentLoader: () => import('./pages/settings-page.js'),
+      },
+      {
+        name: 'aiSkills',
+        path: '/ai/skills',
+        navigation: { title: 'Skills' },
+        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        componentLoader: () => import('./pages/skills-settings-page.js'),
+      },
+      {
+        name: 'aiConversations',
+        path: '/ai/conversations',
+        navigation: { title: 'Conversations' },
+        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        componentLoader: () =>
+          import('./pages/conversation-center-settings-page.js'),
+      },
+      {
+        name: 'aiLLMServices',
+        path: '/ai/llm-services',
+        navigation: { title: 'LLM services' },
+        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        componentLoader: () => import('./pages/llm-service-settings-page.js'),
+      },
+      {
+        name: 'aiMCPServices',
+        path: '/ai/mcp-services',
+        navigation: { title: 'MCP services' },
+        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        componentLoader: () => import('./pages/mcp-service-settings-page.js'),
+      },
+      {
+        name: 'aiSettings',
+        path: '/ai/settings',
+        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        componentLoader: () => import('./pages/service-settings-page.js'),
+      },
+    ],
   };
 }

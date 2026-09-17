@@ -289,6 +289,30 @@ async function listMetadata(
       const definition = isRecord(item.definition) ? item.definition : item;
       const name = definition.name;
       if (typeof name !== 'string') return [];
+      if (resource === 'aiSkills') {
+        const introduction = isRecord(item.introduction)
+          ? item.introduction
+          : {};
+        return [
+          {
+            name,
+            title:
+              typeof introduction.title === 'string'
+                ? introduction.title
+                : undefined,
+            description:
+              typeof item.description === 'string'
+                ? item.description
+                : undefined,
+            about:
+              typeof introduction.about === 'string'
+                ? introduction.about
+                : undefined,
+            scope: typeof item.scope === 'string' ? item.scope : undefined,
+            from: typeof item.from === 'string' ? item.from : undefined,
+          },
+        ];
+      }
       return [
         {
           name,
@@ -316,7 +340,8 @@ async function listMetadata(
         },
       ];
     });
-  } catch {
+  } catch (error) {
+    if (resource === 'aiSkills') throw error;
     return [];
   }
 }

@@ -1,0 +1,254 @@
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
+import { apiClientToken, useService } from '@nocobase/app-client';
+import { CircleAlert, X } from 'lucide-react';
+import { useEffect, useState, type ReactElement, type RefObject } from 'react';
+import { MarkdownMessage } from '../../registry/nocobase-ai/components/chat/markdown-message.js';
+import {
+  Alert,
+  AlertDescription,
+} from '../../registry/nocobase-ai/shared/ui/alert.js';
+import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
+import {
+  Dialog,
+  DialogDescription,
+  DialogPortal,
+  DialogTitle,
+} from '../../registry/nocobase-ai/shared/ui/dialog.js';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '../../registry/nocobase-ai/shared/ui/tabs.js';
+import { useT } from '../locales/index.js';
+import {
+  getManagedSkillDetails,
+  type ManagedSkillDetail,
+  type ManagedSkillSummary,
+} from '../skills-management-service.js';
+
+type DetailState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'ready'; skill: ManagedSkillDetail };
+
+function SkillDetailSkeleton(): ReactElement {
+  const t = useT();
+  return (
+    <div role='status' className='flex flex-col gap-6 px-6 py-6 sm:px-8'>
+      <span className='sr-only'>{t('skills.detailsLoading')}</span>
+      <div aria-hidden='true' className='flex flex-col gap-4'>
+        <div className='h-6 w-2/5 rounded-md bg-muted' />
+        <div className='flex flex-col gap-3'>
+          <div className='h-3 w-full rounded-md bg-muted' />
+          <div className='h-3 w-full rounded-md bg-muted' />
+          <div className='h-3 w-3/4 rounded-md bg-muted' />
+        </div>
+        <div className='mt-2 h-28 w-full rounded-lg bg-muted' />
+      </div>
+    </div>
+  );
+}
+
+function SkillDetails({
+  summary,
+}: {
+  summary: ManagedSkillSummary;
+}): ReactElement {
+  const api = useService(apiClientToken);
+  const t = useT();
+  const [state, setState] = useState<DetailState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void getManagedSkillDetails(api, summary.name, controller.signal).then(
+      (skill) => {
+        if (!controller.signal.aborted) setState({ status: 'ready', skill });
+      },
+      () => {
+        if (!controller.signal.aborted) setState({ status: 'error' });
+      },
+    );
+    return () => controller.abort();
+  }, [api, summary.name, attempt]);
+
+  const skill = state.status === 'ready' ? state.skill : summary;
+  return (
+    <div className='min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]'>
+      <Tabs defaultValue='instructions' className='min-w-0 flex-col gap-0'>
+        <div className='flex min-w-0 flex-col gap-3 px-6 pb-6 pt-7 sm:px-8'>
+          <div className='flex min-w-0 flex-col gap-2'>
+            <h3 className='font-heading text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]'>
+              {skill.title.trim() || skill.name}
+            </h3>
+            <p
+              translate='no'
+              className='break-all font-mono text-xs text-muted-foreground'
+            >
+              {skill.name}
+            </p>
+          </div>
+          <DialogDescription className='whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]'>
+            {skill.description || t('skills.detailsDescription')}
+          </DialogDescription>
+        </div>
+        <div className='sticky top-0 z-10 flex border-b bg-background px-6 sm:px-8'>
+          <TabsList
+            activateOnFocus
+            variant='line'
+            aria-label={t('skills.details')}
+            className='-mb-px h-11 gap-5 p-0'
+          >
+            <TabsTrigger
+              value='instructions'
+              className='h-full rounded-none border-0 border-b-2 border-transparent px-0 after:hidden data-active:border-b-primary motion-reduce:transition-none'
+            >
+              {t('skills.instructions')}
+            </TabsTrigger>
+            <TabsTrigger
+              value='tools'
+              className='h-full rounded-none border-0 border-b-2 border-transparent px-0 after:hidden data-active:border-b-primary motion-reduce:transition-none'
+            >
+              {t('skills.tools')}{' '}
+              <span className='tabular-nums'>({skill.tools.length})</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
+        {state.status === 'loading' ? (
+          <SkillDetailSkeleton />
+        ) : state.status === 'error' ? (
+          <div className='px-6 py-6 sm:px-8'>
+            <Alert variant='destructive'>
+              <AlertDescription className='flex flex-col items-start gap-3'>
+                <p>{t('skills.detailsError')}</p>
+                <Button
+                  variant='outline'
+                  onClick={() => {
+                    setState({ status: 'loading' });
+                    setAttempt((value) => value + 1);
+                  }}
+                >
+                  {t('Retry')}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : (
+          <>
+            <TabsContent
+              value='instructions'
+              className='min-w-0 px-6 py-6 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-8'
+            >
+              <section
+                aria-label={t('skills.content')}
+                className='min-w-0 max-w-full [overflow-wrap:anywhere] [&_h1]:text-xl [&_h2]:text-lg [&_h3]:text-base [&_h4]:text-sm [&_img]:max-w-full [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_table]:[overflow-wrap:normal]'
+              >
+                {state.skill.content.trim() ? (
+                  <MarkdownMessage variant='document'>
+                    {state.skill.content}
+                  </MarkdownMessage>
+                ) : (
+                  <p className='py-4 text-sm text-muted-foreground'>
+                    {t('skills.noContent')}
+                  </p>
+                )}
+              </section>
+            </TabsContent>
+            <TabsContent
+              value='tools'
+              className='min-w-0 px-6 py-6 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-8'
+            >
+              <p className='mb-5 text-sm leading-6 text-muted-foreground'>
+                {t('skills.toolsDescription')}
+              </p>
+              {state.skill.tools.length ? (
+                <ul className='flex min-w-0 flex-col divide-y rounded-lg border px-4'>
+                  {state.skill.tools.map((tool) => (
+                    <li
+                      key={tool.name}
+                      className='flex min-w-0 flex-col gap-2 py-4'
+                    >
+                      <div className='flex flex-wrap items-center justify-between gap-2'>
+                        <h4 className='min-w-0 font-heading text-sm font-semibold [overflow-wrap:anywhere]'>
+                          {tool.title.trim() || tool.name}
+                        </h4>
+                        {!tool.available ? (
+                          <span className='inline-flex items-center gap-1.5 text-xs text-muted-foreground'>
+                            <CircleAlert
+                              aria-hidden='true'
+                              className='size-3.5'
+                            />
+                            {t('skills.toolMissing')}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p
+                        translate='no'
+                        className='break-all font-mono text-xs text-muted-foreground'
+                      >
+                        {tool.name}
+                      </p>
+                      {tool.description ? (
+                        <p className='whitespace-pre-wrap text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]'>
+                          {tool.description}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className='rounded-lg border border-dashed p-5 text-sm text-muted-foreground'>
+                  {t('skills.noTools')}
+                </p>
+              )}
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
+    </div>
+  );
+}
+
+export function SkillDetailsDrawer({
+  selected,
+  onClose,
+  returnFocusRef,
+}: {
+  selected: ManagedSkillSummary | null;
+  onClose: () => void;
+  returnFocusRef: RefObject<HTMLButtonElement | null>;
+}): ReactElement {
+  const t = useT();
+  return (
+    <Dialog
+      open={selected !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      {selected ? (
+        <DialogPortal>
+          <DialogPrimitive.Backdrop className='fixed inset-0 z-50 bg-black/40 transition-opacity duration-200 data-starting-style:opacity-0 data-ending-style:opacity-0 motion-reduce:transition-none' />
+          <DialogPrimitive.Popup
+            finalFocus={returnFocusRef}
+            className='fixed inset-y-0 right-0 z-50 flex h-dvh w-full min-w-0 max-w-2xl flex-col overflow-hidden border-l bg-background text-foreground shadow-xl outline-none transition-transform duration-200 data-starting-style:translate-x-full data-ending-style:translate-x-full motion-reduce:transition-none'
+          >
+            <header className='flex shrink-0 items-center justify-between gap-4 border-b px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-8'>
+              <DialogTitle>{t('skills.details')}</DialogTitle>
+              <DialogPrimitive.Close
+                render={
+                  <Button variant='ghost' size='icon' className='size-11' />
+                }
+                aria-label={t('Close')}
+              >
+                <X aria-hidden='true' />
+              </DialogPrimitive.Close>
+            </header>
+            <SkillDetails key={selected.name} summary={selected} />
+          </DialogPrimitive.Popup>
+        </DialogPortal>
+      ) : null}
+    </Dialog>
+  );
+}
