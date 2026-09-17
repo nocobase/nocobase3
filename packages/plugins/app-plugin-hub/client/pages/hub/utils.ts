@@ -1,4 +1,4 @@
-import { resolveAppUrl } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 import type {
   AppDetail,
   AppOverview,
@@ -109,23 +109,19 @@ export function configModeLabel(mode: ConfigMode): string {
 }
 
 export async function uploadArtifact(
+  api: ApiClient,
   appId: string,
   artifact: File,
 ): Promise<ReleaseRecord> {
-  const response = await fetch(
-    resolveAppUrl(`/api/hub/apps/${appId}/releases`),
-    {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/gzip',
-      },
-      body: artifact,
+  const result = await api.request<ApiResponse<ReleaseRecord>>({
+    path: `hub/apps/${appId}/releases`,
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/gzip',
     },
-  );
-  if (!response.ok) throw new Error(await response.text());
-  const result = (await response.json()) as ApiResponse<ReleaseRecord>;
+    body: artifact,
+  });
   return result.data;
 }
 

@@ -680,7 +680,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
           onUpload={() =>
             void perform(async () => {
               if (!artifact) return;
-              const uploaded = await uploadArtifact(appId, artifact);
+              const uploaded = await uploadArtifact(client, appId, artifact);
               setSelectedReleaseId(uploaded.id);
               setArtifact(undefined);
               setUploadOpen(false);

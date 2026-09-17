@@ -35,7 +35,7 @@ describe('@nocobase/app-plugin-notification Registry contract', () => {
       expect.objectContaining({
         name: 'logs-ui',
         dependencies: expect.arrayContaining([
-          '@nocobase/app-portal-sdk@^0.0.1-beta.1',
+          expect.stringMatching(/^@nocobase\/app-client@/u),
         ]),
         registryDependencies: ['alert', 'badge', 'button', 'card', 'table'],
         source: {
