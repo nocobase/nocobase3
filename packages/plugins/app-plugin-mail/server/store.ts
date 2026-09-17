@@ -366,6 +366,14 @@ export class DatabaseMailStore implements MailStore {
     return this.sync.commitSyncBatch(batch);
   }
 
+  public saveMessageContent(
+    accountId: string,
+    messageId: string,
+    message: NormalizedMailMessage,
+  ): Promise<MailMessage> {
+    return this.messages.saveMessageContent(accountId, messageId, message);
+  }
+
   public async saveMessage(
     accountId: string,
     message: NormalizedMailMessage,
@@ -536,6 +544,10 @@ export class DatabaseMailStore implements MailStore {
     limit = 100,
   ): Promise<readonly MailSyncRun[]> {
     return this.sync.listSyncRuns(userId, offset, limit);
+  }
+
+  public recoverSyncRuns(now: string): Promise<number> {
+    return this.sync.recoverSyncRuns(now);
   }
 
   public async listAllSyncRuns(): Promise<readonly MailSyncRun[]> {

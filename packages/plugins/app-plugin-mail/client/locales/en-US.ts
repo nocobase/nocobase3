@@ -1,6 +1,20 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  content: {
+    deferred:
+      'Only message details are synchronized. Download the body when needed.',
+    failed:
+      'Message content could not be synchronized. Other messages continue syncing.',
+    size: 'Message size: {{size}} MiB',
+    retry: 'Load / retry content',
+    loading: 'Loading…',
+    retryFailed: 'Content could not be loaded. You can retry.',
+    recovering: 'Recovering',
+    history: 'Importing history',
+    partial: 'Content pending',
+    pending: '{{count}} messages awaiting content',
+  },
   pagination: {
     unavailable: 'This page has no records. Choose another page or refresh.',
     label: 'Pagination',
@@ -305,6 +319,12 @@ const enUS = {
       syncProgress: '{{messages}} messages in {{pages}} batches',
       owner: 'User ID: {{userId}}',
       deactivate: 'Deactivate',
+      deactivateTitle: 'Deactivate mail account?',
+      deactivateDescription:
+        'This account will stop synchronizing and sending mail and will be hidden from the Mail center. Synchronized mail will remain available in Mail management. You can activate the account again later.',
+      deactivateCancel: 'Cancel',
+      deactivateConfirm: 'Deactivate account',
+      deactivating: 'Deactivating…',
       activate: 'Activate',
       remove: 'Remove account',
       removing: 'Removing…',

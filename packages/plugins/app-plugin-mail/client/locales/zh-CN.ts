@@ -1,6 +1,18 @@
 import type { MailResource } from './en-US.js';
 
 const zhCN: MailResource = {
+  content: {
+    deferred: '已同步邮件信息，正文可按需下载。',
+    failed: '此邮件内容同步失败，不影响其他邮件同步。',
+    size: '邮件大小：{{size}} MiB',
+    retry: '加载 / 重试正文',
+    loading: '加载中…',
+    retryFailed: '内容加载失败，可再次重试。',
+    recovering: '恢复中',
+    history: '历史同步中',
+    partial: '存在待补偿邮件',
+    pending: '{{count}} 封邮件内容待获取',
+  },
   pagination: {
     unavailable: '该页没有记录，请选择其他页码或刷新。',
     label: '分页',
@@ -297,6 +309,12 @@ const zhCN: MailResource = {
       syncProgress: '已处理 {{messages}} 封邮件，共 {{pages}} 批',
       owner: '用户 ID：{{userId}}',
       deactivate: '停用',
+      deactivateTitle: '停用邮件账户？',
+      deactivateDescription:
+        '停用后，此账户将停止同步和发件，并从邮件中心隐藏。已同步邮件仍可在邮件管理中查看，之后可随时重新启用。',
+      deactivateCancel: '取消',
+      deactivateConfirm: '确认停用',
+      deactivating: '正在停用…',
       activate: '启用',
       remove: '移除账户',
       removing: '正在移除…',

@@ -34,6 +34,31 @@ const SYNTHETIC_FOLDER_TYPES: Readonly<Record<string, MailFolder['type']>> = {
 };
 
 export class MailMessagesStore {
+  public async saveMessageContent(
+    accountId: string,
+    messageId: string,
+    message: NormalizedMailMessage,
+  ): Promise<MailMessage> {
+    await this.database
+      .query()
+      .updateTable<MessageRow>('mailMessages')
+      .set({
+        text: message.text ?? null,
+        html: message.html ?? null,
+        attachments: JSON.stringify(message.attachments),
+        contentStatus: message.contentStatus ?? 'complete',
+        contentError: message.contentError ?? null,
+        size: message.size ?? null,
+      })
+      .where('accountId', '=', accountId)
+      .where('id', '=', messageId)
+      .where('providerMessageId', '=', message.providerMessageId)
+      .execute();
+    const saved = await this.getMessageForAccount(accountId, messageId);
+    if (!saved)
+      throw new Error('Mail message was removed while loading content.');
+    return saved;
+  }
   public constructor(
     private readonly database: DatabaseManager,
     private readonly accounts: Pick<
@@ -64,7 +89,9 @@ export class MailMessagesStore {
     userId: string,
     input: MailListMessagesInput,
   ): Promise<MailPage<MailMessageSummary>> {
-    const owned = await this.accounts.listAccounts(userId);
+    const owned = (await this.accounts.listAccounts(userId)).filter(
+      (account) => account.status !== 'suspended',
+    );
     const requested = input.accountIds
       ? owned.filter((account) => input.accountIds?.includes(account.id))
       : owned;
@@ -159,7 +186,35 @@ export class MailMessagesStore {
           'mailMessages.id',
           'mailMessageFolders.messageId',
         )
-        .where('mailMessageFolders.providerFolderId', 'in', input.folderIds)
+        .where((builder) =>
+          builder.or([
+            builder(
+              'mailMessageFolders.providerFolderId',
+              'in',
+              input.folderIds!,
+            ),
+            builder.and([
+              builder(
+                'mailMessageFolders.providerFolderId',
+                '=',
+                MAIL_LOCAL_DRAFT_FOLDER_ID,
+              ),
+              builder('mailMessages.providerDraftMessageId', 'is not', null),
+              builder.exists(
+                builder
+                  .selectFrom('mailFolders')
+                  .select('id')
+                  .whereRef(
+                    'mailFolders.accountId',
+                    '=',
+                    'mailMessages.accountId',
+                  )
+                  .where('mailFolders.providerFolderId', 'in', input.folderIds!)
+                  .where('mailFolders.type', '=', 'drafts'),
+              ),
+            ]),
+          ]),
+        )
         .distinct();
     }
     if (
@@ -171,6 +226,11 @@ export class MailMessagesStore {
           ? query.where((builder) =>
               builder.eb.or([
                 builder.eb('mailMessages.draft', '=', false),
+                builder.eb(
+                  'mailMessageFolders.providerFolderId',
+                  '=',
+                  MAIL_LOCAL_DRAFT_FOLDER_ID,
+                ),
                 builder.exists(
                   builder
                     .selectFrom('mailFolders')
@@ -191,6 +251,27 @@ export class MailMessagesStore {
             )
           : query.where('mailMessages.draft', '=', false);
     }
+    // Keep the editable local draft visible without also listing its synced copy.
+    query = query.where((builder) =>
+      builder.or([
+        builder('mailMessages.draft', '=', false),
+        builder.not(
+          builder.exists(
+            builder
+              .selectFrom('mailMessages as localDraft')
+              .select('localDraft.id')
+              .whereRef('localDraft.accountId', '=', 'mailMessages.accountId')
+              .whereRef(
+                'localDraft.providerDraftMessageId',
+                '=',
+                'mailMessages.providerMessageId',
+              )
+              .where('localDraft.providerMessageId', 'like', 'local-draft:%')
+              .where('localDraft.draft', '=', true),
+          ),
+        ),
+      ]),
+    );
     if (input.labelIds?.length) {
       query = query
         .innerJoin(
@@ -440,7 +521,9 @@ export class MailMessagesStore {
   }
 
   public async countUnreadMessages(userId: string): Promise<number> {
-    const accounts = await this.accounts.listAccounts(userId);
+    const accounts = (await this.accounts.listAccounts(userId)).filter(
+      (account) => account.status !== 'suspended',
+    );
     if (accounts.length === 0) return 0;
     const row = await this.database
       .query()

@@ -17,14 +17,15 @@ import {
   Tag,
   Trash2,
 } from 'lucide-react';
+import { Tooltip } from '@base-ui/react/tooltip';
 import type { ReactElement } from 'react';
 import { useRef, useState } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 
-import { MailHtmlBody } from './mail-html-body.js';
+import { MailMessageContent } from './mail-message-content.js';
 import type { MailLabel, MailMessage } from '../mail-client.js';
 import { MAIL_PLUGIN_NS } from '../namespace.js';
-import { Button } from './ui/button.js';
+import { Button, type ButtonProps } from './ui/button.js';
 import { MailLabelTag } from './mail-label-tag.js';
 import {
   Dialog,
@@ -281,7 +282,7 @@ export function MailConversationView({
                     {actionLabels ? (
                       <>
                         {message.draft && actions.editDraft ? (
-                          <Button
+                          <MessageActionButton
                             aria-label={actionLabels.editDraft}
                             title={actionLabels.editDraft}
                             className='size-9 p-0 [&_svg]:size-4'
@@ -289,10 +290,10 @@ export function MailConversationView({
                             variant='ghost'
                           >
                             <PenLine aria-hidden='true' />
-                          </Button>
+                          </MessageActionButton>
                         ) : null}
                         {!message.draft && actions.reply ? (
-                          <Button
+                          <MessageActionButton
                             aria-label={actionLabels.reply}
                             title={actionLabels.reply}
                             className='size-9 p-0 [&_svg]:size-4'
@@ -300,10 +301,10 @@ export function MailConversationView({
                             variant='ghost'
                           >
                             <Reply aria-hidden='true' />
-                          </Button>
+                          </MessageActionButton>
                         ) : null}
                         {!message.draft && actions.forward ? (
-                          <Button
+                          <MessageActionButton
                             aria-label={actionLabels.forward}
                             title={actionLabels.forward}
                             className='size-9 p-0 [&_svg]:size-4'
@@ -311,9 +312,9 @@ export function MailConversationView({
                             variant='ghost'
                           >
                             <Forward aria-hidden='true' />
-                          </Button>
+                          </MessageActionButton>
                         ) : null}
-                        <Button
+                        <MessageActionButton
                           aria-label={
                             message.starred
                               ? actionLabels.unstar
@@ -332,14 +333,14 @@ export function MailConversationView({
                             aria-hidden='true'
                             fill={message.starred ? 'currentColor' : 'none'}
                           />
-                        </Button>
+                        </MessageActionButton>
                       </>
                     ) : null}
                     {canEditLabels ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           render={
-                            <Button
+                            <MessageActionButton
                               aria-label={addLabelText}
                               title={addLabelText}
                               className='size-9 p-0 [&_svg]:size-4'
@@ -440,7 +441,7 @@ export function MailConversationView({
                     {message.note}
                   </p>
                   {actions?.saveNote ? (
-                    <Button
+                    <MessageActionButton
                       aria-label={editNoteLabel}
                       title={editNoteLabel}
                       className='size-7 shrink-0 self-center p-0 text-muted-foreground [&_svg]:size-4'
@@ -450,7 +451,7 @@ export function MailConversationView({
                       variant='ghost'
                     >
                       <PenLine aria-hidden='true' />
-                    </Button>
+                    </MessageActionButton>
                   ) : null}
                 </div>
               ) : null}
@@ -550,6 +551,21 @@ export function MailConversationView({
   );
 }
 
+function MessageActionButton({ title, ...props }: ButtonProps): ReactElement {
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger delay={200} render={<Button {...props} />} />
+      <Tooltip.Portal>
+        <Tooltip.Positioner side='bottom' sideOffset={4} className='z-50'>
+          <Tooltip.Popup className='max-w-xs rounded-md bg-foreground px-3 py-1.5 text-xs text-background shadow-md'>
+            {title}
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
+  );
+}
+
 function MessageMoreActions({
   actionLabels,
   actions,
@@ -580,7 +596,7 @@ function MessageMoreActions({
         <DropdownMenuTrigger
           ref={moreButtonRef}
           render={
-            <Button
+            <MessageActionButton
               aria-label={labels.more ?? 'More actions'}
               title={labels.more ?? 'More actions'}
               className='size-9 p-0 [&_svg]:size-4'
@@ -719,15 +735,7 @@ function MessageBody({
   readonly message: MailMessage;
   readonly title: string;
 }): ReactElement {
-  if (message.html) {
-    return <MailHtmlBody message={message} title={title} />;
-  }
-
-  return (
-    <div className='mt-4 whitespace-pre-wrap text-sm leading-6 text-foreground'>
-      {plainMessageBody(message)}
-    </div>
-  );
+  return <MailMessageContent message={message} title={title} />;
 }
 
 function plainMessageBody(message: MailMessage): string {

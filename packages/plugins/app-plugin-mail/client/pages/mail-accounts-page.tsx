@@ -64,6 +64,8 @@ export default function MailAccountsPage(): ReactElement {
   const [showLabels, setShowLabels] = useState(false);
   const [showSignatures, setShowSignatures] = useState(false);
   const [accountToRemove, setAccountToRemove] = useState<MailAccountView>();
+  const [accountToDeactivate, setAccountToDeactivate] =
+    useState<MailAccountView>();
   const [removingAccountId, setRemovingAccountId] = useState<string>();
   const [error, setError] = useState<string>();
   const authorizationNotice = readAuthorizationNotice();
@@ -236,14 +238,22 @@ export default function MailAccountsPage(): ReactElement {
     setUpdatingAccountId(account.id);
     void mail
       .updateAccount({ accountId: account.id, ...change })
-      .then(refresh, (cause: unknown) => {
-        setError(
-          mailErrorMessage(
-            cause,
-            t('errors.requestFailed', { defaultValue: 'Mail request failed.' }),
-          ),
-        );
-      })
+      .then(
+        () => {
+          setAccountToDeactivate(undefined);
+          refresh();
+        },
+        (cause: unknown) => {
+          setError(
+            mailErrorMessage(
+              cause,
+              t('errors.requestFailed', {
+                defaultValue: 'Mail request failed.',
+              }),
+            ),
+          );
+        },
+      )
       .finally(() => setUpdatingAccountId(undefined));
   };
 
@@ -449,14 +459,14 @@ export default function MailAccountsPage(): ReactElement {
                           account={account}
                           onSync={startSync}
                           onRemove={requestRemoveAccount}
-                          onToggleStatus={(account) =>
-                            updateAccount(account, {
-                              status:
-                                account.status === 'suspended'
-                                  ? 'active'
-                                  : 'suspended',
-                            })
-                          }
+                          onToggleStatus={(account) => {
+                            if (account.status === 'suspended') {
+                              updateAccount(account, { status: 'active' });
+                            } else {
+                              setError(undefined);
+                              setAccountToDeactivate(account);
+                            }
+                          }}
                           providerLabel={
                             providerLabels.get(providerKey(account.provider)) ??
                             account.provider.name
@@ -548,6 +558,31 @@ export default function MailAccountsPage(): ReactElement {
               </div>
             ) : null}
             <section className='space-y-4 pt-2'>
+              <div>
+                <h2 className='font-semibold'>
+                  {t('settings.initialSync.title', {
+                    defaultValue: 'Initial sync limits',
+                  })}
+                </h2>
+                <p className='mt-1 text-sm leading-6 text-muted-foreground'>
+                  {t('settings.initialSync.description', {
+                    defaultValue:
+                      'Choose the default date for a newly connected account. Each account’s saved date is shown in the account list.',
+                  })}
+                </p>
+              </div>
+              <MailSyncPolicyFields
+                labels={{
+                  receivedAfter: t('settings.initialSync.receivedAfter', {
+                    defaultValue: 'Import messages received after',
+                  }),
+                }}
+                onChange={setPolicy}
+                value={policy}
+              />
+            </section>
+
+            <section className='space-y-4 border-t pt-6'>
               {loading ? (
                 <LoadingState
                   label={t('settings.loading', {
@@ -621,31 +656,6 @@ export default function MailAccountsPage(): ReactElement {
                   providers={providers}
                 />
               )}
-            </section>
-
-            <section className='space-y-4 border-t pt-6'>
-              <div>
-                <h2 className='font-semibold'>
-                  {t('settings.initialSync.title', {
-                    defaultValue: 'Initial sync limits',
-                  })}
-                </h2>
-                <p className='mt-1 text-sm leading-6 text-muted-foreground'>
-                  {t('settings.initialSync.description', {
-                    defaultValue:
-                      'Choose the default date for a newly connected account. Each account’s saved date is shown in the account list.',
-                  })}
-                </p>
-              </div>
-              <MailSyncPolicyFields
-                labels={{
-                  receivedAfter: t('settings.initialSync.receivedAfter', {
-                    defaultValue: 'Import messages received after',
-                  }),
-                }}
-                onChange={setPolicy}
-                value={policy}
-              />
             </section>
           </div>
         </SheetContent>
@@ -748,6 +758,74 @@ export default function MailAccountsPage(): ReactElement {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={accountToDeactivate !== undefined}
+        onOpenChange={(open) => {
+          if (!open && updatingAccountId === undefined) {
+            setAccountToDeactivate(undefined);
+            setError(undefined);
+          }
+        }}
+      >
+        <DialogContent
+          closeLabel={t('dev.closePanel', { defaultValue: 'Close' })}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {t('settings.accounts.deactivateTitle', {
+                defaultValue: 'Deactivate mail account?',
+              })}
+            </DialogTitle>
+            <DialogDescription>
+              {t('settings.accounts.deactivateDescription', {
+                defaultValue:
+                  'This account will stop synchronizing and sending mail and will be hidden from the Mail center. Synchronized mail will remain available in Mail management. You can activate the account again later.',
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <p className='mt-5 text-sm font-medium'>
+            {accountToDeactivate?.address}
+          </p>
+          {error ? (
+            <p role='alert' className='mt-4 text-sm text-destructive'>
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              disabled={updatingAccountId !== undefined}
+              onClick={() => {
+                setAccountToDeactivate(undefined);
+                setError(undefined);
+              }}
+              type='button'
+              variant='outline'
+            >
+              {t('settings.accounts.deactivateCancel', {
+                defaultValue: 'Cancel',
+              })}
+            </Button>
+            <Button
+              disabled={updatingAccountId !== undefined}
+              onClick={() => {
+                if (accountToDeactivate && updatingAccountId === undefined) {
+                  updateAccount(accountToDeactivate, { status: 'suspended' });
+                }
+              }}
+              type='button'
+            >
+              {updatingAccountId !== undefined
+                ? t('settings.accounts.deactivating', {
+                    defaultValue: 'Deactivating…',
+                  })
+                : t('settings.accounts.deactivateConfirm', {
+                    defaultValue: 'Deactivate account',
+                  })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={accountToRemove !== undefined}

@@ -38,7 +38,7 @@ export interface MailComposerRequest {
 export interface MailComposerProps {
   readonly allowBulkSend?: boolean;
   readonly senderSelection?: {
-    readonly identityId: string;
+    readonly identityId?: string;
     readonly options: readonly {
       readonly accountId: string;
       readonly identity: MailIdentity;

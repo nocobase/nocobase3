@@ -134,9 +134,18 @@ export default function MailSyncLogsPage(): ReactElement {
                       </td>
                       <td className='px-4 py-3'>
                         <MailStatusBadge
-                          label={t(`status.sync.${run.status}`, {
-                            defaultValue: run.status,
-                          })}
+                          label={
+                            run.recovering
+                              ? t('content.recovering')
+                              : run.status === 'partial'
+                                ? t('content.partial')
+                                : run.mode === 'initial' &&
+                                    run.status === 'running'
+                                  ? t('content.history')
+                                  : t(`status.sync.${run.status}`, {
+                                      defaultValue: run.status,
+                                    })
+                          }
                           tone={syncStatusTone(run.status)}
                         />
                       </td>
@@ -151,6 +160,13 @@ export default function MailSyncLogsPage(): ReactElement {
                           })}
                         </div>
                         <div className='text-xs text-muted-foreground'>
+                          {(run.pendingMessages ?? 0) > 0 ? (
+                            <p>
+                              {t('content.pending', {
+                                count: run.pendingMessages,
+                              })}
+                            </p>
+                          ) : null}
                           {t('settings.syncLogs.batches', {
                             defaultValue: '{{count}} batches',
                             count: run.processedPages,
@@ -199,7 +215,8 @@ export default function MailSyncLogsPage(): ReactElement {
 
 function syncStatusTone(
   status: MailSyncRunView['status'],
-): 'success' | 'danger' | 'info' {
+): 'success' | 'danger' | 'info' | 'warning' {
+  if (status === 'partial') return 'warning';
   if (status === 'completed') return 'success';
   if (status === 'failed' || status === 'cancelled') return 'danger';
   return 'info';

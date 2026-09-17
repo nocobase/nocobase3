@@ -17,6 +17,7 @@ export async function upsertMessages(
   query: QueryAdapter,
   accountId: string,
   messages: readonly NormalizedMailMessage[],
+  preserveUpdatedAfter?: string,
 ): Promise<void> {
   const uniqueMessages = [
     ...new Map(
@@ -27,7 +28,15 @@ export async function upsertMessages(
   const now = new Date().toISOString();
   const existingRows = await query
     .selectFrom<MessageRow>('mailMessages')
-    .select(['id', 'providerMessageId', 'createdAt', 'note', 'todo'])
+    .select([
+      'id',
+      'providerMessageId',
+      'createdAt',
+      'updatedAt',
+      'contentStatus',
+      'note',
+      'todo',
+    ])
     .where('accountId', '=', accountId)
     .where(
       'providerMessageId',
@@ -37,15 +46,46 @@ export async function upsertMessages(
     .execute<
       Pick<
         MessageRow,
-        'id' | 'providerMessageId' | 'createdAt' | 'note' | 'todo'
+        | 'id'
+        | 'providerMessageId'
+        | 'createdAt'
+        | 'updatedAt'
+        | 'contentStatus'
+        | 'note'
+        | 'todo'
       >
     >();
   const existingByProviderId = new Map(
     existingRows.map((row) => [row.providerMessageId, row]),
   );
   const rows: MessageRow[] = [];
+  const draftIds = uniqueMessages
+    .filter((message) => message.draft)
+    .map((message) => message.providerMessageId);
+  const acceptedDrafts = draftIds.length
+    ? await query
+        .selectFrom('mailSubmissions')
+        .select('providerMessageId')
+        .where('accountId', '=', accountId)
+        .where('status', '=', 'accepted')
+        .where('providerMessageId', 'in', draftIds)
+        .execute<{ providerMessageId: string }>()
+    : [];
+  const acceptedIds = new Set(
+    acceptedDrafts.map((row) => row.providerMessageId),
+  );
   for (const message of uniqueMessages) {
+    // Graph can still return its pre-send draft briefly after accepting delivery.
+    if (message.draft && acceptedIds.has(message.providerMessageId)) continue;
     const existing = existingByProviderId.get(message.providerMessageId);
+    if (
+      existing &&
+      ((preserveUpdatedAfter && existing.updatedAt >= preserveUpdatedAfter) ||
+        (existing.contentStatus === 'complete' &&
+          message.contentStatus &&
+          message.contentStatus !== 'complete'))
+    )
+      continue;
     const row = toMessageRow(
       accountId,
       message,
@@ -69,6 +109,7 @@ export async function upsertMessages(
   for (const batch of chunks(newRows, 25)) {
     await query.insertInto<MessageRow>('mailMessages').values(batch).execute();
   }
+  if (rows.length === 0) return;
   const messageIds = rows.map((row) => row.id);
   await query
     .deleteFrom<MessageFolderRow>('mailMessageFolders')

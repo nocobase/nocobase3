@@ -8,7 +8,7 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 
 这份清单只收录当前已经具备实现基础、可以直接执行的测试用例。已确认但尚未完成的页面、权限、交互和验收规则放在 [邮件插件待实现清单](./pending-implementation.md)。
 
-测试状态约定：[ ] 表示待执行，[x] 表示已执行并通过，[-] 表示不适用或暂不执行。
+测试状态约定：[ ] 表示待执行，[x] 表示已执行并通过，[-] 表示不适用或暂不执行。自动化测试覆盖不等于真实 Provider 或完整页面验收通过；勾选前应记录执行环境、日期、结果和失败证据。
 
 测试层级标识：[UI] 页面交互，[API] HTTP 接口，[SRV] 服务、队列和状态机，[PROVIDER] Provider 适配，[DATA] 数据库和一致性，[SEC] 权限与安全，[NFR] 性能、可用性和无障碍，[BOUNDARY] 产品边界。优先级标识：[P0] 核心链路，[P1] 重要能力，[P2] 增强能力。
 
@@ -28,6 +28,9 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 - [ ] 准备 0、1、100、101 个收件人，以及逗号和分号混合地址
 - [ ] 准备 0 MB、25 MB、超过 25 MB 和多附件总量超过限制的附件
 - [ ] 准备 Provider 认证失败、游标过期、404、5xx、超时、网络中断和重复回调场景
+- [ ] 准备 0、1、99、100、101、10,000 和 10,001 封范围内邮件，以及早于、等于、晚于 receivedAfter 的邮件；记录 Provider 原始 ID 作为最终对账依据
+- [ ] 准备 IMAP 稀疏 UID、乱序 FETCH、缺少 UIDNEXT、UIDVALIDITY 变化、多文件夹分页，以及小于、等于、超过 16 MiB 的邮件和损坏 MIME
+- [ ] 准备可重复创建的测试邮箱、持久化测试数据库和两个运行实例；支持在提交前、提交后及队列投递后中断进程，并在历史扫描期间注入新邮件、更新和删除
 
 | 页面         | 当前地址                  | 当前验证范围                               |
 | ------------ | ------------------------- | ------------------------------------------ |
@@ -191,13 +194,13 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 
 ## 九、[SRV] 同步、发送任务与一致性
 
-- [ ] [P0][SRV] MAIL-SYNC-001：新账号连接后创建初始同步任务，receivedAfter 和 maxMessages 限制按配置执行
-- [ ] [P1][SRV] MAIL-SYNC-002：未配置 maxMessages 或 syncBatchSize 时使用默认值，已配置值按原样执行，不因固定上限被改写
+- [ ] [P0][SRV] MAIL-SYNC-001：新账号连接后创建初始同步任务，按 receivedAfter 筛选，超过 10,000 封仍持续分页直至扫描完成
+- [ ] [P1][SRV] MAIL-SYNC-002：未配置 syncBatchSize 时每批默认 100 封；syncBatchSize 可配置为 1–200，越界配置被拒绝；maxMessages 即使传入 1 也不截断历史同步
 - [ ] [P0][SRV] MAIL-SYNC-003：当前账号同步只处理该账号，Sync all 只处理 active 账号；suspended、revoked 和 reauthorizationRequired 账号不启动同步
 - [ ] [P0][SRV] MAIL-SYNC-004：不支持 incrementalSync 的 Provider 不触发增量同步，同一账号已有 active 同步时不会创建重复运行
 - [ ] [P1][SRV] MAIL-SYNC-005：同步阶段、processed messages、pages、batches、时间和错误码持续更新，跨页面刷新或进程重启后可继续执行
 - [ ] [P0][SRV] MAIL-SYNC-006：初始和增量同步按批次处理，单页失败按重试规则恢复，不丢失或重复邮件
-- [ ] [P0][SRV] MAIL-SYNC-007：增量同步正确处理新增、更新、删除、移动和文件夹移除，游标过期时重建 baseline
+- [ ] [P0][SRV] MAIL-SYNC-007：增量同步按 Provider 能力处理新增、更新、删除、移动和文件夹移除；游标过期后按指定日期范围重新扫描，并捕获扫描期间的新变化，禁止仅刷新 baseline 后跳到当前进度
 - [ ] [P1][SRV] MAIL-SYNC-008：游标不前进时触发保护逻辑，不进入无限循环；可重试错误释放租约并重新入队
 - [ ] [P0][SRV] MAIL-SYNC-009：认证终止错误将账号置为 reauthorizationRequired，不可重试错误标记为 failed 并保留安全错误码
 - [ ] [P1][SRV] MAIL-SYNC-010：取消 pending 或 running 同步后不继续处理，只有账号所有者可以重试或取消自己的同步
@@ -205,6 +208,72 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 - [ ] [P1][UI][SRV] MAIL-SYNC-012：账号页不提供自动同步配置；config 中的 mail.automaticSyncIntervalMs 统一作用于新账号和已有账号，历史账号间隔不影响调度；自动同步只在该账号距离上次同步达到配置间隔后执行，手动同步、自动同步和 Push webhook 同时触发时同一账号只有一个有效同步任务
 - [ ] [P1][SRV] MAIL-SYNC-013：Gmail watch 和 Microsoft subscription 可以创建、续期、过期重建和删除；Push 不可用时按当前实现回退到自动同步
 - [ ] [P1][SRV] MAIL-SYNC-014：重复 Push 事件被去重，IMAP/SMTP 不创建 Push 订阅，账号删除或状态变化与同步并发时最终状态一致
+
+### 日期范围、批次和完成条件
+
+- [ ] [P0][SRV][PROVIDER] MAIL-SYNC-015：分别测试未指定 receivedAfter 和指定有效日期；前者扫描全部历史，后者包含恰好位于边界的邮件并排除更早的历史邮件，无效日期被拒绝
+- [ ] [P0][SRV][DATA] MAIL-SYNC-016：用 0、1、99、100、101 封邮件验证空邮箱、恰好满批和跨批场景；空页仍有 nextCursor 时继续扫描，仅在历史无后续页且增量已追平后结束
+- [ ] [P0][SRV][DATA] MAIL-SYNC-017：用超过 10,000 封真实范围内邮件完成同步，最终按账号和 Provider ID 对账无遗漏、无重复；processedMessages 是处理次数，重扫和更新可重复计数，不能代替唯一邮件数对账
+- [ ] [P0][SRV] MAIL-SYNC-018：多页历史同步期间持续注入新邮件；baseline 就绪后历史页与增量页交替执行，新邮件无需等待全部历史完成；历史和增量游标分别保存，增量仍有后续页时历史也能继续推进
+- [ ] [P0][DATA] MAIL-SYNC-019：增量页先更新某封邮件，后续历史页再返回其旧内容和状态；已同步的新状态不被覆盖，本地备注、待办和标签保留
+- [ ] [P0][DATA] MAIL-SYNC-020：增量页先删除某封邮件，后续历史页再返回该邮件；同次扫描不使其重新出现，完成或重新开始扫描时清理对应删除标记
+
+### 重启续跑与事务一致性
+
+重启用例必须保留同一测试数据库并启用 Mail runtime。分别在首次同步和游标失效后的恢复扫描执行；浏览器刷新不能替代服务进程重启。恢复调度在启动时和每分钟运行，接管时间还受剩余租约、两分钟无进展阈值、重试时间和队列处理时间影响，不以“重启后立即完成”作为断言。
+
+- [ ] [P0][SRV][DATA] MAIL-SYNC-021：历史页提交前中断进程；重启后重做未提交页，邮件、历史游标、增量游标与下一任务均不出现部分提交
+- [ ] [P0][SRV][DATA] MAIL-SYNC-022：历史页或增量页提交后、下一任务执行前中断进程；重启后继续原运行的已持久化阶段和游标；连续重启两次仍能完成，不要求用户再次点击 Sync
+- [ ] [P0][SRV][DATA] MAIL-SYNC-023：队列消息已发布但 worker 尚未领取时丢失消息；无租约且超过两分钟无进展后，恢复调度补发任务并增加 revision，原任务迟到不能重复提交
+- [ ] [P0][SRV][DATA] MAIL-SYNC-024：worker 执行中停止且租约到期；恢复调度接管，旧 worker 恢复后提交被拒绝，接管者从最后成功检查点继续
+- [ ] [P0][SRV] MAIL-SYNC-025：仍有 pending 或 publishing Outbox 的运行不被重复补发；延迟重试保留 availableAt，恢复调度不会绕过 Provider 的退避时间
+- [ ] [P0][SRV][DATA] MAIL-SYNC-026：两个实例同时扫描同一失联运行，只有一个成功补发；另准备 100 个更早、仍有排队 Outbox 的运行，后面的失联运行也能被发现和接管
+- [ ] [P0][SRV][DATA] MAIL-SYNC-027：注入租约丢失或下一条 Outbox 写入失败，邮件、文件夹、同步状态和游标整体回滚；再次执行不跳过该页
+- [ ] [P0][SRV] MAIL-SYNC-028：对 cancelled、completed、partial、failed 运行执行恢复调度，不自动复活；取消或删除账号后投递旧任务也不能继续写入
+
+### 游标失效与恢复扫描
+
+- [ ] [P0][SRV][DATA] MAIL-SYNC-029：分别在历史页和增量页注入游标失效；运行回到 preparing 并标记 recovering，清除失效检查点，保留批次大小与适用的初始同步日期，不删除已有本地邮件
+- [ ] [P0][SRV][PROVIDER] MAIL-SYNC-030：在旧检查点与当前时间之间放入尚未同步的邮件，再触发失效；重新扫描必须导入日期范围内的缺口邮件，不能把当前 Provider 游标直接记为同步完成
+- [ ] [P0][SRV][DATA] MAIL-SYNC-031：恢复扫描建立新 baseline 后再注入新邮件，并在中途重启；历史完成后仍能通过增量读到新邮件，账号最终只有一个有效运行
+- [ ] [P1][SRV] MAIL-SYNC-032：恢复期间再次发生游标失效，重新进入扫描流程；保留已有数据和本地标注，不错误标记 completed，也不绕过日期范围
+
+### 大邮件、解析失败与独立正文重试
+
+- [ ] [P0][PROVIDER][DATA] MAIL-SYNC-033：同一页依次放入超大邮件、解析失败邮件和正常邮件；前两封分别保存 deferred、failed 记录及可取得的元数据，正常邮件继续导入，成功保存后才推进页游标
+- [ ] [P0][SRV][DATA] MAIL-SYNC-034：网络、认证或 Provider 请求失败导致无法取得必要记录时，保留原检查点并按错误分类重试或失败；不能把请求失败当作已保存的正文异常而跳过
+- [ ] [P1][UI][SRV] MAIL-SYNC-035：历史和增量均追平但账号仍有未完成正文时，运行状态为 partial，pendingMessages 与未完成记录数一致；没有未完成正文时为 completed
+- [ ] [P1][UI][API] MAIL-SYNC-036：邮件正文区域显示未完成提示和可用的大小信息；点击加载后显示忙碌状态，失败显示提示并可再次重试，成功展示正文；刷新后读取已持久化内容
+- [ ] [P0][API][SEC] MAIL-SYNC-037：POST /api/mail/accounts/:accountId/messages/:messageId/content/retry 要求登录且校验账号和邮件所有权；未登录返回 401，用户 B、错配账号和仅有管理查看权限的用户不能替所有者重试正文
+- [ ] [P0][DATA] MAIL-SYNC-038：正文重试只更新正文、附件及内容状态，保留已读、星标、本地备注、待办和标签；已经 complete 的邮件直接返回现有记录，不重复拉取正文
+- [ ] [P1][UI] MAIL-SYNC-039：同步日志区分历史导入、恢复扫描和正文部分完成；已完成日志的 pendingMessages 是完成时快照，独立正文重试不改写旧日志，后续同步记录反映新的数量
+- [ ] [P1][UI][SEC] MAIL-SYNC-040：管理邮件详情可显示正文未完成提示，但不提供所有者专属重试操作；正常完整邮件仍按原方式显示 HTML 或纯文本
+
+### 自动化覆盖与实测入口
+
+下表列出当前可复用的自动化测试，定位已有断言，不表示上面每个验收用例都已完整覆盖。Provider 测试使用模拟响应；SQLite 检查点测试通过重建 Store 和推进时钟模拟恢复，不能替代真实进程故障、真实邮箱大数据量和真实服务端协议验证。
+
+| 测试文件                                                                                          | 已有覆盖重点                                                                                                                                              | 仍需实测或补充的边界                                                                                     |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [sync-recovery.test.ts](../../tests/sync-recovery.test.ts)                                        | 超过旧累计计数后继续分页、重建 Store 续跑、历史与增量交替、旧状态保护、删除标记、失效重扫、租约接管、丢失投递、双实例竞争、队列筛选、partial 与所有权重试 | 当前万封测试直接设置 processedMessages，需另做 10,001 封真实数据对账；实际杀进程、重复重启和启动调度接管 |
+| [store-transactions.test.ts](../../tests/store-transactions.test.ts)                              | 租约丢失或 Outbox 冲突时邮件、文件夹和检查点回滚                                                                                                          | 提交前后进程故障注入                                                                                     |
+| [mail-runtime.test.ts](../../tests/mail-runtime.test.ts)                                          | 初始同步、自动调度间隔、Push 去重、分页、错误恢复、取消及日志隔离                                                                                         | 真实队列投递中断与多进程调度                                                                             |
+| [Gmail 测试](../../tests/adapters/gmail/gmail.test.ts)                                            | mailbox history ID、分页、History 404 失效、异常邮件元数据                                                                                                | 真实 history/token 失效及日期边界                                                                        |
+| [Microsoft 测试](../../tests/adapters/microsoft/microsoft.test.ts)                                | baseline 分页、delta 追赶、新文件夹与历史期间到信                                                                                                         | Graph 410、异常单封内容、baseline 准备中重启                                                             |
+| [IMAP 测试](../../tests/adapters/imap-smtp/imap-smtp.test.ts)                                     | 稀疏与乱序 UID、缺少 UIDNEXT、UIDVALIDITY、收件时间边界、大邮件与异常 MIME、按需正文                                                                      | 多种真实 IMAP 服务、恰好 16 MiB、长时间断线和 UIDVALIDITY 重置                                           |
+| [正文组件测试](../../tests/mail-message-content.test.tsx)、[接口测试](../../tests/routes.test.ts) | 未完成提示、失败后重试、成功展示正文、登录检查及重试服务调用                                                                                              | 真实页面刷新、管理页权限和多语言验收                                                                     |
+| [migration.test.ts](../../tests/migration.test.ts)                                                | 同步进度字段、正文状态、删除标记表及迁移 up/down                                                                                                          | 部署所用数据库的实际迁移验证                                                                             |
+
+在仓库根目录运行以下定向回归；只选择同步相关文件，不依赖 SMTP 传输测试的本地监听端口：
+
+```bash
+pnpm --filter @nocobase/app-plugin-mail exec vitest run tests/sync-recovery.test.ts tests/store-transactions.test.ts tests/mail-runtime.test.ts tests/adapters/gmail/gmail.test.ts tests/adapters/microsoft/microsoft.test.ts tests/adapters/imap-smtp/imap-smtp.test.ts tests/mail-message-content.test.tsx tests/routes.test.ts tests/migration.test.ts --maxWorkers=2
+```
+
+真实故障验收按“创建专用测试邮箱 → 记录日期范围和 Provider ID 清单 → 开始同步 → 在指定故障点中断 → 用同一数据库重启 → 等待恢复调度 → 对账”执行。在历史和恢复扫描期间分别注入新增、更新、删除邮件，记录运行 ID、阶段、revision、故障时间及最终唯一邮件数；记录不应包含凭据和原始游标。当前不提供旧版本漏信修复工具，不以修复历史用户数据作为本轮验收前置条件。
+
+### 发送与草稿任务
+
 - [ ] [P0][SRV] MAIL-SEND-SRV-001：Queue job、Outbox 和发送租约恢复 pending、unknown 或超时任务时不产生重复邮件
 - [ ] [P1][SRV] MAIL-SEND-SRV-002：发送任务记录 submission 状态、公开错误分类、Provider message ID 和幂等结果
 - [ ] [P1][SRV] MAIL-DRAFT-SRV-001：本地草稿创建、更新、发送和删除失败时保留可追踪状态，不产生半成品关系；远端镜像失败不回滚本地草稿
@@ -224,20 +293,32 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 | 别名和身份     | [ ] Send-as             | [ ] Graph identity      | [ ] 主地址和配置别名                  |
 
 - [ ] [P0][PROVIDER] MAIL-GMAIL-001：OAuth PKCE、scope、token 交换、profile、subject、地址和 Send-as 身份同步正确
-- [ ] [P0][PROVIDER] MAIL-GMAIL-002：Gmail History 初始同步、增量同步、游标过期和 History 404 回退正确
+- [ ] [P0][PROVIDER] MAIL-GMAIL-002：Gmail 历史分页和 History 增量同步正确；History 404 返回游标失效并进入完整范围重扫，不回退为仅查询最近邮件或直接推进 historyId
 - [ ] [P1][PROVIDER] MAIL-GMAIL-003：Gmail 系统文件夹、threadId、MIME 正文、纯文本 fallback、签名和附件正确
 - [ ] [P1][PROVIDER] MAIL-GMAIL-004：Gmail read、star、move、Trash、永久删除、草稿和 Pub/Sub watch 行为正确
 - [ ] [P1][PROVIDER] MAIL-GMAIL-005：Gmail 5xx、超时、认证失败和附件准备失败时账号与 submission 状态正确
+- [ ] [P0][PROVIDER] MAIL-GMAIL-006：baseline 取自 mailbox profile 的当前 historyId；最新一封邮件的旧 historyId 不能代替邮箱当前检查点
+- [ ] [P0][PROVIDER] MAIL-GMAIL-007：history 分页保留起始 historyId，耗尽后推进；历史 page token 失效进入恢复扫描，日期筛选包含恰好位于 receivedAfter 的邮件
+- [ ] [P1][PROVIDER] MAIL-GMAIL-008：单封正文解析失败时用 metadata 保留身份、文件夹和可用头信息，健康邮件继续导入；metadata 请求失败不能跳过该封邮件
 - [ ] [P0][PROVIDER] MAIL-MS-001：OAuth offline scope、PKCE、稳定 profile ID、token 轮换、Graph 文件夹树和分页正确
 - [ ] [P0][PROVIDER] MAIL-MS-002：Graph delta baseline、增量变化、cursor 过期重建和新增文件夹发现正确
 - [ ] [P1][PROVIDER] MAIL-MS-003：Graph 202 无响应体发送、conversation、草稿、回复和转发关系正确
 - [ ] [P1][PROVIDER] MAIL-MS-004：小于 3 MB 和大于等于 3 MB 附件分别走正确路径，upload session 续传和 HTTPS 校验正确
 - [ ] [P1][PROVIDER] MAIL-MS-005：Graph subscription challenge、clientState、续期、404 重建、认证失败和超时状态正确
+- [ ] [P0][PROVIDER] MAIL-MS-006：baseline 尚有 nextLink 时 historyReady 为 false，逐页保存各文件夹检查点；准备完成前不拿未完成 baseline 进入交替追赶，重启后延续 baseline 分页
+- [ ] [P0][PROVIDER] MAIL-MS-007：Graph 历史分页或 delta 返回 410 时重新扫描配置日期范围；新增文件夹会建立自己的检查点，不覆盖其他文件夹进度
+- [ ] [P1][PROVIDER] MAIL-MS-008：单封正文或附件内容异常时保留可识别邮件记录，正常同页邮件继续导入；请求失败和中止不伪装成成功处理
 - [ ] [P0][PROVIDER] MAIL-IMAP-001：IMAP/SMTP endpoint、端口、TLS、rejectUnauthorized 和双端点连接校验正确
 - [ ] [P0][PROVIDER] MAIL-IMAP-002：文件夹发现、层级、Sent、Trash、Drafts、UID 分页和 UIDVALIDITY 变化处理正确
 - [ ] [P1][PROVIDER] MAIL-IMAP-003：增量同步只读取新的 UID，异常或 malformed cursor 不产生错误数据
 - [ ] [P1][PROVIDER] MAIL-IMAP-004：SMTP 普通文本、HTML、回复、转发和附件发送正确，Sent copy 不可用时状态符合定义
 - [ ] [P1][PROVIDER] MAIL-IMAP-005：IMAP read、star、永久删除、密码错误、TLS 错误、socket 超时和连接中断状态正确
+- [ ] [P0][PROVIDER] MAIL-IMAP-006：初始和增量扫描均检查 UIDVALIDITY；STATUS 与 SELECT 之间世代变化时不得使用旧游标读取新世代 UID，必须进入恢复扫描
+- [ ] [P0][PROVIDER] MAIL-IMAP-007：FETCH 乱序、UID 有空洞或某范围无邮件时，完整处理本次有界 UID 范围后再推进，不能用第一封或最后返回一封邮件的 UID 跳过未处理邮件
+- [ ] [P1][PROVIDER] MAIL-IMAP-008：历史页恰好结束于文件夹边界、新文件夹出现或连续稀疏范围超过单次扫描预算时，保存后续游标继续处理，不把空页或预算耗尽视为全部完成
+- [ ] [P0][PROVIDER] MAIL-IMAP-009：缺少 UIDNEXT 时能推导检查点则继续，无法确定时返回错误；只有真实空邮箱才按空邮箱完成
+- [ ] [P0][PROVIDER] MAIL-IMAP-010：receivedAfter 使用收件时间 INTERNALDATE 并包含边界；伪造或更早的 Date 头不导致范围内邮件被跳过
+- [ ] [P1][PROVIDER] MAIL-IMAP-011：超过 16 MiB 的背景同步保留 envelope、大小和可取得的附件结构；所有者按需加载完整正文和附件不受背景 16 MiB 截断，UIDVALIDITY 已变化时拒绝读取复用 UID 的另一封邮件
 - [ ] [P0][PROVIDER] MAIL-PROVIDER-COMPAT-001：Gmail、Microsoft 和 IMAP/SMTP 的 definition、adapter identity、capabilities、能力方法和 OAuth/credentials 连接方式符合 Mail Core 兼容性契约
 - [ ] [P1][DOC] MAIL-PROVIDER-DOC-001：第三方 Provider 开发指南中的目录、注册、能力、凭据、同步、内联附件、错误分类、兼容性测试和发布清单与当前代码一致
 
@@ -248,6 +329,7 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 - [ ] [P1][DATA] MAIL-DATA-003：本地标签、邮件标签关联、签名默认值、幂等 key 和活动同步唯一约束正确
 - [ ] [P0][DATA] MAIL-DATA-004：并发发送、同步、删除、重新授权和状态切换不会产生重复、孤儿数据或旧状态覆盖新状态
 - [ ] [P1][DATA] MAIL-DATA-005：过期附件、OAuth verifier、临时凭据、已完成 Outbox 和失效租约可以被清理
+- [ ] [P0][DATA] MAIL-DATA-006：迁移包含 historyStartedAt、historyComplete、recovering、pendingMessages、contentStatus、contentError、size 及相关索引；mailSyncTombstones 的运行与 Provider ID 联合主键、外键和 down 清理顺序正确
 
 ## 十二、[NFR] 性能、兼容性、可用性与恢复
 
@@ -271,6 +353,7 @@ keywords: 'NocoBase,邮件插件,测试清单,Gmail,Microsoft,IMAP,SMTP,草稿'
 - [ ] [BOUNDARY] MAIL-SCOPE-005：从表格选中业务记录后批量生成邮件收件人不出现在当前邮件列表页
 - [ ] [BOUNDARY] MAIL-SCOPE-006：撤回、送达回执、优先级、邮件审计和组织范围等未纳入当前实现的能力不显示入口
 - [ ] [BOUNDARY] MAIL-SCOPE-007：组织、部门和成员数据不作为当前邮件插件测试前置条件，等待其他插件接入后再评估
+- [ ] [BOUNDARY] MAIL-SCOPE-008：游标失效后重新扫描账号配置范围，包括未受影响的文件夹；不宣称自动清理已超出 Provider 历史保留期的远端删除，也不提供既有漏信数据的专项修复工具
 
 ## 十四、执行优先级
 

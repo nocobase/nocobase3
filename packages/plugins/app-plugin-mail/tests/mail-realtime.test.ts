@@ -23,21 +23,29 @@ describe('Mail realtime notifications', () => {
 
   it('does not make persistence fail when realtime publishing fails', () => {
     const error = new Error('socket unavailable');
-    const consoleError = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
+    const logger = { error: vi.fn() };
     const notifier: MailMessageChangeNotifier = {
       notify: vi.fn(() => {
         throw error;
       }),
     };
 
-    expect(() => notifyMailMessageChange(notifier, 'user-1')).not.toThrow();
-    expect(consoleError).toHaveBeenCalledWith(
+    expect(() =>
+      notifyMailMessageChange(notifier, 'user-1', logger),
+    ).not.toThrow();
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'mail.realtime.failed',
+        userId: 'user-1',
+        err: { type: 'Error', message: error.message, stack: error.stack },
+      }),
       'Failed to publish Mail realtime event.',
-      error,
     );
-
-    consoleError.mockRestore();
+    logger.error.mockImplementation(() => {
+      throw new Error('transport unavailable');
+    });
+    expect(() =>
+      notifyMailMessageChange(notifier, 'user-1', logger),
+    ).not.toThrow();
   });
 });

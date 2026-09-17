@@ -9,7 +9,6 @@ import {
 import { toSyncRunView } from '../views.js';
 import { requireActiveAccount, requireOwnedAccount } from './access.js';
 import { type DefaultMailServiceDependencies } from './dependencies.js';
-import { boundedInteger } from './input.js';
 
 export class MailSyncService {
   public constructor(
@@ -29,6 +28,11 @@ export class MailSyncService {
       context,
       input.accountId,
     );
+    if (
+      input.receivedAfter !== undefined &&
+      !Number.isFinite(Date.parse(input.receivedAfter))
+    )
+      throw new TypeError('Mail synchronization start date is invalid.');
     const active = await this.dependencies.store.findActiveSyncRun(
       input.accountId,
     );
@@ -49,7 +53,6 @@ export class MailSyncService {
         receivedAfter:
           input.receivedAfter ??
           (mode === 'initial' ? account.initialSyncReceivedAfter : undefined),
-        maxMessages: boundedInteger(input.maxMessages, 10_000, 1, 100_000),
         batchSize: this.syncBatchSize,
       },
     });
@@ -101,7 +104,6 @@ export class MailSyncService {
       accountId: run.accountId,
       mode: run.mode,
       receivedAfter: run.policy.receivedAfter,
-      maxMessages: run.policy.maxMessages,
     });
   }
 

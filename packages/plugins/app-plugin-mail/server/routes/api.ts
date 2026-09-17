@@ -740,6 +740,17 @@ export const mailApiRoutes: AppApiRouteContribution<AppPluginApplication> =
         return new Response(content.stream, { headers });
       },
     );
+    routes.post(
+      '/accounts/:accountId/messages/:messageId/content/retry',
+      async (context) => {
+        const message = await mail.retryMessageContent(
+          operationContext(context),
+          context.req.param('accountId'),
+          context.req.param('messageId'),
+        );
+        return context.json({ data: message });
+      },
+    );
     routes.get('/accounts/:accountId/messages/:messageId', async (context) => {
       const t = getRequestTranslator(context, MAIL_NAMESPACE);
       const message = await mail.getMessage(

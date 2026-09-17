@@ -86,3 +86,9 @@ A failed IMAP append preserves the accepted delivery status and records `IMAP_SE
 ## Partial SMTP delivery
 
 If SMTP accepts some recipients and rejects others, the submission remains `accepted` to prevent duplicate delivery to the accepted recipients. Its error has code `SMTP_RECIPIENTS_REJECTED`, `retryable: false`, and `recipients.accepted` / `recipients.rejected` address lists. The composer and delivery logs show partial delivery; only rejected addresses should be used for a new send. Raw SMTP diagnostics are not included in public responses.
+
+## Interrupted synchronization and large messages
+
+Initial synchronization has no total message cap and persists progress after every batch. History reads alternate with incremental UID reads. Service restarts recover abandoned tasks after their lease or delivery grace period expires. A UIDVALIDITY change restarts the configured history range; a stale locator cannot download a different message with a reused UID.
+
+Messages larger than 16 MiB save envelope, size, and MIME attachment metadata without parsing the truncated body. They remain visible with a deferred-content notice. Owners explicitly load the full content from the message detail, outside the background sync size cap; this can consume memory proportional to the message size. Malformed messages retain a failed-content record for independent retry. Network or authentication failures still stop the affected batch instead of advancing its cursor.

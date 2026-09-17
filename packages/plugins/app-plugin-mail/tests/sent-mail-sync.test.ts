@@ -211,6 +211,158 @@ describe('post-send mailbox synchronization', () => {
     expect(adapter.sendMessage).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['local-draft:1', 'remote-1'])(
+    'shows accepted draft %s in Sent before background sync and does not restore a stale remote draft',
+    async (draftProviderId) => {
+      await store.commitSyncBatch({
+        accountId: 'account-1',
+        nextCursor: { value: 'baseline' },
+        folders: [
+          {
+            providerFolderId: 'Sent',
+            name: 'Sent',
+            type: 'sent',
+            kind: 'folder',
+          },
+        ],
+        messages: [],
+        deletedProviderMessageIds: [],
+      });
+      const draft = await store.saveMessage('account-1', {
+        ...sent,
+        providerMessageId: draftProviderId,
+        providerDraftMessageId: 'remote-1',
+        providerFolderIds: ['__nocobase_local_drafts__'],
+        draft: true,
+      });
+      const request = { ...input, draftMessageId: draft.id };
+      expect(
+        await service.sendMessage({ actorId: 'user-1' }, request),
+      ).toMatchObject({ status: 'accepted' });
+      const first = await service.listMessages(
+        { actorId: 'user-1' },
+        { folderIds: ['Sent'] },
+      );
+      expect(first.items).toHaveLength(1);
+      expect(first.items[0]).toMatchObject({
+        draft: false,
+        subject: input.subject,
+      });
+      await store.commitSyncBatch({
+        accountId: 'account-1',
+        nextCursor: { value: 'baseline' },
+        folders: [],
+        deletedProviderMessageIds: [],
+        messages: [{ ...sent, draft: true, providerFolderIds: ['Drafts'] }],
+      });
+      expect(
+        (
+          await service.listMessages(
+            { actorId: 'user-1' },
+            { folderIds: ['Sent'] },
+          )
+        ).items,
+      ).toHaveLength(1);
+      await drain();
+      expect(
+        (
+          await service.listMessages(
+            { actorId: 'user-1' },
+            { folderIds: ['Sent'] },
+          )
+        ).items,
+      ).toHaveLength(1);
+      expect(adapter.sendMessage).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([false, true])(
+    'lists a local draft only once when the remote copy already exists: %s',
+    async (remoteFirst) => {
+      if (remoteFirst)
+        await store.saveMessage('account-1', { ...sent, draft: true });
+      const draft = await store.saveMessage('account-1', {
+        ...sent,
+        providerMessageId: 'local-draft:1',
+        providerDraftMessageId: 'remote-1',
+        draft: true,
+        providerFolderIds: ['__nocobase_local_drafts__'],
+        subject: 'Local edits',
+      });
+      await store.commitSyncBatch({
+        accountId: 'account-1',
+        nextCursor: { value: 'baseline' },
+        folders: [
+          {
+            providerFolderId: 'Drafts',
+            name: 'Drafts',
+            type: 'drafts',
+            kind: 'folder',
+          },
+        ],
+        deletedProviderMessageIds: [],
+        messages: [{ ...sent, draft: true, providerFolderIds: ['Drafts'] }],
+      });
+      const drafts = await service.listMessages(
+        { actorId: 'user-1' },
+        { folderIds: ['__nocobase_local_drafts__'], withTotal: true },
+      );
+      expect(drafts.items).toHaveLength(1);
+      expect(drafts.items[0]).toMatchObject({
+        id: draft.id,
+        subject: 'Local edits',
+      });
+      expect(drafts.total).toBe(1);
+      const remoteFolder = await service.listMessages(
+        { actorId: 'user-1' },
+        { folderIds: ['Drafts'], withTotal: true },
+      );
+      expect(remoteFolder.items).toHaveLength(1);
+      expect(remoteFolder.items[0].id).toBe(draft.id);
+      expect(remoteFolder.total).toBe(1);
+    },
+  );
+
+  it('cleans up the draft and retains accepted delivery when saving the local sent copy fails', async () => {
+    await store.commitSyncBatch({
+      accountId: 'account-1',
+      folders: [
+        {
+          providerFolderId: 'Sent',
+          name: 'Sent',
+          type: 'sent',
+          kind: 'folder',
+        },
+      ],
+      messages: [],
+      deletedProviderMessageIds: [],
+      nextCursor: { value: 'baseline' },
+    });
+    const draft = await service.saveDraft({ actorId: 'user-1' }, input);
+    vi.spyOn(store, 'saveMessage').mockRejectedValueOnce(
+      new Error('sent copy failed'),
+    );
+    expect(
+      await service.sendMessage(
+        { actorId: 'user-1' },
+        { ...input, draftMessageId: draft.id },
+      ),
+    ).toMatchObject({ status: 'accepted' });
+    expect(
+      await store.getMessage('user-1', 'account-1', draft.id),
+    ).toBeUndefined();
+    expect(runtime.kick).toHaveBeenCalled();
+    await drain();
+    expect(
+      (
+        await service.listMessages(
+          { actorId: 'user-1' },
+          { folderIds: ['Sent'] },
+        )
+      ).items,
+    ).toHaveLength(1);
+  });
+
   it('requests another pass when a sync was already in progress', async () => {
     await store.commitSyncBatch({
       accountId: 'account-1',

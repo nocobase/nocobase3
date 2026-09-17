@@ -76,6 +76,126 @@ describe('IMAP/SMTP mail Provider', () => {
     mocks.imap.fetch.mockImplementation(async function* () {});
   });
 
+  it('keeps oversized and malformed messages visible without blocking later UIDs', async () => {
+    mocks.imap.list.mockResolvedValue([{ path: 'INBOX', name: 'Inbox' }]);
+    mocks.imap.status.mockResolvedValue({ uidNext: 4, uidValidity: 1n });
+    mocks.imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fetchedMessage(1),
+        size: 20 * 1024 * 1024,
+        bodyStructure: {
+          type: 'application/pdf',
+          disposition: 'attachment',
+          dispositionParameters: { filename: 'large.pdf' },
+          size: 19 * 1024 * 1024,
+        },
+      };
+      yield { ...fetchedMessage(2), source: 123 };
+      yield fetchedMessage(3);
+    });
+    const provider = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const result = await provider.listChanges!({ limit: 100 });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.messages).toMatchObject([
+      {
+        contentStatus: 'deferred',
+        size: 20 * 1024 * 1024,
+        attachments: [{ fileName: 'large.pdf' }],
+      },
+      { contentStatus: 'failed', contentError: 'IMAP_MESSAGE_PARSE_FAILED' },
+      { contentStatus: 'complete' },
+    ]);
+    expect(
+      JSON.parse(String(result.value.nextCursor.value)).folders.INBOX.uidNext,
+    ).toBe(4);
+  });
+
+  it('downloads large content on demand without the background sync size cap', async () => {
+    mocks.imap.fetchOne.mockResolvedValue({
+      ...fetchedMessage(1),
+      size: 20 * 1024 * 1024,
+    });
+    const provider = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    await expect(
+      provider.getMessage!(
+        encodeMessageLocator({ folder: 'INBOX', uidValidity: '1', uid: 1 }),
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: { contentStatus: 'complete' },
+    });
+    expect(mocks.imap.fetchOne).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ source: true }),
+      { uid: true },
+    );
+  });
+
+  it('uses receipt time for an inclusive history boundary despite a misleading Date header', async () => {
+    mocks.imap.list.mockResolvedValue([{ path: 'INBOX', name: 'Inbox' }]);
+    mocks.imap.search.mockResolvedValue([1, 2]);
+    mocks.imap.fetch.mockImplementation(async function* () {
+      yield {
+        ...fetchedMessage(1),
+        internalDate: new Date('2026-09-01T00:00:00Z'),
+        source: Buffer.from(
+          'Date: Mon, 1 Jan 2024 00:00:00 +0000\r\nSubject: boundary\r\n\r\nBody',
+        ),
+      };
+      yield {
+        ...fetchedMessage(2),
+        internalDate: new Date('2026-08-31T23:59:59Z'),
+      };
+    });
+    const provider = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const result = await provider.listMessages!({
+      limit: 100,
+      receivedAfter: '2026-09-01T00:00:00Z',
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { messages: [{ subject: 'boundary' }] },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.messages).toHaveLength(1);
+  });
+
+  it('advances only through a fully fetched UID range when responses arrive out of order', async () => {
+    mocks.imap.list.mockResolvedValue([{ path: 'INBOX', name: 'Inbox' }]);
+    mocks.imap.status.mockResolvedValue({ uidNext: 5, uidValidity: 1n });
+    mocks.imap.fetch.mockImplementation(async function* () {
+      yield fetchedMessage(2);
+      yield fetchedMessage(1);
+    });
+    const provider = await imapSmtpMailProviderDefinition.createAdapter(
+      context(),
+      config(),
+      account(),
+    );
+    const result = await provider.listChanges!({ limit: 2 });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.messages).toHaveLength(2);
+    expect(
+      JSON.parse(String(result.value.nextCursor.value)).folders.INBOX.uidNext,
+    ).toBe(3);
+    expect(result.value.hasMore).toBe(true);
+    expect(mocks.imap.fetch).toHaveBeenCalledWith('1:2', expect.any(Object), {
+      uid: true,
+    });
+  });
+
   it('rejects ordinary deletion without opening or expunging the mailbox', async () => {
     const adapter = await imapSmtpMailProviderDefinition.createAdapter(
       context(),
@@ -179,7 +299,7 @@ describe('IMAP/SMTP mail Provider', () => {
       uids: number[] | string,
     ) {
       const range = String(uids);
-      for (const uid of range === '1:3' ? [1] : [2, 3]) {
+      for (const uid of range === '1' ? [1] : [2, 3]) {
         yield fetchedMessage(uid);
       }
     });

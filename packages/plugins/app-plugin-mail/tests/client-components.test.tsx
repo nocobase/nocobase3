@@ -843,7 +843,9 @@ describe('[UI][SEC] mail client components and capability states', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Note' })).toBeNull();
     const more = screen.getByRole('button', { name: 'More actions' });
-    expect(more).toHaveAttribute('title', 'More actions');
+    fireEvent.mouseEnter(more);
+    fireEvent.mouseMove(more);
+    expect(await screen.findByText('More actions')).toBeVisible();
     fireEvent.click(more);
     const todo = await screen.findByRole('menuitemcheckbox', {
       name: 'Mark as to do',
@@ -913,7 +915,7 @@ describe('[UI][SEC] mail client components and capability states', () => {
     expect(document.querySelector('script')).not.toBeInTheDocument();
   });
 
-  it('dispatches conversation reply, forward, draft, and attachment actions', () => {
+  it('dispatches conversation reply, forward, draft, and attachment actions', async () => {
     const reply = vi.fn();
     const forward = vi.fn();
     const editDraft = vi.fn();
@@ -969,7 +971,11 @@ describe('[UI][SEC] mail client components and capability states', () => {
       <MailConversationView {...props} messages={[message]} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    const replyButton = screen.getByRole('button', { name: 'Reply' });
+    fireEvent.mouseEnter(replyButton);
+    fireEvent.mouseMove(replyButton);
+    expect(await screen.findByText('Reply')).toBeVisible();
+    fireEvent.click(replyButton);
     fireEvent.click(screen.getByRole('button', { name: 'Forward' }));
     fireEvent.click(
       screen.getByRole('button', { name: 'Download report.pdf' }),
@@ -987,7 +993,11 @@ describe('[UI][SEC] mail client components and capability states', () => {
         messages={[{ ...message, draft: true }]}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Edit draft' }));
+    const draftButton = screen.getByRole('button', { name: 'Edit draft' });
+    fireEvent.mouseEnter(draftButton);
+    fireEvent.mouseMove(draftButton);
+    expect(await screen.findByText('Edit draft')).toBeVisible();
+    fireEvent.click(draftButton);
     expect(editDraft).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'message-1', draft: true }),
     );

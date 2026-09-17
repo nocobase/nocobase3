@@ -19,7 +19,7 @@ export class MailMessagesService {
   public constructor(
     private readonly dependencies: Pick<
       DefaultMailServiceDependencies,
-      'store' | 'messageChangeNotifier' | 'adapters'
+      'store' | 'messageChangeNotifier' | 'logger' | 'adapters'
     >,
   ) {}
 
@@ -64,6 +64,7 @@ export class MailMessagesService {
     notifyMailMessageChange(
       this.dependencies.messageChangeNotifier,
       context.actorId,
+      this.dependencies.logger,
     );
     return updated;
   }
@@ -77,6 +78,45 @@ export class MailMessagesService {
     input: MailListMessagesInput,
   ): Promise<MailPage<MailMessageSummary>> {
     return this.dependencies.store.listMessages(context.actorId, input);
+  }
+
+  public async retryMessageContent(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage> {
+    const { account, message } = await requireOwnedMessage(
+      this.dependencies.store,
+      context,
+      accountId,
+      messageId,
+    );
+    if (!message.contentStatus || message.contentStatus === 'complete')
+      return message;
+    const adapter = await this.dependencies.adapters.resolve(
+      account,
+      context.signal,
+    );
+    try {
+      if (!adapter.getMessage)
+        throw new Error('The mail Provider cannot load message content.');
+      const refreshed = assertProviderResult(
+        await adapter.getMessage(message.providerMessageId, context.signal),
+      );
+      const saved = await this.dependencies.store.saveMessageContent(
+        accountId,
+        messageId,
+        refreshed,
+      );
+      notifyMailMessageChange(
+        this.dependencies.messageChangeNotifier,
+        context.actorId,
+        this.dependencies.logger,
+      );
+      return saved;
+    } finally {
+      await closeAdapter(adapter);
+    }
   }
 
   public getMessage(
@@ -133,6 +173,7 @@ export class MailMessagesService {
       notifyMailMessageChange(
         this.dependencies.messageChangeNotifier,
         context.actorId,
+        this.dependencies.logger,
       );
       return updated;
     }
@@ -181,6 +222,7 @@ export class MailMessagesService {
       notifyMailMessageChange(
         this.dependencies.messageChangeNotifier,
         context.actorId,
+        this.dependencies.logger,
       );
       return updated;
     } finally {
@@ -227,6 +269,7 @@ export class MailMessagesService {
       notifyMailMessageChange(
         this.dependencies.messageChangeNotifier,
         context.actorId,
+        this.dependencies.logger,
       );
       return updated;
     } finally {
@@ -273,6 +316,7 @@ export class MailMessagesService {
         notifyMailMessageChange(
           this.dependencies.messageChangeNotifier,
           context.actorId,
+          this.dependencies.logger,
         );
       }
       return;
@@ -305,6 +349,7 @@ export class MailMessagesService {
           notifyMailMessageChange(
             this.dependencies.messageChangeNotifier,
             context.actorId,
+            this.dependencies.logger,
           );
           return;
         }
@@ -327,6 +372,7 @@ export class MailMessagesService {
         notifyMailMessageChange(
           this.dependencies.messageChangeNotifier,
           context.actorId,
+          this.dependencies.logger,
         );
       }
     } finally {

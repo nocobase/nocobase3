@@ -3,6 +3,7 @@ import {
   type FetchMessageObject,
   type ListResponse,
   type MailboxObject,
+  type MessageStructureObject,
 } from 'imapflow';
 import { type Transporter } from 'nodemailer';
 import MailComposer from 'nodemailer/lib/mail-composer/index.js';
@@ -25,6 +26,7 @@ import type {
   MailProviderSendResult,
   MailSyncCursor,
   NormalizedMailFolder,
+  NormalizedMailAttachment,
   NormalizedMailMessage,
 } from '../../types.js';
 
@@ -38,10 +40,10 @@ import { IMAP_SMTP_CAPABILITIES, MAX_IMAP_MESSAGE_BYTES } from './constants.js';
 import { createImapClient, createSmtpTransport } from './connection.js';
 import {
   encodeHistoryCursor,
+  encodeAttachmentLocator,
   encodeMessageLocator,
   folderCursor,
   parseHistoryCursor,
-  parseMessageLocator,
   parseSyncCursor,
   rangeFor,
   requireAttachmentLocator,
@@ -125,13 +127,29 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
       const folders = input.providerFolderIds?.length
         ? [...input.providerFolderIds]
         : (await this.listMailboxes()).map((mailbox) => mailbox.path);
-      const position = parseHistoryCursor(input.cursor);
+      let position: ReturnType<typeof parseHistoryCursor>;
+      try {
+        position = parseHistoryCursor(input.cursor);
+      } catch {
+        return failure(
+          'IMAP_SYNC_CURSOR_INVALID',
+          'Invalid history cursor; rescan is required.',
+          'provider',
+          false,
+        );
+      }
       const limit = Math.max(1, input.limit ?? 100);
       const messages: NormalizedMailMessage[] = [];
       let folderIndex = position.folderIndex;
       let upperUid = position.upperUid;
       let legacyOffset = position.legacyOffset;
-      while (folderIndex < folders.length && messages.length < limit) {
+      let scannedRanges = 0;
+      while (
+        folderIndex < folders.length &&
+        messages.length < limit &&
+        scannedRanges < 10
+      ) {
+        scannedRanges += 1;
         throwIfAborted(input.signal);
         const folder = folders[folderIndex];
         const mailbox = await (
@@ -139,6 +157,15 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
         ).mailboxOpen(folder, {
           readOnly: true,
         });
+        const baseline = parseSyncCursor(input.baselineCursor).folders[folder];
+        if (baseline && baseline.uidValidity !== String(mailbox.uidValidity)) {
+          return failure(
+            'IMAP_SYNC_CURSOR_INVALID',
+            'IMAP mailbox generation changed during history sync.',
+            'provider',
+            false,
+          );
+        }
         const remaining = limit - messages.length;
         let selected: number[];
         if (legacyOffset !== undefined) {
@@ -177,7 +204,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
           if (
             input.receivedAfter &&
             message.receivedAt &&
-            message.receivedAt < input.receivedAfter
+            Date.parse(message.receivedAt) < Date.parse(input.receivedAfter)
           ) {
             continue;
           }
@@ -251,31 +278,32 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
           };
         }
         const start = old?.uidNext ?? 1;
-        const end = Math.max(start - 1, current.uidNext - 1);
+        const end = Math.min(
+          current.uidNext - 1,
+          start + limit - messages.length - 1,
+        );
         let nextUid = start;
         if (start <= end) {
-          const remaining = limit - messages.length;
-          await (
+          const selected = await (
             await this.imap()
           ).mailboxOpen(mailbox.path, { readOnly: true });
+          if (String(selected.uidValidity) !== current.uidValidity)
+            return failure(
+              'IMAP_SYNC_CURSOR_INVALID',
+              'Mailbox generation changed before fetching.',
+              'provider',
+              false,
+            );
           const fetched = await this.fetchMessages(
             mailbox.path,
             current.uidValidity,
             rangeFor(start, end),
             input.signal,
-            remaining,
           );
           messages.push(...fetched);
-          if (fetched.length < remaining) {
-            // IMAP UIDs are sparse: a short fetch can simply mean that the
-            // requested range contains holes, not that the page is full.
-            nextUid = end + 1;
-          } else {
-            const lastUid = fetched.at(-1)?.providerMessageId;
-            const locator = lastUid ? parseMessageLocator(lastUid) : undefined;
-            nextUid = locator ? locator.uid + 1 : end + 1;
-          }
-          if (nextUid <= end) hasMore = true;
+          // Complete the bounded UID range before advancing, regardless of response order or holes.
+          nextUid = end + 1;
+          if (nextUid < current.uidNext) hasMore = true;
         } else {
           nextUid = current.uidNext;
         }
@@ -323,6 +351,14 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
       ).mailboxOpen(locator.folder, {
         readOnly: true,
       });
+      if (String(mailbox.uidValidity) !== locator.uidValidity) {
+        return failure(
+          'IMAP_SYNC_CURSOR_INVALID',
+          'The mailbox generation changed; synchronization must recover first.',
+          'provider',
+          false,
+        );
+      }
       const message = await (
         await this.imap()
       ).fetchOne(
@@ -333,7 +369,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
           flags: true,
           internalDate: true,
           envelope: true,
-          source: { maxLength: MAX_IMAP_MESSAGE_BYTES },
+          source: true,
         },
         { uid: true },
       );
@@ -344,14 +380,6 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
           'provider',
           false,
         );
-      if ((message.size ?? 0) > MAX_IMAP_MESSAGE_BYTES) {
-        return failure(
-          'IMAP_MESSAGE_TOO_LARGE',
-          'IMAP message exceeds the configured message size limit.',
-          'content',
-          false,
-        );
-      }
       return {
         ok: true,
         value: await this.normalizeMessage(
@@ -373,11 +401,16 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
     try {
       throwIfAborted(signal);
       const locator = requireAttachmentLocator(providerAttachmentId);
-      await (
+      const selected = await (
         await this.imap()
-      ).mailboxOpen(locator.folder, {
-        readOnly: true,
-      });
+      ).mailboxOpen(locator.folder, { readOnly: true });
+      if (String(selected.uidValidity) !== locator.uidValidity)
+        return failure(
+          'IMAP_SYNC_CURSOR_INVALID',
+          'Mailbox generation changed before downloading.',
+          'provider',
+          false,
+        );
       const message = await (
         await this.imap()
       ).fetchOne(
@@ -385,7 +418,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
         {
           uid: true,
           size: true,
-          source: { maxLength: MAX_IMAP_MESSAGE_BYTES },
+          source: true,
         },
         { uid: true },
       );
@@ -394,14 +427,6 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
           'IMAP_ATTACHMENT_NOT_FOUND',
           'IMAP message source was not found.',
           'provider',
-          false,
-        );
-      }
-      if ((message.size ?? 0) > MAX_IMAP_MESSAGE_BYTES) {
-        return failure(
-          'IMAP_MESSAGE_TOO_LARGE',
-          'IMAP message exceeds the configured message size limit.',
-          'content',
           false,
         );
       }
@@ -723,7 +748,6 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
     uidValidity: string,
     uids: number[] | string,
     signal?: AbortSignal,
-    limit?: number,
   ): Promise<NormalizedMailMessage[]> {
     if (typeof uids === 'string' && uids.length === 0) return [];
     const messages: NormalizedMailMessage[] = [];
@@ -736,22 +760,78 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
         flags: true,
         internalDate: true,
         envelope: true,
+        bodyStructure: true,
         source: { maxLength: MAX_IMAP_MESSAGE_BYTES },
       },
       { uid: true },
     )) {
       throwIfAborted(signal);
+      let normalized: NormalizedMailMessage;
       if ((message.size ?? 0) > MAX_IMAP_MESSAGE_BYTES) {
-        const error = new Error(
-          'IMAP message exceeds the configured message size limit.',
-        );
-        Object.assign(error, { code: 'IMAP_MESSAGE_TOO_LARGE' });
-        throw error;
+        normalized = {
+          ...(await this.normalizeMessage(folder, uidValidity, {
+            ...message,
+            source: undefined,
+          })),
+          contentStatus: 'deferred',
+          contentError: 'IMAP_MESSAGE_TOO_LARGE',
+        };
+      } else {
+        try {
+          normalized = await this.normalizeMessage(
+            folder,
+            uidValidity,
+            message,
+          );
+        } catch {
+          throwIfAborted(signal);
+          normalized = {
+            ...(await this.normalizeMessage(folder, uidValidity, {
+              ...message,
+              source: undefined,
+            })),
+            contentStatus: 'failed',
+            contentError: 'IMAP_MESSAGE_PARSE_FAILED',
+          };
+        }
       }
-      messages.push(await this.normalizeMessage(folder, uidValidity, message));
-      if (limit !== undefined && messages.length >= limit) break;
+      messages.push(normalized);
     }
     return messages;
+  }
+
+  private structureAttachments(
+    folder: string,
+    uidValidity: string,
+    uid: number,
+    structure?: MessageStructureObject,
+  ): NormalizedMailAttachment[] {
+    const attachments: NormalizedMailAttachment[] = [];
+    const visit = (part: MessageStructureObject): void => {
+      const name =
+        part.dispositionParameters?.filename ?? part.parameters?.name;
+      if (
+        part.disposition === 'attachment' ||
+        name ||
+        (part.id && !part.type.startsWith('text/'))
+      ) {
+        attachments.push({
+          providerAttachmentId: encodeAttachmentLocator({
+            folder,
+            uidValidity,
+            uid,
+            attachment: attachments.length,
+          }),
+          fileName: name ?? 'attachment',
+          contentType: part.type,
+          size: part.size ?? 0,
+          inline: part.disposition === 'inline',
+          contentId: part.id?.replace(/^<|>$/g, ''),
+        });
+      } else part.childNodes?.forEach(visit);
+    };
+    if (structure) visit(structure);
+    return attachments;
   }
 
   private async normalizeMessage(
@@ -777,7 +857,7 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
     const replyTo = parsed
       ? addresses(parsed.replyTo)
       : envelopeAddresses(message.envelope?.replyTo);
-    const receivedAt = toIsoDate(parsed?.date ?? message.internalDate);
+    const receivedAt = toIsoDate(message.internalDate ?? parsed?.date);
     const attachments = parsed
       ? parsed.attachments.map((attachment, index) =>
           normalizeAttachment(
@@ -788,7 +868,12 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
             index,
           ),
         )
-      : [];
+      : this.structureAttachments(
+          folder,
+          uidValidity,
+          message.uid,
+          message.bodyStructure,
+        );
     const flags = message.flags ?? new Set<string>();
     const providerMessageId = encodeMessageLocator({
       folder,
@@ -797,6 +882,8 @@ export class ImapSmtpAdapter implements MailProviderAdapter {
     });
     return {
       providerMessageId,
+      contentStatus: 'complete',
+      size: message.size,
       internetMessageId: parsed?.messageId ?? message.envelope?.messageId,
       providerFolderIds: [folder],
       from,

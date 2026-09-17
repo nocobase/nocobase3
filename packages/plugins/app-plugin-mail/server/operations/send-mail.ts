@@ -1,3 +1,4 @@
+import { mailLogError, writeMailLog, type MailLogger } from '../logging.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 import type {
@@ -11,6 +12,8 @@ import type {
   MailService,
   MailStore,
   MailSubmission,
+  MailIdentity,
+  NormalizedMailAttachment,
 } from '../types.js';
 import {
   notifyMailMessageChange,
@@ -18,6 +21,7 @@ import {
 } from '../realtime.js';
 
 export interface SendMailOperationDependencies {
+  readonly logger?: MailLogger;
   readonly store: MailStore;
   readonly adapters: MailProviderAdapterResolver;
   readonly outbox?: { kick(): void };
@@ -41,6 +45,60 @@ export class SendMailOperation {
     context: MailOperationContext,
     input: MailComposeInput,
     options: SendMailExecutionOptions = {},
+  ): Promise<MailSubmission> {
+    const startedAt = Date.now();
+    const fields = {
+      accountId: input.accountId,
+      actorId: context.actorId,
+      scheduled: options.scheduledDelivery === true,
+    };
+    try {
+      const result = await this.executeSubmission(context, input, options);
+      writeMailLog(
+        this.dependencies.logger,
+        result.status === 'failed' || result.status === 'unknown'
+          ? 'error'
+          : result.error
+            ? 'warn'
+            : 'info',
+        {
+          ...fields,
+          event: 'mail.send.result',
+          submissionId: result.id,
+          status: result.status,
+          durationMs: Date.now() - startedAt,
+          ...(result.error
+            ? {
+                errorCode: result.error.code,
+                category: result.error.category,
+                retryable: result.error.retryable,
+                err: mailLogError(result.error),
+              }
+            : {}),
+        },
+        'Mail submission result.',
+      );
+      return result;
+    } catch (error) {
+      writeMailLog(
+        this.dependencies.logger,
+        'error',
+        {
+          ...fields,
+          event: 'mail.send.failed',
+          durationMs: Date.now() - startedAt,
+          err: mailLogError(error),
+        },
+        'Mail submission failed.',
+      );
+      throw error;
+    }
+  }
+
+  private async executeSubmission(
+    context: MailOperationContext,
+    input: MailComposeInput,
+    options: SendMailExecutionOptions,
   ): Promise<MailSubmission> {
     if (input.inReplyToMessageId && input.forwardOfMessageId) {
       throw new TypeError('A message cannot be both a reply and a forward.');
@@ -174,6 +232,17 @@ export class SendMailOperation {
       );
     }
 
+    writeMailLog(
+      this.dependencies.logger,
+      'info',
+      {
+        event: 'mail.send.started',
+        accountId: account.id,
+        submissionId: submission.id,
+        provider: account.provider.type,
+      },
+      'Mail submission started.',
+    );
     let adapter;
     try {
       adapter = await this.dependencies.adapters.resolve(
@@ -181,6 +250,17 @@ export class SendMailOperation {
         context.signal,
       );
     } catch (error) {
+      writeMailLog(
+        this.dependencies.logger,
+        'error',
+        {
+          event: 'mail.send.exception',
+          accountId: account.id,
+          submissionId: submission.id,
+          err: mailLogError(error),
+        },
+        'Mail Provider operation failed.',
+      );
       return this.dependencies.store.finishSubmission(
         {
           ...submission,
@@ -233,23 +313,77 @@ export class SendMailOperation {
         );
         // Cleanup and refresh must never turn a confirmed delivery into a retry.
         try {
-          this.dependencies.outbox?.kick();
+          if (result.providerMessageId && !result.sentCopyError) {
+            await this.saveAcceptedMessage(
+              context,
+              input,
+              identity,
+              providerMessage,
+              result.providerMessageId,
+              result.internetMessageId,
+            );
+          }
+        } catch (error) {
+          writeMailLog(
+            this.dependencies.logger,
+            'error',
+            {
+              event: 'mail.send.sent_copy_failed',
+              accountId: account.id,
+              submissionId: submission.id,
+              err: mailLogError(error),
+            },
+            'Mail was accepted but its local sent copy could not be saved.',
+          );
+        }
+        try {
           if (input.draftMessageId) {
-            const deleted = await this.dependencies.store.deleteMessage(
+            const draft = await this.dependencies.store.getMessage(
+              context.actorId,
               account.id,
               input.draftMessageId,
             );
+            const deleted =
+              draft?.draft &&
+              (await this.dependencies.store.deleteMessage(
+                account.id,
+                input.draftMessageId,
+              ));
             if (deleted)
               notifyMailMessageChange(
                 this.dependencies.messageChangeNotifier,
                 context.actorId,
+                this.dependencies.logger,
               );
           }
         } catch (error) {
-          console.error(
+          writeMailLog(
+            this.dependencies.logger,
+            'error',
+            {
+              event: 'mail.send.cleanup_failed',
+              accountId: account.id,
+              submissionId: submission.id,
+              err: mailLogError(error),
+            },
             'Mail was accepted but post-send cleanup failed.',
-            error,
           );
+        } finally {
+          try {
+            this.dependencies.outbox?.kick();
+          } catch (error) {
+            writeMailLog(
+              this.dependencies.logger,
+              'error',
+              {
+                event: 'mail.send.sync_kick_failed',
+                accountId: account.id,
+                submissionId: submission.id,
+                err: mailLogError(error),
+              },
+              'Mail was accepted but the background refresh could not be started.',
+            );
+          }
         }
         return accepted;
       }
@@ -270,6 +404,17 @@ export class SendMailOperation {
         leaseToken,
       );
     } catch (error) {
+      writeMailLog(
+        this.dependencies.logger,
+        'error',
+        {
+          event: 'mail.send.exception',
+          accountId: account.id,
+          submissionId: submission.id,
+          err: mailLogError(error),
+        },
+        'Mail Provider operation failed.',
+      );
       return this.dependencies.store.finishSubmission(
         {
           ...submission,
@@ -289,6 +434,87 @@ export class SendMailOperation {
     } finally {
       await closeQuietly(adapter);
     }
+  }
+
+  private async saveAcceptedMessage(
+    context: MailOperationContext,
+    input: MailComposeInput,
+    identity: MailIdentity,
+    message: MailProviderMessageInput,
+    providerMessageId: string,
+    internetMessageId?: string,
+  ): Promise<void> {
+    const folders = await this.dependencies.store.listFolders(input.accountId);
+    const sentFolder = folders.find((folder) => folder.type === 'sent');
+    if (!sentFolder) return;
+    const draft = input.draftMessageId
+      ? await this.dependencies.store.getMessage(
+          context.actorId,
+          input.accountId,
+          input.draftMessageId,
+        )
+      : undefined;
+    const attachments: NormalizedMailAttachment[] = (draft?.attachments ?? [])
+      .filter(
+        (attachment) =>
+          input.retainedAttachmentIds === undefined ||
+          input.retainedAttachmentIds.includes(attachment.id),
+      )
+      .map(
+        ({
+          id: _id,
+          messageId: _messageId,
+          fileReference: _fileReference,
+          ...attachment
+        }) => attachment,
+      );
+    for (const id of input.attachmentIds ?? []) {
+      if (
+        attachments.some((attachment) => attachment.outboundAttachmentId === id)
+      )
+        continue;
+      const metadata = await this.dependencies.store.getOutboundAttachment(
+        context.actorId,
+        id,
+      );
+      if (metadata)
+        attachments.push({
+          providerAttachmentId: id,
+          outboundAttachmentId: id,
+          fileName: metadata.fileName,
+          contentType: metadata.contentType,
+          size: metadata.size,
+          inline: false,
+        });
+    }
+    await this.dependencies.store.saveMessage(input.accountId, {
+      providerMessageId,
+      providerFolderIds: [sentFolder.providerFolderId],
+      internetMessageId: internetMessageId ?? message.internetMessageId,
+      providerConversationId:
+        message.providerConversationId ?? draft?.conversationId,
+      from: { address: identity.address, name: identity.displayName },
+      to: message.to,
+      cc: message.cc,
+      bcc: message.bcc,
+      replyTo: [],
+      inReplyTo: message.inReplyTo,
+      references: message.references,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+      preview: message.text.slice(0, 240),
+      sentAt: new Date().toISOString(),
+      read: true,
+      starred: false,
+      draft: false,
+      attachments,
+    });
+    notifyMailMessageChange(
+      this.dependencies.messageChangeNotifier,
+      context.actorId,
+      this.dependencies.logger,
+    );
   }
 
   private async localAttachmentId(

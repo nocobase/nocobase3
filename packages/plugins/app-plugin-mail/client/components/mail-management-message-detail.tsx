@@ -162,6 +162,18 @@ export function MailManagementMessageDetail({
                   )}
                 </dd>
               </dl>
+              {message.contentStatus && message.contentStatus !== 'complete' ? (
+                <p
+                  className='rounded-lg border bg-muted p-3 text-sm'
+                  role='status'
+                >
+                  {t(
+                    message.contentStatus === 'deferred'
+                      ? 'content.deferred'
+                      : 'content.failed',
+                  )}
+                </p>
+              ) : null}
               <div className='border-t pt-4'>
                 {message.html ? (
                   <MailHtmlBody

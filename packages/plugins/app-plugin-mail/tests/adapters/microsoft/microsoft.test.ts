@@ -99,6 +99,11 @@ describe('Microsoft Mail Provider', () => {
       expect(String(fetchMock.mock.calls[1][0])).toContain(
         '/messages/inline-message/attachments?',
       );
+      expect(
+        new URL(String(fetchMock.mock.calls[1][0])).searchParams
+          .get('$select')
+          ?.split(','),
+      ).toContain('microsoft.graph.fileAttachment/contentId');
     },
   );
 
@@ -647,6 +652,84 @@ describe('Microsoft Mail Provider', () => {
       error: { code: 'MICROSOFT_HTTP_503', retryable: false },
     });
   });
+
+  it.each(['draft', 'forward'] as const)(
+    'sends an attachment-free %s without selecting file-only properties on the attachment base type',
+    async (mode) => {
+      const credentials = memoryVault();
+      await credentials.putAt('credential-1', {
+        provider: 'microsoft',
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        scopes: [],
+        tokenType: 'Bearer',
+      });
+      const fetchMock = vi.fn<typeof fetch>(async (url) => {
+        const request = new URL(String(url));
+        if (request.pathname.endsWith('/attachments')) {
+          const select = request.searchParams.get('$select')?.split(',') ?? [];
+          if (select.includes('contentId')) {
+            return Response.json(
+              {
+                error: {
+                  code: 'RequestBroker--ParseUri',
+                  message:
+                    "Parsing OData Select and Expand failed: Could not find a property named 'contentId' on type 'microsoft.graph.attachment'.",
+                },
+              },
+              { status: 400 },
+            );
+          }
+          return Response.json({ value: [] });
+        }
+        if (request.pathname.endsWith('/send')) {
+          return new Response(null, { status: 202 });
+        }
+        return Response.json({ id: 'draft-1', isDraft: true });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      const adapter = new MicrosoftMailProviderAdapter(
+        context(credentials),
+        config(),
+        account(),
+      );
+
+      const result = await adapter.sendMessage({
+        trackingId: 'submission-no-attachments',
+        identity: {
+          id: 'identity-1',
+          accountId: 'account-1',
+          address: 'user@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        message: {
+          to: [{ address: 'recipient@example.com' }],
+          cc: [],
+          bcc: [],
+          subject: 'Hello',
+          text: 'Mail body',
+          attachments: [],
+          references: [],
+          ...(mode === 'draft'
+            ? {
+                draftProviderMessageId: 'draft-1',
+                retainedProviderAttachmentIds: [],
+              }
+            : { forwardOfProviderMessageId: 'original-1' }),
+        },
+      });
+
+      expect(result).toMatchObject({ status: 'accepted' });
+      expect(
+        fetchMock.mock.calls.some(([url]) =>
+          String(url).includes('/attachments'),
+        ),
+      ).toBe(true);
+      expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/draft-1/send');
+    },
+  );
 
   it('reports attachment preparation failures before submission as failed', async () => {
     const credentials = memoryVault();

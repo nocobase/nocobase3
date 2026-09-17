@@ -27,7 +27,12 @@ export class MailManagementService {
   public constructor(
     private readonly dependencies: Pick<
       DefaultMailServiceDependencies,
-      'store' | 'adapters' | 'messageChangeNotifier' | 'registry' | 'users'
+      | 'store'
+      | 'adapters'
+      | 'messageChangeNotifier'
+      | 'logger'
+      | 'registry'
+      | 'users'
     >,
   ) {}
 
@@ -279,6 +284,7 @@ export class MailManagementService {
       notifyMailMessageChange(
         this.dependencies.messageChangeNotifier,
         account.userId,
+        this.dependencies.logger,
       );
     } finally {
       await closeAdapter(adapter);

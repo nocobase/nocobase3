@@ -11,6 +11,7 @@ import SyncMailboxJob, {
 import SendScheduledMailJob, {
   registerMailScheduledSendJobHandler,
 } from './jobs/send-scheduled-mail.js';
+import { mailLogError, writeMailLog, type MailLogger } from './logging.js';
 import { SendMailOperation } from './operations/send-mail.js';
 import { SyncMailboxOperation } from './operations/sync-mailbox.js';
 import {
@@ -29,10 +30,7 @@ import type {
   MailRuntimeService,
 } from './types.js';
 
-export interface MailRuntimeLogger {
-  info?(data: object, message: string): void;
-  error?(data: object, message: string): void;
-}
+export type MailRuntimeLogger = MailLogger;
 
 export interface MailRuntimeOptions {
   readonly store: MailStore;
@@ -87,6 +85,16 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
             scheduledDelivery: true,
           });
         } catch (error) {
+          writeMailLog(
+            options.logger,
+            'error',
+            {
+              event: 'mail.send.scheduled_failed',
+              submissionId: payload.submissionId,
+              err: mailLogError(error),
+            },
+            'Scheduled Mail submission failed.',
+          );
           await options.store.failScheduledSubmission(payload.submissionId, {
             code: 'MAIL_SCHEDULED_SEND_FAILED',
             message:
@@ -111,8 +119,10 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
     this.workerLoop = this.worker
       .start([this.options.queueName])
       .catch((error: unknown): void => {
-        this.options.logger?.error?.(
-          { error },
+        writeMailLog(
+          this.options.logger,
+          'error',
+          { err: mailLogError(error) },
           'Mail Queue worker stopped unexpectedly.',
         );
       });
@@ -136,8 +146,10 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
       .then(() => this.createAutomaticSyncRuns())
       .then(() => undefined)
       .catch((error: unknown): void => {
-        this.options.logger?.error?.(
-          { error },
+        writeMailLog(
+          this.options.logger,
+          'error',
+          { err: mailLogError(error) },
           'Automatic Mail synchronization sweep failed.',
         );
       })
@@ -154,8 +166,10 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
       try {
         await this.maintainPushSubscription(account);
       } catch (error) {
-        this.options.logger?.error?.(
-          { accountId: account.id, error },
+        writeMailLog(
+          this.options.logger,
+          'error',
+          { accountId: account.id, err: mailLogError(error) },
           'Mail push subscription maintenance failed.',
         );
       }
@@ -170,8 +184,10 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
       try {
         if (await this.createSyncRun(account.id)) created += 1;
       } catch (error) {
-        this.options.logger?.error?.(
-          { accountId: account.id, error },
+        writeMailLog(
+          this.options.logger,
+          'error',
+          { accountId: account.id, err: mailLogError(error) },
           'Automatic Mail synchronization could not be scheduled.',
         );
       }
@@ -182,6 +198,7 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
 
   private async runMaintenance(): Promise<void> {
     const now = new Date().toISOString();
+    if (await this.options.store.recoverSyncRuns(now)) this.kick();
     await this.options.outboundAttachments?.cleanupExpired?.(now);
     await this.options.store.deleteExpiredAuthorizationTransactions?.(now);
     await this.options.credentials?.deleteExpired?.(now);
@@ -240,8 +257,10 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
           }
         }
       } catch (error) {
-        this.options.logger?.error?.(
-          { accountId: account.id, error },
+        writeMailLog(
+          this.options.logger,
+          'error',
+          { accountId: account.id, err: mailLogError(error) },
           'Push-triggered Mail synchronization could not be activated.',
         );
       }
@@ -261,7 +280,6 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
       mode: cursor ? 'incremental' : 'initial',
       policy: {
         receivedAfter: cursor ? undefined : account.initialSyncReceivedAfter,
-        maxMessages: 10_000,
         batchSize: this.syncBatchSize,
       },
     });
@@ -315,8 +333,10 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
       );
     const leaseHeartbeat = setInterval(() => {
       void renewLease().catch((error: unknown) => {
-        this.options.logger?.error?.(
-          { accountId: account.id, error },
+        writeMailLog(
+          this.options.logger,
+          'error',
+          { accountId: account.id, err: mailLogError(error) },
           'Mail push subscription lease could not be renewed.',
         );
       });
@@ -338,7 +358,9 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
         adapter.deletePushSubscription?.bind(adapter);
       if (configurationChanged) {
         if (!deletePushSubscription) {
-          this.options.logger?.error?.(
+          writeMailLog(
+            this.options.logger,
+            'error',
             { accountId: account.id },
             'The Provider cannot replace a stale Mail push subscription.',
           );
@@ -348,8 +370,14 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
           existing.providerSubscriptionId,
         );
         if (!removed.ok) {
-          this.options.logger?.error?.(
-            { accountId: account.id, error: removed.error },
+          writeMailLog(
+            this.options.logger,
+            'error',
+            {
+              accountId: account.id,
+              err: mailLogError(removed.error),
+              errorCode: removed.error.code,
+            },
             'The stale Mail push subscription could not be removed before replacement.',
           );
           return;
@@ -372,8 +400,14 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
           : existing?.providerSubscriptionId,
       });
       if (!result.ok) {
-        this.options.logger?.error?.(
-          { accountId: account.id, error: result.error },
+        writeMailLog(
+          this.options.logger,
+          'error',
+          {
+            accountId: account.id,
+            err: mailLogError(result.error),
+            errorCode: result.error.code,
+          },
           'Mail push subscription could not be renewed.',
         );
         return;
@@ -444,7 +478,12 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
       if (this.closed || this.publishPromise) return;
       this.publishPromise = this.publishPending()
         .catch((error: unknown): void => {
-          this.options.logger?.error?.({ error }, 'Mail Outbox Relay failed.');
+          writeMailLog(
+            this.options.logger,
+            'error',
+            { err: mailLogError(error) },
+            'Mail Outbox Relay failed.',
+          );
         })
         .finally((): void => {
           this.publishPromise = undefined;
@@ -494,14 +533,18 @@ export class MailRuntime implements MailOutboxPublisher, MailRuntimeService {
           record.leaseToken ?? '',
           new Date(Date.now() + delay).toISOString(),
         );
-        this.options.logger?.error?.(
-          { error, outboxId: record.id },
+        writeMailLog(
+          this.options.logger,
+          'error',
+          { err: mailLogError(error), outboxId: record.id },
           'Mail Outbox message could not be published.',
         );
       }
     }
     if (claimed.length > 0) {
-      this.options.logger?.info?.(
+      writeMailLog(
+        this.options.logger,
+        'info',
         { count: claimed.length },
         'Mail Outbox Relay processed messages.',
       );

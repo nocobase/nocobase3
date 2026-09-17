@@ -1,3 +1,4 @@
+import { incompleteMessage } from '../incomplete-message.js';
 import type {
   MailAccount,
   MailAttachmentContent,
@@ -22,7 +23,6 @@ import type {
 
 import type {
   GmailCredential,
-  GmailCursorValue,
   GmailDraftList,
   GmailDraftResource,
   GmailHistoryList,
@@ -61,12 +61,7 @@ import {
   forwardedText,
   normalizedDraft,
 } from './mime.js';
-import {
-  gmailCursor,
-  gmailRecoveryCursor,
-  parseGmailCursor,
-  recoveryStart,
-} from './sync.js';
+import { gmailCursor, parseGmailCursor } from './sync.js';
 import { mapConcurrent } from './concurrency.js';
 import { expiry, exchangeToken, required, splitScopes } from './auth.js';
 
@@ -143,36 +138,6 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
   public async getCurrentSyncCursor(
     signal?: AbortSignal,
   ): Promise<MailProviderResult<MailSyncCursor>> {
-    const query = new URLSearchParams({
-      maxResults: '1',
-      includeSpamTrash: 'true',
-    });
-    const page = await this.request<GmailMessageList>(
-      `/users/me/messages?${query.toString()}`,
-      { signal },
-    );
-    if (!page.ok) return page;
-    const latestMessageId = page.value.messages?.find(
-      (message) => message.id,
-    )?.id;
-    if (latestMessageId) {
-      const message = await this.request<GmailMessageResource>(
-        `/users/me/messages/${encodeURIComponent(latestMessageId)}?format=minimal`,
-        { signal },
-      );
-      if (!message.ok) return message;
-      if (message.value.historyId) {
-        return {
-          ok: true,
-          value: gmailCursor(
-            message.value.historyId,
-            undefined,
-            new Date().toISOString(),
-          ),
-        };
-      }
-    }
-
     const profile = await this.request<GmailProfile>('/users/me/profile', {
       signal,
     });
@@ -293,17 +258,27 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       const seconds = Math.floor(
         new Date(input.receivedAfter).getTime() / 1000,
       );
-      if (Number.isFinite(seconds)) query.set('q', `after:${seconds}`);
+      if (Number.isFinite(seconds)) query.set('q', `after:${seconds - 1}`);
     }
     const page = await this.request<GmailMessageList>(
       `/users/me/messages?${query.toString()}`,
       { signal: input.signal },
     );
-    if (!page.ok) return page;
+    if (!page.ok)
+      return input.cursor &&
+        page.error.code === 'GMAIL_HTTP_400' &&
+        /token/i.test(page.error.message)
+        ? failure(
+            'GMAIL_SYNC_CURSOR_INVALID',
+            'Gmail history pagination expired.',
+            'provider',
+            false,
+          )
+        : page;
     const messages = await mapConcurrent(
       (page.value.messages ?? []).flatMap((item) => (item.id ? [item.id] : [])),
       MESSAGE_FETCH_CONCURRENCY,
-      async (id) => this.getMessage(id, input.signal),
+      async (id) => this.getSyncMessage(id, input.signal),
     );
     const failed = messages.find(
       (result) => !result.ok && result.error.code !== 'GMAIL_HTTP_404',
@@ -313,7 +288,13 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       ok: true,
       value: {
         messages: messages.flatMap((result) =>
-          result.ok ? [result.value] : [],
+          result.ok &&
+          (!input.receivedAfter ||
+            !result.value.receivedAt ||
+            Date.parse(result.value.receivedAt) >=
+              Date.parse(input.receivedAfter))
+            ? [result.value]
+            : [],
         ),
         nextCursor: page.value.nextPageToken,
       },
@@ -332,7 +313,12 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
         false,
       );
     if (cursor.recoveryAfter) {
-      return this.listRecoveryChanges(cursor, input);
+      return failure(
+        'GMAIL_SYNC_CURSOR_INVALID',
+        'Gmail requires a complete policy-scoped rescan.',
+        'provider',
+        false,
+      );
     }
     const query = new URLSearchParams({
       startHistoryId: cursor.historyId,
@@ -345,7 +331,12 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
     );
     if (!history.ok) {
       return history.error.code === 'GMAIL_HTTP_404'
-        ? this.listRecoveryChanges(cursor, input)
+        ? failure(
+            'GMAIL_SYNC_CURSOR_INVALID',
+            'Gmail history expired; rescan is required.',
+            'provider',
+            false,
+          )
         : history;
     }
     const deleted = new Set<string>();
@@ -367,7 +358,7 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       }
     }
     const results = await mapConcurrent([...changed], 10, (id) =>
-      this.getMessage(id, input.signal),
+      this.getSyncMessage(id, input.signal),
     );
     const failed = results.find(
       (result) => !result.ok && result.error.code !== 'GMAIL_HTTP_404',
@@ -396,57 +387,37 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
     };
   }
 
-  private async listRecoveryChanges(
-    cursor: GmailCursorValue,
-    input: MailProviderListChangesInput,
-  ): Promise<MailProviderResult<MailProviderChangePage>> {
-    const recoveryAfter =
-      cursor.recoveryAfter ?? recoveryStart(cursor.capturedAt);
-    // Preserve a baseline captured before the first recovery page. Legacy
-    // recovery cursors have no baseline, so restart their bounded scan safely.
-    const baseline = cursor.recoveryHistoryId
-      ? {
-          ok: true as const,
-          value: gmailCursor(
-            cursor.recoveryHistoryId,
-            undefined,
-            cursor.capturedAt,
-          ),
-        }
-      : await this.getCurrentSyncCursor(input.signal);
-    if (!baseline.ok) return baseline;
-    const baselineCursor = parseGmailCursor(baseline.value)!;
-    const page = await this.listMessages({
-      receivedAfter: recoveryAfter,
-      cursor: cursor.recoveryHistoryId ? cursor.recoveryPageToken : undefined,
-      limit: input.limit,
-      signal: input.signal,
-    });
-    if (!page.ok) return page;
-    if (page.value.nextCursor) {
-      return {
-        ok: true,
-        value: {
-          messages: page.value.messages,
-          deletedProviderMessageIds: [],
-          nextCursor: gmailRecoveryCursor(
-            baselineCursor.historyId,
-            baselineCursor.capturedAt,
-            recoveryAfter,
-            page.value.nextCursor,
-          ),
-          hasMore: true,
-        },
-      };
+  private async getSyncMessage(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<MailProviderResult<NormalizedMailMessage>> {
+    const result = await this.getMessage(id, signal);
+    if (result.ok || result.error.category !== 'content') return result;
+    const metadata = await this.request<GmailMessageResource>(
+      `/users/me/messages/${encodeURIComponent(id)}?format=metadata`,
+      { signal },
+    );
+    if (!metadata.ok) return metadata;
+    try {
+      const normalized = normalizeMessage(metadata.value);
+      if (normalized.ok)
+        return {
+          ok: true,
+          value: incompleteMessage(id, result.error.code, normalized.value),
+        };
+    } catch {
+      /* Keep the provider identity even when its headers are malformed. */
     }
+    const receivedAt = new Date(Number(metadata.value.internalDate));
     return {
       ok: true,
-      value: {
-        messages: page.value.messages,
-        deletedProviderMessageIds: [],
-        nextCursor: baseline.value,
-        hasMore: true,
-      },
+      value: incompleteMessage(id, result.error.code, {
+        providerFolderIds: metadata.value.labelIds ?? [],
+        receivedAt:
+          metadata.value.internalDate && Number.isFinite(receivedAt.getTime())
+            ? receivedAt.toISOString()
+            : undefined,
+      }),
     };
   }
 
@@ -458,7 +429,17 @@ export class GmailMailProviderAdapter implements MailProviderAdapter {
       `/users/me/messages/${encodeURIComponent(providerMessageId)}?format=full`,
       { signal },
     );
-    return message.ok ? normalizeMessage(message.value) : message;
+    if (!message.ok) return message;
+    try {
+      return normalizeMessage(message.value);
+    } catch {
+      return failure(
+        'MAIL_CONTENT_INVALID',
+        'Mail content could not be decoded.',
+        'content',
+        false,
+      );
+    }
   }
 
   public async getAttachment(

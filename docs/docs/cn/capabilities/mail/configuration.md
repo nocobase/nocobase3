@@ -5,7 +5,7 @@ description: '配置邮件服务商、OAuth 回调、自动同步和推送同步
 
 # 配置邮件
 
-邮件配置位于应用 `config.yml` 的 `mail` 节点。先按[邮件概览](./index.md)注册核心和需要的服务商插件，再选择下面的配置。一个应用可以同时配置多个实例；实例名会关联到已有账户，接入后应保持稳定。
+邮件配置位于应用 `config.yml` 的 `mail` 节点。Gmail、Microsoft 365 和 IMAP/SMTP 已内置，按[快速开始](./quick-start.md)注册 Mail 插件后，选择需要的服务商配置。一个应用可以同时配置多个实例；实例名会关联到已有账户，接入后应保持稳定。
 
 ## Gmail
 
@@ -57,6 +57,27 @@ mail:
 
 `host`、`port` 和 `secure` 均为必填项。`secure: true` 表示连接时直接使用 TLS；上例适用于 IMAP `993` 和 SMTP `465`。SMTP 使用 STARTTLS 端口时按服务器要求设置 `secure: false`。证书校验 `rejectUnauthorized` 默认是 `true`。实例还可以设置 `sentFolder`、`trashFolder`、`draftsFolder`，作为文件夹自动识别的路径提示；这些提示不会启用远端草稿功能。
 
+`sentCopyMode` 默认为 `server`，由 SMTP 服务保存已发送副本。服务端不保存副本时，设置为 `client`，插件会将已发送邮件追加到 `sentFolder` 指定的现有文件夹，或服务端标记为「已发送」的文件夹：
+
+```yaml
+mail:
+  providers:
+    company-mail:
+      type: imap-smtp
+      imap:
+        host: imap.example.com
+        port: 993
+        secure: true
+      smtp:
+        host: smtp.example.com
+        port: 465
+        secure: true
+      sentCopyMode: client
+      sentFolder: Sent
+```
+
+服务端已经自动保存副本时，保持 `server`，避免产生重复副本。客户端保存失败会记录 `IMAP_SENT_COPY_FAILED`，不会重发已被 SMTP 接受的邮件。
+
 所有服务商实例的 `enabled` 默认是 `true`。设置为 `false` 后，关联到该实例的已有账户也不能继续使用它。
 
 ## OAuth 回调地址
@@ -85,9 +106,11 @@ mail:
 | `mail.automaticSyncIntervalMs` | `300000` | `MAIL_AUTOMATIC_SYNC_INTERVAL_MS` | 所有账户统一使用的自动同步间隔，仅通过 config 配置，单位毫秒，至少 `60000` |
 | `mail.syncBatchSize`           | `100`    | `MAIL_SYNC_BATCH_SIZE`            | 每次服务商同步请求的批量大小，整数 `1–200`                                 |
 
-每个账户可以单独保存同步间隔，在开发环境的 `/dev/mail/accounts` 账户表格中按分钟调整，最小为 1 分钟。运行时每分钟检查到期账户；全局配置作为新账户的默认值，不会统一改写已有账户的间隔。
+自动同步间隔统一通过配置管理，对新账户和已有账户生效，账户页面不单独调整。运行时每分钟检查到期账户，因此实际启动时间可能稍晚于设定间隔。
 
-首次关联账户时可以选择历史邮件的起始日期。通过 API 发起首次同步时，`receivedAfter` 和 `maxMessages` 同时生效：默认最多导入 10,000 封历史邮件，`maxMessages` 允许设置为 `1–100000`。服务商返回的单页可能略超请求数量，最终历史导入数量也可能略超上限。历史导入完成后，还会补齐导入期间发生的变更；该上限不是账户今后可以保存的邮件总量。
+首次关联账户时可以选择历史邮件的起始日期。插件导入该日期及之后的邮件；不设置日期时导入全部历史。历史导入没有累计封数上限，旧的 `maxMessages` 请求字段不再生效。`syncBatchSize` 只控制单次请求的批量大小，不限制账户邮件总量。
+
+历史导入与增量同步交替推进，每批保存进度。服务重启后可以恢复中断任务；游标失效时会重新扫描账户配置的历史范围。同步进度和正文待处理状态见[管理与诊断](./management.md#同步记录)。
 
 ## 推送同步
 
@@ -115,6 +138,9 @@ Microsoft 365 的订阅由邮件插件在账户连接后创建、验证和续期
 
 上面列出的 `MAIL_*` 环境变量会覆盖对应的 `mail` 配置。服务商凭据、端点和授权范围通过 `mail.providers` 设置，没有独立的 `MAIL_*` 环境变量映射。修改配置后重启应用。
 
-不要将真实的 OAuth 密钥、推送密钥和邮箱密码提交到仓库。当前核心插件的默认凭据存储将授权数据以普通 JSON 保存在数据库中；如应用要求加密保存，应让 Coding Agent 在邮件核心注册前接入 `mailCredentialVaultToken` 的替代实现。
+不要将真实的 OAuth 密钥、推送密钥和邮箱密码提交到仓库。当前核心插件的默认凭据存储将授权数据以普通 JSON 保存在数据库中；如应用要求加密保存，可按[应用开发](./development.md#扩展服务商和凭据存储)接入替代实现。
 
-配置完成后，继续[关联账户并使用邮件](./usage.md)。
+## 下一步
+
+- [快速开始](./quick-start.md)：关联账户并验证收发信。
+- [管理与诊断](./management.md)：查看同步和发送结果，排查配置问题。

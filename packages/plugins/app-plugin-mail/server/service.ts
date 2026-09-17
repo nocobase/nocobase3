@@ -370,6 +370,14 @@ export class DefaultMailService implements MailService {
     return this.messages.listMessages(context, input);
   }
 
+  public retryMessageContent(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage> {
+    return this.messages.retryMessageContent(context, accountId, messageId);
+  }
+
   public getMessage(
     context: MailOperationContext,
     accountId: string,

@@ -74,6 +74,63 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     await database.destroy();
   });
 
+  it('excludes suspended mail before pagination and counting while retaining management access', async () => {
+    await store.saveAccount({
+      ...account(),
+      id: 'paused',
+      address: 'paused@example.com',
+    });
+    const visible = await store.saveMessage(
+      'account-1',
+      message('visible', 'Visible mail'),
+    );
+    const hidden = await store.saveMessage('paused', {
+      ...message('hidden', 'Paused mail'),
+      receivedAt: '2026-09-04T00:00:00.000Z',
+    });
+    const service = new DefaultMailService({
+      store,
+      adapters: resolver(baseAdapter()),
+      outbox: { kick: vi.fn() },
+    });
+    await service.updateAccount(
+      { actorId: 'user-1' },
+      { accountId: 'paused', status: 'suspended' },
+    );
+    const page = await store.listMessages('user-1', {
+      limit: 1,
+      withTotal: true,
+    });
+    expect(page.items.map((item) => item.id)).toEqual([visible.id]);
+    expect(page.total).toBe(1);
+    expect(page.nextCursor).toBeUndefined();
+    expect(
+      (await store.listMessages('user-1', { accountIds: ['paused'] })).items,
+    ).toEqual([]);
+    expect(await service.getUnreadCount({ actorId: 'user-1' })).toBe(1);
+    expect(
+      (
+        await service.listManagedMessages(
+          { actorId: 'user-1' },
+          { accountIds: ['paused'] },
+        )
+      ).items.map((item) => item.id),
+    ).toEqual([hidden.id]);
+    expect(
+      await service.getManagedMessage(
+        { actorId: 'user-1' },
+        'paused',
+        hidden.id,
+      ),
+    ).toMatchObject({ id: hidden.id });
+    await service.updateAccount(
+      { actorId: 'user-1' },
+      { accountId: 'paused', status: 'active' },
+    );
+    expect((await store.listMessages('user-1', {})).items).toHaveLength(2);
+    expect(await service.getUnreadCount({ actorId: 'user-1' })).toBe(2);
+  });
+
   it('resolves account owner usernames in batches with name and missing-user fallbacks', async () => {
     for (let index = 0; index < 102; index += 1) {
       await store.saveAccount({
@@ -295,6 +352,288 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     expect(
       new Set([...first.slice(0, 60), ...second].map((row) => row.id)).size,
     ).toBe(66);
+  });
+
+  it('logs delivery results without message payloads and preserves accepted delivery on cleanup and logger failures', async () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(async () => ({
+      status: 'accepted',
+      providerMessageId: 'sent',
+    }));
+    const cleanupError = new Error('cleanup unavailable');
+    const service = new DefaultMailService({
+      store,
+      logger,
+      adapters: resolver({ ...baseAdapter(), sendMessage }),
+      outbox: {
+        kick: () => {
+          throw cleanupError;
+        },
+      },
+    });
+    const input = {
+      accountId: 'account-1',
+      identityId: 'identity-1',
+      to: [{ address: 'private@example.com' }],
+      subject: 'private subject',
+      text: 'private body',
+      idempotencyKey: 'logged-send',
+    };
+    const result = await service.sendMessage({ actorId: 'user-1' }, input);
+    expect(result.status).toBe('accepted');
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'mail.send.result',
+        accountId: 'account-1',
+        submissionId: result.id,
+        status: 'accepted',
+        durationMs: expect.any(Number),
+      }),
+      'Mail submission result.',
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'mail.send.sync_kick_failed',
+        submissionId: result.id,
+        err: {
+          type: 'Error',
+          message: cleanupError.message,
+          stack: cleanupError.stack,
+        },
+      }),
+      expect.any(String),
+    );
+    const serialized = JSON.stringify([
+      logger.info.mock.calls,
+      logger.error.mock.calls,
+    ]);
+    for (const value of [
+      'private@example.com',
+      'private subject',
+      'private body',
+      'secret:test',
+    ])
+      expect(serialized).not.toContain(value);
+    logger.info.mockImplementation(() => {
+      throw new Error('transport failed');
+    });
+    logger.error.mockImplementation(() => {
+      throw new Error('transport failed');
+    });
+    expect(
+      (
+        await service.sendMessage(
+          { actorId: 'user-1' },
+          { ...input, idempotencyKey: 'logged-send-2' },
+        )
+      ).status,
+    ).toBe('accepted');
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['failed', 'submission_unknown', 'throw'] as const)(
+    'logs provider send outcome %s with its submission identity',
+    async (outcome) => {
+      const logger = { error: vi.fn() };
+      const failure = new Error('SMTP unavailable');
+      const sendMessage = vi.fn<MailProviderAdapter['sendMessage']>(
+        async () => {
+          if (outcome === 'throw') throw failure;
+          return {
+            status: outcome,
+            error: {
+              code: 'SMTP_FAILED',
+              category: 'network',
+              message: failure.message,
+              retryable: false,
+            },
+          };
+        },
+      );
+      const service = new DefaultMailService({
+        store,
+        logger,
+        adapters: resolver({ ...baseAdapter(), sendMessage }),
+        outbox: { kick: vi.fn() },
+      });
+      const result = await service.sendMessage(
+        { actorId: 'user-1' },
+        {
+          accountId: 'account-1',
+          identityId: 'identity-1',
+          to: [{ address: 'recipient@example.com' }],
+          subject: 'Test',
+          text: 'Body',
+          idempotencyKey: 'failed-send',
+        },
+      );
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'mail.send.result',
+          submissionId: result.id,
+          status: outcome === 'failed' ? 'failed' : 'unknown',
+          errorCode:
+            outcome === 'throw' ? 'MAIL_SEND_RESULT_UNKNOWN' : 'SMTP_FAILED',
+        }),
+        expect.any(String),
+      );
+      if (outcome === 'throw')
+        expect(logger.error).toHaveBeenCalledWith(
+          expect.objectContaining({
+            event: 'mail.send.exception',
+            err: {
+              type: 'Error',
+              message: failure.message,
+              stack: failure.stack,
+            },
+          }),
+          expect.any(String),
+        );
+    },
+  );
+
+  it.each([true, false])(
+    'logs synchronization failure with retryable=%s after saving its state',
+    async (retryable) => {
+      const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const provider = {
+        ...baseAdapter(),
+        getCurrentSyncCursor: async () => ({
+          ok: false as const,
+          error: {
+            code: 'SYNC_FAILED',
+            category: 'network' as const,
+            message: 'Provider unavailable',
+            retryable,
+            retryAfterMs: 1234,
+          },
+        }),
+        listMessages: async () => ({
+          ok: true as const,
+          value: { messages: [] },
+        }),
+      };
+      const run = await store.createSyncRun({
+        id: 'logged-sync',
+        accountId: 'account-1',
+        requestedBy: 'user-1',
+        mode: 'initial',
+        policy: { batchSize: 10 },
+      });
+      const operation = new SyncMailboxOperation({
+        store,
+        adapters: resolver(provider),
+        logger,
+      });
+      await operation.execute({
+        syncRunId: run.id,
+        expectedRevision: run.revision,
+        expectedPhase: run.phase,
+      });
+      expect(await store.getSyncRun(run.id)).toMatchObject({
+        status: retryable ? 'pending' : 'failed',
+      });
+      expect(logger[retryable ? 'warn' : 'error']).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: retryable ? 'mail.sync.retry_scheduled' : 'mail.sync.failed',
+          accountId: 'account-1',
+          syncRunId: run.id,
+          errorCode: 'SYNC_FAILED',
+          retryable,
+          durationMs: expect.any(Number),
+          ...(retryable ? { retryAfterMs: 1234 } : {}),
+        }),
+        expect.any(String),
+      );
+    },
+  );
+
+  it('logs persisted synchronization completion with counts', async () => {
+    const logger = { info: vi.fn(), warn: vi.fn() };
+    const provider: MailProviderAdapter = {
+      ...baseAdapter(),
+      getCurrentSyncCursor: async () => ({
+        ok: true,
+        value: { value: 'initial' },
+      }),
+      listMessages: async () => ({
+        ok: true,
+        value: { messages: [message('logged-message', 'Secret subject')] },
+      }),
+      listChanges: async () => ({
+        ok: true,
+        value: {
+          messages: [],
+          deletedProviderMessageIds: [],
+          nextCursor: { value: 'next' },
+          hasMore: false,
+        },
+      }),
+    };
+    let run = await store.createSyncRun({
+      id: 'completed-sync',
+      accountId: 'account-1',
+      requestedBy: 'user-1',
+      mode: 'initial',
+      policy: { batchSize: 10 },
+    });
+    const operation = new SyncMailboxOperation({
+      store,
+      adapters: resolver(provider),
+      logger,
+    });
+    for (let step = 0; step < 3; step += 1) {
+      await operation.execute({
+        syncRunId: run.id,
+        expectedRevision: run.revision,
+        expectedPhase: run.phase,
+      });
+      run = (await store.getSyncRun(run.id))!;
+    }
+    expect(run.status).toBe('completed');
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'mail.sync.completed',
+        syncRunId: run.id,
+        status: 'completed',
+        processedMessages: 1,
+      }),
+      expect.any(String),
+    );
+    expect(JSON.stringify(logger.info.mock.calls)).not.toContain(
+      'Secret subject',
+    );
+  });
+
+  it('preserves background exception details even if the logging transport fails', async () => {
+    const error = new Error('outbox database unavailable');
+    const logger = { error: vi.fn() };
+    vi.spyOn(store, 'claimOutbox').mockRejectedValue(error);
+    queue = createQueueManager({
+      default: 'sync',
+      connections: { sync: { driver: 'sync' } },
+      jobs: { autoLoad: false, locations: [] },
+    });
+    runtime = createMailRuntime({
+      store,
+      adapters: resolver(baseAdapter()),
+      queue,
+      queueName: 'logging-runtime',
+      logger,
+    });
+    runtime.kick();
+    await vi.waitFor(() =>
+      expect(logger.error).toHaveBeenCalledWith(
+        { err: { type: 'Error', message: error.message, stack: error.stack } },
+        'Mail Outbox Relay failed.',
+      ),
+    );
+    logger.error.mockImplementation(() => {
+      throw new Error('transport failed');
+    });
+    runtime.kick();
+    await vi.waitFor(() => expect(logger.error).toHaveBeenCalledTimes(2));
+    await expect(runtime.close()).resolves.toBeUndefined();
   });
 
   // MAIL-SEND-009/010 and MAIL-BULK-003: idempotent and scheduled delivery.
@@ -2828,7 +3167,7 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
       { accountId: 'account-1' },
     );
 
-    for (let step = 0; step < 4; step += 1) {
+    for (let step = 0; step < 5; step += 1) {
       await runtime.publishPending();
     }
 
@@ -2840,7 +3179,7 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     expect(completed).toMatchObject({
       status: 'completed',
       phase: 'completed',
-      processedMessages: 4,
+      processedMessages: 6,
       changeCursor: { value: 'watermark-2' },
     });
     expect(messages.items).toHaveLength(3);
@@ -2881,7 +3220,7 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     expect(next.mode).toBe('incremental');
   });
 
-  it('re-establishes the baseline once when an initial catch-up cursor expires', async () => {
+  it('rescans history before catching up when an initial cursor expires', async () => {
     const getCurrentSyncCursor = vi
       .fn<NonNullable<MailProviderAdapter['getCurrentSyncCursor']>>()
       .mockResolvedValueOnce({
@@ -2915,7 +3254,10 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     const adapters = resolver({
       ...baseAdapter(),
       getCurrentSyncCursor,
-      listMessages: async () => ({ ok: true, value: { messages: [] } }),
+      listMessages: vi.fn(async () => ({
+        ok: true as const,
+        value: { messages: [message('rescanned', 'Recovered')] },
+      })),
       listChanges,
     });
     queue = createQueueManager({
@@ -2940,7 +3282,7 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
       { accountId: 'account-1' },
     );
 
-    for (let step = 0; step < 3; step += 1) {
+    for (let step = 0; step < 6; step += 1) {
       await runtime.publishPending();
     }
 
@@ -3426,8 +3768,10 @@ describe('[SRV][DATA] mail runtime, synchronization, sending, and consistency', 
     await operation.execute(nextTask[0].payload);
 
     expect(await store.getSyncRun(created.id)).toMatchObject({
-      status: 'failed',
-      error: { code: 'TEST_SYNC_CURSOR_INVALID' },
+      status: 'running',
+      phase: 'preparing',
+      recovering: true,
+      mode: 'initial',
     });
     expect(await store.getSyncCursor('account-1')).toBeUndefined();
     const restarted = await service.startSync(

@@ -1,3 +1,4 @@
+import { mailLogError, writeMailLog, type MailLogger } from './logging.js';
 import type { RealtimeUserTopic } from '@nocobase/app-server/realtime';
 
 import type { MailRealtimeEvent } from '../shared/realtime.js';
@@ -29,11 +30,17 @@ export function createMailMessageChangeNotifier(
 export function notifyMailMessageChange(
   notifier: MailMessageChangeNotifier | undefined,
   userId: string,
+  logger?: MailLogger,
 ): void {
   if (!notifier) return;
   try {
     notifier.notify(userId);
   } catch (error) {
-    console.error('Failed to publish Mail realtime event.', error);
+    writeMailLog(
+      logger,
+      'error',
+      { event: 'mail.realtime.failed', userId, err: mailLogError(error) },
+      'Failed to publish Mail realtime event.',
+    );
   }
 }

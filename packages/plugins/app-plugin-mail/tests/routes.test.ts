@@ -977,6 +977,33 @@ describe('[API][SEC] mail API routes and permission boundaries', () => {
     expect(JSON.stringify(body)).not.toContain('database password');
   });
 
+  it('requires a session and dispatches owner-scoped content retries', async () => {
+    const retryMessageContent = vi.fn<MailService['retryMessageContent']>(
+      async () => messageView(),
+    );
+    const anonymous = await createRouter(
+      false,
+      service({ retryMessageContent }),
+    );
+    const unauthorized = await anonymous.request(
+      '/api/mail/accounts/account-1/messages/message-1/content/retry',
+      { method: 'POST' },
+    );
+    expect(unauthorized.status).toBe(401);
+    expect(retryMessageContent).not.toHaveBeenCalled();
+    const router = await createRouter(true, service({ retryMessageContent }));
+    const response = await router.request(
+      '/api/mail/accounts/account-1/messages/message-1/content/retry',
+      { method: 'POST' },
+    );
+    expect(response.status).toBe(200);
+    expect(retryMessageContent).toHaveBeenCalledWith(
+      expect.objectContaining({ actorId: 'user-1' }),
+      'account-1',
+      'message-1',
+    );
+  });
+
   it('maps message mutation routes onto the Mail service', async () => {
     const updateMessage = vi.fn<MailService['updateMessage']>(async () =>
       messageView(),

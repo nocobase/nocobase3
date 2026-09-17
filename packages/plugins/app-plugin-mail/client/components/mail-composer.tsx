@@ -42,7 +42,10 @@ import { Input } from './ui/input.js';
 import { NativeSelect } from './ui/native-select.js';
 export type { MailComposerRequest } from '../hooks/use-mail-composer.js';
 export function MailComposer(
-  props: MailComposerProps & { readonly inline?: boolean },
+  props: MailComposerProps & {
+    readonly inline?: boolean;
+    readonly active?: boolean;
+  },
 ): ReactElement {
   const fieldId = useId();
   const Surface = props.inline ? 'section' : DialogPrimitive.Popup;
@@ -114,7 +117,7 @@ export function MailComposer(
     <>
       <ComposerFrame
         inline={props.inline}
-        open={Boolean(composer)}
+        open={Boolean(composer) && props.active !== false}
         modal={mobile}
         disablePointerDismissal
         onOpenChange={(open, event) => {

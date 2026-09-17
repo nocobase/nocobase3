@@ -1,3 +1,4 @@
+import { incompleteMessage } from '../incomplete-message.js';
 import type {
   MailAccount,
   MailAttachmentContent,
@@ -320,6 +321,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         return {
           ok: true,
           value: {
+            historyReady: false,
             messages: [],
             nextCursor: encode({
               ...cursor,
@@ -338,12 +340,16 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
         cursor.nextLink ?? this.latestDeltaUrl(folderId),
         { signal: input.signal },
       );
-      if (!page.ok) return page;
+      if (!page.ok)
+        return page.error.code === 'MICROSOFT_HTTP_410'
+          ? invalidSyncCursor()
+          : page;
       const nextLink = page.value['@odata.nextLink'];
       if (nextLink) {
         return {
           ok: true,
           value: {
+            historyReady: false,
             messages: [],
             nextCursor: encode({
               ...cursor,
@@ -372,6 +378,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       return {
         ok: true,
         value: {
+          historyReady: false,
           messages: [],
           nextCursor: encode({
             phase:
@@ -391,6 +398,7 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       return {
         ok: true,
         value: {
+          historyReady: false,
           messages: [],
           syncCursor: graphCursor({
             checkpoints: cursor.checkpoints,
@@ -406,7 +414,10 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     const page = await this.request<GraphPage<GraphMessage>>(url, {
       signal: input.signal,
     });
-    if (!page.ok) return page;
+    if (!page.ok)
+      return page.error.code === 'MICROSOFT_HTTP_410'
+        ? invalidSyncCursor()
+        : page;
     const normalized = await this.normalizePage(
       page.value.value ?? [],
       input.signal,
@@ -1222,29 +1233,67 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
       messages,
       MESSAGE_NORMALIZATION_CONCURRENCY,
       async (message): Promise<PageNormalizationResult> => {
-        if (message['@removed']) {
-          if (!message.id) return {};
-          const current = await this.getMessage(message.id, signal);
-          if (current.ok) {
-            return { message: current.value };
-          } else if (current.error.code === 'MICROSOFT_HTTP_404') {
-            return { deletedProviderMessageId: message.id };
-          } else {
-            return { error: current.error };
+        try {
+          if (message['@removed']) {
+            if (!message.id) return {};
+            const current = await this.getMessage(message.id, signal);
+            if (current.ok) {
+              return { message: current.value };
+            } else if (current.error.code === 'MICROSOFT_HTTP_404') {
+              return { deletedProviderMessageId: message.id };
+            } else {
+              return { error: current.error };
+            }
           }
+          const attachments =
+            (message.hasAttachments ||
+              /cid:/iu.test(message.body?.content ?? '')) &&
+            message.id
+              ? await this.attachments(message.id, signal)
+              : {
+                  ok: true as const,
+                  value: [] as readonly NormalizedMailAttachment[],
+                };
+          if (!attachments.ok) {
+            if (attachments.error.category !== 'content' || !message.id)
+              return { error: attachments.error };
+            const metadata = normalizeGraphMessage(message, []);
+            return metadata.ok
+              ? {
+                  message: incompleteMessage(
+                    message.id,
+                    attachments.error.code,
+                    metadata.value,
+                  ),
+                }
+              : { error: metadata.error };
+          }
+          const result = normalizeGraphMessage(message, attachments.value);
+          return result.ok
+            ? { message: result.value }
+            : { error: result.error };
+        } catch (error) {
+          if (signal?.aborted) throw error;
+          if (!message.id)
+            return {
+              error: {
+                code: 'MICROSOFT_MESSAGE_INVALID',
+                message: 'Message identity is missing.',
+                category: 'provider',
+                retryable: false,
+              },
+            };
+          return {
+            message: incompleteMessage(message.id, 'MAIL_CONTENT_INVALID', {
+              providerFolderIds: message.parentFolderId
+                ? [message.parentFolderId]
+                : [],
+              receivedAt: message.receivedDateTime,
+              subject:
+                typeof message.subject === 'string' ? message.subject : '',
+            }),
+          };
         }
-        const attachments =
-          (message.hasAttachments ||
-            /cid:/iu.test(message.body?.content ?? '')) &&
-          message.id
-            ? await this.attachments(message.id, signal)
-            : {
-                ok: true as const,
-                value: [] as readonly NormalizedMailAttachment[],
-              };
-        if (!attachments.ok) return { error: attachments.error };
-        const result = normalizeGraphMessage(message, attachments.value);
-        return result.ok ? { message: result.value } : { error: result.error };
       },
     );
     const normalized: NormalizedMailMessage[] = [];
@@ -1269,8 +1318,9 @@ export class MicrosoftMailProviderAdapter implements MailProviderAdapter {
     messageId: string,
     signal?: AbortSignal,
   ): Promise<MailProviderResult<readonly NormalizedMailAttachment[]>> {
+    // contentId belongs to fileAttachment, not the attachment base type.
     const result = await this.request<GraphPage<GraphAttachment>>(
-      `/me/messages/${encodeURIComponent(messageId)}/attachments?$select=id,name,contentType,size,isInline,contentId`,
+      `/me/messages/${encodeURIComponent(messageId)}/attachments?$select=id,name,contentType,size,isInline,microsoft.graph.fileAttachment/contentId`,
       { signal },
     );
     if (!result.ok) return result;

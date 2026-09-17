@@ -1,6 +1,6 @@
 # Gmail
 
-Adds delegated Gmail OAuth, sending, paginated initial synchronization, Gmail History incremental synchronization, and Pub/Sub mailbox watches to `@nocobase/app-plugin-mail`. When Gmail History records are temporarily unavailable, incremental sync falls back to a resumable message scan from the last captured synchronization time. This fallback can import and update messages but cannot detect deletions until Gmail History becomes available again.
+Adds delegated Gmail OAuth, sending, paginated initial synchronization, Gmail History incremental synchronization, and Pub/Sub mailbox watches to `@nocobase/app-plugin-mail`. When Gmail History expires, Mail Core restarts the configured history range with a fresh mailbox-profile baseline and catches subsequent changes. It does not skip to a new cursor or restrict recovery to a recent-time window.
 
 ## Configuration
 

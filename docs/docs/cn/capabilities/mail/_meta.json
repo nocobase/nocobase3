@@ -6,6 +6,11 @@
   },
   {
     "type": "file",
+    "name": "quick-start",
+    "label": "快速开始"
+  },
+  {
+    "type": "file",
     "name": "configuration",
     "label": "配置邮件"
   },
@@ -13,5 +18,15 @@
     "type": "file",
     "name": "usage",
     "label": "使用邮件"
+  },
+  {
+    "type": "file",
+    "name": "management",
+    "label": "管理与诊断"
+  },
+  {
+    "type": "file",
+    "name": "development",
+    "label": "应用开发"
   }
 ]

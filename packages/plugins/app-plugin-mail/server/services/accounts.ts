@@ -12,7 +12,7 @@ export class MailAccountsService {
   public constructor(
     private readonly dependencies: Pick<
       DefaultMailServiceDependencies,
-      'store' | 'adapters' | 'messageChangeNotifier' | 'credentials'
+      'store' | 'adapters' | 'messageChangeNotifier' | 'logger' | 'credentials'
     >,
   ) {}
 
@@ -47,6 +47,13 @@ export class MailAccountsService {
         ...updated,
         status: input.status ?? updated.status,
       });
+      if (updated.status !== account.status) {
+        notifyMailMessageChange(
+          this.dependencies.messageChangeNotifier,
+          context.actorId,
+          this.dependencies.logger,
+        );
+      }
     }
     return toMailAccountView(updated);
   }
@@ -92,6 +99,7 @@ export class MailAccountsService {
     notifyMailMessageChange(
       this.dependencies.messageChangeNotifier,
       context.actorId,
+      this.dependencies.logger,
     );
     try {
       if (pushAdapter && pushSubscription) {

@@ -129,6 +129,9 @@ export interface FolderRow extends Row {
 }
 
 export interface MessageRow extends Row {
+  contentStatus?: 'complete' | 'deferred' | 'failed';
+  contentError?: string | null;
+  size?: number | null;
   id: string;
   accountId: string;
   providerMessageId: string;
@@ -184,6 +187,10 @@ export interface SyncStateRow extends Row {
 }
 
 export interface SyncRunRow extends Row {
+  historyStartedAt?: string | null;
+  historyComplete?: boolean | number;
+  recovering?: boolean | number;
+  pendingMessages?: number;
   id: string;
   accountId: string;
   requestedBy: string;

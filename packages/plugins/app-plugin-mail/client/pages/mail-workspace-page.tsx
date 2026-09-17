@@ -18,10 +18,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 import { resolveAppUrl } from '@nocobase/app-client';
-import {
-  MailComposer,
-  type MailComposerRequest,
-} from '../components/mail-composer.js';
+import type { MailComposerRequest } from '../components/mail-composer.js';
+import { MailWorkspaceComposer } from '../components/mail-workspace-composer.js';
 
 import {
   MailboxSidebar,
@@ -189,7 +187,9 @@ export default function MailWorkspacePage({
           if (labelsResult.status === 'rejected') {
             requestError(labelsResult.reason);
           }
-          const nextAccounts = accountsResult.value;
+          const nextAccounts = accountsResult.value.filter(
+            (account) => account.status !== 'suspended',
+          );
           const nextProviders =
             providersResult.status === 'fulfilled' ? providersResult.value : [];
           const nextLabels =
@@ -236,6 +236,9 @@ export default function MailWorkspacePage({
 
   useEffect(() => {
     void Promise.resolve().then(() => loadAccounts());
+    const refreshOnFocus = (): void => loadAccounts(false);
+    window.addEventListener('focus', refreshOnFocus);
+    return () => window.removeEventListener('focus', refreshOnFocus);
   }, [loadAccounts]);
 
   useEffect(() => {
@@ -386,7 +389,6 @@ export default function MailWorkspacePage({
   }, [accountId, accounts, mail, reloadVersion, requestError, t]);
 
   useEffect(() => {
-    if (accounts.length === 0) return;
     const requestId = messageRequestIdRef.current + 1;
     messageRequestIdRef.current = requestId;
     conversationRequestIdRef.current += 1;
@@ -405,7 +407,9 @@ export default function MailWorkspacePage({
         setConversationCursor(undefined);
         setLoadingConversation(false);
         setError(undefined);
-        return mail.listMessages(messageQuery);
+        return accounts.length === 0
+          ? { items: [], nextCursor: undefined }
+          : mail.listMessages(messageQuery);
       })
       .then(
         (page) => {
@@ -1198,7 +1202,8 @@ export default function MailWorkspacePage({
         </div>
       )}
       {composerRequest ? (
-        <MailComposer
+        <MailWorkspaceComposer
+          onSelectAccount={rememberComposeAccount}
           request={composerRequest}
           accounts={accounts}
           providers={providers}

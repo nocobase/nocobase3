@@ -30,6 +30,7 @@ const COLLECTIONS = [
   ['mailMessageFolders', 'mail_message_folders'],
   ['mailSyncStates', 'mail_sync_states'],
   ['mailSyncRuns', 'mail_sync_runs'],
+  ['mailSyncTombstones', 'mail_sync_tombstones'],
   ['mailSubmissions', 'mail_submissions'],
   ['mailOutbox', 'mail_outbox'],
   ['mailSignatures', 'mail_signatures'],
@@ -84,8 +85,30 @@ describe('mail database migration', () => {
         client.schema.hasColumn('mail_messages', 'draft_conflict'),
         client.schema.hasColumn('mail_messages', 'remote_draft_fingerprint'),
         client.schema.hasColumn('mail_accounts', 'default_for_user_id'),
+        client.schema.hasColumn('mail_messages', 'content_status'),
+        client.schema.hasColumn('mail_messages', 'content_error'),
+        client.schema.hasColumn('mail_messages', 'size'),
+        client.schema.hasColumn('mail_sync_runs', 'history_complete'),
+        client.schema.hasColumn('mail_sync_runs', 'recovering'),
+        client.schema.hasColumn('mail_sync_runs', 'history_started_at'),
+        client.schema.hasColumn('mail_sync_runs', 'pending_messages'),
       ]),
-    ).resolves.toEqual([true, true, true, true, true, true, false]);
+    ).resolves.toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
 
     await expect(
       client.raw('PRAGMA table_info(mail_accounts)'),
@@ -108,6 +131,7 @@ describe('mail database migration', () => {
           name: 'mail_messages_account_provider_unique',
         }),
         expect.objectContaining({ name: 'mail_messages_account_sort_idx' }),
+        expect.objectContaining({ name: 'mail_messages_content_status_idx' }),
         expect.objectContaining({
           name: 'mail_messages_account_todo_sort_idx',
         }),
@@ -122,6 +146,36 @@ describe('mail database migration', () => {
         }),
       ]),
     );
+    await expect(
+      client.raw('PRAGMA table_info(mail_messages)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'content_status',
+          notnull: 1,
+          dflt_value: "'complete'",
+        }),
+      ]),
+    );
+    await expect(
+      client.raw('PRAGMA table_info(mail_sync_runs)'),
+    ).resolves.toEqual(
+      expect.arrayContaining(
+        ['history_complete', 'recovering', 'pending_messages'].map((name) =>
+          expect.objectContaining({
+            name,
+            notnull: 1,
+            dflt_value: expect.stringMatching(/^'?0'?$/u),
+          }),
+        ),
+      ),
+    );
+    await expect(
+      client.raw('PRAGMA index_info(mail_messages_content_status_idx)'),
+    ).resolves.toEqual([
+      expect.objectContaining({ name: 'account_id' }),
+      expect.objectContaining({ name: 'content_status' }),
+    ]);
     await expect(
       client.raw('PRAGMA index_list(mail_accounts)'),
     ).resolves.toEqual(
@@ -221,6 +275,9 @@ describe('mail database migration', () => {
       metadataStore.get('mailMessages').then((stored) => stored?.document),
     ).resolves.toMatchObject({
       fields: {
+        contentStatus: { type: 'string' },
+        contentError: { type: 'string' },
+        size: { type: 'integer' },
         note: { type: 'text' },
         todo: { type: 'boolean' },
         providerDraftMessageId: { type: 'string' },
@@ -228,6 +285,44 @@ describe('mail database migration', () => {
         draftConflict: { type: 'json' },
       },
     });
+    await expect(
+      metadataStore.get('mailSyncRuns').then((stored) => stored?.document),
+    ).resolves.toMatchObject({
+      fields: {
+        historyStartedAt: { type: 'datetimeTz' },
+        historyComplete: { type: 'boolean' },
+        recovering: { type: 'boolean' },
+        pendingMessages: { type: 'integer' },
+      },
+    });
+    await expect(
+      metadataStore
+        .get('mailSyncTombstones')
+        .then((stored) => stored?.document),
+    ).resolves.toMatchObject({
+      fields: {
+        runId: { type: 'uuid' },
+        providerMessageId: { type: 'string' },
+      },
+    });
+    await expect(
+      client.raw('PRAGMA table_info(mail_sync_tombstones)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'run_id', pk: 1 }),
+        expect.objectContaining({ name: 'provider_message_id', pk: 2 }),
+      ]),
+    );
+    await expect(
+      client.raw('PRAGMA foreign_key_list(mail_sync_tombstones)'),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'mail_sync_runs',
+          on_delete: 'CASCADE',
+        }),
+      ]),
+    );
     await expect(
       metadataStore.get('mailSignatures').then((stored) => stored?.document),
     ).resolves.toMatchObject({

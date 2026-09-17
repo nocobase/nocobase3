@@ -62,8 +62,10 @@ export function filterReceivedAfter(
   if (!Number.isFinite(cutoff)) return messages;
   return messages.filter(
     (message) =>
-      message.receivedAt !== undefined &&
-      Date.parse(message.receivedAt) >= cutoff,
+      (message.contentStatus === 'failed' &&
+        message.receivedAt === undefined) ||
+      (message.receivedAt !== undefined &&
+        Date.parse(message.receivedAt) >= cutoff),
   );
 }
 

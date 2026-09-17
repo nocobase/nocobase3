@@ -33,6 +33,7 @@
   },
   {
     "type": "dir",
+    "collapsed": true,
     "name": "mail",
     "label": "Mail"
   },

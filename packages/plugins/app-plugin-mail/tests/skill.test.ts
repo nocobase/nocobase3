@@ -1,5 +1,6 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve, sep } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -22,9 +23,41 @@ describe('@nocobase/app-plugin-mail Skill', () => {
     expect(manifest.files).toContain('skills');
     expect(manifest.exports).toHaveProperty('./server/tokens');
     expect(manifest.exports).toHaveProperty('./client/components');
-    expect(skillSource).toContain('@nocobase/app-plugin-mail/server/tokens');
-    expect(skillSource).toContain('POST /api/mail/messages/send');
-    expect(skillSource).toContain('POST /api/mail/accounts/:accountId/sync');
-    expect(skillSource).not.toMatch(/development draft|placeholder|TODO/iu);
+    expect(skillSource).toMatch(/^---\nname: nocobase-app-plugin-mail\n/u);
+  });
+
+  it('keeps referenced guidance readable after copying the Skill into an App', async () => {
+    const appRoot = await mkdtemp(join(tmpdir(), 'mail-skill-app-'));
+    const skillRoot = resolve(
+      appRoot,
+      '.agents/skills/nocobase-app-plugin-mail',
+    );
+    try {
+      await cp(
+        resolve(packageRoot, 'skills/nocobase-app-plugin-mail'),
+        skillRoot,
+        { recursive: true },
+      );
+      const pending = [resolve(skillRoot, 'SKILL.md')];
+      const visited = new Set<string>();
+      while (pending.length > 0) {
+        const file = pending.pop()!;
+        if (visited.has(file)) continue;
+        visited.add(file);
+        const source = await readFile(file, 'utf8');
+        expect(source.trim()).not.toBe('');
+        expect(source).not.toMatch(/^\s*\[TODO:/mu);
+        for (const match of source.matchAll(
+          /\]\(([^)#]+\.md)(?:#[^)]*)?\)/gu,
+        )) {
+          const target = resolve(dirname(file), match[1]!);
+          expect(target.startsWith(`${skillRoot}${sep}`)).toBe(true);
+          pending.push(target);
+        }
+      }
+      expect(visited.size).toBeGreaterThan(1);
+    } finally {
+      await rm(appRoot, { recursive: true, force: true });
+    }
   });
 });

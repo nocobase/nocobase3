@@ -684,7 +684,9 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
       render(<MailWorkspacePage />);
       fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
       await waitFor(() =>
-        expect(screen.getByLabelText('From address')).toHaveValue('identity-1'),
+        expect(screen.getByLabelText('From address')).toHaveValue(
+          JSON.stringify(['account-1', 'identity-1']),
+        ),
       );
       fireEvent.change(screen.getByLabelText('TO'), {
         target: { value: 'recipient@example.com' },
@@ -1035,7 +1037,7 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     expect(screen.getByText('2', { exact: true })).toBeInTheDocument();
   });
 
-  it('disables sending and synchronization for an inactive account', async () => {
+  it('hides suspended accounts and does not load their mail or folders', async () => {
     mail.listAccounts.mockResolvedValue([
       {
         id: 'account-1',
@@ -1055,6 +1057,58 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     expect(
       screen.getByRole('button', { name: 'Sync all mailboxes' }),
     ).toBeDisabled();
+    await screen.findByRole('link', { name: 'Connect mail account' });
+    expect(
+      screen.queryByRole('option', { name: 'user@example.com' }),
+    ).toBeNull();
+    expect(mail.listMessages).not.toHaveBeenCalled();
+    expect(mail.listFolders).not.toHaveBeenCalled();
+  });
+
+  it('excludes suspended accounts from the account selector with active accounts present', async () => {
+    const active = (await mail.listAccounts())[0];
+    mail.listAccounts.mockResolvedValue([
+      active,
+      {
+        ...active,
+        id: 'suspended',
+        address: 'paused@example.com',
+        status: 'suspended',
+      },
+    ]);
+    render(<MailWorkspacePage />);
+    const selector = await screen.findByLabelText('Account');
+    await waitFor(() =>
+      expect(mail.listFolders).toHaveBeenCalledWith('account-1'),
+    );
+    expect(
+      within(selector).getByRole('option', { name: 'user@example.com' }),
+    ).toBeVisible();
+    expect(
+      within(selector).queryByRole('option', { name: 'paused@example.com' }),
+    ).toBeNull();
+    expect(mail.listFolders).not.toHaveBeenCalledWith('suspended');
+  });
+
+  it('clears previously loaded mail when the last account is suspended while away', async () => {
+    const active = (await mail.listAccounts())[0];
+    mail.listMessages.mockResolvedValue({
+      items: [
+        {
+          ...createUnreadMessage('old-mail'),
+          subject: 'Previously visible mail',
+        },
+      ],
+    });
+    render(<MailWorkspacePage />);
+    expect(await screen.findByText('Previously visible mail')).toBeVisible();
+    mail.listAccounts.mockResolvedValue([{ ...active, status: 'suspended' }]);
+    fireEvent.focus(window);
+    await screen.findByRole('link', { name: 'Connect mail account' });
+    expect(screen.queryByText('Previously visible mail')).toBeNull();
+    expect(
+      screen.queryByRole('option', { name: 'user@example.com' }),
+    ).toBeNull();
   });
 
   it('keeps the selected signature when sending to multiple recipients', async () => {
@@ -1554,6 +1608,201 @@ describe('[UI][SRV] mail workspace, composer, drafts, and management', () => {
     expect(mail.startSync).toHaveBeenNthCalledWith(2, {
       accountId: 'account-2',
     });
+  });
+
+  it('offers all three accounts and keeps each sender draft and attachments when switching', async () => {
+    mail.listAccounts.mockResolvedValue(
+      [1, 2, 3].map((number) => ({
+        id: `account-${number}`,
+        userId: 'user-1',
+        provider: { type: 'gmail', name: 'google' },
+        address: `sender${number}@example.com`,
+        scopes: [],
+        status: 'active',
+      })),
+    );
+    mail.listIdentities.mockImplementation(async (accountId: string) => [
+      {
+        id: `identity-${accountId}`,
+        accountId,
+        address: `${accountId}@example.com`,
+        isPrimary: true,
+        canSend: true,
+      },
+      {
+        id: `blocked-${accountId}`,
+        accountId,
+        address: `blocked-${accountId}@example.com`,
+        canSend: false,
+      },
+    ]);
+    render(<MailWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    const first = await screen.findByRole('dialog', { name: 'New message' });
+    await waitFor(() =>
+      expect(
+        within(first).getByLabelText('From address').querySelectorAll('option'),
+      ).toHaveLength(3),
+    );
+    fireEvent.change(within(first).getByLabelText('TO'), {
+      target: { value: 'first-recipient@example.com' },
+    });
+    fireEvent.change(within(first).getByLabelText('Subject'), {
+      target: { value: 'First draft' },
+    });
+    const body = within(first).getByLabelText('Message body');
+    body.innerHTML = '<p>First message body</p>';
+    fireEvent.input(body);
+    fireEvent.change(first.querySelector('input[type=file]')!, {
+      target: {
+        files: [new File(['report'], 'report.txt', { type: 'text/plain' })],
+      },
+    });
+    await within(first).findByText('report.txt');
+    fireEvent.change(within(first).getByLabelText('From address'), {
+      target: { value: JSON.stringify(['account-2', 'identity-account-2']) },
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'New message' })).not.toBe(
+        first,
+      ),
+    );
+    const second = screen.getByRole('dialog', { name: 'New message' });
+    expect(within(second).getByLabelText('Subject')).toHaveValue('');
+    expect(within(second).queryByText('report.txt')).not.toBeInTheDocument();
+    fireEvent.change(within(second).getByLabelText('Subject'), {
+      target: { value: 'Second draft' },
+    });
+    fireEvent.change(within(second).getByLabelText('From address'), {
+      target: { value: JSON.stringify(['account-1', 'identity-account-1']) },
+    });
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('dialog', { name: 'New message' })
+          .querySelector('input[value="First draft"]'),
+      ).not.toBeNull(),
+    );
+    const restored = screen.getByRole('dialog', { name: 'New message' });
+    expect(within(restored).getByLabelText('TO')).toHaveValue(
+      'first-recipient@example.com',
+    );
+    expect(within(restored).getByLabelText('Message body')).toHaveTextContent(
+      'First message body',
+    );
+    expect(within(restored).getByText('report.txt')).toBeVisible();
+    fireEvent.change(within(restored).getByLabelText('From address'), {
+      target: { value: JSON.stringify(['account-3', 'identity-account-3']) },
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: 'New message' })).not.toBe(
+        restored,
+      ),
+    );
+    const third = screen.getByRole('dialog', { name: 'New message' });
+    fireEvent.change(within(third).getByLabelText('TO'), {
+      target: { value: 'third-recipient@example.com' },
+    });
+    fireEvent.change(within(third).getByLabelText('Subject'), {
+      target: { value: 'Third message' },
+    });
+    const thirdBody = within(third).getByLabelText('Message body');
+    thirdBody.innerHTML = '<p>Third body</p>';
+    fireEvent.input(thirdBody);
+    await waitFor(() =>
+      expect(within(third).getByRole('button', { name: 'Send' })).toBeEnabled(),
+    );
+    fireEvent.click(within(third).getByRole('button', { name: 'Send' }));
+    await waitFor(() =>
+      expect(mail.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'account-3',
+          identityId: 'identity-account-3',
+          subject: 'Third message',
+          attachmentIds: [],
+          retainedAttachmentIds: [],
+        }),
+      ),
+    );
+    expect(
+      window.localStorage.getItem(
+        'nocobase:mail:last-compose-account:v1:user-1',
+      ),
+    ).toBe('account-3');
+  });
+
+  it('keeps available senders when another account fails and excludes inactive or receive-only accounts', async () => {
+    mail.listAccounts.mockResolvedValue([
+      {
+        id: 'account-1',
+        provider: { type: 'gmail', name: 'google' },
+        status: 'active',
+      },
+      {
+        id: 'unavailable',
+        provider: { type: 'gmail', name: 'google' },
+        status: 'active',
+      },
+      {
+        id: 'suspended',
+        provider: { type: 'gmail', name: 'google' },
+        status: 'suspended',
+      },
+      {
+        id: 'receive-only',
+        provider: { type: 'imap', name: 'imap' },
+        status: 'active',
+      },
+    ]);
+    mail.listProviders.mockResolvedValue([
+      {
+        type: 'gmail',
+        name: 'google',
+        capabilities: { send: true, receive: true },
+      },
+      {
+        type: 'imap',
+        name: 'imap',
+        capabilities: { send: false, receive: true },
+      },
+    ]);
+    mail.listIdentities.mockImplementation(async (accountId: string) => {
+      if (accountId === 'unavailable')
+        throw new Error('Account identities unavailable');
+      return [
+        {
+          id: 'primary',
+          accountId,
+          address: 'primary@example.com',
+          isPrimary: true,
+          canSend: true,
+        },
+        { id: 'alias', accountId, address: 'alias@example.com', canSend: true },
+        {
+          id: 'blocked',
+          accountId,
+          address: 'blocked@example.com',
+          canSend: false,
+        },
+      ];
+    });
+    render(<MailWorkspacePage />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Compose' }));
+    await screen.findByText('Account identities unavailable');
+    const from = screen.getByRole('combobox', { name: 'From address' });
+    expect(within(from).getAllByRole('option')).toHaveLength(2);
+    expect(mail.listIdentities).not.toHaveBeenCalledWith('suspended');
+    expect(mail.listIdentities).not.toHaveBeenCalledWith('receive-only');
+    fireEvent.change(screen.getByLabelText('Subject'), {
+      target: { value: 'Keep same-account content' },
+    });
+    fireEvent.change(from, {
+      target: { value: JSON.stringify(['account-1', 'alias']) },
+    });
+    expect(from).toHaveValue(JSON.stringify(['account-1', 'alias']));
+    expect(screen.getByLabelText('Subject')).toHaveValue(
+      'Keep same-account content',
+    );
   });
 
   it('uses the browser-cached account when opening a new composer', async () => {

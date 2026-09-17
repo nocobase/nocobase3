@@ -1,3 +1,4 @@
+import { mailLogError, writeMailLog, type MailLogger } from '../logging.js';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -9,6 +10,7 @@ import type {
   MailSyncCursor,
   MailSyncMailboxTaskPayload,
   MailSyncRun,
+  MailSyncStepCommit,
 } from '../types.js';
 import {
   notifyMailMessageChange,
@@ -16,6 +18,7 @@ import {
 } from '../realtime.js';
 
 export interface SyncMailboxOperationDependencies {
+  readonly logger?: MailLogger;
   readonly store: MailStore;
   readonly adapters: MailProviderAdapterResolver;
   readonly leaseMs?: number;
@@ -30,6 +33,28 @@ export class SyncMailboxOperation {
   ) {}
 
   public async execute(payload: MailSyncMailboxTaskPayload): Promise<void> {
+    try {
+      await this.executeTask(payload);
+    } catch (error) {
+      writeMailLog(
+        this.dependencies.logger,
+        'error',
+        {
+          event: 'mail.sync.exception',
+          syncRunId: payload.syncRunId,
+          phase: payload.expectedPhase,
+          revision: payload.expectedRevision,
+          err: mailLogError(error),
+        },
+        'Mail synchronization task failed.',
+      );
+      throw error;
+    }
+  }
+
+  private async executeTask(
+    payload: MailSyncMailboxTaskPayload,
+  ): Promise<void> {
     const now = Date.now();
     const leaseMs = this.dependencies.leaseMs ?? 60_000;
     const leaseToken = randomUUID();
@@ -53,8 +78,19 @@ export class SyncMailboxOperation {
       }
       return;
     }
-    if (run.status === 'completed' || run.status === 'cancelled') return;
+    if (
+      run.status === 'completed' ||
+      run.status === 'partial' ||
+      run.status === 'cancelled'
+    )
+      return;
 
+    writeMailLog(
+      this.dependencies.logger,
+      'info',
+      { event: 'mail.sync.started', ...this.logFields(run) },
+      'Mail synchronization step started.',
+    );
     const signal = AbortSignal.timeout(SYNC_STEP_TIMEOUT_MS);
     const account = await this.dependencies.store.getAccount(run.accountId);
     if (!account || account.status !== 'active') {
@@ -82,6 +118,7 @@ export class SyncMailboxOperation {
             ? error.message
             : 'The selected mail Provider is unavailable.',
         ),
+        error,
       );
       return;
     }
@@ -96,13 +133,24 @@ export class SyncMailboxOperation {
         notifyMailMessageChange(
           this.dependencies.messageChangeNotifier,
           account.userId,
+          this.dependencies.logger,
         );
       }
     } catch (error) {
       if (await this.isCancelledOrRemoved(run)) return;
       const normalized = normalizeError(error);
       if (isCursorInvalid(normalized)) {
-        await this.dependencies.store.clearSyncCursor(account.id);
+        await this.commitSyncStep({
+          run,
+          messages: [],
+          phase: 'preparing',
+          status: 'running',
+          restart: true,
+          receivedAfter:
+            run.policy.receivedAfter ?? account.initialSyncReceivedAfter,
+          createNextTask: true,
+        });
+        return;
       }
       if (normalized.category === 'authentication' && !normalized.retryable) {
         await this.dependencies.store.markAccountReauthorizationRequired(
@@ -110,8 +158,9 @@ export class SyncMailboxOperation {
         );
       }
       if (normalized.retryable) {
+        let released: MailSyncRun;
         try {
-          await this.dependencies.store.releaseSyncRun(
+          released = await this.dependencies.store.releaseSyncRun(
             run,
             normalized,
             new Date(
@@ -120,10 +169,25 @@ export class SyncMailboxOperation {
           );
         } catch (releaseError) {
           if (!(await this.isCancelledOrRemoved(run))) throw releaseError;
+          return;
         }
+        writeMailLog(
+          this.dependencies.logger,
+          'warn',
+          {
+            event: 'mail.sync.retry_scheduled',
+            ...this.logFields(released),
+            errorCode: normalized.code,
+            category: normalized.category,
+            retryable: true,
+            retryAfterMs: normalized.retryAfterMs ?? 30_000,
+            err: mailLogError(error),
+          },
+          'Mail synchronization retry scheduled.',
+        );
         return;
       }
-      await this.failSyncRun(run, normalized);
+      await this.failSyncRun(run, normalized, error);
     } finally {
       stopLeaseHeartbeat();
       await closeQuietly(adapter);
@@ -133,12 +197,60 @@ export class SyncMailboxOperation {
   private async failSyncRun(
     run: MailSyncRun,
     error: MailProviderError,
+    cause: unknown = error,
   ): Promise<void> {
     try {
-      await this.dependencies.store.failSyncRun(run, error);
+      const failed = await this.dependencies.store.failSyncRun(run, error);
+      writeMailLog(
+        this.dependencies.logger,
+        'error',
+        {
+          event: 'mail.sync.failed',
+          ...this.logFields(failed),
+          errorCode: error.code,
+          category: error.category,
+          retryable: error.retryable,
+          err: mailLogError(cause),
+        },
+        'Mail synchronization failed.',
+      );
     } catch (failureError) {
       if (!(await this.isCancelledOrRemoved(run))) throw failureError;
     }
+  }
+
+  private logFields(run: MailSyncRun): object {
+    return {
+      accountId: run.accountId,
+      syncRunId: run.id,
+      phase: run.phase,
+      status: run.status,
+      revision: run.revision,
+      processedMessages: run.processedMessages,
+      processedPages: run.processedPages,
+      pendingMessages: run.pendingMessages,
+      durationMs: Math.max(0, Date.now() - Date.parse(run.createdAt)),
+    };
+  }
+
+  private async commitSyncStep(
+    input: MailSyncStepCommit,
+  ): Promise<MailSyncRun> {
+    const result = await this.dependencies.store.commitSyncStep(input);
+    writeMailLog(
+      this.dependencies.logger,
+      result.status === 'partial' || input.restart ? 'warn' : 'info',
+      {
+        event: input.restart
+          ? 'mail.sync.restarted'
+          : result.status === 'completed' || result.status === 'partial'
+            ? 'mail.sync.completed'
+            : 'mail.sync.progress',
+        ...this.logFields(result),
+      },
+      'Mail synchronization progress saved.',
+    );
+    return result;
   }
 
   private async isCancelledOrRemoved(
@@ -169,7 +281,18 @@ export class SyncMailboxOperation {
             leaseToken,
             new Date(Date.now() + leaseMs).toISOString(),
           )
-          .catch(() => undefined);
+          .catch((error: unknown) => {
+            writeMailLog(
+              this.dependencies.logger,
+              'error',
+              {
+                event: 'mail.sync.lease_failed',
+                syncRunId,
+                err: mailLogError(error),
+              },
+              'Mail synchronization lease could not be renewed.',
+            );
+          });
       },
       Math.max(1_000, Math.floor(leaseMs / 3)),
     );
@@ -225,7 +348,7 @@ export class SyncMailboxOperation {
         )
       : { folders: [], completeProviderFolderIds: [] };
     if (folderPage.nextCursor) {
-      await this.dependencies.store.commitSyncStep({
+      await this.commitSyncStep({
         run,
         folders: folderPage.folders,
         messages: [],
@@ -247,7 +370,7 @@ export class SyncMailboxOperation {
     const changeCursor = adapter.reconcileSyncCursor
       ? unwrap(adapter.reconcileSyncCursor(currentCursor, providerFolderIds))
       : currentCursor;
-    await this.dependencies.store.commitSyncStep({
+    await this.commitSyncStep({
       run,
       folders: folderPage.folders,
       completeProviderFolderIds: folderPage.completeProviderFolderIds,
@@ -274,13 +397,6 @@ export class SyncMailboxOperation {
         ),
       );
     }
-    const remaining = Math.max(
-      0,
-      run.policy.maxMessages - run.processedMessages,
-    );
-    if (remaining === 0) {
-      return this.completeHistory(run);
-    }
     const page = unwrap(
       await adapter.listMessages({
         providerFolderIds: (
@@ -289,17 +405,12 @@ export class SyncMailboxOperation {
         receivedAfter: run.policy.receivedAfter,
         baselineCursor: run.baselineCursor,
         cursor: run.historyCursor,
-        limit: Math.min(run.policy.batchSize, remaining),
+        limit: run.policy.batchSize,
         signal,
       }),
     );
-    // Never discard records covered by the Provider's returned cursor. A
-    // Provider may exceed its requested limit; importing the complete page can
-    // exceed maxMessages slightly, but slicing it would permanently skip mail.
     const imported = page.messages;
-    const hasMore =
-      page.nextCursor !== undefined &&
-      run.processedMessages + imported.length < run.policy.maxMessages;
+    const hasMore = page.nextCursor !== undefined;
     if (hasMore && page.nextCursor === run.historyCursor) {
       throw new MailOperationError(
         terminalError(
@@ -308,32 +419,22 @@ export class SyncMailboxOperation {
         ),
       );
     }
-    await this.dependencies.store.commitSyncStep({
+    await this.commitSyncStep({
       run,
       messages: imported,
-      phase: hasMore ? 'history' : 'catchUp',
+      historyPage: true,
+      phase: page.historyReady === false && hasMore ? 'history' : 'catchUp',
+      historyComplete: !hasMore,
       status: 'running',
       historyCursor: hasMore ? page.nextCursor : undefined,
       baselineCursor: run.baselineCursor,
-      changeCursor: hasMore
-        ? undefined
-        : (page.syncCursor ?? run.baselineCursor),
+      changeCursor:
+        page.historyReady === false
+          ? (page.syncCursor ?? run.changeCursor)
+          : (run.changeCursor ?? page.syncCursor ?? run.baselineCursor),
       createNextTask: true,
     });
     return imported.length > 0;
-  }
-
-  private async completeHistory(run: MailSyncRun): Promise<boolean> {
-    await this.dependencies.store.commitSyncStep({
-      run,
-      messages: [],
-      phase: 'catchUp',
-      status: 'running',
-      baselineCursor: run.baselineCursor,
-      changeCursor: run.baselineCursor,
-      createNextTask: true,
-    });
-    return false;
   }
 
   private async importChangePage(
@@ -349,27 +450,11 @@ export class SyncMailboxOperation {
         ),
       );
     }
-    let result = await adapter.listChanges({
+    const result = await adapter.listChanges({
       cursor: run.changeCursor,
       limit: run.policy.batchSize,
       signal,
     });
-    if (
-      !result.ok &&
-      run.mode === 'initial' &&
-      run.phase === 'catchUp' &&
-      isCursorInvalid(result.error) &&
-      adapter.getCurrentSyncCursor
-    ) {
-      const refreshedCursor = unwrap(
-        await adapter.getCurrentSyncCursor(signal),
-      );
-      result = await adapter.listChanges({
-        cursor: refreshedCursor,
-        limit: run.policy.batchSize,
-        signal,
-      });
-    }
     const page = unwrap(result);
     if (page.hasMore && sameSyncCursor(run.changeCursor, page.nextCursor)) {
       throw new MailOperationError(
@@ -379,16 +464,21 @@ export class SyncMailboxOperation {
         ),
       );
     }
-    await this.dependencies.store.commitSyncStep({
+    const resumeHistory =
+      run.mode === 'initial' &&
+      !run.historyComplete &&
+      run.historyCursor !== undefined;
+    await this.commitSyncStep({
       run,
+      historyCursor: run.historyCursor,
       messages: page.messages,
       removedFromFolders: page.removedFromFolders,
       deletedProviderMessageIds: page.deletedProviderMessageIds,
-      phase: page.hasMore ? run.phase : 'completed',
-      status: page.hasMore ? 'running' : 'completed',
+      phase: resumeHistory ? 'history' : page.hasMore ? run.phase : 'completed',
+      status: page.hasMore || resumeHistory ? 'running' : 'completed',
       baselineCursor: run.baselineCursor,
       changeCursor: page.nextCursor,
-      createNextTask: page.hasMore,
+      createNextTask: page.hasMore || resumeHistory,
     });
     return (
       page.messages.length > 0 ||

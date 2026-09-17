@@ -200,6 +200,9 @@ export interface MailAttachment {
 }
 
 export interface MailMessageSummary {
+  readonly contentStatus?: 'complete' | 'deferred' | 'failed';
+  readonly contentError?: string;
+  readonly size?: number;
   readonly id: string;
   readonly accountId: string;
   readonly providerMessageId: string;
@@ -308,15 +311,20 @@ export type MailSyncMode = 'initial' | 'incremental';
 export type MailSyncPhase =
   'preparing' | 'history' | 'catchUp' | 'incremental' | 'completed';
 export type MailSyncRunStatus =
-  'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  'pending' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled';
 
 export interface MailInitialSyncPolicy {
   readonly receivedAfter?: string;
-  readonly maxMessages: number;
+  /** @deprecated Historical imports no longer have a total message limit. */
+  readonly maxMessages?: number;
   readonly batchSize: number;
 }
 
 export interface MailSyncRun {
+  readonly historyStartedAt?: string;
+  readonly historyComplete?: boolean;
+  readonly recovering?: boolean;
+  readonly pendingMessages?: number;
   readonly id: string;
   readonly accountId: string;
   readonly requestedBy: string;
@@ -341,6 +349,9 @@ export interface MailSyncRun {
 
 /** API-safe progress view. Provider cursors and leases never leave mail core. */
 export interface MailSyncRunView {
+  readonly historyComplete?: boolean;
+  readonly recovering?: boolean;
+  readonly pendingMessages?: number;
   readonly id: string;
   readonly accountId: string;
   readonly mode: MailSyncMode;
@@ -813,6 +824,11 @@ export interface MailService {
     context: MailOperationContext,
     input: MailListMessagesInput,
   ): Promise<MailPage<MailMessageSummary>>;
+  retryMessageContent(
+    context: MailOperationContext,
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage>;
   getMessage(
     context: MailOperationContext,
     accountId: string,
@@ -995,6 +1011,8 @@ export interface MailProviderListMessagesInput {
 }
 
 export interface MailProviderMessagePage {
+  /** False while the Provider is still establishing its history baseline. */
+  readonly historyReady?: boolean;
   readonly messages: readonly NormalizedMailMessage[];
   readonly nextCursor?: string;
   /**
@@ -1074,6 +1092,9 @@ export interface NormalizedMailAttachment {
 
 /** Provider-normalized message before mail core assigns local identifiers. */
 export interface NormalizedMailMessage {
+  readonly contentStatus?: 'complete' | 'deferred' | 'failed';
+  readonly contentError?: string;
+  readonly size?: number;
   readonly remoteDraftFingerprint?: string;
   readonly providerMessageId: string;
   readonly providerDraftId?: string;
@@ -1362,6 +1383,10 @@ export interface MailSyncBatch {
 }
 
 export interface MailSyncStepCommit {
+  readonly historyComplete?: boolean;
+  readonly restart?: boolean;
+  readonly historyPage?: boolean;
+  readonly receivedAfter?: string;
   readonly run: MailSyncRun;
   readonly folders?: readonly NormalizedMailFolder[];
   readonly completeProviderFolderIds?: readonly string[];
@@ -1545,6 +1570,11 @@ export interface MailStore {
     folder: NormalizedMailFolder,
   ): Promise<MailFolder>;
   commitSyncBatch(batch: MailSyncBatch): Promise<void>;
+  saveMessageContent(
+    accountId: string,
+    messageId: string,
+    message: NormalizedMailMessage,
+  ): Promise<MailMessage>;
   saveMessage(
     accountId: string,
     message: NormalizedMailMessage,
@@ -1637,6 +1667,7 @@ export interface MailStore {
     offset?: number,
     limit?: number,
   ): Promise<readonly MailSyncRun[]>;
+  recoverSyncRuns(now: string): Promise<number>;
   listAllSyncRuns(): Promise<readonly MailSyncRun[]>;
   cancelSyncRun(syncRunId: string): Promise<MailSyncRun | undefined>;
   claimSyncRun(

@@ -245,6 +245,13 @@ const migration: MigrationDefinition = defineMigration({
       collection.text('text');
       collection.text('html');
       collection.text('note');
+      collection.string('contentStatus', {
+        length: 20,
+        nullable: false,
+        defaultValue: 'complete',
+      });
+      collection.string('contentError', { length: 100 });
+      collection.integer('size');
       collection.datetimeTz('receivedAt');
       collection.datetimeTz('sentAt');
       collection.datetimeTz('sortAt', { nullable: false });
@@ -262,6 +269,9 @@ const migration: MigrationDefinition = defineMigration({
       });
       collection.index(['accountId', 'sortAt', 'id'], {
         name: 'mail_messages_account_sort_idx',
+      });
+      collection.index(['accountId', 'contentStatus'], {
+        name: 'mail_messages_content_status_idx',
       });
       collection.index(['accountId', 'todo', 'sortAt'], {
         name: 'mail_messages_account_todo_sort_idx',
@@ -341,6 +351,19 @@ const migration: MigrationDefinition = defineMigration({
         defaultValue: 0,
       });
       collection.text('historyCursor');
+      collection.datetimeTz('historyStartedAt');
+      collection.boolean('historyComplete', {
+        nullable: false,
+        defaultValue: false,
+      });
+      collection.boolean('recovering', {
+        nullable: false,
+        defaultValue: false,
+      });
+      collection.integer('pendingMessages', {
+        nullable: false,
+        defaultValue: 0,
+      });
       collection.text('folderCursor');
       collection.json('baselineCursor');
       collection.json('changeCursor');
@@ -363,6 +386,20 @@ const migration: MigrationDefinition = defineMigration({
         .belongsTo('account', 'mailAccounts')
         .targetKey('id')
         .foreignKey('accountId')
+        .constraints(true)
+        .onDelete('cascade');
+    });
+
+    await builder.createCollection('mailSyncTombstones', (collection) => {
+      collection.uuid('runId', { nullable: false });
+      collection.string('providerMessageId', { length: 500, nullable: false });
+      collection.primary(['runId', 'providerMessageId'], {
+        name: 'mail_sync_tombstones_pk',
+      });
+      collection
+        .belongsTo('run', 'mailSyncRuns')
+        .targetKey('id')
+        .foreignKey('runId')
         .constraints(true)
         .onDelete('cascade');
     });
@@ -467,6 +504,7 @@ const migration: MigrationDefinition = defineMigration({
     await builder.dropCollection('mailLabels');
     await builder.dropCollection('mailOutbox');
     await builder.dropCollection('mailSubmissions');
+    await builder.dropCollection('mailSyncTombstones');
     await builder.dropCollection('mailSyncRuns');
     await builder.dropCollection('mailSyncStates');
     await builder.dropCollection('mailMessageFolders');

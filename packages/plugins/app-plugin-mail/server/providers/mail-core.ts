@@ -109,6 +109,10 @@ export class MailCoreProvider extends ServiceProvider<MailCoreProviderApplicatio
       mailServiceToken,
       (container) =>
         new DefaultMailService({
+          logger: container
+            .resolve(loggingToken)
+            .getLogger()
+            .child({ module: 'mail' }),
           users: container.resolve(userAdministrationServiceToken),
           store: container.resolve(mailStoreToken),
           adapters: container.resolve(mailProviderAdapterResolverToken),

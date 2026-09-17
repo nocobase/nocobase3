@@ -1,6 +1,17 @@
 import type { MailProviderError, MailProviderResult } from '../../types.js';
 
 export function unknownError(error: unknown, code: string): MailProviderError {
+  if (
+    error instanceof SyntaxError ||
+    (error instanceof Error &&
+      error.message.includes('response exceeded the size limit'))
+  )
+    return {
+      code: 'MAIL_CONTENT_INVALID',
+      message: 'Mail content could not be decoded within the size limit.',
+      category: 'content',
+      retryable: false,
+    };
   return {
     code,
     message:

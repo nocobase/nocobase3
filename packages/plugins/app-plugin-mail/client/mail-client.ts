@@ -456,6 +456,16 @@ export class MailClient {
     });
   }
 
+  public retryMessageContent(
+    accountId: string,
+    messageId: string,
+  ): Promise<MailMessage> {
+    return this.post<MailMessage>(
+      `mail/accounts/${encodeURIComponent(accountId)}/messages/${encodeURIComponent(messageId)}/content/retry`,
+      {},
+    );
+  }
+
   public getMessage(
     accountId: string,
     messageId: string,

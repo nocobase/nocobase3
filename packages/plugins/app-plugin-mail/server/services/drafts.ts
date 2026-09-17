@@ -27,7 +27,7 @@ export class MailDraftsService {
   public constructor(
     private readonly dependencies: Pick<
       DefaultMailServiceDependencies,
-      'store' | 'adapters' | 'messageChangeNotifier'
+      'store' | 'adapters' | 'messageChangeNotifier' | 'logger'
     >,
     private readonly sendMail: SendMailOperation,
   ) {}
@@ -81,6 +81,7 @@ export class MailDraftsService {
       notifyMailMessageChange(
         this.dependencies.messageChangeNotifier,
         context.actorId,
+        this.dependencies.logger,
       );
       return localDraft;
     }
@@ -101,6 +102,7 @@ export class MailDraftsService {
           notifyMailMessageChange(
             this.dependencies.messageChangeNotifier,
             context.actorId,
+            this.dependencies.logger,
           );
           return localDraft;
         }
@@ -154,12 +156,14 @@ export class MailDraftsService {
       notifyMailMessageChange(
         this.dependencies.messageChangeNotifier,
         context.actorId,
+        this.dependencies.logger,
       );
       return saved;
     } catch {
       notifyMailMessageChange(
         this.dependencies.messageChangeNotifier,
         context.actorId,
+        this.dependencies.logger,
       );
       return localDraft;
     } finally {
@@ -214,6 +218,7 @@ export class MailDraftsService {
     notifyMailMessageChange(
       this.dependencies.messageChangeNotifier,
       context.actorId,
+      this.dependencies.logger,
     );
     return resolved;
   }

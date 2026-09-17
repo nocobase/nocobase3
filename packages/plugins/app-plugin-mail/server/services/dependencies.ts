@@ -1,3 +1,4 @@
+import type { MailLogger } from '../logging.js';
 import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
 import { type MailMessageChangeNotifier } from '../realtime.js';
 import {
@@ -15,6 +16,7 @@ export interface MailOutboxPublisher {
 }
 
 export interface DefaultMailServiceDependencies {
+  readonly logger?: MailLogger;
   readonly users?: Pick<UserAdministrationService, 'list'>;
   readonly store: MailStore;
   readonly adapters: MailProviderAdapterResolver;

@@ -21,11 +21,13 @@ import {
 } from './message-writes.js';
 import {
   type AccountRow,
+  type MessageRow,
+  type OutboxRow,
   type PushPendingRow,
   type SyncRunRow,
   type SyncStateRow,
 } from './rows.js';
-import { jsonOrNull, parseJson } from './serialization.js';
+import { chunks, jsonOrNull, parseJson } from './serialization.js';
 import { insertOutbox, upsertSyncState } from './sync-writes.js';
 
 export class MailSyncStore {
@@ -96,6 +98,7 @@ export class MailSyncStore {
       ...input,
       phase: 'preparing',
       status: 'pending',
+      historyStartedAt: now,
       revision: 0,
       processedMessages: 0,
       processedPages: 0,
@@ -211,6 +214,87 @@ export class MailSyncStore {
     return rows.map(fromSyncRunRow);
   }
 
+  /** Recreate lost queue deliveries from durable checkpoints, fenced by revision and lease. */
+  public async recoverSyncRuns(now: string): Promise<number> {
+    const staleBefore = new Date(Date.parse(now) - 120_000).toISOString();
+    const candidates = await this.database
+      .query()
+      .selectFrom<SyncRunRow>('mailSyncRuns')
+      .selectAll()
+      .where('status', 'in', ['pending', 'running'])
+      .where((builder) =>
+        builder.not(
+          builder.exists(
+            builder
+              .selectFrom('mailOutbox')
+              .select('id')
+              .whereRef('mailOutbox.aggregateId', '=', 'mailSyncRuns.id')
+              .where('mailOutbox.status', 'in', ['pending', 'publishing']),
+          ),
+        ),
+      )
+      .where((builder) =>
+        builder.or([
+          builder.eb('leaseExpiresAt', '<=', now),
+          builder.eb.and([
+            builder.eb('leaseToken', 'is', null),
+            builder.eb('updatedAt', '<=', staleBefore),
+          ]),
+        ]),
+      )
+      .orderBy('updatedAt', 'asc')
+      .limit(100)
+      .execute<SyncRunRow>();
+    let recovered = 0;
+    for (const row of candidates) {
+      recovered += await this.database.transaction(
+        async (connection): Promise<number> => {
+          const waiting = await connection.query
+            .selectFrom<OutboxRow>('mailOutbox')
+            .select('id')
+            .where('aggregateId', '=', row.id)
+            .where('status', 'in', ['pending', 'publishing'])
+            .executeTakeFirst();
+          if (waiting) return 0;
+          let update = connection.query
+            .updateTable<SyncRunRow>('mailSyncRuns')
+            .set({
+              revision: Number(row.revision) + 1,
+              status: 'pending',
+              leaseToken: null,
+              leaseExpiresAt: null,
+              updatedAt: now,
+            })
+            .where('id', '=', row.id)
+            .where('revision', '=', row.revision)
+            .where('status', 'in', ['pending', 'running']);
+          update = row.leaseToken
+            ? update
+                .where('leaseToken', '=', row.leaseToken)
+                .where('leaseExpiresAt', '<=', now)
+            : update
+                .where('leaseToken', 'is', null)
+                .where('updatedAt', '<=', staleBefore);
+          const result = await update.execute();
+          if (result.updatedCount !== 1) return 0;
+          await insertOutbox(
+            connection.query,
+            {
+              id: row.id,
+              phase: row.phase,
+              revision: Number(row.revision) + 1,
+            },
+            Number(row.processedPages),
+            now,
+            randomUUID(),
+          );
+          return 1;
+        },
+      );
+    }
+    return recovered;
+  }
+
   public async cancelSyncRun(
     syncRunId: string,
   ): Promise<MailSyncRun | undefined> {
@@ -311,11 +395,60 @@ export class MailSyncStore {
           input.completeProviderFolderIds,
         );
       }
+      let messages = input.messages;
+      if (input.historyPage && messages.length > 0) {
+        const removed = await connection.query
+          .selectFrom('mailSyncTombstones')
+          .select('providerMessageId')
+          .where('runId', '=', input.run.id)
+          .where(
+            'providerMessageId',
+            'in',
+            messages.map((message) => message.providerMessageId),
+          )
+          .execute<{ providerMessageId: string }>();
+        const deletedIds = new Set(removed.map((row) => row.providerMessageId));
+        messages = messages.filter(
+          (message) => !deletedIds.has(message.providerMessageId),
+        );
+      }
       await upsertMessages(
         connection.query,
         input.run.accountId,
-        input.messages,
+        messages,
+        input.historyPage
+          ? (input.run.historyStartedAt ?? input.run.createdAt)
+          : undefined,
       );
+      if (input.run.mode === 'initial' && !input.historyPage) {
+        const affectedIds = [
+          ...new Set([
+            ...input.messages.map((message) => message.providerMessageId),
+            ...(input.deletedProviderMessageIds ?? []),
+          ]),
+        ];
+        for (const ids of chunks(affectedIds, 100)) {
+          await connection.query
+            .deleteFrom('mailSyncTombstones')
+            .where('runId', '=', input.run.id)
+            .where('providerMessageId', 'in', ids)
+            .execute();
+        }
+        for (const ids of chunks(
+          [...new Set(input.deletedProviderMessageIds ?? [])],
+          100,
+        )) {
+          await connection.query
+            .insertInto('mailSyncTombstones')
+            .values(
+              ids.map((providerMessageId) => ({
+                runId: input.run.id,
+                providerMessageId,
+              })),
+            )
+            .execute();
+        }
+      }
       await removeMessagesFromFolders(
         connection.query,
         input.run.accountId,
@@ -343,7 +476,18 @@ export class MailSyncStore {
           .where('requestToken', '=', pendingPush.requestToken)
           .execute();
       }
-      const status = pendingPush ? 'running' : input.status;
+      const pending = await connection.query
+        .selectFrom<MessageRow>('mailMessages')
+        .select(({ fn }) => [fn.countAll().as('count')])
+        .where('accountId', '=', input.run.accountId)
+        .where('contentStatus', '!=', 'complete')
+        .executeTakeFirst<{ count: number | string }>();
+      const pendingMessages = Number(pending?.count ?? 0);
+      const status = pendingPush
+        ? 'running'
+        : input.status === 'completed' && pendingMessages > 0
+          ? 'partial'
+          : input.status;
       // Refresh folder metadata too: a send may have created the Sent folder.
       const phase = pendingPush ? 'preparing' : input.phase;
       const createNextTask = pendingPush || input.createNextTask;
@@ -352,9 +496,34 @@ export class MailSyncStore {
         .set({
           phase,
           status,
-          mode: pendingPush ? 'incremental' : input.run.mode,
+          mode: input.restart
+            ? 'initial'
+            : pendingPush
+              ? 'incremental'
+              : input.run.mode,
+          policy: JSON.stringify(
+            input.restart
+              ? {
+                  receivedAfter: input.receivedAfter,
+                  batchSize: input.run.policy.batchSize,
+                }
+              : input.run.policy,
+          ),
+          historyStartedAt: input.restart
+            ? now
+            : (input.run.historyStartedAt ?? input.run.createdAt),
+          historyComplete: input.restart
+            ? false
+            : (input.historyComplete ?? input.run.historyComplete ?? false),
+          recovering:
+            input.restart ||
+            (status === 'running' && (input.run.recovering ?? false)),
+          pendingMessages,
           revision: input.run.revision + 1,
-          activeKey: status === 'completed' ? null : input.run.accountId,
+          activeKey:
+            status === 'completed' || status === 'partial'
+              ? null
+              : input.run.accountId,
           processedMessages:
             input.run.processedMessages + input.messages.length,
           processedPages: input.run.processedPages + 1,
@@ -366,7 +535,8 @@ export class MailSyncStore {
           leaseExpiresAt: null,
           error: null,
           updatedAt: now,
-          completedAt: status === 'completed' ? now : null,
+          completedAt:
+            status === 'completed' || status === 'partial' ? now : null,
         })
         .where('id', '=', input.run.id)
         .where('status', '=', 'running')
@@ -374,6 +544,17 @@ export class MailSyncStore {
         .execute();
       if (result.updatedCount !== 1) {
         throw new Error('Mail sync run lease was lost before commit.');
+      }
+      if (input.restart || input.status === 'completed')
+        await connection.query
+          .deleteFrom('mailSyncTombstones')
+          .where('runId', '=', input.run.id)
+          .execute();
+      if (input.restart) {
+        await connection.query
+          .deleteFrom('mailSyncStates')
+          .where('accountId', '=', input.run.accountId)
+          .execute();
       }
       if (input.status === 'completed' && input.changeCursor) {
         await upsertSyncState(

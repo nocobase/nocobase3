@@ -17,24 +17,6 @@ export function gmailCursor(
   };
 }
 
-export function gmailRecoveryCursor(
-  historyId: string,
-  capturedAt: string | undefined,
-  recoveryAfter: string,
-  recoveryPageToken: string,
-): MailSyncCursor {
-  return {
-    value: {
-      historyId,
-      ...(capturedAt ? { capturedAt } : {}),
-      recoveryAfter,
-      recoveryHistoryId: historyId,
-      recoveryPageToken,
-    },
-    version: 'gmail-v1',
-  };
-}
-
 export function parseGmailCursor(
   cursor: MailSyncCursor | undefined,
 ): GmailCursorValue | undefined {
@@ -62,12 +44,4 @@ export function parseGmailCursor(
             : undefined,
       }
     : undefined;
-}
-
-export function recoveryStart(capturedAt: string | undefined): string {
-  const capturedTime = capturedAt ? Date.parse(capturedAt) : Number.NaN;
-  const start = Number.isFinite(capturedTime)
-    ? capturedTime - 1_000
-    : Date.now() - 7 * 24 * 60 * 60 * 1_000;
-  return new Date(start).toISOString();
 }
