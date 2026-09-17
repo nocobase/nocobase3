@@ -176,3 +176,31 @@ it.skipIf(selectedBackend() !== 'redis')(
     }
   },
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'terminates an abandoned configuration write without requiring shutdown',
+  async () => {
+    const { createTcpProxy } = await import('../helpers/tcp-proxy.js');
+    const proxy = await createTcpProxy(
+      Number(process.env.QUEUE_TEST_REDIS_PORT),
+    );
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-configure-blackhole`,
+      queueBackend: 'redis',
+      connection: { host: '127.0.0.1', port: proxy.port },
+    });
+    const manager = service.manager('jobs');
+    try {
+      await service.setup();
+      proxy.blackhole(true);
+      await expect(
+        manager.configure({ rateLimit: { max: 1, duration: 100 } }),
+      ).rejects.toThrow();
+      await expect.poll(() => proxy.sockets.size, { timeout: 2000 }).toBe(0);
+    } finally {
+      await service.shutdown().catch(() => {});
+      await proxy.close();
+    }
+  },
+  20000,
+);
