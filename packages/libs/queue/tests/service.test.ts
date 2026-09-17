@@ -515,4 +515,33 @@ describe('application-private queue service', () => {
       await Promise.all([updating, closing]);
     }
   });
+  it('uses private built-in memory storage and reports each initialized queue once', async () => {
+    const initialized = vi.fn();
+    const first = createQueueService(
+      { namespace: 'same' },
+      { onInMemoryQueueInitialized: initialized },
+    );
+    const second = createQueueService({ namespace: 'same' });
+    services.push(first, second);
+    const received: unknown[] = [];
+    first.consumer('jobs').consume(async (_channel, message) => {
+      received.push(message);
+    });
+    second.producer('jobs');
+    await Promise.all([first.setup(), second.setup()]);
+    const foreign = await second
+      .producer('jobs')
+      .publish('event', { from: 'second' }, { jobIdProducer: () => 'same-id' });
+    const own = await first
+      .producer('jobs')
+      .publish('event', { from: 'first' }, { jobIdProducer: () => 'same-id' });
+    expect(own).toEqual(foreign);
+    await expect.poll(() => received).toEqual([{ from: 'first' }]);
+    expect(initialized).toHaveBeenCalledExactlyOnceWith({
+      namespace: 'same',
+      queue: 'jobs',
+    });
+    await first.producer('late').publish('event', {});
+    expect(initialized).toHaveBeenCalledTimes(2);
+  });
 });
