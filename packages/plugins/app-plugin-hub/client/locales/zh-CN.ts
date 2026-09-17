@@ -417,7 +417,7 @@ const zhCN: HubResource = {
     names: {
       'hub-administrator': '管理员',
       'hub-operator': '运维人员',
-      'hub-viewer': '查看者',
+      'hub-viewer': '查看者（历史角色）',
     },
     descriptions: {
       'hub-administrator': '完整管理应用、运维操作和用户权限',

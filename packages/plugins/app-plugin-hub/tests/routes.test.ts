@@ -164,16 +164,6 @@ describe('@nocobase/app-plugin-hub API routes', () => {
             },
           ],
         },
-        {
-          key: 'hub-viewer',
-          title: 'Hub viewer',
-          grants: [
-            {
-              resource: { type: 'hub.app', id: '*' },
-              actions: ['read'],
-            },
-          ],
-        },
       ],
     });
   });

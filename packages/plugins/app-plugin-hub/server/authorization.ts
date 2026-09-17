@@ -15,6 +15,11 @@ export const HUB_PERMISSION_SET_KEYS: readonly [
   'hub-viewer',
 ] = ['hub-administrator', 'hub-operator', 'hub-viewer'] as const;
 
+export const HUB_ACTIVE_ROLE_KEYS = [
+  'hub-administrator',
+  'hub-operator',
+] as const;
+
 export const HUB_ADMINISTRATOR: 'hub-administrator' =
   HUB_PERMISSION_SET_KEYS[0];
 
@@ -160,7 +165,8 @@ export function createHubUserRoleScope(
         },
         {
           value: 'hub-viewer',
-          label: 'Viewer',
+          label: 'Viewer (legacy)',
+          assignable: false,
           labelI18nKey: 'roles.names.hub-viewer',
           labelI18nNs: '@nocobase/app-plugin-hub',
           description: 'View your own applications and runtime status.',
@@ -213,6 +219,13 @@ export function createHubUserRoleScope(
       // snapshot used by the final-administrator check.
       await lockAdministratorRole(connection);
       const current = await currentHubRole(authorization, userId, connection);
+      if (role === 'hub-viewer') {
+        if (current === role) return;
+        throw new UserManagementError(
+          'INVALID_ROLE_SCOPE_VALUE',
+          'The legacy Viewer role can no longer be assigned.',
+        );
+      }
       if (current === HUB_ADMINISTRATOR && role !== HUB_ADMINISTRATOR) {
         await assertAdministratorCanBeRemoved(userId, connection);
       }

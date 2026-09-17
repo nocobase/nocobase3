@@ -203,7 +203,7 @@ const USER_API_CASES: readonly ApiCase[] = [
       name: 'Alice',
       email: 'alice@example.com',
       password: 'secret123',
-      roleScopes: { hub: 'hub-viewer' },
+      roleScopes: { hub: 'hub-operator' },
     }),
     allowed: ['hub-administrator'],
     expectedStatus: 201,
@@ -231,7 +231,7 @@ const USER_API_CASES: readonly ApiCase[] = [
     name: 'assign a user role',
     method: 'PUT',
     path: '/users/user-1/role-scopes/hub',
-    body: json({ value: 'hub-viewer' }),
+    body: json({ value: 'hub-operator' }),
     allowed: ['hub-administrator'],
   },
   {
@@ -680,7 +680,7 @@ function createUserService(): UserManagementService {
     disabledAt: null,
     createdAt: now,
     updatedAt: now,
-    roleScopes: { hub: 'hub-viewer' },
+    roleScopes: { hub: 'hub-operator' },
   } as const;
   return {
     options: vi.fn(() => Promise.resolve({ roleScopes: [] })),

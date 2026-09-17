@@ -455,7 +455,7 @@ const enUS = {
     names: {
       'hub-administrator': 'Administrator',
       'hub-operator': 'Operator',
-      'hub-viewer': 'Viewer',
+      'hub-viewer': 'Viewer (legacy)',
     },
     descriptions: {
       'hub-administrator': 'Full access to applications and user management',
