@@ -110,6 +110,7 @@ export function createQueueService(
   let setupPromise: Promise<void> | undefined;
   let shutdownPromise: Promise<void> | undefined;
   let producersOpen = true;
+  const publishing = new Set<Promise<void>>();
 
   function entry(name: string): QueueEntry {
     validateQueueName(name, 'queue');
@@ -174,6 +175,18 @@ export function createQueueService(
       },
       producer: createQueueProducer({
         name,
+        beginOperation(): () => void {
+          if (!producersOpen) throw new Error('Queue service is closed');
+          let settle = (): void => {};
+          const pending = new Promise<void>((resolve) => {
+            settle = resolve;
+          });
+          publishing.add(pending);
+          return (): void => {
+            publishing.delete(pending);
+            settle();
+          };
+        },
         async queue(): Promise<ServiceQueue> {
           if (!producersOpen) throw new Error('Queue service is closed');
           if (!stopped) await requireReady(name, current);
@@ -503,6 +516,7 @@ export function createQueueService(
             if (result.status === 'rejected') errors.push(result.reason);
         }
         producersOpen = false;
+        await Promise.all([...publishing]);
         const closed = await Promise.allSettled(
           workers.map(async (current) => {
             await current.worker!.close(!settled);

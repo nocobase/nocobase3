@@ -21,6 +21,7 @@ export interface ProducerContext {
   name: string;
   queue(): Promise<ProducerQueue>;
   configuration(): ResolvedQueueConfiguration;
+  beginOperation?(): () => void;
 }
 
 interface PreparedJob {
@@ -47,29 +48,46 @@ export function createQueueProducer(context: ProducerContext): QueueProducer {
   }
   return {
     async publish(channel, message, options) {
-      const queue = await context.queue();
-      const prepared = prepare(
-        channel,
-        message,
-        resolvePublishOptions(context.configuration(), options),
-      );
-      const job = await queue.add(prepared.name, prepared.data, prepared.opts);
-      if (job.id === undefined)
-        throw new Error('Queue backend returned no job ID');
-      return { jobId: job.id };
-    },
-    async publishMany(batches, options) {
-      const queue = await context.queue();
-      const resolved = resolvePublishOptions(context.configuration(), options);
-      const prepared = batches.map(({ channel, message }) =>
-        prepare(channel, message, resolved),
-      );
-      const jobs = await queue.addBulk(prepared);
-      return jobs.map((job) => {
+      const finish = context.beginOperation?.();
+      try {
+        const queue = await context.queue();
+        const prepared = prepare(
+          channel,
+          message,
+          resolvePublishOptions(context.configuration(), options),
+        );
+        const job = await queue.add(
+          prepared.name,
+          prepared.data,
+          prepared.opts,
+        );
         if (job.id === undefined)
           throw new Error('Queue backend returned no job ID');
         return { jobId: job.id };
-      });
+      } finally {
+        finish?.();
+      }
+    },
+    async publishMany(batches, options) {
+      const finish = context.beginOperation?.();
+      try {
+        const queue = await context.queue();
+        const resolved = resolvePublishOptions(
+          context.configuration(),
+          options,
+        );
+        const prepared = batches.map(({ channel, message }) =>
+          prepare(channel, message, resolved),
+        );
+        const jobs = await queue.addBulk(prepared);
+        return jobs.map((job) => {
+          if (job.id === undefined)
+            throw new Error('Queue backend returned no job ID');
+          return { jobId: job.id };
+        });
+      } finally {
+        finish?.();
+      }
     },
   };
 }

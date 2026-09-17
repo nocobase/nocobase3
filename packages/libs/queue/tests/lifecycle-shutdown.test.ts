@@ -36,4 +36,51 @@ describe('shutdown idempotency', () => {
     await Promise.all([first, second]);
     expect(first).toBe(second);
   });
+  it('waits for admitted producer operations before closing their backend', async () => {
+    const service = createQueueService({
+      namespace: 'producer-close',
+      queueBackend: 'test',
+    });
+    const { createInMemoryBackendFactory } =
+      await import('../src/backends/in-memory/index.js');
+    const factory = createInMemoryBackendFactory();
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started = false;
+    let finished = false;
+    let closedEarly = false;
+    service.registerBackend('test', (...args) => {
+      const backend = factory(...args);
+      const add = backend.addJob.bind(backend);
+      const close = backend.close.bind(backend);
+      backend.addJob = async (...values) => {
+        started = true;
+        await gate;
+        const id = await add(...values);
+        finished = true;
+        return id;
+      };
+      backend.close = async (...values) => {
+        closedEarly = !finished;
+        await close(...values);
+      };
+      return backend;
+    });
+    const producer = service.producer('jobs');
+    await service.setup();
+    const publishing = producer.publish('event', {});
+    void publishing.catch(() => {});
+    await expect.poll(() => started).toBe(true);
+    const closing = service.shutdown();
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(closedEarly).toBe(false);
+    } finally {
+      release();
+      await Promise.allSettled([publishing, closing]);
+    }
+    await expect(publishing).resolves.toHaveProperty('jobId');
+  });
 });
