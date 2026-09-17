@@ -9,7 +9,7 @@ keywords: 'NocoBase,Authentication Skill,Agent,提示词'
 认证插件随包带了一份 Skill。插件注册到应用时它会同步到 `.agents/skills/nocobase-app-plugin-authentication/`，Agent 在处理登录、会话、当前用户、认证方式这类需求时会自动读它。目录不在或看起来过期，在应用根目录运行：
 
 ```bash
-pnpm plugin:skills:sync
+pnpm skills:sync
 ```
 
 这个目录是同步生成的，下次同步会整体覆盖，不要手改。

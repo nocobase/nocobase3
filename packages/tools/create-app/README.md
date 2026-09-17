@@ -112,7 +112,7 @@ The template is downloaded (`@nocobase/app-template-default@latest` by default) 
 - `pnpm-workspace.yaml` gets its `allowBuilds` decisions (see below)
 - A hub additionally gets `.env`, derived from the template's `.env.example` with `APP_NAME` set
 - Dependencies are installed (skip with `--no-install`)
-- The application's own `pnpm plugin:skills:sync` runs, copying the bundled plugins' skills into `.agents/skills/`. This has to come after the install, because the sync resolves plugins out of `node_modules`. A failure is only a warning; the generated application still runs, and the command can be re-run in the application directory at any time
+- The application's own `pnpm skills:sync` runs, copying skills from its direct `@nocobase/*` dependencies and registered plugins into `.agents/skills/`. This has to come after the install, because the sync resolves packages out of `node_modules`. A failure is only a warning; the generated application still runs, and the command can be re-run in the application directory at any time. Older templates that only provide `plugin:skills:sync` continue to work through the compatibility entry point
 
 ## Choosing a database
 

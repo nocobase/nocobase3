@@ -8,11 +8,13 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server routes start empty; the only built-in application provider exposes Authorization Permission Sets as direct roles in the Users page. The only application page is a localized homepage.
 
-`database/main/` contains required permission initialization only; application-owned business migrations and seeds start empty. Do not add article history, demo seeds, or compatibility copies from Examples to this template. Existing installations retain their own executed migration sources when upgrading; see the [upgrade migration rules](skills/nocobase-app-upgrade/references/edge-cases.md#migrations).
+`database/main/` contains required permission initialization only; application-owned business migrations and seeds start empty. Do not add article history, demo seeds, or compatibility copies from Examples to this template. Existing installations retain their own executed migration sources when upgrading; see the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations).
 
 ## Load the development skills
 
-`skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
+If `.agents/skills/nocobase-app-development/` is missing, run `pnpm install` and then `pnpm skills:sync` from the application root.
+
+`.agents/skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
 
 | Task                                             | Reference                               |
 | ------------------------------------------------ | --------------------------------------- |
@@ -28,7 +30,7 @@ Default is the clean application starting point. It registers product capabiliti
 
 Read the one page your task needs, not the whole directory.
 
-`skills/nocobase-app-upgrade/` is a separate Skill for a separate job: merging a newer release of the template this application was generated from. Read it when the task is upgrading the template rather than building a feature, and read it before touching anything — an upgrade done by copying the newest template over this application destroys the work that made it this application.
+`.agents/skills/nocobase-app-upgrade/` is a separate Skill for a separate job: merging a newer release of the template this application was generated from. Read it when the task is upgrading the template rather than building a feature, and read it before touching anything — an upgrade done by copying the newest template over this application destroys the work that made it this application.
 
 ## Where things go
 
@@ -50,13 +52,13 @@ cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
 
-A page with children or page-local helpers uses a folder with `index.tsx`; child folders mirror route paths. Keep page-local components and data in that folder, reserving `client/components/` for application-wide components. See [child routes](skills/nocobase-app-development/references/client-child-routes.md) for examples.
+A page with children or page-local helpers uses a folder with `index.tsx`; child folders mirror route paths. Keep page-local components and data in that folder, reserving `client/components/` for application-wide components. See [child routes](.agents/skills/nocobase-app-development/references/client-child-routes.md) for examples.
 
 A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
 ### The rest is framework structure
 
-Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
+Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](.agents/skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
 
 The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
@@ -67,7 +69,7 @@ Prefer the mechanism the system already provides. Declare a page in `client/rout
 When the built-in mechanism genuinely cannot express what is being asked, changing this structure is a legitimate answer — not a last resort to apologize for. Do it deliberately, and leave the next agent enough to work with:
 
 - Comment what you changed and why the built-in path did not fit. On upgrade, an agent reconciling the template's version needs to know whether your change is still needed.
-- Update this file and `skills/nocobase-app-development/` in the same change, so the guidance describes the application as it actually is. Documentation describing a layout the application no longer has is worse than none.
+- Update this file in the same change, so the guidance describes the application as it actually is. If the framework's shared guidance is wrong for every application, update the source `@nocobase/app-skills` package instead of editing its synchronized copy.
 
 ## Building a feature
 
@@ -94,7 +96,7 @@ Use `defineSettingsRoutes()` for administrative pages, which mount under `/setti
 
 **Declare navigation on the route.** App, Settings and Dev menus read `navigation: { title: 'navigation.orders' }`; titles resolve in the owning locale namespace. Add the translation in `client/locales/`. Refine resources remain for CRUD and do not add menu entries.
 
-Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For examples and the exact file list, read `skills/nocobase-app-development/references/client-child-routes.md`.
+Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For examples and the exact file list, read `.agents/skills/nocobase-app-development/references/client-child-routes.md`.
 
 ### Components and styling
 
@@ -201,7 +203,7 @@ The development proxy adapts same-origin HTTP and WebSocket Origin headers to th
 
 ## The command line
 
-`pnpm nocobase` runs this application's CLI. It holds three kinds of command: `plugin *` manages the plugins this application uses, `app *` is what this application writes for itself in `cli/commands/`, and each registered plugin contributes its own commands under a topic it declares — a workflow plugin's commands appear under `workflow`.
+`pnpm nocobase` runs this application's CLI. Built-in `plugin *` commands manage registered plugins, `package *` commands manage direct NocoBase package dependencies, `app *` is what this application writes for itself in `cli/commands/`, and each registered plugin contributes its own commands under a topic it declares — a workflow plugin's commands appear under `workflow`.
 
 ```bash
 pnpm nocobase --help          # every topic and command
@@ -227,7 +229,7 @@ To customize a page a plugin owns, pass an option on its registration, add a sou
 
 ### Read a plugin's Skill before building what it already does
 
-**You are not starting from scratch.** This application ships with plugins that already solve whole categories of requirement, and each one publishes a Skill explaining how to use it. Registration copies those Skills into `.agents/skills/`. Before implementing a feature, check whether a plugin already covers it:
+**You are not starting from scratch.** This application ships with NocoBase packages that already solve whole categories of requirement, and packages may publish a Skill explaining how to use them. `pnpm skills:sync` copies Skills from direct `@nocobase/*` dependencies and registered plugins into `.agents/skills/`. Before implementing a feature, check whether an installed and registered plugin already covers it:
 
 | The requirement sounds like                                                                       | Read the Skill for                    |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------- |
@@ -239,11 +241,19 @@ To customize a page a plugin owns, pass an option on its registration, add a sou
 | File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file`           |
 | Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
 
-Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
+Run `pnpm skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
 
 Building a permission system, a notification sender, or a job scheduler by hand when a registered plugin already provides one is the most expensive mistake available here. Prefer the plugin; write your own only when you have read its Skill and confirmed it genuinely does not fit.
 
-`.agents/skills/` itself is generated output: gitignored, and every synchronized directory is replaced wholesale on the next sync, so never edit a file there. This application's own `skills/` directory is the opposite — committed source you should keep current.
+`.agents/skills/` is generated output: gitignored, and every synchronized package-owned directory is replaced wholesale on the next sync, so never edit a file there. Put application-specific guidance in committed `AGENTS.md` files.
+
+## Removing a NocoBase dependency
+
+Before removing a direct `@nocobase/*` dependency, search application imports, Client/Server/CLI plugin registrations, routes, services, configuration, tests, and build scripts for its package name and public contracts. Migrate or delete those references first. The command below changes dependency metadata and generated Skills; it does not edit application source or configuration, so never use it to remove a capability the application still needs.
+
+Use `pnpm package:remove @nocobase/example`. It invokes the application's package manager so `package.json` and the lockfile stay consistent, then deletes only synchronized Skills recorded as belonging to that package. For an `@nocobase/app-plugin-*` package it delegates to the plugin unregister workflow, removing its Client, Server, and CLI registrations together; `pnpm plugin:unregister <name>` remains a supported plugin-specific entry point. Preview with `--dry-run`, and use `--json` when another tool needs structured output.
+
+If an older application has the command but lacks the script, run `pnpm nocobase package remove @nocobase/example`. If its CLI predates the command, update `@nocobase/nb3-cli` first; where `skills:sync` is already available, the compatibility fallback is to remove the dependency with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, first confirm the manifest no longer declares the package, then run a full `pnpm skills:sync` to reconcile stale package-owned output. `package:remove` may also be passed a package already absent from the manifest to clean recorded historical Skill ownership, and it must not uninstall or clean Skills owned by another package.
 
 ## Adding a dependency
 
@@ -319,9 +329,9 @@ Add tests for what you changed: a route's authenticated, unauthenticated, and un
 
 `pnpm client:inspect` and `pnpm server:inspect` show what is wired when a contribution does not appear as expected. They report composition, not correctness — a clean inspection proves nothing about behavior or security.
 
-For creating or editing theme presets, read `skills/nocobase-app-development/references/themes.md` (from the application root).
+For creating or editing theme presets, read `.agents/skills/nocobase-app-development/references/themes.md` (from the application root).
 
-For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `.agents/skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
 
 Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.
 
@@ -334,3 +344,5 @@ TypeScript and compiled JavaScript use the same source checksum for migration hi
 The account menu checks Better Auth sign-out results before refreshing the session and shows a localized error toast for API or network failures. Preserve this behavior when upgrading the shell; navigation alone does not revoke a session.
 
 The authorization provider clears the permission snapshot before rendering a new session. Route navigation and page guards subscribe to the authorization revision; preserve these checks when customizing the shell so account changes and permission updates take effect without a reload. Pending checks hide protected content, and failed checks deny access.
+
+Navigation groups retain their expanded or collapsed state while the navigation tree stays mounted. Selecting a new page expands its ancestor groups without collapsing other groups; users can still collapse the active group manually. Keep this behavior aligned across the application, Settings, and Dev tools navigation.

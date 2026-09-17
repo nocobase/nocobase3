@@ -2,7 +2,7 @@ import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
 import { GroupByExamples } from '../components/group-by-examples.js';
 import type { GroupByExample } from '../group-by.js';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useState, type ReactElement } from 'react';
 import { Link } from 'react-router';
@@ -54,7 +54,7 @@ const metrics = [
   'maximumPrice',
 ] as const;
 export default function AggregatePage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t } = useTranslation(NS);
   const [status, setStatus] = useState<AggregateStatus>('all');
   const [minimum, setMinimum] = useState('0');

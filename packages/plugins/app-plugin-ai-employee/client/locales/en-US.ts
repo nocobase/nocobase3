@@ -1,8 +1,388 @@
 export default {
+  'demo.navigation.group': 'AI Components',
+  'demo.navigation.chat': 'Chat window',
+  'demo.navigation.floating': 'Floating chat',
+  'demo.navigation.tasks': 'Employee tasks',
+  'demo.navigation.context': 'Page context',
+  'demo.navigation.tools': 'Tool cards',
+  'demo.containerPatterns': 'Container patterns',
+  'demo.promptGenerator': 'Prompt generator',
+  'demo.componentApi': 'Component API',
+  'demo.manualContext': 'Manual context',
+  'demo.shortcutContext': 'Task context · Shortcut',
+  'demo.presetContext': 'Task context · Conversation preset',
+  'demo.scopeContext': 'Task context · Scope inheritance',
+  'demo.builtinFrontendTool': 'Built-in frontend tool',
+  'demo.customFrontendTool': 'Custom frontend tool',
+  'demo.specializedRenderers': 'Specialized renderers',
+  'demo.defaultToolCard': 'Default Tool Card',
+  'demo.codePrompt': 'Code prompt',
+
+  'demo.conversationList': 'Conversation list',
+  'demo.aiEmployeeSelector': 'AI employee selector',
+  'demo.modelSelector': 'Model selector',
+  'demo.personalizedPromptEditor': 'Personalized prompt editor',
+  'demo.uploadFiles': 'Upload files',
+  'demo.panelExpandCollapse': 'Panel expand / collapse',
+  'demo.chatSurfaceProps': 'ChatSurface props',
+  'demo.chatWindowProps': 'AIChatWindow props',
+  'demo.panelWidthDefault': '450px · NocoBase default',
+  'demo.props.width': 'Sets the width used by the side-panel variant.',
+  'demo.props.closeOnEscape': 'Allows Escape to close the active surface.',
+  'demo.props.showCloseHandle':
+    'Shows an outside close handle for the side-panel variant.',
+  'demo.props.className':
+    'Adds layout or sizing classes to the root conversation window.',
+  'demo.props.headerActions':
+    'Adds surface actions such as expand, collapse, or close to the header.',
+  'demo.props.composerActions':
+    'Application-specific buttons rendered in the composer toolbar.',
+  'demo.props.showConversationToggle': 'Shows the conversation-list control.',
+  'demo.props.showNewConversation': 'Shows the new-conversation action.',
+  'demo.props.showEmployeeSelector':
+    'Shows the AI employee selector in the composer.',
+  'demo.props.showModelSelector': 'Shows the model selector in the composer.',
+  'demo.props.showUserPrompt':
+    'Shows the personalized AI employee prompt editor.',
+  'demo.props.enableAttachments':
+    'Enables file picker, drag-and-drop, and pasted-image uploads.',
+  'demo.props.attachmentActionIndex':
+    'Places the attachment action at a specific position in the composer toolbar.',
+  'demo.props.onToolCallDecision':
+    'Observes approve, reject, or edit decisions after AIChatProvider has processed them; use it for application side effects or telemetry.',
+  'demo.props.placeholder': 'Composer placeholder text.',
+  'demo.props.disclaimer': 'Customizes or hides the footer disclaimer.',
+  'demo.props.variant':
+    'Changes only the outer presentation while keeping the same chat window mounted.',
+  'demo.props.open': 'Controls whether the surface is open.',
+  'demo.props.onOpenChange':
+    'Receives close requests from Escape, the dialog backdrop, or surface actions.',
+  'demo.props.side': 'Chooses the side used by the side-panel variant.',
+  'demo.noEmployee': 'No AI employee is available for the current user.',
+  'demo.insideThePage': 'Inside the page',
+  'demo.dedicatedPage': 'Dedicated page',
+  'demo.rightSidePanel': 'Right side panel',
+  'demo.mobileRegion': 'Mobile region',
+  'demo.pushSidePanel': 'Push side panel',
+  'demo.mobileContainer': 'Mobile container',
+  'demo.previewBlock': 'Preview block',
+  'demo.previewPage': 'Preview page',
+  'demo.openPanel': 'Open panel',
+  'demo.openDialog': 'Open dialog',
+  'demo.previewMobile': 'Preview mobile',
+  'demo.containers.embeddedDescription':
+    'Place chat inside a dashboard, record page, or workspace region.',
+  'demo.containers.pageDescription':
+    'Give the conversation a full route and the largest working area.',
+  'demo.containers.panelDescription':
+    'Keep the page operable while the content narrows for chat.',
+  'demo.containers.dialogDescription':
+    'Open a focused conversation from an action without changing route.',
+  'demo.containers.mobileDescription':
+    'Use the same component in a narrow, touch-friendly viewport.',
+  'demo.placements.embeddedDescription':
+    'Embed chat in the selected content region.',
+  'demo.placements.pageDescription':
+    'Create a full route for the AI conversation.',
+  'demo.placements.panelDescription':
+    'Push the page narrower while chat is open.',
+  'demo.placements.dialogDescription':
+    'Open chat from a button or page action.',
+  'demo.placements.mobileDescription':
+    'Optimize the embedded container for a narrow viewport.',
+  'demo.ticketAnalysis': 'Ticket analysis',
+  'demo.responseDrafting': 'Response drafting',
+  'demo.workflowDesign': 'Workflow design',
+  'demo.inspectRecord': 'Inspect record',
+  'demo.searchRecords': 'Search records',
+  'demo.updateRecord': 'Update record',
+  'demo.suggestions': 'Suggestions',
+  'demo.businessReport': 'Business report',
+  'demo.chart': 'Chart',
+  'demo.subAgent': 'Sub-agent',
+  'demo.workflowOutput': 'Workflow output',
+  'demo.pickPageElement': 'Pick page element',
+  'demo.fillLeadForm': 'Fill lead form',
+  'demo.updateQuoteDiscount': 'Update quote discount',
+  'demo.applyReviewDiscount': 'Apply review discount',
+  'demo.prepareOpportunityBrief': 'Prepare opportunity brief',
+  'demo.renewalTask': 'Recommend next renewal action',
+  'demo.loadingConfiguration': 'Loading AI employees and enabled models…',
+  'demo.configurationNotReady': 'AI employee is not ready',
+  'demo.developmentInstance': 'Development instance',
+  'demo.developmentDescription':
+    "This page uses the Registry UI against the plugin's existing authenticated",
+  'demo.developmentOnly': 'routes. It is excluded from production builds.',
+  'demo.aiEmployeeRegistry': 'AI Employee Registry',
+  'demo.aiEmployeePlayground': 'AI employee playground',
+  'demo.playgroundDescription':
+    'Exercise the application-owned AI component library with the current plugin runtime.',
+  'demo.inlineMessages': 'Inline messages',
+  'demo.standardConversationTranscript': 'Standard conversation transcript',
+  'demo.transcriptDescription':
+    'This fixed example shows where reasoning, a normal tool call, and the final assistant response appear in one message sequence.',
+  'demo.conversations': 'Conversations',
+  'demo.supportWorkspaceReview': 'Support workspace review',
+  'demo.newConversation': 'New conversation',
+  'demo.messagePlaceholder': 'Message your AI employee…',
+  'demo.attachFile': 'Attach file',
+  'demo.sendMessage': 'Send message',
+  'demo.compactComposer': 'Compact composer',
+  'demo.compactTitle': 'Open the transcript only when needed',
+  'demo.compactDescription':
+    'The compact variant keeps only the chat header and composer. Its history button opens a dialog with conversation switching and the selected transcript.',
+  'demo.contextPickerTitle': 'Pick page context while composing a message',
+  'demo.contextPickerDescription':
+    'The user can pick any registered page element from the composer. Its current content is added to this message without changing task configuration.',
+  'demo.shortcutContextTitle': 'Reference page context from a Shortcut task',
+  'demo.shortcutContextDescription':
+    'The Shortcut task stores a page-element reference in message.workContext and reads its latest content when the user starts the task.',
+  'demo.presetContextTitle':
+    'Reference page context from a conversation preset task',
+  'demo.presetContextDescription':
+    'The AIChatProvider employeeTasks configuration uses the same message.workContext reference, but exposes the task in the conversation empty state instead of through a Shortcut.',
+  'demo.scopeTitle': 'Inherit the surrounding page context',
+  'demo.scopeDescription':
+    'A Shortcut or AIChatProvider inside AIPageContextScope inherits that context. A task-level message.workContext still takes precedence when configured.',
+  'demo.formFillerTitle': 'Fill a registered React form with Form filler',
+  'demo.formFillerDescription':
+    'Form filler is registered once by AIProvider. The form exposes its identifier, field schema, live values, and setter through useAIForm; it is not part of the custom frontend Tool catalog.',
+  'demo.pageActionTitle': 'Expose a page-specific action to the AI employee',
+  'demo.pageActionDescription':
+    'A registered page element can advertise custom Tools through the NocoBase loadFrontendTool and executeFrontendTool protocol. The example uses ASK permission and updates only the local quote preview.',
+  'demo.sceneGeneratorTitle': 'Generate a complete page context scene',
+  'demo.sceneGeneratorDescription':
+    'Describe the business scene, select the AI employee and task, then generate the full page surface, context binding, conversation layout, and optional frontend capability together.',
+  'demo.sourceContent': 'Source content',
+  'demo.sourceContentHint':
+    'Edit this text, then ask the AI employee to fill the registered form below.',
+  'demo.leadIntakeForm': 'Lead intake form',
+  'demo.formFillerHint':
+    'Form filler changes visible values only. It never submits the form.',
+  'demo.clear': 'Clear',
+  'demo.company': 'Company',
+  'demo.contactName': 'Contact name',
+  'demo.email': 'Email',
+  'demo.priority': 'Priority',
+  'demo.low': 'Low',
+  'demo.normal': 'Normal',
+  'demo.high': 'High',
+  'demo.quoteReview': 'Quote review',
+  'demo.customTool': 'Custom Tool',
+  'demo.reviewNote': 'Review note',
+  'demo.quoteToolHint':
+    'The page element registers update_quote_discount. Its full input schema is loaded only when the AI chooses this Tool. Approval is controlled by the ASK permission.',
+  'demo.selectedSupportCase': 'Selected support case',
+  'demo.caseEditHint': 'Change a value before running either task.',
+  'demo.taskContext': 'Task context',
+  'demo.summary': 'Summary',
+  'demo.severity': 'Severity',
+  'demo.medium': 'Medium',
+  'demo.taskShortcutArea': 'Task shortcut area',
+  'demo.shortcutReferenceHint':
+    'This button is outside the selected page element. Its task explicitly references “Selected support case”.',
+  'demo.explicitReference': 'Explicit reference',
+  'demo.analyzeSelectedCase': 'Analyze selected case',
+  'demo.selectedOpportunity': 'Selected opportunity',
+  'demo.opportunityEditHint':
+    'Change a value, then select the preset task in the chat.',
+  'demo.presetTaskContext': 'Preset task context',
+  'demo.opportunity': 'Opportunity',
+  'demo.forecast': 'Forecast',
+  'demo.pipeline': 'Pipeline',
+  'demo.likely': 'Likely',
+  'demo.committed': 'Committed',
+  'demo.presetTaskHint':
+    'No Shortcut is used here. “Prepare opportunity brief” comes from AIChatProvider.employeeTasks and appears in the conversation empty state.',
+  'demo.currentAccountRenewal': 'Current account renewal',
+  'demo.renewalScopeHint':
+    'Shortcut and conversation are inside this context scope.',
+  'demo.inherited': 'Inherited',
+  'demo.account': 'Account',
+  'demo.renewalStage': 'Renewal stage',
+  'demo.discovery': 'Discovery',
+  'demo.negotiation': 'Negotiation',
+  'demo.inheritedShortcut': 'Shortcut task without message.workContext',
+  'demo.reviewCurrentRenewal': 'Review current renewal',
+  'demo.inheritedTaskHint':
+    'The preset task “Recommend next renewal action” also has no task context, so it inherits this scope.',
+  'demo.customerWorkspace': 'Customer workspace',
+  'demo.pageElementsHint':
+    'The form and detail card are registered page elements.',
+  'demo.selectableElements': '2 selectable elements',
+  'demo.customerIntakeForm': 'Customer intake form',
+  'demo.customerFormHint':
+    'Update a value, then pick this form to capture its current state.',
+  'demo.customerName': 'Customer name',
+  'demo.contactEmail': 'Contact email',
+  'demo.customerHealthSummary': 'Customer health summary',
+  'demo.floatingChatPrompt': 'Floating chat prompt',
+  'demo.launcherTitle': 'Generate the global launcher separately',
+  'demo.launcherAction': 'Add a lower-right AI floating entry',
+  'demo.launcherDescription':
+    'This prompt configures the global trigger and its switchable side-panel/dialog surface.',
+  'demo.integrationTitle': 'Describe the integration',
+  'demo.integrationHint':
+    'Choose where chat belongs and which capabilities the target page needs.',
+  'demo.targetRegion': 'Target page or region',
+  'demo.targetPlaceholder': 'e.g. the ticket detail page',
+  'demo.placement': 'Placement',
+  'demo.sidePanelWidth': 'Side panel width',
+  'demo.messagePresentation': 'Message presentation',
+  'demo.fullTranscript': 'Full transcript',
+  'demo.compactHistory': 'Compact + history dialog',
+  'demo.capabilities': 'Capabilities',
+  'demo.capabilitiesPreview': 'Capabilities preview',
+  'demo.capabilitiesHint':
+    'The selected controls are rendered on the real AIChatWindow.',
+  'demo.generatedImplementationPrompt': 'Generated implementation prompt',
+  'demo.promptHint':
+    'Updates from the selected page, placement, and capabilities.',
+  'demo.multipleTasksScenario': 'Scenario 1 · Multiple tasks',
+  'demo.multipleTasksTitle': 'Trigger employee tasks from a business record',
+  'demo.multipleTasksDescription':
+    'The Shortcut component can still sit in a detail header and provide the current record as work context. Opening it shows the configured analysis and reply tasks below the employee greeting.',
+  'demo.requester': 'Requester',
+  'demo.created': 'Created',
+  'demo.description': 'Description',
+  'demo.explicitTargetScenario': 'Scenario 2 · Explicit target',
+  'demo.explicitTargetTitle':
+    'Send a shortcut task to a designated embedded chat',
+  'demo.explicitTargetDescription':
+    'The shortcut receives the embedded chat Controller directly. Its Provider explicitly configures',
+  'demo.explicitTargetHint':
+    'and an employee task set. It does not need a global target ID and cannot accidentally trigger another conversation on the same page.',
+  'demo.riskReviewWorkspace': 'Risk review workspace',
+  'demo.riskReviewHint':
+    'The embedded chat starts without preset tasks. Clicking the Shortcut injects “Review operational risk” into this specific conversation, where the user can choose it before the request is placed in the composer.',
+  'demo.chatTasksScenario': 'Scenario 3 · Chat-bound tasks',
+  'demo.chatTasksTitle': 'Show tasks when the selected employee changes',
+  'demo.chatTasksDescription':
+    'This conversation window binds task lists directly to business AI employees. Starting a new conversation or switching employees in the composer immediately replaces the empty-state tasks. Employees without a binding keep the normal greeting-only state.',
+  'demo.employeeTaskBindings': 'Employee task bindings',
+  'demo.analyzeThisTicket': 'Analyze this ticket',
+  'demo.draftACustomerReply': 'Draft a customer reply',
+  'demo.reviewOperationalRisk': 'Review operational risk',
+  'demo.employeeSwitchHint':
+    'Switch employees from the bottom of the chat to preview each configured task list.',
+  'demo.taskParameterPrefix': 'The same',
+  'demo.taskParameterSuffix':
+    'parameter works in page, embedded, side-panel, dialog, and mobile containers.',
+  'demo.employeeTasksPrompt': 'Employee tasks prompt',
+  'demo.taskPromptTitle': 'Generate an integration prompt',
+  'demo.taskPromptDescription':
+    'Choose whether tasks are exposed through a contextual Shortcut or directly by the selected employee in a chat. Both modes share the same task, model, Web search, Skills, and Tools configuration.',
+  'demo.employeeTaskConfiguration': 'Employee task configuration',
+  'demo.integration': 'Integration',
+  'demo.contextualShortcut': 'Contextual Shortcut',
+  'demo.tasksInsideAChat': 'Tasks inside a chat',
+  'demo.aiEmployee': 'AI employee',
+  'demo.employeeSelectionHint':
+    'Select an employee first, then configure the tasks shown in that employee’s new-conversation state.',
+  'demo.chatContainer': 'Chat container',
+  'demo.page': 'Page',
+  'demo.embeddedBlock': 'Embedded block',
+  'demo.sidePanel': 'Side panel',
+  'demo.dialog': 'Dialog',
+  'demo.targetConversation': 'Target conversation',
+  'demo.globalSidePanel': 'Global side panel',
+  'demo.embeddedChat': 'Embedded chat',
+  'demo.tasks': 'Tasks',
+  'demo.configuredTask': 'configured task',
+  'demo.addTask': 'Add task',
+  'demo.model': 'Model',
+  'demo.useEmployeeDefault': 'Use employee default',
+  'demo.defaultUserMessage': 'Default user message',
+  'demo.autoSend': 'Auto send',
+  'demo.autoSendHint': 'Otherwise the message is placed in the composer.',
+  'demo.workContext': 'Work context',
+  'demo.workContextHint':
+    'Select a page context for this task. Without one, the task inherits its surrounding context.',
+  'demo.pickContext': 'Pick context',
+  'demo.removeTaskContext': 'Remove task context',
+  'demo.advancedTaskSettings': 'Advanced task settings',
+  'demo.advancedSettingsHint': 'Background, Web search, Skills, and Tools',
+  'demo.background': 'Background',
+  'demo.webSearch': 'Web search',
+  'demo.webSearchHint': 'Subject to the selected LLM service capability.',
+  'demo.presetHint': 'Preset inherits the AI employee configuration.',
+  'demo.preset': 'Preset',
+  'demo.containersTitle':
+    'Use the same conversation window wherever the product needs it',
+  'demo.containersDescription':
+    'The provider owns conversation state. Page, embedded block, push side panel, dialog, and mobile containers only decide placement and dimensions.',
+  'demo.historyTitle':
+    'Choose how much conversation history the page should expose',
+  'demo.historyDescription':
+    'Use the complete transcript for conversational work, or a compact worker surface that opens message history only when the user asks for it.',
+  'demo.promptGeneratorTitle':
+    'Describe where chat belongs, then copy an implementation prompt',
+  'demo.promptGeneratorDescription':
+    'This replaces a generic prop configuration panel with a task-oriented generator: choose the target area, placement mode, and required capabilities.',
+  'demo.surfacePropsDescription':
+    'Use variant as the single presentation switch. The child AIChatWindow remains the same React instance while the surface changes shape.',
+  'demo.windowPropsDescription':
+    'The core window stays reusable while business pages provide placement, composer actions, and tool-approval behavior.',
+  'demo.prop': 'Prop',
+  'demo.type': 'Type',
+  'demo.default': 'Default',
+  'demo.sceneSettings': 'Scene settings',
+  'demo.sceneTitle': 'Scene title',
+  'demo.businessScene': 'Business scene',
+  'demo.taskTitle': 'Task title',
+  'demo.taskMessage': 'Task message',
+  'demo.sceneAutoSendHint': 'Otherwise fill the composer for review.',
+  'demo.manualPickHint':
+    'Manual Pick keeps the message in the composer so context can be selected before sending.',
+  'demo.contextIntegration': 'Context integration',
+  'demo.shortcutTask': 'Shortcut task',
+  'demo.conversationPresetTask': 'Conversation preset task',
+  'demo.scopeInheritance': 'Scope inheritance',
+  'demo.manualPick': 'Manual Pick',
+  'demo.contextId': 'Context id',
+  'demo.contextTitle': 'Context title',
+  'demo.pageCapability': 'Page capability',
+  'demo.contextOnly': 'Context only',
+  'demo.formFiller': 'Built-in Form filler',
+  'demo.frontendTool': 'Custom frontend Tool',
+  'demo.toolName': 'Tool name',
+  'demo.businessAction': 'Business action',
+  'demo.scenePrompt': 'Complete page context scene prompt',
+  'demo.scenePromptHint':
+    'Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene.',
+  'demo.toolCardsTitle':
+    'Adapt NocoBase tool results to the job they represent',
+  'demo.toolCardsDescription':
+    "These cards follow the original AI employee patterns while using the starter's shadcn and Base UI component system.",
+  'demo.toolShellTitle': 'One shared shell for every normal tool state',
+  'demo.toolShellDescription':
+    'Tools without a specialized renderer still use the same compact status, input disclosure, error, and permission behavior.',
+  'demo.approvalRequired': 'Approval required',
+  'demo.toolPromptTitle':
+    'Generate an implementation prompt for a specialized Tool Card',
+  'demo.toolPromptDescription':
+    'Choose the nearest existing renderer and describe the business interaction. The generated prompt tells the coding agent exactly where and how to implement it.',
+  'demo.toolCardSettings': 'Describe the Tool Card',
+  'demo.toolCardSettingsHint':
+    'The examples above remain the visual reference; these values define the implementation task.',
+  'demo.closestExample': 'Closest example',
+  'demo.businessInteraction': 'Business interaction',
+  'demo.customApproval': 'Card owns approval UI',
+  'demo.customApprovalHint':
+    'Enable for actions such as Approve, Revise, and Reject.',
+  'demo.codingPrompt': 'Coding prompt',
+  'demo.codingPromptHint': 'Ready to paste into an implementation task.',
+  'demo.containerPreview': 'Container preview',
+
   'AI Employee': 'AI Employee',
   'AI settings': 'AI settings',
   'LLM Service': 'LLM Service',
   MCP: 'MCP',
+  'mcp.configNotice': 'MCP servers are configured in config.yml.',
+  'mcp.toolsTitle': 'MCP tools',
+  'mcp.toolsEmpty': 'No MCP tools available.',
+  'mcp.transportHttp': 'HTTP (Streamable)',
+  'mcp.transportSse': 'HTTP + SSE (Legacy)',
   'MCP servers': 'MCP servers',
   'LLM services are configured in config.yml.':
     'LLM services are configured in config.yml.',

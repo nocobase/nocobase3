@@ -1,3 +1,4 @@
+import { useT } from '../locales/index.js';
 import {
   createElement,
   useEffect,
@@ -16,6 +17,7 @@ function AISettingsTabPage({
 }: {
   readonly tab: AISettingsTabDefinition;
 }): ReactElement {
+  const t = useT();
   const [Page, setPage] = useState<ComponentType>();
 
   useEffect(() => {
@@ -32,7 +34,7 @@ function AISettingsTabPage({
   return Page ? (
     createElement(Page)
   ) : (
-    <main className='p-8 text-sm text-muted-foreground'>Loading…</main>
+    <main className='p-8 text-sm text-muted-foreground'>{t('Loading…')}</main>
   );
 }
 

@@ -24,6 +24,7 @@ dist-ssr
 
 # Local application configuration
 /config.yml
+/.env
 
 # Local SQLite database, at the path config.example.yml gives the default connection
 /database.sqlite

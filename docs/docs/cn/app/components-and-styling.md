@@ -175,7 +175,7 @@ export function SettingsIcon(): ReactElement {
 
 ```tsx
 // client/pages/orders.tsx
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useState, type ReactElement } from 'react';
 
@@ -191,7 +191,7 @@ interface OrdersResponse {
 }
 
 export default function OrdersPage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t } = useTranslation();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);

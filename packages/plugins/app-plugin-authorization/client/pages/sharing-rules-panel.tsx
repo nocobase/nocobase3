@@ -1,3 +1,5 @@
+import { messageKey } from '../lib/message-key.js';
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button, Input } from '../components/ui.js';
 import {
   useCallback,
@@ -32,13 +34,13 @@ import { getAuthorizationClient } from '../runtime.js';
 
 const authz = getAuthorizationClient();
 
-export function SharingRulesPanel({
-  options,
-  users,
-}: {
+export function SharingRulesPanel(inputProps: {
   options: AuthorizationOptions;
   users: readonly AuthorizationUser[];
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, users } = inputProps;
+
   const [rules, setRules] = useState<readonly SharingRule[]>([]);
   const [draft, setDraft] = useState<SharingRule>();
   const [originalKey, setOriginalKey] = useState<string>();
@@ -110,17 +112,29 @@ export function SharingRulesPanel({
         <ManagementToolbar
           search={search}
           onSearch={setSearch}
-          actionLabel='New sharing rule'
+          actionLabel={t('newSharingRule', {
+            defaultValue: 'New sharing rule',
+          })}
           onAction={() => edit()}
         />
         <table className='w-full min-w-[58rem] text-left text-sm'>
           <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
             <tr>
-              <th className='px-5 py-3 font-medium'>Rule</th>
-              <th className='px-5 py-3 font-medium'>Resource</th>
-              <th className='px-5 py-3 font-medium'>Records shared</th>
-              <th className='px-5 py-3 font-medium'>Shared with</th>
-              <th className='px-5 py-3 font-medium'>Access</th>
+              <th className='px-5 py-3 font-medium'>
+                {t('rule', { defaultValue: 'Rule' })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('resourceLabel', { defaultValue: 'Resource' })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('recordsShared', { defaultValue: 'Records shared' })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('sharedWith', { defaultValue: 'Shared with' })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('accessLabel', { defaultValue: 'Access' })}
+              </th>
               <th className='w-20 px-5 py-3' />
             </tr>
           </thead>
@@ -133,26 +147,30 @@ export function SharingRulesPanel({
                     className='font-medium text-primary hover:underline'
                     onClick={() => edit(rule)}
                   >
-                    {rule.title || humanize(rule.key)}
+                    {rule.title || humanize(t, rule.key)}
                   </button>
                   <p className='text-xs text-muted-foreground'>{rule.key}</p>
                 </td>
                 <td className='px-5 py-4'>{resourceLabel(options, rule)}</td>
-                <td className='px-5 py-4'>{selectionLabel(rule)}</td>
-                <td className='px-5 py-4'>{subjectLabel(rule, users)}</td>
+                <td className='px-5 py-4'>{selectionLabel(t, rule)}</td>
+                <td className='px-5 py-4'>{subjectLabel(t, rule, users)}</td>
                 <td className='px-5 py-4'>
-                  {rule.actions.map((item) => humanize(item.action)).join(', ')}
+                  {rule.actions
+                    .map((item) => humanize(t, item.action))
+                    .join(', ')}
                 </td>
                 <td className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
-                    Edit
+                    {t('edit', { defaultValue: 'Edit' })}
                   </Button>
                 </td>
               </tr>
             ))}
             {visibleRules.length === 0 ? (
               <EmptyTableRow colSpan={6}>
-                No sharing rules match your search.
+                {t('noSharingRules', {
+                  defaultValue: 'No sharing rules match your search.',
+                })}
               </EmptyTableRow>
             ) : null}
           </tbody>
@@ -160,8 +178,14 @@ export function SharingRulesPanel({
       </ManagementTable>
       {draft ? (
         <SidePanel
-          title={originalKey ? 'Edit sharing rule' : 'New sharing rule'}
-          description='Open access to selected records for an audience.'
+          title={
+            originalKey
+              ? t('editSharingRule', { defaultValue: 'Edit sharing rule' })
+              : t('newSharingRule', { defaultValue: 'New sharing rule' })
+          }
+          description={t('sharingRuleDescription', {
+            defaultValue: 'Open access to selected records for an audience.',
+          })}
           onClose={() => setDraft(undefined)}
           wide
           scrollable={false}
@@ -176,26 +200,35 @@ export function SharingRulesPanel({
               <>
                 {originalKey ? (
                   <Button variant='outline' onClick={() => void remove()}>
-                    Delete rule
+                    {t('deleteRule', { defaultValue: 'Delete rule' })}
                   </Button>
                 ) : null}
                 <Button variant='outline' onClick={() => setDraft(undefined)}>
-                  Cancel
+                  {t('cancel', { defaultValue: 'Cancel' })}
                 </Button>
-                <Button onClick={() => void save()}>Save sharing rule</Button>
+                <Button onClick={() => void save()}>
+                  {t('saveSharingRule', {
+                    defaultValue: 'Save sharing rule',
+                  })}
+                </Button>
               </>
             }
           >
             {editorTab === 'rule' ? (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Rule details</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('ruleDetails', { defaultValue: 'Rule details' })}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Name the rule and choose the collection to share.
+                    {t('sharingRuleDetailsHint', {
+                      defaultValue:
+                        'Name the rule and choose the collection to share.',
+                    })}
                   </p>
                 </div>
                 <div className='grid gap-4 sm:grid-cols-2'>
-                  <Field label='Rule name'>
+                  <Field label={t('ruleName', { defaultValue: 'Rule name' })}>
                     <Input
                       value={draft.title ?? ''}
                       onChange={(event) =>
@@ -203,7 +236,12 @@ export function SharingRulesPanel({
                       }
                     />
                   </Field>
-                  <Field label='Key' hint='Stable identifier used by APIs.'>
+                  <Field
+                    label={t('key', { defaultValue: 'Key' })}
+                    hint={t('keyHint', {
+                      defaultValue: 'Stable identifier used by APIs.',
+                    })}
+                  >
                     <Input
                       required
                       disabled={Boolean(originalKey)}
@@ -240,9 +278,16 @@ export function SharingRulesPanel({
             {editorTab === 'access' ? (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Records to share</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('recordsToShare', {
+                      defaultValue: 'Records to share',
+                    })}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Choose records independently for each action.
+                    {t('sharingActionsHint', {
+                      defaultValue:
+                        'Choose records independently for each action.',
+                    })}
                   </p>
                 </div>
                 <SharingActionsEditor
@@ -257,9 +302,14 @@ export function SharingRulesPanel({
             {editorTab === 'assignments' ? (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Assignments</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('assignments', { defaultValue: 'Assignments' })}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Choose who receives the additional access.
+                    {t('sharingAudienceHint', {
+                      defaultValue:
+                        'Choose who receives the additional access.',
+                    })}
                   </p>
                 </div>
                 <SubjectsEditor
@@ -267,7 +317,9 @@ export function SharingRulesPanel({
                   value={draft.subjects}
                   onChange={(subjects) => setDraft({ ...draft, subjects })}
                 />
-                <Field label='Description'>
+                <Field
+                  label={t('description', { defaultValue: 'Description' })}
+                >
                   <Input
                     value={draft.reason ?? ''}
                     onChange={(event) =>
@@ -327,19 +379,16 @@ const sharingSteps = [
   },
 ] as const;
 
-function SharingActionsEditor({
-  options,
-  resourceType,
-  collection,
-  value,
-  onChange,
-}: {
+function SharingActionsEditor(inputProps: {
   options: AuthorizationOptions;
   resourceType: string;
   collection: string;
   value: SharingRule['actions'];
   onChange: (value: SharingRule['actions']) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, resourceType, collection, value, onChange } = inputProps;
+
   const [active, setActive] = useState(value[0]?.action ?? '');
   const [records, setRecords] = useState<
     readonly import('../authorization-client.js').AuthorizationRecordOption[]
@@ -381,12 +430,16 @@ function SharingActionsEditor({
                 type='button'
                 onClick={() => setActive(item.action)}
               >
-                {humanize(item.action)}
+                {humanize(t, item.action)}
               </button>
             ))}
           </div>
           <div className='space-y-4 p-4'>
-            <Field label='Records to share'>
+            <Field
+              label={t('recordsToShare', {
+                defaultValue: 'Records to share',
+              })}
+            >
               <select
                 className='h-8 w-full rounded-lg border bg-background px-3 text-sm'
                 value={current.selection.type}
@@ -401,8 +454,14 @@ function SharingActionsEditor({
                   )
                 }
               >
-                <option value='records'>Selected records</option>
-                <option value='policy'>Records matching a policy</option>
+                <option value='records'>
+                  {t('selectedRecords', { defaultValue: 'Selected records' })}
+                </option>
+                <option value='policy'>
+                  {t('policyRecordsOption', {
+                    defaultValue: 'Records matching a policy',
+                  })}
+                </option>
               </select>
             </Field>
             {current.selection.type === 'records' ? (
@@ -438,19 +497,16 @@ function SharingActionsEditor({
   );
 }
 
-function RecordPicker({
-  records,
-  search,
-  onSearch,
-  value,
-  onChange,
-}: {
+function RecordPicker(inputProps: {
   records: readonly import('../authorization-client.js').AuthorizationRecordOption[];
   search: string;
   onSearch: (value: string) => void;
   value: readonly string[];
   onChange: (value: readonly string[]) => void;
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { records, search, onSearch, value, onChange } = inputProps;
+
   const query = search.trim().toLowerCase();
   const visible = records.filter(
     (record) =>
@@ -461,10 +517,10 @@ function RecordPicker({
   );
   return (
     <div className='space-y-2'>
-      <Field label='Records'>
+      <Field label={t('records', { defaultValue: 'Records' })}>
         <Input
           type='search'
-          placeholder='Search records'
+          placeholder={t('searchRecords', { defaultValue: 'Search records' })}
           value={search}
           onChange={(event) => onSearch(event.target.value)}
         />
@@ -499,12 +555,15 @@ function RecordPicker({
         ))}
         {visible.length === 0 ? (
           <p className='p-6 text-center text-sm text-muted-foreground'>
-            No records found.
+            {t('noRecords', { defaultValue: 'No records found.' })}
           </p>
         ) : null}
       </div>
       <p className='text-xs text-muted-foreground'>
-        {value.length} record{value.length === 1 ? '' : 's'} selected
+        {t('counts.selectedRecords', {
+          count: value.length,
+          defaultValue: `${value.length} records selected`,
+        })}
       </p>
     </div>
   );
@@ -566,27 +625,36 @@ function resourceLabel(
     rule.resource.id
   );
 }
-function selectionLabel(rule: SharingRule): string {
+function selectionLabel(
+  t: ReturnType<typeof useTranslation>['t'],
+  rule: SharingRule,
+): string {
   return rule.actions
     .map(
       (item) =>
-        `${humanize(item.action)}: ${item.selection.type === 'records' ? `${item.selection.ids.length} selected records` : 'Records matching policy'}`,
+        `${humanize(t, item.action)}: ${item.selection.type === 'records' ? t('counts.selectedRecords', { count: item.selection.ids.length, defaultValue: `${item.selection.ids.length} selected records` }) : t('policyRecords', { defaultValue: 'Records matching policy' })}`,
     )
     .join(' · ');
 }
 function subjectLabel(
+  t: ReturnType<typeof useTranslation>['t'],
   rule: SharingRule,
   users: readonly AuthorizationUser[],
 ): string {
   const subject = rule.subjects[0];
   if (!subject || subject.type === 'authenticated')
-    return 'All signed-in users';
+    return t('allSignedInUsers', { defaultValue: 'All signed-in users' });
   return (
-    users.find((user) => user.id === subject.id)?.name ?? `User ${subject.id}`
+    users.find((user) => user.id === subject.id)?.name ??
+    t('userFallback', { id: subject.id, defaultValue: `User ${subject.id}` })
   );
 }
-function humanize(value: string): string {
-  return value
+function humanize(
+  t: ReturnType<typeof useTranslation>['t'],
+  value: string,
+): string {
+  const label = value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return t(messageKey(label), { defaultValue: label });
 }

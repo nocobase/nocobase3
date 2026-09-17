@@ -37,12 +37,18 @@ For pages with Tabs or other frontend React Router tasks (`defineAppRoutes()`,
 `defineSettingsRoutes()`, or `defineDevRoutes()`), read the routing references
 in the existing `nocobase-app-development` Skill:
 
-- [Pages, routes, and menus](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-pages-and-routes.md)
-- [Child routes, Tabs, navigation groups, and Outlet](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-child-routes.md)
+- [Pages, routes, and menus](../../../packages/app/app-skills/skills/nocobase-app-development/references/client-pages-and-routes.md)
+- [Child routes, Tabs, navigation groups, and Outlet](../../../packages/app/app-skills/skills/nocobase-app-development/references/client-child-routes.md)
 
-These links use Default as the shared routing reference. When integrating with Examples or Hub, use the same reference files under that target template's `skills/nocobase-app-development/` directory. Reuse the React Router, navigation, and verification guidance; plugin source ownership and registration remain governed by this Skill. In particular, declare plugin routes in the plugin's `client/routes.ts`, not the application's route file. App menus are declared on routes; Refine resources serve CRUD.
+These links use the shared application routing reference published by `@nocobase/app-skills`. Reuse the React Router, navigation, and verification guidance; plugin source ownership and registration remain governed by this Skill. In particular, declare plugin routes in the plugin's `client/routes.ts`, not the application's route file. App menus are declared on routes; Refine resources serve CRUD.
 
 For Client or Server Route tasks, inspect only the matching files in `packages/examples/app-plugin-routes-example` when a runnable reference is needed.
+
+## Frontend API requests
+
+For plugin frontend requests to custom endpoints or remote Repository operations, read [client API requests](../../../packages/app/app-skills/skills/nocobase-app-development/references/client-api.md). Keep the complete request guidance in that shared application reference rather than duplicating it here.
+
+Reuse the host application's `apiClientToken`: resolve it with `useApiClient()` in React or from the application's services in a Client ServiceProvider, and pass the client into ordinary business functions. Do not construct a separate client for application API calls. Import the token, hooks, `ApiClient` type and `ApiClientError` from `@nocobase/app-client`, and declare that runtime in the plugin's `peerDependencies`, not `dependencies`, so the plugin shares the host's service-token and React-context identity.
 
 ## Stable v3 protocol
 
@@ -155,6 +161,14 @@ For Client or Server Route tasks, inspect only the matching files in `packages/e
   Registry item is not a runtime contribution and does not enable the plugin.
 - Follow repository and package `AGENTS.md` rules, including shared dev config,
   dependency protocols, and validation requirements.
+
+## Translation keys
+
+When adding or changing plugin text, read the [internationalization Skill's key naming rules](../../../packages/plugins/app-plugin-i18n/skills/nocobase-app-plugin-i18n/SKILL.md#naming-translation-keys). It covers locale files, interpolation, namespace ownership, and examples for both application and plugin text.
+
+Use concise semantic keys with lower camelCase segments and useful dot-separated groups: `orders.title`, `orders.empty`, `files.uploadFailed`, and `demo.pageDescription`. Do not use `File upload failed.` or turn a whole sentence into a long camelCase key. Keep package names in the namespace, and reuse a key only when its meaning and translation context match. Plural suffixes such as `selection.count_one` and `selection.count_other` are exceptions to camelCase; call `t('selection.count', { count })`.
+
+Keep keys stable when wording changes. When a rename is needed, update every locale, caller, navigation/breadcrumb title, and dynamic lookup together, preserving custom text fallbacks. Review naming explicitly: locale type checking does not enforce this convention.
 
 ## Resource and checksum contract
 

@@ -7,6 +7,7 @@ export function Toaster(props: ToasterProps = {}): ReactElement {
   return (
     <Sonner
       theme='system'
+      position='top-right'
       className='toaster group'
       style={
         {

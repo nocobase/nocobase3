@@ -282,9 +282,10 @@ describe('planPluginRegistration', () => {
     expect(plan.clientPluginsPath).toBe(clientPluginsPath(appRoot));
 
     const manifest = plannedManifest(plan.manifestText);
-    expect(manifest.devDependencies).toEqual({
+    expect(manifest.dependencies).toEqual({
       '@nocobase/app-plugin-audit-log': '^1.0.0',
     });
+    expect(manifest.devDependencies).toBeUndefined();
     expect(manifest.nocobase?.plugins).toBeUndefined();
     expect(plan.clientPluginsText).toContain(
       '@nocobase/app-plugin-audit-log/client',
@@ -294,7 +295,7 @@ describe('planPluginRegistration', () => {
     );
   });
 
-  it('records the dependency in the field the caller names', async () => {
+  it('records workspace dependencies as production dependencies', async () => {
     const appRoot = await createApp();
     const pluginDirectory = await createPlugin(
       appRoot,
@@ -303,7 +304,6 @@ describe('planPluginRegistration', () => {
 
     const plan = await planPluginRegistration({
       appRoot,
-      dependencyField: 'dependencies',
       dependencyRange: 'workspace:*',
       packageName: '@nocobase/app-plugin-audit-log',
       pluginDirectory,
@@ -417,7 +417,7 @@ describe('planPluginRegistration', () => {
 
   it('uses source registration despite stale legacy metadata', async () => {
     const appRoot = await createApp({
-      devDependencies: { '@nocobase/app-plugin-cron': '^1.0.0' },
+      dependencies: { '@nocobase/app-plugin-cron': '^1.0.0' },
       nocobase: {
         plugins: { '@nocobase/app-plugin-cron': { enabled: false } },
       },
@@ -439,28 +439,31 @@ describe('planPluginRegistration', () => {
     expect(plan.serverPluginsChanged).toBe(true);
   });
 
-  it('refuses to overwrite a dependency pinned at another range', async () => {
-    const appRoot = await createApp({
-      devDependencies: { '@nocobase/app-plugin-audit-log': '^1.0.0' },
-    });
-    const pluginDirectory = await createPlugin(
-      appRoot,
-      '@nocobase/app-plugin-audit-log',
-    );
-
-    await expect(
-      planPluginRegistration({
+  it.each(['dependencies', 'devDependencies'])(
+    'refuses to overwrite a dependency pinned at another range in %s',
+    async (field) => {
+      const appRoot = await createApp({
+        [field]: { '@nocobase/app-plugin-audit-log': '^1.0.0' },
+      });
+      const pluginDirectory = await createPlugin(
         appRoot,
-        dependencyRange: '^2.0.0',
-        packageName: '@nocobase/app-plugin-audit-log',
-        pluginDirectory,
-      }),
-    ).rejects.toThrow('refusing to overwrite it');
-  });
+        '@nocobase/app-plugin-audit-log',
+      );
+
+      await expect(
+        planPluginRegistration({
+          appRoot,
+          dependencyRange: '^2.0.0',
+          packageName: '@nocobase/app-plugin-audit-log',
+          pluginDirectory,
+        }),
+      ).rejects.toThrow('refusing to overwrite it');
+    },
+  );
 
   it('inserts both keys in sorted order', async () => {
     const appRoot = await createApp({
-      devDependencies: {
+      dependencies: {
         '@nocobase/app-plugin-alpha': '^1.0.0',
         '@nocobase/app-plugin-zulu': '^1.0.0',
       },
@@ -490,7 +493,7 @@ describe('planPluginRegistration', () => {
       '@nocobase/app-plugin-mike',
       '@nocobase/app-plugin-zulu',
     ];
-    expect(Object.keys(manifest.devDependencies ?? {})).toEqual(sorted);
+    expect(Object.keys(manifest.dependencies ?? {})).toEqual(sorted);
     expect(Object.keys(manifest.nocobase?.plugins ?? {})).toEqual([
       '@nocobase/app-plugin-alpha',
       '@nocobase/app-plugin-zulu',
@@ -515,7 +518,7 @@ describe('applyPluginRegistration', () => {
     await applyPluginRegistration(appRoot, plan);
 
     const manifest = await readManifest(appRoot);
-    expect(manifest.devDependencies).toEqual({
+    expect(manifest.dependencies).toEqual({
       '@nocobase/app-plugin-audit-log': '^1.0.0',
     });
     expect(await readFile(clientPluginsPath(appRoot), 'utf8')).toBe(
@@ -609,12 +612,12 @@ describe('planPluginUnregistration', () => {
 
     expect(plan.changed).toBe(true);
     expect(plan.removedFrom).toEqual([
-      'devDependencies',
+      'dependencies',
       'client/plugins.ts',
       'server/plugins.ts',
     ]);
     const manifest = await readManifest(appRoot);
-    expect(manifest.devDependencies).toEqual({
+    expect(manifest.dependencies).toEqual({
       '@nocobase/app-plugin-keep': '^1.0.0',
     });
     expect(manifest.nocobase?.plugins).toBeUndefined();

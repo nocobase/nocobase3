@@ -17,7 +17,7 @@ import locales from '../client/locales/index.js';
 const state = vi.hoisted(() => ({ api: undefined as ApiClient | undefined }));
 vi.mock('@nocobase/app-client', async (original) => ({
   ...(await original<typeof import('@nocobase/app-client')>()),
-  useService: () => state.api,
+  useApiClient: () => state.api,
 }));
 import AggregatePage from '../client/pages/aggregate-page.js';
 let f: Awaited<ReturnType<typeof createFixture>>;

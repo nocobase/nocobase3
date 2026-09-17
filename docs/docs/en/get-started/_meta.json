@@ -2,12 +2,12 @@
   {
     "type": "file",
     "name": "index",
-    "label": "Getting Started"
+    "label": "What is NocoBase 3?"
   },
   {
     "type": "file",
-    "name": "what-is-nocobase",
-    "label": "What is NocoBase 3"
+    "name": "overview",
+    "label": "Before you start"
   },
   {
     "type": "file",
@@ -17,6 +17,6 @@
   {
     "type": "file",
     "name": "first-feature",
-    "label": "Let AI build your first feature"
+    "label": "Let your AI Agent build your first feature"
   }
 ]

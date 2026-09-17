@@ -1,5 +1,5 @@
 import { PageHeader } from './page-header.js';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   Bell,
@@ -32,7 +32,7 @@ import {
 } from './ui/card.js';
 
 export function NotificationInAppInbox(): ReactElement {
-  const appClient = useService(apiClientToken);
+  const appClient = useApiClient();
   const { t } = useTranslation(IN_APP_NOTIFICATION_CLIENT_NAMESPACE);
   const inboxRuntime = useNotificationInAppRuntime();
   const { revision, unreadCount } = inboxRuntime;
@@ -280,7 +280,9 @@ function InboxRow({ item, onMutate }: InboxRowProps): ReactElement {
               {!item.readAt ? (
                 <span
                   className='size-2 shrink-0 rounded-full bg-primary'
-                  aria-label='Unread'
+                  aria-label={t('inbox.unreadFilter', {
+                    defaultValue: 'Unread',
+                  })}
                 />
               ) : null}
             </div>

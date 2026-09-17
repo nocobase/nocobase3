@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement } from 'react';
 
 import { AuthLayout } from '../../extensions/nocobase-auth-ui/components/auth-layout.js';
@@ -5,13 +6,18 @@ import { PasswordResetRequestForm } from '../../extensions/nocobase-auth-ui/form
 import { authLogo, authMarketing } from './shared.js';
 
 export default function ForgotPasswordPage(): ReactElement {
+  const { t } = useTranslation();
+
   return (
     <AuthLayout
-      description='Enter your email and we will send a reset link if the account exists.'
+      description={t('auth.forgotDescription', {
+        defaultValue:
+          'Enter your email and we will send a reset link if the account exists.',
+      })}
       form={<PasswordResetRequestForm />}
       logo={authLogo}
       marketing={authMarketing}
-      title='Forgot password'
+      title={t('auth.forgotTitle', { defaultValue: 'Forgot password' })}
     />
   );
 }

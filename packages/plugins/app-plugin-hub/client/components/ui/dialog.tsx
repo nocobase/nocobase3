@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 // shadcn base-nova source adapted for declaration-emitting ESM builds.
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
@@ -10,11 +11,12 @@ export function Dialog(props: DialogPrimitive.Root.Props): ReactElement {
   return <DialogPrimitive.Root data-slot='dialog' {...props} />;
 }
 
-export function DialogContent({
-  className,
-  children,
-  ...props
-}: DialogPrimitive.Popup.Props): ReactElement {
+export function DialogContent(
+  inputProps: DialogPrimitive.Popup.Props,
+): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { className, children, ...props } = inputProps;
+
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Backdrop className='fixed inset-0 z-50 bg-black/45' />
@@ -30,7 +32,7 @@ export function DialogContent({
         <DialogPrimitive.Close
           render={
             <Button
-              aria-label='Close'
+              aria-label={t('common.close', { defaultValue: 'Close' })}
               className='absolute top-4 right-4'
               size='icon'
               variant='ghost'

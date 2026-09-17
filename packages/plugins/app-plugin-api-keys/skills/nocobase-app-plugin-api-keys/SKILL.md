@@ -9,9 +9,7 @@ metadata:
 
 Use this Skill when an App needs non-interactive callers — a script, a cron job,
 a third-party integration — to reach its API as a real user, or when a key the
-App issued is being rejected. Do not use it to build a service account, a
-machine identity, or per-key permission scoping: a key here is the user who
-created it, and carries exactly that user's roles.
+App issued is being rejected. The default configuration resolves a key into its owner’s Session and carries that user’s roles. Applications needing scoped credentials must use a separate configuration with `enableSessionForAPIKeys: false` and enforce their business rules on the server.
 
 This package is Better Auth's
 [API Key plugin](https://www.better-auth.com/docs/plugins/api-key) plus the
@@ -156,3 +154,13 @@ row inserted by hand authenticates nothing.
    expect the same response the signed-in user gets.
 3. Revoke the key in the page, repeat step 2 — expect 401, not 500.
 4. Disable the owning user, repeat step 2 with a second key — expect 401.
+
+## Trusted server extensions
+
+`apiKey()` also accepts a configuration array, each with a unique `configId`. The three NocoBase defaults apply to each entry and remain overridable. A non-Session configuration must never share the default Session configuration’s identity. Verification checks the actual stored configuration, so presenting such a key in `x-api-key` does not grant its owner’s Session.
+
+`new ApiKeyService(authentication, configId)` provides trusted database-backed `create({ userId, name, expiresIn? })`, `get(id)`, `verify(secret)`, `disable(id)` and `remove(id)` operations. Create returns `{ key, secret }` once; summaries never include the stored hash. Get, disable and remove are configuration-bound; disable and remove are repeatable. Missing configurations fail closed. The service uses the registered Better Auth configuration, endpoints and formal Authentication plugin API. Secondary storage is not supported by this service.
+
+These methods are server-only capabilities, not authorization checks. Callers must authorize the actor, bind their own business resource, and enforce scopes before allowing the operation. Keep application-specific rules outside this plugin. Applications that reserve a configuration for their own management API must also reject public Better Auth management requests for that configuration; otherwise its owner can update its enabled state or expiration through the self-service endpoints. Better Auth may prune expired rows during normal API Key operations.
+
+Server calls run through `Auth.pluginApi()` and the normal Better Auth hooks; `withConnection(connection)` binds all credential writes to a caller-owned transaction. The added get/delete operations are declared with `createAuthEndpoint.serverOnly` and cannot be reached over HTTP.

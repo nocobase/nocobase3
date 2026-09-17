@@ -1,6 +1,7 @@
 import type { UsersResource } from './en-US.js';
 
 const zhCN: UsersResource = {
+  'common.close': '关闭',
   nav: { users: '用户管理' },
   page: {
     title: '用户',
@@ -29,6 +30,7 @@ const zhCN: UsersResource = {
       resetPassword: '重置密码',
       revokeSessions: '撤销全部会话',
       enable: '启用账号',
+      delete: '删除用户',
       disable: '禁用账号',
     },
   },
@@ -59,7 +61,19 @@ const zhCN: UsersResource = {
     enable: '启用',
     disable: '禁用',
   },
-  errors: { operationFailed: '用户操作失败。' },
+  deletion: {
+    title: '删除用户？',
+    description:
+      '确定删除用户“{{name}}”吗？其全部会话和 API Key 将被撤销，历史操作记录会保留。此操作无法撤销。',
+    success: '用户已删除。',
+  },
+  errors: {
+    SELF_DELETE_NOT_ALLOWED: '不能删除当前登录的账号。',
+    LAST_HUB_ADMIN: '不能删除、停用或变更最后一位有效平台管理员的角色。',
+    USER_HAS_APPS: '该用户名下还有应用，请先移交或删除应用。',
+    HUB_ADMIN_REQUIRED: '仅平台管理员可以删除用户。',
+    operationFailed: '用户操作失败。',
+  },
 };
 
 export default zhCN;

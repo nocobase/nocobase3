@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { resolveAppUrl } from '@nocobase/app-client';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
@@ -6,10 +7,15 @@ export interface AppBrandProps {
   readonly compact?: boolean;
 }
 
-export function AppBrand({ compact = false }: AppBrandProps): ReactElement {
+export function AppBrand(props: AppBrandProps): ReactElement {
+  const { t } = useTranslation();
+  const { compact = false } = props;
+
   return (
     <Link
-      aria-label='NocoBase applications'
+      aria-label={t('navigation.brandApps', {
+        defaultValue: 'NocoBase applications',
+      })}
       className='flex min-w-0 items-center text-foreground'
       to='/'
     >

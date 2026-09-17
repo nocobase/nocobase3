@@ -116,6 +116,12 @@ describe('app client runtime', () => {
         title: 'navigation.roles',
       },
       {
+        name: 'hub-api-keys',
+        path: '/api-keys',
+        access: { resource: 'hub.app:*', action: 'manage-api-keys' },
+        title: 'navigation.apiKeys',
+      },
+      {
         name: 'users',
         path: '/users',
         access: { resource: 'users', action: 'access' },

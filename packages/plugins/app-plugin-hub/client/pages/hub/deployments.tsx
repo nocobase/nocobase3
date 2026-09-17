@@ -96,7 +96,7 @@ export function Deployments({
                 onClick={onDeploy}
               >
                 <Play className='size-4' />{' '}
-                {t('deployments.deploy', { defaultValue: 'Deploy' })}
+                {t('deployments.deploy', { defaultValue: 'Deploy release' })}
               </Button>
               {deployState.reason ? (
                 <span className='sr-only' id='hub-deploy-action-reason'>
@@ -141,7 +141,7 @@ export function Deployments({
             onClick={onDeploy}
           >
             <Play className='size-4' />{' '}
-            {t('deployments.deploy', { defaultValue: 'Deploy' })}
+            {t('deployments.deploy', { defaultValue: 'Deploy release' })}
           </Button>
         ) : null}
       </div>

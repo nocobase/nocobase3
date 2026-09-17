@@ -1,3 +1,4 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import { PageHeader } from '../../components/page-header.js';
 import {
   AIChatFloatingTrigger,
@@ -41,6 +42,10 @@ export function FloatingChatPage() {
 }
 
 function FloatingChatPageContent() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const t = useAITranslate();
   const controller = useAIChatController();
   const { open } = useAIChatControllerState(controller);
@@ -128,15 +133,24 @@ function FloatingChatPageContent() {
           <section className='space-y-5'>
             <div>
               <p className='text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                Floating chat prompt
+                {translateDemo('demo.floatingChatPrompt', {
+                  defaultValue: 'Floating chat prompt',
+                })}
               </p>
               <h2 className='mt-2 text-xl font-semibold tracking-tight'>
-                Generate the global launcher separately
+                {translateDemo('demo.launcherTitle', {
+                  defaultValue: 'Generate the global launcher separately',
+                })}
               </h2>
             </div>
             <PromptCard
-              title='Add a lower-right AI floating entry'
-              description='This prompt configures the global trigger and its switchable side-panel/dialog surface.'
+              title={translateDemo('demo.launcherAction', {
+                defaultValue: 'Add a lower-right AI floating entry',
+              })}
+              description={translateDemo('demo.launcherDescription', {
+                defaultValue:
+                  'This prompt configures the global trigger and its switchable side-panel/dialog surface.',
+              })}
               prompt={floatingPrompt}
             />
           </section>

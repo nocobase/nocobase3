@@ -1,8 +1,4 @@
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import {
   useCallback,
@@ -14,7 +10,7 @@ import {
 import { useNavigate, useOutlet, useResolvedPath } from 'react-router';
 
 import type { ApiResponse, AppPageResponse } from './hub/types.js';
-import { ErrorBanner } from './hub/shared.js';
+import { ErrorNotification } from './hub/shared.js';
 import { Catalog, CreateDialog } from './hub/catalog.js';
 import { readError, type ReadableError } from './hub/utils.js';
 import {
@@ -30,7 +26,7 @@ export default function HubPage(): ReactElement {
 }
 
 export function ApplicationsCatalog(): ReactElement {
-  const client = useService(apiClientToken);
+  const client = useApiClient();
   const authorization = useService(authorizationClientToken);
   const navigate = useNavigate();
   const parentPath = useResolvedPath('.');
@@ -54,6 +50,8 @@ export function ApplicationsCatalog(): ReactElement {
   const [createOpen, setCreateOpen] = useState(false);
   const [newAppId, setNewAppId] = useState('');
   const [newAppName, setNewAppName] = useState('');
+  const [appIdEdited, setAppIdEdited] = useState(false);
+  const appIdSuffixRef = useRef('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ReadableError>();
 
@@ -141,6 +139,8 @@ export function ApplicationsCatalog(): ReactElement {
       const appId = newAppId.trim();
       setNewAppId('');
       setNewAppName('');
+      setAppIdEdited(false);
+      appIdSuffixRef.current = '';
       setCreateOpen(false);
       goToApp(appId);
     } catch (reason) {
@@ -153,7 +153,10 @@ export function ApplicationsCatalog(): ReactElement {
     <main className='min-h-[calc(100svh-4rem)] bg-muted/20 [&_button:not(:disabled)]:cursor-pointer'>
       <div className='mx-auto max-w-[1400px] px-5 py-8 sm:px-8'>
         {error ? (
-          <ErrorBanner error={error} onClose={() => setError(undefined)} />
+          <ErrorNotification
+            error={error}
+            onClose={() => setError(undefined)}
+          />
         ) : null}
         <Catalog
           apps={apps}
@@ -176,7 +179,16 @@ export function ApplicationsCatalog(): ReactElement {
           }}
           onView={setView}
           canCreate={capabilities.create}
-          onCreate={() => setCreateOpen(true)}
+          onCreate={() => {
+            if (!appIdSuffixRef.current)
+              appIdSuffixRef.current = Array.from(
+                crypto.getRandomValues(new Uint8Array(4)),
+                (byte) => byte.toString(16).padStart(2, '0'),
+              ).join('');
+            if (!newAppId && !appIdEdited)
+              setNewAppId(`app-${appIdSuffixRef.current}`);
+            setCreateOpen(true);
+          }}
           onSelect={goToApp}
           onPage={(page) => setPagination((current) => ({ ...current, page }))}
         />
@@ -186,8 +198,22 @@ export function ApplicationsCatalog(): ReactElement {
           busy={busy}
           appId={newAppId}
           name={newAppName}
-          onAppId={setNewAppId}
-          onName={setNewAppName}
+          onAppId={(value) => {
+            setAppIdEdited(true);
+            setNewAppId(value);
+          }}
+          onName={(value) => {
+            setNewAppName(value);
+            if (!appIdEdited) {
+              const prefix =
+                value
+                  .toLowerCase()
+                  .replace(/[^a-z0-9_-]+/g, '-')
+                  .replace(/^-+|-+$/g, '')
+                  .slice(0, 32) || 'app';
+              setNewAppId(`${prefix}-${appIdSuffixRef.current}`);
+            }
+          }}
           onClose={() => {
             if (!busy) setCreateOpen(false);
           }}

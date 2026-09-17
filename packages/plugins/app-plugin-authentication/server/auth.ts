@@ -3,6 +3,8 @@ import {
   APIError,
   betterAuth,
   type BetterAuthOptions,
+  type BetterAuthPlugin,
+  type FilteredAPI,
   type Session,
   type User,
 } from 'better-auth';
@@ -63,6 +65,8 @@ export class Auth {
         ...config.user,
         additionalFields: {
           ...config.user?.additionalFields,
+          deletedAt: { type: 'date', required: false, input: false },
+          deletedBy: { type: 'string', required: false, input: false },
           disabledAt: {
             type: 'date',
             required: false,
@@ -76,6 +80,30 @@ export class Auth {
           ...config.databaseHooks?.session,
           create: {
             ...configuredSessionCreate,
+            after: async (session, context) => {
+              await configuredSessionCreate?.after?.(session, context);
+              const user = context
+                ? await context.context.internalAdapter.findUserById(
+                    session.userId,
+                  )
+                : await connection.query
+                    .selectFrom('user')
+                    .select('disabledAt')
+                    .where('id', '=', session.userId)
+                    .executeTakeFirst();
+              if (!user || Reflect.get(user, 'disabledAt') != null) {
+                // A login already in flight may persist after user deletion.
+                // Remove its new session before returning it to the caller.
+                const adapter =
+                  context?.context.internalAdapter ??
+                  (await this.auth.$context).internalAdapter;
+                await adapter.deleteSession(session.token);
+                throw APIError.from('FORBIDDEN', {
+                  code: 'ACCOUNT_DISABLED',
+                  message: 'This account is disabled.',
+                });
+              }
+            },
             before: async (session, context) => {
               const configuredResult = await configuredSessionCreate?.before?.(
                 session,
@@ -136,12 +164,27 @@ export class Auth {
     return session;
   }
 
+  /** Returns only a registered plugin's API methods, including the normal hook pipeline. */
+  pluginApi<TPlugin extends BetterAuthPlugin>(
+    pluginId: TPlugin['id'],
+  ): FilteredAPI<NonNullable<TPlugin['endpoints']>> {
+    const plugin = this.options.plugins?.find((item) => item.id === pluginId);
+    if (!plugin?.endpoints)
+      throw new Error(`Authentication plugin "${pluginId}" is not registered.`);
+    const api: Record<string, unknown> = {};
+    for (const name of Object.keys(plugin.endpoints)) {
+      const endpoint: unknown = Reflect.get(this.auth.api, name);
+      if (typeof endpoint === 'function') api[name] = endpoint;
+    }
+    return api as FilteredAPI<NonNullable<TPlugin['endpoints']>>;
+  }
+
   /** @internal Used by the Authentication-owned administration service. */
   administrationContext(): typeof this.auth.$context {
     return this.auth.$context;
   }
 
-  /** @internal Binds Authentication operations to a caller-owned transaction. */
+  /** Binds trusted server operations to a caller-owned connection or transaction. */
   forConnection(connection: DatabaseConnection): Auth {
     return new Auth({ ...this.options, connection });
   }

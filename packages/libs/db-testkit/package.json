@@ -47,11 +47,6 @@
   },
   "devDependencies": {
     "@nocobase/db": "workspace:*",
-    "@nocobase/db-mssql": "workspace:*",
-    "@nocobase/db-mysql": "workspace:*",
-    "@nocobase/db-oracle": "workspace:*",
-    "@nocobase/db-postgres": "workspace:*",
-    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",

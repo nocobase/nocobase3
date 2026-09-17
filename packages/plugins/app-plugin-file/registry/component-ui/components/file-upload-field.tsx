@@ -1,3 +1,5 @@
+import { messageKey } from '../lib/message-key.js';
+import { useTranslation } from '@nocobase/i18n/client';
 import { LoaderCircle, RotateCcw, Trash2, UploadCloud, X } from 'lucide-react';
 import {
   useEffect,
@@ -34,20 +36,25 @@ function accepts(file: File, rules: readonly string[]): boolean {
   });
 }
 
-export function FileUploadField({
-  repository,
-  value,
-  onChange,
-  onError,
-  onStatusChange,
-  multiple = false,
-  accept = [],
-  maxSize,
-  maxFiles,
-  disabled = false,
-  removeOnDelete = false,
-  labels,
-}: FileUploadFieldProps): ReactElement {
+export function FileUploadField(
+  inputProps: FileUploadFieldProps,
+): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-file');
+  const {
+    repository,
+    value,
+    onChange,
+    onError,
+    onStatusChange,
+    multiple = false,
+    accept = [],
+    maxSize,
+    maxFiles,
+    disabled = false,
+    removeOnDelete = false,
+    labels,
+  } = inputProps;
+
   const [items, setItems] = useState<UploadItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -59,9 +66,14 @@ export function FileUploadField({
   const mountedRef = useRef(true);
   const maximum = multiple ? (maxFiles ?? Infinity) : 1;
   const chooseLabel =
-    labels?.choose ?? (multiple ? 'Choose files' : 'Choose file');
-  const removeLabel = labels?.remove ?? 'Remove';
-  const retryLabel = labels?.retry ?? 'Retry';
+    labels?.choose ??
+    (multiple
+      ? t('files.chooseMany', { defaultValue: 'Choose files' })
+      : t('files.chooseOne', { defaultValue: 'Choose file' }));
+  const removeLabel =
+    labels?.remove ?? t('files.remove', { defaultValue: 'Remove' });
+  const retryLabel =
+    labels?.retry ?? t('files.retry', { defaultValue: 'Retry' });
 
   useEffect(() => {
     valueRef.current = value;
@@ -155,16 +167,34 @@ export function FileUploadField({
   const addFiles = (files: readonly File[]): void => {
     if (disabled) return;
     if (files.length + (multiple ? value.length : 0) + items.length > maximum) {
-      onError?.(new Error('The maximum number of files has been reached.'));
+      onError?.(
+        new Error(
+          t('fileLimitReached', {
+            defaultValue: 'The maximum number of files has been reached.',
+          }),
+        ),
+      );
       return;
     }
     const selected = (multiple ? files : files.slice(0, 1)).filter((file) => {
       if (maxSize !== undefined && file.size > maxSize) {
-        onError?.(new Error('File exceeds the maximum size.'));
+        onError?.(
+          new Error(
+            t('fileTooLarge', {
+              defaultValue: 'File exceeds the maximum size.',
+            }),
+          ),
+        );
         return false;
       }
       if (!accepts(file, accept)) {
-        onError?.(new Error('File type is not allowed.'));
+        onError?.(
+          new Error(
+            t('fileTypeNotAllowed', {
+              defaultValue: 'File type is not allowed.',
+            }),
+          ),
+        );
         return false;
       }
       return true;
@@ -184,7 +214,13 @@ export function FileUploadField({
         await repository.deleteOne({ filter: { id: record.id } });
       } catch (error) {
         onError?.(
-          error instanceof Error ? error : new Error('File removal failed.'),
+          error instanceof Error
+            ? error
+            : new Error(
+                t('removalFailed', {
+                  defaultValue: 'File removal failed.',
+                }),
+              ),
         );
         return;
       }
@@ -234,7 +270,9 @@ export function FileUploadField({
             <div className='mt-2 truncate text-sm' title={record.filename}>
               {record.filename}
             </div>
-            <div className='text-xs text-muted-foreground'>Done</div>
+            <div className='text-xs text-muted-foreground'>
+              {t('files.done', { defaultValue: 'Done' })}
+            </div>
             <Button
               type='button'
               size='icon'
@@ -251,7 +289,12 @@ export function FileUploadField({
           <div key={item.key} className='w-36 rounded-md border p-2'>
             <div className='flex h-20 items-center justify-center overflow-hidden rounded-sm bg-muted/30'>
               {item.status === 'uploading' ? (
-                <LoaderCircle className='animate-spin' aria-label='Uploading' />
+                <LoaderCircle
+                  className='animate-spin'
+                  aria-label={t('files.uploading', {
+                    defaultValue: 'Uploading',
+                  })}
+                />
               ) : (
                 <UploadCloud aria-hidden='true' />
               )}
@@ -261,10 +304,15 @@ export function FileUploadField({
             </div>
             <div className='text-xs text-muted-foreground'>
               {item.status === 'error'
-                ? (item.error?.message ?? 'Failed')
+                ? ((item.error
+                    ? t(messageKey(item.error.message), {
+                        defaultValue: item.error.message,
+                      })
+                    : undefined) ??
+                  t('files.failed', { defaultValue: 'Failed' }))
                 : item.status === 'uploading'
-                  ? 'Uploading'
-                  : 'Pending'}
+                  ? t('files.uploading', { defaultValue: 'Uploading' })
+                  : t('files.pending', { defaultValue: 'Pending' })}
             </div>
             <div className='mt-2 flex gap-1'>
               {item.status === 'error' ? (
@@ -283,7 +331,10 @@ export function FileUploadField({
                 type='button'
                 size='icon'
                 variant='ghost'
-                aria-label={`Cancel ${item.file.name}`}
+                aria-label={t('files.cancelFile', {
+                  filename: item.file.name,
+                  defaultValue: `Cancel ${item.file.name}`,
+                })}
                 onClick={() => cancel(item)}
                 disabled={disabled}
               >
@@ -320,8 +371,14 @@ export function FileUploadField({
       </div>
       <div className='sr-only' aria-live='polite'>
         {[
-          ...value.map((record) => `${record.filename}: done`),
-          ...items.map((item) => `${item.file.name}: ${item.status}`),
+          ...value.map(
+            (record) =>
+              `${record.filename}: ${t('files.done', { defaultValue: 'done' })}`,
+          ),
+          ...items.map(
+            (item) =>
+              `${item.file.name}: ${t(`files.status.${item.status}`, { defaultValue: item.status })}`,
+          ),
         ].join('. ')}
       </div>
     </div>
