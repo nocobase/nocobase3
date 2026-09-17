@@ -54,7 +54,7 @@ export const createServiceRedisBackend: BackendFactory = (
 ) => {
   const connection = resolveRedisConnection(options.connection);
   const worker = metadata?.withBlockingConnection === true;
-  return createRedisBackend(
+  const backend = createRedisBackend(
     name,
     {
       ...options,
@@ -70,4 +70,10 @@ export const createServiceRedisBackend: BackendFactory = (
     },
     metadata,
   );
+  const close = backend.close.bind(backend);
+  backend.close = async (): Promise<void> => {
+    // All connections in this options-only adapter are owned. No QUIT reply is needed.
+    await close(true);
+  };
+  return backend;
 };
