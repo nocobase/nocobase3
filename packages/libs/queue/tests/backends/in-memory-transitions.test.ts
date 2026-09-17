@@ -4,6 +4,28 @@ import { describe, expect, it, vi } from 'vitest';
 import { createInMemoryBackendFactory } from '../../src/backends/in-memory/index.js';
 
 describe('memory completion protocol', () => {
+  it('orders active ranges by claim order rather than insertion order', async () => {
+    const factory = createInMemoryBackendFactory();
+    const queue = new Queue('active-order', { connection: {} }, factory);
+    const backend = factory('active-order', { connection: {} });
+    try {
+      await queue.add('low', {}, { jobId: 'low', priority: 2 });
+      await queue.add('high', {}, { jobId: 'high', priority: 1 });
+      await backend.moveToActive('first');
+      await backend.moveToActive('second');
+      expect(
+        (await queue.getJobs(['active'], 0, -1, true)).map((job) => job.id),
+      ).toEqual(['high', 'low']);
+      expect(
+        (await queue.getJobs(['active'], 0, 0, true)).map((job) => job.id),
+      ).toEqual(['high']);
+      expect(
+        (await queue.getJobs(['active'], 0, -1, false)).map((job) => job.id),
+      ).toEqual(['low', 'high']);
+    } finally {
+      await Promise.all([queue.close(), backend.close()]);
+    }
+  });
   it.each([0, 1, 2])(
     'caps age retention removal at %i jobs including the age boundary',
     async (limit) => {
