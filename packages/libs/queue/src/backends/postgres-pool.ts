@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
+const RESOURCE_CLEANUP_TIMEOUT_MS = 5000;
 
 export function isBorrowedPostgresPool(value: unknown): value is Pool {
   if (typeof value !== 'object' || value === null || !('connect' in value))
@@ -186,12 +187,41 @@ export function createBorrowedPostgresPool(
   return {
     pool,
     close: (): Promise<void> =>
-      (closing ??= (async (): Promise<void> => {
+      (closing ??= new Promise<void>((resolve, reject) => {
         closed = true;
-        for (const lease of leases) lease.release();
-        await Promise.allSettled(acquisitions);
-        await Promise.all(retiring);
-        owner.off('error', forwardError);
-      })()),
+        // One reserve covers both pending checkouts and physical lease endings.
+        // Expiry reports failure; it cannot cancel a caller-owned Pool operation.
+        const timer = setTimeout(() => {
+          reject(
+            new Error(
+              `Borrowed PostgreSQL Pool cleanup exceeded ${RESOURCE_CLEANUP_TIMEOUT_MS}ms; unresolved acquisitions: ${acquisitions.size}; leases awaiting end: ${retiring.size}; host or Pool owner action required`,
+            ),
+          );
+        }, RESOURCE_CLEANUP_TIMEOUT_MS);
+        const settle = async (): Promise<void> => {
+          for (const lease of leases) lease.release();
+          await Promise.allSettled(acquisitions);
+          await Promise.all(retiring);
+          owner.off('error', forwardError);
+        };
+        // Keep tracking and retiring late acquisitions after timeout. Only actual
+        // settlement removes the bridge; a rejected close never becomes success.
+        void settle().then(
+          () => {
+            clearTimeout(timer);
+            resolve();
+          },
+          (error: unknown) => {
+            clearTimeout(timer);
+            reject(
+              error instanceof Error
+                ? error
+                : new Error('Borrowed PostgreSQL Pool cleanup failed', {
+                    cause: error,
+                  }),
+            );
+          },
+        );
+      })),
   };
 }
