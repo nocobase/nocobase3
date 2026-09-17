@@ -11,7 +11,7 @@ import {
   LoggingProvider,
   requestLoggingMiddleware,
 } from '@nocobase/app-server/logging';
-import { QueueProvider } from '@nocobase/app-server/queue';
+import { QueueServiceProvider } from '@nocobase/app-server/queue';
 import {
   SessionProvider,
   sessionHttpMiddleware,
@@ -34,7 +34,7 @@ export function createApp(runtime: AppRuntimeContext): Application {
   app.addServiceProvider(IdGeneratorProvider);
   app.addServiceProvider(SessionProvider);
   app.addServiceProvider(DriveProvider);
-  app.addServiceProvider(QueueProvider);
+  app.addServiceProvider(QueueServiceProvider);
   app.addHttpMiddleware(requestLoggingMiddleware);
   app.addHttpMiddleware(sessionHttpMiddleware);
   app.addHttpMiddleware(i18nHttpMiddleware);

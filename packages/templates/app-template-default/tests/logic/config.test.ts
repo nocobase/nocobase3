@@ -9,7 +9,7 @@ import {
   type CachingConfig,
   type AppDriveConfig,
   type AppLoggingConfig,
-  type AppQueueConfig,
+  type AppQueueServiceConfig,
   type AppSessionConfigInput,
 } from '@nocobase/app-server';
 import { describe, expect, it } from 'vitest';
@@ -43,16 +43,10 @@ describe('application config', () => {
     expect(runtime.config.get<AppLoggingConfig>('logging')!.default).toBe(
       'system',
     );
-    expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
-    expect(
-      runtime.config.get<AppQueueConfig>('queue')!.jobs?.locations,
-    ).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(
-          /app-template-default\/server\/jobs\/\*\*\/\*\.\{ts,js\}$/,
-        ),
-      ]),
-    );
+    expect(runtime.config.get<AppQueueServiceConfig>('queue')).toEqual({
+      queueBackend: 'inMemory',
+      environment: runtime.env.NODE_ENV,
+    });
     expect(runtime.config.get<AppSessionConfigInput>('session')!.default).toBe(
       'memory',
     );
@@ -78,9 +72,10 @@ describe('application config', () => {
       },
     });
     expect(runtime.config.get('server.port')).toBe(14001);
-    expect(runtime.config.get('queue.connections.redis.host')).toBe(
-      '127.0.0.1',
-    );
+    expect(runtime.config.get<AppQueueServiceConfig>('queue')).toEqual({
+      queueBackend: 'inMemory',
+      environment: 'production',
+    });
     expect(runtime.config.get('session.stores.redis.host')).toBe('127.0.0.1');
     expect(runtime.config.get('logging.pretty')).toBe(false);
     expect(runtime.config.get('session.cookie.secure')).toBe(true);

@@ -1,4 +1,18 @@
+// @vitest-environment node
+
 import { describe, expect, it, vi } from 'vitest';
+import { fileURLToPath } from 'node:url';
+import { Hono } from 'hono';
+import type { Application } from '@nocobase/app-server/application';
+import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
+import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
+import {
+  defineServerPlugin,
+  defineServerPlugins,
+} from '@nocobase/app-server/plugins';
+import type { UnregisterHandler } from '@nocobase/queue';
+import { createApp } from '../../server/app.js';
+import appRuntime from '../../server/runtime.js';
 
 import {
   RealtimeProvider,
@@ -6,6 +20,7 @@ import {
 } from '@nocobase/app-server/realtime';
 import {
   ServiceContainer,
+  ServiceProvider,
   ServiceProviderRegistry,
 } from '@nocobase/service-provider';
 import { createDefaultCachingConfig } from '@nocobase/caching';
@@ -17,7 +32,10 @@ import {
   idGeneratorToken,
 } from '@nocobase/app-server/id-generator';
 import { LoggingProvider, loggingToken } from '@nocobase/app-server/logging';
-import { QueueProvider, queueManagerToken } from '@nocobase/app-server/queue';
+import {
+  QueueServiceProvider,
+  queueServiceToken,
+} from '@nocobase/app-server/queue';
 import {
   SessionProvider,
   sessionManagerToken,
@@ -46,10 +64,7 @@ describe('app service providers', () => {
           enabled: false,
           level: 'silent',
         },
-        queue: {
-          default: 'sync',
-          connections: { sync: { driver: 'sync' } },
-        },
+        queue: { queueBackend: 'inMemory' },
         session: createNullSessionConfig(),
         snowflake: {
           workerId: 0,
@@ -62,7 +77,7 @@ describe('app service providers', () => {
     registry.add(new IdGeneratorProvider(app));
     registry.add(new SessionProvider(app));
     registry.add(new DriveProvider(app));
-    registry.add(new QueueProvider(app));
+    registry.add(new QueueServiceProvider(app));
     registry.add(new RealtimeProvider(app));
 
     registry.registerAll();
@@ -70,12 +85,12 @@ describe('app service providers', () => {
     const caching = services.resolve(cachingToken);
     const idGenerator = services.resolve(idGeneratorToken);
     const sessionManager = services.resolve(sessionManagerToken);
-    const queueManager = services.resolve(queueManagerToken);
+    const queue = services.resolve(queueServiceToken);
     const realtime = services.resolve(realtimeServiceToken);
     const closeLogging = vi.spyOn(logging, 'close');
     const dispose = vi.spyOn(caching, 'dispose');
     const disposeSession = vi.spyOn(sessionManager, 'dispose');
-    const closeQueue = vi.spyOn(queueManager, 'close');
+    const closeQueue = vi.spyOn(queue, 'shutdown');
     const closeRealtime = vi.spyOn(realtime, 'close');
 
     await registry.shutdown();
@@ -129,7 +144,7 @@ describe('app service providers', () => {
     expect(services.resolve(driveManagerToken)).toBeDefined();
   });
 
-  it('resolves authentication, authorization, and queue provider dependencies', async () => {
+  it('starts the queue without using the application database', async () => {
     const services = new ServiceContainer();
     const registry = new ServiceProviderRegistry();
     const connection = { kind: 'connection' };
@@ -137,12 +152,7 @@ describe('app service providers', () => {
       connection: vi.fn(() => connection),
       destroy: vi.fn(() => Promise.resolve()),
     } as unknown as DatabaseManager;
-    const queueConfig = {
-      default: 'test',
-      connections: {
-        test: { driver: 'fake' as const },
-      },
-    };
+    const queueConfig = { queueBackend: 'inMemory' };
     const app = createProviderApplication(
       {
         database: createDatabaseConfig(),
@@ -170,15 +180,169 @@ describe('app service providers', () => {
     registry.add(new LoggingProvider(app));
     registry.add(new CachingProvider(app));
     registry.add(new IdGeneratorProvider(app));
-    registry.add(new QueueProvider(app));
+    registry.add(new QueueServiceProvider(app));
 
     registry.registerAll();
-    services.resolve(queueManagerToken);
+    const queue = services.resolve(queueServiceToken);
+    await registry.bootAll();
+    await registry.startAll();
+    await expect(queue.producer('test').publish('event', {})).resolves.toEqual({
+      jobId: expect.any(String),
+    });
 
+    expect(database.connection).not.toHaveBeenCalled();
     expect(services.resolve(databaseManagerToken)).toBe(database);
     await registry.shutdown();
   });
 });
+
+describe('template queue composition', () => {
+  it('registers an app-scoped in-memory queue before plugins and consumes only after boot', async () => {
+    const first = await createQueueApplication('first-app');
+    const second = await createQueueApplication('second-app');
+    try {
+      first.app.registerProviders();
+      second.app.registerProviders();
+      expect(first.registered()).toBe(true);
+      expect(second.registered()).toBe(true);
+      const firstQueue = first.app.container.resolve(queueServiceToken);
+      const secondQueue = second.app.container.resolve(queueServiceToken);
+      expect(firstQueue).not.toBe(secondQueue);
+      await expect(
+        firstQueue.producer('shared').publish('event', 'before'),
+      ).rejects.toThrow();
+      expect(first.received).toEqual([]);
+      await first.app.start();
+      await second.app.start();
+      expect(first.booted()).toBe(true);
+      expect(second.booted()).toBe(true);
+      await firstQueue.producer('shared').publish('event', 'first');
+      await secondQueue.producer('shared').publish('event', 'second');
+      await expect
+        .poll(() => [first.received, second.received])
+        .toEqual([['first'], ['second']]);
+      expect(first.warn).toHaveBeenCalledWith(
+        { namespace: 'first-app', queue: 'shared' },
+        'Queue is running in memory mode. Jobs will be lost on restart.',
+      );
+      await first.app.shutdown();
+      await secondQueue.producer('shared').publish('event', 'still-running');
+      await expect
+        .poll(() => second.received)
+        .toEqual(['second', 'still-running']);
+      expect(first.received).toEqual(['first']);
+    } finally {
+      await first.app.shutdown();
+      await second.app.shutdown();
+      vi.restoreAllMocks();
+    }
+  });
+});
+
+async function createQueueApplication(name: string) {
+  const received: unknown[] = [];
+  let registered = false;
+  let booted = false;
+  class QueuePluginProvider extends ServiceProvider<Application> {
+    public readonly name: string = 'test/queue-plugin';
+    private unregister: UnregisterHandler | undefined;
+
+    public override register(): void {
+      registered = this.app.container.has(queueServiceToken);
+      expect(registered).toBe(true);
+    }
+
+    public override async boot(): Promise<void> {
+      const queue = this.app.container.resolve(queueServiceToken);
+      this.unregister = queue
+        .consumer('shared')
+        .consume(async (_channel, message) => {
+          received.push(message);
+        });
+      await expect(
+        queue.producer('shared').publish('event', 'boot'),
+      ).rejects.toThrow();
+      expect(received).toEqual([]);
+      booted = true;
+    }
+
+    public override async shutdown(): Promise<void> {
+      await this.unregister?.();
+    }
+  }
+  const runtime = await resolveStandaloneAppRuntime(
+    {
+      ...appRuntime,
+      createAppConfig: () => new AppConfig(),
+      defaultConfigs: () => ({
+        app: { name, publicBasePath: '', internalBasePath: '' },
+        spa: { indexPath: '/missing/index.html' },
+        database: { default: 'none', connections: {} },
+        drive: {
+          default: 'local',
+          disks: {
+            local: {
+              driver: 'fs',
+              location: process.cwd(),
+              visibility: 'private',
+            },
+          },
+        },
+        logging: { enabled: false, level: 'silent' },
+        caching: createDefaultCachingConfig(),
+        session: createNullSessionConfig(),
+        snowflake: { workerId: 0 },
+      }),
+      plugins: defineServerPlugins([]),
+      serviceProviders: [],
+      routes: [],
+      locales: undefined,
+    },
+    {
+      rootDir: fileURLToPath(new URL('../..', import.meta.url)),
+      env: {},
+    },
+  );
+  const app = createApp({
+    ...runtime,
+    plugins: {
+      ...runtime.plugins,
+      plugins: [
+        {
+          definition: defineServerPlugin({
+            packageName: '@nocobase/app-plugin-queue-test',
+            serviceProviders: [QueuePluginProvider],
+          }),
+          metadata: {
+            packageName: '@nocobase/app-plugin-queue-test',
+            version: 'test',
+            rootDir: '/test/queue-plugin',
+            jobLocations: [],
+          },
+        },
+      ],
+    },
+  });
+  // Observe the public warning payload to verify the default namespace without inspecting internals.
+  const warn = vi.fn();
+  app.addServiceProvider(
+    class QueueLoggerProbe extends ServiceProvider<Application> {
+      public readonly name: string = 'test/queue-logger';
+      public override register(): void {
+        const logger = this.app.container.resolve(loggingToken).getLogger();
+        vi.spyOn(logger, 'child').mockReturnValue(logger);
+        vi.spyOn(logger, 'warn').mockImplementation(warn);
+      }
+    },
+  );
+  return {
+    app,
+    received,
+    warn,
+    registered: () => registered,
+    booted: () => booted,
+  };
+}
 
 function createProviderApplication(
   values: Readonly<Record<string, unknown>>,
@@ -186,10 +350,18 @@ function createProviderApplication(
 ): {
   config: AppConfigAccessor;
   container: ServiceContainer;
+  appName: string;
+  publicBasePath: string;
+  paths: ReturnType<typeof createConfigPaths>;
+  router: Hono;
 } {
   return {
     config: createTestConfig(values),
     container,
+    appName: 'provider-test',
+    publicBasePath: '/provider-test',
+    paths: createConfigPaths({ rootDir: process.cwd() }),
+    router: new Hono(),
   };
 }
 
