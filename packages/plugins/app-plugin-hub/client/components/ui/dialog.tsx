@@ -19,7 +19,10 @@ export function DialogContent(
 
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop className='fixed inset-0 z-50 bg-black/45' />
+      <DialogPrimitive.Backdrop
+        data-slot='dialog-overlay'
+        className='fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0'
+      />
       <DialogPrimitive.Popup
         data-slot='dialog-content'
         className={cn(
