@@ -35,6 +35,13 @@ function createFixture(initial: AIEmployeeEntity[] = []) {
     }),
   };
   const ai = {
+    skillsManager: {
+      listSkills: vi.fn(async () => [
+        { name: 'general' },
+        { name: 'registered' },
+      ]),
+    },
+    toolsManager: { listTools: vi.fn(async () => []) },
     features: {
       isFeaturesEnabled: vi.fn((features: string[]) =>
         features.includes(EEFeatures.knowledgeBase),
@@ -51,7 +58,10 @@ function createFixture(initial: AIEmployeeEntity[] = []) {
   const database = {
     transaction: async (run: (connection: unknown) => Promise<void>) => run({}),
   };
-  const repositories = { aiEmployees: repository };
+  const repositories = {
+    aiEmployees: repository,
+    usersAiEmployees: { find: vi.fn(async () => []) },
+  };
   const translate = (key: string) => `localized:${key}`;
   const service = new AIEmployeeService({
     ai: ai as never,
@@ -62,6 +72,94 @@ function createFixture(initial: AIEmployeeEntity[] = []) {
 }
 
 describe('AI employee management service', () => {
+  it('normalizes explicit skill selections, preserves omissions and supports null reset', async () => {
+    const { service, translate } = createFixture();
+    const save = (input: Record<string, unknown>) =>
+      service.upsert({ input: { username: 'support', ...input }, translate });
+    await save({
+      skillSettings: {
+        skills: ['legacy'],
+        tools: [{ name: 'legacy-tool' }],
+        enabledSkills: ['specified', 'specified'],
+      },
+    });
+    await expect(
+      service.get({ username: 'support', translate }),
+    ).resolves.toMatchObject({
+      skillSettings: {
+        skills: ['legacy'],
+        tools: [{ name: 'legacy-tool' }],
+        enabledSkills: ['specified'],
+      },
+    });
+    await save({ nickname: 'Renamed' });
+    await save({ skillSettings: { skills: ['updated'], tools: [] } });
+    await expect(
+      service.get({ username: 'support', translate }),
+    ).resolves.toMatchObject({
+      skillSettings: {
+        skills: ['updated'],
+        tools: [],
+        enabledSkills: ['specified'],
+      },
+    });
+    for (const enabledSkills of [[], null]) {
+      await expect(
+        save({ skillSettings: { enabledSkills } }),
+      ).resolves.toMatchObject({ skillSettings: { enabledSkills } });
+    }
+  });
+
+  it.each(
+    ['bad', 3, false, {}, ['ok', 1], [''], ['   ']].map((enabledSkills) => ({
+      enabledSkills,
+    })),
+  )(
+    'rejects invalid enabledSkills $enabledSkills without saving',
+    async ({ enabledSkills }) => {
+      const { service, translate } = createFixture();
+      await expect(
+        service.upsert({
+          input: { username: 'invalid', skillSettings: { enabledSkills } },
+          translate,
+        }),
+      ).rejects.toThrow('skillSettings.enabledSkills');
+      await expect(service.list({ translate })).resolves.toEqual([]);
+    },
+  );
+
+  it.each([
+    { enabledSkills: undefined, expected: ['registered', 'general'] },
+    { enabledSkills: null, expected: ['registered', 'general'] },
+    { enabledSkills: [], expected: [] },
+    { enabledSkills: ['specified', 'specified'], expected: ['specified'] },
+  ])(
+    'returns effective deduplicated skill names for $enabledSkills',
+    async ({ enabledSkills, expected }) => {
+      const { service, translate } = createFixture([
+        {
+          username: 'support',
+          enabled: true,
+          skillSettings: {
+            skills: ['registered', 'registered'],
+            tools: [],
+            enabledSkills,
+          },
+        },
+      ]);
+      const result = await service.listByUser({
+        actor: { id: 1, roles: [], isRoot: false },
+        translate,
+      });
+      expect(result[0].skillSettings?.skills).toEqual(expected);
+      await expect(
+        service.get({ username: 'support', translate }),
+      ).resolves.toMatchObject({
+        skillSettings: { skills: ['registered', 'registered'] },
+      });
+    },
+  );
+
   it('preserves omitted fields and persists explicit false and empty values', async () => {
     const { service, translate } = createFixture();
 

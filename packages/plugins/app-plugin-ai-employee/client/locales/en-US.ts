@@ -1,4 +1,10 @@
 export default {
+  employeeSkills: {
+    use: 'Use {{name}}',
+    loading: 'Loading skill catalog…',
+    error: 'Skill catalog unavailable. Retry to edit skills.',
+    unavailable: 'Unavailable',
+  },
   tools: {
     title: 'Tools',
     description: 'Browse tools available to AI employees.',

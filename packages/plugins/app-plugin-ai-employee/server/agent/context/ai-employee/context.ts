@@ -311,6 +311,25 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
       ...tool,
       definition: { ...tool.definition },
       auto: this.resolveToolAuto(tool),
+      ...(tool.definition.name === SYSTEM_TOOLS.GET_SKILL
+        ? {
+            // Execution can receive a different context from discovery. Bind the
+            // trusted employee/session policy here rather than trusting that input.
+            invoke: (
+              ctx: unknown,
+              args: unknown,
+              runtime: Parameters<ToolsEntity['invoke']>[2],
+            ) =>
+              tool.invoke(
+                {
+                  ...(ctx as AppAgentContext),
+                  availableSkills: () => this.getAvailableSkills(),
+                },
+                args,
+                runtime,
+              ),
+          }
+        : {}),
     };
   }
 
@@ -392,11 +411,15 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
       (tool) => tool.definition.name === SYSTEM_TOOLS.GET_SKILL,
     );
     if (!getSkill) return [];
-    const general = await this.skillsManager.listSkills({ scope: 'GENERAL' });
-    const names = this.employee.skillSettings?.skills ?? [];
+    const enabled = this.employee.skillSettings?.enabledSkills;
+    const names = enabled ?? this.employee.skillSettings?.skills ?? [];
     const specified = names.length
-      ? await this.skillsManager.getSkills(names)
+      ? await this.skillsManager.getSkills([...new Set(names)])
       : [];
+    const general =
+      enabled == null
+        ? await this.skillsManager.listSkills({ scope: 'GENERAL' })
+        : [];
     const merged = _.uniqBy([...(specified || []), ...(general || [])], 'name');
     const settings = this.skillSettings;
     if (!settings) return merged;
@@ -427,7 +450,9 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     const toolMap = new Map(discoveredToolMap);
     for (const tool of baseTools) toolMap.set(tool.definition.name, tool);
     const skillToolNames = new Set(
-      (await this.getAvailableSkillsForTools(baseTools)).flatMap(
+      // Disabled skills must not turn their formerly gated GENERAL/configured
+      // tools into base tools. Only loading an available skill activates them.
+      (await this.skillsManager.listSkills()).flatMap(
         (skill) => skill.tools ?? [],
       ),
     );

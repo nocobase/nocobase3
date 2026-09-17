@@ -1,3 +1,5 @@
+import type { AIEmployeeSkillSettings } from '@nocobase/ai-employee';
+
 export interface Actor {
   readonly id: string | number;
   readonly roles: readonly string[];
@@ -142,10 +144,7 @@ export type AIEmployeeDefinition = {
   enabled?: boolean;
   systemPrompt?: string | null;
   chatSettings?: Record<string, unknown>;
-  skillSettings?: {
-    skills?: string[];
-    tools?: Array<{ name: string; autoCall?: boolean }>;
-  };
+  skillSettings?: Partial<AIEmployeeSkillSettings>;
   modelSettings?: {
     enabled?: boolean;
     llmService?: string;
@@ -171,10 +170,7 @@ export type AIEmployeeDto = {
   builtIn?: boolean;
   userConfig?: { prompt?: string; sort?: number };
   chatSettings?: Record<string, unknown>;
-  skillSettings?: {
-    skills?: string[];
-    tools?: Array<{ name: string; autoCall?: boolean }>;
-  };
+  skillSettings?: Partial<AIEmployeeSkillSettings>;
   modelSettings?: {
     enabled?: boolean;
     llmService?: string;

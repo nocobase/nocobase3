@@ -5,6 +5,13 @@ export type AIEmployeeToolSetting = {
   autoCall?: boolean;
 };
 
+export type AIEmployeeSkillSettings = {
+  skills: string[];
+  tools: AIEmployeeToolSetting[];
+  /** Null or omission inherits registered skills and GENERAL skills; [] disables all. */
+  enabledSkills?: string[] | null;
+};
+
 export type AIEmployeeKnowledgeBase = {
   topK?: number;
   score?: number;
@@ -23,10 +30,7 @@ export type AIEmployeeEntity = {
   greeting?: string;
   about?: string | null;
   defaultPrompt?: string | null;
-  skillSettings: {
-    skills: string[];
-    tools: AIEmployeeToolSetting[];
-  };
+  skillSettings: AIEmployeeSkillSettings;
   chatSettings?: {
     systemPromptMode?: 'default' | 'raw' | 'none';
     enableSkills?: boolean;

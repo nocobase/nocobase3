@@ -48,6 +48,7 @@ export interface AIEmployeeRecord extends Record<string, unknown> {
   knowledgeBase?: AIEmployeeKnowledgeBaseSettings;
   missingKnowledgeBaseKeys?: string[];
   skillSettings?: {
+    enabledSkills?: string[] | null;
     skills?: string[];
     tools?: AIEmployeeToolSetting[];
   };
@@ -79,6 +80,7 @@ export interface AIEmployeeEditableValues {
   about: string | null;
   modelSettings: AIEmployeeModelSettings;
   skillSettings: {
+    enabledSkills?: string[] | null;
     skills: string[];
     tools: AIEmployeeToolSetting[];
   };
@@ -120,6 +122,14 @@ export function buildEditableValues(
     about: employee.about ?? null,
     modelSettings: { ...(employee.modelSettings ?? {}) },
     skillSettings: {
+      ...(employee.skillSettings?.enabledSkills !== undefined
+        ? {
+            enabledSkills:
+              employee.skillSettings.enabledSkills === null
+                ? null
+                : [...employee.skillSettings.enabledSkills],
+          }
+        : {}),
       skills: [...(employee.skillSettings?.skills ?? [])],
       tools: (employee.skillSettings?.tools ?? []).map((tool) => ({ ...tool })),
     },
@@ -147,6 +157,14 @@ export function buildAIEmployeeUpdatePayload(
       ...editable.modelSettings,
     },
     skillSettings: {
+      ...(editable.skillSettings.enabledSkills !== undefined
+        ? {
+            enabledSkills:
+              editable.skillSettings.enabledSkills === null
+                ? null
+                : [...editable.skillSettings.enabledSkills],
+          }
+        : {}),
       skills: [...editable.skillSettings.skills],
       tools: editable.skillSettings.tools.map((tool) => ({ ...tool })),
     },
@@ -299,7 +317,9 @@ async function listMetadata(
             title:
               typeof introduction.title === 'string'
                 ? introduction.title
-                : undefined,
+                : typeof item.title === 'string'
+                  ? item.title
+                  : undefined,
             description:
               typeof item.description === 'string'
                 ? item.description

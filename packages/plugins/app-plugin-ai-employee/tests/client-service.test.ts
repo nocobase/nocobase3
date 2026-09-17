@@ -48,6 +48,41 @@ describe('AI employee knowledge base editing', () => {
 });
 
 describe('AI employee update payload', () => {
+  it.each(
+    [undefined, null, [], ['unknown-skill', 'analysis']].map(
+      (enabledSkills) => ({ enabledSkills }),
+    ),
+  )(
+    'preserves and clones enabledSkills $enabledSkills without defaulting or filtering',
+    ({ enabledSkills }) => {
+      const employee: AIEmployeeRecord = {
+        username: 'ava',
+        skillSettings: {
+          skills: ['legacy-unknown'],
+          ...(enabledSkills === undefined ? {} : { enabledSkills }),
+        },
+      };
+      const editable = buildEditableValues(employee);
+      const payload = buildAIEmployeeUpdatePayload(employee, editable);
+      if (enabledSkills === undefined) {
+        expect(editable.skillSettings).not.toHaveProperty('enabledSkills');
+        expect(payload.skillSettings).not.toHaveProperty('enabledSkills');
+      } else {
+        expect(editable.skillSettings.enabledSkills).toEqual(enabledSkills);
+        expect(payload.skillSettings.enabledSkills).toEqual(enabledSkills);
+      }
+      if (Array.isArray(enabledSkills)) {
+        expect(editable.skillSettings.enabledSkills).not.toBe(enabledSkills);
+        expect(payload.skillSettings.enabledSkills).not.toBe(
+          editable.skillSettings.enabledSkills,
+        );
+        payload.skillSettings.enabledSkills?.push('another');
+        expect(editable.skillSettings.enabledSkills).toEqual(enabledSkills);
+      }
+      expect(payload.skillSettings.skills).toEqual(['legacy-unknown']);
+    },
+  );
+
   it('submits editable role, model, skill, and knowledge base settings', () => {
     const employee: AIEmployeeRecord = {
       username: 'ava',

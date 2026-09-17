@@ -71,6 +71,7 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
       await this.registerEmployeeInRepository(
         repository,
         this.toEmployeeOptions(employee),
+        employee.skillSettings,
       );
     }
     this.repository = repository;
@@ -80,14 +81,41 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
     const current = await this.repository.findOne({
       filter: { username: entry.username },
     });
+    const enabledSkills =
+      entry.skillSettings.enabledSkills === undefined
+        ? current?.skillSettings?.enabledSkills
+        : entry.skillSettings.enabledSkills;
+    if (
+      enabledSkills != null &&
+      (!Array.isArray(enabledSkills) ||
+        !enabledSkills.every(
+          (name) => typeof name === 'string' && name.trim().length > 0,
+        ))
+    ) {
+      throw new TypeError(
+        'skillSettings.enabledSkills must be an array of non-empty strings or null',
+      );
+    }
+    const values: AIEmployeeEntity = {
+      ...entry,
+      skillSettings: {
+        ...entry.skillSettings,
+        ...(enabledSkills === undefined
+          ? {}
+          : {
+              enabledSkills:
+                enabledSkills === null ? null : [...new Set(enabledSkills)],
+            }),
+      },
+    };
     if (current) {
       await this.repository.update({
         filter: { username: entry.username },
-        values: entry,
+        values,
       });
-      return { ...current, ...entry };
+      return { ...current, ...values };
     }
-    return this.repository.create({ values: entry });
+    return this.repository.create({ values });
   }
 
   async deleteEmployee(username: string): Promise<void> {
@@ -97,12 +125,22 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
   private async registerEmployeeInRepository(
     repository: AIEmployeeRepository,
     options: AIEmployeeOptions,
+    sourceSettings?: AIEmployeeEntity['skillSettings'],
   ): Promise<void> {
     const current =
       (await repository.findOne({
         filter: { username: options.username },
       })) ?? undefined;
     const value = this.toBuiltInEmployee(options, current);
+    // Registration refreshes legacy arrays, never an administrator's override.
+    const enabledSkills =
+      current?.skillSettings?.enabledSkills !== undefined
+        ? current.skillSettings.enabledSkills
+        : sourceSettings?.enabledSkills;
+    if (enabledSkills !== undefined) {
+      value.skillSettings.enabledSkills =
+        enabledSkills === null ? null : [...new Set(enabledSkills)];
+    }
     if (current) {
       await repository.update({
         filter: { username: options.username },

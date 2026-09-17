@@ -25,8 +25,10 @@ export default defineTools<AgentContext<{}, {}>>({
     }),
   },
   invoke: async (ctx, args) => {
-    const target = await ctx.ai.skillsManager.getSkills(
-      args.skillName as string,
+    // Discovery and persisted activation are not authorization grants. Require
+    // the host's current visibility policy even for a direct tool invocation.
+    const target = (await ctx.availableSkills?.())?.find(
+      (skill) => skill.name === args.skillName,
     );
     if (!target) {
       return {

@@ -37,6 +37,9 @@ function cloneEmployee(employee: AIEmployeeEntity): AIEmployeeRecord {
       ? {
           skillSettings: {
             ...skillSettings,
+            ...(Array.isArray(skillSettings.enabledSkills)
+              ? { enabledSkills: [...new Set(skillSettings.enabledSkills)] }
+              : {}),
             skills: Array.isArray(skillSettings.skills)
               ? [...skillSettings.skills]
               : skillSettings.skills,
@@ -167,7 +170,31 @@ function getSkillSettings(
   const tools = Array.isArray(record.tools)
     ? record.tools.filter(isAIEmployeeToolSetting)
     : [];
-  return { skills, tools };
+  const enabledSkills = hasOwn(record, 'enabledSkills')
+    ? record.enabledSkills
+    : fallback?.enabledSkills;
+  if (
+    hasOwn(record, 'enabledSkills') &&
+    enabledSkills !== null &&
+    (!Array.isArray(enabledSkills) ||
+      !enabledSkills.every(
+        (name) => typeof name === 'string' && name.trim().length > 0,
+      ))
+  ) {
+    throw badRequest(
+      'skillSettings.enabledSkills must be an array of non-empty strings or null',
+    );
+  }
+  return {
+    skills,
+    tools,
+    ...(enabledSkills === undefined
+      ? {}
+      : {
+          enabledSkills:
+            enabledSkills === null ? null : [...new Set<string>(enabledSkills)],
+        }),
+  };
 }
 
 function getKnowledgeBaseKeys(employee: AIEmployeeRecord): string[] {
@@ -292,7 +319,14 @@ export class AIEmployeeService {
         };
         skillSettings.tools.push(toolSetting);
       }
-      for (const skill of skills) skillSettings.skills.push(skill.name);
+      skillSettings.skills = [
+        ...new Set(
+          skillSettings.enabledSkills ?? [
+            ...skillSettings.skills,
+            ...skills.map((skill) => skill.name),
+          ],
+        ),
+      ];
       return {
         username: serialized.username,
         nickname: serialized.nickname ?? serialized.username,

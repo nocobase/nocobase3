@@ -42,6 +42,31 @@ describe('Skills metadata API', () => {
     },
   );
 
+  it('reads management titles and prefers introduction titles when both exist', async () => {
+    const api = {
+      request: vi.fn().mockResolvedValue([
+        {
+          name: 'managed',
+          title: 'Managed title',
+          description: 'Managed description',
+        },
+        {
+          name: 'loaded',
+          title: 'Fallback',
+          introduction: { title: 'Introduction title' },
+        },
+      ]),
+    } as unknown as ApiClient;
+    await expect(listAISkills(undefined, api)).resolves.toMatchObject([
+      {
+        name: 'managed',
+        title: 'Managed title',
+        description: 'Managed description',
+      },
+      { name: 'loaded', title: 'Introduction title' },
+    ]);
+  });
+
   it('distinguishes request failures from an empty skill catalog', async () => {
     const error = new Error('Unavailable');
     const request = vi

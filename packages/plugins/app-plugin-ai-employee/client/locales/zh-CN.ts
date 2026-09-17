@@ -1,4 +1,10 @@
 export default {
+  employeeSkills: {
+    use: '使用{{name}}',
+    loading: '正在加载技能目录…',
+    error: '技能目录不可用，请重试后编辑技能。',
+    unavailable: '不可用',
+  },
   tools: {
     title: '工具',
     description: '浏览 AI 员工可使用的工具。',

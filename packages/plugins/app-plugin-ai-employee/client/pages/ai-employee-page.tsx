@@ -23,6 +23,7 @@ import {
 } from 'react';
 
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
+import { Switch as SkillSwitch } from '../../registry/nocobase-ai/shared/ui/switch.js';
 import {
   Collapsible,
   CollapsibleContent,
@@ -61,6 +62,22 @@ const detailTabs: Array<{ key: DetailTab; label: string }> = [
 ];
 
 const stable = (value: unknown): string => JSON.stringify(value);
+
+function effectiveSkillNames(
+  settings: AIEmployeeEditableValues['skillSettings'] | undefined,
+  catalog: AIMetadataItem[],
+): string[] {
+  return (
+    settings?.enabledSkills ?? [
+      ...new Set([
+        ...catalog
+          .filter((item) => item.scope === 'GENERAL')
+          .map((item) => item.name),
+        ...(settings?.skills ?? []),
+      ]),
+    ]
+  );
+}
 
 function ReadonlyField({
   label,
@@ -526,6 +543,9 @@ export default function AIEmployeePage(): ReactElement {
     [],
   );
   const [skills, setSkills] = useState<AIMetadataItem[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(true);
+  const [skillsError, setSkillsError] = useState(false);
+  const [skillsRequest, setSkillsRequest] = useState(0);
   const [tools, setTools] = useState<AIMetadataItem[]>([]);
   const [tab, setTab] = useState<DetailTab>('profile');
   const [loading, setLoading] = useState(true);
@@ -546,18 +566,16 @@ export default function AIEmployeePage(): ReactElement {
     setLoading(true);
     setError('');
     try {
-      const [employeeRows, modelRows, knowledgeRows, skillRows, toolRows] =
+      const [employeeRows, modelRows, knowledgeRows, toolRows] =
         await Promise.all([
           listAIEmployees(controller.signal, api),
           listEnabledModels(controller.signal, api),
           listEnabledKnowledgeBases(controller.signal, api).catch(() => []),
-          listAISkills(controller.signal, api).catch(() => []),
           listAITools(controller.signal, api),
         ]);
       setEmployees(employeeRows);
       setModels(modelRows);
       setKnowledgeBases(knowledgeRows);
-      setSkills(skillRows);
       setTools(toolRows);
       setSelectedUsername((current) =>
         current && employeeRows.some((item) => item.username === current)
@@ -576,6 +594,23 @@ export default function AIEmployeePage(): ReactElement {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setSkillsLoading(true);
+    setSkillsError(false);
+    void listAISkills(controller.signal, api)
+      .then((items) => {
+        if (!controller.signal.aborted) setSkills(items);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setSkillsError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSkillsLoading(false);
+      });
+    return () => controller.abort();
+  }, [api, skillsRequest]);
 
   useEffect(() => {
     if (!selectedUsername) {
@@ -630,13 +665,16 @@ export default function AIEmployeePage(): ReactElement {
   };
 
   const updateSkillNames = (update: (skills: string[]) => string[]): void => {
+    if (skillsLoading || skillsError || saving) return;
     setDraft((current) => {
       if (!current) return current;
       return {
         ...current,
         skillSettings: {
           ...current.skillSettings,
-          skills: update(current.skillSettings.skills),
+          enabledSkills: update(
+            effectiveSkillNames(current.skillSettings, skills),
+          ),
         },
       };
     });
@@ -741,19 +779,17 @@ export default function AIEmployeePage(): ReactElement {
   const configuredTools = draft?.skillSettings.tools ?? [];
   const skillsByName = new Map(skills.map((item) => [item.name, item]));
   const toolsByName = new Map(tools.map((item) => [item.name, item]));
-  const generalSkills = skills.filter((item) => item.scope === 'GENERAL');
-  const specifiedSkills = configuredSkills
-    .map((name) => skillsByName.get(name))
-    .filter(
-      (item): item is AIMetadataItem => !!item && item.scope === 'SPECIFIED',
-    );
-  const customSkills = configuredSkills.filter((name) => {
-    const item = skillsByName.get(name);
-    return !item || item.scope === 'CUSTOM';
-  });
-  const availableCustomSkills = skills.filter(
-    (item) => item.scope === 'CUSTOM' && !configuredSkills.includes(item.name),
+  const enabledSkills = new Set(
+    effectiveSkillNames(draft?.skillSettings, skills),
   );
+  const skillNames = [
+    ...new Set([
+      ...skillsByName.keys(),
+      ...configuredSkills,
+      ...(selected?.skillSettings?.enabledSkills ?? []),
+      ...(draft?.skillSettings.enabledSkills ?? []),
+    ]),
+  ];
   const generalTools = tools.filter(
     (item) => item.scope === 'GENERAL' && item.from === 'loader',
   );
@@ -1065,70 +1101,82 @@ export default function AIEmployeePage(): ReactElement {
               ) : null}
 
               {tab === 'skills' ? (
-                <div>
-                  <CollapsibleSection
-                    title={t('General skills')}
-                    description={t('Shared by all AI employees.')}
-                  >
-                    <MetadataList
-                      items={generalSkills}
-                      emptyLabel={t('None configured.')}
-                    />
-                  </CollapsibleSection>
-                  {selected.builtIn && specifiedSkills.length ? (
-                    <CollapsibleSection
-                      title={t('Employee-specific skills')}
-                      description={t('Only available to this AI employee.')}
+                <div className='space-y-4' aria-busy={skillsLoading}>
+                  {skillsLoading ? (
+                    <p role='status' className='text-sm text-muted-foreground'>
+                      {t('employeeSkills.loading')}
+                    </p>
+                  ) : skillsError ? (
+                    <div
+                      role='alert'
+                      className='flex flex-wrap items-center gap-3 text-sm'
                     >
-                      <MetadataList
-                        items={specifiedSkills}
-                        emptyLabel={t('None configured.')}
-                      />
-                    </CollapsibleSection>
-                  ) : null}
-                  <CollapsibleSection
-                    title={t('Custom skills')}
-                    description={t(
-                      'Can be added to or removed from this AI employee.',
-                    )}
-                    defaultOpen={customSkills.length > 0}
-                    action={
-                      <AddMenu
-                        label={t('Add skill')}
-                        items={availableCustomSkills}
-                        onAdd={(name) =>
-                          updateSkillNames((currentSkills) => [
-                            ...currentSkills,
-                            name,
-                          ])
+                      <span className='text-destructive'>
+                        {t('employeeSkills.error')}
+                      </span>
+                      <Button
+                        variant='outline'
+                        onClick={() =>
+                          setSkillsRequest((current) => current + 1)
                         }
-                      />
-                    }
-                  >
-                    <MetadataList
-                      items={customSkills.map(
-                        (name) =>
-                          skillsByName.get(name) ?? { name, title: name },
-                      )}
-                      emptyLabel={t('None configured.')}
-                      renderExtra={(item) => (
-                        <button
-                          type='button'
-                          aria-label={`${t('Remove')} ${item.title ?? item.name}`}
-                          className='rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground'
-                          onClick={() =>
-                            updateSkillNames((currentSkills) =>
-                              currentSkills.filter(
-                                (name) => name !== item.name,
-                              ),
-                            )
-                          }
-                        >
-                          <Trash2 className='h-4 w-4' />
-                        </button>
-                      )}
-                    />
-                  </CollapsibleSection>
+                      >
+                        <RefreshCw className='size-4' /> {t('Retry')}
+                      </Button>
+                    </div>
+                  ) : null}
+                  {skillNames.length ? (
+                    <ul
+                      aria-label={t('Skills')}
+                      className='divide-y divide-border'
+                    >
+                      {skillNames.map((name) => {
+                        const item = skillsByName.get(name);
+                        const title = item?.title || name;
+                        return (
+                          <li
+                            key={name}
+                            className='flex items-start justify-between gap-4 py-4'
+                          >
+                            <div className='min-w-0 space-y-1 break-words'>
+                              <div className='font-medium'>{title}</div>
+                              {title !== name ? (
+                                <div className='text-sm text-muted-foreground'>
+                                  {name}
+                                </div>
+                              ) : null}
+                              {item?.description ? (
+                                <p className='text-sm text-muted-foreground'>
+                                  {item.description}
+                                </p>
+                              ) : null}
+                              {!item && !skillsLoading && !skillsError ? (
+                                <p className='text-sm text-muted-foreground'>
+                                  {t('employeeSkills.unavailable')}
+                                </p>
+                              ) : null}
+                            </div>
+                            <SkillSwitch
+                              className='mt-1'
+                              aria-label={t('employeeSkills.use', {
+                                name: title,
+                              })}
+                              checked={enabledSkills.has(name)}
+                              disabled={skillsLoading || skillsError || saving}
+                              onCheckedChange={(checked) =>
+                                updateSkillNames((current) =>
+                                  checked
+                                    ? [...new Set([...current, name])]
+                                    : current.filter((value) => value !== name),
+                                )
+                              }
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : !skillsLoading && !skillsError ? (
+                    <EmptyList label={t('None configured.')} />
+                  ) : null}
                 </div>
               ) : null}
 
