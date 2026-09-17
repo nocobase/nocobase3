@@ -1,3 +1,4 @@
+import { PageContainer } from '../components/page-container.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -36,8 +37,8 @@ export default function ApiKeysPage(): ReactElement {
     };
   }, [client, authorization]);
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20 p-5 sm:p-8'>
-      <div className='mx-auto max-w-6xl space-y-5'>
+    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
+      <PageContainer>
         {failed ? (
           <ErrorNotification message={t('apiKeys.loadFailed')} />
         ) : !state ? (
@@ -45,7 +46,7 @@ export default function ApiKeysPage(): ReactElement {
         ) : (
           <ApiKeys apps={state.apps} capabilities={state.capabilities} />
         )}
-      </div>
+      </PageContainer>
     </main>
   );
 }

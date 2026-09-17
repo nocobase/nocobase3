@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Check, CircleMinus, LoaderCircle } from 'lucide-react';
@@ -60,16 +62,12 @@ export default function RolesPage(): ReactElement {
   }, [load]);
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20 p-5 sm:p-8'>
-      <div className='mx-auto max-w-6xl space-y-5'>
-        <header>
-          <h1 className='text-2xl font-semibold tracking-tight'>
-            {t('roles.title')}
-          </h1>
-          <p className='mt-1 text-sm text-muted-foreground'>
-            {t('roles.description')}
-          </p>
-        </header>
+    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
+      <PageContainer>
+        <PageHeader
+          title={t('roles.title')}
+          description={t('roles.description')}
+        />
 
         {loading ? (
           <Card className='grid min-h-64 place-items-center'>
@@ -158,7 +156,7 @@ export default function RolesPage(): ReactElement {
             </Table>
           </Card>
         )}
-      </div>
+      </PageContainer>
     </main>
   );
 }

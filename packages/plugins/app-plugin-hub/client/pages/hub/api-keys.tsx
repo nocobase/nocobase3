@@ -1,3 +1,4 @@
+import { PageHeader } from '../../components/page-header.js';
 import { toast } from 'sonner';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -139,36 +140,35 @@ export function ApiKeys({
   if (!canManage) return <ErrorNotification message={t('apiKeys.noAccess')} />;
 
   return (
-    <section className='space-y-5'>
-      <div className='flex flex-wrap items-start justify-between gap-4'>
-        <div>
-          <h2 className='font-semibold'>{t('apiKeys.title')}</h2>
-          <p className='mt-1 text-sm text-muted-foreground'>
-            {t('apiKeys.description')}
-          </p>
-        </div>
-        <Button
-          variant='outline'
-          disabled={
-            busy ||
-            (!apps.length && !scopeOptions.some((scope) => capabilities[scope]))
-          }
-          onClick={() => {
-            setName('');
-            setAppIds([]);
-            setAppSearch('');
-            setAllApps(false);
-            setExpiresAt('');
-            setCustomExpiry(false);
-            setScopes([]);
-            setError(undefined);
-            setCreateOpen(true);
-          }}
-        >
-          <Plus className='size-4' />
-          {t('apiKeys.create')}
-        </Button>
-      </div>
+    <section className='space-y-6'>
+      <PageHeader
+        title={t('apiKeys.title')}
+        description={t('apiKeys.description')}
+        actions={
+          <Button
+            variant='outline'
+            disabled={
+              busy ||
+              (!apps.length &&
+                !scopeOptions.some((scope) => capabilities[scope]))
+            }
+            onClick={() => {
+              setName('');
+              setAppIds([]);
+              setAppSearch('');
+              setAllApps(false);
+              setExpiresAt('');
+              setCustomExpiry(false);
+              setScopes([]);
+              setError(undefined);
+              setCreateOpen(true);
+            }}
+          >
+            <Plus className='size-4' />
+            {t('apiKeys.create')}
+          </Button>
+        }
+      />
       {!apps.length ? (
         <p className='text-sm text-muted-foreground'>{t('apiKeys.noApps')}</p>
       ) : null}
