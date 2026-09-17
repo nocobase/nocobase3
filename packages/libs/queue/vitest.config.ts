@@ -8,6 +8,7 @@ export default createNodeVitestConfig({
           'tests/*.test.ts',
           'tests/unit/**/*.test.ts',
           'tests/contracts/**/*.test.ts',
+          'tests/backends/**/*.test.ts',
         ],
     fileParallelism: !process.env.QUEUE_TEST_BACKEND,
     passWithNoTests: false,
