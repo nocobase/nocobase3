@@ -1,4 +1,18 @@
 export default {
+  employeeTools: {
+    use: '使用{{name}}',
+    description:
+      '选择此员工可使用的工具。技能工具仍需加载所属技能，可选工具仍需启用相应能力。',
+    loading: '正在加载工具可用范围…',
+    error: '无法确定工具可用范围，请重试后编辑工具及权限。',
+    unavailable: '不可用',
+    permission: '{{name}}的权限：{{permission}}',
+    permissionUnavailable: '未知',
+    enableToEdit: '启用工具后可编辑权限，已保存的权限会保留。',
+    registeredPermission: '权限由工具定义，无法在此修改。',
+    askHint: '运行此工具前请求批准。',
+    allowHint: '允许此工具运行，无需请求批准。',
+  },
   employeeSkills: {
     use: '使用{{name}}',
     loading: '正在加载技能目录…',

@@ -228,6 +228,69 @@ async function createFixture(services?: DataServices) {
 }
 
 describe('package-owned data skill runtime', () => {
+  it('intersects persisted skill activation with employee tool selection and rejects disabled direct calls', async () => {
+    const fixture = await createFixture();
+    const first = await fixture.runtime();
+    await first.call('getSkill', { skillName: 'data-query' });
+    expect(await first.visibleTools()).toContain('dataQuery');
+    const disabled = await fixture.runtime(undefined, 'analysis', {
+      enabledTools: ['getSkill'],
+    });
+    expect(disabled.discovered.tools.has('dataQuery')).toBe(false);
+    await disabled.call('getSkill', { skillName: 'data-query' });
+    expect(await disabled.visibleTools()).toEqual(['getSkill']);
+    expect((await disabled.call('dataQuery')).result).toMatchObject({
+      status: 'error',
+      content: 'Tool unavailable.',
+    });
+    expect(fixture.data.dataQuery).not.toHaveBeenCalled();
+    const enabled = await fixture.runtime(undefined, 'analysis', {
+      enabledTools: ['getSkill', 'dataQuery'],
+    });
+    expect(new Set(await enabled.visibleTools())).toEqual(
+      new Set(['getSkill', 'dataQuery']),
+    );
+    const narrowed = await fixture.runtime(
+      { toolsVersion: 1, tools: ['getSkill', 'dataSourceQuery'] },
+      'analysis',
+      {
+        enabledTools: ['getSkill', 'dataQuery'],
+      },
+    );
+    expect(await narrowed.visibleTools()).toEqual(['getSkill']);
+    expect(narrowed.discovered.tools.has('dataSourceQuery')).toBe(false);
+    expect(narrowed.discovered.tools.has('dataQuery')).toBe(false);
+    const none = await fixture.runtime(undefined, 'analysis', {
+      enabledTools: [],
+    });
+    expect(none.discovered.tools.size).toBe(0);
+    expect(await none.visibleTools()).toEqual([]);
+    expect(
+      (await none.call('getSkill', { skillName: 'data-query' })).result,
+    ).toMatchObject({ status: 'error', content: 'Tool unavailable.' });
+  });
+
+  it('does not activate selected skill tools until an available skill is loaded', async () => {
+    const fixture = await createFixture();
+    const settings = { enabledTools: ['getSkill', 'dataQuery'] };
+    const selected = await fixture.runtime(undefined, 'analysis', settings);
+    expect(selected.discovered.tools.has('dataQuery')).toBe(true);
+    expect(await selected.visibleTools()).toEqual(['getSkill']);
+    expect((await selected.call('dataQuery')).result).toMatchObject({
+      status: 'error',
+    });
+    await selected.call('getSkill', { skillName: 'data-query' });
+    expect(await selected.visibleTools()).toContain('dataQuery');
+    const disabledSkill = await fixture.runtime(undefined, 'analysis', {
+      ...settings,
+      enabledSkills: [],
+    });
+    expect(await disabledSkill.visibleTools()).toEqual(['getSkill']);
+    expect((await disabledSkill.call('dataQuery')).result).toMatchObject({
+      status: 'error',
+    });
+  });
+
   it('denies direct skill loads without host visibility and allows an explicit policy', async () => {
     const fixture = await createFixture();
     const context = { ...createTestAgentContext(), ai: fixture.aiManager };

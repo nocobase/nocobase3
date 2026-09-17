@@ -1,4 +1,20 @@
 export default {
+  employeeTools: {
+    use: 'Use {{name}}',
+    description:
+      'Choose which tools this employee may use. Skill tools still require their skill to be loaded; optional tools require the corresponding capability.',
+    loading: 'Loading tool eligibility…',
+    error: 'Tool eligibility unavailable. Retry to edit tools and permissions.',
+    unavailable: 'Unavailable',
+    permission: 'Permission for {{name}}: {{permission}}',
+    permissionUnavailable: 'Unknown',
+    enableToEdit:
+      'Enable this tool to edit its permission. Your saved permission is retained.',
+    registeredPermission:
+      'Permission is defined by this tool and cannot be changed here.',
+    askHint: 'Ask for approval before running this tool.',
+    allowHint: 'Allow this tool to run without asking for approval.',
+  },
   employeeSkills: {
     use: 'Use {{name}}',
     loading: 'Loading skill catalog…',

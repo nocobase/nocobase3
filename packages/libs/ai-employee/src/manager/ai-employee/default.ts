@@ -81,33 +81,31 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
     const current = await this.repository.findOne({
       filter: { username: entry.username },
     });
-    const enabledSkills =
-      entry.skillSettings.enabledSkills === undefined
-        ? current?.skillSettings?.enabledSkills
-        : entry.skillSettings.enabledSkills;
-    if (
-      enabledSkills != null &&
-      (!Array.isArray(enabledSkills) ||
-        !enabledSkills.every(
-          (name) => typeof name === 'string' && name.trim().length > 0,
-        ))
-    ) {
-      throw new TypeError(
-        'skillSettings.enabledSkills must be an array of non-empty strings or null',
-      );
-    }
     const values: AIEmployeeEntity = {
       ...entry,
-      skillSettings: {
-        ...entry.skillSettings,
-        ...(enabledSkills === undefined
-          ? {}
-          : {
-              enabledSkills:
-                enabledSkills === null ? null : [...new Set(enabledSkills)],
-            }),
-      },
+      skillSettings: { ...entry.skillSettings },
     };
+    for (const key of ['enabledSkills', 'enabledTools'] as const) {
+      const selection =
+        entry.skillSettings[key] === undefined
+          ? current?.skillSettings?.[key]
+          : entry.skillSettings[key];
+      if (
+        selection != null &&
+        (!Array.isArray(selection) ||
+          !selection.every(
+            (name) => typeof name === 'string' && name.trim().length > 0,
+          ))
+      ) {
+        throw new TypeError(
+          `skillSettings.${key} must be an array of non-empty strings or null`,
+        );
+      }
+      if (selection !== undefined) {
+        values.skillSettings[key] =
+          selection === null ? null : [...new Set(selection)];
+      }
+    }
     if (current) {
       await this.repository.update({
         filter: { username: entry.username },
@@ -133,14 +131,45 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
       })) ?? undefined;
     const value = this.toBuiltInEmployee(options, current);
     // Registration refreshes legacy arrays, never an administrator's override.
-    const enabledSkills =
-      current?.skillSettings?.enabledSkills !== undefined
-        ? current.skillSettings.enabledSkills
-        : sourceSettings?.enabledSkills;
-    if (enabledSkills !== undefined) {
-      value.skillSettings.enabledSkills =
-        enabledSkills === null ? null : [...new Set(enabledSkills)];
+    for (const key of ['enabledSkills', 'enabledTools'] as const) {
+      const selection =
+        current?.skillSettings?.[key] !== undefined
+          ? current.skillSettings[key]
+          : sourceSettings?.[key];
+      if (selection !== undefined) {
+        value.skillSettings[key] =
+          selection === null ? null : [...new Set(selection)];
+      }
     }
+    if (Array.isArray(value.skillSettings.enabledTools)) {
+      // The manager cannot classify dynamic tools by scope. Keep all saved
+      // settings; runtime only consults these permissions for CUSTOM tools.
+      // Saved ASK must win over a subsequently registered ALLOW default.
+      value.skillSettings.tools = [
+        ...new Map(
+          [
+            ...value.skillSettings.tools,
+            ...(sourceSettings?.tools ?? []),
+            ...(current?.skillSettings?.tools ?? []),
+          ].map((tool) => [tool.name, tool]),
+        ).values(),
+      ];
+    }
+    // Approval overrides are independent of selection overrides. Legacy
+    // employees still inherit the registered tool list, but not new approval
+    // defaults for names whose permissions have already been saved.
+    const savedTools = new Map(
+      [
+        ...(sourceSettings?.tools ?? []),
+        ...(current?.skillSettings?.tools ?? []),
+      ].map((tool) => [tool.name, tool]),
+    );
+    value.skillSettings.tools = value.skillSettings.tools.map((tool) => {
+      const saved = savedTools.get(tool.name);
+      return typeof saved?.autoCall === 'boolean'
+        ? { ...tool, autoCall: saved.autoCall }
+        : tool;
+    });
     if (current) {
       await repository.update({
         filter: { username: options.username },

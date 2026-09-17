@@ -359,6 +359,9 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     const toolMap = discoveredToolMap ?? (await this.listToolMap());
     const configured = [
       ...(this.employee.skillSettings?.tools ?? []),
+      ...(this.employee.skillSettings?.enabledTools ?? []).map((name) => ({
+        name,
+      })),
       ...(this.tools ?? []),
     ];
     if (await this.getKnowledgeBaseRetrieveTool())
@@ -369,38 +372,55 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
         if (tool) tools.push(tool);
       }
     }
-    const systemTools = [
-      ...listSystemTools(),
-      LOAD_FRONTEND_TOOL_NAME,
-      EXECUTE_FRONTEND_TOOL_NAME,
-    ];
+    const eligible = await this.getEligibleToolNames(
+      tools.map((tool) => tool.definition.name),
+    );
+    return prepareToolsForFrontendConversation(
+      tools.filter((tool) => eligible.has(tool.definition.name)),
+      currentFrontendTools,
+    );
+  }
+
+  private async getEligibleToolNames(
+    names: readonly string[],
+  ): Promise<Set<string>> {
+    const eligible = new Set(names.filter((name) => this.isToolSelected(name)));
+    // A selection is not a capability grant. Preserve deliberately configured
+    // legacy web search, but not web search inherited into enabledTools.
+    const configuredWebSearch = [
+      ...(this.employee.skillSettings?.tools ?? []),
+      ...this.tools,
+    ].some(({ name }) => name === SYSTEM_TOOLS.WEB_SEARCH);
+    if (!this.webSearch && !configuredWebSearch) {
+      eligible.delete(SYSTEM_TOOLS.WEB_SEARCH);
+    }
+    // No injection source, selection or persisted skill activation may bypass
+    // the employee's KB configuration or the current actor's access rights.
+    if (
+      eligible.has(SYSTEM_TOOLS.KNOWLEDGE_BASE) &&
+      !(await this.getKnowledgeBaseRetrieveTool())
+    ) {
+      eligible.delete(SYSTEM_TOOLS.KNOWLEDGE_BASE);
+    }
+    return eligible;
+  }
+
+  private isToolSelected(name: string): boolean {
+    const enabled = this.employee.skillSettings?.enabledTools;
+    // Employee selection is the outer boundary, including system tools.
+    if (Array.isArray(enabled) && !enabled.includes(name)) return false;
     const settings = this.skillSettings;
-    if (!settings)
-      return prepareToolsForFrontendConversation(tools, currentFrontendTools);
-    const filter = settings.tools;
-    if (!settings.toolsVersion) {
-      const names = filter ?? [];
-      return prepareToolsForFrontendConversation(
-        tools.filter(
-          (tool) =>
-            names.length === 0 ||
-            systemTools.includes(tool.definition.name) ||
-            names.includes(tool.definition.name),
-        ),
-        currentFrontendTools,
-      );
-    }
-    if (Array.isArray(filter)) {
-      return prepareToolsForFrontendConversation(
-        tools.filter(
-          (tool) =>
-            systemTools.includes(tool.definition.name) ||
-            filter.includes(tool.definition.name),
-        ),
-        currentFrontendTools,
-      );
-    }
-    return prepareToolsForFrontendConversation(tools, currentFrontendTools);
+    const filter = settings?.tools;
+    if (!Array.isArray(filter)) return true;
+    if (!settings?.toolsVersion && filter.length === 0) return true;
+    // Preserve the legacy session exception; it never bypasses employee policy.
+    return (
+      [
+        ...listSystemTools(),
+        LOAD_FRONTEND_TOOL_NAME,
+        EXECUTE_FRONTEND_TOOL_NAME,
+      ].includes(name) || filter.includes(name)
+    );
   }
 
   private async getAvailableSkillsForTools(
@@ -447,8 +467,6 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     }
     const discoveredToolMap = await this.listToolMap();
     const baseTools = await this.getAIEmployeeTools(discoveredToolMap);
-    const toolMap = new Map(discoveredToolMap);
-    for (const tool of baseTools) toolMap.set(tool.definition.name, tool);
     const skillToolNames = new Set(
       // Disabled skills must not turn their formerly gated GENERAL/configured
       // tools into base tools. Only loading an available skill activates them.
@@ -464,9 +482,27 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
             name === SYSTEM_TOOLS.GET_SKILL || !skillToolNames.has(name),
         ),
     );
+    const currentFrontendTools = await listCurrentFrontendTools(
+      this.conversations,
+      { sessionId: this.sessionId, frontendTools: this.frontendTools },
+    );
+    const eligible = await this.getEligibleToolNames([
+      ...discoveredToolMap.keys(),
+    ]);
+    const eligibleTools = prepareToolsForFrontendConversation(
+      [...discoveredToolMap.values()].filter((tool) =>
+        eligible.has(tool.definition.name),
+      ),
+      currentFrontendTools,
+    );
+    // Base tools may include runtime injections absent from discovery. Both
+    // sets have passed selection, capability and current frontend restrictions.
     return {
       tools: new Map(
-        [...toolMap].map(([name, tool]) => [name, this.resolveTool(tool)]),
+        [...eligibleTools, ...baseTools].map((tool) => [
+          tool.definition.name,
+          this.resolveTool(tool),
+        ]),
       ),
       baseToolNames,
     };
@@ -506,21 +542,10 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     // Reapply current employee/session visibility before accepting its tools.
     const available = await this.getAvailableSkills();
     const loadedNames = new Set(names);
-    const settings = this.skillSettings;
-    const allowedTools = settings?.tools;
-    const enforceTools =
-      Array.isArray(allowedTools) &&
-      (Boolean(settings?.toolsVersion) || allowedTools.length > 0);
-    return new Set(
+    return this.getEligibleToolNames(
       available
         .filter((skill) => loadedNames.has(skill.name))
-        .flatMap((skill) => skill.tools ?? [])
-        .filter(
-          (name) =>
-            !enforceTools ||
-            listSystemTools().includes(name) ||
-            allowedTools.includes(name),
-        ),
+        .flatMap((skill) => skill.tools ?? []),
     );
   }
 

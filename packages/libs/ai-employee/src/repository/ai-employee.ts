@@ -10,6 +10,8 @@ export type AIEmployeeSkillSettings = {
   tools: AIEmployeeToolSetting[];
   /** Null or omission inherits registered skills and GENERAL skills; [] disables all. */
   enabledSkills?: string[] | null;
+  /** Null or omission inherits legacy tool availability; [] disables all tools. */
+  enabledTools?: string[] | null;
 };
 
 export type AIEmployeeKnowledgeBase = {

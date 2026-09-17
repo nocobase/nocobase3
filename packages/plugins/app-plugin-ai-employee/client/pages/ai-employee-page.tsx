@@ -5,10 +5,8 @@ import {
   CircleAlert,
   ChevronLeft,
   ChevronRight,
-  Plus,
   RefreshCw,
   Save,
-  Trash2,
   Undo2,
   X,
 } from 'lucide-react';
@@ -47,6 +45,13 @@ import {
 } from '../ai-employee-service.js';
 import { AIEmployeeAvatar } from '../avatar.js';
 import { ConfirmDialog } from '../components/confirm-dialog.js';
+import { EmployeeCatalogStatus } from '../components/employee-catalog-status.js';
+import { EmployeeToolPermission } from '../components/employee-tool-permission.js';
+import { TooltipProvider } from '../../registry/nocobase-ai/shared/ui/tooltip.js';
+import {
+  effectiveSkillNames,
+  effectiveToolNames,
+} from '../employee-tool-selection.js';
 import { useT } from '../locales/index.js';
 
 type DetailTab =
@@ -62,22 +67,6 @@ const detailTabs: Array<{ key: DetailTab; label: string }> = [
 ];
 
 const stable = (value: unknown): string => JSON.stringify(value);
-
-function effectiveSkillNames(
-  settings: AIEmployeeEditableValues['skillSettings'] | undefined,
-  catalog: AIMetadataItem[],
-): string[] {
-  return (
-    settings?.enabledSkills ?? [
-      ...new Set([
-        ...catalog
-          .filter((item) => item.scope === 'GENERAL')
-          .map((item) => item.name),
-        ...(settings?.skills ?? []),
-      ]),
-    ]
-  );
-}
 
 function ReadonlyField({
   label,
@@ -112,148 +101,11 @@ function ReadonlyField({
   );
 }
 
-function SectionLabel({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}): ReactElement {
-  return (
-    <div>
-      <div className='text-sm font-semibold'>{title}</div>
-      <div className='text-sm text-muted-foreground'>{description}</div>
-    </div>
-  );
-}
-
 function EmptyList({ label }: { label: string }): ReactElement {
   return (
     <p className='rounded-md border border-dashed p-5 text-sm text-muted-foreground'>
       {label}
     </p>
-  );
-}
-
-function MetadataList({
-  items,
-  emptyLabel,
-  renderExtra,
-}: {
-  items: AIMetadataItem[];
-  emptyLabel: string;
-  renderExtra?: (item: AIMetadataItem) => ReactElement | null;
-}): ReactElement {
-  if (!items.length) return <EmptyList label={emptyLabel} />;
-  return (
-    <div className='divide-y rounded-md border'>
-      {items.map((item) => (
-        <div
-          key={item.name}
-          className='flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between'
-        >
-          <div className='min-w-0'>
-            <div className='font-medium'>{item.title ?? item.name}</div>
-            {item.description ? (
-              <div className='mt-1 text-sm text-muted-foreground'>
-                {item.description}
-              </div>
-            ) : null}
-          </div>
-          {renderExtra?.(item)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function CollapsibleSection({
-  title,
-  description,
-  action,
-  children,
-  defaultOpen = false,
-}: {
-  title: string;
-  description: string;
-  action?: ReactElement;
-  children: ReactElement;
-  defaultOpen?: boolean;
-}): ReactElement {
-  return (
-    <details className='group border-b py-2' open={defaultOpen}>
-      <summary className='flex cursor-pointer list-none items-center gap-3 py-3 marker:content-none'>
-        <ChevronDown className='h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180' />
-        <div className='min-w-0 flex-1'>
-          <SectionLabel title={title} description={description} />
-        </div>
-        {action ? (
-          <div
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-          >
-            {action}
-          </div>
-        ) : null}
-      </summary>
-      <div className='pb-4 pl-7'>{children}</div>
-    </details>
-  );
-}
-
-function AddMenu({
-  label,
-  items,
-  onAdd,
-}: {
-  label: string;
-  items: AIMetadataItem[];
-  onAdd: (name: string) => void;
-}): ReactElement {
-  const [open, setOpen] = useState(false);
-  const disabled = items.length === 0;
-  return (
-    <div
-      className='relative'
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <button
-        type='button'
-        disabled={disabled}
-        aria-expanded={open}
-        onFocus={() => setOpen(true)}
-        className={`inline-flex list-none items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${disabled ? 'pointer-events-none bg-muted text-muted-foreground' : 'cursor-pointer bg-primary text-primary-foreground'}`}
-      >
-        <Plus className='h-4 w-4' /> {label}
-      </button>
-      {open && !disabled ? (
-        <div className='absolute right-0 z-30 mt-1 max-h-72 min-w-72 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md'>
-          {items.map((item) => (
-            <button
-              type='button'
-              key={item.name}
-              onClick={() => {
-                onAdd(item.name);
-                setOpen(false);
-              }}
-              className='block w-full rounded-sm px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground'
-            >
-              <span className='block text-sm font-medium'>
-                {item.title ?? item.name}
-              </span>
-              {item.description ? (
-                <span className='mt-1 block text-xs text-muted-foreground'>
-                  {item.description}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -547,6 +399,9 @@ export default function AIEmployeePage(): ReactElement {
   const [skillsError, setSkillsError] = useState(false);
   const [skillsRequest, setSkillsRequest] = useState(0);
   const [tools, setTools] = useState<AIMetadataItem[]>([]);
+  const [toolsLoading, setToolsLoading] = useState(true);
+  const [toolsError, setToolsError] = useState(false);
+  const [toolsRequest, setToolsRequest] = useState(0);
   const [tab, setTab] = useState<DetailTab>('profile');
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -566,17 +421,14 @@ export default function AIEmployeePage(): ReactElement {
     setLoading(true);
     setError('');
     try {
-      const [employeeRows, modelRows, knowledgeRows, toolRows] =
-        await Promise.all([
-          listAIEmployees(controller.signal, api),
-          listEnabledModels(controller.signal, api),
-          listEnabledKnowledgeBases(controller.signal, api).catch(() => []),
-          listAITools(controller.signal, api),
-        ]);
+      const [employeeRows, modelRows, knowledgeRows] = await Promise.all([
+        listAIEmployees(controller.signal, api),
+        listEnabledModels(controller.signal, api),
+        listEnabledKnowledgeBases(controller.signal, api).catch(() => []),
+      ]);
       setEmployees(employeeRows);
       setModels(modelRows);
       setKnowledgeBases(knowledgeRows);
-      setTools(toolRows);
       setSelectedUsername((current) =>
         current && employeeRows.some((item) => item.username === current)
           ? current
@@ -611,6 +463,23 @@ export default function AIEmployeePage(): ReactElement {
       });
     return () => controller.abort();
   }, [api, skillsRequest]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setToolsLoading(true);
+    setToolsError(false);
+    void listAITools(controller.signal, api)
+      .then((items) => {
+        if (!controller.signal.aborted) setTools(items);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setToolsError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setToolsLoading(false);
+      });
+    return () => controller.abort();
+  }, [api, toolsRequest]);
 
   useEffect(() => {
     if (!selectedUsername) {
@@ -680,18 +549,44 @@ export default function AIEmployeePage(): ReactElement {
     });
   };
 
-  const updateToolSettings = (
-    update: (
-      tools: AIEmployeeEditableValues['skillSettings']['tools'],
-    ) => AIEmployeeEditableValues['skillSettings']['tools'],
-  ): void => {
+  const toolEditsDisabled =
+    toolsLoading || toolsError || skillsLoading || skillsError || saving;
+
+  const updateToolNames = (name: string, checked: boolean): void => {
+    if (toolEditsDisabled) return;
     setDraft((current) => {
       if (!current) return current;
+      const names = effectiveToolNames(current.skillSettings, tools, skills);
       return {
         ...current,
         skillSettings: {
           ...current.skillSettings,
-          tools: update(current.skillSettings.tools),
+          enabledTools: checked
+            ? [...new Set([...names, name])]
+            : names.filter((value) => value !== name),
+        },
+      };
+    });
+  };
+
+  const updateToolPermission = (name: string, autoCall: boolean): void => {
+    if (toolEditsDisabled) return;
+    setDraft((current) => {
+      if (
+        !current ||
+        !effectiveToolNames(current.skillSettings, tools, skills).includes(name)
+      )
+        return current;
+      const settings = current.skillSettings.tools;
+      return {
+        ...current,
+        skillSettings: {
+          ...current.skillSettings,
+          tools: settings.some((tool) => tool.name === name)
+            ? settings.map((tool) =>
+                tool.name === name ? { ...tool, autoCall } : tool,
+              )
+            : [...settings, { name, autoCall }],
         },
       };
     });
@@ -790,22 +685,18 @@ export default function AIEmployeePage(): ReactElement {
       ...(draft?.skillSettings.enabledSkills ?? []),
     ]),
   ];
-  const generalTools = tools.filter(
-    (item) => item.scope === 'GENERAL' && item.from === 'loader',
+  const enabledTools = new Set(
+    effectiveToolNames(draft?.skillSettings, tools, skills),
   );
-  const specifiedTools = configuredTools.filter((setting) => {
-    const item = toolsByName.get(setting.name);
-    return item && item.scope !== 'GENERAL' && item.scope !== 'CUSTOM';
-  });
-  const customTools = configuredTools.filter((setting) => {
-    const item = toolsByName.get(setting.name);
-    return !item || item.scope === 'CUSTOM';
-  });
-  const availableCustomTools = tools.filter(
-    (item) =>
-      item.scope === 'CUSTOM' &&
-      !configuredTools.some((setting) => setting.name === item.name),
-  );
+  const toolNames = [
+    ...new Set([
+      ...toolsByName.keys(),
+      ...configuredTools.map((item) => item.name),
+      ...(selected?.skillSettings?.enabledTools ?? []),
+      ...(draft?.skillSettings.enabledTools ?? []),
+      ...enabledTools,
+    ]),
+  ];
 
   return (
     <Collapsible
@@ -1102,28 +993,13 @@ export default function AIEmployeePage(): ReactElement {
 
               {tab === 'skills' ? (
                 <div className='space-y-4' aria-busy={skillsLoading}>
-                  {skillsLoading ? (
-                    <p role='status' className='text-sm text-muted-foreground'>
-                      {t('employeeSkills.loading')}
-                    </p>
-                  ) : skillsError ? (
-                    <div
-                      role='alert'
-                      className='flex flex-wrap items-center gap-3 text-sm'
-                    >
-                      <span className='text-destructive'>
-                        {t('employeeSkills.error')}
-                      </span>
-                      <Button
-                        variant='outline'
-                        onClick={() =>
-                          setSkillsRequest((current) => current + 1)
-                        }
-                      >
-                        <RefreshCw className='size-4' /> {t('Retry')}
-                      </Button>
-                    </div>
-                  ) : null}
+                  <EmployeeCatalogStatus
+                    loading={skillsLoading}
+                    error={skillsError}
+                    loadingLabel={t('employeeSkills.loading')}
+                    errorLabel={t('employeeSkills.error')}
+                    onRetry={() => setSkillsRequest((current) => current + 1)}
+                  />
                   {skillNames.length ? (
                     <ul
                       aria-label={t('Skills')}
@@ -1181,146 +1057,92 @@ export default function AIEmployeePage(): ReactElement {
               ) : null}
 
               {tab === 'tools' ? (
-                <div>
-                  <CollapsibleSection
-                    title={t('General tools')}
-                    description={t('Shared by all AI employees.')}
-                  >
-                    <MetadataList
-                      items={generalTools}
-                      emptyLabel={t('None configured.')}
-                      renderExtra={(item) => (
-                        <div className='flex items-center gap-2 text-sm'>
-                          <span className='text-muted-foreground'>
-                            {t('Permission')}
-                          </span>
-                          <span className='rounded-md bg-muted px-3 py-1'>
-                            {item.defaultPermission === 'ALLOW'
-                              ? t('Allow')
-                              : t('Ask')}
-                          </span>
-                        </div>
-                      )}
-                    />
-                  </CollapsibleSection>
-                  {selected.builtIn && specifiedTools.length ? (
-                    <CollapsibleSection
-                      title={t('Employee-specific tools')}
-                      description={t('Only available to this AI employee.')}
-                    >
-                      <MetadataList
-                        items={specifiedTools.map(
-                          (setting) =>
-                            toolsByName.get(setting.name) ?? {
-                              name: setting.name,
-                              title: setting.name,
-                            },
-                        )}
-                        emptyLabel={t('None configured.')}
-                        renderExtra={(item) => (
-                          <div className='flex items-center gap-2 text-sm'>
-                            <span className='text-muted-foreground'>
-                              {t('Permission')}
-                            </span>
-                            <span className='rounded-md bg-muted px-3 py-1'>
-                              {configuredTools.find(
-                                (setting) => setting.name === item.name,
-                              )?.autoCall
-                                ? t('Allow')
-                                : t('Ask')}
-                            </span>
-                          </div>
-                        )}
-                      />
-                    </CollapsibleSection>
-                  ) : null}
-                  <CollapsibleSection
-                    title={t('Custom tools')}
-                    description={t(
-                      'Created by workflow. You can add/remove and set default permissions.',
-                    )}
-                    defaultOpen={customTools.length > 0}
-                    action={
-                      <AddMenu
-                        label={t('Add tool')}
-                        items={availableCustomTools}
-                        onAdd={(name) =>
-                          updateToolSettings((currentTools) => [
-                            ...currentTools,
-                            { name, autoCall: false },
-                          ])
-                        }
-                      />
-                    }
-                  >
-                    <MetadataList
-                      items={customTools.map(
-                        (setting) =>
-                          toolsByName.get(setting.name) ?? {
-                            name: setting.name,
-                            title: setting.name,
-                          },
-                      )}
-                      emptyLabel={t('None configured.')}
-                      renderExtra={(item) => {
-                        const setting = configuredTools.find(
-                          (candidate) => candidate.name === item.name,
-                        );
-                        return (
-                          <div className='flex items-center gap-2'>
-                            <span className='text-sm text-muted-foreground'>
-                              {t('Permission')}
-                            </span>
-                            <div className='inline-flex rounded-md bg-muted p-0.5'>
-                              {(['ASK', 'ALLOW'] as const).map((permission) => {
-                                const active =
-                                  permission ===
-                                  (setting?.autoCall ? 'ALLOW' : 'ASK');
-                                return (
-                                  <button
-                                    type='button'
-                                    key={permission}
-                                    onClick={() =>
-                                      updateToolSettings((currentTools) =>
-                                        currentTools.map((tool) =>
-                                          tool.name === item.name
-                                            ? {
-                                                ...tool,
-                                                autoCall:
-                                                  permission === 'ALLOW',
-                                              }
-                                            : tool,
-                                        ),
-                                      )
-                                    }
-                                    className={`rounded px-3 py-1 text-sm ${active ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
-                                  >
-                                    {permission === 'ALLOW'
-                                      ? t('Allow')
-                                      : t('Ask')}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            <button
-                              type='button'
-                              aria-label={`${t('Remove')} ${item.title ?? item.name}`}
-                              className='rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground'
-                              onClick={() =>
-                                updateToolSettings((currentTools) =>
-                                  currentTools.filter(
-                                    (tool) => tool.name !== item.name,
-                                  ),
-                                )
-                              }
+                <div
+                  className='flex flex-col gap-4'
+                  aria-busy={toolsLoading || skillsLoading}
+                >
+                  <p className='text-sm text-muted-foreground'>
+                    {t('employeeTools.description')}
+                  </p>
+                  <EmployeeCatalogStatus
+                    loading={toolsLoading || skillsLoading}
+                    error={toolsError || skillsError}
+                    loadingLabel={t('employeeTools.loading')}
+                    errorLabel={t('employeeTools.error')}
+                    onRetry={() => {
+                      if (toolsError) setToolsRequest((current) => current + 1);
+                      if (skillsError)
+                        setSkillsRequest((current) => current + 1);
+                    }}
+                  />
+                  {toolNames.length ? (
+                    <TooltipProvider>
+                      <ul
+                        aria-label={t('Tools')}
+                        className='divide-y divide-border'
+                      >
+                        {toolNames.map((name) => {
+                          const item = toolsByName.get(name);
+                          const title = item?.title || name;
+                          const checked = enabledTools.has(name);
+                          return (
+                            <li
+                              key={name}
+                              className='flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6'
                             >
-                              <Trash2 className='h-4 w-4' />
-                            </button>
-                          </div>
-                        );
-                      }}
-                    />
-                  </CollapsibleSection>
+                              <div className='flex min-w-0 flex-col gap-1 break-words'>
+                                <div className='font-medium'>{title}</div>
+                                {title !== name ? (
+                                  <div className='font-mono text-xs text-muted-foreground'>
+                                    {name}
+                                  </div>
+                                ) : null}
+                                {item?.description ? (
+                                  <p className='text-sm text-muted-foreground'>
+                                    {item.description}
+                                  </p>
+                                ) : null}
+                                {!item && !toolsLoading && !toolsError ? (
+                                  <p className='text-sm text-muted-foreground'>
+                                    {t('employeeTools.unavailable')}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <div className='flex shrink-0 items-center justify-end gap-5'>
+                                <EmployeeToolPermission
+                                  item={item}
+                                  setting={configuredTools.find(
+                                    (setting) => setting.name === name,
+                                  )}
+                                  title={title}
+                                  enabled={checked}
+                                  disabled={toolEditsDisabled}
+                                  onChange={(autoCall) =>
+                                    updateToolPermission(name, autoCall)
+                                  }
+                                />
+                                <SkillSwitch
+                                  aria-label={t('employeeTools.use', {
+                                    name: title,
+                                  })}
+                                  checked={checked}
+                                  disabled={toolEditsDisabled}
+                                  onCheckedChange={(value) =>
+                                    updateToolNames(name, value)
+                                  }
+                                />
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </TooltipProvider>
+                  ) : !toolsLoading &&
+                    !toolsError &&
+                    !skillsLoading &&
+                    !skillsError ? (
+                    <EmptyList label={t('None configured.')} />
+                  ) : null}
                 </div>
               ) : null}
 

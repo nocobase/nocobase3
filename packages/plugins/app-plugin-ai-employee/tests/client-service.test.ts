@@ -49,6 +49,54 @@ describe('AI employee knowledge base editing', () => {
 
 describe('AI employee update payload', () => {
   it.each(
+    [undefined, null, [], ['unknown-tool', 'search']].map((enabledTools) => ({
+      enabledTools,
+    })),
+  )(
+    'preserves and clones enabledTools $enabledTools and every saved permission',
+    ({ enabledTools }) => {
+      const employee: AIEmployeeRecord = {
+        username: 'ava',
+        skillSettings: {
+          skills: ['legacy-unknown'],
+          tools: [
+            { name: 'unknown-tool', autoCall: false, futurePermission: 'keep' },
+            { name: 'search', autoCall: true },
+          ],
+          ...(enabledTools === undefined ? {} : { enabledTools }),
+        },
+      };
+      const editable = buildEditableValues(employee);
+      const payload = buildAIEmployeeUpdatePayload(employee, editable);
+      if (enabledTools === undefined) {
+        expect(editable.skillSettings).not.toHaveProperty('enabledTools');
+        expect(payload.skillSettings).not.toHaveProperty('enabledTools');
+      } else {
+        expect(editable.skillSettings.enabledTools).toEqual(enabledTools);
+        expect(payload.skillSettings.enabledTools).toEqual(enabledTools);
+      }
+      if (Array.isArray(enabledTools)) {
+        expect(editable.skillSettings.enabledTools).not.toBe(enabledTools);
+        expect(payload.skillSettings.enabledTools).not.toBe(
+          editable.skillSettings.enabledTools,
+        );
+        payload.skillSettings.enabledTools?.push('another');
+        expect(editable.skillSettings.enabledTools).toEqual(enabledTools);
+      }
+      expect(payload.skillSettings.tools).toEqual(
+        employee.skillSettings?.tools,
+      );
+      expect(editable.skillSettings.tools[0]).not.toBe(
+        employee.skillSettings?.tools?.[0],
+      );
+      expect(payload.skillSettings.tools[0]).not.toBe(
+        editable.skillSettings.tools[0],
+      );
+      expect(payload.skillSettings.skills).toEqual(['legacy-unknown']);
+    },
+  );
+
+  it.each(
     [undefined, null, [], ['unknown-skill', 'analysis']].map(
       (enabledSkills) => ({ enabledSkills }),
     ),
