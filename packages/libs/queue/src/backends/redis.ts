@@ -8,6 +8,7 @@ export function resolveRedisConnection(value: unknown): RedisOptions {
   keys(
     input,
     [
+      'url',
       'host',
       'port',
       'db',
@@ -22,6 +23,19 @@ export function resolveRedisConnection(value: unknown): RedisOptions {
   if (input.keyPrefix !== undefined)
     throw new TypeError('connection.keyPrefix is unsupported');
   const result: RedisOptions = {};
+  if (input.url !== undefined) {
+    if (typeof input.url !== 'string')
+      throw new TypeError('Invalid connection.url');
+    let parsed: URL;
+    try {
+      parsed = new URL(input.url);
+    } catch {
+      throw new TypeError('Invalid connection.url');
+    }
+    if (!['redis:', 'rediss:'].includes(parsed.protocol) || !parsed.hostname)
+      throw new TypeError('Invalid connection.url');
+    result.url = input.url;
+  }
   for (const key of [
     'host',
     'username',

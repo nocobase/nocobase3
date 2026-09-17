@@ -31,3 +31,22 @@ it.each([
     expect(() => resolveRedisConnection(options)).toThrow();
   },
 );
+
+it('preserves a valid Redis URL without exposing its credentials in validation errors', () => {
+  const url = 'redis://user:password@localhost:6379/2';
+  expect(resolveRedisConnection({ url })).toEqual({ url });
+  for (const invalid of [
+    'https://user:password@localhost',
+    'redis://user:password@',
+    'not-a-url',
+  ]) {
+    expect(() => resolveRedisConnection({ url: invalid })).toThrow(
+      'Invalid connection.url',
+    );
+    try {
+      resolveRedisConnection({ url: invalid });
+    } catch (error) {
+      expect(String(error)).not.toContain('password');
+    }
+  }
+});
