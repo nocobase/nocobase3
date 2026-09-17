@@ -2,6 +2,11 @@ import { Socket } from 'node:net';
 import { createPostgresBackend } from 'bullmq';
 import type { BackendFactory, PostgresPoolConfig } from 'bullmq';
 import {
+  createBorrowedPostgresPool,
+  isBorrowedPostgresPool,
+  postgresDeadline,
+} from './postgres-pool.js';
+import {
   integer,
   keys,
   record,
@@ -11,6 +16,7 @@ import {
 /** Resolves the owned PoolConfig subset without loading the optional pg driver. */
 export function resolvePostgresConnection(value: unknown): PostgresPoolConfig {
   validateConnection('postgres', value);
+  if (isBorrowedPostgresPool(value)) return { borrowedPool: value };
   const input =
     typeof value === 'string'
       ? { connectionString: value }
@@ -73,11 +79,14 @@ export const createServicePostgresBackend: BackendFactory = (
   const sockets = new Set<Socket>();
   let closed = false;
   const connection = record(options.connection, 'connection');
+  const borrowed = isBorrowedPostgresPool(connection.borrowedPool)
+    ? createBorrowedPostgresPool(connection.borrowedPool)
+    : undefined;
   const backend = createPostgresBackend(
     name,
     {
       ...options,
-      connection: {
+      connection: borrowed?.pool ?? {
         ...connection,
         stream: (): Socket => {
           if (closed) throw new Error('PostgreSQL backend is closed');
@@ -105,7 +114,7 @@ export const createServicePostgresBackend: BackendFactory = (
         for (const socket of sockets) socket.destroy();
       }, 1000);
       try {
-        await Promise.all([close(), ...endings]);
+        await Promise.all([close(), borrowed?.close(), ...endings]);
       } finally {
         clearTimeout(force);
       }
@@ -124,7 +133,10 @@ export const createServicePostgresBackend: BackendFactory = (
           .catch((error: unknown) => backend.emit('error', error));
       }, 10000);
       try {
-        const result = await operation();
+        const result = await postgresDeadline.run(
+          performance.now() + 10000,
+          operation,
+        );
         const failure = getFailure();
         if (failure) throw failure;
         return result;

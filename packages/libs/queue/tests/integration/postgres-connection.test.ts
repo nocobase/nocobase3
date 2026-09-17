@@ -160,3 +160,82 @@ it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
     }
   },
 );
+
+it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
+  'borrows a caller Pool without changing or closing it',
+  async () => {
+    const { Pool } = await import('pg');
+    const owner = new Pool({
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_PG_PORT),
+      user: 'postgres',
+      password: 'queue-test-only',
+      database: 'postgres',
+      options: '-c search_path=bullmq',
+      connectionTimeoutMillis: 100,
+      max: 8,
+    });
+    const before = { ...owner.options };
+    const errorListener = (): void => {};
+    owner.on('error', errorListener);
+    const listeners = owner.listeners('error');
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-borrowed`,
+      queueBackend: 'postgres',
+      connection: owner,
+    });
+    const received: unknown[] = [];
+    service.consumer('jobs').consume(async (_channel, message) => {
+      received.push(message);
+    });
+    try {
+      await service.setup();
+      await service.producer('jobs').publish('event', 42);
+      await expect.poll(() => received, { timeout: 5000 }).toEqual([42]);
+      await service.shutdown();
+      expect(owner.options).toEqual(before);
+      expect(owner.listeners('error')).toEqual(listeners);
+      expect(owner.totalCount).toBe(0);
+      expect(owner.waitingCount).toBe(0);
+      expect((await owner.query('SELECT 1 AS value')).rows).toEqual([
+        { value: 1 },
+      ]);
+    } finally {
+      await service.shutdown().catch(() => {});
+      await owner.end();
+    }
+  },
+);
+
+it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
+  'rejects a borrowed Pool with a shared search path before migration',
+  async () => {
+    const { Pool } = await import('pg');
+    const owner = new Pool({
+      host: '127.0.0.1',
+      port: Number(process.env.QUEUE_TEST_PG_PORT),
+      user: 'postgres',
+      password: 'queue-test-only',
+      database: 'postgres',
+      options: '-c search_path=public,bullmq',
+      connectionTimeoutMillis: 100,
+    });
+    const service = createQueueService({
+      namespace: `${process.env.QUEUE_TEST_RUN}-bad-path`,
+      queueBackend: 'postgres',
+      connection: owner,
+    });
+    try {
+      await expect(service.setup()).rejects.toThrow('dedicated search_path');
+      expect(owner.totalCount).toBe(0);
+      expect(owner.listenerCount('error')).toBe(0);
+      expect(
+        (await owner.query("SELECT current_setting('search_path') AS path"))
+          .rows,
+      ).toEqual([{ path: 'public,bullmq' }]);
+    } finally {
+      await service.shutdown().catch(() => {});
+      await owner.end();
+    }
+  },
+);
