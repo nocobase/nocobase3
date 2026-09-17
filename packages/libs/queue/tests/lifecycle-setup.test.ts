@@ -177,43 +177,52 @@ it.each([false, true])(
   },
 );
 
-it('retains the setup deadline together with cleanup failure', async () => {
-  const service = createQueueService({
-    namespace: 'setup-errors',
-    queueBackend: 'test',
-    setupTimeoutMs: 20,
-  });
-  const factory = createInMemoryBackendFactory();
-  const cleanupError = new Error('cleanup transport failed');
-  let release = (): void => {};
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  service.registerBackend('test', (...args) => {
-    const backend = factory(...args);
-    backend.waitUntilReady = async () => gate;
-    const close = backend.close.bind(backend);
-    backend.close = async (...values) => {
-      await close(...values);
-      throw cleanupError;
-    };
-    return backend;
-  });
-  service.producer('jobs');
-  const messages = (error: unknown): string[] =>
-    error instanceof AggregateError
-      ? [error.message, ...error.errors.flatMap(messages)]
-      : error instanceof Error
-        ? [error.message]
-        : [];
-  try {
-    const failure: unknown = await service
-      .setup()
-      .catch((error: unknown) => error);
-    expect(messages(failure)).toContain('Queue setup deadline exceeded');
-    expect(messages(failure)).toContain(cleanupError.message);
-  } finally {
-    release();
-    await service.shutdown().catch(() => {});
-  }
-});
+it.each([false, true])(
+  'retains initialization deadline together with cleanup failure (runtime: %s)',
+  async (runtime) => {
+    const service = createQueueService({
+      namespace: 'setup-errors',
+      queueBackend: 'test',
+      setupTimeoutMs: 20,
+    });
+    const factory = createInMemoryBackendFactory();
+    const cleanupError = new Error('cleanup transport failed');
+    let release = (): void => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    service.registerBackend('test', (...args) => {
+      const backend = factory(...args);
+      backend.waitUntilReady = async () => gate;
+      const close = backend.close.bind(backend);
+      backend.close = async (...values) => {
+        await close(...values);
+        throw cleanupError;
+      };
+      return backend;
+    });
+    if (runtime) await service.setup();
+    service.producer('jobs');
+    const messages = (error: unknown): string[] =>
+      error instanceof AggregateError
+        ? [error.message, ...error.errors.flatMap(messages)]
+        : error instanceof Error
+          ? [error.message]
+          : [];
+    try {
+      const pending = runtime
+        ? service.producer('jobs').publish('event', {})
+        : service.setup();
+      const failure: unknown = await pending.catch((error: unknown) => error);
+      expect(messages(failure)).toContain(
+        runtime
+          ? 'Queue jobs initialization deadline exceeded'
+          : 'Queue setup deadline exceeded',
+      );
+      expect(messages(failure)).toContain(cleanupError.message);
+    } finally {
+      release();
+      await service.shutdown().catch(() => {});
+    }
+  },
+);

@@ -302,7 +302,13 @@ export function createQueueService(
         `Queue ${name} initialization deadline exceeded`,
       );
       const cleanupDeadline = performance.now() + 5000;
-      const cleanup = closeEntries([current]);
+      const cleanup = closeEntries([current]).catch((error: unknown) => {
+        throw new AggregateError(
+          [timeout, error],
+          'Queue initialization and cleanup failed',
+          { cause: timeout },
+        );
+      });
       if (!(await settlesWithin(cleanup, 5000)))
         throw new AggregateError(
           [timeout, new Error('Queue cleanup remains unresolved')],
