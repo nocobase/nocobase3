@@ -365,4 +365,41 @@ describe('application-private queue service', () => {
     await expect.poll(() => inspect?.(jobId)).toBe('failed');
     expect(instance.manager('jobs').cancelJob(jobId)).toBe(false);
   });
+  it.each([undefined, null, { max: 1, duration: 500 }])(
+    'applies only explicit global rate settings at startup: %j',
+    async (rateLimit) => {
+      const instance = createQueueService({
+        namespace: 'app',
+        queueBackend: 'memory-test',
+        rateLimit,
+      });
+      services.push(instance);
+      const { createInMemoryBackendFactory } =
+        await import('../src/backends/in-memory/index.js');
+      const memory = createInMemoryBackendFactory();
+      const writes: unknown[] = [];
+      const removals: string[][] = [];
+      instance.registerBackend('memory-test', (name, options, metadata) => {
+        expect('limiter' in options).toBe(false);
+        const backend = memory(name, options, metadata);
+        const set = backend.setQueueMeta.bind(backend);
+        vi.spyOn(backend, 'setQueueMeta').mockImplementation(async (values) => {
+          if ('max' in values) writes.push(values);
+          return set(values);
+        });
+        const remove = backend.removeQueueMetaFields.bind(backend);
+        vi.spyOn(backend, 'removeQueueMetaFields').mockImplementation(
+          async (fields) => {
+            removals.push(fields);
+            return remove(fields);
+          },
+        );
+        return backend;
+      });
+      instance.consumer('jobs').consume(async () => {});
+      await instance.setup();
+      expect(writes).toEqual(rateLimit ? [rateLimit] : []);
+      expect(removals).toEqual(rateLimit === null ? [['max', 'duration']] : []);
+    },
+  );
 });
