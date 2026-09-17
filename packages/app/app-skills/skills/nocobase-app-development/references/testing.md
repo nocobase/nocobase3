@@ -16,15 +16,17 @@ Templates ship their tests into generated applications. Keep them runnable from 
 
 ## What to test, by change
 
-| You changed      | Test at least                                                                                     |
-| ---------------- | ------------------------------------------------------------------------------------------------- |
-| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload            |
-| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                         |
-| A migration      | `up` produces the expected schema; `down` reverses it; against a real database                    |
-| A seed           | First run, run against existing data, repeat run                                                  |
-| A service        | Its domain behavior, with its dependencies supplied directly                                      |
-| A job            | `execute()` with a realistic payload; a second run is harmless; failures behave as intended       |
-| Frontend code    | See [frontend tests](frontend/references/testing.md): pages, components, route declarations, copy |
+| You changed      | Test at least                                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| A server route   | Anonymous → `401`, authenticated but unpermitted → `403`, permitted → expected payload                                     |
+| A public webhook | Missing signature, invalid signature, valid signature, duplicate delivery                                                  |
+| A migration      | `up` produces the expected schema; `down` reverses it; against a real database                                             |
+| A seed           | First run, run against existing data, repeat run                                                                           |
+| A service        | Its domain behavior, with its dependencies supplied directly                                                               |
+| A job            | Channel/payload validation, observable async completion after publication, retries/idempotency, and awaited unregistration |
+| Frontend code    | See [frontend tests](frontend/references/testing.md): pages, components, route declarations, copy                          |
+
+Queue tests must wait for a persisted result or an explicit handler completion signal, not assume `publish()` returning a receipt means execution finished. Cover `boot()` registration without consumption, App-start activation, shutdown waiting for unregistration before dependency disposal, and two-App isolation. Use the real asynchronous `inMemory` backend for the local lifecycle path; verify persistent deployments against their selected backend separately.
 
 ## Testing a route
 

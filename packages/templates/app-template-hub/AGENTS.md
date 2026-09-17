@@ -53,7 +53,7 @@ A feature with a page and an API touches five places: a migration for the table,
 
 `client/runtime.ts` composes the browser application; `client/react-providers.ts` declares React providers in outer-to-inner layers `root`, `application`, and `extension`. Applications use the first two and plugins own the last; `before` and `after` order providers only within their layer.
 
-`server/runtime.ts` composes configuration, plugins, providers and routes; `server/app.ts` assembles the application. `server/standalone.ts` starts the Node listener and `server/embedded.ts` lets a host mount the same runtime. Register endpoints through `server/routes/index.ts`; background jobs in `server/jobs/` are discovered automatically. Editable module defaults live in `server/config/` and are collected by `defaultAppConfigs` in its `index.ts`; `server/config.ts` loads the configuration file. Each section declares the environment variables that set it in `env` of its `defineAppConfig`; `pnpm nocobase config env` lists them all.
+`server/runtime.ts` composes configuration, plugins, providers and routes; `server/app.ts` assembles the application. `server/standalone.ts` starts the Node listener and `server/embedded.ts` lets a host mount the same runtime. Register endpoints through `server/routes/index.ts`; `server/jobs/` may hold queue handlers that a provider imports explicitly, and is not auto-discovered. Editable module defaults live in `server/config/` and are collected by `defaultAppConfigs` in its `index.ts`; `server/config.ts` loads the configuration file. Each section declares the environment variables that set it in `env` of its `defineAppConfig`; `pnpm nocobase config env` lists them all.
 
 ### The rest is framework structure
 
@@ -155,6 +155,10 @@ A webhook that a third party calls cannot use a login session, so it is delibera
 Keep HTTP concerns in the route and domain logic in a service under `server/providers/`. Services do not read Hono contexts, return HTTP status codes, or decide retry behavior.
 
 Bind services to their existing tokens in a provider's `register()`; calling `createServiceToken` twice with the same name creates different keys. Do not connect to databases, start workers, or execute route factories at module top level. Acquire long-lived resources in `start()` and release them in `shutdown()`. Providers and routes read typed configuration rather than `process.env`.
+
+### Background work
+
+Use the App-owned `QueueService` through the original `queueServiceToken` from `@nocobase/app-server/queue`. Register handlers in a provider's `boot()` without I/O, and await the returned unregister function in `shutdown()` before releasing their dependencies. The core `QueueServiceProvider` owns setup at App start and final shutdown; plugins do not own its Workers. `server/jobs/` is not auto-discovered, and the retired `queue.jobs` contribution is rejected. Publishing returns a receipt, not completion; the default private `inMemory` backend is asynchronous and loses jobs on restart. See `skills/nocobase-app-development/references/services-and-jobs.md` for the provider example, numeric millisecond delays, backend selection, and lifecycle boundaries.
 
 ### Database
 
