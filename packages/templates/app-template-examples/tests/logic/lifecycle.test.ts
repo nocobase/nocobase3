@@ -317,7 +317,6 @@ async function createQueueApplication(name: string) {
             packageName: '@nocobase/app-plugin-queue-test',
             version: 'test',
             rootDir: '/test/queue-plugin',
-            jobLocations: [],
           },
         },
       ],

@@ -1286,7 +1286,6 @@ function createResolvedTestServerPlugins(
         version: 'test',
         rootDir: `/test/plugins/${definition.packageName}`,
         baseDir: definition.baseDir,
-        jobLocations: [],
       },
     })),
   };
