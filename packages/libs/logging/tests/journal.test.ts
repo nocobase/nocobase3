@@ -227,7 +227,7 @@ it('keeps readable console diagnostics when file output fails', async () => {
     .mockImplementation(() => true);
   const logging = createLogging({
     file: { directory: blocked },
-    console: { enabled: true, pretty: true },
+    console: { enabled: true, pretty: true, color: false },
   });
   try {
     logging

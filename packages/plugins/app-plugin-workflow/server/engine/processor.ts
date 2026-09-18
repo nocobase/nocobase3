@@ -51,6 +51,7 @@ export interface ProcessorOptions {
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
+  resumeNode?: (nodeRunId: WorkflowId) => Promise<void>;
   terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
@@ -99,9 +100,19 @@ export default class Processor {
     import('./run-services.js').WorkflowRunServices | undefined;
   readonly nodes: WorkflowNode[] = [];
   readonly nodesMap: Map<string, WorkflowNode> = new Map();
+  readonly resumeNode: ProcessorOptions['resumeNode'];
   readonly abortController: AbortController = new AbortController();
 
   lastSavedNodeRun: WorkflowNodeRun | null = null;
+  private readonly deferredTasks: Array<() => Promise<void>> = [];
+
+  defer(task: () => Promise<void>): void {
+    this.deferredTasks.push(task);
+  }
+
+  takeDeferredTasks(): Array<() => Promise<void>> {
+    return this.deferredTasks.splice(0);
+  }
 
   private readonly connectionName?: string;
   private readonly instructions: Map<string, WorkflowInstructionClass>;
@@ -118,6 +129,7 @@ export default class Processor {
   private readonly terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 
   constructor(options: ProcessorOptions) {
+    this.resumeNode = options.resumeNode;
     this.database = options.database;
     this.connectionName = options.connectionName;
     this.workflow = options.workflow;
@@ -691,7 +703,9 @@ export default class Processor {
     options: ProcessorRunOptions = {},
   ): Promise<WorkflowNodeRun | null | undefined> {
     if (!(await this.shouldContinueExecution())) {
-      await this.exit();
+      await this.exit(
+        this.abortSignal.aborted ? NODE_RUN_STATUS.ABORTED : undefined,
+      );
       return null;
     }
 

@@ -505,6 +505,8 @@ describe('@nocobase/app-plugin-hub service', () => {
       idempotencyKey: 'deploy-1',
     });
     expect(again.id).toBe(first.id);
+    expect(first.reused).toBe(false);
+    expect(again.reused).toBe(true);
     await expect(
       service.deploy('customer', {
         releaseId: 'changed',

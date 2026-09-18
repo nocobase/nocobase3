@@ -241,6 +241,8 @@ export class WorkflowRunRepository {
       ...options,
       eventKey,
       manually: true,
+      deferred: false,
+      waitForCompletion: false,
     });
     return this.findRun(
       eventKey,
