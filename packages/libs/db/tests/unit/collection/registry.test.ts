@@ -102,6 +102,84 @@ describe('CollectionRegistry', () => {
     });
   });
 
+  it.each(['', 'app_'])(
+    'rejects a physical alias without dropping metadata (prefix %s)',
+    async (tablePrefix) => {
+      const store = new InMemoryCollectionMetadataStore();
+      await store.put(
+        { version: 1, name: 'crmAccountFiles' },
+        { expectedRevision: null },
+      );
+      const tableName = `${tablePrefix}crm_account_files`;
+      const registry = new CollectionRegistry({
+        inspector: new FakeInspector([physical(tableName)]),
+        metadataStore: store,
+        naming: { tablePrefix },
+      });
+
+      await expect(registry.get('crmAccountFiles')).resolves.toMatchObject({
+        name: 'crmAccountFiles',
+      });
+      for (const load of [
+        () => registry.get('crm_account_files'),
+        () => registry.getPhysical('crm_account_files'),
+      ]) {
+        await expect(load()).rejects.toMatchObject({
+          code: 'COLLECTION_RESOLUTION_FAILED',
+          issues: [
+            {
+              code: 'COLLECTION_NAME_MISMATCH',
+              path: ['collection', 'crm_account_files'],
+              message: `Requested Collection "crm_account_files" resolves to physical table "${tableName}", which belongs to logical Collection "crmAccountFiles". Use "crmAccountFiles" in Collection and Repository APIs.`,
+            },
+          ],
+        });
+      }
+      await expect(registry.get('crmAccountFiles')).resolves.toMatchObject({
+        name: 'crmAccountFiles',
+      });
+    },
+  );
+
+  it('checks current metadata when the naming index predates a new collection', async () => {
+    const store = new InMemoryCollectionMetadataStore();
+    const inspector = new FakeInspector([]);
+    const registry = new CollectionRegistry({
+      inspector,
+      metadataStore: store,
+    });
+    await expect(registry.get('missing')).resolves.toBeUndefined();
+    await store.put(
+      { version: 1, name: 'crmAccountFiles' },
+      { expectedRevision: null },
+    );
+    inspector.schemas.set('crm_account_files', physical('crm_account_files'));
+    await expect(registry.get('crm_account_files')).rejects.toMatchObject({
+      issues: [expect.objectContaining({ code: 'COLLECTION_NAME_MISMATCH' })],
+    });
+  });
+
+  it('preserves underscored logical names and tables without metadata', async () => {
+    const store = new InMemoryCollectionMetadataStore();
+    await store.put(
+      { version: 1, name: 'legacy_files' },
+      { expectedRevision: null },
+    );
+    const registry = new CollectionRegistry({
+      inspector: new FakeInspector([
+        physical('legacy_files'),
+        physical('external_files'),
+      ]),
+      metadataStore: store,
+    });
+    await expect(registry.get('legacy_files')).resolves.toMatchObject({
+      name: 'legacy_files',
+    });
+    await expect(registry.get('external_files')).resolves.toMatchObject({
+      name: 'externalFiles',
+    });
+  });
+
   it('limits listing and scanning to effective table prefixes', async () => {
     const store = new InMemoryCollectionMetadataStore();
     await store.put(

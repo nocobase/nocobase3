@@ -282,6 +282,22 @@ export class CollectionRegistry
       }
       return undefined;
     }
+    if (!stored) {
+      const canonical = index.resolvePhysicalCollection(physical);
+      if (
+        canonical &&
+        canonical.name !== name &&
+        (await this.options.metadataStore.get(canonical.name))
+      ) {
+        throw new CollectionResolutionError([
+          {
+            code: 'COLLECTION_NAME_MISMATCH',
+            path: ['collection', name],
+            message: `Requested Collection "${name}" resolves to physical table "${physical.tableName}", which belongs to logical Collection "${canonical.name}". Use "${canonical.name}" in Collection and Repository APIs.`,
+          },
+        ]);
+      }
+    }
     if (identity.metadata) {
       const defaultTableName = new DefaultNamingStrategy(
         this.options.naming,

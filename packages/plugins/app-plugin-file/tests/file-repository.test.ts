@@ -65,11 +65,13 @@ afterEach(async () => {
 async function fixture(
   overrides: Partial<FileRepositoryApiExposure> = {},
   {
+    collectionName = 'attachments',
     publicBasePath = '/main',
     storageUrl = 'https://cdn.example.test/storage',
     databaseSize,
     databaseJsonField,
   }: {
+    collectionName?: string;
     publicBasePath?: string;
     storageUrl?: string;
     databaseSize?: (value: unknown) => unknown;
@@ -83,7 +85,7 @@ async function fixture(
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
   cleanup.push(() => db.destroy());
-  await db.builder().createCollection('attachments', (collection) => {
+  await db.builder().createCollection(collectionName, (collection) => {
     collection.uuid('id').primary().notNull();
     collection.string('disk', { length: 255 }).notNull();
     collection.text('key').notNull();
@@ -129,7 +131,7 @@ async function fixture(
     },
   });
   const manager = new ServerFileRepositoryManager(db, drive);
-  const files = manager.repository('attachments', {
+  const files = manager.repository(collectionName, {
     disk: overrides.disk ?? 'local',
     accessPath: overrides.accessPath ?? '/uploads/attachments',
     policy: overrides.policy ?? openPolicy,
@@ -146,6 +148,7 @@ async function fixture(
     repositories: [
       {
         name: 'attachments',
+        collection: collectionName,
         disk: 'local',
         policy: openPolicy,
         actions: {
@@ -768,5 +771,49 @@ describe('service providers and uncertain commits', () => {
     ).rejects.toThrow(URIError);
     expect(await readdir(path.join(root, 'objects'))).toHaveLength(1);
     expect(await repository.count()).toBe(1);
+  });
+});
+
+it('keeps SQLite datetime metadata in standard routes and diagnoses a physical collection alias', async () => {
+  const { client, router, db } = await fixture(
+    {},
+    { collectionName: 'crmAccountFiles' },
+  );
+  const result = await client.uploadOne({ file: file() });
+  expect(result.record.createdAt).toBeTruthy();
+  const definition = await db.connection().collections.get('crmAccountFiles');
+  expect(definition?.fields).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ name: 'createdAt', type: 'datetime' }),
+      expect.objectContaining({ name: 'updatedAt', type: 'datetime' }),
+    ]),
+  );
+  const content = await router.request(result.record.contentUrl!);
+  expect(content.status).toBe(200);
+  expect(await content.text()).toBe('hello');
+
+  const wrong = await fixture(
+    { collection: 'crm_account_files' },
+    { collectionName: 'crmAccountFiles' },
+  );
+  await expect(
+    wrong.db.connection().collections.get('crm_account_files'),
+  ).rejects.toMatchObject({
+    code: 'COLLECTION_RESOLUTION_FAILED',
+    issues: expect.arrayContaining([
+      expect.objectContaining({ code: 'COLLECTION_NAME_MISMATCH' }),
+    ]),
+  });
+  const body = new FormData();
+  body.append('file', file());
+  const response = await wrong.router.request(
+    '/main/api/attachments:uploadOne',
+    { method: 'POST', body },
+  );
+  expect(response.status).toBe(500);
+  expect(await response.json()).toMatchObject({
+    message: expect.stringContaining(
+      'Use "crmAccountFiles" in Collection and Repository APIs.',
+    ),
   });
 });
