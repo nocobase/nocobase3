@@ -11,6 +11,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { ThemeSettings } from '../../client/theme/theme-settings';
 import { UserMenu } from '../../client/shell/user-menu';
 
+const { signOut } = vi.hoisted(() => ({
+  signOut: vi.fn(async () => ({ error: null })),
+}));
+
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({
     t: (_key: string, options: { defaultValue: string }) =>
@@ -31,7 +35,7 @@ vi.mock('../../client/theme/theme-context', () => ({
 }));
 vi.mock('@nocobase/app-plugin-authentication/client', () => ({
   useAuthentication: () => ({
-    client: { signOut: vi.fn() },
+    client: { signOut },
     session: {
       user: { id: 'operator', name: 'Operator', email: 'operator@example.com' },
     },
@@ -187,5 +191,67 @@ it('keeps keyboard theme selection available until Escape', async () => {
   expect(dark).toBeChecked();
   expect(trigger).toHaveAttribute('aria-expanded', 'true');
   await user.keyboard('{Escape}');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});
+
+it('keeps Sign out reachable when the language submenu shields the parent menu', async () => {
+  const user = userEvent.setup();
+  render(<UserMenu />);
+  const trigger = screen.getByRole('button', { name: 'Open account menu' });
+  await user.hover(trigger);
+  const panel = screen.getByRole('menu');
+  vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(100, 100, 256, 160),
+  );
+  fireEvent.mouseLeave(trigger, { relatedTarget: panel });
+  fireEvent.mouseEnter(panel, { relatedTarget: trigger });
+  fireEvent.mouseMove(panel, { clientX: 220, clientY: 150 });
+  const language = screen.getByRole('menuitem', { name: /Language/ });
+  fireEvent.mouseEnter(language);
+  fireEvent.mouseMove(language);
+  await screen.findByRole('menuitemradio', { name: '中文' });
+  expect(panel).toHaveStyle({ pointerEvents: 'none' });
+  // The submenu's safe corridor retargets the pointer to the page even though
+  // its coordinates are still over the parent's Sign out row.
+  fireEvent.mouseLeave(panel, {
+    relatedTarget: document.body,
+    clientX: 240,
+    clientY: 240,
+  });
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  // Moving down dismisses the submenu, then the parent receives the pointer again.
+  fireEvent.mouseLeave(language, {
+    relatedTarget: document.body,
+    clientX: 240,
+    clientY: 240,
+  });
+  fireEvent.mouseMove(document.body, { clientX: 240, clientY: 240 });
+  await waitFor(() =>
+    expect(language).toHaveAttribute('aria-expanded', 'false'),
+  );
+  fireEvent.mouseEnter(panel, {
+    relatedTarget: document.body,
+    clientX: 240,
+    clientY: 240,
+  });
+  const signOutItem = screen.getByRole('menuitem', { name: 'Sign out' });
+  fireEvent.mouseMove(signOutItem, { clientX: 240, clientY: 240 });
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  expect(signOutItem).toBeVisible();
+  fireEvent.click(signOutItem);
+  await waitFor(() => expect(signOut).toHaveBeenCalledOnce());
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  // The geometry guard must not suppress a real exit, even from a click-opened menu.
+  fireEvent.click(trigger);
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  const reopenedPanel = screen.getByRole('menu');
+  vi.spyOn(reopenedPanel, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(100, 100, 256, 160),
+  );
+  fireEvent.mouseLeave(reopenedPanel, {
+    relatedTarget: document.body,
+    clientX: 400,
+    clientY: 300,
+  });
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });

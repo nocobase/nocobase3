@@ -75,6 +75,16 @@ export function UserMenu(): ReactElement {
             triggerRef.current?.contains(event.relatedTarget)
           )
             return;
+          // A submenu's safe corridor can disable pointer events on this menu.
+          // Ignore the resulting synthetic leave while the pointer is still over it.
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (
+            event.clientX >= rect.left &&
+            event.clientX < rect.right &&
+            event.clientY >= rect.top &&
+            event.clientY < rect.bottom
+          )
+            return;
           setOpen(false);
         }}
       >
