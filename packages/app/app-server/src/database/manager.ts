@@ -91,6 +91,7 @@ export function resolveConnections(
           },
           paths,
           drivers,
+          name,
         ),
       ];
     }),
@@ -127,9 +128,10 @@ function bookkeepingTables(
 function normalizeConnection(
   connection: ConnectionConfig,
   paths: AppPaths | undefined,
-  drivers?: Record<string, DatabaseDriverRegistration>,
+  drivers: Record<string, DatabaseDriverRegistration> | undefined,
+  name: string,
 ): ConnectionConfig {
-  const driver = resolveDatabaseDriver(connection, drivers);
+  const driver = resolveDatabaseDriver(connection, drivers, name);
   if (!driver?.normalizeConnection) return connection;
   return driver.normalizeConnection(connection, {
     resolveStoragePath: paths

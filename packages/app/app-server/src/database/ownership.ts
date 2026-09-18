@@ -20,10 +20,11 @@ export function validateDatabaseOwnership(
     }),
   )) {
     if (connection.schemaManagement === 'external') continue;
-    const driver = resolveDatabaseDriver(connection, {
-      ...config.drivers,
-      ...drivers,
-    });
+    const driver = resolveDatabaseDriver(
+      connection,
+      { ...config.drivers, ...drivers },
+      name,
+    );
     const target = driver?.resolveOwnershipTarget
       ? driver.resolveOwnershipTarget(connection)
       : genericOwnershipTarget(

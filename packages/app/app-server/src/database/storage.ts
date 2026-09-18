@@ -28,7 +28,7 @@ export async function prepareAppDatabaseStorage<
   for (const name of names ?? (primary ? [primary] : [])) {
     const connection = connections[name];
     if (!connection) throw new Error(`Unknown database connection "${name}".`);
-    const driver = resolveDatabaseDriver(connection, availableDrivers);
+    const driver = resolveDatabaseDriver(connection, availableDrivers, name);
     await driver?.prepareStorage?.(connection, {
       ensureDirectory: async (directory) => {
         await mkdir(directory, { recursive: true });
