@@ -43,6 +43,11 @@
   },
   {
     "type": "file",
+    "name": "template-print",
+    "label": "Template printing"
+  },
+  {
+    "type": "file",
     "name": "i18n",
     "label": "Language switching"
   },
