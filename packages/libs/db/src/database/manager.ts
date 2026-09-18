@@ -1,3 +1,5 @@
+import { assertNoUnsupportedConnectionConfigFields } from './internal/knex/config.js';
+import { resolveDatabaseDriver } from './resolve-driver.js';
 import type { CollectionBuilder } from '../collection/builder/builder.js';
 import type { ConnectionCollections } from '../collection/registry/types.js';
 import { createMigrator, type Migrator } from '../migration/migrator.js';
@@ -14,11 +16,7 @@ import type {
 } from './config.js';
 import type { CollectionMetadataStore } from '../metadata/document-store.js';
 import { DirectoryCollectionMetadataStore } from '../metadata/directory-document-store.js';
-import type {
-  ConnectionConfig,
-  DatabaseDriverDefinition,
-  DatabaseDriverRegistration,
-} from './config.js';
+import type { ConnectionConfig } from './config.js';
 import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
 import { KnexConnectionAdapter } from './internal/knex/adapter.js';
@@ -112,11 +110,15 @@ export class DefaultDatabaseManager implements DatabaseManager {
       throw new Error(`Database connection "${name}" is not configured.`);
     }
 
-    const resolvedConnectionConfig = resolveConnectionDriver(
-      connectionConfig,
-      this.config.drivers,
-      name,
-    );
+    assertNoUnsupportedConnectionConfigFields(connectionConfig);
+    const resolvedConnectionConfig = {
+      ...connectionConfig,
+      databaseDriver: resolveDatabaseDriver(
+        connectionConfig,
+        this.config.drivers,
+        name,
+      ),
+    };
     const metadataStore = resolveMetadataStore(
       resolvedConnectionConfig.metadataStore ?? this.config.metadataStore,
     );
@@ -238,68 +240,4 @@ function resolveMetadataStore(
         `Unknown Collection metadata store type "${String((config as { type?: unknown }).type)}".`,
       );
   }
-}
-
-function resolveConnectionDriver(
-  connection: ConnectionConfig,
-  drivers: Record<string, DatabaseDriverRegistration> | undefined,
-  name: string,
-): ConnectionConfig {
-  const supplied = connection.databaseDriver;
-  const registeredValue = drivers?.[connection.dialect];
-  const registered = resolveDriverDefinition(
-    registeredValue,
-    connection.dialect,
-  );
-  if (supplied && supplied.dialect !== connection.dialect) {
-    throw new Error(
-      `Database connection "${name}" uses dialect "${connection.dialect}" but its driver is for "${supplied.dialect}".`,
-    );
-  }
-  if (supplied && registered && supplied !== registered) {
-    throw new Error(
-      `Database connection "${name}" provides a driver that conflicts with the registered "${connection.dialect}" driver.`,
-    );
-  }
-  const driver = supplied ?? registered;
-  return driver ? { ...connection, databaseDriver: driver } : connection;
-}
-
-function resolveDriverDefinition(
-  value: DatabaseDriverRegistration | undefined,
-  expectedDialect: string,
-): DatabaseDriverDefinition | undefined {
-  if (!value) return undefined;
-  const candidate = value as DatabaseDriverRegistration & {
-    driver?: DatabaseDriverDefinition;
-  };
-  const isFactory =
-    typeof candidate === 'function' &&
-    typeof candidate.driver === 'object' &&
-    candidate.driver !== null;
-  const driver = isFactory ? candidate.driver : value;
-
-  if (
-    typeof driver !== 'object' ||
-    driver === null ||
-    typeof driver.dialect !== 'string'
-  ) {
-    throw new Error(
-      `Invalid database driver registration for dialect "${expectedDialect}". Expected a driver descriptor or a dialect factory.`,
-    );
-  }
-  if (driver.dialect !== expectedDialect) {
-    throw new Error(
-      `Database driver registration for dialect "${expectedDialect}" points to dialect "${driver.dialect}".`,
-    );
-  }
-  if (
-    isFactory &&
-    (candidate.dialect !== expectedDialect || candidate.driver !== driver)
-  ) {
-    throw new Error(
-      `Database driver factory for dialect "${expectedDialect}" has inconsistent dialect metadata.`,
-    );
-  }
-  return driver;
 }

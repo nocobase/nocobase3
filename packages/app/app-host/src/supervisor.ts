@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveAppHostMode, type AppHostMode } from './host-mode.ts';
@@ -616,13 +617,9 @@ export class AppHostSupervisor {
 
     const tsconfig = this.tsconfig;
     const args =
-      this.mode === 'managed'
-        ? [tsxCli]
-        : [tsxCli, 'watch', '--clear-screen=false'];
-    if (tsconfig) {
-      args.push('--tsconfig', tsconfig);
-    }
-    args.push('-r', 'tsconfig-paths/register', entrypoint);
+      this.mode === 'managed' ? [] : ['--watch', '--watch-preserve-output'];
+    const loader = createRequire(tsxCli).resolve('tsx/esm');
+    args.push(`--import=${loader}`, entrypoint);
 
     return {
       command: process.execPath,
@@ -630,6 +627,7 @@ export class AppHostSupervisor {
       env: {
         ...this.baseAppHostEnv(port),
         NODE_ENV: 'development',
+        ...(tsconfig ? { TSX_TSCONFIG_PATH: tsconfig } : {}),
       },
       entrypoint,
     };
@@ -714,7 +712,9 @@ function resolveTsxCli(explicit?: string): string | null {
   }
 
   try {
-    return require.resolve('tsx/dist/cli.mjs', { paths: [process.cwd()] });
+    return createRequire(import.meta.url).resolve('tsx/cli', {
+      paths: [process.cwd()],
+    });
   } catch {
     const local = path.resolve(process.cwd(), 'node_modules/tsx/dist/cli.mjs');
     return existsSync(local) ? local : null;

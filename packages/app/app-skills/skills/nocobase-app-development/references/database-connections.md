@@ -8,15 +8,15 @@ Start by reading `server/config/database.ts` and the connection structure in `co
 
 | Location                    | Responsibility                                                                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `server/config/database.ts` | Import drivers and declare typed defaults with `defineAppDatabaseConfig`.                                                             |
+| `server/config/database.ts` | Declare connection defaults with `defineAppDatabaseConfig`; optionally register explicit drivers.                                     |
 | `config.yml`                | Override connection settings for the environment, including credentials. This file is gitignored.                                     |
 | `config.example.yml`        | Document the supported connection structure and credential placeholders for future installations. Keep it aligned with code defaults. |
 
-The callback passed to `defineAppDatabaseConfig` receives the runtime context and runs during configuration resolution, not at module import. Imported drivers determine the accepted dialects and connection fields in TypeScript. YAML overrides are resolved at runtime; passing `pnpm typecheck` does not validate their contents or prove connectivity.
+The callback passed to `defineAppDatabaseConfig` receives the runtime context and runs during configuration resolution, not at module import. When supplied, explicit drivers determine the accepted dialects and connection fields in TypeScript. Without registrations, use a driver-owned connection type with `satisfies` when strict dialect-specific checking is needed. YAML overrides are resolved at runtime; passing `pnpm typecheck` does not validate their contents or prove connectivity.
 
 `config.yml` deep-merges into code defaults. Changing a dialect in code does not remove an old YAML override or fields belonging to the previous dialect. Update both layers when switching, and check any existing environment overrides using the Configuration section of `README.MD` in the application root.
 
-A dialect must be imported and registered in code before a connection can use it. YAML cannot install or register a driver. The registration key must match the driver's declared dialect: `{ postgres }` is valid; aliases such as `{ pg: postgres }` and mismatches such as `{ mysql: postgres }` fail at runtime.
+Official drivers are optional peers of `@nocobase/db`. Install the needed package in application `dependencies` and configure its dialect; no driver import or registration is required. The core synchronously loads a driver when a connection or application preparation step first needs it. Merely creating a manager does not load drivers or open connections. YAML cannot install packages. Explicit `drivers` and connection-level `databaseDriver` values retain precedence and conflict checking. Custom dialects still require explicit registration. The registration key must match the driver's declared dialect: `{ postgres }` is valid; aliases such as `{ pg: postgres }` and mismatches such as `{ mysql: postgres }` fail at runtime.
 
 ### SQLite paths
 
@@ -32,16 +32,14 @@ Install the dialect package if it is not already a dependency:
 pnpm add @nocobase/db-postgres
 ```
 
-Server driver imports belong in `dependencies` so they reach the deployed server. The dialect package includes its underlying driver dependency.
+Installed driver packages belong in `dependencies` so they reach the deployed server. The dialect package includes its underlying driver dependency.
 
-For an application with only `main`, the complete `server/config/database.ts` becomes:
+Configure the target in `config.yml` as shown below. Changing `server/config/database.ts` is optional; when updating the source defaults for an application with only `main`, use:
 
 ```ts
-import postgres from '@nocobase/db-postgres';
 import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
 
 export default defineAppDatabaseConfig(() => ({
-  drivers: { postgres },
   default: 'main',
   connections: {
     main: {
@@ -53,7 +51,7 @@ export default defineAppDatabaseConfig(() => ({
 }));
 ```
 
-If other connections still use SQLite or another dialect, retain their imports, registrations and configuration. Remove `filename` from the connection being switched.
+Preserve other connections and any explicit custom driver registrations. Remove `filename` from the connection being switched.
 
 Update `config.yml` to match the new dialect and target:
 
@@ -77,17 +75,14 @@ Keep `default: 'main'` when changing where `main` connects. Changing `database.d
 
 ## Add managed or external connections
 
-Reuse an installed driver for additional connections of the same dialect. Install and register a new driver only when needed. Keep the existing default connection unless the task includes moving the system database.
+Reuse an installed driver for additional connections of the same dialect. Install a new official driver only when needed; explicit registration is optional. Keep the existing default connection unless the task includes moving the system database.
 
 This example keeps the default SQLite connection and adds two PostgreSQL connections:
 
 ```ts
-import sqlite from '@nocobase/db-sqlite';
-import postgres from '@nocobase/db-postgres';
 import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
 
 export default defineAppDatabaseConfig((runtime) => ({
-  drivers: { sqlite, postgres },
   default: 'main',
   connections: {
     main: {
@@ -159,16 +154,13 @@ When adding a driver dependency, also run `pnpm build` to verify deployment pack
 
 ## Troubleshooting and type details
 
-### Missing driver registration
+### Missing driver package
 
-An unregistered `dialect: postgres` fails at startup with:
+An official dialect without its package reports the connection name and an installation command such as `pnpm add @nocobase/db-postgres`. Install it in `dependencies`; no source registration is needed. Unknown dialects require an explicit custom driver. Errors inside an installed package retain their original cause and must not be treated as missing-driver errors.
 
-```text
-Database dialect "postgres" is not registered.
-Install and register the corresponding @nocobase/db-postgres package.
-```
+### Source development and synchronous ESM
 
-Confirm the package is installed in `dependencies`, imported and included in `drivers`. Editing YAML alone cannot supply the registration.
+Official driver packages expose the same ESM implementation to `import` and `require`. Node 24 or newer loads it synchronously; the driver and its static dependency graph must not contain top-level `await`. Source applications use `node --import tsx/esm` so synchronous driver loading shares module identities with static imports. Do not replace it with the full `tsx` loader, which can transform required TypeScript into a separate CommonJS module. The development watcher launches an isolated ESM-only server process for this reason.
 
 ### Installation and platform binaries
 
@@ -180,7 +172,7 @@ Native dependencies must match the deployment platform and supported Node ABI. T
 
 ### Inference and declaration generation
 
-No manual connection union, `typeof drivers` annotation, `satisfies` clause or factory type annotation is needed with `defineAppDatabaseConfig`. Selecting a dialect selects its fields: SQLite requires `filename`, PostgreSQL accepts `host` and `port`, and SQLite's `filename` on a PostgreSQL connection is a type error. Application metadata paths, migration settings and seed settings remain available on every connection.
+With explicit `drivers`, no manual connection union, `typeof drivers` annotation, `satisfies` clause or factory type annotation is needed with `defineAppDatabaseConfig`. Selecting a dialect selects its fields: SQLite requires `filename`, PostgreSQL accepts `host` and `port`, and SQLite's `filename` on a PostgreSQL connection is a type error. Application metadata paths, migration settings and seed settings remain available on every connection.
 
 With multiple connections, TypeScript may omit suggestions inside an empty `dialect: ''` value. Enter the dialect name to receive its field suggestions; unregistered dialects and invalid fields are still rejected by type checking.
 

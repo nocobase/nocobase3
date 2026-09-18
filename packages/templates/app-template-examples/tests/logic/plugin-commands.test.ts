@@ -32,7 +32,7 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:skills:sync': 'nocobase plugin skills sync',
   'skills:sync': 'nocobase skills sync',
   'package:remove': 'nocobase package remove',
-  nocobase: 'tsx ./cli/index.ts',
+  nocobase: 'node --import tsx/esm ./cli/index.ts',
   'client:inspect': 'pnpm nocobase app inspect client',
   'server:inspect': 'pnpm nocobase app inspect server',
   migrate: 'pnpm nocobase app migrate',

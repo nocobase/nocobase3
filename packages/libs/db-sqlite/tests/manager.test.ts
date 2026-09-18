@@ -60,18 +60,6 @@ describe('DatabaseManager', () => {
     }
   });
 
-  it('requires an explicitly registered dialect package', () => {
-    const db = createDatabaseManager({
-      connections: {
-        main: { dialect: 'sqlite', filename: ':memory:' },
-      },
-    });
-
-    expect(() => db.connection()).toThrow(
-      'Database dialect "sqlite" is not registered. Install and register the corresponding @nocobase/db-sqlite package.',
-    );
-  });
-
   it('returns lazy builder, query, and connection handles for the default connection', async () => {
     const db = createTestDatabase(
       defineDatabase({
@@ -990,7 +978,7 @@ describe('DatabaseManager', () => {
       },
     });
     expect(() => invalidDialect.connection()).toThrow(
-      'Database dialect "custom" is not registered. Install and register the corresponding @nocobase/db-custom package.',
+      'Database dialect "custom" is not registered. Register a custom driver in database.drivers.',
     );
 
     const unsupportedUrl = createTestDatabase({

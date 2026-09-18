@@ -36,7 +36,7 @@ export interface ExtensibleDatabaseConfig<
   TConnection extends AnyConnectionConfig = AnyConnectionConfig,
 > {
   default?: string;
-  /** Database drivers available to connections that use declarative configs. */
+  /** Explicit drivers override installed official dialect packages, which load on demand. */
   drivers?: Record<string, DatabaseDriverRegistration>;
   connections: Record<string, TConnection>;
   metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;

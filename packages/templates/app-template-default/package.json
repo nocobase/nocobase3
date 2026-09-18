@@ -134,7 +134,7 @@
     "directory": "packages/templates/app-template-default"
   },
   "scripts": {
-    "dev": "tsx ./scripts/dev/index.mjs",
+    "dev": "node --import tsx/esm ./scripts/dev/index.mjs",
     "build": "node ./scripts/build.mjs",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
@@ -145,7 +145,7 @@
     "collections:generate": "pnpm nocobase app collections generate",
     "migrate": "pnpm nocobase app migrate",
     "seed": "pnpm nocobase app seed",
-    "nocobase": "tsx ./cli/index.ts",
+    "nocobase": "node --import tsx/esm ./cli/index.ts",
     "upload": "pnpm nocobase app upload",
     "deploy": "pnpm nocobase app deploy",
     "plugin:register": "nocobase plugin register",

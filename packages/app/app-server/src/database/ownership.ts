@@ -1,7 +1,10 @@
 import type { AppPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
-import { resolveAppDatabaseDriver, resolveConnections } from './manager.js';
-import type { DatabaseDriverRegistration } from '@nocobase/db';
+import { resolveConnections } from './manager.js';
+import {
+  resolveDatabaseDriver,
+  type DatabaseDriverRegistration,
+} from '@nocobase/db';
 
 /** Catch identical configured targets. Network aliases still require operator validation. */
 export function validateDatabaseOwnership(
@@ -17,7 +20,7 @@ export function validateDatabaseOwnership(
     }),
   )) {
     if (connection.schemaManagement === 'external') continue;
-    const driver = resolveAppDatabaseDriver(connection.dialect, {
+    const driver = resolveDatabaseDriver(connection, {
       ...config.drivers,
       ...drivers,
     });

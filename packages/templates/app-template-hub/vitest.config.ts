@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { createReactVitestConfig } from '@nocobase/dev-config/vitest/react';
@@ -19,6 +20,18 @@ export default createReactVitestConfig({
   },
   test: {
     root,
+    execArgv: ['--import', createRequire(import.meta.url).resolve('tsx/esm')],
+    server: {
+      deps: {
+        // Keep this CommonJS package in Vite's interop path with the ESM-only loader.
+        inline: ['bloom-filters'],
+        // Native require(ESM) and tests must share identity-sensitive DB exports.
+        external: [
+          /\/@nocobase\/(?:db(?:-[^/]+)?|service-provider|repository-input)(?:\/|$)/,
+          /\/packages\/libs\/(?:db(?:-[^/]+)?|service-provider|repository-input)\//,
+        ],
+      },
+    },
     // A glob rather than a list of filenames. The list had to be edited by hand for every test added or removed and
     // silently drifted: it named a file that no longer existed while several real test files were absent from it, so
     // those tests were never run at all.
