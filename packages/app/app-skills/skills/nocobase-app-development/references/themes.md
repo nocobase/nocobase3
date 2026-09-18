@@ -4,7 +4,7 @@ Theme presets belong to the App, not a plugin. Read [the token reference](theme-
 
 ## Add a preset
 
-1. Copy `client/theme/themes/default.css` to a stable lowercase ID such as `forest.css`. Keep the existing registry order; `defaultThemePreset` selects the built-in fallback independently of display order.
+1. Copy `client/theme/themes/default.css` to a stable lowercase ID such as `forest.css`. Keep compact first in the registry: it is the fallback.
 2. Define all colors, fonts, sizes with their line heights, spacing, radius and shadows in the base rule. Define every color again in dark; non-color tokens inherit the preset base unless explicitly overridden. Use `:root[data-theme='forest'], .theme-preview[data-theme='forest']` for light; `:root.dark[data-theme='forest'], :root.dark .theme-preview[data-theme='forest']` for dark. Do not retain the default file's bare root selectors.
 3. Import the CSS from `client/styles.css`, after default. Add the ID and label key to `client/theme/theme-presets.ts`, then the label to every locale.
 4. The Appearance popover discovers registry entries automatically. Preview cards use the same CSS variables, not a second palette in JavaScript. Theme CSS is loaded through `client/styles.css`, imported by the client entry.
@@ -12,7 +12,7 @@ Theme presets belong to the App, not a plugin. Read [the token reference](theme-
 
 ## Edit or remove
 
-Edit the existing preset's CSS instead of changing component styles or `components.json`. Do not add shared tokens or change component APIs without design approval. Keep its ID when changing its look or label. To remove a non-default preset, remove its registry entry, CSS import/file and locale labels together. Unknown saved IDs fall back to the configured default, or `defaultThemePreset` (`compact`). Do not add development-data migrations.
+Edit the existing preset's CSS instead of changing component styles or `components.json`. Do not add shared tokens or change component APIs without design approval. Keep its ID when changing its look or label. To remove a non-default preset, remove its registry entry, CSS import/file and locale labels together. Unknown saved IDs fall back to the configured default, or the first registered preset (`compact`). Do not add development-data migrations.
 
 ## Runtime invariants
 
@@ -26,4 +26,4 @@ Run the theme token, preference and client-theme tests when available, then the 
 
 ## Application defaults
 
-Set optional `client.app.defaultColorScheme` (`light`, `dark`, or `system`) and `client.app.defaultTheme` (an ID in `client/theme/theme-presets.ts`) in `config.yml`. Startup and the theme provider read the same injected configuration. Each valid saved browser preference overrides its configured default independently; missing or invalid configuration falls back to `system` and `defaultThemePreset` (`compact`). If that preset is absent from the supplied registry, use the first registered preset. Clearing preferences, including in another tab, restores the configured defaults. Defaults are not saved as user choices. Refresh after changing configuration.
+Set optional `client.app.defaultColorScheme` (`light`, `dark`, or `system`) and `client.app.defaultTheme` (an ID in `client/theme/theme-presets.ts`) in `config.yml`. Startup and the theme provider read the same injected configuration. Each valid saved browser preference overrides its configured default independently; missing or invalid configuration falls back to `system` and the first registered preset (`compact`). Clearing preferences, including in another tab, restores the configured defaults. Defaults are not saved as user choices. Refresh after changing configuration.

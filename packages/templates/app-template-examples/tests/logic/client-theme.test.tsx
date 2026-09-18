@@ -1,3 +1,4 @@
+import { themePresets } from '../../client/theme/theme-presets';
 import { initializeTheme } from '../../client/theme/theme-preferences';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -91,7 +92,10 @@ describe('app client theme', () => {
         localStorage.setItem('nocobase:crm:theme:color-scheme', savedMode);
       if (savedPreset)
         localStorage.setItem('nocobase:crm:theme:preset', savedPreset);
-      initializeTheme('/crm/', ['default', 'compact']);
+      initializeTheme(
+        '/crm/',
+        themePresets.map(({ id }) => id),
+      );
       expect(document.documentElement).toHaveClass(mode);
       expect(document.documentElement).toHaveAttribute('data-theme', preset);
       render(
@@ -137,7 +141,10 @@ describe('app client theme', () => {
       document.body.append(config);
       const key = 'nocobase:crm:theme:preset';
       if (saved) localStorage.setItem(key, saved);
-      initializeTheme('/crm/', ['default', 'compact']);
+      initializeTheme(
+        '/crm/',
+        themePresets.map(({ id }) => id),
+      );
       expect(document.documentElement).toHaveAttribute('data-theme', expected);
       render(
         <AppThemeProvider>
@@ -199,7 +206,10 @@ describe('app client theme', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
     });
-    initializeTheme('/crm/', ['default', 'compact']);
+    initializeTheme(
+      '/crm/',
+      themePresets.map(({ id }) => id),
+    );
     expect(document.documentElement).toHaveClass('light');
     const { unmount } = render(
       <AppThemeProvider>
@@ -227,7 +237,10 @@ describe('app client theme', () => {
     config.type = 'application/json';
     config.textContent = JSON.stringify({ version: 1, config: { app } });
     document.body.append(config);
-    initializeTheme('/crm/', ['default', 'compact']);
+    initializeTheme(
+      '/crm/',
+      themePresets.map(({ id }) => id),
+    );
     render(
       <AppThemeProvider>
         <ThemeProbe />
