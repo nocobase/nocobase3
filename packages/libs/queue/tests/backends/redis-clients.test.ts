@@ -1,5 +1,10 @@
 import { EventEmitter } from 'node:events';
-import { createIORedisClient, createNodeRedisClient, Queue } from 'bullmq';
+import {
+  createIORedisClient,
+  createNodeRedisClient,
+  Queue,
+  RedisQueueBackend,
+} from 'bullmq';
 import { Redis } from 'ioredis';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
@@ -189,6 +194,14 @@ it('coordinates official node-redis adapter reconnect only on owned regular/bloc
     expect(blocking.connect).toHaveBeenCalledOnce();
     expect(regular.isReady).toBe(true);
     expect(blocking.isReady).toBe(true);
+    if (!(backend instanceof RedisQueueBackend))
+      throw new Error('Expected Redis backend');
+    expect((await backend.client).status).toBe('ready');
+    expect((await backend.blockingClient)?.status).toBe('ready');
+    const disconnects = blocking.destroy.mock.calls.length;
+    await backend.disconnectBlocking(true);
+    expect(blocking.destroy).toHaveBeenCalledTimes(disconnects + 1);
+    expect(blocking.isOpen).toBe(false);
     expect(raw.connect).not.toHaveBeenCalled();
     expect(raw.destroy).not.toHaveBeenCalled();
   } finally {
