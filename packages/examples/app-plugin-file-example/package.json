@@ -85,7 +85,8 @@
     "@nocobase/service-provider": "workspace:^",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@silurus/ooxml": "0.85.1"
   },
   "engines": {
     "node": ">=24.0.0"

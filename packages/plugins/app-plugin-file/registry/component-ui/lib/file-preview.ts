@@ -7,8 +7,11 @@ export type FilePreviewKind =
   | 'video'
   | 'text'
   | 'markdown'
+  | 'ooxml'
   | 'office'
   | 'unsupported';
+
+export type OfficeOpenXmlFormat = 'docx' | 'xlsx' | 'pptx';
 
 const ACTIVE_MIME_TYPES: ReadonlySet<string> = new Set([
   'application/xhtml+xml',
@@ -24,9 +27,24 @@ const ACTIVE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.xhtml',
   '.xml',
 ]);
+const OFFICE_OPEN_XML_EXTENSIONS: Readonly<
+  Record<string, OfficeOpenXmlFormat>
+> = {
+  '.docx': 'docx',
+  '.pptx': 'pptx',
+  '.xlsx': 'xlsx',
+};
+const OFFICE_OPEN_XML_MIME_TYPES: Readonly<
+  Record<string, OfficeOpenXmlFormat>
+> = {
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+    'pptx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+    'docx',
+};
 const OFFICE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.doc',
-  '.docx',
   '.odf',
   '.odg',
   '.odm',
@@ -39,9 +57,7 @@ const OFFICE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.ots',
   '.ott',
   '.ppt',
-  '.pptx',
   '.xls',
-  '.xlsx',
 ]);
 const OFFICE_MIME_TYPES: ReadonlySet<string> = new Set([
   'application/msword',
@@ -57,9 +73,6 @@ const OFFICE_MIME_TYPES: ReadonlySet<string> = new Set([
   'application/vnd.oasis.opendocument.text',
   'application/vnd.oasis.opendocument.text-master',
   'application/vnd.oasis.opendocument.text-template',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
 export function fileExtension(filename: string): string {
@@ -76,6 +89,25 @@ export function isSafeImagePreview(file: FileRecord): boolean {
   );
 }
 
+export function resolveOfficeOpenXmlFormat(
+  file: FileRecord,
+): OfficeOpenXmlFormat | undefined {
+  const mimeType = file.mimeType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  const extension = fileExtension(file.filename);
+  if (
+    ACTIVE_MIME_TYPES.has(mimeType) ||
+    mimeType.endsWith('+xml') ||
+    ACTIVE_EXTENSIONS.has(extension) ||
+    OFFICE_EXTENSIONS.has(extension)
+  ) {
+    return undefined;
+  }
+
+  const extensionFormat = OFFICE_OPEN_XML_EXTENSIONS[extension];
+  if (extensionFormat) return extensionFormat;
+  return OFFICE_OPEN_XML_MIME_TYPES[mimeType];
+}
+
 export function resolveFilePreviewKind(file: FileRecord): FilePreviewKind {
   const mimeType = file.mimeType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
   const extension = fileExtension(file.filename);
@@ -87,6 +119,7 @@ export function resolveFilePreviewKind(file: FileRecord): FilePreviewKind {
     return 'unsupported';
   }
   if (mimeType === 'text/markdown' || extension === '.md') return 'markdown';
+  if (resolveOfficeOpenXmlFormat(file)) return 'ooxml';
   if (OFFICE_MIME_TYPES.has(mimeType) || OFFICE_EXTENSIONS.has(extension)) {
     return 'office';
   }
