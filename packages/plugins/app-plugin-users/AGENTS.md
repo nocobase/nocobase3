@@ -30,9 +30,11 @@ Before adding a client package, check whether `packages/templates/app-template-d
 
 ### Runtime packages are peers, never dependencies
 
-`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, `@nocobase/queue`, and every other `@nocobase/app-plugin-*` carry process-wide state — service tokens compared by object identity, React contexts, a job registry. A second copy splits that state, and nothing warns: the install succeeds, the build succeeds, and at runtime a demonstrably registered service reports `Service "..." is not registered`.
+`@nocobase/app-server`, `@nocobase/app-client`, `@nocobase/db`, `@nocobase/i18n`, `@nocobase/service-provider`, and every other `@nocobase/app-plugin-*` carry identity-sensitive state such as service tokens and React contexts. A second copy splits that state, and a demonstrably registered service can report `Service "..." is not registered`.
 
-Declare each as a `peerDependency` (the published contract: "provide this, and provide exactly one"). One declaration is enough: pnpm links a `workspace:^` peer to this repository's copy for development. `pnpm peers:check` enforces this.
+`@nocobase/queue` holds instance-owned state, not a global job registry. Plugins may use it as an application-provided peer to align the host queue contract; type-only uses need only a development dependency. Resolve the original identity-sensitive `queueServiceToken` from `@nocobase/app-server/queue`, never a newly created token with the same name.
+
+Declare each identity-sensitive runtime above as a `peerDependency` (the published contract: "provide this, and provide exactly one"). One declaration is enough: pnpm links a `workspace:^` peer to this repository's copy for development. `pnpm peers:check` enforces this.
 
 ## Before you finish
 

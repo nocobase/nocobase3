@@ -108,7 +108,7 @@ import {
   type ImRecipient,
 } from '@nocobase/app-plugin-notification-providers/im';
 import type { Logger } from '@nocobase/logging';
-import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { QueueService } from '@nocobase/queue';
 
 import { notificationConfig } from './notification-config.js';
 
@@ -134,7 +134,7 @@ export interface AppNotificationRuntime {
 
 export function createAppNotificationRuntime(options: {
   readonly database: DatabaseManager;
-  readonly queue: NocoBaseQueueManager;
+  readonly queue: QueueService;
   readonly logger: Logger;
   readonly resolveUserEmail?: (
     userId: string,
@@ -296,7 +296,7 @@ lifecycle.registerDisposer('notification', async (): Promise<void> => {
 });
 ```
 
-这里的 `lifecycle` 表示宿主自己的生命周期管理器。`start()` 会创建已启用 Channel 的运行时、注册队列任务并启动 reconciler。`close()` 会停止 reconciler，并按逆序关闭 Provider。
+The host owns `lifecycle` and the shared `QueueService`. Complete migrations before starting consumers. `start()` initializes enabled Channel runtimes, registers the delivery handler, and starts reconciliation. Await `close()` to stop reconciliation, unregister and drain the delivery handler, and then close Providers in reverse order. The notification manager does not shut down the shared queue service.
 
 ## 可选：接入客户端页面
 

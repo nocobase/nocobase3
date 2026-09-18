@@ -10,11 +10,11 @@ Boot ordering matters:
 
 1. The core notification Provider registers the manager singleton.
 2. Channel packages register definitions during boot.
-3. The core Provider validates every enabled Channel/Provider configuration after boot, then activates queue registration and reconciliation during application start; Channel runtimes are created lazily on first use.
+3. The core Provider registers its delivery handler during boot without accessing the database. After all plugins finish boot, it validates every enabled Channel/Provider configuration and activates reconciliation during application start; Channel runtimes are created lazily on first use.
 4. A custom host may call `start()` after registering every definition to initialize all enabled Channel runtimes eagerly.
-5. Shutdown calls `close()` so the reconciler and Providers release resources.
+5. Shutdown awaits `close()`, which stops reconciliation, unregisters and drains the delivery handler, and then releases Channel/Provider resources. The application owns shutdown of the shared QueueService.
 
-Install mode may activate queue registration before notification tables exist, but runtime delivery requires migrations to be complete.
+Stock templates complete automatic database migrations during boot, before queue consumers and reconciliation start, including installation mode. Custom hosts that disable automatic migrations must complete their migrations before starting consumers.
 
 ## Built-in configuration
 

@@ -77,7 +77,7 @@ export class NotificationProvider<
   }
 
   public override async start(): Promise<void> {
-    // Install mode starts providers before notification tables are migrated.
+    // Stock templates migrate during database boot, before any consumers start.
     this.app.container.resolve(notificationRuntimeToken).activate();
   }
 
