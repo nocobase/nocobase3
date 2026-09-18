@@ -239,8 +239,8 @@ export function Deployments({
                         ? t('deployments.rolledBack', {
                             defaultValue: 'Rolled back',
                           })
-                        : t('deployments.deployed', {
-                            defaultValue: 'Deployed',
+                        : t('deployments.deployment', {
+                            defaultValue: 'Deployment',
                           })}
                     </div>
                   </TableCell>

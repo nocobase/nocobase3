@@ -5,6 +5,7 @@ import type {
   HubDeploymentListItem,
   HubReleaseRecord,
 } from '../tokens.js';
+import { redactDeploymentDiagnostic } from '@nocobase/app-host';
 
 type AppIdentity = Pick<
   HubAppDetail['app'],
@@ -112,7 +113,7 @@ export function deploymentResponse(
     status: value.status,
     phase: value.phase,
     cacheHit: value.cacheHit,
-    error: value.error,
+    error: value.error ? redactDeploymentDiagnostic(value.error) : null,
     createdAt: value.createdAt,
     config: { mode: value.config.mode },
   };

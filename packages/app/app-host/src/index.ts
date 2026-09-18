@@ -56,6 +56,7 @@ import {
 
 export * from './errors.ts';
 export * from './events.ts';
+export * from './deployment-events.ts';
 export * from './http-adapter.ts';
 export * from './host-mode.ts';
 export * from './host-config.ts';

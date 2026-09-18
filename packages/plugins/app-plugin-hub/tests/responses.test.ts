@@ -38,6 +38,31 @@ describe('Hub response field allowlists', () => {
     expect(deploymentResponse(record).config).toEqual({ mode: 'file' });
   });
 
+  it('redacts credentials from historical deployment errors', () => {
+    const record: HubDeploymentRecord = {
+      id: 'd1',
+      appId: 'app',
+      releaseId: 'r1',
+      kind: 'deploy',
+      rollbackTargetDeploymentId: null,
+      previousDeploymentId: null,
+      status: 'failed',
+      phase: 'completed',
+      config: { mode: 'external' },
+      cacheHit: false,
+      hostRevision: 7,
+      error:
+        'Probe activation failure: password=acceptance-secret token=acceptance-token',
+      createdAt: new Date(),
+      startedAt: new Date(),
+      finishedAt: new Date(),
+    };
+
+    expect(deploymentResponse(record).error).toBe(
+      'Probe activation failure: password=[redacted] token=[redacted]',
+    );
+  });
+
   it('returns only UI fields in nested application and runtime objects', () => {
     const value: HubAppDetail = {
       hasReleases: true,
