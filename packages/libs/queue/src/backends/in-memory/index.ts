@@ -1,4 +1,5 @@
 import { QueueKeys } from 'bullmq';
+import { MAX_QUEUE_TIMESTAMP } from '../../config-validation.js';
 import { InMemoryQueueStore } from './store.js';
 import { prepareMemoryBatch } from './bulk.js';
 import { assertSupportedJob } from './guards.js';
@@ -358,8 +359,19 @@ export class InMemoryQueueBackend extends InMemoryBackendBoundary {
       )
         throw new Error('Unsupported retry field');
     }
-    if (!Number.isFinite(timestamp + delay) || delay < 0)
+    if (
+      !Number.isSafeInteger(timestamp) ||
+      timestamp < 0 ||
+      !Number.isSafeInteger(delay) ||
+      delay < 0
+    )
       throw new Error('Invalid delayed timestamp');
+    // Publication-time validation cannot account for time spent in a handler.
+    // Reject before changing the record, lock, or due-time index.
+    if (timestamp > MAX_QUEUE_TIMESTAMP - delay)
+      throw new Error(
+        'Delayed timestamp exceeds the precise scheduling horizon',
+      );
     if (!this.state.store.transition(jobId, 'active', 'delayed'))
       throw new Error('Job is not active');
     if (typeof fields.failedReason === 'string')
