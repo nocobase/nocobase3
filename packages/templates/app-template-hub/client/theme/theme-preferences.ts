@@ -1,3 +1,4 @@
+import { defaultThemePreset } from './theme-presets';
 import { readAppClientRuntimeConfig } from '@nocobase/app-client/runtime';
 
 // Shared preference helpers for normal client startup and the React provider.
@@ -79,6 +80,8 @@ export function readThemeDefaults(presets: readonly string[]): {
     preset:
       typeof preset === 'string' && presets.includes(preset)
         ? preset
-        : presets[0],
+        : presets.includes(defaultThemePreset)
+          ? defaultThemePreset
+          : presets[0],
   };
 }
