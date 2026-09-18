@@ -62,3 +62,33 @@ it('dispatches versioned payloads through the selected real backend and awaits h
     await harness.close();
   }
 });
+
+it('preserves string channels independently from logical queue-name restrictions', async () => {
+  const harness = await createBackendHarness(createInMemoryBackendFactory());
+  const selected = selectedBackend();
+  const service = createQueueService({
+    namespace: harness.namespace,
+    queueBackend:
+      selected === 'postgres13'
+        ? 'postgres'
+        : selected === 'cluster'
+          ? 'redis'
+          : selected,
+    connection: harness.connection,
+  });
+  const channels = ['', ' ', 'x'.repeat(257), 'line\nbreak'];
+  const received: string[] = [];
+  service.consumer('channels').consume(async (channel) => {
+    received.push(channel);
+  });
+  try {
+    await service.setup();
+    await service
+      .producer('channels')
+      .publishMany(channels.map((channel) => ({ channel, message: null })));
+    await expect.poll(() => received, { timeout: 5000 }).toEqual(channels);
+  } finally {
+    await service.shutdown();
+    await harness.close();
+  }
+});
