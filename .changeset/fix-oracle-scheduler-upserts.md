@@ -1,0 +1,10 @@
+---
+'@nocobase/app-plugin-scheduler': patch
+'@nocobase/queue': minor
+'@nocobase/db': minor
+'@nocobase/db-oracle': patch
+---
+
+Add a transaction-safe physical row upsert API and use it through a unified Queue adapter accepting DatabaseConnection, with the upstream Knex client bridge kept private. Fix scheduler startup across database dialects while preserving schedule execution history.
+
+Preserve the outer Oracle transaction when a nested savepoint completes, allowing inserted rows to roll back with their owning transaction.
