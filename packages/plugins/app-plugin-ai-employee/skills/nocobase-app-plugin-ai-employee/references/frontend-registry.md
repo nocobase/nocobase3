@@ -36,23 +36,96 @@ It composes `AIProvider`, `AIToolRendererProvider`, and `AIPageElementProvider` 
 
 Use lower-level providers only for an advanced integration that deliberately replaces one layer. Keep the existing provider ordering.
 
+`NocoBaseAIRootProvider` starts employee/model discovery asynchronously; it does not defer mounting its children. A chat initialized before discovery may display fallback defaults while its internal selection and transport still reflect the empty configuration. Gate the entire `AIChatProvider` subtree with a child component that reads `useAI()` under the root, not merely the composer or a loading overlay. Require `configurationStatus === 'ready'`, nonempty `employees`, and `hasEnabledModels` before mounting it.
+
+Show a loading status while discovery runs, an actionable alert for `configurationStatus === 'error'` / `configurationError`, and a separate alert for `modelConfigurationError` or missing enabled models. `configurationStatus` can be `'ready'` when model discovery fails, and `models` can contain a `configured: false` placeholder; neither status nor array length alone proves the chat can send. Do not supply preview employees/models to make a production composer appear ready.
+
 ## Chat surfaces
 
-Wrap each conversation scene in one `AIChatProvider` with a stable id and, when needed, a dedicated controller:
+Mount each conversation scene in one `AIChatProvider` with a stable id and, when needed, a dedicated controller, but only after configuration is usable. This complete minimal page uses the same readiness gate as the Skill's Frontend App Integration example:
 
 ```tsx
-const controller = useAIChatController();
+import {
+  AIChatProvider,
+  AIChatWindow,
+  ChatInline,
+  NocoBaseAIRootProvider,
+  nocobaseAIService,
+  useAI,
+  useAIChatController,
+} from '@/extensions/nocobase-ai';
 
-return (
-  <AIChatProvider id='customer-assistant' controller={controller}>
-    <ChatInline>
-      <AIChatWindow />
-    </ChatInline>
-  </AIChatProvider>
-);
+function ConfiguredChat() {
+  const {
+    configurationStatus,
+    configurationError,
+    modelConfigurationError,
+    employees,
+    hasEnabledModels,
+  } = useAI();
+  const controller = useAIChatController();
+
+  if (configurationStatus === 'loading') {
+    return <p role='status'>Loading AI configuration...</p>;
+  }
+  if (configurationStatus === 'error') {
+    return (
+      <p role='alert'>
+        {configurationError?.message ?? 'Unable to load AI configuration.'}{' '}
+        Check your connection, employee access, and AI settings, then reload
+        this page.
+      </p>
+    );
+  }
+  if (!employees.length) {
+    return <p role='alert'>No AI employees are available for this user.</p>;
+  }
+  if (modelConfigurationError) {
+    return (
+      <p role='alert'>
+        {modelConfigurationError.message} Check and enable a model in AI
+        settings, then reload this page.
+      </p>
+    );
+  }
+  if (!hasEnabledModels) {
+    return (
+      <p role='alert'>
+        No enabled AI model is available. Configure and enable a model in AI
+        settings, then reload this page.
+      </p>
+    );
+  }
+
+  return (
+    <AIChatProvider id='sales-chat' controller={controller}>
+      <ChatInline>
+        <AIChatWindow />
+      </ChatInline>
+    </AIChatProvider>
+  );
+}
+
+export default function SalesChatPage() {
+  return (
+    <NocoBaseAIRootProvider service={nocobaseAIService}>
+      <ConfiguredChat />
+    </NocoBaseAIRootProvider>
+  );
+}
 ```
 
+Use the App's actual extension import alias and localize these messages. If a root AI provider already wraps the route, mount `ConfiguredChat` under it without nesting another root. Keep the controller hook unconditional and its identity stable. Do not key the chat by an employee or model merely to force initialization; that discards conversation state.
+
 Available surfaces include `ChatInline`, `ChatPage`, `ChatDialog`, `ChatSidePanel`, and the variant-switching `ChatSurface`. For a chat that expands from side panel to dialog, change `ChatSurface.variant` rather than remounting the chat; this preserves messages, composer, scroll, and tool state.
+
+### First-send acceptance checks
+
+- Open the page with discovery requests delayed. A loading status must be visible and the chat must not mount or offer a send action until both employee and model discovery finish.
+- Once ready, keep the displayed default employee and model unchanged, enter text, and send. Verify conversation creation and the message stream request use those defaults, the draft clears, and the message appears.
+- Reload the page and repeat the first send without switching employees or models. Test a fresh mount, not only a page whose chat was previously initialized.
+- Simulate employee discovery failure, no accessible employees, model discovery failure, and no enabled models (including an unconfigured placeholder). Each must show an actionable alert instead of an apparently usable composer. After fixing configuration and reloading, first send must work.
+- Use the existing service/transport for these checks; a mocked composer callback alone cannot prove conversation creation or sending works.
 
 ## Service and transport
 
