@@ -41,7 +41,7 @@ export function createQueueIdentity(
     queue: validQueue,
     digest,
     redisPrefix: `nbq:{${digest}}`,
-    redisQueueName: Buffer.from(validQueue, 'utf8').toString('base64url'),
+    redisQueueName: `q-${Buffer.from(validQueue, 'utf8').toString('base64url')}`,
     postgresQueueName: `q-${digest}`,
   };
 }

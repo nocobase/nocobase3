@@ -37,9 +37,15 @@ describe('queue physical identity', () => {
     expect(identity.namespace).toBe(name);
     expect(identity.queue).toBe(name);
     expect(identity.redisQueueName).toBe(
-      Buffer.from(name).toString('base64url'),
+      `q-${Buffer.from(name).toString('base64url')}`,
     );
     expect(identity.redisQueueName).not.toMatch(/[:{}]/u);
+  });
+
+  it('uses the specified q-prefixed base64url physical queue name', () => {
+    expect(createQueueIdentity('app', 'email').redisQueueName).toBe(
+      'q-ZW1haWw',
+    );
   });
 
   it('uses the unambiguous JSON tuple and full SHA-256 for shared physical identities', () => {
