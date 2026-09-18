@@ -11,6 +11,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  EXECUTION_REASON,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
 } from '../server/engine/constants.js';
@@ -278,14 +279,14 @@ describe('run instruction', () => {
     expect(runServices).not.toHaveProperty('singleton');
   });
 
-  it('lets a run stop in-flight work through the Workflow abort signal', async () => {
+  it('aborts a 5s Run node when the workflow timeout is 2s', async () => {
     const resourceRoot = await createArtifactRoot({
       './slow':
-        'export const run = (_args, options) => new Promise((resolve, reject) => { options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true }); setTimeout(resolve, 2000); });',
+        'import { setTimeout as sleep } from "node:timers/promises"; export const run = async (_args, options) => { await sleep(5000, undefined, { signal: options.signal }); return "finished"; };',
     });
     const workflow = await createTestWorkflow(database, {
       key: 'aborted',
-      options: { timeout: 0.05 },
+      options: { timeout: 2 },
       nodes: [{ key: 'run', type: 'run', config: { module: './slow' } }],
     });
     const dispatcher = new Dispatcher({
@@ -294,14 +295,31 @@ describe('run instruction', () => {
       resolveWorkflowResourceRoot: () => Promise.resolve(resourceRoot),
       services,
     });
+    const startedAt = performance.now();
     await dispatcher.trigger(
       workflow,
       {},
       { eventKey: 'aborted', manually: true },
     );
-    expect((await findRun(database, 'aborted')).status).toBe(
-      EXECUTION_STATUS.ABORTED,
-    );
+    const elapsedMs = performance.now() - startedAt;
+    const execution = await findRun(database, 'aborted');
+
+    expect(execution).toMatchObject({
+      status: EXECUTION_STATUS.ABORTED,
+      reason: EXECUTION_REASON.TIMEOUT,
+    });
+    await expect(
+      listNodeRuns(database, execution.id as number),
+    ).resolves.toEqual([
+      {
+        nodeKey: 'run',
+        status: NODE_RUN_STATUS.ABORTED,
+        result: null,
+        error: 'The operation was aborted',
+      },
+    ]);
+    expect(elapsedMs).toBeGreaterThanOrEqual(1_500);
+    expect(elapsedMs).toBeLessThan(4_000);
   });
 
   it('logs metadata without args or result values', async () => {
