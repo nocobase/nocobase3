@@ -1,6 +1,8 @@
 ---
-'@nocobase/queue': patch
-'@nocobase/app-server': patch
+'@nocobase/queue': minor
+'@nocobase/app-server': major
 ---
 
-Finalize the application-scoped QueueService API, including QueueManager and withChannel, and remove the legacy Job, Locator, queue manager, driver exports, and old application provider/token. Remove obsolete runtime dependencies and clean build output so retired modules cannot remain in published artifacts.
+Breaking pre-1.0 queue migration: replace the legacy Job, Locator, global queue manager, and driver APIs with application-owned QueueService factories, per-queue QueueManager facades, and withChannel. Replace QueueProvider and queueManagerToken with QueueServiceProvider and queueServiceToken from @nocobase/app-server/queue. Register handlers during Provider boot and await their unregistration during shutdown. Publication returns a receipt, not synchronous completion. Remove obsolete runtime dependencies and clean build output so retired modules cannot remain in published artifacts.
+
+Stop old producers and drain or manually account for old-engine work before cutover. Old workers cannot resume BullMQ backlog, including during rollback; no automatic backlog migration, replay, or deletion is performed.
