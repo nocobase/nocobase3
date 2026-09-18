@@ -159,7 +159,10 @@ const messages = {
     who: 'Who',
   },
   permissionWorkspace: {
+    pageAccessHint:
+      'Page access controls entry. Business permissions control data operations.',
     categories: {
+      pages: 'Page permissions',
       business: 'Business permissions',
       administration: 'Administration',
     },
@@ -286,6 +289,8 @@ const messages = {
       error: 'Inspection failed',
     },
     reasonCodes: {
+      PAGE_ACCESS_GRANTED: 'Page access is granted',
+      PAGE_ACCESS_DENIED: 'Page access is not granted',
       USER_CONTEXT_REQUIRED:
         'This scope depends on a specific user and cannot be resolved from this subject alone.',
       GRANT_MATCHED: 'This operation is granted',

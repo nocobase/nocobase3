@@ -1,3 +1,10 @@
+import {
+  DatabaseCollectionBuilder,
+  databaseGrant,
+  databaseScope,
+  type CollectionShape,
+  type CollectionRow,
+} from './builders.js';
 import { DatabaseCollectionRegistry } from './collection-registry.js';
 import type {
   ResourceAuthorizationCheck,
@@ -23,6 +30,16 @@ import type {
 import { RecordAccessPolicyRegistry } from './record-access-registry.js';
 
 export interface DatabaseApi {
+  collection<const D extends CollectionShape>(
+    definition: D,
+  ): DatabaseCollectionBuilder<CollectionRow<D>, D['name']>;
+  collection<const N extends string>(
+    name: N,
+  ): DatabaseCollectionBuilder<
+    Record<string, import('@nocobase/db').FilterLiteral>,
+    N
+  >;
+
   readonly collections: DatabaseCollectionRegistry;
   readonly recordAccess: RecordAccessPolicyRegistry;
   grant(resource: string, definition: DatabaseGrantDefinition): PermissionGrant;
@@ -48,6 +65,28 @@ export class DatabaseAuthorizationService implements DatabaseApi {
   private host: Authorization | undefined;
   constructor(recordAccess: RecordAccessPolicyRegistry) {
     this.recordAccess = recordAccess;
+  }
+
+  collection<const D extends CollectionShape>(
+    definition: D,
+  ): DatabaseCollectionBuilder<CollectionRow<D>, D['name']>;
+  collection<const N extends string>(
+    name: N,
+  ): DatabaseCollectionBuilder<
+    Record<string, import('@nocobase/db').FilterLiteral>,
+    N
+  >;
+  collection(
+    definition: string | CollectionShape,
+  ): DatabaseCollectionBuilder<
+    Record<string, import('@nocobase/db').FilterLiteral>,
+    string
+  > {
+    return new DatabaseCollectionBuilder(
+      this,
+      typeof definition === 'string' ? definition : definition.name,
+      { actions: ['read', 'create', 'update', 'delete'] },
+    );
   }
 
   /**
@@ -76,20 +115,11 @@ export class DatabaseAuthorizationService implements DatabaseApi {
     resource: string,
     definition: DatabaseGrantDefinition,
   ): PermissionGrant {
-    return {
-      resource: { type: 'database.collection', id: resource },
-      actions: Object.entries(definition).map(([action, config]) => ({
-        action,
-        policy: { type: 'database', ...config },
-      })),
-    };
+    return databaseGrant(resource, definition);
   }
 
   scope(recordAccess: DatabaseRecordAccess): DatabaseAccessScope {
-    return {
-      type: 'database',
-      recordAccess,
-    };
+    return databaseScope(recordAccess);
   }
 
   /**

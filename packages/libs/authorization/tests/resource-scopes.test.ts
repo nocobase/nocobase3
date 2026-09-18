@@ -48,8 +48,8 @@ it('preserves the business origin of grants without named data scopes', async ()
         title: 'Run',
         grants: [
           {
-            resource: { type: 'page', id: 'export' },
-            actions: [{ action: 'access' }],
+            resource: { type: 'database.collection', id: 'export' },
+            actions: [{ action: 'read' }],
           },
         ],
       },
@@ -110,7 +110,11 @@ it('evaluates each composed target once with only that operation grants', async 
       },
     ],
   });
-  authz.resourceGroups.add({ name: 'reports', title: 'Reports' });
+  authz.resourceGroups.add({
+    name: 'reports',
+    title: 'Reports',
+    category: 'administration',
+  });
   const target = {
     resource: { type: 'document', id: 'report' },
     actions: [{ action: 'read' }],

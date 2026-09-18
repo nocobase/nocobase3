@@ -9,7 +9,45 @@ import type {
   AuthorizationReason,
 } from '@nocobase/authorization/core';
 
+export class PageReference<N extends string> {
+  constructor(readonly name: N) {}
+  access(): PermissionGrant {
+    return {
+      resource: { type: 'page', id: this.name },
+      actions: [{ action: 'access' }],
+    };
+  }
+}
+
+export class PageBuilder<N extends string> {
+  constructor(
+    private readonly definition: Omit<ResourceItemDefinition, 'id'> & {
+      name: N;
+    },
+  ) {}
+  build(): Omit<ResourceItemDefinition, 'id'> & { name: N } {
+    return structuredClone(this.definition);
+  }
+  reference(): PageReference<N> {
+    return new PageReference(this.definition.name);
+  }
+  register(api: PagesApi): PageReference<N> {
+    api.add(this.build());
+    return this.reference();
+  }
+}
+export function authorizationPage<const N extends string>(
+  name: N,
+  metadata: { title: import('@nocobase/authorization/core').ResourceTitle },
+): PageBuilder<N> {
+  return new PageBuilder({ name, ...metadata, actions: ['access'] });
+}
+
 export interface PagesApi {
+  define<const N extends string>(
+    name: N,
+    metadata: { title: import('@nocobase/authorization/core').ResourceTitle },
+  ): PageReference<N>;
   add(definition: Omit<ResourceItemDefinition, 'id'> & { name: string }): void;
   grant(name: string, actions: readonly string[]): PermissionGrant;
 }
@@ -20,6 +58,10 @@ export function pages(): PagesPlugin {
   return {
     authorizationApi: {
       pages: {
+        define: (name, metadata) => {
+          items.add({ id: name, ...metadata, actions: ['access'] });
+          return new PageReference(name);
+        },
         add: ({ name, ...definition }) =>
           items.add({ ...definition, id: name }),
         grant: (name, actions) => ({
@@ -87,5 +129,6 @@ function grantReason(grant: AuthorizationGrant): AuthorizationReason {
     code: 'PAGE_ACCESS_GRANTED',
     message: `${grant.source.plugin}:${grant.source.id} allows access to page "${grant.resource.id}"`,
     plugin: 'pages',
+    details: { source: grant.source },
   };
 }

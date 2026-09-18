@@ -6,3 +6,5 @@ export * from './plugin.js';
 export * from './record-access.js';
 export * from './record-access-registry.js';
 export * from './scope.js';
+
+export * from './builders.js';

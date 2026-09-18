@@ -12,7 +12,7 @@ Register each collection explicitly with `authz.getResource('database.collection
 
 ## Permission management
 
-Permission sets use a collapsible sidebar and routed tabs for permissions, user assignments and basic information. Each editable tab owns its save action. The permission editor displays explicitly composed business operations in flat business and administration groups. Named scopes configure the data each operation can use. Underlying page, collection and custom resource types are never listed directly, including when no business group exists.
+Permission sets use a collapsible sidebar and routed tabs for permissions, user assignments and basic information. Each editable tab owns its save action. The permission editor displays explicitly composed business operations in flat business and administration groups. Named scopes configure the data each operation can use. Registered pages have a separate permission section, even when no business group exists. Raw collection and custom resource types remain internal.
 
 Default access and sharing rules expand record scopes for users who already have the relevant action permission. Restriction rules limit those scopes. These rules do not grant action or field permissions.
 
@@ -20,11 +20,15 @@ The permission inspector displays an authorization subject's decisions, reasons 
 
 Client and server locale catalogues provide English and Chinese messages. Options preserve translation descriptors for resource titles and action labels. Client rendering resolves them in the current language without refetching permission data. Integration instructions and examples live in [the authorization Skill](skills/nocobase-app-plugin-authorization/SKILL.md).
 
+## Fluent registration
+
+Business groups expose `.resource().action().register()`. Page references provide `.access()`, while database references provide `.scope().read().update()` and record-access resolver builders. Plugin contributions carry scope types into the composed resource’s `.grant()`. Reusable scopes are immutable. See [the fluent registration guide](skills/nocobase-app-plugin-authorization/references/fluent-registration.md) and the sales example in `packages/examples/app-plugin-authorization-example/server/sales-authorization.ts`.
+
 ## Resource registration
 
-`authz.resourceTypes.add()` registers an underlying authorization handler. `authz.getResource(type)` accesses its item registry; `authz.pages.add()` and `authz.db.collections.add()` register page and collection targets. These registrations define executable authorization boundaries and never create permission-editor entries.
+`authz.resourceTypes.add()` registers an underlying authorization handler. `authz.getResource(type)` accesses its item registry; `authz.pages.add()` and `authz.db.collections.add()` register page and collection targets. Registered pages appear as independent entry-access permissions; raw collection registrations remain internal.
 
-`authz.resourceGroups.add()` and `authz.resources.add()` declare the operations administrators configure. The flat group's `category` is `business` or `administration` and only controls presentation. Each operation composes underlying grants; the resulting data conditions must still be enforced by the server.
+`authz.resourceGroups.add()` and `authz.resources.add()` declare the operations administrators configure. The flat group's `category` is `business` or `administration`. Business operations compose only database grants; administration operations compose system capabilities. Page grants must always be assigned independently. For business operations, the resulting data conditions must still be enforced by the server.
 
 ```ts
 authz.resourceGroups.add({
@@ -101,6 +105,6 @@ The resource-type sidebar uses `POST /authz/inspect/configured` to summarize the
 
 Shared administration components and data types are exported from `./client/management`; server option queries and request helpers are exported from `./server/management`. Feature plugins depend on these exports; this plugin does not import them at runtime.
 
-The decision drawer leads with whether the selected operation is allowed, then shows deduplicated source titles and the named record scopes present in the returned decision. “Me” refers to the inspected subject. Effective conditions and fields are available on demand; underlying page/table checks, reason codes and the raw decision appear in one collapsed technical section. Redundant Boolean conditions are simplified only for display, without changing executable policies.
+The decision drawer leads with whether the selected operation is allowed, then shows deduplicated source titles and the named record scopes present in the returned decision. “Me” refers to the inspected subject. Effective conditions and fields are available on demand; underlying checks, reason codes and the raw decision appear in one collapsed technical section. Redundant Boolean conditions are simplified only for display, without changing executable policies.
 
 Authorization sources may provide a localized `title` alongside their plugin and record identifiers. The inspector renders those titles and returned reason messages without a plugin-specific lookup or an assumed rule pipeline. Custom reason codes retain their supplied message; codes recognized by the inspector use its localized wording.

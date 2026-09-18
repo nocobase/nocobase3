@@ -158,7 +158,12 @@ const zhCN: AuthorizationResource = {
     who: '对象',
   },
   permissionWorkspace: {
-    categories: { business: '业务权限', administration: '系统管理' },
+    pageAccessHint: '页面权限控制能否进入页面，数据操作由业务权限控制。',
+    categories: {
+      business: '业务权限',
+      pages: '页面权限',
+      administration: '系统管理',
+    },
     specifyScope: '指定{{scope}}的范围',
     inheritScope: '未指定时，仍遵循已配置的默认数据范围、共享及限制规则。',
     configurePermission: '配置权限',
@@ -275,6 +280,8 @@ const zhCN: AuthorizationResource = {
       error: '检查失败',
     },
     reasonCodes: {
+      PAGE_ACCESS_GRANTED: '已授予页面访问权限',
+      PAGE_ACCESS_DENIED: '尚未授予页面访问权限',
       USER_CONTEXT_REQUIRED: '此范围依赖具体用户，无法仅根据授权对象计算。',
       GRANT_MATCHED: '已授予此操作',
       SCOPE_EXPANDED: '扩展可访问记录范围',

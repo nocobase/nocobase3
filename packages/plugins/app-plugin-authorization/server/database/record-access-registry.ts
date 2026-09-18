@@ -1,3 +1,4 @@
+import { RecordAccessBuilder } from './builders.js';
 import {
   allRecords,
   customFilter,
@@ -23,6 +24,20 @@ export class RecordAccessPolicyRegistry {
       );
     }
     this.policies.set(policy.key, policy);
+  }
+
+  define<const K extends string, const C extends string>(
+    key: K,
+    options: {
+      collections: readonly C[];
+      title?: import('../i18n.js').OptionText;
+    },
+  ): RecordAccessBuilder<
+    Record<string, import('@nocobase/db').FilterLiteral>,
+    C,
+    K
+  > {
+    return new RecordAccessBuilder(this, { key, ...options });
   }
 
   get(key: string): RecordAccessPolicy | undefined {

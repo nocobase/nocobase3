@@ -89,7 +89,7 @@ async function ids(user: string, path = 'projects'): Promise<string[]> {
   const body = await response.json();
   return body.data.items.map((item: { id: string }) => item.id);
 }
-it('composes page and table access; defaults, selected sharing and restrictions govern real endpoints', async () => {
+it('grants page entry separately while data rules govern real endpoints', async () => {
   expect(await ids('assistant')).toEqual([
     'project-1',
     'project-2',
@@ -287,6 +287,9 @@ it('saves one operation scope from the real editor without changing view or quot
   }
   render(<Editor />);
   fireEvent.click(
+    screen.getByRole('button', { name: 'Sales collaboration', exact: true }),
+  );
+  fireEvent.click(
     screen.getByRole('button', { name: 'Projects: Edit project information' }),
   );
   fireEvent.click(
@@ -309,7 +312,11 @@ it('saves one operation scope from the real editor without changing view or quot
   fireEvent.click(screen.getByRole('button', { name: 'Save permission set' }));
   await waitFor(() => expect(saved).toBe(true));
   expect(
-    (await authz.permissionSets.get(set.key))?.grants[0].actions,
+    (await authz.permissionSets.get(set.key))?.grants.find(
+      (grant) =>
+        grant.resource.type === 'resource' &&
+        grant.resource.id === 'example.sales.projects',
+    )?.actions,
   ).toContainEqual({
     action: 'edit',
     policy: { type: 'resource', projects: 'example.sales.region' },
@@ -746,7 +753,7 @@ it('narrows business endpoints to their operation while generic data policies ag
   expect(invalid.status).toBe(400);
 });
 
-it('presents only business groups and applicable global scopes consistently across management pages', async () => {
+it('exposes pages in permission sets and inspection while data rules only list business scopes', async () => {
   for (const path of [
     'permission-sets',
     'default-access',
@@ -756,8 +763,8 @@ it('presents only business groups and applicable global scopes consistently acro
   ]) {
     const options = (await (await admin(`${path}/options`)).json())
       .data as AuthorizationOptions<LocalizedText>;
-    expect(options.resourceTypes.map((type) => type.value)).not.toContain(
-      'page',
+    expect(options.resourceTypes.some((type) => type.value === 'page')).toBe(
+      path === 'permission-sets' || path === 'inspector',
     );
     expect(options.resourceTypes.map((type) => type.value)).not.toContain(
       'database.collection',
@@ -1343,4 +1350,42 @@ it('reports per-record edit eligibility and input errors without mislabeling per
     (await fixture.request('engineer', 'sales/quotes/quote-2/submit', {}))
       .status,
   ).toBe(400);
+});
+
+it('keeps page grants and business data grants independent in both directions', async () => {
+  const identity = { principal: { type: 'user', id: fixture.users.assistant } };
+  const set = (await authz.permissionSets.get('example-sales-assistant'))!;
+  const pageGrant = set.grants.find(
+    (grant) =>
+      grant.resource.type === 'page' &&
+      grant.resource.id === 'example.sales.projects',
+  )!;
+  const dataGrant = set.grants.find(
+    (grant) =>
+      grant.resource.type === 'resource' &&
+      grant.resource.id === 'example.sales.projects',
+  )!;
+  const pageRequest = {
+    resource: { type: 'page', id: 'example.sales.projects' },
+    action: 'access',
+  };
+  await authz.permissionSets.update(set.key, { ...set, grants: [pageGrant] });
+  expect(await authz.for(identity).can(pageRequest)).toBe(true);
+  expect((await fixture.request('assistant', 'sales/projects')).status).toBe(
+    403,
+  );
+  await authz.permissionSets.update(set.key, { ...set, grants: [dataGrant] });
+  expect(await authz.for(identity).can(pageRequest)).toBe(false);
+  expect((await fixture.request('assistant', 'sales/projects')).status).toBe(
+    200,
+  );
+  const decision = await authz.for(identity).authorize({
+    resource: { type: 'resource', id: 'example.sales.projects' },
+    action: 'view',
+  });
+  expect(
+    decision.conditions?.checks.every(
+      (check) => check.resource.type === 'database.collection',
+    ),
+  ).toBe(true);
 });

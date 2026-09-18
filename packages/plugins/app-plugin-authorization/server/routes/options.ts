@@ -8,7 +8,7 @@ interface DatabaseCollectionOption {
   readonly fields: readonly string[];
 }
 
-/** Only explicitly composed operations are user-configurable. Categories arrange them, never expose underlying handlers. */
+/** Page entry access is configured independently of business data operations. Raw collections remain internal. */
 async function managementOptions(
   authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
@@ -21,7 +21,10 @@ async function managementOptions(
       category: group.category ?? 'business',
       label: optionText(group.title, group.name),
     })),
-    resourceTypes: businessResourceOptions(authz, collections),
+    resourceTypes: [
+      ...businessResourceOptions(authz, collections),
+      ...pageResourceOptions(authz),
+    ],
     subjectTypes: subjectTypeOptions(authz),
     collections: collections.map(({ name, fields }) => ({ name, fields })),
     recordAccessPolicies: authz.db.recordAccess.list().map((policy) => ({
@@ -188,4 +191,37 @@ export async function permissionSetOptions(
   connection: DatabaseConnection | undefined,
 ): Promise<object> {
   return managementOptions(authz, connection);
+}
+
+function pageResourceOptions(authz: AppAuthorizationService) {
+  if (!authz.resourceTypes.list().includes('page')) return [];
+  const items = authz.getResource('page').items.list();
+  if (!items.length) return [];
+  const actions = [
+    { value: 'access', label: optionLabel('options.actions.access', 'Access') },
+  ];
+  return [
+    {
+      value: 'page',
+      category: 'pages',
+      label: optionLabel('options.resourceTypes.page', 'Pages'),
+      groups: [] as ReturnType<
+        typeof businessResourceOptions
+      >[number]['groups'],
+      actions,
+      resources: items.map((item) => ({
+        value: item.id,
+        label: optionText(item.title, item.id),
+        group: item.group ?? '',
+        actions: item.actions.map((action) => ({
+          value: action,
+          label: item.actionTitles?.[action]
+            ? optionText(item.actionTitles[action], action)
+            : optionLabel(`options.actions.${action}`, action),
+        })),
+        ruleScopes: [],
+        actionScopes: {},
+      })),
+    },
+  ];
 }

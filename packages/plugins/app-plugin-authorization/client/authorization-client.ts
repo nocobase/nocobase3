@@ -50,7 +50,7 @@ export type LocalizedText =
   string | { key: string; ns: string; defaultValue?: string };
 
 export interface SelectOption<Text = string> {
-  category?: 'business' | 'administration';
+  category?: 'business' | 'pages' | 'administration';
   value: string;
   label: Text;
   description?: Text;
@@ -85,7 +85,7 @@ export interface ResourceGroupOption<Text = string> extends SelectOption<Text> {
   children?: readonly ResourceGroupOption<Text>[];
 }
 export interface ResourceTypeOption<Text = string> {
-  category?: 'business' | 'administration';
+  category?: 'business' | 'pages' | 'administration';
   groups?: readonly ResourceGroupOption<Text>[];
   value: string;
   label: Text;

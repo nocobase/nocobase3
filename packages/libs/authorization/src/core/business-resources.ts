@@ -1,3 +1,4 @@
+import { BusinessGroupReference, buildBusinessGrant } from './builders.js';
 import type { PermissionGrant } from '../plugins/permission-sets/model.js';
 import type { AccessConstraintService } from './constraints.js';
 import type {
@@ -55,6 +56,19 @@ export interface BusinessResource {
 }
 export class BusinessResourceGroups {
   private entries = new Map<string, BusinessResourceGroup>();
+  private resources?: BusinessResources;
+  bind(resources: BusinessResources): void {
+    this.resources = resources;
+  }
+  define(
+    name: string,
+    metadata: Omit<BusinessResourceGroup, 'name'>,
+  ): BusinessGroupReference {
+    if (!this.resources)
+      throw new Error('Business resources are not initialized');
+    this.add({ name, ...metadata });
+    return new BusinessGroupReference(name, this.resources);
+  }
   add(value: BusinessResourceGroup): void {
     if (
       value.category &&
@@ -75,7 +89,9 @@ export class BusinessResourceGroups {
 /** User-facing operations compose underlying resource types. */
 export class BusinessResources {
   private definitions = new Map<string, BusinessResource>();
-  constructor(private groups: BusinessResourceGroups) {}
+  constructor(private groups: BusinessResourceGroups) {
+    groups.bind(this);
+  }
   add(definition: BusinessResource): void {
     if (
       !definition.name ||
@@ -83,6 +99,24 @@ export class BusinessResources {
       !this.groups.has(definition.group)
     )
       throw new TypeError('Invalid business resource name or group');
+    const business =
+      this.groups.list().find((group) => group.name === definition.group)
+        ?.category !== 'administration';
+    for (const action of definition.actions) {
+      if (action.grants.some((grant) => grant.resource.type === 'page'))
+        throw new TypeError(
+          'Page access must be granted separately from composed operations',
+        );
+      if (
+        business &&
+        action.grants.some(
+          (grant) => grant.resource.type !== 'database.collection',
+        )
+      )
+        throw new TypeError(
+          'Business actions must only reference database collections',
+        );
+    }
     const names = definition.actions.map((action) => action.name);
     if (
       !names.length ||
@@ -166,26 +200,8 @@ export class BusinessResources {
         >,
   ): PermissionGrant {
     const definition = this.definitions.get(name);
-    if (
-      !definition ||
-      (Array.isArray(actions) ? actions : Object.keys(actions)).some(
-        (action) => !definition.actions.some((item) => item.name === action),
-      )
-    )
-      throw new TypeError('Unknown business resource or action');
-    return {
-      resource: { type: 'resource', id: name },
-      actions: Array.isArray(actions)
-        ? actions.map((action: string) => ({ action }))
-        : Object.entries(
-            actions as Readonly<
-              Record<string, Readonly<Record<string, BusinessScopeSelection>>>
-            >,
-          ).map(([action, scopes]) => ({
-            action,
-            policy: { type: 'resource', ...scopes },
-          })),
-    };
+    if (!definition) throw new TypeError('Unknown business resource or action');
+    return buildBusinessGrant(definition, actions);
   }
   expand(grant: AuthorizationGrant): readonly AuthorizationGrant[] {
     if (grant.resource.type !== 'resource') return [grant];

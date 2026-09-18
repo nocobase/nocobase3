@@ -9,7 +9,7 @@ import {
   databaseScopeRuleOptions,
 } from '../server/routes/options.js';
 
-it('exposes only composed operations regardless of whether a business group exists', async () => {
+it('exposes pages independently while keeping raw collections and custom handlers internal', async () => {
   const authz = createAppAuthorization({});
   authz.pages.add({ name: 'orders', title: 'Orders', actions: ['access'] });
   authz.db.collections.add('orders');
@@ -20,21 +20,31 @@ it('exposes only composed operations regardless of whether a business group exis
   authz.getResource('custom').items.add({ id: 'one', actions: ['read'] });
   const title = { key: 'sales.title', ns: 'example' };
   const actionTitle = { key: 'sales.view', ns: 'example' };
-  const assertHidden = async () => {
+  const assertSeparated = async () => {
     const options = (await permissionSetOptions(
       authz,
       undefined,
     )) as AuthorizationOptions<LocalizedText>;
     expect(options.resourceTypes.map((type) => type.value)).toEqual([
       'resource',
+      'page',
     ]);
     expect(
-      options.resourceTypes.flatMap((type) =>
-        type.resources.map((resource) => resource.value),
-      ),
-    ).not.toContain('orders');
+      options.resourceTypes.find((type) => type.value === 'page')?.resources,
+    ).toEqual([
+      expect.objectContaining({
+        value: 'orders',
+        actions: [{ value: 'access', label: expect.anything() }],
+      }),
+    ]);
+    expect(options.resourceTypes.map((type) => type.value)).not.toContain(
+      'database.collection',
+    );
+    expect(options.resourceTypes.map((type) => type.value)).not.toContain(
+      'custom',
+    );
   };
-  await assertHidden();
+  await assertSeparated();
   expect(
     (
       (await databaseScopeRuleOptions(
@@ -44,7 +54,7 @@ it('exposes only composed operations regardless of whether a business group exis
     ).resourceTypes,
   ).toEqual([]);
   authz.resourceGroups.add({ name: 'sales', title: 'Sales' });
-  await assertHidden();
+  await assertSeparated();
   authz.resources.add({
     name: 'sales.orders',
     title,

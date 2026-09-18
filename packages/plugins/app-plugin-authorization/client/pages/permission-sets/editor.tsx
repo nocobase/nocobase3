@@ -54,7 +54,9 @@ export function PermissionSetEditor({
   const t = useAuthorizationTranslation();
   const configurationRef = useRef<HTMLDivElement>(null);
   const [initial] = useState(() => JSON.stringify(draft));
-  const [type, setType] = useState(options.resourceTypes[0]?.value ?? '');
+  const [type, setType] = useState(
+    () => resourceSections(options)[0]?.value ?? '',
+  );
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -364,7 +366,11 @@ export function PermissionSetEditor({
                   </div>
                   <div className='flex shrink-0 items-center justify-between gap-3 px-4 py-2'>
                     <p className='text-xs text-muted-foreground'>
-                      {t('permissionWorkspace.clickScope')}
+                      {t(
+                        type === 'page'
+                          ? 'permissionWorkspace.pageAccessHint'
+                          : 'permissionWorkspace.clickScope',
+                      )}
                     </p>
                   </div>
                   <div className='min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]'>

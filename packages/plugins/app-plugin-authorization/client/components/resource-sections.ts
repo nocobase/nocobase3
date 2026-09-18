@@ -22,9 +22,8 @@ export function resourceSections(
           }))
         : [{ ...type, key: type.value }],
     )
-    .sort(
-      (a, b) =>
-        Number(a.category === 'administration') -
-        Number(b.category === 'administration'),
-    );
+    .sort((a, b) => {
+      const order = { pages: 0, business: 1, administration: 2 };
+      return order[a.category ?? 'business'] - order[b.category ?? 'business'];
+    });
 }

@@ -23,6 +23,10 @@ For a complete end-to-end implementation, read [references/orders-module.md](ref
 
 Do not add a second permission system inside a module. The module should keep its normal service/repository API and add an authorization check immediately before the operation.
 
+## Fluent registration
+
+For new code, use [plugin-owned fluent builders](references/fluent-registration.md) to compose business actions with typed database field permissions and named record scopes, plus independent page-access grants. The sales authorization example demonstrates independent scopes on a multi-table operation.
+
 ## Register the collections the module governs
 
 Database authorization is built in — an application no longer lists it among its plugins — and it is reached as `authz.db`.
@@ -204,7 +208,7 @@ Do not treat a successful permission snapshot as proof that a database query is 
 
 ## Resource registration
 
-Register user-facing groups with `authz.resourceGroups.add({ name, title, category })` and resources with `authz.resources.add({ name, title, group, actions })`. Groups are flat; category is `business` (default) or `administration`, for presentation only. Management options expose only these composed resources, even when no business group exists. Page, collection and custom handlers belong to `authz.resourceTypes` and are never exposed directly. Settings resources use this same catalog and reference underlying permissions through `authz.settings.grant(id, actions)`, which returns declarations without granting access. Backend routes still check `settings` permissions. Do not register settings display items with `getResource('settings').groups/items`. Only resources with data scopes appear in data-rule editors.
+Register user-facing groups with `authz.resourceGroups.add({ name, title, category })` and resources with `authz.resources.add({ name, title, group, actions })`. Groups are flat; category is `business` (default) or `administration`. Business actions compose only database collection grants; administration actions may compose other system capabilities. Page access must be granted independently and cannot be included in composed actions. Permission sets and the inspector expose registered pages as a separate category, including when no business group exists. Raw collection and custom handlers remain internal. Settings resources use this same catalog and reference underlying permissions through `authz.settings.grant(id, actions)`, which returns declarations without granting access. Backend routes still check `settings` permissions. Do not register settings display items with `getResource('settings').groups/items`. Only resources with data scopes appear in data-rule editors.
 
 ## Register selectable subject types
 
@@ -242,6 +246,6 @@ Register flat business groups with `authz.resourceGroups.add` and resources with
 
 Default access, sharing and restriction rules may target `{ type: 'resource', id: businessResourceName }`, with each action entry specifying `action` and `scopeKey`. Records and conditions belong to that scope's collection. Sharing never grants the operation itself and never follows relations implicitly. Use `authz.db.policyFor(collection, requestScope, { resource: businessResourceName, action })` when an endpoint must enforce only that operation's grants. Omit the third argument for ordinary aggregate underlying authorization. Collection-level restriction rules still apply across every grant branch.
 
-Record-access policies have one global registry, `authz.db.recordAccess`. Policies may declare `collections` and `requiredFields` to limit applicability. Omit action scope `options` to use all applicable policies; specify it only to narrow that list. Permission-set scopes and all rule selectors share these choices, including custom filters. Business resource groups replace page/table categories in management when composed resources are present. Inspector rows show each resource’s own actions; action details explain the business grant and underlying database checks.
+Record-access policies have one global registry, `authz.db.recordAccess`. Policies may declare `collections` and `requiredFields` to limit applicability. Omit action scope `options` to use all applicable policies; specify it only to narrow that list. Permission-set scopes and all rule selectors share these choices, including custom filters. Permission sets and the inspector configure registered pages independently from business operations. Business groups compose database grants only; administration groups compose system capabilities. Raw table permissions remain internal, and no composed operation may include page grants. Inspector rows show each resource’s own actions; action details explain the business grant and underlying database checks.
 
 Register inherited authorization subjects, such as teams, with `authz.subjects.define(type, { resolveFor, filterActive, administration })`. `resolveFor(principal)` returns current subject IDs; authenticated requests and user inspection resolve these memberships server-side. `filterActive` excludes disabled or deleted subjects. A manually constructed `authz.for(identity)` uses the supplied identity; include resolved subjects explicitly outside HTTP middleware.

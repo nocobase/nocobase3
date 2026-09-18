@@ -1,6 +1,8 @@
 {
   "extends": "@nocobase/dev-config/tsconfig/server-library.json",
   "compilerOptions": {
+    // Preserve inferred fluent resource types across the seed and runtime modules.
+    "isolatedDeclarations": false,
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "paths": {

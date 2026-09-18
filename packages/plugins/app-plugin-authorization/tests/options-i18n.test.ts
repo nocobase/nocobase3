@@ -322,7 +322,7 @@ describe('locale-independent option descriptors', () => {
         {
           name: 'view',
           title: 'View',
-          grants: [authz.pages.grant('orders', ['access'])],
+          grants: [authz.db.grant('orders', { read: {} })],
         },
       ],
     });
@@ -355,7 +355,7 @@ describe('locale-independent option descriptors', () => {
         {
           name: 'view',
           title: 'View',
-          grants: [authz.pages.grant('orders', ['access'])],
+          grants: [authz.db.grant('orders', { read: {} })],
         },
       ],
     });

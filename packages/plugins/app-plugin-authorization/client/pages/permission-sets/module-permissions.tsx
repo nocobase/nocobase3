@@ -56,7 +56,10 @@ export function ModulePermissions({
   );
   const rowStyle: CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: 'minmax(12rem, 32%) minmax(0, 1fr) 2rem',
+    gridTemplateColumns:
+      type === 'page'
+        ? 'minmax(0, 1fr) auto 2rem'
+        : 'minmax(12rem, 32%) minmax(0, 1fr) 2rem',
     alignItems: 'center',
     columnGap: '0.75rem',
     paddingRight: '1rem',
@@ -154,15 +157,26 @@ export function ModulePermissions({
               className='flex min-w-0 items-center gap-2'
               style={{ paddingLeft: 16 + row.depth * 20 }}
             >
-              <span className='shrink-0 font-medium'>{item.label}</span>
-              <span
-                className='truncate text-xs text-muted-foreground'
-                title={item.value}
-              >
-                {item.value}
+              <span className='min-w-0 truncate font-medium' title={item.value}>
+                {item.label}
               </span>
+              {type !== 'page' && (
+                <span
+                  className='truncate text-xs text-muted-foreground'
+                  title={item.value}
+                >
+                  {item.value}
+                </span>
+              )}
             </div>
-            <div className='flex min-w-0 flex-wrap gap-x-3 gap-y-1'>
+            <div
+              className='flex min-w-0 flex-wrap gap-x-3 gap-y-1'
+              style={
+                type === 'page'
+                  ? { gridColumn: '3', justifyContent: 'center' }
+                  : undefined
+              }
+            >
               {(item.actions ?? actions).map((action) => {
                 const granted = grant.actions.includes(action.value);
                 const config = item.actionScopes?.[action.value];
@@ -193,8 +207,9 @@ export function ModulePermissions({
                     type='button'
                     disabled={disabled}
                     aria-label={`${item.label}: ${action.label}`}
+                    title={`${item.label}: ${action.label}`}
                     aria-pressed={granted}
-                    className='inline-flex items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
+                    className={`inline-flex items-center gap-1 rounded-md text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${type === 'page' ? 'p-1' : 'py-1 pl-1 pr-2'}`}
                     onClick={() =>
                       onToggle(
                         grant,
@@ -215,15 +230,16 @@ export function ModulePermissions({
                           : 'permissionWorkspace.moduleNotGranted',
                       )}
                     />
-                    <span>{action.label}</span>
+                    {type !== 'page' && <span>{action.label}</span>}
                   </button>
                 );
               })}
             </div>
-            {bulk(
-              [item],
-              t('permissionWorkspace.selectGroup', { group: item.label }),
-            )}
+            {type !== 'page' &&
+              bulk(
+                [item],
+                t('permissionWorkspace.selectGroup', { group: item.label }),
+              )}
           </div>
         );
       })}
