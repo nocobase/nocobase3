@@ -572,6 +572,11 @@ export class AppHostSupervisor {
       APP_VOLUMES_DIR: this.appVolumesDir,
       APP_HOST_CONFIG_PATH: this.configPath,
     };
+    // This process relays the child's piped output to its own stdout, so the child cannot detect a
+    // terminal on its own. FORCE_COLOR is the only channel; an explicit environment setting wins.
+    if (appHostChildForcesColor(process.env, process.stdout.isTTY)) {
+      env.FORCE_COLOR = '1';
+    }
     const nodeOptions = sanitizeAppHostChildNodeOptions(env.NODE_OPTIONS);
 
     if (nodeOptions) {
@@ -727,6 +732,24 @@ function normalizeUrl(value?: string): URL | undefined {
   }
 
   return new URL(value);
+}
+
+/**
+ * A managed App Host child inherits a pipe, so it cannot tell that this process relays its output to
+ * a terminal. Color has to be requested explicitly with FORCE_COLOR; an environment that already
+ * states an intent, in either direction, is left alone.
+ */
+export function appHostChildForcesColor(
+  environment: NodeJS.ProcessEnv,
+  isTerminal: boolean | undefined,
+): boolean {
+  if (
+    environment.FORCE_COLOR !== undefined ||
+    environment.NO_COLOR !== undefined
+  ) {
+    return false;
+  }
+  return isTerminal === true;
 }
 
 export function sanitizeAppHostChildNodeOptions(value: unknown): string {

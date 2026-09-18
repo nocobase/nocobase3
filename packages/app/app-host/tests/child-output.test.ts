@@ -36,3 +36,26 @@ it('captures partial UTF-8 lines and bounds unterminated child output', async ()
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it('strips terminal escapes before a captured line reaches the journal', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'host-child-color-'));
+  try {
+    const child = spawn(
+      process.execPath,
+      [
+        '-e',
+        `console.log(String.fromCharCode(27) + '[32mINFO' + String.fromCharCode(27) + '[39m host ready')`,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    captureChildOutput(child, directory);
+    await once(child, 'close');
+    await vi.waitFor(async () => {
+      const page = await readJournal(directory, { fromStart: true });
+      expect(page.entries).toHaveLength(1);
+      expect(page.entries[0]?.msg).toBe('INFO host ready');
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

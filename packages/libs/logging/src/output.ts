@@ -24,6 +24,11 @@ export interface LoggerFileOptions {
 export interface ConsoleLogOptions {
   enabled?: boolean;
   pretty?: boolean;
+  /**
+   * Color level labels in pretty output. Defaults to writing color only to a terminal, so piped or
+   * captured output stays plain; `NO_COLOR` disables it and `FORCE_COLOR` requests it.
+   */
+  color?: boolean;
 }
 export interface LogOutputOptions {
   file?: FileLogOptions;
@@ -71,7 +76,25 @@ export function normalizeFileOptions(
     );
   return normalized;
 }
-function prettyEntry(entry: JournalEntry): string {
+/** Level colors match the pino-pretty palette developers saw before console.pretty replaced it. */
+const levelColors: Readonly<Record<string, readonly [string, string]>> = {
+  TRACE: ['\u001b[90m', '\u001b[39m'],
+  DEBUG: ['\u001b[34m', '\u001b[39m'],
+  INFO: ['\u001b[32m', '\u001b[39m'],
+  WARN: ['\u001b[33m', '\u001b[39m'],
+  ERROR: ['\u001b[31m', '\u001b[39m'],
+  FATAL: ['\u001b[41m\u001b[37m', '\u001b[39m\u001b[49m'],
+};
+/** An escape only helps a terminal, and the environment can override that guess. */
+function resolveConsoleColor(configured: boolean | undefined): boolean {
+  if (configured !== undefined) return configured;
+  const forced = process.env.FORCE_COLOR;
+  // Node itself lets FORCE_COLOR override NO_COLOR, and warns that it does.
+  if (forced !== undefined) return forced !== '0' && forced !== 'false';
+  if (process.env.NO_COLOR) return false;
+  return process.stdout.isTTY === true;
+}
+function prettyEntry(entry: JournalEntry, color: boolean): string {
   const {
     time,
     level,
@@ -99,6 +122,8 @@ function prettyEntry(entry: JournalEntry): string {
     typeof level === 'number'
       ? (names[level] ?? String(level))
       : level.toUpperCase();
+  const palette = color ? levelColors[label] : undefined;
+  const shown = palette ? `${palette[0]}${label}${palette[1]}` : label;
   const name = typeof logger === 'string' ? logger : 'system';
   const scope = typeof appId === 'string' ? `${appId}/${name}` : name;
   if (fields.app === appId) delete fields.app;
@@ -117,7 +142,7 @@ function prettyEntry(entry: JournalEntry): string {
   const clock = Number.isNaN(date.getTime())
     ? time
     : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}.${String(date.getMilliseconds()).padStart(3, '0')}`;
-  return `${clock} ${label} [${scope}] ${msg}${typeof durationMs === 'number' ? ` ${durationMs}ms` : ''}${details ? ` ${details}` : ''}${err ? `\n${JSON.stringify(err, null, 2)}` : ''}\n`;
+  return `${clock} ${shown} [${scope}] ${msg}${typeof durationMs === 'number' ? ` ${durationMs}ms` : ''}${details ? ` ${details}` : ''}${err ? `\n${JSON.stringify(err, null, 2)}` : ''}\n`;
 }
 interface DirectoryWriter {
   references: number;
@@ -130,6 +155,9 @@ const directories = new Map<string, DirectoryWriter>();
 /** Shared across named loggers and hosted lifecycle writers in the same process. */
 export function createLogOutput(options: LogOutputOptions): Writable {
   const file = normalizeFileOptions(options.file);
+  const color =
+    options.console?.pretty === true &&
+    resolveConsoleColor(options.console.color);
   const directory =
     file.enabled !== false && file.directory
       ? path.resolve(file.directory)
@@ -252,7 +280,7 @@ export function createLogOutput(options: LogOutputOptions): Writable {
         if (options.console?.enabled) {
           process.stdout.write(
             options.console.pretty
-              ? prettyEntry(entry)
+              ? prettyEntry(entry, color)
               : JSON.stringify(entry) + '\n',
           );
         }
