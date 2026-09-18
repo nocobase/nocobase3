@@ -140,7 +140,7 @@ export function rateLimit(
   };
 }
 
-/** Validate driver shapes without creating a connection or loading the optional pg runtime. */
+/** Validate built-in driver shapes without creating a connection. */
 export function validateConnection(backend: string, value: unknown): void {
   if (backend === 'inMemory') {
     if (value === undefined) return;
@@ -148,91 +148,46 @@ export function validateConnection(backend: string, value: unknown): void {
       throw new TypeError('inMemory connection must be empty');
     return;
   }
-  if (backend !== 'redis' && backend !== 'postgres') return;
-  if (backend === 'postgres' && typeof value === 'string') {
-    if (!value.trim())
-      throw new TypeError('postgres connection string must not be empty');
-    return;
-  }
+  if (backend !== 'redis') return;
   const input = record(value, 'connection');
-  if (backend === 'postgres') {
-    const config =
-      typeof input.connect === 'function'
-        ? record(input.options, 'connection.options')
-        : input;
-    if (config.port !== undefined)
-      integer(config.port, 'connection.port', 1, 65535);
-    if (config.max !== undefined)
-      integer(config.max, 'connection.max', 1, MAX_QUEUE_COUNT);
-    if (
-      config.connectionString !== undefined &&
-      typeof config.connectionString !== 'string'
-    )
-      throw new TypeError('Invalid connection.connectionString');
-    for (const key of ['onConnect', 'verify', 'Client']) {
-      if (config[key] !== undefined)
-        throw new TypeError(`Unsupported connection extension: ${key}`);
+  const config =
+    typeof input.duplicate === 'function'
+      ? record(input.options ?? {}, 'connection.options')
+      : input;
+  const clusterConfig =
+    config.redisOptions === undefined
+      ? undefined
+      : record(config.redisOptions, 'connection.redisOptions');
+  if (config.keyPrefix || clusterConfig?.keyPrefix)
+    throw new TypeError('connection.keyPrefix is unsupported');
+  for (const settings of clusterConfig ? [config, clusterConfig] : [config]) {
+    if (settings.port !== undefined)
+      integer(settings.port, 'connection.port', 1, 65535);
+    for (const flag of [
+      'lazyConnect',
+      'enableOfflineQueue',
+      'skipVersionCheck',
+    ]) {
+      if (settings[flag] !== undefined && typeof settings[flag] !== 'boolean')
+        throw new TypeError(`Invalid connection.${flag}`);
     }
-    if (typeof input.connect === 'function')
+    if (
+      settings.maxRetriesPerRequest !== undefined &&
+      settings.maxRetriesPerRequest !== null
+    )
       integer(
-        config.connectionTimeoutMillis,
-        'connection.connectionTimeoutMillis',
-        1,
+        settings.maxRetriesPerRequest,
+        'connection.maxRetriesPerRequest',
+        0,
         MAX_QUEUE_COUNT,
       );
-    if (
-      config.schema !== undefined &&
-      (typeof config.schema !== 'string' ||
-        !/^[A-Za-z_][A-Za-z0-9_$]*$/u.test(config.schema) ||
-        config.schema.length > 63)
-    )
-      throw new TypeError('Invalid connection.schema');
-    if (
-      config.skipVersionCheck !== undefined &&
-      typeof config.skipVersionCheck !== 'boolean'
-    )
-      throw new TypeError('Invalid connection.skipVersionCheck');
   }
-  if (backend === 'redis') {
-    const config =
-      typeof input.duplicate === 'function'
-        ? record(input.options ?? {}, 'connection.options')
-        : input;
-    const clusterConfig =
-      config.redisOptions === undefined
-        ? undefined
-        : record(config.redisOptions, 'connection.redisOptions');
-    if (config.keyPrefix || clusterConfig?.keyPrefix)
-      throw new TypeError('connection.keyPrefix is unsupported');
-    for (const settings of clusterConfig ? [config, clusterConfig] : [config]) {
-      if (settings.port !== undefined)
-        integer(settings.port, 'connection.port', 1, 65535);
-      for (const flag of [
-        'lazyConnect',
-        'enableOfflineQueue',
-        'skipVersionCheck',
-      ]) {
-        if (settings[flag] !== undefined && typeof settings[flag] !== 'boolean')
-          throw new TypeError(`Invalid connection.${flag}`);
-      }
-      if (
-        settings.maxRetriesPerRequest !== undefined &&
-        settings.maxRetriesPerRequest !== null
-      )
-        integer(
-          settings.maxRetriesPerRequest,
-          'connection.maxRetriesPerRequest',
-          0,
-          MAX_QUEUE_COUNT,
-        );
-    }
-    if (config.port !== undefined)
-      integer(config.port, 'connection.port', 1, 65535);
-    if (config.db !== undefined)
-      integer(config.db, 'connection.db', 0, MAX_QUEUE_COUNT);
-    if (config.host !== undefined && typeof config.host !== 'string')
-      throw new TypeError('Invalid connection.host');
-    if (config.url !== undefined && typeof config.url !== 'string')
-      throw new TypeError('Invalid connection.url');
-  }
+  if (config.port !== undefined)
+    integer(config.port, 'connection.port', 1, 65535);
+  if (config.db !== undefined)
+    integer(config.db, 'connection.db', 0, MAX_QUEUE_COUNT);
+  if (config.host !== undefined && typeof config.host !== 'string')
+    throw new TypeError('Invalid connection.host');
+  if (config.url !== undefined && typeof config.url !== 'string')
+    throw new TypeError('Invalid connection.url');
 }

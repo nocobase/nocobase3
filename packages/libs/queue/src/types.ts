@@ -1,14 +1,8 @@
 /** Connection contracts for the application-scoped BullMQ service. */
 export interface QueueBackendConnections {
   redis: import('bullmq').ConnectionOptions;
-  postgres: PostgresConnectionOptions;
   inMemory: Record<string, never>;
 }
-
-export type PostgresConnectionOptions =
-  | string
-  | (import('pg').PoolConfig & { schema?: string; skipVersionCheck?: boolean })
-  | import('pg').Pool;
 
 export type QueueConnectionOptions<B extends string> =
   B extends keyof QueueBackendConnections

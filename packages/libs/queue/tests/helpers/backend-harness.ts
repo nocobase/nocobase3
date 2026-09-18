@@ -1,33 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { Redis, Cluster } from 'ioredis';
-import { Pool } from 'pg';
-import {
-  createPostgresBackend,
-  createRedisBackend,
-  runMigrations,
-} from 'bullmq';
+import { createRedisBackend } from 'bullmq';
 import type { BackendFactory, ConnectionOptions } from 'bullmq';
 
-export type TestBackend =
-  'inMemory' | 'redis' | 'cluster' | 'postgres' | 'postgres13';
+export type TestBackend = 'inMemory' | 'redis' | 'cluster';
 
 export interface BackendHarness {
   backend: TestBackend;
   namespace: string;
-  connection: ConnectionOptions | Pool;
+  connection: ConnectionOptions;
   factory: BackendFactory;
   close(): Promise<void>;
 }
 
 export function selectedBackend(): TestBackend {
   const backend = process.env.QUEUE_TEST_BACKEND;
-  if (
-    backend !== 'inMemory' &&
-    backend !== 'redis' &&
-    backend !== 'cluster' &&
-    backend !== 'postgres' &&
-    backend !== 'postgres13'
-  ) {
+  if (backend !== 'inMemory' && backend !== 'redis' && backend !== 'cluster') {
     throw new Error(
       'Run integration tests through scripts/test-integration.mjs with an explicit backend',
     );
@@ -60,35 +48,6 @@ export async function createBackendHarness(
       factory: memoryFactory,
       close: async () => {},
     };
-  }
-  if (backend === 'postgres' || backend === 'postgres13') {
-    const pool = new Pool({
-      host: '127.0.0.1',
-      port: port(process.env.QUEUE_TEST_PG_PORT),
-      user: 'postgres',
-      password: 'queue-test-only',
-      database: 'postgres',
-      connectionTimeoutMillis: 1000,
-      options: '-c search_path=bullmq -c statement_timeout=5000',
-    });
-    try {
-      const lease = await pool.connect();
-      try {
-        await runMigrations(lease);
-      } finally {
-        lease.release();
-      }
-      return {
-        backend,
-        namespace,
-        connection: pool,
-        factory: createPostgresBackend,
-        close: () => pool.end(),
-      };
-    } catch (error) {
-      await pool.end();
-      throw error;
-    }
   }
   const options = {
     maxRetriesPerRequest: null,

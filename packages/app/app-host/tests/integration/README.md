@@ -6,14 +6,11 @@ With concurrency one, each handler holds its claim on a separate barrier. Publis
 
 ## Run against externally supplied infrastructure
 
-Run these commands from the repository root, **one at a time**, only after the current queue integration owner releases the shared infrastructure slot. The runner never starts or stops Docker or a database. Supply ports for disposable loopback services; never point it at production. Redis uses database 0 without authentication. PostgreSQL uses database/user `postgres`, password `queue-test-only`, and the queue backend's default `bullmq` schema. The PostgreSQL service must permit the backend's normal migrations. Each run uses a fresh namespace; completed/failed jobs are removed, but backend queue metadata may remain until the external fixture is discarded.
+Run this command from the repository root only after the current queue integration owner releases the shared infrastructure slot. The runner never starts or stops Docker or a database. Supply the port for a disposable loopback Redis service; never point it at production. Redis uses database 0 without authentication. Each run uses a fresh namespace; completed/failed jobs are removed, but backend queue metadata may remain until the external fixture is discarded.
 
 ```bash
 QUEUE_TEST_REDIS_PORT=<externally-supplied-redis-port> \
   pnpm --filter @nocobase/app-host exec node tests/run-persistent-queue.mjs redis
-
-QUEUE_TEST_PG_PORT=<externally-supplied-postgres-port> \
-  pnpm --filter @nocobase/app-host exec node tests/run-persistent-queue.mjs postgres
 ```
 
 The runner builds Host first because these tests import `dist`, then runs only `vitest.queue-persistent.config.ts`. It rejects missing/invalid ports, unsupported targets (including memory), empty runs, failures, skips, and todos, and enforces a child-process timeout. `QUEUE_TEST_BACKEND` is set from the explicit positional argument rather than inherited. The ordinary `pnpm --filter @nocobase/app-host check` excludes this integration directory and does not establish persistent-backend acceptance.

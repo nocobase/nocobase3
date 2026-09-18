@@ -1,28 +1,9 @@
-import { EventEmitter } from 'node:events';
-import type { PgPool, PgPoolClient, PgQueryResult } from 'bullmq';
-import { PostgresConnection, PostgresQueueBackend } from 'bullmq';
 import type { BackendFactory } from 'bullmq';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueueService } from '../src/service.js';
 import type { QueueService } from '../src/service.js';
 
-class NoNetworkPool extends EventEmitter implements PgPool {
-  async connect(): Promise<PgPoolClient> {
-    throw new Error('Unexpected network acquisition');
-  }
-  async query<R>(): Promise<PgQueryResult<R>> {
-    throw new Error('Unexpected query');
-  }
-  async end(): Promise<void> {}
-}
-
-/** Full upstream backend declaration, with only startup lifecycle under test replaced. */
-class StartupBackend extends PostgresQueueBackend {
-  override async waitUntilReady(): Promise<void> {}
-  override async setQueueMeta(): Promise<number> {
-    return 1;
-  }
-}
+import { createInMemoryBackendFactory } from '../src/backends/in-memory/index.js';
 
 const services: QueueService[] = [];
 function service(backend = 'probe'): QueueService {
@@ -34,10 +15,7 @@ function service(backend = 'probe'): QueueService {
   return result;
 }
 function factory(): ReturnType<typeof vi.fn<BackendFactory>> {
-  return vi.fn<BackendFactory>((name, options) => {
-    const pool = new NoNetworkPool();
-    return new StartupBackend(new PostgresConnection(pool), name, options);
-  });
+  return vi.fn<BackendFactory>(createInMemoryBackendFactory());
 }
 afterEach(async () => {
   await Promise.allSettled(
@@ -56,7 +34,7 @@ describe('application-private queue service', () => {
     expect(backend).not.toHaveBeenCalled();
   });
 
-  it.each(['redis', 'postgres', 'inMemory', 'probe'])(
+  it.each(['redis', 'inMemory', 'probe'])(
     'rejects duplicate backend %s immediately',
     (name) => {
       const instance = service();

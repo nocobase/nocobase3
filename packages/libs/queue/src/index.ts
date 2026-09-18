@@ -12,7 +12,6 @@ export type {
 export type {
   Channel,
   JobIdProducer,
-  PostgresConnectionOptions,
   PublishOptions,
   QueueBackendConnections,
   QueueConnectionOptions,

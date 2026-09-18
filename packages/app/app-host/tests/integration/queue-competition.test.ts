@@ -11,13 +11,12 @@ import {
 import { AppRuntimeRegistry } from '../../dist/app-registry.js';
 
 const backend = process.env.QUEUE_TEST_BACKEND;
-if (backend !== 'redis' && backend !== 'postgres') {
+if (backend !== 'redis') {
   throw new Error(
-    'Select redis or postgres through tests/run-persistent-queue.mjs; memory is not persistent competition evidence',
+    'Select redis through tests/run-persistent-queue.mjs; memory is not persistent competition evidence',
   );
 }
-const portVariable =
-  backend === 'redis' ? 'QUEUE_TEST_REDIS_PORT' : 'QUEUE_TEST_PG_PORT';
+const portVariable = 'QUEUE_TEST_REDIS_PORT';
 const port = Number(process.env[portVariable]);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error(
@@ -35,24 +34,13 @@ it(`competes across actual Host applications on the same ${backend} target and p
   const configuration: AppQueueServiceConfig = {
     namespace: `host-competition-${randomUUID()}`,
     queueBackend: backend,
-    connection:
-      backend === 'redis'
-        ? {
-            host: '127.0.0.1',
-            port,
-            db: 0,
-            connectTimeout: 1000,
-            maxRetriesPerRequest: null,
-          }
-        : {
-            host: '127.0.0.1',
-            port,
-            user: 'postgres',
-            password: 'queue-test-only',
-            database: 'postgres',
-            connectionTimeoutMillis: 1000,
-            statement_timeout: 5000,
-          },
+    connection: {
+      host: '127.0.0.1',
+      port,
+      db: 0,
+      connectTimeout: 1000,
+      maxRetriesPerRequest: null,
+    },
     concurrency: 1,
     attempts: 1,
     removeOnComplete: true,

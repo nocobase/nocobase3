@@ -8,8 +8,7 @@ it.each([
   { args: ['redis', 'extra'], port: '12345', error: 'Usage:' },
   { args: ['redis'], port: '', error: 'QUEUE_TEST_REDIS_PORT' },
   { args: ['redis'], port: '65536', error: 'QUEUE_TEST_REDIS_PORT' },
-  { args: ['postgres'], port: '', error: 'QUEUE_TEST_PG_PORT' },
-  { args: ['postgres'], port: '1.5', error: 'QUEUE_TEST_PG_PORT' },
+  { args: ['redis'], port: '1.5', error: 'QUEUE_TEST_REDIS_PORT' },
 ])(
   'rejects invalid persistent-runner inputs before build or backend access: $args / $port',
   ({ args, port, error }) => {
@@ -25,7 +24,6 @@ it.each([
         env: {
           ...process.env,
           QUEUE_TEST_REDIS_PORT: port,
-          QUEUE_TEST_PG_PORT: port,
         },
       },
     );

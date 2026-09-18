@@ -1,49 +1,25 @@
-import { EventEmitter } from 'node:events';
-import { PostgresConnection, PostgresQueueBackend } from 'bullmq';
-import type {
-  BackendFactory,
-  PgPool,
-  PgPoolClient,
-  PgQueryResult,
-  QueueBaseOptions,
-} from 'bullmq';
+import type { BackendFactory, QueueBaseOptions } from 'bullmq';
+import { createInMemoryBackendFactory } from '../src/backends/in-memory/index.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueueService } from '../src/service.js';
 import type { QueueService } from '../src/service.js';
 
-class NoNetworkPool extends EventEmitter implements PgPool {
-  async connect(): Promise<PgPoolClient> {
-    throw new Error('Unexpected network acquisition');
-  }
-  async query<R>(): Promise<PgQueryResult<R>> {
-    throw new Error('Unexpected query');
-  }
-  async end(): Promise<void> {}
+function createResourceBackend(
+  name: string,
+  options: QueueBaseOptions,
+  ready: Promise<void>,
+) {
+  const backend = createInMemoryBackendFactory()(name, options);
+  const drained = vi.spyOn(backend, 'drain');
+  const closed = vi.spyOn(backend, 'close');
+  const waitUntilReady = backend.waitUntilReady.bind(backend);
+  vi.spyOn(backend, 'waitUntilReady').mockImplementation(async () => {
+    await ready;
+    await waitUntilReady();
+  });
+  return Object.assign(backend, { drained, closed });
 }
-class ResourceBackend extends PostgresQueueBackend {
-  readonly drained = vi.fn();
-  readonly closed = vi.fn();
-  constructor(
-    name: string,
-    options: QueueBaseOptions,
-    private readonly ready: Promise<void>,
-  ) {
-    super(new PostgresConnection(new NoNetworkPool()), name, options);
-  }
-  override async waitUntilReady(): Promise<void> {
-    await this.ready;
-  }
-  override async setQueueMeta(): Promise<number> {
-    return 1;
-  }
-  override async drain(delayed: boolean): Promise<void> {
-    this.drained(delayed);
-  }
-  override async close(): Promise<void> {
-    this.closed();
-    await super.close();
-  }
-}
+type ResourceBackend = ReturnType<typeof createResourceBackend>;
 const services: QueueService[] = [];
 afterEach(async () => {
   await Promise.allSettled(
@@ -53,7 +29,7 @@ afterEach(async () => {
 function fixture(queues = {}, ready: Promise<void> = Promise.resolve()) {
   const resources: ResourceBackend[] = [];
   const factory = vi.fn<BackendFactory>((name, options) => {
-    const result = new ResourceBackend(name, options, ready);
+    const result = createResourceBackend(name, options, ready);
     resources.push(result);
     return result;
   });
@@ -159,7 +135,7 @@ describe('queue service resource initialization', () => {
     });
     let resource: ResourceBackend | undefined;
     factory.mockImplementationOnce((name, options) => {
-      resource = new ResourceBackend(name, options, barrier);
+      resource = createResourceBackend(name, options, barrier);
       return resource;
     });
     const operation = service.manager('late').drain();
