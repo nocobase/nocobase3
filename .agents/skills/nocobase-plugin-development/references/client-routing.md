@@ -1,0 +1,205 @@
+# Client Routes, Navigation, and Overrides
+
+Use Client Routes for navigable browser pages. A plugin contributes all three Client surfaces through its single `routes` field and keeps each page behind a lazy `componentLoader()`.
+
+## Choose the surface
+
+| Need                                                 | API                      | Declared path | Final path         |
+| ---------------------------------------------------- | ------------------------ | ------------- | ------------------ |
+| Business, authentication, or other ordinary App page | `defineAppRoutes()`      | `/orders`     | `/orders`          |
+| Plugin administration or settings page               | `defineSettingsRoutes()` | `/orders`     | `/settings/orders` |
+| Tooling page that must disappear from production     | `defineDevRoutes()`      | `/orders`     | `/dev/orders`      |
+
+Paths are internal application paths. Do not include `/main`, another deployment base path, `/settings` in a Settings declaration, or `/dev` in a Dev declaration. Settings and Dev have separate path spaces, so the same relative path may exist in both.
+
+## Declare all Client Routes through one entry
+
+```ts
+import {
+  defineAppRoutes,
+  defineDevRoutes,
+  defineSettingsRoutes,
+  type AppClientRouteContribution,
+} from '@nocobase/app-client/plugins';
+
+const routes: readonly AppClientRouteContribution[] = [
+  defineAppRoutes([
+    {
+      name: 'orders',
+      path: '/orders',
+      auth: 'required',
+      navigation: { title: 'navigation.orders' },
+      breadcrumb: { title: 'breadcrumbs.orders' },
+      componentLoader: () => import('./pages/orders-page.js'),
+    },
+  ]),
+  defineSettingsRoutes([
+    {
+      name: 'orders',
+      path: '/orders',
+      navigation: { title: 'navigation.orders' },
+      access: { resource: 'orders.settings', action: 'read' },
+      componentLoader: () => import('./pages/orders-settings-page.js'),
+    },
+  ]),
+  defineDevRoutes([
+    {
+      name: 'orders',
+      path: '/orders',
+      navigation: { title: 'navigation.ordersDev' },
+      componentLoader: () => import('./pages/orders-dev-page.js'),
+    },
+  ]),
+];
+
+export default routes;
+```
+
+`defineDevRoutes()` contains its production guard. Call it unconditionally like `defineSettingsRoutes()`; a production Vite build replaces the environment flag and drops the contribution, page modules, and modules used only by those pages. Dev Routes are a build boundary, not a role-based authorization mechanism.
+
+Each page module must default-export a React component. Declaration modules remain side-effect-free, and `client:inspect` reads the declarations without invoking page loaders.
+
+## Authentication and authorization boundaries
+
+App Routes accept `auth: 'required' | 'guest' | 'optional'`. Omitted authentication defaults to `required`; child Routes inherit their ancestor's value and cannot change it. Reserved authentication paths such as `/login`, `/register`, `/forgot-password`, and `/reset-password` must use `guest`.
+
+Settings and Dev Routes require an authenticated user. A Settings page containing sensitive administration UI should also declare a stable `access` resource and action. If access is denied, the page is omitted from available navigation and its loader is not run.
+
+Client `auth` and `access` control navigation and page loading only. Every Server Route called by the page must install and test its own authentication and authorization. Similar Client and Server route names create no automatic connection.
+
+## Navigation, breadcrumbs, groups, and child pages
+
+`navigation` adds a static route to the matching menu. Its title is a key in the owning plugin namespace, and its optional icon is a component that accepts `className`, such as a Lucide icon. Dynamic or wildcard paths cannot declare navigation because they do not produce a static target.
+
+`breadcrumb` independently adds a page to the breadcrumb trail and may be used on a parameterized route. Menu and breadcrumb titles do not fall back to each other; declare both when the page belongs in both surfaces.
+
+A group has `name`, `navigation`, and non-empty `children`, may have a path prefix, and has no `componentLoader`. Groups may nest recursively and pathless groups organize navigation without changing descendant URLs. A page may also contain child pages, but its component must render an `Outlet` for the matched child to appear.
+
+```ts
+import { defineAppRoutes } from '@nocobase/app-client/plugins';
+
+export default defineAppRoutes([
+  {
+    name: 'business',
+    navigation: { title: 'navigation.business' },
+    children: [
+      {
+        name: 'orders',
+        path: '/orders',
+        navigation: { title: 'navigation.orders' },
+        componentLoader: () => import('./pages/orders.js'),
+        children: [
+          {
+            name: 'order-detail',
+            path: ':orderId',
+            breadcrumb: { title: 'breadcrumbs.orderDetail' },
+            componentLoader: () => import('./pages/order-detail.js'),
+          },
+        ],
+      },
+    ],
+  },
+]);
+```
+
+```tsx
+import type { ReactElement } from 'react';
+import { NavLink, Outlet } from 'react-router';
+
+export default function OrdersPage(): ReactElement {
+  return (
+    <section>
+      <NavLink to='new'>New order</NavLink>
+      <Outlet />
+    </section>
+  );
+}
+```
+
+Relative links resolve from the current route. Test direct navigation, refresh, browser back and forward, parent layout preservation, menu selection, denied access, and each intended Outlet.
+
+Settings and Dev support extending an existing top-level navigation group owned by another contribution. Set `extend: true`, use the owner's group `name`, and provide children; if a path is supplied it must match the owner's resolved path. This contract does not apply to App route groups.
+
+```ts
+defineSettingsRoutes([
+  {
+    name: 'security',
+    extend: true,
+    navigation: { title: 'navigation.security' },
+    children: [
+      {
+        name: 'audit-log',
+        path: '/audit-log',
+        navigation: { title: 'navigation.auditLog' },
+        componentLoader: () => import('./pages/audit-log-settings.js'),
+      },
+    ],
+  },
+]);
+```
+
+Group names on Settings and Dev surfaces are surface-wide identities, while App route identities are package-qualified. Avoid accidental name and normalized-path collisions; parameter names do not make structurally identical dynamic paths distinct.
+
+## Implement page Tabs through child routes
+
+Use child routes for page Tabs by default, including Settings and Dev pages. Declare each Tab in the parent's `children`, omit its `navigation` and `breadcrumb` when it is only a view within the parent, and render `Outlet` in the parent page. Use plugin-owned shadcn Tabs primitives and derive their controlled value from the matched URL; Tab changes navigate through React Router rather than updating independent selection state. Preserve the component's keyboard and focus behavior.
+
+Opening the exact parent URL redirects with replace to the business default when accessible, otherwise the first accessible Tab in display order, preserving `location.search`. While permission/data checks are loading, show loading content; if no Tab is accessible, show an empty or denied state without redirecting. Never redirect an explicit child URL merely because it is denied, unknown, or not the default. Ordinary Tab changes add history entries so back/forward restores selection.
+
+Use `useResolvedPath('.')` and `matchPath({ path: parentPath.pathname, end: true }, location.pathname)` to identify the exact parent entry. Do not infer it from an absent Outlet, a path prefix, or an invented route `index` field. Read the shared [child routes and Tabs implementation](../../../../packages/app/app-skills/skills/nocobase-app-development/references/client-child-routes.md) for the complete redirect example, access/loading behavior, file organization, and child presentation patterns. Its App-owned `@/` imports must be adapted to plugin-owned relative imports or deliberate public exports; do not copy the App's `PageContainer` import into a compiled plugin.
+
+For full navigation, breadcrumb, and page access contracts, read [pages, routes, and menus](../../../../packages/app/app-skills/skills/nocobase-app-development/references/client-pages-and-routes.md). Keep the declarations in the plugin's `client/routes.ts`. Refine resources support CRUD and do not create sidebar entries.
+
+## Replace a page without duplicating its Route
+
+When the App needs different UI for a plugin page, override only the component loader. Preserve the plugin's route identity, path, authentication, access, navigation, and children:
+
+```ts
+const override = {
+  routeId: '@nocobase/app-plugin-orders:orders',
+  componentLoader: () => import('./pages/custom-orders-page.js'),
+  componentEntry: './client/pages/custom-orders-page',
+};
+```
+
+The target ID must resolve to a page rather than a group, and a route may have only one final override. Include `componentEntry` so inspection and later maintainers can locate App-owned source. If an overridden parent page owns children, the replacement must preserve its `Outlet`.
+
+## Test declarations and behavior
+
+Plugin declaration tests should inspect the real contribution and invoke page loaders:
+
+```ts
+import { describe, expect, it } from 'vitest';
+
+import routes from '../../client/routes.js';
+
+describe('client routes', () => {
+  it('declares App and Settings pages with lazy components', async () => {
+    const [appContribution, settingsContribution] = routes;
+    if (
+      appContribution?.parent !== 'app' ||
+      settingsContribution?.parent !== 'settings'
+    ) {
+      throw new Error('Missing Client route contributions.');
+    }
+
+    expect(appContribution.routes[0]).toMatchObject({
+      name: 'orders',
+      path: '/orders',
+      auth: 'required',
+    });
+    await expect(
+      appContribution.routes[0]?.componentLoader?.(),
+    ).resolves.toHaveProperty('default');
+    await expect(
+      settingsContribution.routes[0]?.componentLoader?.(),
+    ).resolves.toHaveProperty('default');
+  });
+});
+```
+
+Also cover inherited auth, access denial, nested routing and Outlet behavior, plugin options when routes are factory-produced, override uniqueness, and any page-to-Server-API flow. Test anonymous, denied, and allowed API requests independently of Client navigation.
+
+Run the plugin's focused checks and the target App tests when registration or final routing changes. `pnpm --filter <target-app> client:inspect --json` helps diagnose final identities, paths, owners, loaders, groups, and overrides, but it does not load pages or prove authorization behavior.
+
+Use the maintained [route example declaration](../../../../packages/examples/app-plugin-routes-example/client/routes.ts), [route declaration tests](../../../../packages/examples/app-plugin-routes-example/tests/client/routes.test.ts), and [app-client child route tests](../../../../packages/app/app-client/tests/child-routes.test.ts) for current contracts.
