@@ -1,9 +1,14 @@
 import { createNodeVitestConfig } from '@nocobase/dev-config/vitest/node';
 
 const integrationFiles: Record<string, string[]> = {
-  inMemory: [],
-  redis: ['redis-connection', 'redis-contract', 'redis-native'],
-  cluster: ['redis-cluster', 'redis-cluster-shutdown'],
+  inMemory: ['rate-limit-contract'],
+  redis: [
+    'redis-connection',
+    'redis-contract',
+    'redis-native',
+    'rate-limit-contract',
+  ],
+  cluster: ['redis-cluster', 'redis-cluster-shutdown', 'rate-limit-contract'],
   postgres: ['postgres-*'],
   postgres13: ['postgres-*'],
 };
