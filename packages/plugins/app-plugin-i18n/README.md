@@ -46,6 +46,8 @@ import { useAppLocale } from '@nocobase/app-plugin-i18n/client';
 const { locale, locales, setLocale, switching } = useAppLocale();
 ```
 
+Both `useAppLocale()` and `useSyncServerLocale()` must run inside `AppClientRoot`. They use `useApiClient()` to send requests through the current application's shared API client, including its configured `api.baseURL` and request hooks. Tests rendering these hooks must provide application context too.
+
 | Field       | Meaning                                                                                |
 | ----------- | -------------------------------------------------------------------------------------- |
 | `locale`    | The language currently in use                                                          |

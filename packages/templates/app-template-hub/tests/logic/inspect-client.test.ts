@@ -219,8 +219,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-template-hub', order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
-      { packageName: '@nocobase/app-plugin-i18n', order: 4 },
-      { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
+      { packageName: '@nocobase/app-plugin-notification-provider', order: 4 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',

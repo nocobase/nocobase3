@@ -1,6 +1,6 @@
 import {
-  ClientApplicationContext,
   apiClientToken,
+  ClientApplicationContext,
   realtimeClientToken,
   type ClientApplication,
 } from '@nocobase/app-client';
@@ -250,12 +250,18 @@ function renderApplication(
   const authorizationClient = new AuthorizationClient({
     request: vi.fn(),
   } as never);
+  const apiClient = {
+    request: vi.fn(async ({ path }: { path: string }) =>
+      path === 'notifications/in-app/unread-count'
+        ? { count: 0 }
+        : { fallback: false, locale: 'en-US', requestedLocale: 'en-US' },
+    ),
+  };
   const app = {
     runtime: { settingsRouteTree: options.settingsRouteTree ?? [] },
     services: {
       resolve: (token: unknown) => {
-        if (token === apiClientToken)
-          return { request: async () => ({ count: 0 }) };
+        if (token === apiClientToken) return apiClient;
         if (token === realtimeClientToken)
           return { subscribe: () => () => {}, onOpen: () => () => {} };
         if (token === authenticationClientToken) return authClient;
