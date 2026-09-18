@@ -9,6 +9,8 @@ import { I18nRuntime } from '@nocobase/i18n';
 import { I18nProvider } from '@nocobase/i18n/client';
 import locales from '../../client/locales/index.js';
 import { MemoryRouter } from 'react-router';
+import userEvent from '@testing-library/user-event';
+import { TooltipProvider } from '../../client/components/ui/tooltip';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -59,7 +61,9 @@ it('caps the badge, follows the app base, refreshes unread state, and resets on 
   const renderButton = () => (
     <MemoryRouter basename='/demo' initialEntries={['/demo/']}>
       <I18nProvider runtime={runtime}>
-        <NotificationButton />
+        <TooltipProvider>
+          <NotificationButton />
+        </TooltipProvider>
       </I18nProvider>
     </MemoryRouter>
   );
@@ -87,26 +91,34 @@ it('caps the badge, follows the app base, refreshes unread state, and resets on 
   expect(screen.queryByRole('link')).not.toBeInTheDocument();
 });
 
-it('updates the notification label and tooltip when the language changes', async () => {
-  mocks.request.mockResolvedValue({ count: 2 });
-  render(
-    <I18nProvider runtime={runtime}>
-      <MemoryRouter>
-        <NotificationButton />
-      </MemoryRouter>
-    </I18nProvider>,
-  );
-  expect(
-    await screen.findByRole('link', { name: 'Notifications, 2 unread' }),
-  ).toHaveAttribute('title', 'Notifications, 2 unread');
-  await act(() => runtime.changeLanguage('zh-CN'));
-  expect(
-    screen.getByRole('link', { name: '通知中心，2 条未读' }),
-  ).toHaveAttribute('title', '通知中心，2 条未读');
-  mocks.request.mockResolvedValue({ count: 0 });
-  fireEvent(window, new Event('focus'));
-  expect(await screen.findByRole('link', { name: '通知中心' })).toHaveAttribute(
-    'title',
-    '通知中心',
-  );
-});
+it.each(['hover', 'keyboard'] as const)(
+  'shows a localized notification tooltip on %s',
+  async (method) => {
+    const user = userEvent.setup();
+    mocks.request.mockResolvedValue({ count: 2 });
+    render(
+      <I18nProvider runtime={runtime}>
+        <MemoryRouter>
+          <TooltipProvider>
+            <NotificationButton />
+          </TooltipProvider>
+        </MemoryRouter>
+      </I18nProvider>,
+    );
+    const link = await screen.findByRole('link', {
+      name: 'Notifications, 2 unread',
+    });
+    if (method === 'hover') await user.hover(link);
+    else await user.tab();
+    expect(await screen.findByText('Notifications, 2 unread')).toBeVisible();
+    expect(link).not.toHaveAttribute('title');
+    await act(() => runtime.changeLanguage('zh-CN'));
+    expect(screen.getByText('通知中心，2 条未读')).toBeVisible();
+    expect(link).toHaveAccessibleName('通知中心，2 条未读');
+    mocks.request.mockResolvedValue({ count: 0 });
+    fireEvent(window, new Event('focus'));
+    await waitFor(() => expect(link).toHaveAccessibleName('通知中心'));
+    expect(screen.getByText('通知中心')).toBeVisible();
+    expect(link).toHaveAttribute('href', '/notifications');
+  },
+);

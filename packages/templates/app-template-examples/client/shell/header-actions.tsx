@@ -3,6 +3,12 @@ import { useClientApplication } from '@nocobase/app-client';
 import { MonitorCog, Settings } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
 
 import {
   navigationPages,
@@ -25,33 +31,45 @@ export function HeaderActions(): ReactElement {
   const hasSettings = navigationPages(items).length > 0;
 
   return (
-    <div className='flex shrink-0 items-center gap-2'>
-      {/* Examples owns its notification center; keep its unread shortcut on every authenticated surface. */}
-      <NotificationButton />
-      {/* The dev entry sits left of settings and exists only while developing: a production build evaluates this to
+    <TooltipProvider>
+      <div className='flex shrink-0 items-center gap-2'>
+        {/* Examples owns its notification center; keep its unread shortcut on every authenticated surface. */}
+        <NotificationButton />
+        {/* The dev entry sits left of settings and exists only while developing: a production build evaluates this to
           false and drops the link along with the whole dev surface it points at. */}
-      {import.meta.env.DEV ? (
-        <Link
-          aria-label={t('dev.title', { defaultValue: 'Dev tools' })}
-          className={ACTION_LINK_CLASS}
-          title={t('dev.title', { defaultValue: 'Dev tools' })}
-          to='/dev'
-        >
-          <MonitorCog className='size-5' />
-        </Link>
-      ) : null}
-      {hasSettings ? (
-        <Link
-          aria-label={t('settings.title', { defaultValue: 'Settings' })}
-          className={ACTION_LINK_CLASS}
-          title={t('settings.title', { defaultValue: 'Settings' })}
-          to='/settings'
-        >
-          <Settings className='size-5' />
-        </Link>
-      ) : null}
-      <ThemeSettings />
-      <UserMenu />
-    </div>
+        {import.meta.env.DEV ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={<Link to='/dev' className={ACTION_LINK_CLASS} />}
+              aria-label={t('dev.componentExamples', {
+                defaultValue: 'Component examples',
+              })}
+            >
+              <MonitorCog className='size-5' />
+            </TooltipTrigger>
+            <TooltipContent side='bottom'>
+              {t('dev.componentExamples', {
+                defaultValue: 'Component examples',
+              })}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        {hasSettings ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={<Link to='/settings' className={ACTION_LINK_CLASS} />}
+              aria-label={t('settings.title', { defaultValue: 'Settings' })}
+            >
+              <Settings className='size-5' />
+            </TooltipTrigger>
+            <TooltipContent side='bottom'>
+              {t('settings.title', { defaultValue: 'Settings' })}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        <ThemeSettings />
+        <UserMenu />
+      </div>
+    </TooltipProvider>
   );
 }

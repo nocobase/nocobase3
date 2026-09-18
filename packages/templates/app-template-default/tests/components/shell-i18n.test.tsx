@@ -5,6 +5,7 @@ import {
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { I18nRuntime } from '@nocobase/i18n';
 import { I18nProvider } from '@nocobase/i18n/client';
+import userEvent from '@testing-library/user-event';
 import { act, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -93,20 +94,39 @@ describe('shell translations', () => {
       'href',
       'https://www.nocobase.com',
     );
-    expect(screen.getByRole('link', { name: '设置' })).toHaveAttribute(
-      'title',
-      '设置',
-    );
-    expect(screen.getByRole('link', { name: '开发工具' })).toHaveAttribute(
-      'title',
-      '开发工具',
-    );
+    const user = userEvent.setup();
+    const settings = screen.getByRole('link', { name: '设置' });
+    expect(settings).not.toHaveAttribute('title');
+    await user.hover(settings);
+    expect(
+      await screen.findByText('设置', {
+        selector: '[data-slot=tooltip-content]',
+      }),
+    ).toBeVisible();
+    await user.unhover(settings);
+    const examples = screen.getByRole('link', { name: '组件示例' });
+    expect(examples).toHaveAttribute('href', '/dev');
+    expect(examples).not.toHaveAttribute('title');
+    await user.hover(examples);
+    expect(
+      await screen.findByText('组件示例', {
+        selector: '[data-slot=tooltip-content]',
+      }),
+    ).toBeVisible();
     await act(() => runtime.changeLanguage('en-US'));
+    expect(
+      screen.getByText('Component examples', {
+        selector: '[data-slot=tooltip-content]',
+      }),
+    ).toBeVisible();
     expect(screen.getByText('AI application workspace')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
-      'title',
-      'Settings',
-    );
+    await user.unhover(examples);
+    act(() => settings.focus());
+    expect(
+      await screen.findByText('Settings', {
+        selector: '[data-slot=tooltip-content]',
+      }),
+    ).toBeVisible();
   });
 
   it.each([
