@@ -38,14 +38,14 @@ await queue.shutdown();
 
 NocoBase applications assemble `QueueServiceProvider` from `@nocobase/app-server/queue` and resolve the shared `queueServiceToken`. Registration is lazy; the provider calls `setup()` during start and `shutdown()` during application shutdown. Its namespace defaults to the application name. Plugins register handlers during boot and await the returned unregistration functions before releasing business dependencies. Plugins do not create or close their own shared workers.
 
-The application provider accepts an application-only `environment` option and logs `Queue is running in memory mode. Jobs will be lost on restart.` when a memory queue is actually initialized outside development. Standalone library users can supply logging and an `onInMemoryQueueInitialized` callback through service dependencies. The library does not read application or process-global environment state.
+Pass application-owned environment context through `app.addServiceProvider(QueueServiceProvider, { nodeEnv: runtime.env.NODE_ENV })`, not through queue configuration. The provider logs `Queue is running in memory mode. Jobs will be lost on restart.` when a memory queue is actually initialized unless `nodeEnv` is `develop` or `development`. Standalone library users can supply logging and an `onInMemoryQueueInitialized` callback through service dependencies. The library does not read application or process-global environment state.
 
 Legacy plugin `queue.jobs` declarations are rejected. Register explicit provider-owned handlers instead of scanning Job modules.
 
 ## Backends and isolation
 
 - **inMemory** is the default. Each service owns independent state, even when two services use the same namespace. It needs no connection and loses all jobs when the service is destroyed or the process exits.
-- **redis** uses Redis persistence and competing workers. Configure a connection explicitly, for example `{ queueBackend: 'redis', connection: { host: '127.0.0.1', port: 6379 } }`. Borrowed ioredis clients and clusters are adapted through owned duplicates; the original remains caller-owned. Redis Cluster keys use a queue-specific hash tag. Do not configure ioredis `keyPrefix`.
+- **redis** uses Redis persistence and competing workers. Configure a connection explicitly, for example `{ queueBackend: 'redis', connection: { host: '127.0.0.1', port: 6379 } }`. Borrowed ioredis clients/clusters, native node-redis clients, and official BullMQ Redis adapters use owned duplicates; the original remains caller-owned. Ordinary driver settings are preserved, while producer request bounds and Worker retry policy are service-owned. Redis Cluster keys use a queue-specific hash tag. Do not configure ioredis `keyPrefix`.
 - **postgres** uses the optional `pg` peer dependency. Install `pg` when selecting this backend. A connection string or supported connection configuration creates owned resources. A standard caller-owned `pg.Pool` is borrowed through scoped leases and is never ended by the service. PostgreSQL 13 and newer are integration targets.
 
 Namespace and queue name jointly determine storage identity. Services sharing a persistent backend and the same identity compete for jobs; they do not broadcast each job to every service. Inside one service, every handler registered for a queue receives a snapshot of that dispatch and executes concurrently. Registering the same function twice creates two registrations. Use the channel argument to select the business operation.
@@ -56,9 +56,13 @@ Global defaults are overlaid by `queues[queueName]`; `undefined` does not overri
 
 Defaults include concurrency `1`, attempts `0`, publication delay `0`, and priority `0`. Delay, backoff delay, rate-limit duration, and lifecycle timeout fields use milliseconds; retention age uses seconds. Attempts follow BullMQ's total-attempt semantics: `attempts: 2` allows at most two processing attempts, not two retries after the first attempt. Backoff supports the validated BullMQ fixed and exponential forms.
 
+Scheduling timestamps must not exceed `2199023255551` (`2**41 - 1`); publication validation checks delay and the maximum configured retry horizon. Time spent inside a handler can still make a later retry exceed that boundary. The memory backend rejects that transition before mutating the active job or its lock and reports a Worker error; this is not a terminal failed-job acknowledgement.
+
+Retention cleanup is lazy and partitioned by terminal state: completing a job does not prune failed jobs, and failing a job does not prune completed jobs. `KeepJobs.age` is measured in seconds. `KeepJobs.limit` caps age-based cleanup work on Redis and memory; PostgreSQL does not apply this cap. Count limits and age limits are not a background expiration service.
+
 `queue.manager(name).configure()` changes supported local worker/publication settings and shared rate metadata. It cannot replace a backend, connection, or namespace. Removing a rate limit uses `rateLimit: null`. A failed remote metadata update can occur after local changes; do not assume transactional configuration rollback.
 
-`registerBackend(name, factory)` accepts a complete BullMQ backend factory before setup freezes the registry. Factories must implement the complete backend interface; unsupported operations must fail explicitly rather than silently succeeding.
+`registerBackend(name, factory)` accepts a complete BullMQ backend factory before setup freezes the registry. Custom connections are opaque to the wrapper and validated by the factory. Construction must return promptly and validate before irreversible side effects. `waitUntilReady()` and pending operations must be interruptible through backend close/disconnect; close must be idempotent and settle actual resources. Factories must implement the complete backend interface; unsupported operations must fail explicitly rather than silently succeeding. A noncooperative factory causes failed initialization/cleanup with unresolved-resource diagnostics, not a memory fallback.
 
 ## IDs, batching, and uncertain acknowledgement
 
@@ -72,7 +76,7 @@ A synchronous `jobIdProducer(queue, channel, message)` can supply an ID. Duplica
 
 `drain({ delayed: true })` removes waiting and delayed jobs, not active handlers. Unregistering a handler prevents future dispatches and waits for its current dispatches. Never await your own unregistration from inside that handler: it would wait for itself. The same restriction applies to initiating and awaiting service shutdown from work that shutdown must drain.
 
-Shutdown is memoized, stops admission and drains active work within configured budgets. Defaults are `setupTimeoutMs: 10000`, `shutdownTimeoutMs: 30000`, and `cancellationGraceMs: 5000`; internal producer and cleanup budgets are separate. A timeout or close rejection is not proof that every underlying operation has stopped. Preserve cleanup diagnostics and do not immediately reuse an invalidated generation. Borrowed originals remain owned by the caller.
+Shutdown is memoized. It stops new consumer work while existing producers remain available during handler drain, then closes publication admission, settles accepted operations, and closes owned resources. Defaults are `setupTimeoutMs: 10000`, `shutdownTimeoutMs: 30000`, and `cancellationGraceMs: 5000`. The fixed producer request budget is separately `10000` ms, including preparation and lazy initialization; resource cleanup has a separate `5000` ms reserve. JavaScript cannot preempt synchronous getters, `toJSON`, ID generators, or custom factory code; expired work is rejected before subsequent dispatch once control returns. A timeout or close rejection is not proof that every underlying operation has stopped. Preserve cleanup diagnostics and do not immediately reuse an invalidated generation. Borrowed originals remain owned by the caller.
 
 ## Deployment considerations
 
