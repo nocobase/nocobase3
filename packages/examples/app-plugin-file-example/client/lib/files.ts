@@ -1,7 +1,9 @@
 import type { FileRecord } from '@nocobase/app-plugin-file/client';
 
+import { resolveOfficeOpenXmlFormat } from './office-format.js';
+
 export type FilePreviewKind =
-  'image' | 'pdf' | 'text' | 'audio' | 'video' | 'unsupported';
+  'image' | 'pdf' | 'text' | 'audio' | 'video' | 'ooxml' | 'unsupported';
 
 const ACTIVE_EXTENSIONS: ReadonlySet<string> = new Set([
   '.htm',
@@ -33,8 +35,13 @@ export function isSafeImage(file: FileRecord): boolean {
 export function previewKind(file: FileRecord): FilePreviewKind {
   const type = mimeType(file);
   const extension = fileExtension(file.filename);
-  if (ACTIVE_EXTENSIONS.has(extension) || type.endsWith('+xml'))
+  if (
+    ACTIVE_EXTENSIONS.has(extension) ||
+    type.endsWith('+xml') ||
+    ['text/html', 'text/xml', 'application/xml'].includes(type)
+  )
     return 'unsupported';
+  if (resolveOfficeOpenXmlFormat(file)) return 'ooxml';
   if (isSafeImage(file)) return 'image';
   if (type === 'application/pdf' || extension === '.pdf') return 'pdf';
   if (type.startsWith('audio/')) return 'audio';

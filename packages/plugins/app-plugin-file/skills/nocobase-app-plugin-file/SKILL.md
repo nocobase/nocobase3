@@ -69,7 +69,18 @@ const fileRoutes: ReturnType<typeof defineFileRepositoryApiRoutes> =
         accessPath: '/uploads/invoices',
         accessMode: 'stream',
         policy: {
-          read: { scope: true, fields: ['id', 'filename', 'ext', 'size'] },
+          read: {
+            scope: true,
+            fields: [
+              'id',
+              'filename',
+              'ext',
+              'mimeType',
+              'size',
+              'createdAt',
+              'updatedAt',
+            ],
+          },
           create: { scope: true },
           update: false,
           delete: { scope: true },
@@ -130,7 +141,7 @@ const rows = await files.findMany({ limit: 20 });
 await files.deleteOne({ filter: { id: record.id } });
 ```
 
-Inputs are a native File or a nonempty File array. Results are `{ record, createdTargets, version? }` and `{ createdCount, records }`. Upload already creates metadata. Client uploads accept an optional second `{ signal }` argument; abort does not undo a server commit. Use returned contentUrl directly: HTTP already adds the host prefix, such as `/main`. Custom selects need id and ext for contentUrl; UI also needs filename, mimeType, size and timestamps.
+Inputs are a native File or a nonempty File array. Results are `{ record, createdTargets, version? }` and `{ createdCount, records }`. Upload already creates metadata. Client uploads accept an optional second `{ signal }` argument; abort does not undo a server commit. Use returned contentUrl directly: HTTP already adds the host prefix, such as `/main`. Both the read Policy and custom selects must retain `id`, `ext`, `filename`, `mimeType`, `size`, `createdAt` and `updatedAt` when their results feed Registry UI. `id` and `ext` derive `contentUrl`; the remaining fields support thumbnails, preview selection and component refresh. Verify queried records, not only the immediate upload response. Storage `disk` and `key` need not be exposed to read-only UI.
 
 ## Registry components
 
@@ -142,7 +153,25 @@ Install component-ui for editable upload, list, thumbnail and preview source. Fr
 pnpm registry materialize --package @nocobase/app-plugin-file --item component-ui --output-root packages/templates/app-template-default
 ```
 
-Materialize copies source only. The App must provide React/React DOM, lucide-react, react-markdown, remark-gfm and shadcn button/dialog primitives. It adds no route or permissions. A hosted Registry JSON can instead be installed with shadcn add; npm publication alone supplies no Registry URL.
+Materialize copies source only. Run it from the source repository and replace `--output-root` with the target App path. The App must provide React/React DOM, lucide-react, react-markdown, remark-gfm and shadcn button/dialog primitives. It adds no route or permissions. A hosted Registry JSON can instead be installed with shadcn add, which reads the item's declared dependencies; npm publication alone supplies no Registry URL.
+
+For local materialization or an upgrade of an existing copy, install the OOXML viewer from the target App directory:
+
+```bash
+pnpm add -D --save-exact @silurus/ooxml@0.85.1
+```
+
+The viewer is an App client build dependency; do not add it to the deployed server's dependencies. Retain the registered file Client plugin for its locale resources. Merge Registry upgrades with App customizations instead of overwriting installed source.
+
+Use a version of `@nocobase/dev-config` whose `createPortalViteConfig` excludes `@silurus/ooxml` from dependency prebundling. For an older shared preset or custom Vite configuration, merge this entry into the existing configuration and preserve other exclusions:
+
+```ts
+optimizeDeps: {
+  exclude: ['@silurus/ooxml'],
+},
+```
+
+Restart the development server after changing the configuration. This exclusion preserves the viewer's `import.meta.url`-relative WASM paths during development; verify the parser WASM requests in both development and the served production build.
 
 Compose inside the started App's React context:
 
@@ -184,11 +213,21 @@ export function InvoiceAttachments(): ReactElement {
 
 FileUploadField takes a repository and controlled value/onChange; onStatusChange reports idle/uploading/error so forms can prevent incomplete submissions. Accept/maxSize/maxFiles are UI checks. removeOnDelete calls deleteOne, deleting metadata only; otherwise removal unlinks the selection. Read-only FileList, FileThumbnail, FilePreviewField and FilePreviewDialog use contentUrl without a repository prop. Import UI types from the installed recipe. Supply translated labels and adapt App-owned source as needed.
 
-Preview supports safe raster images, PDF via a fetched blob, text/Markdown, audio/video and Office fallback. HTML/SVG/XML previews and unsafe URL schemes are rejected. Office Online requires an internet-accessible URL and cannot use the App session. Same-origin fetches include credentials; external fetches need CORS. Bearer-only content policies need an App-owned authenticated blob adapter. Merge installed source upgrades with App customizations.
+### Preview and content access
+
+Preview supports safe raster images, PDF via a fetched blob, text/Markdown and audio/video. HTML/SVG/XML previews and unsafe URL schemes are rejected. DOCX, XLSX and PPTX use lazily loaded `@silurus/ooxml` viewers to render locally from `FileRecord.contentUrl`; their content is not sent to a third-party preview service. Legacy DOC/XLS/PPT and OpenDocument formats use Office Online, which requires an internet-accessible absolute URL and cannot use the App session.
+
+OOXML, PDF and text fetches use same-origin credentials. An App-owned content route protected by same-origin session cookies can therefore serve restricted previews, provided it checks the caller's record access. Cross-origin fetches omit credentials and require CORS; an external cookie-protected URL is not supported by this default path. The Repository API client's Bearer token is not automatically attached to content fetches.
+
+For Bearer-only content authorization, adapt the installed Registry source in the App. Add an authenticated content loader to the OOXML fetch path and `PreviewBody`'s PDF/text fetches, and adapt download and media/image paths as needed. Resolve authentication through the App's supported client/session services and send credentials only to the trusted content endpoint. Do not put tokens in `contentUrl`. If the adapter creates blob URLs, keep an App-owned trusted URL set, pass it to the relevant `resolveSafeFileUrl` calls, and revoke URLs when replaced or unmounted. Merely assigning a `blob:` URL to `FileRecord.contentUrl` is insufficient: the default components reject untrusted blob URLs.
+
+OOXML request or rendering failure displays an error and, when downloads are enabled, a download action. `download={false}` removes that action. This is not a second preview service or a guarantee that downloading the same inaccessible URL will succeed.
 
 ## Verify and handle failures
 
 Verify upload → query → contentUrl → identical downloaded bytes, including batch upload, resource aliases and host prefixes. After materialization run the consuming App's typecheck/build and exercise upload, cancel/retry, remove, download and preview. Restricted files need anonymous, forbidden-user and permitted-user tests against both API and content routes. Inspectors check registration only.
+
+For preview changes, verify each of DOCX/XLSX/PPTX with real files in development and a served production build. Check relative same-origin URLs, an authorized and unauthorized session, cross-origin CORS success/failure, failed requests and invalid documents, and `download={false}`. Close or switch files while loading and after a failure: pending requests must abort, viewers must be destroyed, and the next file must render without stale state. Unit mocks and a successful build do not establish document rendering fidelity.
 
 - Upload defaults are 5 MiB single / 20 MiB batch for the whole multipart body, including overhead. Direct Server uploads have no HTTP limit; UI maxSize checks an individual file. The Client supplies the multipart boundary.
 - BODY_TOO_LARGE (413): reduce request size or adjust route limits. INVALID_FILE/INVALID_FILES (400): send native File values and a nonempty batch.

@@ -756,6 +756,9 @@ importers:
 
   packages/examples/app-plugin-file-example:
     dependencies:
+      '@silurus/ooxml':
+        specifier: 0.85.1
+        version: 0.85.1
       lucide-react:
         specifier: 'catalog:'
         version: 0.487.0(react@19.2.8)
@@ -2606,6 +2609,9 @@ importers:
       '@nocobase/service-provider':
         specifier: workspace:*
         version: link:../../libs/service-provider
+      '@silurus/ooxml':
+        specifier: 0.85.1
+        version: 0.85.1
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -7820,6 +7826,9 @@ packages:
 
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
+
+  '@silurus/ooxml@0.85.1':
+    resolution: {integrity: sha512-7ovshP+AWYauvMokT2YWJDw8tspsRJiJPgdx8AYd9IIHo3X0uVUByIUlkwRPzNFjD6efiepQvva7+vQlt4c9gQ==}
 
   '@sinclair/typebox@0.34.52':
     resolution: {integrity: sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw==}
@@ -18355,6 +18364,8 @@ snapshots:
       '@types/hast': 3.0.5
 
   '@shikijs/vscode-textmate@10.0.2': {}
+
+  '@silurus/ooxml@0.85.1': {}
 
   '@sinclair/typebox@0.34.52': {}
 

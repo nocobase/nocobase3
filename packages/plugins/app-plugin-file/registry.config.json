@@ -14,7 +14,8 @@
         "remark-gfm@^4.0.1",
         "react@^19.0.0",
         "react-dom@^19.0.0",
-        "@nocobase/i18n@^1.0.0-beta.4"
+        "@nocobase/i18n@^1.0.0-beta.4",
+        "@silurus/ooxml@0.85.1"
       ],
       "registryDependencies": ["button", "dialog"],
       "docs": "Install editable file components, resolve clientFileRepositoryManagerToken from the App, and pass manager.repository(resourceName) to FileUploadField. Read components use FileRecord.contentUrl. The App owns routes, authorization and business relations. Upgrade installed source with a three-way merge.",

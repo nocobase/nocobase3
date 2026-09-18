@@ -1,4 +1,6 @@
 export default {
+  'files.ooxmlLoadFailed': 'Unable to render this Office Open XML file.',
+  'files.previewRequestFailed': 'Preview request failed ({{status}}).',
   uploadFailed: 'File upload failed.',
   fileLimitReached: 'The maximum number of files has been reached.',
   fileTooLarge: 'File exceeds the maximum size.',
