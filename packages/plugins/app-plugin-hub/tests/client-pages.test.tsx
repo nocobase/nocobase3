@@ -1,5 +1,11 @@
 import { Toaster, toast } from 'sonner';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import {
   MemoryRouter,
   Route,
@@ -60,6 +66,7 @@ vi.mock('@nocobase/i18n/client', () => ({
 import AppPage from '../client/pages/hub/app-page.js';
 import DevelopmentPage from '../client/pages/hub/tabs/development-page.js';
 import DeploymentsPage from '../client/pages/hub/tabs/deployments-page.js';
+import ReleasesPage from '../client/pages/hub/tabs/releases-page.js';
 import SettingsPage from '../client/pages/hub/tabs/settings-page.js';
 import { Detail } from '../client/pages/hub/detail.js';
 import { ApplicationsCatalog } from '../client/pages/hub-page.js';
@@ -730,6 +737,59 @@ describe('Hub client pages', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('accepts a dragged release artifact in the upload dialog', async () => {
+    mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+      if (path === 'hub/apps/customer') {
+        return Promise.resolve({ data: detail() });
+      }
+      if (path === 'hub/apps/customer/releases') {
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(
+      <MemoryRouter initialEntries={['/apps/customer/releases']}>
+        <Routes>
+          <Route path='/apps'>
+            <Route path=':appId' element={<AppPage />}>
+              <Route path='releases' element={<ReleasesPage />} />
+            </Route>
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Upload release' }),
+    );
+    const zone = await screen.findByText('Choose a .tar.gz release artifact');
+
+    // A drag carrying no file has nothing to upload, so it neither highlights the zone nor clears the selection.
+    fireEvent.dragOver(zone, {
+      dataTransfer: { files: [], types: ['text/plain'] },
+    });
+    expect(screen.queryByText('Drop to upload')).not.toBeInTheDocument();
+    fireEvent.dragOver(zone, { dataTransfer: { files: [], types: ['Files'] } });
+    expect(screen.getByText('Drop to upload')).toBeInTheDocument();
+
+    const file = new File(['artifact'], 'dist.tar.gz', {
+      type: 'application/gzip',
+    });
+    fireEvent.drop(zone, { dataTransfer: { files: [file], types: ['Files'] } });
+
+    expect(await screen.findByText('dist.tar.gz')).toBeInTheDocument();
+    expect(screen.queryByText('Drop to upload')).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Upload release',
+      }),
+    ).toBeEnabled();
+
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [file], types: ['text/plain'] },
+    });
+    expect(screen.getByText('dist.tar.gz')).toBeInTheDocument();
+  });
   it('defaults the deploy dialog to the newest release rather than the running one', async () => {
     // Two uploads of the same version: "release-2" is newer, "release-1" is what the App is running (see detail()).
     const release = (id: string, createdAt: string): ReleaseRecord => ({

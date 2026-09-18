@@ -3,7 +3,13 @@ import { Badge } from '../../components/ui/badge.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { useTranslation } from '@nocobase/i18n/client';
-import { type ChangeEvent, type ReactElement } from 'react';
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type ReactElement,
+} from 'react';
 import type { AppDetail } from './types.js';
 import { Empty, AppDialog } from './shared.js';
 import { formatDate, formatBytes } from './utils.js';
@@ -103,6 +109,26 @@ export function UploadReleaseDialog({
   readonly onUpload: () => void;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => {
+    // A file dropped beside the zone would otherwise leave the Hub to open or download it, losing this dialog, so
+    // every drop while it is open is claimed here and only the zone acts on one.
+    const claim = (event: Event): void => {
+      if (
+        carriesFiles(
+          (event as Event & { dataTransfer?: DataTransfer }).dataTransfer,
+        )
+      ) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener('dragover', claim);
+    document.addEventListener('drop', claim);
+    return () => {
+      document.removeEventListener('dragover', claim);
+      document.removeEventListener('drop', claim);
+    };
+  }, []);
   return (
     <AppDialog
       title={t('releases.uploadTitle', { defaultValue: 'Upload release' })}
@@ -125,16 +151,40 @@ export function UploadReleaseDialog({
       }
     >
       <Button
-        className='h-auto min-h-28 w-full flex-col gap-2 border-dashed'
+        className={`h-auto min-h-28 w-full flex-col gap-2 border-dashed ${dragging ? 'border-primary bg-primary/5' : ''}`}
+        onDragLeave={(event: DragEvent<HTMLElement>) => {
+          // Moving between the zone's own children raises dragleave too; only leaving the zone ends the highlight.
+          if (
+            event.currentTarget.contains(event.relatedTarget as Node | null)
+          ) {
+            return;
+          }
+          setDragging(false);
+        }}
+        onDragOver={(event: DragEvent<HTMLElement>) => {
+          if (!carriesFiles(event.dataTransfer)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = busy ? 'none' : 'copy';
+          if (!busy) setDragging(true);
+        }}
+        onDrop={(event: DragEvent<HTMLElement>) => {
+          if (!carriesFiles(event.dataTransfer)) return;
+          event.preventDefault();
+          setDragging(false);
+          if (busy) return;
+          onArtifact(event.dataTransfer.files[0]);
+        }}
         render={<label className='cursor-pointer' />}
         variant='outline'
       >
         <CloudUpload className='size-5' />
         <span>
           {artifact?.name ??
-            t('releases.chooseArtifact', {
-              defaultValue: 'Choose a .tar.gz release artifact',
-            })}
+            (dragging
+              ? t('releases.dropArtifact', { defaultValue: 'Drop to upload' })
+              : t('releases.chooseArtifact', {
+                  defaultValue: 'Choose a .tar.gz release artifact',
+                }))}
         </span>
         <Input
           accept='.gz,.tgz,application/gzip'
@@ -147,4 +197,9 @@ export function UploadReleaseDialog({
       </Button>
     </AppDialog>
   );
+}
+
+/** A drop only means an artifact when it carries files; text and links belong to the browser. */
+function carriesFiles(dataTransfer: DataTransfer | null | undefined): boolean {
+  return Boolean(dataTransfer?.types?.includes('Files'));
 }

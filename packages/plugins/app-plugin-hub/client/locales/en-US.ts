@@ -284,6 +284,7 @@ const enUS = {
     uploadDescription:
       'Upload a built application artifact. Version and config.example.yml or config.example.yaml are detected automatically.',
     chooseArtifact: 'Choose a .tar.gz release artifact',
+    dropArtifact: 'Drop to upload',
     uploading: 'Uploading…',
     cancel: 'Cancel',
   },
