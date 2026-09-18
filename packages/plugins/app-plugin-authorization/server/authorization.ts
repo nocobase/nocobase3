@@ -1,11 +1,5 @@
-import {
-  settingsResource,
-  settingsApi,
-} from './management/settings-resource.js';
-import {
-  createPermissionSetHandler,
-  PERMISSION_SETS_ROUTE_PATH,
-} from './management/permission-sets.js';
+import { settingsApi } from './management/settings-resource.js';
+import { installPermissionSetAdministration } from './management/authorization.js';
 import './subjects.js';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import {
@@ -89,8 +83,8 @@ export function createAppAuthorization(
     },
     defaultSet: sets?.defaultSet ?? DEFAULT_DEFAULT_SET,
   });
-  // The two built-in plugins lead the tuple so their apis are inferred rather
-  // than asserted: `authz.permissionSets` and `authz.db` are statically typed.
+  // The built-in plugins lead the tuple so their apis are inferred rather
+  // than asserted: `authz.permissionSets`, `authz.db` and `authz.pages` are statically typed.
   const plugins: readonly [
     PermissionSetsPlugin<DatabaseConnection>,
     DatabaseAuthorizationPlugin,
@@ -101,114 +95,9 @@ export function createAppAuthorization(
       ...permissionSetPlugin,
       setup(authz) {
         permissionSetPlugin.setup?.(authz);
-        authz.resourceTypes.add(settingsResource);
-
-        authz.resourceGroups.add({
-          name: 'authorization',
-          title: { key: 'options.settingsModules.authorization' },
-          category: 'administration',
-        });
-        authz.resources.add({
-          name: 'authorization.permission-sets',
-          title: { key: 'options.settings.permission-sets' },
-          group: 'authorization',
-          actions: [
-            {
-              name: 'read',
-              title: { key: 'options.actions.read' },
-              grants: [
-                settingsApi.grant('authorization.permission-sets', ['read']),
-              ],
-            },
-            {
-              name: 'create',
-              title: { key: 'options.actions.create' },
-              grants: [
-                settingsApi.grant('authorization.permission-sets', ['create']),
-              ],
-            },
-            {
-              name: 'update',
-              title: { key: 'options.actions.update' },
-              grants: [
-                settingsApi.grant('authorization.permission-sets', ['update']),
-              ],
-            },
-            {
-              name: 'delete',
-              title: { key: 'options.actions.delete' },
-              grants: [
-                settingsApi.grant('authorization.permission-sets', ['delete']),
-              ],
-            },
-            {
-              name: 'assign',
-              title: { key: 'options.actions.assign' },
-              grants: [
-                settingsApi.grant('authorization.permission-sets', ['assign']),
-              ],
-            },
-          ],
-        });
-        authz.resources.add({
-          name: 'authorization.inspector',
-          title: { key: 'options.settings.inspector' },
-          group: 'authorization',
-          actions: [
-            {
-              name: 'inspect',
-              title: { key: 'options.actions.inspect' },
-              grants: [
-                settingsApi.grant('authorization.inspector', ['inspect']),
-              ],
-            },
-          ],
-        });
-        authz.routes.add(
-          PERMISSION_SETS_ROUTE_PATH,
-          createPermissionSetHandler(
-            permissionSetPlugin.authorizationApi!.permissionSets,
-            (input) => {
-              for (const grant of input.grants)
-                for (const action of grant.actions)
-                  if (grant.resource.type === 'resource') {
-                    const expanded = authz.resources.expand({
-                      source: { plugin: 'permission-sets', id: input.key },
-                      resource: grant.resource,
-                      ...action,
-                    });
-                    for (const target of expanded) {
-                      if (target.resource.type !== 'database.collection')
-                        continue;
-                      const policies = target.policy?.recordAccess;
-                      if (!Array.isArray(policies)) continue;
-                      for (const value of policies) {
-                        const key: unknown =
-                          typeof value === 'string'
-                            ? value
-                            : value && typeof value === 'object'
-                              ? Reflect.get(value, 'key')
-                              : undefined;
-                        if (typeof key !== 'string')
-                          throw new TypeError('Invalid record access policy');
-                        const policy = authz.recordAccess.get(key);
-                        if (
-                          !policy ||
-                          !policy.resources.some(
-                            (resource) =>
-                              resource.type === target.resource.type &&
-                              (resource.id === '*' ||
-                                resource.id === target.resource.id),
-                          )
-                        )
-                          throw new TypeError(
-                            'Unknown or inapplicable record access policy',
-                          );
-                      }
-                    }
-                  }
-            },
-          ),
+        installPermissionSetAdministration(
+          authz,
+          permissionSetPlugin.authorizationApi!.permissionSets,
         );
       },
     },

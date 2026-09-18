@@ -38,18 +38,6 @@ export function pages(): PagesPlugin {
           {
             name: 'access',
             async authorize(request, context) {
-              if (request.action !== 'access') {
-                return {
-                  effect: 'deny',
-                  reasons: [
-                    {
-                      code: 'PAGE_ACTION_NOT_SUPPORTED',
-                      message: `Page authorization does not support action "${request.action}"`,
-                      plugin: 'pages',
-                    },
-                  ],
-                };
-              }
               const grants = await context.grants.resolve({
                 principal: request.principal,
                 subjects: request.subjects,
@@ -62,7 +50,7 @@ export function pages(): PagesPlugin {
               return staticGrants.length > 0
                 ? {
                     effect: 'permit',
-                    reasons: staticGrants.map((grant) => grantReason(grant)),
+                    reasons: staticGrants.map(grantReason),
                   }
                 : {
                     effect: 'deny',
