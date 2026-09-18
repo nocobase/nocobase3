@@ -16,7 +16,7 @@ function fixture() {
   });
   const acquisition = { promise, resolve, reject };
   const connect = vi
-    .spyOn(owner, 'connect')
+    .spyOn(Pool.prototype, 'connect')
     .mockImplementation(() => acquisition.promise);
   const end = vi.spyOn(owner, 'end');
   const ownerError = vi.fn();
