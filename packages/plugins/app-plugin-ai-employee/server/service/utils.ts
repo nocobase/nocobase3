@@ -31,6 +31,15 @@ export function requiredString(value: unknown, name: string): string {
   throw badRequest(`${name} is required`);
 }
 
+export function resourceI18n(
+  value: unknown,
+): { namespace: string } | undefined {
+  if (value === undefined) return undefined;
+  const record = asRecord(value);
+  if (!record) throw badRequest('i18n must be an object');
+  return { namespace: requiredString(record.namespace, 'i18n.namespace') };
+}
+
 export function stringArray(value: unknown): string[] | undefined {
   if (value == null) return undefined;
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string'))

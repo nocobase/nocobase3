@@ -14,6 +14,7 @@ export default defineTools<AgentContext<{}, {}>>({
   scope: 'GENERAL',
   requiresContext: false,
   defaultPermission: 'ALLOW',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
     title: 'Chart generator',
     about:

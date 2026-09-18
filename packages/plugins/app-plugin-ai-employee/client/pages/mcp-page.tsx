@@ -12,6 +12,7 @@ import {
   type MCPTransport,
 } from '../mcp-service.js';
 import { useT } from '../locales/index.js';
+import { useCatalogDisplay } from '../catalog-display.js';
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
 import {
   Table,
@@ -260,11 +261,16 @@ function ToolsPanel({
   tools: MCPToolEntry[];
   t: (key: string) => string;
 }): ReactElement {
+  const { toolTitle, compareTitles } = useCatalogDisplay();
   const pageSize = 8;
   const [page, setPage] = useState(1);
   const [updatingTool, setUpdatingTool] = useState<string>();
   const pageCount = Math.ceil(tools.length / pageSize);
-  const visibleTools = tools.slice((page - 1) * pageSize, page * pageSize);
+  const visibleTools = [...tools]
+    .sort((left, right) =>
+      compareTitles(toolTitle(left), toolTitle(right), left.name, right.name),
+    )
+    .slice((page - 1) * pageSize, page * pageSize);
   const updatePermission = async (
     tool: MCPToolEntry,
     permission: 'ASK' | 'ALLOW',
@@ -295,7 +301,7 @@ function ToolsPanel({
         {visibleTools.map((tool) => (
           <li key={tool.name} className='p-3'>
             <div className='flex items-start justify-between gap-3'>
-              <div className='font-medium'>{tool.title}</div>
+              <div className='font-medium'>{toolTitle(tool)}</div>
               <div className='flex shrink-0 items-center gap-1 text-xs text-muted-foreground'>
                 <span>{t('Permission')}</span>
                 <Button

@@ -147,6 +147,11 @@ export default defineTools({
   scope: 'SPECIFIED',
   execution: 'backend',
   defaultPermission: 'ASK',
+  i18n: { namespace: '@acme/sales-app' }, // Use this App's actual package.json name.
+  introduction: {
+    title: 'Look up lead',
+    about: 'Find a lead available to the current user.',
+  },
   definition: {
     name: 'lookup-lead',
     description: 'Look up one lead authorized for the current user.',
@@ -160,6 +165,31 @@ export default defineTools({
 ```
 
 Explicitly choose scope, execution, and permission. Validate input, enforce business authorization inside the tool, and return serializable output. Use `GENERAL` only when every employee should see it; otherwise activate a `SPECIFIED` tool from an employee or skill.
+
+## Tool and Skill display translations
+
+Declare top-level `i18n: { namespace: '<actual package.json name>' }` on every Tool or Skill that opts into translated display metadata. The namespace is the owning plugin's or application's actual package name, not the AI Employee plugin that displays it, a Skill name, or an application namespace sentinel. Factories and dynamic Tool providers must put this metadata on each returned resource. A Skill and each Tool it references are independent resources: a Tool keeps its own namespace and must not inherit the Skill's namespace.
+
+Tool `introduction.title` and `introduction.about`, and Skill `introduction.title` and `description`, contain readable English source text. These fields are the explicit exception to the usual semantic translation-key rule: use the entire exact English text as a flat locale key, including punctuation, spaces, and capitalization. Do not substitute semantic identifiers or `{{t(...)}}` templates. Do not add a Skill `about` field for this purpose.
+
+Register translations through the owner's Client locale contribution in `client/locales/`, not `server/locales/`. Every source key requires an explicit English-to-English entry in `client/locales/en-US.ts` as well as translated entries in other locales; readable fallback text does not replace the English entry. For the Tool above, the App's locale files include:
+
+```ts
+// client/locales/en-US.ts
+export default {
+  'Look up lead': 'Look up lead',
+  'Find a lead available to the current user.':
+    'Find a lead available to the current user.',
+};
+
+// client/locales/zh-CN.ts
+export default {
+  'Look up lead': '查找线索',
+  'Find a lead available to the current user.': '查找当前用户可访问的线索。',
+};
+```
+
+Translation is display-only. Keep stable names, Tool `definition.description`, schemas, Skill instruction bodies, persisted values, and model-facing Skill descriptions unchanged. Resources without namespace metadata and missing translations display their original source text. Tool and Skill catalogs sort by localized display title in the current locale, with the stable resource `name` as the tie-breaker; changing locale must update both labels and ordering. See [Exact contracts](references/contracts.md#tool-and-skill-display-i18n) for the Skill frontmatter and ownership rules.
 
 ## Skill, MCP, and LLM services
 

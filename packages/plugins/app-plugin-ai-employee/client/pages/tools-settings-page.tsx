@@ -10,7 +10,7 @@ import { ToolListContent } from '../components/tool-list-content.js';
 import { Input } from '../../registry/nocobase-ai/shared/ui/input.js';
 import { ToolDetailsDrawer } from '../components/tool-details-drawer.js';
 import { useT } from '../locales/index.js';
-import { compareResourceNames } from '../resource-name-order.js';
+import { useCatalogDisplay } from '../catalog-display.js';
 import { SettingsShell } from '../settings-shell.js';
 import {
   listManagedTools,
@@ -25,6 +25,7 @@ type ToolsState =
 export default function ToolsSettingsPage(): ReactElement {
   const api = useApiClient();
   const t = useT();
+  const { toolTitle, toolAbout, compareTitles, locale } = useCatalogDisplay();
   const [state, setState] = useState<ToolsState>({ status: 'loading' });
   const [query, setQuery] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -44,19 +45,21 @@ export default function ToolsSettingsPage(): ReactElement {
     return () => controller.abort();
   }, [api, attempt]);
 
-  const keyword = query.trim().toLocaleLowerCase();
+  const keyword = query.trim().toLocaleLowerCase(locale);
   const tools =
     state.status === 'ready'
       ? state.tools
           .filter((tool) =>
-            [tool.name, tool.title, tool.about].some((value) =>
-              value.toLocaleLowerCase().includes(keyword),
+            [tool.name, toolTitle(tool), toolAbout(tool)].some((value) =>
+              value.toLocaleLowerCase(locale).includes(keyword),
             ),
           )
           .sort((left, right) =>
-            compareResourceNames(
-              left.title.trim() || left.name,
-              right.title.trim() || right.name,
+            compareTitles(
+              toolTitle(left),
+              toolTitle(right),
+              left.name,
+              right.name,
             ),
           )
       : [];
@@ -122,7 +125,7 @@ export default function ToolsSettingsPage(): ReactElement {
             className='min-w-0 divide-y overflow-hidden rounded-xl border bg-card'
           >
             {tools.map((tool) => {
-              const title = tool.title.trim() || tool.name;
+              const title = toolTitle(tool);
               return (
                 <li key={tool.name} className='min-w-0'>
                   <button
@@ -134,8 +137,8 @@ export default function ToolsSettingsPage(): ReactElement {
                   >
                     <ToolListContent
                       name={tool.name}
-                      title={tool.title}
-                      about={tool.about}
+                      title={title}
+                      about={toolAbout(tool)}
                     />
                     <ChevronRight
                       aria-hidden='true'

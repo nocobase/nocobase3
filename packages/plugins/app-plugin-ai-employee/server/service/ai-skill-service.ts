@@ -14,6 +14,7 @@ import {
   notFound,
   optionalString,
   requiredString,
+  resourceI18n,
   stringArray,
 } from './utils.js';
 
@@ -80,6 +81,7 @@ export class AISkillService {
           return tool
             ? {
                 name: tool.definition.name,
+                ...(tool.i18n ? { i18n: tool.i18n } : {}),
                 title: tool.introduction?.title || tool.definition.name,
                 description: tool.definition.description,
                 about: tool.introduction?.about ?? '',
@@ -97,6 +99,7 @@ export class AISkillService {
     );
     return {
       name: skill.name,
+      ...(skill.i18n ? { i18n: skill.i18n } : {}),
       title: skill.introduction?.title || skill.name,
       description: skill.description,
       tools,
@@ -118,6 +121,7 @@ export class AISkillService {
     await this.ai.skillsManager.registerSkills({
       name,
       scope: normalizeScope(record.scope ?? current?.scope),
+      i18n: resourceI18n(record.i18n) ?? current?.i18n,
       description:
         optionalString(record.description) ?? current?.description ?? '',
       content:

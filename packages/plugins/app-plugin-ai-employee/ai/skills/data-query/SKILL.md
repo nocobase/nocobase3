@@ -1,5 +1,7 @@
 ---
 name: data-query
+i18n:
+  namespace: '@nocobase/app-plugin-ai-employee'
 introduction:
   title: Data query
 scope: GENERAL

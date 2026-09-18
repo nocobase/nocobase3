@@ -166,8 +166,8 @@ describe('Skills settings page', () => {
       footer.querySelectorAll('[data-slot="badge"]'),
     ).filter((badge) => !badge.closest('[aria-hidden="true"]'));
     expect(badges.map((badge) => badge.textContent)).toEqual([
-      'Query records',
       'missingTool',
+      'Query records',
     ]);
     for (const badge of badges) {
       expect(badge).toHaveAttribute('data-variant', 'secondary');

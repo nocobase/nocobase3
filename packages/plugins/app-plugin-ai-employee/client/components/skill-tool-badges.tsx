@@ -1,12 +1,29 @@
-import { useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import {
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
 import { Badge } from '../../registry/nocobase-ai/shared/ui/badge.js';
 import type { ManagedSkillSummary } from '../skills-management-service.js';
+import { useCatalogDisplay } from '../catalog-display.js';
 
 export function SkillToolBadges({
-  tools,
+  tools: sourceTools,
 }: {
   tools: ManagedSkillSummary['tools'];
 }): ReactElement {
+  const { toolTitle, compareTitles } = useCatalogDisplay();
+  const tools = useMemo(
+    () =>
+      sourceTools
+        .map((tool) => ({ name: tool.name, title: toolTitle(tool) }))
+        .sort((left, right) =>
+          compareTitles(left.title, right.title, left.name, right.name),
+        ),
+    [sourceTools, toolTitle, compareTitles],
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const [visibleCount, setVisibleCount] = useState(tools.length);

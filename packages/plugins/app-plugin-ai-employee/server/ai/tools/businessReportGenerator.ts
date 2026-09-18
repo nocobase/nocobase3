@@ -11,6 +11,7 @@ export default defineTools({
   execution: 'backend',
   requiresContext: false,
   defaultPermission: 'ALLOW',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
     title: 'Business report generator',
     about:

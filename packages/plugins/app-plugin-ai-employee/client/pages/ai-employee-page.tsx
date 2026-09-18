@@ -54,7 +54,7 @@ import {
   effectiveToolNames,
 } from '../employee-tool-selection.js';
 import { useT } from '../locales/index.js';
-import { compareResourceNames } from '../resource-name-order.js';
+import { useCatalogDisplay } from '../catalog-display.js';
 
 type DetailTab =
   'profile' | 'role' | 'models' | 'skills' | 'tools' | 'knowledge';
@@ -355,6 +355,8 @@ function ModelMultiSelect({
 export default function AIEmployeePage(): ReactElement {
   const api = useApiClient();
   const t = useT();
+  const { skillTitle, skillDescription, toolTitle, toolAbout, compareTitles } =
+    useCatalogDisplay();
   const { open } = useNotification();
   const [employees, setEmployees] = useState<AIEmployeeRecord[]>([]);
   const [employeeListOpen, setEmployeeListOpen] = useState(false);
@@ -691,9 +693,11 @@ export default function AIEmployeePage(): ReactElement {
       ...(draft?.skillSettings.enabledSkills ?? []),
     ]),
   ].sort((left, right) =>
-    compareResourceNames(
-      skillsByName.get(left)?.title?.trim() || left,
-      skillsByName.get(right)?.title?.trim() || right,
+    compareTitles(
+      skillTitle(skillsByName.get(left) ?? { name: left }),
+      skillTitle(skillsByName.get(right) ?? { name: right }),
+      left,
+      right,
     ),
   );
   const enabledTools = new Set(
@@ -708,9 +712,11 @@ export default function AIEmployeePage(): ReactElement {
       ...enabledTools,
     ]),
   ].sort((left, right) =>
-    compareResourceNames(
-      toolsByName.get(left)?.title?.trim() || left,
-      toolsByName.get(right)?.title?.trim() || right,
+    compareTitles(
+      toolTitle(toolsByName.get(left) ?? { name: left }),
+      toolTitle(toolsByName.get(right) ?? { name: right }),
+      left,
+      right,
     ),
   );
 
@@ -1045,7 +1051,7 @@ export default function AIEmployeePage(): ReactElement {
                     >
                       {skillNames.map((name) => {
                         const item = skillsByName.get(name);
-                        const title = item?.title?.trim() || name;
+                        const title = skillTitle(item ?? { name });
                         return (
                           <li
                             key={name}
@@ -1060,7 +1066,7 @@ export default function AIEmployeePage(): ReactElement {
                               ) : null}
                               {item?.description ? (
                                 <p className='text-sm text-muted-foreground'>
-                                  {item.description}
+                                  {skillDescription(item)}
                                 </p>
                               ) : null}
                               {!item && !skillsLoading && !skillsError ? (
@@ -1121,7 +1127,7 @@ export default function AIEmployeePage(): ReactElement {
                       >
                         {toolNames.map((name) => {
                           const item = toolsByName.get(name);
-                          const title = item?.title?.trim() || name;
+                          const title = toolTitle(item ?? { name });
                           const checked = enabledTools.has(name);
                           return (
                             <li
@@ -1130,8 +1136,8 @@ export default function AIEmployeePage(): ReactElement {
                             >
                               <ToolListContent
                                 name={name}
-                                title={item?.title}
-                                about={item?.about}
+                                title={title}
+                                about={item ? toolAbout(item) : undefined}
                                 status={
                                   !item && !toolsLoading && !toolsError ? (
                                     <span className='text-xs text-muted-foreground'>

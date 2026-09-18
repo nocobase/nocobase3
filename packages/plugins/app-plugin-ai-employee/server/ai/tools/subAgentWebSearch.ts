@@ -13,6 +13,7 @@ import { z } from 'zod';
 export default defineTools<AgentContext<{}, {}>>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
     title: 'Web search',
     about:

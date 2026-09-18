@@ -3,6 +3,7 @@ import { requestAIAction } from './api-client.js';
 
 export interface ManagedSkillTool {
   name: string;
+  i18n?: { namespace: string };
   title: string;
   description: string;
   about: string;
@@ -11,6 +12,7 @@ export interface ManagedSkillTool {
 
 export interface ManagedSkillSummary {
   name: string;
+  i18n?: { namespace: string };
   title: string;
   description: string;
   tools: ManagedSkillTool[];

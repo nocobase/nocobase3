@@ -68,6 +68,7 @@ export interface KnowledgeBaseOption {
 
 export interface AIMetadataItem {
   name: string;
+  i18n?: { namespace: string };
   title?: string;
   description?: string;
   about?: string;
@@ -327,11 +328,16 @@ async function listMetadata(
     const definition = isRecord(item.definition) ? item.definition : item;
     const name = definition.name;
     if (typeof name !== 'string') return [];
+    const i18n =
+      isRecord(item.i18n) && typeof item.i18n.namespace === 'string'
+        ? { namespace: item.i18n.namespace }
+        : undefined;
     if (resource === 'aiSkills') {
       const introduction = isRecord(item.introduction) ? item.introduction : {};
       return [
         {
           name,
+          i18n,
           title:
             typeof introduction.title === 'string'
               ? introduction.title
@@ -358,6 +364,7 @@ async function listMetadata(
     return [
       {
         name,
+        i18n,
         title:
           typeof introduction.title === 'string'
             ? introduction.title

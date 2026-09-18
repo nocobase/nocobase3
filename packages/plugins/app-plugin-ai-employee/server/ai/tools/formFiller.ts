@@ -15,6 +15,7 @@ export default defineTools<AgentContext<{}, {}>>({
   requiresContext: false,
   defaultPermission: 'ALLOW',
   execution: 'frontend',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
     title: 'Form filler',
     about:

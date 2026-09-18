@@ -46,6 +46,7 @@ const isModelRef = (value: unknown): value is ModelRef =>
 export default defineTools<DispatchContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
     title: 'Dispatch AI employee task',
     about: 'Assign a task to an AI employee and return the result.',

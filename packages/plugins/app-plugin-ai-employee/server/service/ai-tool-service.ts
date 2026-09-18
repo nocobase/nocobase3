@@ -16,6 +16,7 @@ import {
   notFound,
   optionalString,
   requiredString,
+  resourceI18n,
 } from './utils.js';
 
 export interface AIToolServiceOptions {
@@ -134,6 +135,7 @@ function normalizeTool(
   }
   return {
     scope: normalizeScope(input.scope ?? current?.scope),
+    i18n: resourceI18n(input.i18n) ?? current?.i18n,
     from:
       input.from === 'workflow' ||
       input.from === 'mcp' ||
@@ -178,6 +180,7 @@ function normalizeTool(
 function summarizeTool(tool: ToolsEntity): ManagedToolSummary {
   return {
     name: tool.definition.name,
+    ...(tool.i18n ? { i18n: tool.i18n } : {}),
     title: tool.introduction?.title || tool.definition.name,
     description: tool.definition.description,
     about: tool.introduction?.about ?? '',

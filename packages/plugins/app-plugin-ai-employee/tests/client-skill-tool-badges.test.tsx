@@ -59,7 +59,7 @@ it('reserves counter space, responds to container resizing and disconnects on un
     width = 240;
     resize?.();
   });
-  expect(labels()).toEqual(['one', 'two', 'three']);
+  expect(labels()).toEqual(['one', 'three', 'two']);
   act(() => {
     width = 40;
     resize?.();

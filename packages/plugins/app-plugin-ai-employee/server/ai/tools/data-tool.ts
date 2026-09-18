@@ -21,6 +21,7 @@ export function defineDataTool<T>(
   return defineTools<DataToolContext>({
     scope: 'SPECIFIED',
     defaultPermission: 'ALLOW',
+    i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
     introduction: { title, about: description },
     definition: { name, description, schema },
     async invoke(ctx, args) {

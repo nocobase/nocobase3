@@ -8,6 +8,7 @@ import {
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
 import { DialogDescription } from '../../registry/nocobase-ai/shared/ui/dialog.js';
 import { useT } from '../locales/index.js';
+import { useCatalogDisplay } from '../catalog-display.js';
 import {
   getManagedToolDetails,
   type ManagedToolDetail,
@@ -27,6 +28,7 @@ function ToolDetails({
 }): ReactElement {
   const api = useApiClient();
   const t = useT();
+  const { toolTitle, toolAbout } = useCatalogDisplay();
   const [state, setState] = useState<DetailState>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
@@ -48,7 +50,7 @@ function ToolDetails({
     <div className='min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]'>
       <div className='flex min-w-0 flex-col gap-3 px-6 pb-6 pt-7 sm:px-8'>
         <h3 className='font-heading text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]'>
-          {tool.title.trim() || tool.name}
+          {toolTitle(tool)}
         </h3>
         <p
           translate='no'
@@ -89,9 +91,9 @@ function ToolDetails({
               <h4 className='mb-3 font-heading text-sm font-semibold'>
                 {t('tools.about')}
               </h4>
-              {state.tool.about.trim() ? (
+              {toolAbout(state.tool).trim() ? (
                 <MarkdownMessage variant='document'>
-                  {state.tool.about}
+                  {toolAbout(state.tool)}
                 </MarkdownMessage>
               ) : (
                 <p className='text-sm text-muted-foreground'>

@@ -125,6 +125,7 @@ describe('built-in resource display titles', () => {
             title: tool?.introduction?.title,
             description: tool?.definition.description,
             about: tool?.introduction?.about ?? '',
+            i18n: tool?.i18n,
             available: true,
           };
         }),
@@ -133,6 +134,7 @@ describe('built-in resource display titles', () => {
         name: skill.name,
         title: skill.introduction?.title,
         description: skill.description,
+        i18n: skill.i18n,
         tools: expectedTools,
       };
       expect(rows.find((row) => row.name === skill.name)).toEqual(summary);

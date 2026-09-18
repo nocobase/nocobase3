@@ -1,4 +1,71 @@
 export default {
+  // Tool and Skill display metadata uses exact English source text as flat keys.
+  'Chart generator': 'Chart generator',
+  'Generates ECharts options (JSON) based on user input or data context.':
+    'Generates ECharts options (JSON) based on user input or data context.',
+  'Web search': 'Web search',
+  'Use web search to quickly find up-to-date information from the internet.':
+    'Use web search to quickly find up-to-date information from the internet.',
+  'Business report generator': 'Business report generator',
+  'Validate and prepare a business analysis report for preview and export.':
+    'Validate and prepare a business analysis report for preview and export.',
+  'Load frontend tool': 'Load frontend tool',
+  'Load the input schema of a frontend tool provided by the selected block.':
+    'Load the input schema of a frontend tool provided by the selected block.',
+  'Execute frontend tool': 'Execute frontend tool',
+  'Execute a frontend tool provided by the selected block.':
+    'Execute a frontend tool provided by the selected block.',
+  'Get AI employee': 'Get AI employee',
+  'Get the detailed profile of an AI employee.':
+    'Get the detailed profile of an AI employee.',
+  'Dispatch AI employee task': 'Dispatch AI employee task',
+  'Assign a task to an AI employee and return the result.':
+    'Assign a task to an AI employee and return the result.',
+  'List AI employees': 'List AI employees',
+  'Get the list of available AI employees.':
+    'Get the list of available AI employees.',
+  'Form filler': 'Form filler',
+  'Fill form fields with the given content. This tool only writes values into the form UI; it does not submit or save the form.':
+    'Fill form fields with the given content. This tool only writes values into the form UI; it does not submit or save the form.',
+  'Load skill': 'Load skill',
+  'Load the content and related tools for a specified skill.':
+    'Load the content and related tools for a specified skill.',
+  'Knowledge base retrieval': 'Knowledge base retrieval',
+  'Retrieve relevant content from the knowledge base.':
+    'Retrieve relevant content from the knowledge base.',
+  Suggestions: 'Suggestions',
+  'Provide a list of suggested prompts for the user to choose from.':
+    'Provide a list of suggested prompts for the user to choose from.',
+  'List data sources': 'List data sources',
+  'List authorized named database connections. Only explicitly mapped registered collections are discoverable. Results are paginated (limit 1–100, offset at most 10000).':
+    'List authorized named database connections. Only explicitly mapped registered collections are discoverable. Results are paginated (limit 1–100, offset at most 10000).',
+  'List collections': 'List collections',
+  'List accessible registered collections in dataSource (default main). Paginated; physical tables without authorization mappings are not exposed.':
+    'List accessible registered collections in dataSource (default main). Paginated; physical tables without authorization mappings are not exposed.',
+  'Get collection metadata': 'Get collection metadata',
+  'Read normalized accessible fields and queryable relationships for collection in dataSource (default main). Fields are paginated; no credentials or internal definitions are returned.':
+    'Read normalized accessible fields and queryable relationships for collection in dataSource (default main). Fields are paginated; no credentials or internal definitions are returned.',
+  'Search field metadata': 'Search field metadata',
+  'Search accessible field names, titles, and descriptions within dataSource (default main), optionally collection. Results mark exact matches versus candidates; candidates require confirmation.':
+    'Search accessible field names, titles, and descriptions within dataSource (default main), optionally collection. Results mark exact matches versus candidates; candidates require confirmation.',
+  'Query records': 'Query records',
+  'Query authorized detail records using selected fields, a flat AND filter of field/operator/value conditions, sort, limit (1–100), and offset (0–10000). Optional relations support explicit one-hop non-through joins only, with separately authorized target fields and record scopes. Big integers and exact decimals remain strings. Inspect hasMore and truncated; no SQL, raw AST, nested filters, or identity overrides.':
+    'Query authorized detail records using selected fields, a flat AND filter of field/operator/value conditions, sort, limit (1–100), and offset (0–10000). Optional relations support explicit one-hop non-through joins only, with separately authorized target fields and record scopes. Big integers and exact decimals remain strings. Inspect hasMore and truncated; no SQL, raw AST, nested filters, or identity overrides.',
+  'Count records': 'Count records',
+  'Count records in the same authorized read scope as detail queries. Accepts collection, optional dataSource (default main), and flat AND filter conditions. No SQL or identity overrides.':
+    'Count records in the same authorized read scope as detail queries. Accepts collection, optional dataSource (default main), and flat AND filter conditions. No SQL or identity overrides.',
+  'Aggregate data': 'Aggregate data',
+  'Run server-side count/sum/avg/min/max aggregates, each with a unique alias and field (optional for count). Optional groupBy requires explicit field value domains with at most 100 possible group combinations; results cover only those domains. Sort grouped fields or aliases. Uses the same field permissions and record scope as details. No expressions, SQL, arbitrary dimensions, or whole-table in-memory computation.':
+    'Run server-side count/sum/avg/min/max aggregates, each with a unique alias and field (optional for count). Optional groupBy requires explicit field value domains with at most 100 possible group combinations; results cover only those domains. Sort grouped fields or aliases. Uses the same field permissions and record scope as details. No expressions, SQL, arbitrary dimensions, or whole-table in-memory computation.',
+  'Data metadata': 'Data metadata',
+  'Discover accessible database connections, collections, fields, and relationships before querying business data.':
+    'Discover accessible database connections, collections, fields, and relationships before querying business data.',
+  'Data query': 'Data query',
+  'Query current authorized business records, counts, aggregates, and grouped summaries using bounded NocoBase 3 Repository queries.':
+    'Query current authorized business records, counts, aggregates, and grouped summaries using bounded NocoBase 3 Repository queries.',
+  'Business analysis report': 'Business analysis report',
+  'Build a validated Markdown business report with optional inline charts from freshly queried, authorized data.':
+    'Build a validated Markdown business report with optional inline charts from freshly queried, authorized data.',
   employeeTools: {
     use: 'Use {{name}}',
     description:

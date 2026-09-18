@@ -3,6 +3,7 @@ import { requestAIAction } from './api-client.js';
 
 export interface ManagedToolSummary {
   name: string;
+  i18n?: { namespace: string };
   title: string;
   description: string;
   about: string;

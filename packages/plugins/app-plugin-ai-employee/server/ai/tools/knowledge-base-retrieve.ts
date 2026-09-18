@@ -26,6 +26,7 @@ type KnowledgeBaseContext = AgentContext<
 export default defineTools<KnowledgeBaseContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
     title: 'Knowledge base retrieval',
     about: 'Retrieve relevant content from the knowledge base.',

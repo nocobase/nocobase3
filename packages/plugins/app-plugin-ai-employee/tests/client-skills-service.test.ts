@@ -15,6 +15,37 @@ const skills = [
 ];
 
 describe('Skills metadata API', () => {
+  it.each([listAISkills, listAITools])(
+    'preserves only top-level namespace metadata without translating or mutating responses',
+    async (list) => {
+      const rows = [
+        {
+          name: 'localized',
+          title: 'English source',
+          i18n: { namespace: '@test/owner' },
+        },
+        {
+          name: 'literal',
+          title: 'English source',
+          introduction: { i18n: { namespace: '@test/nested' } },
+        },
+        { name: 'invalid', i18n: { namespace: 42 } },
+      ];
+      const original = structuredClone(rows);
+      const api = {
+        request: vi.fn().mockResolvedValue(rows),
+      } as unknown as ApiClient;
+      const result = await list(undefined, api);
+      expect(result[0]).toMatchObject({
+        title: 'English source',
+        i18n: { namespace: '@test/owner' },
+      });
+      expect(result[1].i18n).toBeUndefined();
+      expect(result[2].i18n).toBeUndefined();
+      expect(rows).toEqual(original);
+    },
+  );
+
   it('normalizes tool introduction titles without dropping scope, source or registered permission', async () => {
     const api = {
       request: vi.fn().mockResolvedValue([

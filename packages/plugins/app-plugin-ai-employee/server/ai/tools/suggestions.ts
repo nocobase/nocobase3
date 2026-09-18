@@ -6,6 +6,7 @@ type SuggestionsContext = AgentContext<{ aiMessages: AIMessageRepository }, {}>;
 
 export default defineTools<SuggestionsContext>({
   scope: 'GENERAL',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
     title: 'Suggestions',
     about: 'Provide a list of suggested prompts for the user to choose from.',

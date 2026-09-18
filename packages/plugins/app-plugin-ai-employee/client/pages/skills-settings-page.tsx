@@ -18,7 +18,7 @@ import { Input } from '../../registry/nocobase-ai/shared/ui/input.js';
 import { SkillDetailsDrawer } from '../components/skill-details-drawer.js';
 import { SkillToolBadges } from '../components/skill-tool-badges.js';
 import { useT } from '../locales/index.js';
-import { compareResourceNames } from '../resource-name-order.js';
+import { useCatalogDisplay } from '../catalog-display.js';
 import { SettingsShell } from '../settings-shell.js';
 import {
   listManagedSkills,
@@ -33,6 +33,8 @@ type SkillsState =
 export default function SkillsSettingsPage(): ReactElement {
   const api = useService(apiClientToken);
   const t = useT();
+  const { skillTitle, skillDescription, toolTitle, compareTitles, locale } =
+    useCatalogDisplay();
   const [state, setState] = useState<SkillsState>({ status: 'loading' });
   const [query, setQuery] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -52,22 +54,26 @@ export default function SkillsSettingsPage(): ReactElement {
     return () => controller.abort();
   }, [api, attempt]);
 
-  const keyword = query.trim().toLocaleLowerCase();
+  const keyword = query.trim().toLocaleLowerCase(locale);
   const skills =
     state.status === 'ready'
       ? state.skills
           .filter((skill) =>
             [
               skill.name,
-              skill.title,
-              skill.description,
-              ...skill.tools.flatMap((tool) => [tool.name, tool.title]),
-            ].some((value) => value.toLocaleLowerCase().includes(keyword)),
+              skillTitle(skill),
+              skillDescription(skill),
+              ...skill.tools.flatMap((tool) => [tool.name, toolTitle(tool)]),
+            ].some((value) =>
+              value.toLocaleLowerCase(locale).includes(keyword),
+            ),
           )
           .sort((left, right) =>
-            compareResourceNames(
-              left.title.trim() || left.name,
-              right.title.trim() || right.name,
+            compareTitles(
+              skillTitle(left),
+              skillTitle(right),
+              left.name,
+              right.name,
             ),
           )
       : [];
@@ -154,15 +160,13 @@ export default function SkillsSettingsPage(): ReactElement {
                         variant='link'
                         aria-haspopup='dialog'
                         className='h-11 min-w-0 max-w-full justify-start px-0 text-left hover:no-underline'
-                        title={skill.title.trim() || skill.name}
+                        title={skillTitle(skill)}
                         onClick={(event) => {
                           event.stopPropagation();
                           openSkill(skill, event.currentTarget);
                         }}
                       >
-                        <span className='truncate'>
-                          {skill.title.trim() || skill.name}
-                        </span>
+                        <span className='truncate'>{skillTitle(skill)}</span>
                       </Button>
                     </CardTitle>
                     <CardDescription>
@@ -178,9 +182,9 @@ export default function SkillsSettingsPage(): ReactElement {
                   <CardContent className='min-h-0 min-w-0 flex-1 overflow-hidden'>
                     <p
                       className='line-clamp-3 whitespace-pre-wrap [overflow-wrap:anywhere]'
-                      title={skill.description}
+                      title={skillDescription(skill)}
                     >
-                      {skill.description}
+                      {skillDescription(skill)}
                     </p>
                   </CardContent>
                   <CardFooter

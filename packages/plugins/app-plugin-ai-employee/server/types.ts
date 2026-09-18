@@ -24,6 +24,7 @@ export interface ToolsManagementActor {
 }
 
 export interface ManagedToolSummary {
+  i18n?: { namespace: string };
   name: string;
   title: string;
   description: string;
@@ -53,6 +54,7 @@ export interface ManagedToolDetail extends ManagedToolSummary {
 }
 
 export interface ManagedSkillTool {
+  i18n?: { namespace: string };
   name: string;
   title: string;
   description: string;
@@ -61,6 +63,7 @@ export interface ManagedSkillTool {
 }
 
 export interface ManagedSkillSummary {
+  i18n?: { namespace: string };
   name: string;
   title: string;
   description: string;

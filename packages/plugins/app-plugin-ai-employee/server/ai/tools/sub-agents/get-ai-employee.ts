@@ -27,6 +27,7 @@ type AIEmployeeContext = AgentContext<
 export default defineTools<AIEmployeeContext>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
     title: 'Get AI employee',
     about: 'Get the detailed profile of an AI employee.',

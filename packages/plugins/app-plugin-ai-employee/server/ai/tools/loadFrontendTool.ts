@@ -16,6 +16,7 @@ export default defineTools<FrontendToolContext>({
   scope: 'GENERAL',
   execution: 'frontend',
   defaultPermission: 'ALLOW',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
     title: 'Load frontend tool',
     about:

@@ -1,4 +1,69 @@
 export default {
+  // Tool and Skill display metadata uses exact English source text as flat keys.
+  'Chart generator': '图表生成器',
+  'Generates ECharts options (JSON) based on user input or data context.':
+    '根据用户输入或数据上下文生成 ECharts 配置（JSON）。',
+  'Web search': '网页搜索',
+  'Use web search to quickly find up-to-date information from the internet.':
+    '通过网页搜索快速查找互联网上的最新信息。',
+  'Business report generator': '业务报告生成器',
+  'Validate and prepare a business analysis report for preview and export.':
+    '校验并准备业务分析报告，以供预览和导出。',
+  'Load frontend tool': '加载前端工具',
+  'Load the input schema of a frontend tool provided by the selected block.':
+    '加载所选区块提供的前端工具的输入结构。',
+  'Execute frontend tool': '执行前端工具',
+  'Execute a frontend tool provided by the selected block.':
+    '执行所选区块提供的前端工具。',
+  'Get AI employee': '获取 AI 员工',
+  'Get the detailed profile of an AI employee.': '获取 AI 员工的详细资料。',
+  'Dispatch AI employee task': '分派 AI 员工任务',
+  'Assign a task to an AI employee and return the result.':
+    '向 AI 员工分派任务并返回结果。',
+  'List AI employees': '列出 AI 员工',
+  'Get the list of available AI employees.': '获取可用的 AI 员工列表。',
+  'Form filler': '表单填写器',
+  'Fill form fields with the given content. This tool only writes values into the form UI; it does not submit or save the form.':
+    '使用给定内容填写表单字段。此工具仅向表单界面写入值，不会提交或保存表单。',
+  'Load skill': '加载技能',
+  'Load the content and related tools for a specified skill.':
+    '加载指定技能的内容和相关工具。',
+  'Knowledge base retrieval': '知识库检索',
+  'Retrieve relevant content from the knowledge base.':
+    '从知识库检索相关内容。',
+  Suggestions: '建议',
+  'Provide a list of suggested prompts for the user to choose from.':
+    '提供建议提示词列表，供用户选择。',
+  'List data sources': '列出数据源',
+  'List authorized named database connections. Only explicitly mapped registered collections are discoverable. Results are paginated (limit 1–100, offset at most 10000).':
+    '列出已授权的具名数据库连接。仅可发现具有显式映射的已注册数据表。结果分页返回（limit 为 1–100，offset 最大为 10000）。',
+  'List collections': '列出数据表',
+  'List accessible registered collections in dataSource (default main). Paginated; physical tables without authorization mappings are not exposed.':
+    '列出 dataSource（默认为 main）中可访问的已注册数据表。结果分页返回，不会暴露没有授权映射的物理表。',
+  'Get collection metadata': '获取数据表元数据',
+  'Read normalized accessible fields and queryable relationships for collection in dataSource (default main). Fields are paginated; no credentials or internal definitions are returned.':
+    '读取 dataSource（默认为 main）中指定 collection 的标准化可访问字段和可查询关系。字段分页返回，不返回凭据或内部定义。',
+  'Search field metadata': '搜索字段元数据',
+  'Search accessible field names, titles, and descriptions within dataSource (default main), optionally collection. Results mark exact matches versus candidates; candidates require confirmation.':
+    '在 dataSource（默认为 main）中搜索可访问字段的名称、标题和描述，可指定 collection。结果区分精确匹配和候选项，候选项需要确认。',
+  'Query records': '查询记录',
+  'Query authorized detail records using selected fields, a flat AND filter of field/operator/value conditions, sort, limit (1–100), and offset (0–10000). Optional relations support explicit one-hop non-through joins only, with separately authorized target fields and record scopes. Big integers and exact decimals remain strings. Inspect hasMore and truncated; no SQL, raw AST, nested filters, or identity overrides.':
+    '使用选定字段、由字段/运算符/值条件组成的平铺 AND 筛选、排序、limit（1–100）和 offset（0–10000）查询已授权的明细记录。可选关系仅支持显式的一跳非中间表连接，目标字段和记录范围分别授权。大整数和精确小数保留为字符串。请检查 hasMore 和 truncated；不支持 SQL、原始 AST、嵌套筛选或身份覆盖。',
+  'Count records': '统计记录数',
+  'Count records in the same authorized read scope as detail queries. Accepts collection, optional dataSource (default main), and flat AND filter conditions. No SQL or identity overrides.':
+    '在与明细查询相同的授权读取范围内统计记录数。接受 collection、可选的 dataSource（默认为 main）和平铺 AND 筛选条件。不支持 SQL 或身份覆盖。',
+  'Aggregate data': '聚合数据',
+  'Run server-side count/sum/avg/min/max aggregates, each with a unique alias and field (optional for count). Optional groupBy requires explicit field value domains with at most 100 possible group combinations; results cover only those domains. Sort grouped fields or aliases. Uses the same field permissions and record scope as details. No expressions, SQL, arbitrary dimensions, or whole-table in-memory computation.':
+    '在服务端执行 count/sum/avg/min/max 聚合，每项需指定唯一别名和字段（count 的字段可选）。可选的 groupBy 需显式指定字段值域，最多允许 100 种分组组合，结果仅覆盖这些值域。可按分组字段或别名排序。使用与明细查询相同的字段权限和记录范围。不支持表达式、SQL、任意维度或整表内存计算。',
+  'Data metadata': '数据元数据',
+  'Discover accessible database connections, collections, fields, and relationships before querying business data.':
+    '查询业务数据前，发现可访问的数据库连接、数据表、字段和关系。',
+  'Data query': '数据查询',
+  'Query current authorized business records, counts, aggregates, and grouped summaries using bounded NocoBase 3 Repository queries.':
+    '通过有界的 NocoBase 3 Repository 查询，获取当前已授权的业务记录、记录数、聚合结果和分组汇总。',
+  'Business analysis report': '业务分析报告',
+  'Build a validated Markdown business report with optional inline charts from freshly queried, authorized data.':
+    '基于最新查询的已授权数据，生成经过校验的 Markdown 业务报告，并可添加内嵌图表。',
   employeeTools: {
     use: '使用{{name}}',
     description:

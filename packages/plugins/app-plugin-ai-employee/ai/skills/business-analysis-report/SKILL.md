@@ -1,5 +1,7 @@
 ---
 name: business-analysis-report
+i18n:
+  namespace: '@nocobase/app-plugin-ai-employee'
 introduction:
   title: Business analysis report
 scope: GENERAL

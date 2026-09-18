@@ -17,6 +17,7 @@ import {
   TabsTrigger,
 } from '../../registry/nocobase-ai/shared/ui/tabs.js';
 import { useT } from '../locales/index.js';
+import { useCatalogDisplay } from '../catalog-display.js';
 import {
   getManagedSkillDetails,
   type ManagedSkillDetail,
@@ -53,6 +54,8 @@ function SkillDetails({
 }): ReactElement {
   const api = useService(apiClientToken);
   const t = useT();
+  const { skillTitle, skillDescription, toolTitle, toolAbout, compareTitles } =
+    useCatalogDisplay();
   const [state, setState] = useState<DetailState>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
@@ -70,13 +73,16 @@ function SkillDetails({
   }, [api, summary.name, attempt]);
 
   const skill = state.status === 'ready' ? state.skill : summary;
+  const tools = [...skill.tools].sort((left, right) =>
+    compareTitles(toolTitle(left), toolTitle(right), left.name, right.name),
+  );
   return (
     <div className='min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]'>
       <Tabs defaultValue='instructions' className='min-w-0 flex-col gap-0'>
         <div className='flex min-w-0 flex-col gap-3 px-6 pb-6 pt-7 sm:px-8'>
           <div className='flex min-w-0 flex-col gap-2'>
             <h3 className='font-heading text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]'>
-              {skill.title.trim() || skill.name}
+              {skillTitle(skill)}
             </h3>
             <p
               translate='no'
@@ -86,7 +92,7 @@ function SkillDetails({
             </p>
           </div>
           <DialogDescription className='whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]'>
-            {skill.description || t('skills.detailsDescription')}
+            {skillDescription(skill) || t('skills.detailsDescription')}
           </DialogDescription>
         </div>
         <div className='sticky top-0 z-10 flex border-b bg-background px-6 sm:px-8'>
@@ -160,15 +166,15 @@ function SkillDetails({
               </p>
               {state.skill.tools.length ? (
                 <ul className='flex min-w-0 flex-col divide-y rounded-lg border px-4'>
-                  {state.skill.tools.map((tool) => (
+                  {tools.map((tool) => (
                     <li
                       key={tool.name}
                       className='flex h-32 min-w-0 items-center overflow-hidden py-4'
                     >
                       <ToolListContent
                         name={tool.name}
-                        title={tool.title}
-                        about={tool.about}
+                        title={toolTitle(tool)}
+                        about={toolAbout(tool)}
                         status={
                           !tool.available ? (
                             <span className='inline-flex items-center gap-1.5 text-xs text-muted-foreground'>
