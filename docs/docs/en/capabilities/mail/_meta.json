@@ -6,12 +6,22 @@
   },
   {
     "type": "file",
-    "name": "configuration",
-    "label": "Configure Mail"
+    "name": "quick-start",
+    "label": "Quick Start"
   },
   {
     "type": "file",
     "name": "usage",
     "label": "Use Mail"
+  },
+  {
+    "type": "file",
+    "name": "configuration",
+    "label": "Mailbox Setup"
+  },
+  {
+    "type": "file",
+    "name": "development",
+    "label": "Application Development"
   }
 ]

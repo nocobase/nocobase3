@@ -11,18 +11,13 @@
   },
   {
     "type": "file",
-    "name": "configuration",
-    "label": "配置邮件"
-  },
-  {
-    "type": "file",
     "name": "usage",
     "label": "使用邮件"
   },
   {
     "type": "file",
-    "name": "management",
-    "label": "管理与诊断"
+    "name": "configuration",
+    "label": "邮箱接入配置"
   },
   {
     "type": "file",

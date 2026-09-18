@@ -1,85 +1,42 @@
 ---
-title: 'Mail'
-description: 'Connect Gmail, Microsoft 365, and IMAP/SMTP accounts to synchronize, read, and send mail in NocoBase 3.'
-keywords: 'NocoBase,mail,mailbox,Gmail,Microsoft 365,IMAP,SMTP'
+title: 'Overview'
+description: 'Use AI to add mail to your application, connect your accounts, and read, organize, and send messages from business pages.'
+keywords: 'NocoBase,mail,email,Gmail,Microsoft 365,IMAP,SMTP'
 ---
 
 # Mail
 
-Mail lets users connect their own mailboxes to an application, read messages, reply to customers, manage drafts, and send attachments from one workspace. Each user can connect multiple accounts, view their synchronized messages together, or filter by account and folder.
+The Mail plugin manages users' connected email accounts, including account authorization, sending and receiving messages, and mail records. Ask AI to build a standalone mail center with the mail components, or add them to customer and project pages so you can read and reply while working with business records.
 
-For approval results, verification codes, or system alerts, use the email channel in [Notifications](../notification.md). The Mail plugin manages user-connected mailboxes, including authorization, sending, and synchronization. The two capabilities have separate configuration and submission records.
+## What you can do
 
-## Mail and built-in Providers
+- **Manage multiple accounts**: Each user connects their own accounts, views incoming mail in one place, and filters by account and folder.
+- **Read and organize messages**: Search mail, view conversations and attachments, and use read status, stars, labels, private notes, and to-do markers.
+- **Compose and send messages**: Write, reply, and forward with attachments, CC, BCC, signatures, and templates.
+- **Plan your sending**: Save drafts, schedule messages, or send a separate message to each recipient.
+- **Connect mail to your business**: Ask AI to link messages to customers, contacts, projects, and other records according to your requirements. View and reply to related messages on record detail pages and use business data in mail templates.
 
-`@nocobase/app-plugin-mail` provides accounts, authorization, synchronization, sending, drafts, the mail workspace, and operation logs. It includes these Providers:
+## Link mail to business data
 
-| Built-in Provider | Responsibility                                                               |
-| ----------------- | ---------------------------------------------------------------------------- |
-| Gmail             | Gmail OAuth authorization, Gmail API, and push synchronization               |
-| Microsoft 365     | Microsoft 365 OAuth authorization, Microsoft Graph, and push synchronization |
-| IMAP/SMTP         | Standard mailboxes connected with a username and password                    |
+Mail can become part of your business records. For example, display correspondence with contacts on a customer detail page, bring project discussions together on a project page, or compose a message from an order page with the customer name and order number filled into a template. This reduces page switching and repeated data entry.
 
-Register only Mail, then configure Provider instances under `mail.providers` in `config.yml`. Third-party Providers can still register through extension plugins.
+When building the feature, tell AI how messages should relate to records: match correspondence by a contact's email address, for example, or let users manually link messages to a project. AI implements the relationships, filtering, and interactions according to these rules while preserving mailbox access permissions. See [Application Development](./development.md) for integration details.
 
-## Add Mail to an application
+For example:
 
-The default application template already registers Mail. Complete [Mail configuration](./configuration.md) before connecting an account. In a custom application, run these commands from the application directory:
+> Add mail to the customer detail page. Use the customer's contact email addresses to show correspondence that the current user is allowed to access, with support for reading and replying directly. When composing, let users select a customer contact as the recipient and fill the customer and contact names into mail templates.
 
-```bash
-pnpm plugin:register mail
-pnpm migrate
-```
+## Supported mailboxes
 
-Run migrations after first enabling Mail to create its tables. Automatic synchronization and scheduled sending require a working application queue.
+Connect Gmail and Microsoft 365 accounts through authorization, or use IMAP/SMTP for other mailboxes. The available connection method depends on the services your provider offers. See [Mailbox Setup](./configuration.md) for what to prepare.
 
-Grant the intended users access to the mail workspace, configure a Provider, and restart the application. Then follow [Using Mail](./usage.md) to connect an account, synchronize messages, and send a test message.
+Organization, draft, and synchronization features vary by connection method. Relevant differences are explained in [Use Mail](./usage.md).
 
-You can also describe the business requirements to your Coding Agent:
+## Get started
 
-```text
-Add NocoBase Mail using our company's IMAP/SMTP mailboxes.
-Let users connect their own accounts and read and reply in the mail workspace.
-Reuse the workspace on customer detail pages and pass the current customer record to template variables.
-Ordinary users may operate only their own accounts; mail administrators may view accounts and operation logs.
-Add account, signature, and template management to the production pages.
-```
+Tell AI where mail should appear, which mailbox service you use, and who needs access. Once AI has built the feature, users connect their own accounts in the application and start sending and receiving mail. Page names and navigation depend on your application.
 
-## Pages and permissions
-
-These are application-local route paths. If the application is mounted at `/main`, include that prefix in the browser URL, such as `/main/mail`.
-
-| Entry point                                  | Purpose                                                                    | Required permission           |
-| -------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------- |
-| `/mail`                                      | Current user's mail workspace                                              | `page:mail.workspace/access`  |
-| `/settings/mail/accounts`                    | Read-only view of all users' connected accounts                            | `page:mail.admin/access`      |
-| `/settings/mail/operation-logs`              | All users' synchronization and sending logs                                | `page:mail.admin/access`      |
-| `/dev/mail/accounts`                         | Personal account, signature, label, and template management in development | `page:mail.workspace/access`  |
-| `/dev/mail/management`                       | All-user message table and batch actions in development                    | `page:mail.management/access` |
-| `/dev/mail/sync-logs`, `/dev/mail/send-logs` | Personal synchronization and sending diagnostics in development            | `page:mail.workspace/access`  |
-
-The `/dev/mail/*` pages are development tools and are excluded from production builds. Use the plugin's public components and APIs to provide account management in a production application. Personal APIs check account ownership as well as page permissions. All-user message management can read and operate on every user's messages; it currently has no department or organization scope, so grant it according to actual responsibilities.
-
-## Provider differences
-
-| Capability                                                 | Gmail                          | Microsoft 365                  | IMAP/SMTP                                   |
-| ---------------------------------------------------------- | ------------------------------ | ------------------------------ | ------------------------------------------- |
-| Account connection                                         | OAuth                          | OAuth                          | Username and password                       |
-| Receiving, sending, and attachments                        | Supported                      | Supported                      | Supported                                   |
-| Automatic synchronization                                  | Supported                      | Supported                      | Supported, primarily discovers new messages |
-| Push-triggered synchronization                             | Requires Pub/Sub configuration | Requires a public callback URL | Unsupported                                 |
-| Local drafts, signatures, templates, and scheduled sending | Supported                      | Supported                      | Supported                                   |
-| Remote draft mirrors                                       | Supported                      | Supported                      | Unsupported                                 |
-| Provider sending alias discovery                           | Supported                      | Supported                      | Unsupported                                 |
-| Move to folder                                             | Supported                      | Supported                      | Unsupported                                 |
-| Provider-native label capability                           | Supported                      | Unsupported                    | Unsupported                                 |
-| NocoBase labels, private notes, and todo markers           | Supported                      | Supported                      | Supported                                   |
-
-IMAP/SMTP currently discovers messages through new UID ranges. It does not guarantee full reconciliation of read state, deletions, or moves made in other mail clients. If the SMTP service does not save submitted mail in Sent automatically, the plugin does not append a copy itself; a local Sent copy appears only after the message becomes available through IMAP.
-
-## Next steps
-
-- [Configure Mail](./configuration.md)—Providers, OAuth callbacks, synchronization intervals, and push.
-- [Use Mail](./usage.md)—Account connection, reading and sending, drafts, logs, and troubleshooting.
-- [Notifications](../notification.md)—Send application notification emails.
-- [Application configuration](../../app/configuration.md)—Manage the application's `config.yml`.
+- [Quick Start](./quick-start.md): Build a mail center, connect your first account, and send and receive mail.
+- [Use Mail](./usage.md): Manage accounts, organize messages, and use common composing features.
+- [Mailbox Setup](./configuration.md): Configure providers and adjust synchronization and push as needed.
+- [Application Development](./development.md): Customize components, business data, and API integration.
