@@ -22,7 +22,7 @@ Client and server locale catalogues provide English and Chinese messages. Option
 
 ## Fluent registration
 
-Business groups expose `.resource().action().register()`. Page references provide `.access()`, while database references provide `.scope().read().update()` and record-access resolver builders. Plugin contributions carry scope types into the composed resource’s `.grant()`. Reusable scopes are immutable. See [the fluent registration guide](skills/nocobase-app-plugin-authorization/references/fluent-registration.md) and the sales example in `packages/examples/app-plugin-authorization-example/server/sales-authorization.ts`.
+Use `defineAuthorizationResource(name, configure)` for resource actions and `defineDatabasePermission(configure)` for immutable, reusable data permissions. Bind each permission with `.grant(key, permission)`; pages and Collections retain direct `.add()` registration. Callbacks return builders to preserve action and configuration-key inference. See [the declaration guide](skills/nocobase-app-plugin-authorization/references/fluent-registration.md) and the sales example's `server/sales-resources.ts`.
 
 ## Resource registration
 
@@ -108,3 +108,7 @@ Shared administration components and data types are exported from `./client/mana
 The decision drawer leads with whether the selected operation is allowed, then shows deduplicated source titles and the named record scopes present in the returned decision. “Me” refers to the inspected subject. Effective conditions and fields are available on demand; underlying checks, reason codes and the raw decision appear in one collapsed technical section. Redundant Boolean conditions are simplified only for display, without changing executable policies.
 
 Authorization sources may provide a localized `title` alongside their plugin and record identifiers. The inspector renders those titles and returned reason messages without a plugin-specific lookup or an assumed rule pipeline. Custom reason codes retain their supplied message; codes recognized by the inspector use its localized wording.
+
+### Relation authorization
+
+Database grants support Policy-shaped `relations` with independent authorization types and immutable fluent builders. See [relation declaration examples](skills/nocobase-app-plugin-authorization/references/fluent-registration.md#relation-permissions). Root `fields` accepts only a field list or `'*'`. Read actions grant output fields; write actions grant input fields. The adapter resolves each relation's optional Record Access against its target Collection and emits an explicit allowlist. Static repository API relations no longer survive without a matching user grant. Different scope/capability combinations are conservatively intersected because DB Policy has one scope per node.

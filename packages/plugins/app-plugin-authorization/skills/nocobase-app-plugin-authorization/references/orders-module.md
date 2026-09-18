@@ -108,7 +108,7 @@ routes.patch('/orders/:id', async (context) => {
 
 Inspect the Policy when the route needs its own status code — `policy.read === false` is a 403 — and let a `RECORD_NOT_FOUND` error from `updateOne` or `deleteOne` become a 404: a row outside the scope is indistinguishable from a row that does not exist, which is the point.
 
-A write grant must name every column the route stores, including the timestamps the server stamps itself. `fields: { input: '*' }` expands to the collection's columns minus a primary key the database generates, so it is safe for a create; list the columns when the route should write fewer.
+A write grant must name every column the route stores, including the timestamps the server stamps itself. `fields: '*'` expands to the collection's columns minus a primary key the database generates, so it is safe for a create; list the columns when the route should write fewer.
 
 ### Or expose the Repository directly
 
@@ -154,26 +154,24 @@ const ordersManager = await authz.permissionSets.create({
   grants: [
     authz.db.grant('orders', {
       read: {
-        fields: { output: '*' },
+        fields: '*',
         recordAccess: ['allRecords'],
       },
       create: {
-        fields: {
-          input: [
-            'number',
-            'customerName',
-            'amount',
-            'status',
-            'region',
-            'ownerId',
-            'createdById',
-            'createdAt',
-            'updatedAt',
-          ],
-        },
+        fields: [
+          'number',
+          'customerName',
+          'amount',
+          'status',
+          'region',
+          'ownerId',
+          'createdById',
+          'createdAt',
+          'updatedAt',
+        ],
       },
       update: {
-        fields: { input: ['status', 'amount', 'updatedAt'] },
+        fields: ['status', 'amount', 'updatedAt'],
         recordAccess: ['allRecords'],
       },
       delete: { recordAccess: ['allRecords'] },
@@ -234,15 +232,17 @@ The database plugin performs that combination and emits one filter AST. Do not i
 A dynamic scope uses a registered Record Access policy, whose `resolve` returns `true`, `false`, or a literal filter node:
 
 ```ts
-import { condition } from '@nocobase/app-plugin-authorization/server';
+import { buildFilter } from '@nocobase/repository-input';
 
-authz.db.recordAccess.add<{ region: string }>({
+authz.recordAccess.add<{ region: string }, unknown>({
+  resources: [{ type: 'database.collection', id: '*' }],
   key: 'regionalOrders',
-  resolve: ({ params }) => condition('region', '$eq', params.region),
+  resolve: ({ params }) =>
+    buildFilter((filter) => filter.string('region').eq(params.region)),
 });
 ```
 
-Nodes are built literally rather than through db's `FilterBuilder`, which needs a field's type to choose an operator group; a registration records names only.
+Use the Repository input builder directly. Authorization owns policy registration and identity context; DB validates and interprets the returned FilterAst.
 
 ## 6. Diagnose a denied request
 

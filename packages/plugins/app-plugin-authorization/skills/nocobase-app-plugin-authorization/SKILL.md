@@ -153,7 +153,7 @@ const permissionSet = await authz.permissionSets.create({
   grants: [
     authz.db.grant('orders', {
       read: {
-        fields: { output: ['id', 'number', 'amount', 'status'] },
+        fields: ['id', 'number', 'amount', 'status'],
         recordAccess: ['allRecords'],
       },
     }),
@@ -246,6 +246,6 @@ Register flat business groups with `authz.resourceGroups.add` and resources with
 
 Default access, sharing and restriction rules may target `{ type: 'resource', id: businessResourceName }`, with each action entry specifying `action` and `scopeKey`. Records and conditions belong to that scope's collection. Sharing never grants the operation itself and never follows relations implicitly. Use `authz.db.policyFor(collection, requestScope, { resource: businessResourceName, action })` when an endpoint must enforce only that operation's grants. Omit the third argument for ordinary aggregate underlying authorization. Collection-level restriction rules still apply across every grant branch.
 
-Record-access policies have one global registry, `authz.db.recordAccess`. Policies may declare `collections` and `requiredFields` to limit applicability. Omit action scope `options` to use all applicable policies; specify it only to narrow that list. Permission-set scopes and all rule selectors share these choices, including custom filters. Permission sets and the inspector configure registered pages independently from business operations. Business groups compose database grants only; administration groups compose system capabilities. Raw table permissions remain internal, and no composed operation may include page grants. Inspector rows show each resource’s own actions; action details explain the business grant and underlying database checks.
+Record-access policies have one global registry, `authz.recordAccess`. Policies declare generic `resources`; DB alone interprets field requirements and filter results. Omit action scope `options` to use all applicable policies; specify it only to narrow that list. Permission-set scopes and all rule selectors share these choices, including custom filters. Permission sets and the inspector configure registered pages independently from business operations. Business groups compose database grants only; administration groups compose system capabilities. Raw table permissions remain internal, and no composed operation may include page grants. Inspector rows show each resource’s own actions; action details explain the business grant and underlying database checks.
 
 Register inherited authorization subjects, such as teams, with `authz.subjects.define(type, { resolveFor, filterActive, administration })`. `resolveFor(principal)` returns current subject IDs; authenticated requests and user inspection resolve these memberships server-side. `filterActive` excludes disabled or deleted subjects. A manually constructed `authz.for(identity)` uses the supplied identity; include resolved subjects explicitly outside HTTP middleware.

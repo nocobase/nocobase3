@@ -100,8 +100,7 @@ export function createRepositoryAuthorization(
     const authorized = async (): Promise<void> => {
       const scope = context.get('authz') as AuthorizationScope;
       // The shape is what this exposure offers; the grant is the patch that
-      // trims it. `policyFor` emits no relations, and an unmentioned member
-      // stays as it was, so the shape keeps its relation rules.
+      // trims it. The complete grant explicitly closes ungranted relations.
       const policy = await database.policyFor(guard.resource, scope);
       context.set(principalVariable, {
         exposure: name,

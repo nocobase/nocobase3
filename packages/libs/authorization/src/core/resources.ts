@@ -1,4 +1,4 @@
-import { BusinessGroupReference, buildBusinessGrant } from './builders.js';
+import { buildResourceGrant } from './resource-grant.js';
 import type { PermissionGrant } from '../plugins/permission-sets/model.js';
 import type { AccessConstraintService } from './constraints.js';
 import type {
@@ -25,15 +25,15 @@ export interface ResourceAuthorizationConditions extends AuthorizationConditions
   checks: readonly ResourceAuthorizationCheck[];
 }
 
-export type BusinessScopeSelection =
+export type RecordAccessSelection =
   string | { readonly key: string; readonly params?: unknown };
 
-export interface BusinessResourceGroup {
+export interface AuthorizationResourceGroup {
   category?: 'business' | 'administration';
   name: string;
   title: ResourceTitle;
 }
-export interface BusinessResource {
+export interface AuthorizationResource {
   name: string;
   title: ResourceTitle;
   group: string;
@@ -54,22 +54,9 @@ export interface BusinessResource {
     grants: readonly PermissionGrant[];
   }[];
 }
-export class BusinessResourceGroups {
-  private entries = new Map<string, BusinessResourceGroup>();
-  private resources?: BusinessResources;
-  bind(resources: BusinessResources): void {
-    this.resources = resources;
-  }
-  define(
-    name: string,
-    metadata: Omit<BusinessResourceGroup, 'name'>,
-  ): BusinessGroupReference {
-    if (!this.resources)
-      throw new Error('Business resources are not initialized');
-    this.add({ name, ...metadata });
-    return new BusinessGroupReference(name, this.resources);
-  }
-  add(value: BusinessResourceGroup): void {
+export class AuthorizationResourceGroups {
+  private entries = new Map<string, AuthorizationResourceGroup>();
+  add(value: AuthorizationResourceGroup): void {
     if (
       value.category &&
       !['business', 'administration'].includes(value.category)
@@ -82,17 +69,15 @@ export class BusinessResourceGroups {
   has(name: string): boolean {
     return this.entries.has(name);
   }
-  list(): readonly BusinessResourceGroup[] {
+  list(): readonly AuthorizationResourceGroup[] {
     return structuredClone([...this.entries.values()]);
   }
 }
 /** User-facing operations compose underlying resource types. */
-export class BusinessResources {
-  private definitions = new Map<string, BusinessResource>();
-  constructor(private groups: BusinessResourceGroups) {
-    groups.bind(this);
-  }
-  add(definition: BusinessResource): void {
+export class AuthorizationResources {
+  private definitions = new Map<string, AuthorizationResource>();
+  constructor(private groups: AuthorizationResourceGroups) {}
+  add(definition: AuthorizationResource): void {
     if (
       !definition.name ||
       this.definitions.has(definition.name) ||
@@ -183,12 +168,12 @@ export class BusinessResources {
   operation(
     resource: string,
     action: string,
-  ): BusinessResource['actions'][number] | undefined {
+  ): AuthorizationResource['actions'][number] | undefined {
     return this.definitions
       .get(resource)
       ?.actions.find((entry) => entry.name === action);
   }
-  definitionsList(): readonly BusinessResource[] {
+  definitionsList(): readonly AuthorizationResource[] {
     return structuredClone([...this.definitions.values()]);
   }
   grant(
@@ -196,12 +181,12 @@ export class BusinessResources {
     actions:
       | readonly string[]
       | Readonly<
-          Record<string, Readonly<Record<string, BusinessScopeSelection>>>
+          Record<string, Readonly<Record<string, RecordAccessSelection>>>
         >,
   ): PermissionGrant {
     const definition = this.definitions.get(name);
     if (!definition) throw new TypeError('Unknown business resource or action');
-    return buildBusinessGrant(definition, actions);
+    return buildResourceGrant(definition, actions);
   }
   expand(grant: AuthorizationGrant): readonly AuthorizationGrant[] {
     if (grant.resource.type !== 'resource') return [grant];
@@ -262,7 +247,7 @@ export class BusinessResources {
 }
 export function composedGrants(
   provider: AuthorizationGrantService,
-  resources: BusinessResources,
+  resources: AuthorizationResources,
   constraints: AccessConstraintService,
 ): AuthorizationGrantService {
   const expand = async (

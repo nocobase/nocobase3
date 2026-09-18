@@ -26,6 +26,7 @@ export const restrictionRules = [
     .title(label('rules.public'))
     .scope('view', 'orders', publicRecords)
     .scope('deliver', 'orders', publicRecords)
+    .scope('manageRelations', 'orders', publicRecords)
     .build(),
 ];
 export function restrictionRuleRows(context: SalesSeedContext) {

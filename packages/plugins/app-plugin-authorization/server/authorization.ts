@@ -190,12 +190,15 @@ export function createAppAuthorization(
                               : undefined;
                         if (typeof key !== 'string')
                           throw new TypeError('Invalid record access policy');
-                        const policy =
-                          database.authorizationApi.db.recordAccess.get(key);
+                        const policy = authz.recordAccess.get(key);
                         if (
                           !policy ||
-                          (policy.collections &&
-                            !policy.collections.includes(target.resource.id))
+                          !policy.resources.some(
+                            (resource) =>
+                              resource.type === target.resource.type &&
+                              (resource.id === '*' ||
+                                resource.id === target.resource.id),
+                          )
                         )
                           throw new TypeError(
                             'Unknown or inapplicable record access policy',

@@ -19,6 +19,10 @@ export const sharingRules = [
       type: 'policy',
       policy: databaseScope('example.sales.region'),
     })
+    .scope('manageRelations', 'orders', {
+      type: 'policy',
+      policy: databaseScope('example.sales.region'),
+    })
     .build(),
   sharingRule('example-selected-projects', projectResource.reference())
     .title(label('rules.projects'))

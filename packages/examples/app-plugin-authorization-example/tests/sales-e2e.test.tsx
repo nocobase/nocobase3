@@ -494,7 +494,7 @@ it('does not combine broad note access with narrow title access into broad title
     grants: [
       authz.resources.grant('example.sales.projects', ['view']),
       authz.db.grant(PROJECTS, {
-        update: { fields: { input: ['notes'] }, recordAccess: ['allRecords'] },
+        update: { fields: ['notes'], recordAccess: ['allRecords'] },
       }),
     ],
   });
@@ -503,7 +503,7 @@ it('does not combine broad note access with narrow title access into broad title
     grants: [
       authz.db.grant(PROJECTS, {
         update: {
-          fields: { input: ['title'] },
+          fields: ['title'],
           recordAccess: ['recordsIOwn'],
         },
       }),

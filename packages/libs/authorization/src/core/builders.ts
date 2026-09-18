@@ -1,17 +1,18 @@
+import { buildResourceGrant } from './resource-grant.js';
 import type { PermissionGrant } from '../plugins/permission-sets/model.js';
 import type {
-  BusinessResource,
-  BusinessResources,
-  BusinessScopeSelection,
-} from './business-resources.js';
+  AuthorizationResource,
+  AuthorizationResources,
+  RecordAccessSelection,
+} from './resources.js';
 import type { ResourceTitle } from './registry.js';
 
 export type ActionScopes = NonNullable<
-  BusinessResource['actions'][number]['scopes']
+  AuthorizationResource['actions'][number]['scopes']
 >;
 /** Plugins build serializable grants and describe their configurable scopes. */
 export interface AuthorizationContribution<
-  S extends Record<string, BusinessScopeSelection> = Record<never, never>,
+  S extends Record<string, RecordAccessSelection> = Record<never, never>,
 > {
   build(): { grants: readonly PermissionGrant[]; scopes?: ActionScopes };
   /** Type-only scope selections, carried from plugin builders into business grants. */
@@ -23,20 +24,57 @@ type ContributionScopes<C extends AuthorizationContribution> =
     ? NonNullable<C['scopeSelections']>
     : Record<never, never>;
 
-export class BusinessActionBuilder<
-  S extends Record<string, BusinessScopeSelection> = Record<never, never>,
+/** A plugin-owned permission that can be bound to an action's configuration key. */
+export interface BindableAuthorizationPermission {
+  readonly recordAccessSelection?: RecordAccessSelection;
+  bind<K extends string>(
+    key: K,
+    metadata?: { title?: ResourceTitle },
+  ): AuthorizationContribution<Record<K, RecordAccessSelection>>;
+}
+
+export class AuthorizationActionBuilder<
+  S extends Record<string, RecordAccessSelection> = Record<never, never>,
 > implements AuthorizationContribution<S> {
   declare readonly scopeSelections?: S;
   constructor(
     private readonly grants: readonly PermissionGrant[] = [],
     private readonly scopes: ActionScopes = {},
+    private readonly actionTitle: ResourceTitle | undefined = undefined,
   ) {
     this.grants = structuredClone(grants);
     this.scopes = structuredClone(scopes);
+    this.actionTitle = structuredClone(actionTitle);
+  }
+  title(title: ResourceTitle): AuthorizationActionBuilder<S> {
+    return new AuthorizationActionBuilder(this.grants, this.scopes, title);
   }
   grant<C extends AuthorizationContribution>(
     value: C,
-  ): BusinessActionBuilder<S & ContributionScopes<C>> {
+  ): AuthorizationActionBuilder<S & ContributionScopes<C>>;
+  grant<const K extends string, P extends BindableAuthorizationPermission>(
+    key: K extends keyof S ? never : K,
+    permission: P,
+    metadata?: { title?: ResourceTitle },
+  ): AuthorizationActionBuilder<
+    S &
+      Record<
+        K,
+        'recordAccessSelection' extends keyof P
+          ? NonNullable<P['recordAccessSelection']>
+          : RecordAccessSelection
+      >
+  >;
+  grant(
+    valueOrKey: AuthorizationContribution | string,
+    permission?: BindableAuthorizationPermission,
+    metadata?: { title?: ResourceTitle },
+  ): AuthorizationActionBuilder<S> {
+    const value =
+      typeof valueOrKey === 'string'
+        ? permission?.bind(valueOrKey, metadata)
+        : valueOrKey;
+    if (!value) throw new TypeError('A permission is required');
     const contribution = value.build();
     const scopes = { ...this.scopes };
     for (const [key, scope] of Object.entries(contribution.scopes ?? {})) {
@@ -44,28 +82,37 @@ export class BusinessActionBuilder<
         throw new TypeError(`Duplicate action scope: ${key}`);
       Object.defineProperty(scopes, key, { value: scope, enumerable: true });
     }
-    return new BusinessActionBuilder(
+    return new AuthorizationActionBuilder(
       [...this.grants, ...contribution.grants],
       scopes,
+      this.actionTitle,
     );
   }
-  build(): { grants: readonly PermissionGrant[]; scopes: ActionScopes } {
-    return structuredClone({ grants: this.grants, scopes: this.scopes });
+  build(): {
+    grants: readonly PermissionGrant[];
+    scopes: ActionScopes;
+    title?: ResourceTitle;
+  } {
+    return structuredClone({
+      grants: this.grants,
+      scopes: this.scopes,
+      ...(this.actionTitle === undefined ? {} : { title: this.actionTitle }),
+    });
   }
 }
 
-export type BusinessActions = Record<
+export type AuthorizationActions = Record<
   string,
-  Record<string, BusinessScopeSelection>
+  Record<string, RecordAccessSelection>
 >;
 type ScopeAssignments<S> = keyof S extends never
   ? Record<string, never>
   : Partial<S>;
-type ActionAssignments<A extends BusinessActions> = {
+type ActionAssignments<A extends AuthorizationActions> = {
   [K in keyof A]?: ScopeAssignments<A[K]>;
 };
-export class BusinessResourceReference<A extends BusinessActions> {
-  constructor(private readonly definition: BusinessResource) {}
+export class AuthorizationResourceReference<A extends AuthorizationActions> {
+  constructor(private readonly definition: AuthorizationResource) {}
   get name(): string {
     return this.definition.name;
   }
@@ -88,108 +135,79 @@ export class BusinessResourceReference<A extends BusinessActions> {
   grant(actions: ActionAssignments<A>): PermissionGrant;
   grant(...input: (string | ActionAssignments<A>)[]): PermissionGrant {
     const first = input[0];
-    return buildBusinessGrant(
+    return buildResourceGrant(
       this.definition,
       typeof first === 'object'
-        ? (first as Record<string, Record<string, BusinessScopeSelection>>)
+        ? (first as Record<string, Record<string, RecordAccessSelection>>)
         : (input as string[]),
     );
   }
 }
 
-export class BusinessResourceBuilder<
-  A extends BusinessActions = Record<never, never>,
+export class AuthorizationResourceBuilder<
+  A extends AuthorizationActions = Record<never, never>,
 > {
-  constructor(
-    private readonly registry: BusinessResources | undefined,
-    private readonly definition: BusinessResource,
-  ) {
+  constructor(private readonly definition: AuthorizationResource) {
     this.definition = structuredClone(definition);
+  }
+  title(title: ResourceTitle): AuthorizationResourceBuilder<A> {
+    return new AuthorizationResourceBuilder({
+      ...this.definition,
+      title,
+    });
+  }
+  group(group: string): AuthorizationResourceBuilder<A> {
+    return new AuthorizationResourceBuilder({
+      ...this.definition,
+      group,
+    });
   }
   action<const N extends string, C extends AuthorizationContribution>(
     name: N extends keyof A ? never : N,
-    metadata: { title: ResourceTitle },
-    configure: (action: BusinessActionBuilder) => C,
-  ): BusinessResourceBuilder<A & Record<N, ContributionScopes<C>>> {
-    const contribution = configure(new BusinessActionBuilder()).build();
-    return new BusinessResourceBuilder(this.registry, {
+    configure: (action: AuthorizationActionBuilder) => C,
+  ): AuthorizationResourceBuilder<A & Record<N, ContributionScopes<C>>> {
+    if (!name || this.definition.actions.some((action) => action.name === name))
+      throw new TypeError('Duplicate or empty resource action');
+    const contribution = configure(new AuthorizationActionBuilder()).build();
+    const title =
+      'title' in contribution ? (contribution.title as ResourceTitle) : name;
+    return new AuthorizationResourceBuilder({
       ...this.definition,
-      actions: [
-        ...this.definition.actions,
-        { name, ...metadata, ...contribution },
-      ],
+      actions: [...this.definition.actions, { ...contribution, name, title }],
     });
   }
-  build(): BusinessResource {
+  build(): AuthorizationResource {
     return structuredClone(this.definition);
   }
-  reference(): BusinessResourceReference<A> {
-    return new BusinessResourceReference(this.build());
+  reference(): AuthorizationResourceReference<A> {
+    return new AuthorizationResourceReference(this.build());
   }
   register(
-    registry: BusinessResources | undefined = this.registry,
-  ): BusinessResourceReference<A> {
-    if (!registry) throw new Error('A business resource registry is required');
+    registry: AuthorizationResources,
+  ): AuthorizationResourceReference<A> {
     registry.add(this.build());
     return this.reference();
   }
 }
 
-export class BusinessGroupReference {
-  constructor(
-    readonly name: string,
-    private readonly registry: BusinessResources,
-  ) {}
-  resource(
-    name: string,
-    metadata: { title: ResourceTitle },
-  ): BusinessResourceBuilder {
-    return new BusinessResourceBuilder(this.registry, {
-      name,
-      ...metadata,
-      group: this.name,
-      actions: [],
-    });
-  }
-}
-
-/** A portable declaration, independent of an application or registry. */
-export function businessResource(
+/** Build a portable resource without registering it into an application. */
+export function defineAuthorizationResource<A extends AuthorizationActions>(
   name: string,
-  metadata: { title: ResourceTitle; group: string },
-): BusinessResourceBuilder {
-  return new BusinessResourceBuilder(undefined, {
-    name,
-    ...metadata,
-    actions: [],
-  });
-}
-
-export function buildBusinessGrant(
-  definition: BusinessResource,
-  actions:
-    | readonly string[]
-    | Readonly<
-        Record<string, Readonly<Record<string, BusinessScopeSelection>>>
-      >,
-): PermissionGrant {
-  if (
-    (Array.isArray(actions) ? actions : Object.keys(actions)).some(
-      (action) => !definition.actions.some((item) => item.name === action),
-    )
-  )
-    throw new TypeError('Unknown business resource or action');
-  return structuredClone({
-    resource: { type: 'resource', id: definition.name },
-    actions: Array.isArray(actions)
-      ? actions.map((action: string) => ({ action }))
-      : Object.entries(
-          actions as Readonly<
-            Record<string, Readonly<Record<string, BusinessScopeSelection>>>
-          >,
-        ).map(([action, scopes]) => ({
-          action,
-          policy: { type: 'resource', ...scopes },
-        })),
-  });
+  configure: (
+    resource: AuthorizationResourceBuilder,
+  ) => AuthorizationResourceBuilder<A>,
+): AuthorizationResourceBuilder<A> {
+  if (!name) throw new TypeError('A resource name is required');
+  const result = configure(
+    new AuthorizationResourceBuilder({
+      name,
+      title: name,
+      group: '',
+      actions: [],
+    }),
+  );
+  const definition = result.build();
+  if (!definition.group || !definition.actions.length)
+    throw new TypeError('A resource requires a group and actions');
+  return new AuthorizationResourceBuilder(definition);
 }

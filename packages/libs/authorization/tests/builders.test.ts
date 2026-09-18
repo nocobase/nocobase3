@@ -1,13 +1,14 @@
 import { expect, it } from 'vitest';
 import {
-  BusinessResourceGroups,
-  BusinessResources,
+  AuthorizationResourceGroups,
+  AuthorizationResources,
+  defineAuthorizationResource,
   type AuthorizationContribution,
 } from '../src/core/index.js';
 
 it('composes a third-party plugin contribution without database methods', () => {
-  const groups = new BusinessResourceGroups();
-  const resources = new BusinessResources(groups);
+  const groups = new AuthorizationResourceGroups();
+  const resources = new AuthorizationResources(groups);
   const workflow: AuthorizationContribution = {
     build: () => ({
       grants: [
@@ -18,11 +19,17 @@ it('composes a third-party plugin contribution without database methods', () => 
       ],
     }),
   };
-  const reference = groups
-    .define('operations', { title: 'Operations', category: 'administration' })
-    .resource('approval', { title: 'Approval' })
-    .action('run', { title: 'Run' }, (action) => action.grant(workflow))
-    .register();
+  groups.add({
+    name: 'operations',
+    title: 'Operations',
+    category: 'administration',
+  });
+  const reference = defineAuthorizationResource('approval', (resource) =>
+    resource
+      .group('operations')
+      .title('Approval')
+      .action('run', (action) => action.title('Run').grant(workflow)),
+  ).register(resources);
   expect(reference.grant('run').actions).toEqual([{ action: 'run' }]);
   expect(resources.operation('approval', 'run')?.grants[0].resource.type).toBe(
     'workflow',
@@ -30,39 +37,43 @@ it('composes a third-party plugin contribution without database methods', () => 
 });
 
 it('registers only complete resources and retains runtime validation', () => {
-  const groups = new BusinessResourceGroups();
-  const resources = new BusinessResources(groups);
-  const builder = groups
-    .define('sales', { title: 'Sales' })
-    .resource('quotes', { title: 'Quotes' });
+  const groups = new AuthorizationResourceGroups();
+  const resources = new AuthorizationResources(groups);
+  groups.add({ name: 'sales', title: 'Sales' });
   expect(resources.definitionsList()).toEqual([]);
-  expect(() => builder.register()).toThrow('Invalid business actions');
   expect(() =>
-    builder.action('view', { title: 'View' }, (action) => action).register(),
+    defineAuthorizationResource('quotes', (r) => r.group('sales')),
+  ).toThrow('requires a group and actions');
+  expect(() =>
+    defineAuthorizationResource('quotes', (r) =>
+      r.group('sales').action('view', (a) => a),
+    ).register(resources),
   ).toThrow('underlying resources');
 });
 
 it('builds portable JSON declarations without registration and isolates snapshots', async () => {
-  const { businessResource } = await import('../src/core/index.js');
-  const resource = businessResource('reports', {
-    group: 'sales',
-    title: 'Reports',
-  }).action('export', { title: 'Export' }, (action) =>
-    action.grant({
-      build: () => ({
-        grants: [
-          {
-            resource: { type: 'report', id: 'sales' },
-            actions: [{ action: 'download' }],
-          },
-        ],
-      }),
-    }),
+  const { defineAuthorizationResource } = await import('../src/core/index.js');
+  const resource = defineAuthorizationResource('reports', (resource) =>
+    resource
+      .group('sales')
+      .title('Reports')
+      .action('export', (action) =>
+        action.title('Export').grant({
+          build: () => ({
+            grants: [
+              {
+                resource: { type: 'report', id: 'sales' },
+                actions: [{ action: 'download' }],
+              },
+            ],
+          }),
+        }),
+      ),
   );
-  const first = new BusinessResourceGroups();
-  const second = new BusinessResourceGroups();
-  const fluent = new BusinessResources(first);
-  const json = new BusinessResources(second);
+  const first = new AuthorizationResourceGroups();
+  const second = new AuthorizationResourceGroups();
+  const fluent = new AuthorizationResources(first);
+  const json = new AuthorizationResources(second);
   for (const groups of [first, second])
     groups.add({ name: 'sales', title: 'Sales', category: 'administration' });
   const data = resource.build();
@@ -79,8 +90,8 @@ it('builds portable JSON declarations without registration and isolates snapshot
 });
 
 it('rejects page composition and limits business groups to database operations', () => {
-  const groups = new BusinessResourceGroups();
-  const resources = new BusinessResources(groups);
+  const groups = new AuthorizationResourceGroups();
+  const resources = new AuthorizationResources(groups);
   groups.add({ name: 'sales', title: 'Sales' });
   groups.add({ name: 'system', title: 'System', category: 'administration' });
   const definition = (group: string, type: string) => ({

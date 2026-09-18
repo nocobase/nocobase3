@@ -1,3 +1,4 @@
+import setupSeed from '../database/seeds/202609220002_sales_permissions.js';
 import { expect, it } from 'vitest';
 import { createFixture } from './helpers.js';
 import { permissionSets } from '../database/seed-data/permission-sets.js';
@@ -36,6 +37,10 @@ it('persists the fluent declarations and all per-table fixtures with their relat
           expect(String(row.id).length).toBeLessThanOrEqual(64);
       }
     }
+    await setupSeed.run({
+      query,
+      connection: fixture.database.connection(),
+    });
     for (const set of permissionSets)
       expect(await fixture.authorization.permissionSets.get(set.key)).toEqual(
         set,

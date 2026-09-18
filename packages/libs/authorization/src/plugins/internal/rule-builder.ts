@@ -1,15 +1,15 @@
 import type {
-  BusinessActions,
-  BusinessResourceReference,
+  AuthorizationActions,
+  AuthorizationResourceReference,
 } from '../../core/builders.js';
 
 /** Validate names through the resource reference shared with registration. */
 export function appendScopedAction<
-  A extends BusinessActions,
+  A extends AuthorizationActions,
   N extends keyof A & string,
   T extends { action: string; scopeKey?: string },
 >(
-  resource: BusinessResourceReference<A>,
+  resource: AuthorizationResourceReference<A>,
   actions: readonly T[],
   action: N,
   scopeKey: keyof A[N] & string,

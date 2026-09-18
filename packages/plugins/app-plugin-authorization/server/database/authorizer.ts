@@ -1,3 +1,7 @@
+import {
+  RelationPermissionResolver,
+  mergeRelationPermissions,
+} from './relation-access.js';
 import { UserContextRequiredError } from './record-access.js';
 import type {
   AccessConstraint,
@@ -33,7 +37,7 @@ import {
   scopeAst,
   type DatabaseScope,
 } from './scope.js';
-import { RecordAccessPolicyRegistry } from './record-access-registry.js';
+import { RecordAccessRegistry } from '@nocobase/authorization/core';
 
 /** A decision that names this reason bypassed grants and constraints entirely. */
 export const UNRESTRICTED_ACCESS = 'UNRESTRICTED_ACCESS';
@@ -43,14 +47,14 @@ const actions: readonly string[] = ['read', 'create', 'update', 'delete'];
 
 export interface DatabaseResourceAuthorizerOptions {
   collections: DatabaseCollectionRegistry;
-  recordAccess: RecordAccessPolicyRegistry;
+  recordAccess: RecordAccessRegistry;
   /** Absent when the application installed the plugin without a connection. */
   resolveCollection?: ResolveAuthorizationCollection;
 }
 
 export class DatabaseResourceAuthorizer {
   private readonly collections: DatabaseCollectionRegistry;
-  private readonly recordAccess: RecordAccessPolicyRegistry;
+  private readonly recordAccess: RecordAccessRegistry;
   private readonly resolveCollection:
     ResolveAuthorizationCollection | undefined;
 
@@ -134,7 +138,7 @@ export class DatabaseResourceAuthorizer {
         `No database grant allows ${resourceId}.${request.action}`,
       );
     }
-    const fields = resolveDatabaseFields(configs);
+    const fields = resolveDatabaseFields(configs, request.action);
     if (!databaseFieldsAllowed(params?.fields, fields)) {
       return this.deny(
         'FIELD_NOT_ALLOWED',
@@ -157,7 +161,7 @@ export class DatabaseResourceAuthorizer {
               resource: { type: 'database.collection', id: resourceId },
               action: request.action,
             });
-      const scope =
+      let scope =
         request.action === 'create'
           ? true
           : await this.resolveEffectiveScope(
@@ -168,6 +172,62 @@ export class DatabaseResourceAuthorizer {
               constraints,
               params?.fields,
             );
+      const resolver = new RelationPermissionResolver({
+        resolveCollection: this.resolveCollection!,
+        resolveScope: async (collection, rules) =>
+          anyScope(
+            await this.compileScopes(
+              request.principal,
+              collection,
+              request.action,
+              rules,
+            ),
+          ),
+      });
+      const relationBranches = await Promise.all(
+        configs.map(async (config) => {
+          const relations = await resolver.resolve(
+            resource,
+            config.relations,
+            request.action,
+          );
+          return {
+            relations,
+            scope:
+              request.action === 'create' || !Object.keys(relations).length
+                ? true
+                : configs.length === 1
+                  ? scope
+                  : await this.resolveEffectiveScope(
+                      request.principal,
+                      resource,
+                      request.action,
+                      [config],
+                      constraints,
+                      params?.fields,
+                    ),
+          };
+        }),
+      );
+      // Identical relation grants may union their root scopes. Different shapes
+      // share one DB node, so conservatively require all contributing groups.
+      const relationScopes = new Map<string, DatabaseScope[]>();
+      for (const branch of relationBranches) {
+        if (!Object.keys(branch.relations).length) continue;
+        const key = JSON.stringify(branch.relations);
+        const scopes = relationScopes.get(key) ?? [];
+        scopes.push(branch.scope);
+        relationScopes.set(key, scopes);
+      }
+      if (configs.length > 1)
+        scope = allScopes([
+          scope,
+          ...[...relationScopes.values()].map(anyScope),
+        ]);
+      const relations = mergeRelationPermissions(
+        relationBranches.map((branch) => branch.relations),
+        request.action,
+      );
       const explanation = [
         ...reasons,
         ...[
@@ -196,6 +256,7 @@ export class DatabaseResourceAuthorizer {
         action: request.action,
         scope: scope === true ? true : scopeAst(resourceId, scope),
         fields: resolveActionFields(request.action, fields, resource),
+        relations,
         fieldAccess: fields,
         allFields:
           request.action === 'delete' ||
@@ -319,7 +380,7 @@ export class DatabaseResourceAuthorizer {
       resource,
       action,
     );
-    const fields = resolveDatabaseFields(configs);
+    const fields = resolveDatabaseFields(configs, action);
     const requested = {
       ...requestedFields,
       ...(action === 'read'
@@ -341,7 +402,7 @@ export class DatabaseResourceAuthorizer {
           branches.every((branch) =>
             databaseFieldsAllowed(
               { [direction]: [field] },
-              resolveDatabaseFields([branch.config]),
+              resolveDatabaseFields([branch.config], action),
             ),
           )
         )
@@ -352,7 +413,7 @@ export class DatabaseResourceAuthorizer {
               .filter((branch) =>
                 databaseFieldsAllowed(
                   { [direction]: [field] },
-                  resolveDatabaseFields([branch.config]),
+                  resolveDatabaseFields([branch.config], action),
                 ),
               )
               .map((branch) => branch.scope),
@@ -413,16 +474,33 @@ export class DatabaseResourceAuthorizer {
       if (!policy) {
         throw new Error(`Unknown Record Access policy: ${config.key}`);
       }
-      if (policy.collections && !policy.collections.includes(resource.name))
-        throw new TypeError(
-          'Record access policy is not applicable to this collection',
-        );
-      const value: unknown = await policy.resolve({
+      let value: unknown = await this.recordAccess.resolve(config.key, {
         principal,
-        collection: resource,
+        resource: { type: 'database.collection', id: resource.name },
         action,
         params: config.params,
       });
+      // Repository input builders produce full FilterAst values. DB owns validation.
+      if (
+        value &&
+        typeof value === 'object' &&
+        Reflect.get(value, 'kind') === 'filter'
+      ) {
+        if (
+          Reflect.get(value, 'version') !== 1 ||
+          (Reflect.get(value, 'collection') !== undefined &&
+            Reflect.get(value, 'collection') !== resource.name)
+        )
+          throw new TypeError('Invalid record access filter');
+        const root: unknown = Reflect.get(value, 'root');
+        if (
+          !root ||
+          typeof root !== 'object' ||
+          Reflect.get(root, 'kind') !== 'group'
+        )
+          throw new TypeError('Invalid record access filter root');
+        value = root;
+      }
       assertDatabaseScope(value, resource.fields);
       resolved.push(value);
     }
@@ -450,7 +528,16 @@ function isDatabaseAuthorizationPolicy(
     value !== null &&
     typeof value === 'object' &&
     !Array.isArray(value) &&
-    Reflect.get(value, 'type') === 'database'
+    Reflect.get(value, 'type') === 'database' &&
+    isPermissionFields(Reflect.get(value, 'fields'))
+  );
+}
+
+function isPermissionFields(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === '*' ||
+    (Array.isArray(value) && value.every((field) => typeof field === 'string'))
   );
 }
 

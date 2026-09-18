@@ -33,11 +33,11 @@ it('rejects ambiguous or invalid action scope declarations', () => {
 });
 
 it('preserves the business origin of grants without named data scopes', async () => {
-  const { BusinessResources, BusinessResourceGroups } =
-    await import('../src/core/business-resources.js');
-  const groups = new BusinessResourceGroups();
+  const { AuthorizationResources, AuthorizationResourceGroups } =
+    await import('../src/core/resources.js');
+  const groups = new AuthorizationResourceGroups();
   groups.add({ name: 'sales', title: 'Sales' });
-  const resources = new BusinessResources(groups);
+  const resources = new AuthorizationResources(groups);
   resources.add({
     name: 'sales.export',
     title: 'Export',

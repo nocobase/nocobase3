@@ -1,5 +1,9 @@
 import { salesRecords } from '../sales-records.js';
-import type { RepositoryPolicy } from '@nocobase/db';
+import type {
+  RepositoryPolicy,
+  UpdateMutationValues,
+  RepositoryRecord,
+} from '@nocobase/db';
 import { PROJECTS, QUOTES, ORDERS } from '../sales-authorization.js';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
@@ -71,6 +75,19 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
             );
           users[key] = user.id;
         }
+        await connection.query
+          .deleteFrom('authorizationExampleOrderTeams')
+          .allowAllRows()
+          .execute();
+        await connection.query
+          .deleteFrom('authorizationExampleOrderChecks')
+          .allowAllRows()
+          .execute();
+        await connection.query
+          .updateTable(ORDERS)
+          .set({ deliveryTeamId: null })
+          .allowAllRows()
+          .execute();
         const records = salesRecords(users);
         for (const [collection, rows] of [
           [PROJECTS, records.projects],
@@ -347,6 +364,127 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         .catch(stateConflict);
       return c.json({ data: { saved: true } });
     });
+    router.get('/sales/orders/:id/relations', async (c) => {
+      const decision = await c.var.authz.authorize({
+        resource: { type: 'resource', id: 'example.sales.orders' },
+        action: 'view',
+      });
+      if (decision.effect === 'deny' || !decision.conditions?.database)
+        throw new AuthorizationDeniedError(decision);
+      const order = await database
+        .repository(ORDERS)
+        .withPolicy(decision.conditions.database[ORDERS])
+        .findOne({
+          filter: { id: c.req.param('id') },
+          select: (select) =>
+            select
+              .fields('id', 'title', 'status')
+              .include('deliveryTeam', (team) => team.fields('id', 'title'))
+              .include('checks', (checks) =>
+                checks.fields('id', 'title', 'done'),
+              )
+              .include('collaborators', (team) => team.fields('id', 'title')),
+        });
+      if (!order) return c.json({ code: 'FORBIDDEN' }, 403);
+      const manage = await c.var.authz.authorize({
+        resource: { type: 'resource', id: 'example.sales.orders' },
+        action: 'manageRelations',
+      });
+      const policy =
+        manage.effect !== 'deny'
+          ? manage.conditions?.database?.[ORDERS]
+          : undefined;
+      const editable =
+        policy &&
+        (await writableRepository(ORDERS, policy, [])?.findOne({
+          filter: { id: c.req.param('id') },
+        }));
+      const write =
+        editable && order.status === 'ready' ? policy?.update : undefined;
+      const relations = write && write !== true ? write.relations : undefined;
+      const operations: Record<string, string[]> = {};
+      const options: Record<string, RepositoryRecord[]> = {};
+      for (const name of ['deliveryTeam', 'checks', 'collaborators']) {
+        const node = write === true ? true : relations && relations[name];
+        operations[name] =
+          node === true
+            ? [
+                'create',
+                'update',
+                'upsert',
+                'connect',
+                'disconnect',
+                'set',
+                'delete',
+              ]
+            : node
+              ? Object.keys(node).filter((key) => key !== 'scope')
+              : [];
+        if (
+          name !== 'checks' &&
+          node &&
+          (node === true || node.connect || node.set)
+        ) {
+          options[name] = await database
+            .repository('authorizationExampleTeams')
+            .withPolicy({
+              read: {
+                scope: node === true ? true : (node.scope ?? true),
+                fields: ['id', 'title'],
+                relations: false,
+              },
+              create: false,
+              update: false,
+              delete: false,
+            })
+            .findMany({
+              select: (select) => select.fields('id', 'title'),
+              sort: (sort) => sort.field('title').asc(),
+            });
+        }
+      }
+      return c.json({
+        data: {
+          ...order,
+          operations,
+          options,
+          access: !policy
+            ? 'notGranted'
+            : !editable
+              ? 'outsideScope'
+              : order.status !== 'ready'
+                ? 'notReady'
+                : 'allowed',
+        },
+      });
+    });
+    router.post('/sales/orders/:id/relations', async (c) => {
+      const decision = await c.var.authz.authorize({
+        resource: { type: 'resource', id: 'example.sales.orders' },
+        action: 'manageRelations',
+      });
+      if (decision.effect === 'deny' || !decision.conditions?.database)
+        throw new AuthorizationDeniedError(decision);
+      const values: unknown = await c.req.json();
+      if (!values || typeof values !== 'object' || Array.isArray(values))
+        throw new TypeError('Expected relation values');
+      const policy = decision.conditions.database[ORDERS];
+      const order = await writableRepository(ORDERS, policy, [])?.findOne({
+        filter: { id: c.req.param('id') },
+      });
+      if (!order) return c.json({ code: 'FORBIDDEN' }, 403);
+      if (order.status !== 'ready')
+        return c.json({ code: 'STATE_CONFLICT' }, 409);
+      // Recheck state in the mutation predicate; DB executes nested writes atomically.
+      await database
+        .repository(ORDERS)
+        .withPolicy(decision.conditions.database[ORDERS])
+        .updateOne({
+          filter: { id: c.req.param('id'), status: 'ready' },
+          values: values as UpdateMutationValues<Partial<RepositoryRecord>>,
+        });
+      return c.json({ data: { saved: true } });
+    });
     router.post('/sales/orders/:id/deliver', async (c) => {
       const decision = await c.var.authz.authorize({
         resource: { type: 'resource', id: 'example.sales.orders' },
@@ -381,6 +519,16 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     router.onError((error, c) => {
       if (error instanceof StateConflictError)
         return c.json({ code: 'STATE_CONFLICT' }, 409);
+      if (
+        error instanceof RepositoryError &&
+        [
+          'INVALID_MUTATION',
+          'INVALID_FILTER',
+          'RELATION_NOT_FOUND',
+          'FIELD_NOT_FOUND',
+        ].includes(error.code)
+      )
+        return c.json({ code: 'INVALID_INPUT' }, 400);
       if (error instanceof TypeError)
         return c.json({ code: 'INVALID_INPUT' }, 400);
       if (

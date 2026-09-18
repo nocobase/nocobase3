@@ -26,10 +26,10 @@ await authz.permissionSets.create({
 再将 Permission Set 分配给用户、角色或其他 subject。运行时授权不要求页面预先注册；要让权限集编辑器和权限检查器展示页面，应用应注册页面名称和标题：
 
 ```ts
-const usersPage = authz.pages.define('users', { title: '用户管理' });
+authz.pages.add({ name: 'users', title: '用户管理', actions: ['access'] });
 
 // 与上面的 JSON DSL 授权等价。
-const grant = usersPage.access();
+const grant = authz.pages.grant('users', ['access']);
 ```
 
 已注册页面显示在独立的“页面权限”分类中，即使应用没有业务分组也会显示。页面权限只控制进入页面，不授予数据库操作。业务权限只组合数据库权限，不包含页面访问；权限集需要分别声明这两类授权。默认数据范围、共享规则和限制规则只配置业务数据范围。

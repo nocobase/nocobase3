@@ -1,6 +1,15 @@
 import type { ResourceAccessScope } from '@nocobase/authorization/core';
 import type { AuthorizationConditions } from '@nocobase/authorization/core';
 import type { FilterAst } from '@nocobase/db';
+import type {
+  PermissionFields,
+  ReadPermission,
+  RelationWritePermission,
+} from './permissions.js';
+import type {
+  ResolvedReadPermission,
+  ResolvedRelationWritePermission,
+} from './relation-access.js';
 
 /**
  * What authorization needs to know about a Collection, read from db.
@@ -12,6 +21,9 @@ import type { FilterAst } from '@nocobase/db';
 export interface AuthorizationCollection {
   readonly name: string;
   readonly fields: readonly string[];
+  readonly relations?: Readonly<
+    Record<string, { readonly target: string; readonly through?: string }>
+  >;
   readonly primaryKey: string;
   readonly generatedPrimaryKey: boolean;
 }
@@ -45,7 +57,9 @@ export interface DatabasePermissionFields {
 export interface DatabaseActionGrant {
   scope?: string;
   branchConstraints?: readonly import('@nocobase/authorization/core').AccessConstraint[];
-  fields?: DatabasePermissionFields;
+  fields?: PermissionFields;
+  relations?:
+    false | Readonly<Record<string, ReadPermission | RelationWritePermission>>;
   recordAccess?: readonly DatabaseRecordAccess[];
 }
 
@@ -85,6 +99,9 @@ export interface DatabaseAuthorizationConditions extends AuthorizationConditions
   action: string;
   scope: true | FilterAst;
   fields: readonly string[];
+  relations?: Readonly<
+    Record<string, ResolvedReadPermission | ResolvedRelationWritePermission>
+  >;
   /** Inspection metadata; repository enforcement uses scope and fields above. */
   fieldAccess?: DatabasePermissionFields;
   allFields?: boolean;

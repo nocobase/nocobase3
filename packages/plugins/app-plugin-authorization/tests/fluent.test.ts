@@ -1,224 +1,139 @@
 import { expect, it } from 'vitest';
 import {
-  BusinessResourceGroups,
-  BusinessResources,
-  BusinessActionBuilder,
+  AuthorizationActionBuilder,
+  AuthorizationResourceGroups,
+  AuthorizationResources,
+  defineAuthorizationResource,
 } from '@nocobase/authorization/core';
+import { defineDatabasePermission } from '../server/database/builders.js';
 import { DatabaseAuthorizationService } from '../server/database/api.js';
-import { RecordAccessPolicyRegistry } from '../server/database/record-access-registry.js';
+import { defineRecordAccess } from '@nocobase/authorization/core';
 import { pages } from '../server/pages-authorization.js';
 
-function setup() {
-  const groups = new BusinessResourceGroups();
-  const resources = new BusinessResources(groups);
-  const db = new DatabaseAuthorizationService(new RecordAccessPolicyRegistry());
-  const sales = groups.define('sales', { title: 'Sales' });
-  const quotes = db
-    .collection('quotes')
-    .typed<{ id: string; amount: number; ownerId: string }>()
-    .actions('read', 'update')
-    .register();
-  return { db, resources, sales, quotes };
-}
-
-it('composes plugin grants without leaking writes across reused scopes', () => {
-  const { resources, sales, quotes } = setup();
-  const scope = quotes
-    .scope('quotes', { title: 'Quotes' })
-    .read(['id', 'amount']);
-  const reference = sales
-    .resource('sales.quotes', { title: 'Quotes' })
-    .action('view', { title: 'View' }, (action) => action.grant(scope))
-    .action('edit', { title: 'Edit' }, (action) =>
-      action.grant(scope.update(['amount'])),
-    )
-    .register();
-  expect(resources.operation('sales.quotes', 'view')?.grants).toEqual([
+it('binds reusable permissions to independent action keys without leaking writes', () => {
+  const read = defineDatabasePermission((p) =>
+    p
+      .collection<{ id: string; amount: number }>('quotes')
+      .title('Quotes')
+      .read(['id']),
+  );
+  const resource = defineAuthorizationResource('sales.quotes', (r) =>
+    r
+      .title('Quotes')
+      .group('sales')
+      .action('view', (a) => a.title('View').grant('visible', read))
+      .action('edit', (a) =>
+        a.title('Edit').grant('editable', read.update(['amount']), {
+          title: 'Editable quotes',
+        }),
+      ),
+  );
+  const groups = new AuthorizationResourceGroups();
+  const resources = new AuthorizationResources(groups);
+  groups.add({ name: 'sales', title: 'Sales' });
+  resources.add(resource.build());
+  expect(read.build().actions).toHaveLength(1);
+  expect(read.build().actions[0].policy).not.toHaveProperty('scope');
+  expect(
+    resources.operation('sales.quotes', 'view')?.grants[0].actions,
+  ).toEqual([
     {
-      resource: { type: 'database.collection', id: 'quotes' },
-      actions: [
-        {
-          action: 'read',
-          policy: {
-            type: 'database',
-            scope: 'quotes',
-            fields: { output: ['id', 'amount'] },
-          },
-        },
-      ],
+      action: 'read',
+      policy: { type: 'database', fields: ['id'], scope: 'visible' },
     },
   ]);
   expect(
-    resources
-      .operation('sales.quotes', 'edit')
-      ?.grants[0].actions.map((action) => action.action),
-  ).toEqual(['read', 'update']);
-  expect(reference.grant('view')).toEqual(
-    resources.grant('sales.quotes', ['view']),
-  );
-});
-
-it('registers resolvers, carries scope options and applies the selected default', async () => {
-  const { db, resources, sales, quotes } = setup();
-  const own = quotes
-    .recordAccess('own')
-    .title('Own')
-    .resolve(({ filter, principal }) => filter.eq('ownerId', principal.id))
-    .register();
-  const scope = quotes
-    .scope('quotes', { title: 'Quotes' })
-    .options(own)
-    .default(own)
-    .read(['id']);
-  const reference = sales
-    .resource('quotes', { title: 'Quotes' })
-    .action('view', { title: 'View' }, (action) => action.grant(scope))
-    .register();
-  const [grant] = reference.grant({ view: { quotes: 'own' } }).actions;
-  const expanded = resources.expand({
-    resource: { type: 'resource', id: 'quotes' },
-    action: grant.action,
-    policy: grant.policy,
-    source: { plugin: 'test', id: 'test' },
-  });
-  expect(expanded[1].policy?.recordAccess).toEqual(['own']);
-  const defaults = resources.expand({
-    resource: { type: 'resource', id: 'quotes' },
-    action: 'view',
-    source: { plugin: 'test', id: 'test' },
-  });
-  expect(defaults[1].policy?.recordAccess).toEqual(['own']);
+    resources.operation('sales.quotes', 'edit')?.scopes?.editable.title,
+  ).toBe('Editable quotes');
+  const bound = read.bind('snapshot').build();
+  Reflect.set(bound.grants[0].actions[0].policy!, 'fields', []);
   expect(
-    await db.recordAccess.get('own')!.resolve({
-      principal: { type: 'user', id: 'alex' },
-      collection: {
-        name: 'quotes',
-        fields: ['id', 'ownerId'],
-        primaryKey: 'id',
-        generatedPrimaryKey: false,
-      },
-      action: 'read',
-      params: undefined,
-    }),
-  ).toEqual({
-    kind: 'condition',
-    path: ['ownerId'],
-    operator: '$eq',
-    value: 'alex',
-  });
+    read.bind('snapshot').build().grants[0].actions[0].policy?.fields,
+  ).toEqual(['id']);
 });
 
-it('keeps independent scope selections on a multi-table operation', () => {
-  const { db, resources, sales, quotes } = setup();
-  const projects = db
-    .collection('projects')
-    .typed<{ id: string }>()
-    .actions('read')
-    .register();
-  const reference = sales
-    .resource('submit', { title: 'Submit' })
-    .action('run', { title: 'Run' }, (action) =>
-      action
-        .grant(projects.scope('projects', { title: 'Projects' }).read(['id']))
-        .grant(
-          quotes
-            .scope('quotes', { title: 'Quotes' })
-            .read(['id'])
-            .update(['amount']),
-        ),
-    )
-    .register();
-  const [grant] = reference.grant({
-    run: { projects: 'regional', quotes: 'own' },
-  }).actions;
+it('keeps multi-table selections and defaults through binding and expansion', () => {
+  const own = defineRecordAccess('own', (access) =>
+    access
+      .resources({ type: 'database.collection', id: 'quotes' })
+      .resolve(() => true),
+  );
+  const quotes = defineDatabasePermission((p) =>
+    p.collection('quotes').read(['id']).options(own).default(own),
+  );
+  const projects = defineDatabasePermission((p) =>
+    p.collection('projects').read(['id']),
+  );
+  const resource = defineAuthorizationResource('submit', (r) =>
+    r
+      .group('sales')
+      .action('run', (a) =>
+        a.grant('quotes', quotes).grant('projects', projects),
+      ),
+  );
+  const groups = new AuthorizationResourceGroups();
+  const resources = new AuthorizationResources(groups);
+  groups.add({ name: 'sales', title: 'Sales' });
+  resource.register(resources);
+  const [grant] = resource
+    .reference()
+    .grant({ run: { projects: 'regional' } }).actions;
   const expanded = resources.expand({
     resource: { type: 'resource', id: 'submit' },
-    action: grant.action,
-    policy: grant.policy,
+    ...grant,
     source: { plugin: 'test', id: 'test' },
   });
-  expect(
-    expanded
-      .slice(1)
-      .map((entry) => [
-        entry.resource.id,
-        entry.action,
-        entry.policy?.recordAccess,
-      ]),
-  ).toEqual([
-    ['projects', 'read', ['regional']],
-    ['quotes', 'read', ['own']],
-    ['quotes', 'update', ['own']],
+  expect(expanded.slice(1).map((entry) => entry.policy?.recordAccess)).toEqual([
+    ['own'],
+    ['regional'],
   ]);
 });
 
-it('rejects ambiguous and empty contributions at runtime', () => {
-  const { quotes } = setup();
-  const scope = quotes.scope('quotes', { title: 'Quotes' });
-  expect(() => scope.build()).toThrow('at least one action');
-  expect(() => scope.read(['id']).read(['amount'])).toThrow(
-    'Duplicate database action',
+it('rejects duplicate bindings, malformed declarations and incompatible scope choices', () => {
+  const permission = defineDatabasePermission((p) =>
+    p.collection('quotes').read(['id']),
   );
+  expect(() => defineDatabasePermission((p) => p.collection('empty'))).toThrow(
+    'at least one action',
+  );
+  expect(() => permission.read(['amount'])).toThrow('Duplicate');
   expect(() =>
-    new BusinessActionBuilder()
-      .grant(scope.read(['id']))
-      .grant(scope.update(['amount'])),
-  ).toThrow('Duplicate action scope');
+    new AuthorizationActionBuilder()
+      .grant('rows', permission)
+      .grant('rows' as never, permission),
+  ).toThrow('Duplicate');
+  expect(() => permission.bind('type')).toThrow('Invalid');
   expect(() =>
-    scope.options({ key: 'foreign', collections: ['other'] } as never),
+    permission.options({
+      key: 'foreign',
+      resources: [{ type: 'database.collection', id: 'other' }],
+    }),
   ).toThrow('does not apply');
   expect(() =>
-    scope
-      .options({ key: 'own', collections: ['quotes'] })
-      .default({ key: 'other', collections: ['quotes'] } as never),
+    permission
+      .options({
+        key: 'own',
+        resources: [{ type: 'database.collection', id: 'quotes' }],
+      })
+      .default({
+        key: 'other',
+        resources: [{ type: 'database.collection', id: 'quotes' }],
+      } as never),
   ).toThrow('Invalid default');
 });
 
-it('supports portable collection, page and resolver definitions', async () => {
-  const { databaseCollection } = await import('../server/database/builders.js');
-  const { authorizationPage } =
-    await import('../server/pages-authorization.js');
-  const { db } = setup();
-  const definition = databaseCollection('portable')
-    .typed<{ id: string }>()
-    .actions('read');
-  expect(db.collections.has('portable')).toBe(false);
-  const data = JSON.parse(JSON.stringify(definition.build()));
-  db.collections.add(data);
-  expect(
-    definition
-      .register(db)
-      .scope('rows', { title: 'Rows' })
-      .read(['id'])
-      .build(),
-  ).toEqual(
-    definition
-      .reference()
-      .scope('rows', { title: 'Rows' })
-      .read(['id'])
-      .build(),
-  );
-  const resolver = definition
-    .reference()
-    .recordAccess('portable-own')
-    .resolve(({ principal, filter }) => filter.eq('id', principal.id));
-  expect(db.recordAccess.get('portable-own')).toBeUndefined();
-  db.recordAccess.add(resolver.build());
-  expect(
-    await db.recordAccess.get('portable-own')!.resolve({
-      principal: { type: 'user', id: 'alex' },
-      collection: {
-        name: 'portable',
-        fields: ['id'],
-        primaryKey: 'id',
-        generatedPrimaryKey: false,
-      },
-      action: 'read',
-      params: undefined,
-    }),
-  ).toMatchObject({ value: 'alex' });
+it('registers pages and collections directly without definition factories', () => {
+  const db = new DatabaseAuthorizationService();
+  db.collections.add({
+    name: 'quotes',
+    title: 'Quotes',
+    actions: ['read', 'update'],
+  });
+  expect(db.collections.has('quotes')).toBe(true);
   const api = pages().authorizationApi!.pages;
-  const page = authorizationPage('portable', { title: 'Portable' });
-  api.add(JSON.parse(JSON.stringify(page.build())));
-  expect(page.reference().access()).toEqual(api.grant('portable', ['access']));
+  api.add({ name: 'quotes', title: 'Quotes', actions: ['access'] });
+  expect(api.grant('quotes', ['access'])).toEqual({
+    resource: { type: 'page', id: 'quotes' },
+    actions: [{ action: 'access' }],
+  });
 });

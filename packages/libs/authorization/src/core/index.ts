@@ -22,8 +22,10 @@ export * from './types.js';
 
 export * from './resource-actions.js';
 
-export * from './business-resources.js';
+export * from './resources.js';
 
 export * from './titles.js';
 
 export * from './builders.js';
+
+export * from './record-access.js';

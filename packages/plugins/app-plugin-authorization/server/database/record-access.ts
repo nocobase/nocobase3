@@ -1,45 +1,10 @@
 import type { Principal } from '@nocobase/authorization/core';
-import type { OptionText } from '../i18n.js';
-import type { AuthorizationCollection } from './model.js';
 import { condition, type DatabaseScope } from './scope.js';
 
-export interface RecordAccessPolicyContext<P> {
-  principal: Principal;
-  collection: AuthorizationCollection;
-  action: string;
-  params: P;
-}
-
-export interface RecordAccessPolicy<P = unknown> {
-  key: string;
-  collections?: readonly string[];
-  requiredFields?: readonly string[];
-  title?: OptionText;
-  description?: OptionText;
-  paramsSchema?: unknown;
-  resolve(
-    context: RecordAccessPolicyContext<P>,
-  ): DatabaseScope | Promise<DatabaseScope>;
-}
-
-export interface DefineRecordAccessPolicyOptions<P = unknown> {
-  key: string;
-  collections?: readonly string[];
-  requiredFields?: readonly string[];
-  title?: OptionText;
-  description?: OptionText;
-  paramsSchema?: unknown;
-  resolve: RecordAccessPolicy<P>['resolve'];
-}
-
-export function defineRecordAccessPolicy<P = unknown>(
-  options: DefineRecordAccessPolicyOptions<P>,
-): RecordAccessPolicy<P> {
-  return { ...options };
-}
+import { type RecordAccessPolicy } from '@nocobase/authorization/core';
 
 export function allRecords(): RecordAccessPolicy {
-  return defineRecordAccessPolicy({
+  return databaseRecordAccess({
     key: 'allRecords',
     title: { key: 'options.recordAccessPolicies.allRecords' },
     resolve: () => true,
@@ -65,32 +30,24 @@ function userId(principal: Principal): string {
 export function recordsIOwn(): RecordAccessPolicy<
   RecordOwnerParams | undefined
 > {
-  return defineRecordAccessPolicy<RecordOwnerParams | undefined>({
+  return databaseRecordAccess<RecordOwnerParams | undefined>({
     key: 'recordsIOwn',
     requiredFields: ['ownerId'],
     title: { key: 'options.recordAccessPolicies.recordsIOwn' },
-    resolve: ({ principal, collection, params }) =>
-      condition(
-        ownerField(collection, params?.field ?? 'ownerId'),
-        '$eq',
-        userId(principal),
-      ),
+    resolve: ({ principal, params }) =>
+      condition(params?.field ?? 'ownerId', '$eq', userId(principal)),
   });
 }
 
 export function recordsICreated(): RecordAccessPolicy<
   RecordOwnerParams | undefined
 > {
-  return defineRecordAccessPolicy<RecordOwnerParams | undefined>({
+  return databaseRecordAccess<RecordOwnerParams | undefined>({
     key: 'recordsICreated',
     requiredFields: ['createdById'],
     title: { key: 'options.recordAccessPolicies.recordsICreated' },
-    resolve: ({ principal, collection, params }) =>
-      condition(
-        ownerField(collection, params?.field ?? 'createdById'),
-        '$eq',
-        userId(principal),
-      ),
+    resolve: ({ principal, params }) =>
+      condition(params?.field ?? 'createdById', '$eq', userId(principal)),
   });
 }
 
@@ -99,7 +56,7 @@ export interface CustomFilterParams {
 }
 
 export function customFilter(): RecordAccessPolicy<CustomFilterParams> {
-  return defineRecordAccessPolicy({
+  return databaseRecordAccess({
     key: 'customFilter',
     title: { key: 'options.recordAccessPolicies.customFilter' },
     description: { key: 'options.recordAccessPolicies.customFilterHint' },
@@ -113,14 +70,30 @@ export function customFilter(): RecordAccessPolicy<CustomFilterParams> {
   });
 }
 
-function ownerField(
-  collection: AuthorizationCollection,
-  field: string,
-): string {
-  if (!collection.fields.includes(field)) {
-    throw new Error(
-      `Collection "${collection.name}" has no field "${field}" to own records by`,
-    );
-  }
-  return field;
+/** DB-specific applicability metadata, interpreted only by the DB adapter. */
+export interface DatabaseRecordAccessPolicy<
+  P = unknown,
+> extends RecordAccessPolicy<P> {
+  requiredFields?: readonly string[];
+}
+function databaseRecordAccess<P = unknown>(
+  definition: Omit<DatabaseRecordAccessPolicy<P>, 'resources'>,
+): DatabaseRecordAccessPolicy<P> {
+  return {
+    ...definition,
+    resources: [{ type: 'database.collection', id: '*' }],
+  };
+}
+export function databaseRecordAccessApplicable(
+  policy: RecordAccessPolicy,
+  fields: readonly string[],
+): boolean {
+  const required: unknown = Reflect.get(policy, 'requiredFields');
+  return (
+    required === undefined ||
+    (Array.isArray(required) &&
+      required.every(
+        (field: unknown) => typeof field === 'string' && fields.includes(field),
+      ))
+  );
 }

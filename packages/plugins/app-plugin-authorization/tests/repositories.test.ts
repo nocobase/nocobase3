@@ -164,12 +164,11 @@ describe('authorizing repository API routes', () => {
     });
   });
 
-  // A grant carries no relation rules, and an unmentioned member of a patch
-  // stays as it was, so the shape's `connect` survives the narrowing.
-  it('keeps the relation rules the shape declares and the fields the grant allows', async () => {
+  // A complete authorization result closes relations absent from the grant.
+  it('closes ungranted relation rules even when the endpoint shape allows them', async () => {
     await grantOrders({
       recordAccess: ['allRecords'],
-      fields: { input: ['id', 'ownerId'], output: '*' },
+      fields: ['id', 'ownerId'],
     });
     const router = await routes();
 
@@ -184,11 +183,120 @@ describe('authorizing repository API routes', () => {
       values: { id: 'order-4', ownerId: 'alice', amount: 30 },
     });
 
-    expect(created.status).toBe(200);
+    expect(created.status).toBe(403);
+    await expect(created.json()).resolves.toMatchObject({
+      code: 'RELATION_WRITE_FORBIDDEN',
+    });
     expect(refused.status).toBe(403);
     await expect(refused.json()).resolves.toMatchObject({
       code: 'FIELD_WRITE_FORBIDDEN',
     });
+  });
+
+  it('allows an explicitly granted relation within the endpoint shape', async () => {
+    await createSet('connector', [
+      {
+        resource: { type: 'database.collection', id: 'authzOrders' },
+        actions: [
+          {
+            action: 'read',
+            policy: {
+              type: 'database',
+              fields: ['id', 'ownerId'],
+              recordAccess: ['allRecords'],
+            },
+          },
+          {
+            action: 'create',
+            policy: {
+              type: 'database',
+              fields: ['id', 'ownerId'],
+              relations: { customer: { connect: {} } },
+            },
+          },
+        ],
+      },
+    ]);
+    await assign('connector', 'alice');
+    const response = await post(await routes(), '/authzOrders:createOne', {
+      values: {
+        id: 'order-3',
+        ownerId: 'alice',
+        customer: { connect: { id: 'acme' } },
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(
+      await database
+        .repository('authzOrders')
+        .findOne({ filter: { id: 'order-3' } }),
+    ).toMatchObject({ customerId: 'acme' });
+  });
+
+  it('does not move a relation capability from an owned-record grant onto all records', async () => {
+    const authorization = createAuthorization();
+    authorization.db.collections.add('authzOrders');
+    await createSet('own-connection', [
+      {
+        resource: { type: 'database.collection', id: 'authzOrders' },
+        actions: [
+          {
+            action: 'update',
+            policy: {
+              type: 'database',
+              fields: [],
+              recordAccess: ['recordsIOwn'],
+              relations: { customer: { connect: {} } },
+            },
+          },
+        ],
+      },
+    ]);
+    await createSet('all-amounts', [
+      {
+        resource: { type: 'database.collection', id: 'authzOrders' },
+        actions: [
+          {
+            action: 'read',
+            policy: {
+              type: 'database',
+              fields: ['id'],
+              recordAccess: ['allRecords'],
+            },
+          },
+          {
+            action: 'update',
+            policy: {
+              type: 'database',
+              fields: ['amount'],
+              recordAccess: ['allRecords'],
+            },
+          },
+        ],
+      },
+    ]);
+    await assign('own-connection', 'alice');
+    await assign('all-amounts', 'alice');
+    const policy = await authorization.db.policyFor(
+      'authzOrders',
+      authorization.for({ principal: { type: 'user', id: 'alice' } }),
+    );
+    const repository = database.repository('authzOrders').withPolicy(policy);
+    await expect(
+      repository.updateOne({
+        filter: { id: 'order-2' },
+        values: { customer: { connect: { id: 'acme' } } },
+      }),
+    ).rejects.toMatchObject({ code: 'RECORD_NOT_FOUND' });
+    await repository.updateOne({
+      filter: { id: 'order-1' },
+      values: { customer: { connect: { id: 'acme' } } },
+    });
+    expect(
+      await database
+        .repository('authzOrders')
+        .findOne({ filter: { id: 'order-2' } }),
+    ).toMatchObject({ customerId: null });
   });
 
   it('registers nothing: an exposure names a resource, it does not declare one', () => {
@@ -282,7 +390,7 @@ async function grantOrders(config: object): Promise<void> {
         action,
         policy: {
           type: 'database',
-          fields: { input: '*', output: '*' },
+          fields: '*',
           ...config,
         },
       })),

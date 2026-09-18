@@ -12,8 +12,25 @@ vi.mock('../client/pages/use-example.js', () => ({
     loading: false,
     error: '',
     reload: vi.fn(),
-    data:
-      path === 'sales/projects'
+    data: path.endsWith('/relations')
+      ? {
+          id: 'o1',
+          title: 'Harbor order',
+          access: 'allowed',
+          operations: {
+            deliveryTeam: ['connect', 'disconnect'],
+            checks: ['create', 'update', 'delete'],
+            collaborators: ['connect', 'set', 'disconnect'],
+          },
+          options: {
+            deliveryTeam: [{ id: 'delivery', title: 'Delivery' }],
+            collaborators: [{ id: 'proposal', title: 'Proposal' }],
+          },
+          deliveryTeam: null,
+          checks: [],
+          collaborators: [],
+        }
+      : path === 'sales/projects'
         ? {
             items: [
               {
@@ -179,4 +196,47 @@ it('requires unsaved quote changes to be saved before submission', () => {
   });
   expect(screen.getByRole('button', { name: 'sales.submit' })).toBeDisabled();
   expect(screen.getByText('sales.saveFirst')).toBeInTheDocument();
+});
+
+it('uses relation mutation envelopes from the order relationship editor', async () => {
+  render(
+    <MemoryRouter>
+      <SalesPage path='orders' />
+    </MemoryRouter>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'relations.assign' }));
+  await waitFor(() =>
+    expect(api.request).toHaveBeenCalledWith({
+      method: 'POST',
+      path: '/authorization-example/sales/orders/o1/relations',
+      json: { deliveryTeam: { connect: { id: 'delivery' } } },
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'relations.addProposal' }),
+    ).toBeEnabled(),
+  );
+  fireEvent.change(screen.getByRole('textbox', { name: 'relations.note' }), {
+    target: { value: 'Review paperwork' },
+  });
+  fireEvent.click(
+    screen.getByRole('button', { name: 'relations.addProposal' }),
+  );
+  await waitFor(() =>
+    expect(api.request).toHaveBeenCalledWith({
+      method: 'POST',
+      path: '/authorization-example/sales/orders/o1/relations',
+      json: {
+        collaborators: {
+          connect: [
+            {
+              where: { id: 'proposal' },
+              through: { note: 'Review paperwork' },
+            },
+          ],
+        },
+      },
+    }),
+  );
 });

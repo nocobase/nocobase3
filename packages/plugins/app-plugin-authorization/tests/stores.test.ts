@@ -56,7 +56,7 @@ describe('authorization plugin database stores', () => {
       key: 'order-reader',
       grants: [
         authorization.db.grant('orders', {
-          read: { fields: { output: ['id', 'amount'] } },
+          read: { fields: ['id', 'amount'] },
         }),
       ],
     });

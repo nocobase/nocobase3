@@ -1,6 +1,6 @@
 import type {
-  BusinessActions,
-  BusinessResourceReference,
+  AuthorizationActions,
+  AuthorizationResourceReference,
 } from '../../core/builders.js';
 import { appendScopedAction } from '../internal/rule-builder.js';
 import type { RestrictionRule, RestrictionRuleAction } from './model.js';
@@ -8,9 +8,9 @@ import type { AccessConstraintValue } from '../../core/constraints.js';
 import type { AuthorizationTitle } from '../../core/titles.js';
 import type { AuthorizationSubject } from '../../core/types.js';
 
-export class RestrictionRuleBuilder<A extends BusinessActions> {
+export class RestrictionRuleBuilder<A extends AuthorizationActions> {
   constructor(
-    private readonly resource: BusinessResourceReference<A>,
+    private readonly resource: AuthorizationResourceReference<A>,
     private readonly definition: RestrictionRule,
   ) {}
   scope<N extends keyof A & string>(
@@ -53,9 +53,9 @@ export class RestrictionRuleBuilder<A extends BusinessActions> {
     return structuredClone(this.definition);
   }
 }
-export function restrictionRule<A extends BusinessActions>(
+export function restrictionRule<A extends AuthorizationActions>(
   key: string,
-  resource: BusinessResourceReference<A>,
+  resource: AuthorizationResourceReference<A>,
 ): RestrictionRuleBuilder<A> {
   if (!key) throw new TypeError('A rule needs a key');
   return new RestrictionRuleBuilder(resource, {

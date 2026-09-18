@@ -1,10 +1,11 @@
+import type { RecordAccessRegistry } from './record-access.js';
 import type { AuthorizationGrantService } from './grants.js';
 import type {
   ResourceAuthorizationCheck,
   ResourceAuthorizationConditions,
-  BusinessResources,
-  BusinessResourceGroups,
-} from './business-resources.js';
+  AuthorizationResources,
+  AuthorizationResourceGroups,
+} from './resources.js';
 import type { ResourceHandlerRegistry } from './registry.js';
 import type { AuthorizationMiddleware } from './middleware.js';
 import type { AccessConstraintRegistry } from './constraints.js';
@@ -12,12 +13,13 @@ import type { AuthorizationSubjectRegistry } from './subjects.js';
 import type { AuthorizationRouteRegistry } from './routes.js';
 
 export interface AuthorizationPluginSetup<TConnection = unknown> {
+  readonly recordAccess: RecordAccessRegistry;
   /** The handle the host passed to `createAuthorization`, never inspected here. */
   readonly connection?: TConnection;
   readonly grants: AuthorizationGrantService;
-  readonly resources: BusinessResources;
+  readonly resources: AuthorizationResources;
   readonly resourceTypes: ResourceHandlerRegistry;
-  readonly resourceGroups: BusinessResourceGroups;
+  readonly resourceGroups: AuthorizationResourceGroups;
   readonly getResource: ResourceHandlerRegistry['getResource'];
   readonly constraints: AccessConstraintRegistry;
   readonly subjects: AuthorizationSubjectRegistry;

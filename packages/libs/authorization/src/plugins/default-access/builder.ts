@@ -1,14 +1,14 @@
 import type {
-  BusinessActions,
-  BusinessResourceReference,
+  AuthorizationActions,
+  AuthorizationResourceReference,
 } from '../../core/builders.js';
 import { appendScopedAction } from '../internal/rule-builder.js';
 import type { DefaultAccessRule, DefaultAccessAction } from './model.js';
 import type { AccessConstraintValue } from '../../core/constraints.js';
 
-export class DefaultAccessRuleBuilder<A extends BusinessActions> {
+export class DefaultAccessRuleBuilder<A extends AuthorizationActions> {
   constructor(
-    private readonly resource: BusinessResourceReference<A>,
+    private readonly resource: AuthorizationResourceReference<A>,
     private readonly definition: DefaultAccessRule,
   ) {}
   scope<N extends keyof A & string>(
@@ -31,8 +31,8 @@ export class DefaultAccessRuleBuilder<A extends BusinessActions> {
     return structuredClone(this.definition);
   }
 }
-export function defaultAccessRule<A extends BusinessActions>(
-  resource: BusinessResourceReference<A>,
+export function defaultAccessRule<A extends AuthorizationActions>(
+  resource: AuthorizationResourceReference<A>,
 ): DefaultAccessRuleBuilder<A> {
   return new DefaultAccessRuleBuilder(resource, {
     resource: { type: 'resource', id: resource.name },

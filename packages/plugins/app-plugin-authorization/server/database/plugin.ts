@@ -9,7 +9,12 @@ import { DatabaseResourceAuthorizer } from './authorizer.js';
 import { DatabaseCollectionRegistry } from './collection-registry.js';
 import { collectionResolver } from './collections.js';
 import type { DatabaseAuthorizationParams } from './model.js';
-import { RecordAccessPolicyRegistry } from './record-access-registry.js';
+import {
+  allRecords,
+  customFilter,
+  recordsIOwn,
+  recordsICreated,
+} from './record-access.js';
 
 /**
  * The api is narrowed to the service so the host can bind itself to it after
@@ -23,8 +28,7 @@ export interface DatabaseAuthorizationPlugin extends AuthorizationPlugin<
 }
 
 export function databaseAuthorization(): DatabaseAuthorizationPlugin {
-  const recordAccess = new RecordAccessPolicyRegistry();
-  const api = new DatabaseAuthorizationService(recordAccess);
+  const api = new DatabaseAuthorizationService();
   const collections = api.collections;
   return {
     id: 'database',
@@ -34,11 +38,18 @@ export function databaseAuthorization(): DatabaseAuthorizationPlugin {
     requiresGrants: true,
     authorizationApi: { db: api },
     setup(authz): void {
+      for (const policy of [
+        allRecords(),
+        customFilter(),
+        recordsIOwn(),
+        recordsICreated(),
+      ])
+        authz.recordAccess.add(policy);
       // Collection metadata comes from the connection the host passed in; an
       // application that installed the plugin without one grants nothing.
       const authorizer = new DatabaseResourceAuthorizer({
         collections,
-        recordAccess,
+        recordAccess: authz.recordAccess,
         ...(authz.connection
           ? { resolveCollection: collectionResolver(authz.connection) }
           : {}),

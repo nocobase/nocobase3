@@ -1,3 +1,4 @@
+import { defineRecordAccess } from '@nocobase/authorization/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import {
@@ -17,7 +18,6 @@ import {
 } from '@nocobase/authorization';
 import {
   databaseAuthorization,
-  defineRecordAccessPolicy,
   recordsIOwn,
   condition,
   type DatabaseAuthorizationPlugin,
@@ -159,7 +159,7 @@ function readerStore(policy: object): MockPermissionSetStore {
 function setup(
   policy: object = {
     type: 'database',
-    fields: { output: ['id', 'amount', 'ownerId'] },
+    fields: ['id', 'amount', 'ownerId'],
     recordAccess: ['recordsIOwn'],
   },
 ) {
@@ -177,6 +177,23 @@ const request = {
 };
 
 describe('database resource authorization', () => {
+  it.each([{ input: ['id'] }, { output: '*' }, { input: '*', output: '*' }])(
+    'rejects object-shaped grant fields %j even without requested fields',
+    async (fields) => {
+      const authorization = setup({
+        type: 'database',
+        fields,
+        recordAccess: ['allRecords'],
+      });
+      await expect(
+        authorization.authorize({ ...request, params: {} }),
+      ).resolves.toMatchObject({
+        effect: 'deny',
+        reasons: [{ code: 'NO_OBJECT_PERMISSION' }],
+      });
+    },
+  );
+
   it('denies every Collection when the plugin was installed without a connection', async () => {
     const authorization = createAuthorization({
       plugins: [
@@ -212,18 +229,20 @@ describe('database resource authorization', () => {
     });
     expect(
       authorization.db.grant('orders', {
-        read: { fields: { output: ['id'] }, recordAccess: ['recordsIOwn'] },
+        read: { fields: ['id'], recordAccess: ['recordsIOwn'] },
       }),
     ).toMatchObject({ resource });
     expect(recordsIOwn()).toMatchObject({ key: 'recordsIOwn' });
-    const policy = defineRecordAccessPolicy({
-      key: 'regionalRecords',
-      resolve: ({ principal }) =>
-        condition('regionId', '$eq', String(principal.attributes?.regionId)),
-    });
-    authorization.db.recordAccess.add(policy);
-    expect(authorization.db.recordAccess.get('regionalRecords')).toBe(policy);
-    expect(authorization.db.recordAccess.list()).toEqual(
+    const policy = defineRecordAccess('regionalRecords', (access) =>
+      access
+        .resources(resource)
+        .resolve(({ principal }) =>
+          condition('regionId', '$eq', String(principal.attributes?.regionId)),
+        ),
+    );
+    authorization.recordAccess.add(policy);
+    expect(authorization.recordAccess.get('regionalRecords')).toEqual(policy);
+    expect(authorization.recordAccess.list()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ key: 'allRecords' }),
         expect.objectContaining({ key: 'recordsIOwn' }),
@@ -231,9 +250,7 @@ describe('database resource authorization', () => {
         policy,
       ]),
     );
-    expect(() => authorization.db.recordAccess.add(policy)).toThrow(
-      /already registered/,
-    );
+    expect(() => authorization.recordAccess.add(policy)).toThrow(/Duplicate/);
     await expect(
       authorization.permissionSets.getEffective({
         principal: { type: 'user', id: 'alice' },
@@ -268,7 +285,7 @@ describe('database resource authorization', () => {
   it('expands a wildcard grant to the registered field list', async () => {
     const authorization = setup({
       type: 'database',
-      fields: { output: '*' },
+      fields: '*',
       recordAccess: ['allRecords'],
     });
     await expect(
@@ -298,7 +315,7 @@ describe('database resource authorization', () => {
                     actions: [
                       {
                         action: 'create',
-                        policy: { type: 'database', fields: { input: '*' } },
+                        policy: { type: 'database', fields: '*' },
                       },
                     ],
                   },
@@ -332,7 +349,7 @@ describe('database resource authorization', () => {
   it('takes the field a Record Access policy compares from its params', async () => {
     const authorization = setup({
       type: 'database',
-      fields: { output: ['id'] },
+      fields: ['id'],
       recordAccess: [{ key: 'recordsICreated', params: { field: 'ownerId' } }],
     });
 
@@ -349,7 +366,7 @@ describe('database resource authorization', () => {
   it('denies a Record Access policy pointed at a field the Collection has not', async () => {
     const authorization = setup({
       type: 'database',
-      fields: { output: ['id'] },
+      fields: ['id'],
       recordAccess: [{ key: 'recordsIOwn', params: { field: 'missing' } }],
     });
 
@@ -363,25 +380,102 @@ describe('database resource authorization', () => {
       reasons: [
         {
           code: 'DATABASE_AUTHORIZATION_FAILED',
-          message:
-            'Collection "orders" has no field "missing" to own records by',
+          message: 'Unknown Record Access scope field: missing',
         },
       ],
     });
   });
 
-  it('registers an application-defined Record Access policy', async () => {
-    const regionalRecords = defineRecordAccessPolicy<{ field: string }>({
-      key: 'regionalRecords',
-      resolve: ({ principal, params }) =>
-        condition(params.field, '$eq', String(principal.attributes?.regionId)),
-    });
+  it('accepts FilterAst results and rejects invalid or foreign-resource results', async () => {
+    for (const [value, effect] of [
+      [
+        {
+          kind: 'filter',
+          version: 1,
+          root: {
+            kind: 'group',
+            logic: 'and',
+            items: [condition('id', '$eq', 'one')],
+          },
+        },
+        'conditional',
+      ],
+      [
+        {
+          kind: 'filter',
+          version: 2,
+          root: { kind: 'group', logic: 'and', items: [] },
+        },
+        'deny',
+      ],
+      [{ kind: 'filter', version: 1, root: true }, 'deny'],
+      [
+        {
+          kind: 'filter',
+          version: 1,
+          collection: 'other',
+          root: { kind: 'group', logic: 'and', items: [] },
+        },
+        'deny',
+      ],
+      [{ prefix: 'files/' }, 'deny'],
+    ] as const) {
+      const authorization = setup({
+        type: 'database',
+        fields: ['id'],
+        recordAccess: ['ast'],
+      });
+      authorization.recordAccess.add(
+        defineRecordAccess('ast', (access) =>
+          access.resources(resource).resolve(() => value),
+        ),
+      );
+      const decision = await authorization.authorize({
+        principal: { type: 'user', id: 'alice' },
+        resource,
+        action: 'read',
+      });
+      expect(decision.effect).toBe(effect);
+    }
     const authorization = setup({
       type: 'database',
-      fields: { output: ['id', 'regionId'] },
+      recordAccess: ['foreign'],
+    });
+    authorization.recordAccess.add(
+      defineRecordAccess('foreign', (access) =>
+        access.resources({ type: 'file', id: 'orders' }).resolve(() => true),
+      ),
+    );
+    expect(
+      (
+        await authorization.authorize({
+          principal: { type: 'user', id: 'alice' },
+          resource,
+          action: 'read',
+        })
+      ).effect,
+    ).toBe('deny');
+  });
+
+  it('registers an application-defined Record Access policy', async () => {
+    const regionalRecords = defineRecordAccess('regionalRecords', (access) =>
+      access
+        .resources(resource)
+        .params<{ field: string }>({})
+        .resolve(({ principal, params }) =>
+          condition(
+            params.field,
+            '$eq',
+            String(principal.attributes?.regionId),
+          ),
+        ),
+    );
+    const authorization = setup({
+      type: 'database',
+      fields: ['id', 'regionId'],
       recordAccess: [{ key: 'regionalRecords', params: { field: 'regionId' } }],
     });
-    authorization.db.recordAccess.add(regionalRecords);
+    authorization.recordAccess.add(regionalRecords);
 
     await expect(
       authorization.authorize({
@@ -405,7 +499,7 @@ describe('database resource authorization', () => {
   it('resolves a custom filter Record Access policy from grant params', async () => {
     const authorization = setup({
       type: 'database',
-      fields: { output: ['id', 'regionId'] },
+      fields: ['id', 'regionId'],
       recordAccess: [
         {
           key: 'customFilter',
@@ -436,7 +530,7 @@ describe('database resource authorization', () => {
                   action: 'create',
                   policy: {
                     type: 'database',
-                    fields: { input: ['amount', 'ownerId'], output: ['id'] },
+                    fields: ['amount', 'ownerId'],
                   },
                 },
               ],
@@ -477,11 +571,12 @@ describe('database resource authorization', () => {
   it('rejects a Record Access policy that returns an invalid scope', async () => {
     const authorization = setup({
       type: 'database',
-      fields: { output: ['id'] },
+      fields: ['id'],
       recordAccess: ['invalidFilter'],
     });
-    authorization.db.recordAccess.add({
+    authorization.recordAccess.add({
       key: 'invalidFilter',
+      resources: [resource],
       resolve: () => condition('unknownField', '$eq', 'value'),
     });
 
@@ -534,7 +629,7 @@ describe('database resource authorization', () => {
         permissionSets({
           store: readerStore({
             type: 'database',
-            fields: { output: ['id', 'ownerId'] },
+            fields: ['id', 'ownerId'],
           }),
         }),
         sharingRules({ store: rules }),
@@ -571,7 +666,7 @@ describe('database resource authorization', () => {
   it('denies when no positive scope allows any row', async () => {
     const authorization = setup({
       type: 'database',
-      fields: { output: ['id'] },
+      fields: ['id'],
     });
     await expect(
       authorization.authorize({
@@ -598,7 +693,7 @@ describe('database resource authorization', () => {
       connection,
       plugins: [
         permissionSets({
-          store: readerStore({ type: 'database', fields: { output: ['id'] } }),
+          store: readerStore({ type: 'database', fields: ['id'] }),
         }),
         defaultAccess({ store: defaults }),
         databasePlugin(),
@@ -627,7 +722,7 @@ describe('database resource authorization', () => {
             action: input.action,
             policy: {
               type: 'database',
-              fields: { output: ['id', 'amount'] },
+              fields: ['id', 'amount'],
               recordAccess: ['allRecords'],
             },
           },
@@ -741,7 +836,7 @@ describe('policyFor', () => {
                   action: 'read',
                   policy: {
                     type: 'database',
-                    fields: { output: '*' },
+                    fields: '*',
                     recordAccess: ['allRecords'],
                   },
                 },
@@ -749,14 +844,14 @@ describe('policyFor', () => {
                   action: 'create',
                   policy: {
                     type: 'database',
-                    fields: { input: ['amount'] },
+                    fields: ['amount'],
                   },
                 },
                 {
                   action: 'update',
                   policy: {
                     type: 'database',
-                    fields: { input: ['amount'] },
+                    fields: ['amount'],
                     recordAccess: ['recordsIOwn'],
                   },
                 },
@@ -782,11 +877,12 @@ describe('policyFor', () => {
     });
 
     await expect(authorization.db.policyFor('orders', scope)).resolves.toEqual({
-      read: { scope: true, fields: orderFields },
-      create: { scope: true, fields: ['amount'] },
+      read: { scope: true, fields: orderFields, relations: {} },
+      create: { scope: true, fields: ['amount'], relations: {} },
       update: {
         scope: ast(and([condition('ownerId', '$eq', 'alice')])),
         fields: ['amount'],
+        relations: {},
       },
       // The grant says nothing about deleting, so the action is denied.
       delete: false,
@@ -898,7 +994,7 @@ describe('the Collection registry', () => {
         permissionSets({
           store: readerStore({
             type: 'database',
-            fields: { output: '*' },
+            fields: '*',
             recordAccess: ['allRecords'],
           }),
         }),

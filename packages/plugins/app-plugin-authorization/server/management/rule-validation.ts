@@ -67,7 +67,7 @@ export function validateDatabaseScopeRule(
           ? Reflect.get(recordAccess, 'key')
           : undefined;
     const policy =
-      typeof key === 'string' ? authz.db.recordAccess.get(key) : undefined;
+      typeof key === 'string' ? authz.recordAccess.get(key) : undefined;
     if (!policy) throw new TypeError('Unknown record access policy');
     const target =
       business && entry.scopeKey
@@ -77,7 +77,11 @@ export function validateDatabaseScopeRule(
         : undefined;
     const collectionId = target?.resource.id ?? rule.resource.id;
     if (
-      (policy.collections && !policy.collections.includes(collectionId)) ||
+      !policy.resources.some(
+        (resource) =>
+          resource.type === (target?.resource.type ?? rule.resource.type) &&
+          (resource.id === '*' || resource.id === collectionId),
+      ) ||
       (target?.options && !target.options.includes(policy.key))
     )
       throw new TypeError(

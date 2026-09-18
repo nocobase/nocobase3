@@ -18,18 +18,36 @@ export const permissionSets = [
   permissionSet('example-sales-assistant')
     .title(label('roles.assistant'))
     .grant(
-      projectPage.reference().access(),
-      quotePage.reference().access(),
-      orderPage.reference().access(),
+      {
+        resource: { type: 'page', id: projectPage.name },
+        actions: [{ action: 'access' }],
+      },
+      {
+        resource: { type: 'page', id: quotePage.name },
+        actions: [{ action: 'access' }],
+      },
+      {
+        resource: { type: 'page', id: orderPage.name },
+        actions: [{ action: 'access' }],
+      },
     )
     .grant(projects.grant('view'), quotes.grant('view'), orders.grant('view'))
     .build(),
   permissionSet('example-sales-engineer')
     .title(label('roles.engineer'))
     .grant(
-      projectPage.reference().access(),
-      quotePage.reference().access(),
-      orderPage.reference().access(),
+      {
+        resource: { type: 'page', id: projectPage.name },
+        actions: [{ action: 'access' }],
+      },
+      {
+        resource: { type: 'page', id: quotePage.name },
+        actions: [{ action: 'access' }],
+      },
+      {
+        resource: { type: 'page', id: orderPage.name },
+        actions: [{ action: 'access' }],
+      },
     )
     .grant(
       projects.grant({
@@ -50,9 +68,18 @@ export const permissionSets = [
   permissionSet('example-sales-manager')
     .title(label('roles.manager'))
     .grant(
-      projectPage.reference().access(),
-      quotePage.reference().access(),
-      orderPage.reference().access(),
+      {
+        resource: { type: 'page', id: projectPage.name },
+        actions: [{ action: 'access' }],
+      },
+      {
+        resource: { type: 'page', id: quotePage.name },
+        actions: [{ action: 'access' }],
+      },
+      {
+        resource: { type: 'page', id: orderPage.name },
+        actions: [{ action: 'access' }],
+      },
     )
     .grant(
       projects.grant({
@@ -65,8 +92,11 @@ export const permissionSets = [
     .build(),
   permissionSet('example-sales-delivery')
     .title(label('roles.delivery'))
-    .grant(orderPage.reference().access())
-    .grant(orders.grant('view', 'deliver'))
+    .grant({
+      resource: { type: 'page', id: orderPage.name },
+      actions: [{ action: 'access' }],
+    })
+    .grant(orders.grant('view', 'deliver', 'manageRelations'))
     .build(),
 ];
 export function permissionSetRows(context: SalesSeedContext) {

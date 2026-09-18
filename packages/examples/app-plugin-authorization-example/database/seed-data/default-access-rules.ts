@@ -20,6 +20,7 @@ export const defaultAccessRules = [
   defaultAccessRule(orderResource.reference())
     .scope('view', 'orders', databaseScope('example.sales.own'))
     .scope('deliver', 'orders', databaseScope('example.sales.own'))
+    .scope('manageRelations', 'orders', databaseScope('example.sales.own'))
     .build(),
 ];
 export function defaultAccessRuleRows(context: SalesSeedContext) {

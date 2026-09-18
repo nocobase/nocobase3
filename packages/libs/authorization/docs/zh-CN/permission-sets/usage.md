@@ -35,7 +35,7 @@ await authz.permissionSets.create({
   title: '订单只读',
   grants: [
     authz.db.grant('orders', {
-      read: { fields: { output: ['id', 'number', 'amount'] } },
+      read: { fields: ['id', 'number', 'amount'] },
     }),
   ],
 });

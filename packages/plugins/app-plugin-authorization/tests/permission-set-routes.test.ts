@@ -91,7 +91,7 @@ describe('Permission Set handler', () => {
                 action: 'read',
                 policy: {
                   type: 'database',
-                  fields: { output: ['id'] },
+                  fields: ['id'],
                 },
               },
             ],
@@ -110,7 +110,7 @@ describe('Permission Set handler', () => {
                 action: 'read',
                 policy: {
                   type: 'database',
-                  fields: { output: ['id'] },
+                  fields: ['id'],
                 },
               },
             ],

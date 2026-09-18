@@ -33,7 +33,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AUTHORIZATION_NAMESPACE } from '../shared.js';
 import { createAppAuthorization } from '../server/authorization.js';
-import { defineRecordAccessPolicy } from '../server/database/record-access.js';
+import { defineRecordAccess } from '@nocobase/authorization/core';
 import serverLocales from '../server/locales/index.js';
 import { apiRoutes } from '../server/routes/index.js';
 import {
@@ -359,13 +359,13 @@ describe('locale-independent option descriptors', () => {
         },
       ],
     });
-    authz.db.recordAccess.add(
-      defineRecordAccessPolicy({
-        key: 'regional',
-        // Nothing declares this key, so its last segment humanised is what shows.
-        title: { key: 'options.recordAccessPolicies.myRegion' },
-        resolve: () => true,
-      }),
+    authz.recordAccess.add(
+      defineRecordAccess('regional', (access) =>
+        access
+          .resources({ type: 'database.collection', id: '*' })
+          .title({ key: 'options.recordAccessPolicies.myRegion' })
+          .resolve(() => true),
+      ),
     );
     const router = await mountedRouter(authz);
 

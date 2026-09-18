@@ -1,6 +1,6 @@
 import type {
-  BusinessActions,
-  BusinessResourceReference,
+  AuthorizationActions,
+  AuthorizationResourceReference,
 } from '../../core/builders.js';
 import { appendScopedAction } from '../internal/rule-builder.js';
 import type {
@@ -11,9 +11,9 @@ import type {
 import type { AuthorizationTitle } from '../../core/titles.js';
 import type { AuthorizationSubject } from '../../core/types.js';
 
-export class SharingRuleBuilder<A extends BusinessActions> {
+export class SharingRuleBuilder<A extends AuthorizationActions> {
   constructor(
-    private readonly resource: BusinessResourceReference<A>,
+    private readonly resource: AuthorizationResourceReference<A>,
     private readonly definition: SharingRule,
   ) {}
   scope<N extends keyof A & string>(
@@ -53,9 +53,9 @@ export class SharingRuleBuilder<A extends BusinessActions> {
     return structuredClone(this.definition);
   }
 }
-export function sharingRule<A extends BusinessActions>(
+export function sharingRule<A extends AuthorizationActions>(
   key: string,
-  resource: BusinessResourceReference<A>,
+  resource: AuthorizationResourceReference<A>,
 ): SharingRuleBuilder<A> {
   if (!key) throw new TypeError('A rule needs a key');
   return new SharingRuleBuilder(resource, {

@@ -11,11 +11,12 @@ export interface ResolvedDatabaseFields {
 
 export function resolveDatabaseFields(
   configs: readonly DatabaseActionGrant[],
+  action: string,
 ): ResolvedDatabaseFields {
-  return {
-    input: unionFields(configs.map((config) => config.fields?.input)),
-    output: unionFields(configs.map((config) => config.fields?.output)),
-  };
+  const fields = unionFields(configs.map((config) => config.fields));
+  return action === 'read'
+    ? { input: [], output: fields }
+    : { input: fields, output: [] };
 }
 
 /**

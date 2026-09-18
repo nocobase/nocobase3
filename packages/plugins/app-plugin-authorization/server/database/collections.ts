@@ -43,6 +43,23 @@ export async function describeCollection(
   return {
     name,
     fields,
+    relations: Object.fromEntries(
+      (definition.fields ?? []).flatMap((field) =>
+        relationTypes.has(field.type) &&
+        'target' in field &&
+        typeof field.target === 'string'
+          ? [
+              [
+                field.name,
+                {
+                  target: field.target,
+                  ...('through' in field ? { through: field.through } : {}),
+                },
+              ],
+            ]
+          : [],
+      ),
+    ),
     primaryKey,
     generatedPrimaryKey:
       schema !== undefined &&

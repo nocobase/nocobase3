@@ -14,13 +14,7 @@ export type {
   DatabaseRecordAccess,
   DatabaseScope,
 } from './database/index.js';
-export {
-  condition,
-  anyScope,
-  scopeAst,
-  defineRecordAccessPolicy,
-  type RecordAccessPolicy,
-} from './database/index.js';
+export { condition, anyScope, scopeAst } from './database/index.js';
 export type {
   Authorization,
   AuthorizationEnv,
@@ -32,13 +26,7 @@ export type {
 } from './authorization.js';
 // Re-exported so an application assembles its plugin list from the package it
 // reads `AuthorizationConfig` from.
-export {
-  pages,
-  authorizationPage,
-  PageBuilder,
-  PageReference,
-  type PagesApi,
-} from './pages-authorization.js';
+export { pages, type PagesApi } from './pages-authorization.js';
 export type { PermissionSetsApi } from '@nocobase/authorization/permissions';
 export type { AuthorizationPlugin } from '@nocobase/authorization/core';
 export {

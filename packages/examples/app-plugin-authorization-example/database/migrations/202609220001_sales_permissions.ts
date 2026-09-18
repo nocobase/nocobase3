@@ -44,6 +44,19 @@ const migration: MigrationDefinition = defineMigration({
       c.string('status').notNull();
       c.index('projectId');
     });
+    await builder.createCollection('authorizationExampleOrderChecks', (c) => {
+      c.string('id').primary().notNull();
+      c.string('orderId').nullable();
+      c.string('title').notNull();
+      c.boolean('done').notNull().defaultTo(false);
+    });
+    await builder.createCollection('authorizationExampleOrderTeams', (c) => {
+      c.string('orderId').notNull();
+      c.string('teamId').notNull();
+      c.string('note').nullable();
+      c.string('internalNote').nullable();
+      c.unique(['orderId', 'teamId']);
+    });
     await builder.createCollection('authorizationExampleOrders', (c) => {
       c.string('id').notNull();
       c.primary('id');
@@ -53,12 +66,30 @@ const migration: MigrationDefinition = defineMigration({
       c.string('status').notNull();
       c.string('deliveryReference').notNull();
       c.index('projectId');
+      c.string('deliveryTeamId').nullable();
+      c.belongsTo('deliveryTeam', 'authorizationExampleTeams')
+        .foreignKey('deliveryTeamId')
+        .targetKey('id')
+        .constraints(false);
+      c.hasMany('checks', 'authorizationExampleOrderChecks')
+        .foreignKey('orderId')
+        .sourceKey('id')
+        .constraints(false);
+      c.belongsToMany('collaborators', 'authorizationExampleTeams')
+        .through('authorizationExampleOrderTeams')
+        .foreignKey('orderId')
+        .otherKey('teamId')
+        .sourceKey('id')
+        .targetKey('id')
+        .constraints(false);
     });
   },
   async down({ builder }) {
+    await builder.dropCollection('authorizationExampleOrders');
+    await builder.dropCollection('authorizationExampleOrderTeams');
+    await builder.dropCollection('authorizationExampleOrderChecks');
     await builder.dropCollection('authorizationExampleTeamMembers');
     await builder.dropCollection('authorizationExampleTeams');
-    await builder.dropCollection('authorizationExampleOrders');
     await builder.dropCollection('authorizationExampleQuotes');
     await builder.dropCollection('authorizationExampleProjects');
     await builder.dropCollection('authorizationExampleSalesMembers');

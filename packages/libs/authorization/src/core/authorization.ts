@@ -1,10 +1,11 @@
+import { RecordAccessRegistry } from './record-access.js';
 import {
   type ResourceAuthorizationConditions,
   type ResourceAuthorizationCheck,
-  BusinessResourceGroups,
-  BusinessResources,
+  AuthorizationResourceGroups,
+  AuthorizationResources,
   composedGrants,
-} from './business-resources.js';
+} from './resources.js';
 import {
   ResourceHandlerRegistry,
   type AuthorizationResourceItems,
@@ -106,11 +107,12 @@ interface AuthorizationOptions {
 }
 
 export class Authorization {
+  readonly recordAccess: RecordAccessRegistry = new RecordAccessRegistry();
   private readonly plugins: readonly AuthorizationPlugin[];
-  readonly resources: BusinessResources;
+  readonly resources: AuthorizationResources;
   readonly resourceTypes: ResourceHandlerRegistry;
-  readonly resourceGroups: BusinessResourceGroups =
-    new BusinessResourceGroups();
+  readonly resourceGroups: AuthorizationResourceGroups =
+    new AuthorizationResourceGroups();
   readonly constraints: AccessConstraintRegistry;
   readonly subjects: AuthorizationSubjectRegistry;
   readonly routes: AuthorizationRouteRegistry;
@@ -120,7 +122,7 @@ export class Authorization {
   private readonly middlewares: AuthorizationMiddleware[] = [];
 
   constructor(options: AuthorizationOptions) {
-    this.resources = new BusinessResources(this.resourceGroups);
+    this.resources = new AuthorizationResources(this.resourceGroups);
     this.resourceTypes = new ResourceHandlerRegistry();
     this.constraints = new AccessConstraintRegistry();
     this.subjects = new AuthorizationSubjectRegistry();
@@ -160,6 +162,7 @@ export class Authorization {
     this.installApis();
     for (const plugin of this.plugins) {
       plugin.setup?.({
+        recordAccess: this.recordAccess,
         ...(options.connection === undefined
           ? {}
           : { connection: options.connection }),

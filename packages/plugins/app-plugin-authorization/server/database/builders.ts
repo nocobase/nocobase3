@@ -1,297 +1,21 @@
+import {
+  ReadPermissionBuilder,
+  WritePermissionBuilder,
+} from './permission-builders.js';
 import type {
   AuthorizationContribution,
-  ActionScopes,
   ResourceTitle,
 } from '@nocobase/authorization/core';
-import type { FilterLiteral, FilterNode } from '@nocobase/db';
 import type { PermissionGrant } from '@nocobase/authorization/permissions';
-import type { DatabaseCollectionRegistration } from './collection-registry.js';
-import type { DatabaseApi } from './api.js';
 import type { DatabaseGrantDefinition, DatabaseActionGrant } from './model.js';
-import type {
-  RecordAccessPolicy,
-  RecordAccessPolicyContext,
-} from './record-access.js';
-import type { RecordAccessPolicyRegistry } from './record-access-registry.js';
-import { condition, type DatabaseScope } from './scope.js';
 
 export type DatabaseOperation = 'read' | 'create' | 'update' | 'delete';
 type Fields<Row> = '*' | readonly (keyof Row & string)[];
-export interface CollectionShape {
-  name: string;
-  fields: readonly { name: string }[];
-}
-export type CollectionRow<D extends CollectionShape> = Record<
-  D['fields'][number]['name'],
-  FilterLiteral
->;
-
-export interface RecordAccessReference<
-  C extends string = string,
-  K extends string = string,
-> {
+export interface RecordAccessReference<K extends string = string> {
   readonly key: K;
-  readonly collections: readonly C[];
-}
-export interface TypedRecordFilter<Row> {
-  eq<K extends keyof Row & string>(
-    field: K,
-    value: NoInfer<Row[K]> & FilterLiteral,
-  ): FilterNode;
+  readonly resources: readonly { type: string; id: string }[];
 }
 
-export class RecordAccessBuilder<Row, C extends string, K extends string> {
-  constructor(
-    private readonly registry: RecordAccessPolicyRegistry | undefined,
-    private readonly definition: Omit<RecordAccessPolicy, 'resolve'> & {
-      key: K;
-      collections: readonly C[];
-    },
-  ) {}
-  title(title: ResourceTitle): RecordAccessBuilder<Row, C, K> {
-    return new RecordAccessBuilder(this.registry, {
-      ...this.definition,
-      title,
-    });
-  }
-  resolve(
-    resolver: (
-      context: RecordAccessPolicyContext<unknown> & {
-        filter: TypedRecordFilter<Row>;
-      },
-    ) => DatabaseScope | Promise<DatabaseScope>,
-  ): {
-    build(): RecordAccessPolicy;
-    register(
-      registry?: RecordAccessPolicyRegistry,
-    ): RecordAccessReference<C, K>;
-  } {
-    const definition = structuredClone(this.definition);
-    const build = (): RecordAccessPolicy => ({
-      ...structuredClone(definition),
-      resolve: (context) =>
-        resolver({
-          ...context,
-          filter: { eq: (field, value) => condition(field, '$eq', value) },
-        }),
-    });
-    return {
-      build,
-      register: (registry = this.registry) => {
-        if (!registry) throw new Error('A record access registry is required');
-        registry.add(build());
-        return {
-          key: definition.key,
-          collections: [...definition.collections],
-        };
-      },
-    };
-  }
-}
-
-/** Immutable builder: reusing a scope cannot leak fields into another action. */
-export class DatabaseScopeBuilder<
-  Row,
-  C extends string,
-  A extends DatabaseOperation,
-  S extends string,
-  O extends string = string,
-> implements AuthorizationContribution<
-  Record<S, O | { readonly key: O; readonly params?: unknown }>
-> {
-  declare readonly scopeSelections?: Record<
-    S,
-    O | { readonly key: O; readonly params?: unknown }
-  >;
-  constructor(
-    private readonly collection: C,
-    private readonly allowedActions: readonly A[],
-    private readonly key: S,
-    private readonly metadata: {
-      title: ResourceTitle;
-      options?: readonly string[];
-      defaultValue?: string;
-    },
-    private readonly operations: DatabaseGrantDefinition = {},
-  ) {}
-  options<const R extends readonly RecordAccessReference[]>(
-    ...options: R & {
-      [I in keyof R]: C extends R[I]['collections'][number] ? R[I] : never;
-    }
-  ): DatabaseScopeBuilder<Row, C, A, S, R[number]['key']> {
-    if (options.some((option) => !option.collections.includes(this.collection)))
-      throw new TypeError(
-        'Record access policy does not apply to this collection',
-      );
-    return new DatabaseScopeBuilder(
-      this.collection,
-      this.allowedActions,
-      this.key,
-      { ...this.metadata, options: options.map((option) => option.key) },
-      this.operations,
-    );
-  }
-  default<const R extends RecordAccessReference<string, O>>(
-    option: R & (C extends R['collections'][number] ? unknown : never),
-  ): DatabaseScopeBuilder<Row, C, A, S, O> {
-    if (
-      !option.collections.includes(this.collection) ||
-      (this.metadata.options && !this.metadata.options.includes(option.key))
-    )
-      throw new TypeError('Invalid default record access policy');
-    return new DatabaseScopeBuilder(
-      this.collection,
-      this.allowedActions,
-      this.key,
-      { ...this.metadata, defaultValue: option.key },
-      this.operations,
-    );
-  }
-  read(
-    this: 'read' extends A ? DatabaseScopeBuilder<Row, C, A, S, O> : never,
-    fields: Fields<Row>,
-  ): DatabaseScopeBuilder<Row, C, A, S, O> {
-    return this.operation('read', { fields: { output: fields } });
-  }
-  create(
-    this: 'create' extends A ? DatabaseScopeBuilder<Row, C, A, S, O> : never,
-    fields: Fields<Row>,
-  ): DatabaseScopeBuilder<Row, C, A, S, O> {
-    return this.operation('create', { fields: { input: fields } });
-  }
-  update(
-    this: 'update' extends A ? DatabaseScopeBuilder<Row, C, A, S, O> : never,
-    fields: Fields<Row>,
-  ): DatabaseScopeBuilder<Row, C, A, S, O> {
-    return this.operation('update', { fields: { input: fields } });
-  }
-  delete(
-    this: 'delete' extends A ? DatabaseScopeBuilder<Row, C, A, S, O> : never,
-  ): DatabaseScopeBuilder<Row, C, A, S, O> {
-    return this.operation('delete', {});
-  }
-  private operation(
-    action: DatabaseOperation,
-    policy: DatabaseActionGrant,
-  ): DatabaseScopeBuilder<Row, C, A, S, O> {
-    if (!(this.allowedActions as readonly string[]).includes(action))
-      throw new TypeError(`Undeclared database action: ${action}`);
-    if (Object.hasOwn(this.operations, action))
-      throw new TypeError(`Duplicate database action: ${action}`);
-    return new DatabaseScopeBuilder(
-      this.collection,
-      this.allowedActions,
-      this.key,
-      this.metadata,
-      {
-        ...this.operations,
-        [action]: { ...structuredClone(policy), scope: this.key },
-      },
-    );
-  }
-  build(): { grants: readonly PermissionGrant[]; scopes: ActionScopes } {
-    if (!Object.keys(this.operations).length)
-      throw new TypeError('A database scope needs at least one action');
-    return structuredClone({
-      grants: [databaseGrant(this.collection, this.operations)],
-      scopes: {
-        [this.key]: {
-          ...this.metadata,
-          resource: { type: 'database.collection', id: this.collection },
-        },
-      },
-    });
-  }
-}
-
-export class DatabaseCollectionReference<
-  Row,
-  C extends string,
-  A extends DatabaseOperation,
-> {
-  constructor(
-    private readonly api: DatabaseApi | undefined,
-    readonly name: C,
-    private readonly actions: readonly A[],
-  ) {}
-  scope<const S extends string>(
-    key: S,
-    metadata: { title: ResourceTitle },
-  ): DatabaseScopeBuilder<Row, C, A, S> {
-    return new DatabaseScopeBuilder(this.name, this.actions, key, metadata);
-  }
-  recordAccess<const K extends string>(key: K): RecordAccessBuilder<Row, C, K> {
-    return new RecordAccessBuilder(this.api?.recordAccess, {
-      key,
-      collections: [this.name],
-    });
-  }
-}
-
-export class DatabaseCollectionBuilder<
-  Row,
-  C extends string,
-  A extends DatabaseOperation = DatabaseOperation,
-> {
-  constructor(
-    private readonly api: DatabaseApi | undefined,
-    private readonly name: C,
-    private readonly metadata: { title?: ResourceTitle; actions: readonly A[] },
-  ) {}
-  /** Reuse a model's row type when the schema is registered dynamically. */
-  typed<T extends object>(): DatabaseCollectionBuilder<T, C, A> {
-    return new DatabaseCollectionBuilder(this.api, this.name, this.metadata);
-  }
-  title(title: ResourceTitle): DatabaseCollectionBuilder<Row, C, A> {
-    return new DatabaseCollectionBuilder(this.api, this.name, {
-      ...this.metadata,
-      title,
-    });
-  }
-  actions<const T extends readonly DatabaseOperation[]>(
-    ...actions: T
-  ): DatabaseCollectionBuilder<Row, C, T[number]> {
-    return new DatabaseCollectionBuilder(this.api, this.name, {
-      ...this.metadata,
-      actions,
-    });
-  }
-  build(): DatabaseCollectionRegistration {
-    return structuredClone({ name: this.name, ...this.metadata });
-  }
-  reference(
-    api: DatabaseApi | undefined = this.api,
-  ): DatabaseCollectionReference<Row, C, A> {
-    return new DatabaseCollectionReference(
-      api,
-      this.name,
-      this.metadata.actions,
-    );
-  }
-  register(
-    api: DatabaseApi | undefined = this.api,
-  ): DatabaseCollectionReference<Row, C, A> {
-    if (!api) throw new Error('A database authorization API is required');
-    api.collections.add(this.build());
-    return this.reference(api);
-  }
-}
-
-export function databaseCollection<const D extends CollectionShape>(
-  definition: D,
-): DatabaseCollectionBuilder<CollectionRow<D>, D['name']>;
-export function databaseCollection<const N extends string>(
-  name: N,
-): DatabaseCollectionBuilder<Record<string, FilterLiteral>, N>;
-export function databaseCollection(
-  definition: string | CollectionShape,
-): DatabaseCollectionBuilder<Record<string, FilterLiteral>, string> {
-  return new DatabaseCollectionBuilder(
-    undefined,
-    typeof definition === 'string' ? definition : definition.name,
-    { actions: ['read', 'create', 'update', 'delete'] },
-  );
-}
 export function databaseGrant(
   resource: string,
   definition: DatabaseGrantDefinition,
@@ -308,4 +32,191 @@ export function databaseScope(
   recordAccess: import('./model.js').DatabaseRecordAccess,
 ): import('./model.js').DatabaseAccessScope {
   return { type: 'database', recordAccess };
+}
+
+/** Reusable data permissions, independent of registration and action scope keys. */
+export class DatabasePermissionBuilder<
+  Row = Record<string, unknown>,
+  O extends string = string,
+> {
+  declare readonly recordAccessSelection?:
+    O | { readonly key: O; readonly params?: unknown };
+  constructor(
+    private readonly name: string,
+    private readonly operations: DatabaseGrantDefinition = {},
+    private readonly label: ResourceTitle | undefined = undefined,
+    private readonly choices: {
+      options?: readonly string[];
+      defaultValue?: string;
+    } = {},
+  ) {
+    if (!name) throw new TypeError('A collection name is required');
+    this.operations = structuredClone(operations);
+    this.label = structuredClone(label);
+    this.choices = structuredClone(choices);
+  }
+  title(title: ResourceTitle): DatabasePermissionBuilder<Row, O> {
+    return new DatabasePermissionBuilder(
+      this.name,
+      this.operations,
+      title,
+      this.choices,
+    );
+  }
+  options<const R extends readonly RecordAccessReference[]>(
+    ...options: R
+  ): DatabasePermissionBuilder<Row, R[number]['key']> {
+    if (
+      !options.length ||
+      options.some(
+        (option) =>
+          !option.resources.some(
+            (resource) =>
+              resource.type === 'database.collection' &&
+              (resource.id === '*' || resource.id === this.name),
+          ),
+      )
+    )
+      throw new TypeError(
+        'Record access policy does not apply to this collection',
+      );
+    const keys = options.map((option) => option.key);
+    if (
+      new Set(keys).size !== keys.length ||
+      (this.choices.defaultValue && !keys.includes(this.choices.defaultValue))
+    )
+      throw new TypeError('Invalid record access options');
+    return new DatabasePermissionBuilder(
+      this.name,
+      this.operations,
+      this.label,
+      { ...this.choices, options: keys },
+    );
+  }
+  default(option: RecordAccessReference<O>): DatabasePermissionBuilder<Row, O> {
+    if (
+      !option.resources.some(
+        (resource) =>
+          resource.type === 'database.collection' &&
+          (resource.id === '*' || resource.id === this.name),
+      ) ||
+      (this.choices.options && !this.choices.options.includes(option.key))
+    )
+      throw new TypeError('Invalid default record access policy');
+    return new DatabasePermissionBuilder(
+      this.name,
+      this.operations,
+      this.label,
+      { ...this.choices, defaultValue: option.key },
+    );
+  }
+  read(
+    fields:
+      | Fields<Row>
+      | ((read: ReadPermissionBuilder<Row>) => ReadPermissionBuilder<Row>),
+  ): DatabasePermissionBuilder<Row, O> {
+    return this.operation(
+      'read',
+      typeof fields === 'function'
+        ? fields(new ReadPermissionBuilder<Row>()).build()
+        : { fields },
+    );
+  }
+  create(
+    fields:
+      | Fields<Row>
+      | ((
+          write: WritePermissionBuilder<Row, true>,
+        ) => WritePermissionBuilder<Row, true>),
+  ): DatabasePermissionBuilder<Row, O> {
+    return this.operation(
+      'create',
+      typeof fields === 'function'
+        ? fields(new WritePermissionBuilder<Row, true>({}, true)).build()
+        : { fields },
+    );
+  }
+  update(
+    fields:
+      | Fields<Row>
+      | ((
+          write: WritePermissionBuilder<Row, false>,
+        ) => WritePermissionBuilder<Row, false>),
+  ): DatabasePermissionBuilder<Row, O> {
+    return this.operation(
+      'update',
+      typeof fields === 'function'
+        ? fields(new WritePermissionBuilder<Row, false>({}, false)).build()
+        : { fields },
+    );
+  }
+  delete(): DatabasePermissionBuilder<Row, O> {
+    return this.operation('delete', {});
+  }
+
+  private operation(
+    action: DatabaseOperation,
+    policy: DatabaseActionGrant,
+  ): DatabasePermissionBuilder<Row, O> {
+    if (Object.hasOwn(this.operations, action))
+      throw new TypeError(`Duplicate database action: ${action}`);
+    return new DatabasePermissionBuilder(
+      this.name,
+      { ...this.operations, [action]: policy },
+      this.label,
+      this.choices,
+    );
+  }
+  build(): PermissionGrant {
+    if (!Object.keys(this.operations).length)
+      throw new TypeError('A database permission needs at least one action');
+    return structuredClone(databaseGrant(this.name, this.operations));
+  }
+  bind<const K extends string>(
+    key: K,
+    metadata?: { title?: ResourceTitle },
+  ): AuthorizationContribution<
+    Record<K, O | { readonly key: O; readonly params?: unknown }>
+  > {
+    if (!key || key === 'type')
+      throw new TypeError('Invalid action permission key');
+    const grant = this.build();
+    const contribution = {
+      grants: [
+        {
+          ...grant,
+          actions: grant.actions.map((action) => ({
+            ...action,
+            policy: { ...action.policy, type: 'database', scope: key },
+          })),
+        },
+      ],
+      scopes: {
+        [key]: {
+          ...this.choices,
+          title: metadata?.title ?? this.label ?? this.name,
+          resource: grant.resource,
+        },
+      },
+    };
+    return { build: () => structuredClone(contribution) };
+  }
+}
+
+export class DatabasePermissionDefinitionBuilder {
+  collection<Row = Record<string, unknown>>(
+    name: string,
+  ): DatabasePermissionBuilder<Row> {
+    return new DatabasePermissionBuilder<Row>(name);
+  }
+}
+
+export function defineDatabasePermission<Row, O extends string>(
+  configure: (
+    permission: DatabasePermissionDefinitionBuilder,
+  ) => DatabasePermissionBuilder<Row, O>,
+): DatabasePermissionBuilder<Row, O> {
+  const permission = configure(new DatabasePermissionDefinitionBuilder());
+  permission.build();
+  return permission;
 }

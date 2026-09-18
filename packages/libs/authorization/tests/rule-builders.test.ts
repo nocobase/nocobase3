@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import {
-  businessResource,
+  defineAuthorizationResource,
   type AuthorizationContribution,
 } from '../src/core/index.js';
 import { permissionSet } from '../src/plugins/permission-sets/index.js';
@@ -26,12 +26,12 @@ const contribution: AuthorizationContribution<{ quotes: string }> = {
     ],
   }),
 };
-const resource = businessResource('sales.quotes', {
-  title: 'Quotes',
-  group: 'sales',
-})
-  .action('view', { title: 'View' }, (action) => action.grant(contribution))
-  .reference();
+const resource = defineAuthorizationResource('sales.quotes', (resource) =>
+  resource
+    .title('Quotes')
+    .group('sales')
+    .action('view', (action) => action.title('View').grant(contribution)),
+).reference();
 
 it('builds independent permission-set and rule DSL without an application or store', () => {
   const grant = resource.grant({ view: { quotes: 'own' } });

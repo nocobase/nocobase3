@@ -70,7 +70,8 @@
   "dependencies": {
     "hono": "catalog:",
     "@nocobase/authorization": "workspace:^",
-    "better-auth": "catalog:"
+    "better-auth": "catalog:",
+    "@nocobase/repository-input": "workspace:^"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",

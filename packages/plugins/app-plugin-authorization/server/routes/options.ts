@@ -1,3 +1,4 @@
+import { databaseRecordAccessApplicable } from '../database/record-access.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import { describeCollection } from '../database/index.js';
 import { optionText, optionLabel } from '../i18n.js';
@@ -27,7 +28,7 @@ async function managementOptions(
     ],
     subjectTypes: subjectTypeOptions(authz),
     collections: collections.map(({ name, fields }) => ({ name, fields })),
-    recordAccessPolicies: authz.db.recordAccess.list().map((policy) => ({
+    recordAccessPolicies: authz.recordAccess.list().map((policy) => ({
       value: policy.key,
       label: optionText(policy.title, policy.key),
       ...(policy.description === undefined
@@ -128,8 +129,11 @@ function businessResourceOptions(
         const scopes = resource.actions.flatMap((action) =>
           Object.entries(action.scopes ?? {}).map(([key, scope]) => {
             const fields = fieldsByCollection.get(scope.resource.id) ?? [];
-            const policies = authz.db.recordAccess
-              .listFor({ name: scope.resource.id, fields })
+            const policies = authz.recordAccess
+              .listFor(scope.resource)
+              .filter((policy) =>
+                databaseRecordAccessApplicable(policy, fields),
+              )
               .filter(
                 (policy) =>
                   !scope.options || scope.options.includes(policy.key),

@@ -68,11 +68,11 @@ await authz.permissionSets.create({
   grants: [
     authz.db.grant('orders', {
       read: {
-        fields: { output: ['id', 'number', 'amount'] },
+        fields: ['id', 'number', 'amount'],
         recordAccess: ['recordsIOwn'],
       },
       update: {
-        fields: { input: ['amount'] },
+        fields: ['amount'],
         recordAccess: ['recordsIOwn'],
       },
     }),
@@ -80,10 +80,7 @@ await authz.permissionSets.create({
 });
 ```
 
-`read` 使用 `fields.output`，写动作使用 `fields.input`。`"*"` 表示 db 报告的全部字段
-——Policy 节点把缺省的字段清单读作“没有任何字段”，所以 `"*"` 会在生成 Policy 时展开
-成真实清单。`create` 会自动排除由数据库生成的主键（自增或带默认值），因为调用方
-本来就写不进去。
+`fields` 仅接受字段数组或 `"*"`：`read` 声明可读字段，写动作声明可写字段。`"*"` 表示 db 报告的全部字段——Policy 节点把缺省的字段清单读作“没有任何字段”，所以 `"*"` 会在生成 Policy 时展开成真实清单。`create` 会自动排除由数据库生成的主键（自增或带默认值），因为调用方本来就写不进去。
 
 ## 得到 Repository Policy
 
@@ -145,20 +142,20 @@ recordAccess: [{ key: 'recordsIOwn', params: { field: 'salesRepId' } }];
 （没有记录）或一个 Filter 节点：
 
 ```ts
-import { condition } from '@nocobase/app-plugin-authorization/server';
+import { buildFilter } from '@nocobase/repository-input';
 
-authz.db.recordAccess.add<{ field: string }>({
+authz.recordAccess.add<{ field: string }, unknown>({
+  resources: [{ type: 'database.collection', id: '*' }],
   key: 'regionalRecords',
   title: '当前区域的记录',
   resolve: ({ principal, params }) =>
-    condition(params.field, '$eq', String(principal.attributes?.regionId)),
+    buildFilter((filter) =>
+      filter.string(params.field).eq(String(principal.attributes?.regionId)),
+    ),
 });
 ```
 
-节点是字面量构造的，不走 `FilterBuilder`：Builder 需要按字段类型选择 `string()` 还是
-`number()`，而授权只看字段名。一个条件节点是
-`{ kind: 'condition', path: [field], operator, value }`，分组是
-`{ kind: 'group', logic: 'and' | 'or', items }`。
+直接复用 Repository 的 buildFilter 构建过滤条件。授权核心只管理策略与身份上下文，DB 适配层校验返回的 FilterAst 并生成 Policy。
 
 Policy 返回的节点只能引用当前 Collection 的字段，不能穿越关系，也不能使用 JSON
 操作符；违反时该次授权以 `DATABASE_AUTHORIZATION_FAILED` 拒绝。

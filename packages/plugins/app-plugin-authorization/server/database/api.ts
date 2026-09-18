@@ -1,9 +1,7 @@
 import {
-  DatabaseCollectionBuilder,
   databaseGrant,
   databaseScope,
-  type CollectionShape,
-  type CollectionRow,
+  type DatabaseOperation,
 } from './builders.js';
 import { DatabaseCollectionRegistry } from './collection-registry.js';
 import type {
@@ -27,21 +25,9 @@ import type {
   DatabaseGrantDefinition,
   DatabaseRecordAccess,
 } from './model.js';
-import { RecordAccessPolicyRegistry } from './record-access-registry.js';
 
 export interface DatabaseApi {
-  collection<const D extends CollectionShape>(
-    definition: D,
-  ): DatabaseCollectionBuilder<CollectionRow<D>, D['name']>;
-  collection<const N extends string>(
-    name: N,
-  ): DatabaseCollectionBuilder<
-    Record<string, import('@nocobase/db').FilterLiteral>,
-    N
-  >;
-
   readonly collections: DatabaseCollectionRegistry;
-  readonly recordAccess: RecordAccessPolicyRegistry;
   grant(resource: string, definition: DatabaseGrantDefinition): PermissionGrant;
   scope(recordAccess: DatabaseRecordAccess): DatabaseAccessScope;
   policyFor(
@@ -61,33 +47,7 @@ export interface DatabaseAuthorizationApi {
 export class DatabaseAuthorizationService implements DatabaseApi {
   readonly collections: DatabaseCollectionRegistry =
     new DatabaseCollectionRegistry();
-  readonly recordAccess: RecordAccessPolicyRegistry;
   private host: Authorization | undefined;
-  constructor(recordAccess: RecordAccessPolicyRegistry) {
-    this.recordAccess = recordAccess;
-  }
-
-  collection<const D extends CollectionShape>(
-    definition: D,
-  ): DatabaseCollectionBuilder<CollectionRow<D>, D['name']>;
-  collection<const N extends string>(
-    name: N,
-  ): DatabaseCollectionBuilder<
-    Record<string, import('@nocobase/db').FilterLiteral>,
-    N
-  >;
-  collection(
-    definition: string | CollectionShape,
-  ): DatabaseCollectionBuilder<
-    Record<string, import('@nocobase/db').FilterLiteral>,
-    string
-  > {
-    return new DatabaseCollectionBuilder(
-      this,
-      typeof definition === 'string' ? definition : definition.name,
-      { actions: ['read', 'create', 'update', 'delete'] },
-    );
-  }
 
   /**
    * The Authorization this api was installed into. A plugin's `setup` is not
@@ -126,9 +86,8 @@ export class DatabaseAuthorizationService implements DatabaseApi {
    * Folds this request's four decisions into one Repository Policy.
    *
    * The calls share the scope's grant and constraint caches, so authorizing
-   * four actions costs one resolution each. `relations` is left out
-   * throughout: authorization has no relation model, and an absent one
-   * normalizes to none, which is the conservative reading.
+   * four actions costs one resolution each. Every node is complete, including
+   * an explicit relation allowlist; binding and narrowing have identical defaults.
    */
   async policyFor(
     collection: string,
@@ -136,9 +95,9 @@ export class DatabaseAuthorizationService implements DatabaseApi {
     operation?: { resource: string; action: string },
   ): Promise<RepositoryPolicy> {
     const resource = { type: 'database.collection', id: collection };
-    const decide = async (
-      action: string,
-    ): Promise<true | false | DatabasePolicyNode> =>
+    const decide = async <A extends DatabaseOperation>(
+      action: A,
+    ): Promise<RepositoryPolicy[A]> =>
       foldDecision(
         action,
         await scope.authorize<DatabaseAuthorizationParams>({
@@ -153,20 +112,8 @@ export class DatabaseAuthorizationService implements DatabaseApi {
       decide('update'),
       decide('delete'),
     ]);
-    return {
-      read,
-      // A create selects no rows, so its node carries no scope of its own.
-      create: typeof create === 'boolean' ? create : { ...create, scope: true },
-      update,
-      // A delete node accepts a scope and nothing else.
-      delete: typeof remove === 'boolean' ? remove : { scope: remove.scope },
-    };
+    return { read, create, update, delete: remove };
   }
-}
-
-interface DatabasePolicyNode {
-  readonly scope: true | DatabaseAuthorizationConditions['scope'];
-  readonly fields: readonly string[];
 }
 
 /** Translate resolved checks only; this never runs authorization again. */
@@ -188,21 +135,18 @@ export function composeDatabasePolicies(
       update: false,
       delete: false,
     });
-    const node = foldDecision(check.action, check.decision);
     switch (check.action) {
       case 'read':
-        policy.read = node;
+        policy.read = foldDecision('read', check.decision);
         break;
       case 'create':
-        policy.create =
-          typeof node === 'boolean' ? node : { ...node, scope: true };
+        policy.create = foldDecision('create', check.decision);
         break;
       case 'update':
-        policy.update = node;
+        policy.update = foldDecision('update', check.decision);
         break;
       case 'delete':
-        policy.delete =
-          typeof node === 'boolean' ? node : { scope: node.scope };
+        policy.delete = foldDecision('delete', check.decision);
         break;
     }
   }
@@ -216,10 +160,10 @@ declare module '@nocobase/authorization/core' {
   }
 }
 
-function foldDecision(
-  action: string,
+function foldDecision<A extends DatabaseOperation>(
+  action: A,
   decision: AuthorizationDecision,
-): true | false | DatabasePolicyNode {
+): RepositoryPolicy[A] {
   if (decision.effect === 'deny') return false;
   if (decision.effect === 'permit') return true;
   const conditions = decision.conditions;
@@ -231,7 +175,15 @@ function foldDecision(
   if (decision.reasons.some((reason) => reason.code === UNRESTRICTED_ACCESS)) {
     return true;
   }
-  return { scope: conditions.scope, fields: conditions.fields };
+  // The authorizer resolves the action-specific relation tree. Keep the only
+  // structural conversion at this DB adapter boundary.
+  return action === 'delete'
+    ? { scope: conditions.scope }
+    : {
+        scope: action === 'create' ? true : conditions.scope,
+        fields: conditions.fields,
+        relations: conditions.relations ?? false,
+      };
 }
 
 function isDatabaseConditions(

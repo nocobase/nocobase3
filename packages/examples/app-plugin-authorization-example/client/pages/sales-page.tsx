@@ -1,3 +1,4 @@
+import { OrderRelations } from './order-relations.js';
 import { Link, useSearchParams } from 'react-router';
 import { useState, type ReactElement } from 'react';
 import { apiClientToken, useService } from '@nocobase/app-client';
@@ -27,6 +28,7 @@ export default function SalesPage({
   path: 'projects' | 'quotes' | 'orders';
 }): ReactElement {
   const { t } = useTranslation(NS);
+  const [revision, setRevision] = useState(0);
   return (
     <main className='mx-auto max-w-6xl space-y-6 p-6'>
       <header>
@@ -35,11 +37,21 @@ export default function SalesPage({
           {t(`sales.descriptions.${path}`)}
         </p>
       </header>
-      <SalesTable path={path} />
+      <SalesTable
+        path={path}
+        onSaved={() => setRevision((value) => value + 1)}
+      />
+      {path === 'orders' && <OrderRelations key={revision} />}
     </main>
   );
 }
-function SalesTable({ path }: { path: string }): ReactElement {
+function SalesTable({
+  path,
+  onSaved,
+}: {
+  path: string;
+  onSaved: () => void;
+}): ReactElement {
   const { t } = useTranslation(NS);
   const api = useService(apiClientToken);
   const [search, setSearch] = useSearchParams();
@@ -53,6 +65,7 @@ function SalesTable({ path }: { path: string }): ReactElement {
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [references, setReferences] = useState<Record<string, string>>({});
   function refresh(): void {
+    onSaved();
     setNotes({});
     setAmounts({});
     setReferences({});
