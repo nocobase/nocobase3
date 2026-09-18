@@ -55,7 +55,7 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
         name: 'aiTools',
         path: '/ai/tools',
         navigation: { title: 'tools.title' },
-        access: { resource: 'ai.settings', action: 'read' },
+        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
         componentLoader: () => import('./pages/tools-settings-page.js'),
       },
       {

@@ -6,7 +6,7 @@ export default function AIConversationsSettingsPage(): ReactElement {
   return (
     <SettingsShell
       title='Conversations'
-      description='Review conversations across all users without changing their read status.'
+      description='conversations.pageDescription'
     >
       <ConversationCenterPage />
     </SettingsShell>

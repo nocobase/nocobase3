@@ -21,7 +21,7 @@ export default {
   },
   tools: {
     title: '工具',
-    description: '浏览 AI 员工可使用的工具。',
+    description: '浏览 AI 员工可用的工具，查看工具来源、使用说明和输入参数。',
     search: '搜索工具',
     loading: '正在加载工具…',
     error: '无法加载工具。',
@@ -398,13 +398,15 @@ export default {
   'Collapse employee list': '收起员工列表',
   'LLM services': 'LLM 服务',
   'MCP services': 'MCP 服务',
-  'Manage AI employees.': '管理 AI 员工。',
-  'Manage LLM services.': '管理 LLM 服务。',
-  'Manage MCP services.': '管理 MCP 服务。',
+  'employees.pageDescription': '配置 AI 员工的模型、角色指令、技能和工具。',
+  'llmServices.pageDescription':
+    '管理 LLM 服务状态和可用模型。服务连接在应用部署时配置。',
+  'mcp.pageDescription':
+    '管理 MCP 服务状态和工具权限。服务连接在应用部署时配置。',
   'AI settings': 'AI 设置',
   'Conversation center': '会话中心',
-  'Review conversations across all users without changing their read status.':
-    '查看所有用户的会话，不改变会话的已读状态。',
+  'conversations.pageDescription':
+    '查看所有用户与 AI 员工的会话、消息和工具调用记录，不改变会话的已读状态。',
   'Refresh list': '刷新列表',
   'Refresh messages': '刷新消息',
   'Refreshing…': '正在刷新…',
@@ -453,13 +455,11 @@ export default {
   'Unable to load conversation messages.': '无法加载会话消息。',
   'LLM Service': 'LLM 服务',
   MCP: 'MCP',
-  'mcp.configNotice': 'MCP 服务配置于 config.yml。',
   'mcp.toolsTitle': 'MCP 工具',
   'mcp.toolsEmpty': '暂无可用的 MCP 工具。',
   'mcp.transportHttp': 'HTTP（流式）',
   'mcp.transportSse': 'HTTP + SSE（旧版）',
   'MCP servers': 'MCP 服务',
-  'LLM services are configured in config.yml.': 'LLM 服务配置于 config.yml。',
   'Manage AI employees, LLM services, and MCP services.':
     '管理 AI 员工、LLM 服务和 MCP 服务。',
   'Connect AI employees to external tools through Model Context Protocol servers.':
@@ -557,7 +557,7 @@ export default {
   'Saving…': '保存中…',
   Score: '相似度阈值',
   Skills: '技能',
-  'Browse skills available to AI employees.': '浏览 AI 员工可用的技能。',
+  'skills.pageDescription': '浏览 AI 员工可用的技能，查看使用指引和关联工具。',
   'Search skills': '搜索技能',
   'Loading skills…': '正在加载技能…',
   'Unable to load skills.': '无法加载技能。',

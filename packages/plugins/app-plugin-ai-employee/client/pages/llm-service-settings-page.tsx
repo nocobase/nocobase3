@@ -4,7 +4,10 @@ import LLMServicePage from './llm-service-page.js';
 
 export default function LLMServiceSettingsPage(): ReactElement {
   return (
-    <SettingsShell title='LLM services' description='Manage LLM services.'>
+    <SettingsShell
+      title='LLM services'
+      description='llmServices.pageDescription'
+    >
       <LLMServicePage />
     </SettingsShell>
   );

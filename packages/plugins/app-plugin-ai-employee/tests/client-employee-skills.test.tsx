@@ -122,6 +122,17 @@ describe('employee Skills selection', () => {
   it('shows all catalog scopes in one divider list using actual shared switches and readable metadata', async () => {
     await renderSkills();
     const list = screen.getByRole('list', { name: 'Skills' });
+    expect(
+      within(list)
+        .getAllByRole('switch')
+        .map((control) => control.getAttribute('aria-label')),
+    ).toEqual([
+      'Use Custom writing',
+      'Use General research',
+      'Use missing',
+      'Use Special analysis',
+      'Use unscoped',
+    ]);
     expect(list).toHaveClass('divide-y', 'divide-border');
     expect(within(list).getAllByRole('listitem')).toHaveLength(5);
     expect(within(list).getAllByRole('switch')).toHaveLength(5);

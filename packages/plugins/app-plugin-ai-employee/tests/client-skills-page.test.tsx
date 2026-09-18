@@ -86,6 +86,23 @@ beforeEach(() => {
 });
 
 describe('Skills settings page', () => {
+  it('sorts by title with a name fallback rather than API order or identifier', async () => {
+    mocks.api.request.mockResolvedValue({
+      rows: [
+        { ...skills[0], name: 'a-first', title: 'Zebra' },
+        { ...skills[1], name: 'middle', title: ' ' },
+        { ...skills[0], name: 'z-last', title: 'alpha' },
+      ],
+    });
+    await renderPage();
+    const list = await screen.findByRole('list', { name: 'Skills' });
+    expect(
+      within(list)
+        .getAllByRole('heading', { level: 2 })
+        .map((heading) => heading.textContent),
+    ).toEqual(['alpha', 'middle', 'Zebra']);
+  });
+
   it('uses the settings shell and responsive cards with tool badges in an icon-first footer, loading details only on open', async () => {
     await renderPage();
     const list = await screen.findByRole('list', { name: 'Skills' });
@@ -97,7 +114,9 @@ describe('Skills settings page', () => {
       'md:p-8',
     );
     expect(
-      screen.getByText('Browse skills available to AI employees.'),
+      screen.getByText(
+        'Browse the skills available to AI employees and review their instructions and associated tools.',
+      ),
     ).toBeVisible();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(list).toHaveClass(

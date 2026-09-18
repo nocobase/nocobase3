@@ -141,6 +141,53 @@ function toggleList() {
 }
 
 describe('AI employee list disclosure', () => {
+  it('keeps role editors equally sized and only shows right-aligned actions for actual edits', async () => {
+    mocks.get.mockResolvedValue({
+      ...employees[0],
+      builtIn: true,
+      about: null,
+      defaultPrompt: 'System instructions',
+    });
+    await renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: 'Role settings' }));
+    expect(screen.getByText('System instructions')).toHaveClass(
+      'h-80',
+      'overflow-auto',
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Custom' }));
+    const editor = screen.getByRole('textbox', { name: 'Role settings' });
+    expect(editor).toHaveClass('h-80', 'resize-none');
+    expect(editor).toHaveValue('');
+    expect(
+      screen.queryByRole('button', { name: 'Save' }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(editor, { target: { value: 'New instructions' } });
+    const saveButton = screen.getByRole('button', { name: 'Save' });
+    expect(saveButton.parentElement).toHaveClass('w-full', 'justify-end');
+    expect(saveButton.parentElement).not.toHaveClass('max-w-5xl', 'px-4');
+    expect(saveButton.closest('footer')).toHaveClass(
+      'absolute',
+      'bottom-0',
+      'inset-x-0',
+    );
+    expect(saveButton.closest('footer')?.parentElement).toHaveClass(
+      'relative',
+      'pb-16',
+    );
+    expect(screen.getByRole('main')).not.toHaveClass('mb-16');
+    fireEvent.change(editor, { target: { value: '' } });
+    expect(
+      screen.queryByRole('button', { name: 'Save' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Custom' })).toBeChecked();
+    fireEvent.change(editor, { target: { value: 'New instructions' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
+    expect(
+      screen.queryByRole('button', { name: 'Save' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('hides the list toggle when there is only one employee', async () => {
     mocks.list.mockResolvedValue([employees[0]]);
     await renderPage();
@@ -194,8 +241,30 @@ describe('AI employee list disclosure', () => {
       'grid-cols-[44px_minmax(0,1fr)]',
       'lg:grid-cols-[32px_minmax(0,1fr)]',
       'lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]',
-      'min-h-[calc(100vh-9rem)]',
+      'h-[clamp(52rem,85dvh,68rem)]',
+      'lg:h-[clamp(40rem,80dvh,64rem)]',
+      'min-h-0',
+      'overflow-hidden',
     );
+    const tabList = screen.getByRole('tablist');
+    expect(tabList).toHaveClass('shrink-0');
+    const content = tabList.nextElementSibling;
+    expect(content).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto', 'pb-6');
+    expect(content?.parentElement).toHaveClass(
+      'relative',
+      'h-full',
+      'min-h-0',
+      'pb-16',
+    );
+    for (const name of ['Skills', 'Tools']) {
+      fireEvent.click(screen.getByRole('tab', { name }));
+      expect(tabList.nextElementSibling).toBe(content);
+      expect(content).toHaveClass(
+        'min-w-0',
+        'overflow-y-auto',
+        'overflow-x-hidden',
+      );
+    }
     expect(screen.getByRole('main')).not.toHaveClass(
       'lg:grid-cols-[19rem_32px_minmax(0,1fr)]',
     );

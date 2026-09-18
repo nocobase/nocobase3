@@ -23,7 +23,7 @@ describe('standalone AI employee settings', () => {
       screen.getByRole('heading', { name: 'AI Employees' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
-    expect(screen.getByText('Manage AI employees.')).toBeInTheDocument();
+    expect(screen.getByText('employees.pageDescription')).toBeInTheDocument();
     expect(
       screen.queryByText(
         'Manage AI employees, LLM services, and MCP services.',

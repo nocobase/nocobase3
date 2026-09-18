@@ -53,6 +53,7 @@ import {
   effectiveToolNames,
 } from '../employee-tool-selection.js';
 import { useT } from '../locales/index.js';
+import { compareResourceNames } from '../resource-name-order.js';
 
 type DetailTab =
   'profile' | 'role' | 'models' | 'skills' | 'tools' | 'knowledge';
@@ -390,6 +391,7 @@ export default function AIEmployeePage(): ReactElement {
   const [selectedUsername, setSelectedUsername] = useState<string>();
   const [selected, setSelected] = useState<AIEmployeeRecord>();
   const [draft, setDraft] = useState<AIEmployeeEditableValues>();
+  const [customRoleMode, setCustomRoleMode] = useState<boolean>();
   const [models, setModels] = useState<EnabledModelOption[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseOption[]>(
     [],
@@ -495,6 +497,7 @@ export default function AIEmployeePage(): ReactElement {
         if (controller.signal.aborted) return;
         setSelected(employee);
         setDraft(buildEditableValues(employee));
+        setCustomRoleMode(undefined);
         setEmployees((current) =>
           current.map((item) =>
             item.username === employee.username
@@ -610,6 +613,7 @@ export default function AIEmployeePage(): ReactElement {
       const updated = await updateAIEmployee(selected, draft, api);
       setSelected(updated);
       setDraft(buildEditableValues(updated));
+      setCustomRoleMode(undefined);
       setEmployees((current) =>
         current.map((item) =>
           item.username === updated.username ? { ...item, ...updated } : item,
@@ -661,6 +665,7 @@ export default function AIEmployeePage(): ReactElement {
     );
   }
 
+  const useCustomRole = customRoleMode ?? draft?.about != null;
   const selectedModels = draft?.modelSettings.models ?? [];
   const selectedModelValues = new Set(
     selectedModels.map((item) => `${item.llmService}::${item.model}`),
@@ -684,7 +689,12 @@ export default function AIEmployeePage(): ReactElement {
       ...(selected?.skillSettings?.enabledSkills ?? []),
       ...(draft?.skillSettings.enabledSkills ?? []),
     ]),
-  ];
+  ].sort((left, right) =>
+    compareResourceNames(
+      skillsByName.get(left)?.title?.trim() || left,
+      skillsByName.get(right)?.title?.trim() || right,
+    ),
+  );
   const enabledTools = new Set(
     effectiveToolNames(draft?.skillSettings, tools, skills),
   );
@@ -696,22 +706,27 @@ export default function AIEmployeePage(): ReactElement {
       ...(draft?.skillSettings.enabledTools ?? []),
       ...enabledTools,
     ]),
-  ];
+  ].sort((left, right) =>
+    compareResourceNames(
+      toolsByName.get(left)?.title?.trim() || left,
+      toolsByName.get(right)?.title?.trim() || right,
+    ),
+  );
 
   return (
     <Collapsible
       open={employeeListOpen}
       onOpenChange={setEmployeeListOpen}
       render={<main />}
-      className={`grid min-h-[calc(100vh-9rem)] grid-cols-[44px_minmax(0,1fr)] ${employeeListOpen ? 'lg:grid-cols-[19rem_32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[19rem_44px_minmax(0,1fr)]' : 'lg:grid-cols-[32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]'}`}
+      className={`grid h-[clamp(52rem,85dvh,68rem)] min-h-0 grid-cols-[44px_minmax(0,1fr)] overflow-hidden lg:h-[clamp(40rem,80dvh,64rem)] ${employeeListOpen ? 'grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[19rem_32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[19rem_44px_minmax(0,1fr)]' : 'grid-rows-[minmax(0,1fr)] lg:grid-cols-[32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]'} lg:grid-rows-[minmax(0,1fr)]`}
     >
       <CollapsibleContent
         keepMounted
         id={employeeListId}
         render={<aside aria-label={t('AI Employees')} />}
-        className='col-span-2 min-w-0 border-b p-4 lg:col-span-1 lg:border-b-0'
+        className='col-span-2 min-h-0 min-w-0 overflow-hidden border-b p-4 lg:col-span-1 lg:border-b-0'
       >
-        <div className='max-h-[calc(100vh-13rem)] space-y-2 overflow-y-auto pr-1'>
+        <div className='max-h-40 space-y-2 overflow-y-auto pr-1 lg:h-full lg:max-h-none'>
           {employees.map((employee) => {
             const active = employee.username === selectedUsername;
             return (
@@ -788,7 +803,7 @@ export default function AIEmployeePage(): ReactElement {
         ) : null}
       </div>
 
-      <section className='min-w-0 p-4 sm:p-6 lg:p-8'>
+      <section className='min-h-0 min-w-0 overflow-hidden p-4 sm:p-6 lg:p-8'>
         {detailLoading || !selected || !draft ? (
           <p
             ref={alignEmployeeToggle}
@@ -797,10 +812,10 @@ export default function AIEmployeePage(): ReactElement {
             {t('Loading employee details…')}
           </p>
         ) : (
-          <div className='flex min-h-[calc(100vh-9rem)] flex-col gap-6'>
+          <div className='relative flex h-full min-h-0 flex-col gap-6 pb-16'>
             <header
               ref={alignEmployeeToggle}
-              className='flex flex-col gap-4 rounded-xl border p-5 sm:flex-row sm:items-center'
+              className='flex shrink-0 flex-col gap-4 rounded-xl border p-5 sm:flex-row sm:items-center'
             >
               <AIEmployeeAvatar
                 src={selected.avatar}
@@ -823,7 +838,10 @@ export default function AIEmployeePage(): ReactElement {
               />
             </header>
 
-            <div className='flex gap-1 overflow-x-auto border-b' role='tablist'>
+            <div
+              className='flex shrink-0 gap-1 overflow-x-auto border-b'
+              role='tablist'
+            >
               {detailTabs.map((item) => (
                 <button
                   type='button'
@@ -838,7 +856,9 @@ export default function AIEmployeePage(): ReactElement {
               ))}
             </div>
 
-            <div className='min-h-72'>
+            <div
+              className={`min-h-0 min-w-0 flex-1 overflow-y-auto pb-6 ${tab === 'skills' || tab === 'tools' ? 'overflow-x-hidden' : ''}`}
+            >
               {tab === 'profile' ? (
                 <div className='grid gap-4'>
                   <ReadonlyField
@@ -885,8 +905,11 @@ export default function AIEmployeePage(): ReactElement {
                           <input
                             type='radio'
                             name='role-setting-mode'
-                            checked={draft.about === null}
-                            onChange={() => patchDraft({ about: null })}
+                            checked={!useCustomRole}
+                            onChange={() => {
+                              setCustomRoleMode(false);
+                              patchDraft({ about: null });
+                            }}
                           />
                           <span>{t('System default')}</span>
                         </label>
@@ -894,23 +917,37 @@ export default function AIEmployeePage(): ReactElement {
                           <input
                             type='radio'
                             name='role-setting-mode'
-                            checked={draft.about !== null}
-                            onChange={() => patchDraft({ about: '' })}
+                            checked={useCustomRole}
+                            onChange={() => {
+                              setCustomRoleMode(true);
+                              patchDraft({
+                                about:
+                                  draft.about ??
+                                  buildEditableValues(selected).about,
+                              });
+                            }}
                           />
                           <span>{t('Custom')}</span>
                         </label>
                       </div>
-                      {draft.about === null ? (
-                        <pre className='max-h-[30rem] min-h-[20rem] whitespace-pre-wrap overflow-auto rounded-md border bg-muted/30 p-3 text-sm'>
+                      {!useCustomRole ? (
+                        <pre className='h-80 w-full overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm'>
                           {selected.defaultPrompt ?? ''}
                         </pre>
                       ) : (
                         <textarea
-                          value={draft.about}
+                          aria-label={t('Role settings')}
+                          value={draft.about ?? ''}
                           onChange={(event) =>
-                            patchDraft({ about: event.target.value })
+                            patchDraft({
+                              about:
+                                event.target.value === '' &&
+                                buildEditableValues(selected).about === null
+                                  ? null
+                                  : event.target.value,
+                            })
                           }
-                          className='min-h-[20rem] w-full rounded-md border bg-background p-3'
+                          className='h-80 w-full resize-none overflow-auto rounded-md border bg-background p-3'
                         />
                       )}
                     </fieldset>
@@ -922,7 +959,7 @@ export default function AIEmployeePage(): ReactElement {
                         onChange={(event) =>
                           patchDraft({ about: event.target.value })
                         }
-                        className='min-h-[24rem] rounded-md border bg-background p-3'
+                        className='h-80 w-full resize-none overflow-auto rounded-md border bg-background p-3'
                         placeholder={t('Role setting placeholder')}
                       />
                     </label>
@@ -1007,13 +1044,13 @@ export default function AIEmployeePage(): ReactElement {
                     >
                       {skillNames.map((name) => {
                         const item = skillsByName.get(name);
-                        const title = item?.title || name;
+                        const title = item?.title?.trim() || name;
                         return (
                           <li
                             key={name}
                             className='flex items-start justify-between gap-4 py-4'
                           >
-                            <div className='min-w-0 space-y-1 break-words'>
+                            <div className='min-w-0 flex-1 space-y-1 [overflow-wrap:anywhere]'>
                               <div className='font-medium'>{title}</div>
                               {title !== name ? (
                                 <div className='text-sm text-muted-foreground'>
@@ -1079,18 +1116,18 @@ export default function AIEmployeePage(): ReactElement {
                     <TooltipProvider>
                       <ul
                         aria-label={t('Tools')}
-                        className='divide-y divide-border'
+                        className='divide-y divide-border pr-4'
                       >
                         {toolNames.map((name) => {
                           const item = toolsByName.get(name);
-                          const title = item?.title || name;
+                          const title = item?.title?.trim() || name;
                           const checked = enabledTools.has(name);
                           return (
                             <li
                               key={name}
                               className='flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6'
                             >
-                              <div className='flex min-w-0 flex-col gap-1 break-words'>
+                              <div className='flex min-w-0 flex-1 flex-col gap-1 [overflow-wrap:anywhere]'>
                                 <div className='font-medium'>{title}</div>
                                 {title !== name ? (
                                   <div className='font-mono text-xs text-muted-foreground'>
@@ -1335,13 +1372,14 @@ export default function AIEmployeePage(): ReactElement {
               </p>
             ) : null}
             {dirty ? (
-              <footer className='sticky bottom-0 z-40 mt-auto border-t bg-background/95 backdrop-blur'>
-                <div className='mx-auto flex max-w-5xl justify-end gap-2 px-4 py-4 sm:px-6 lg:px-8'>
+              <footer className='absolute inset-x-0 bottom-0 border-t bg-background'>
+                <div className='flex w-full justify-end gap-2 py-2'>
                   <button
                     type='button'
-                    className='inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm'
+                    className='inline-flex h-8 items-center gap-2 rounded-md border px-3 text-sm'
                     onClick={() => {
                       setDraft(buildEditableValues(selected));
+                      setCustomRoleMode(undefined);
                       setSaveError('');
                     }}
                   >
@@ -1350,7 +1388,7 @@ export default function AIEmployeePage(): ReactElement {
                   <button
                     type='button'
                     disabled={saving}
-                    className='inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50'
+                    className='inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-sm text-primary-foreground disabled:opacity-50'
                     onClick={() => void save()}
                   >
                     <Save className='h-4 w-4' />{' '}

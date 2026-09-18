@@ -88,6 +88,23 @@ beforeEach(() => {
 });
 
 describe('Tools settings page', () => {
+  it('sorts by title with a name fallback rather than identifier', async () => {
+    mocks.api.request.mockResolvedValue({
+      rows: [
+        { ...tools[0], name: 'a-first', title: 'Zebra' },
+        { ...tools[1], name: 'middle', title: ' ' },
+        { ...tools[0], name: 'z-last', title: 'alpha' },
+      ],
+    });
+    await renderPage();
+    const list = await screen.findByRole('list', { name: 'Tools' });
+    expect(
+      within(list)
+        .getAllByRole('heading', { level: 2 })
+        .map((heading) => heading.textContent),
+    ).toEqual(['alpha', 'middle', 'Zebra']);
+  });
+
   it('uses the shared shell and responsive cards with truthful metadata, fetching only summaries initially', async () => {
     await renderPage();
     const list = await screen.findByRole('list', { name: 'Tools' });
@@ -96,35 +113,44 @@ describe('Tools settings page', () => {
         ?.parentElement,
     ).toHaveClass('w-full', 'p-6', 'md:p-8');
     expect(
-      screen.getByText('Browse tools available to AI employees.'),
+      screen.getByText(
+        'Browse the tools available to AI employees and review their sources, usage instructions, and input parameters.',
+      ),
     ).toBeVisible();
     expect(list).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'xl:grid-cols-3');
     const cards = within(list).getAllByRole('listitem');
-    const card = cards[0].querySelector('[data-slot="card"]')!;
+    expect(
+      cards.map((card) => within(card).getByRole('heading').textContent),
+    ).toEqual(['draft-document', 'Query records']);
+    const queryCard = cards[1];
+    const draftCard = cards[0];
+    const card = queryCard.querySelector('[data-slot="card"]')!;
     expect(
       Array.from(card.children).map((node) => node.getAttribute('data-slot')),
     ).toEqual(['card-header', 'card-content', 'card-footer']);
     expect(
-      within(cards[0]).getByRole('heading', {
+      within(queryCard).getByRole('heading', {
         name: 'Query records',
         level: 2,
       }),
     ).toBeVisible();
-    expect(within(cards[0]).getByText('queryRecords')).toHaveClass(
+    expect(within(queryCard).getByText('queryRecords')).toHaveClass(
       'break-all',
       'font-mono',
     );
-    expect(within(cards[0]).getByText('Read collection records')).toBeVisible();
     expect(
-      within(cards[0]).getByText('Scope').nextElementSibling,
+      within(queryCard).getByText('Read collection records'),
+    ).toBeVisible();
+    expect(
+      within(queryCard).getByText('Scope').nextElementSibling,
     ).toHaveTextContent('SPECIFIED');
     expect(
-      within(cards[0]).getByText('Source').nextElementSibling,
+      within(queryCard).getByText('Source').nextElementSibling,
     ).toHaveTextContent('builtin');
-    expect(within(cards[1]).queryByText('Scope')).not.toBeInTheDocument();
-    expect(within(cards[1]).queryByText('Source')).not.toBeInTheDocument();
+    expect(within(draftCard).queryByText('Scope')).not.toBeInTheDocument();
+    expect(within(draftCard).queryByText('Source')).not.toBeInTheDocument();
     expect(
-      within(cards[1]).getByRole('button', { name: 'draft-document' }),
+      within(draftCard).getByRole('button', { name: 'draft-document' }),
     ).toHaveAttribute('aria-haspopup', 'dialog');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(

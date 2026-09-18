@@ -57,7 +57,7 @@ export function AISettingsShell({
   return (
     <SettingsShell
       title='AI Employees'
-      description='Manage AI employees.'
+      description='employees.pageDescription'
       navigationLabel='AI settings'
       tabs={getAISettingsTabs()}
       activeTabKey={resolvedActiveTabKey}

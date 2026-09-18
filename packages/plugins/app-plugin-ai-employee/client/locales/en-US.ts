@@ -23,7 +23,8 @@ export default {
   },
   tools: {
     title: 'Tools',
-    description: 'Browse tools available to AI employees.',
+    description:
+      'Browse the tools available to AI employees and review their sources, usage instructions, and input parameters.',
     search: 'Search tools',
     loading: 'Loading tools…',
     error: 'Unable to load tools.',
@@ -441,13 +442,16 @@ export default {
   'Collapse employee list': 'Collapse employee list',
   'LLM services': 'LLM services',
   'MCP services': 'MCP services',
-  'Manage AI employees.': 'Manage AI employees.',
-  'Manage LLM services.': 'Manage LLM services.',
-  'Manage MCP services.': 'Manage MCP services.',
+  'employees.pageDescription':
+    'Configure AI employees, their models, instructions, skills, and tools.',
+  'llmServices.pageDescription':
+    'Manage LLM service status and available models. Connections are configured during deployment.',
+  'mcp.pageDescription':
+    'Manage MCP service status and tool permissions. Connections are configured during deployment.',
   'AI settings': 'AI settings',
   'Conversation center': 'Conversation center',
-  'Review conversations across all users without changing their read status.':
-    'Review conversations across all users without changing their read status.',
+  'conversations.pageDescription':
+    'Review all users’ conversations with AI employees, including messages and tool calls, without changing their read status.',
   'Refresh list': 'Refresh list',
   'Refresh messages': 'Refresh messages',
   'Refreshing…': 'Refreshing…',
@@ -498,14 +502,11 @@ export default {
     'Unable to load conversation messages.',
   'LLM Service': 'LLM Service',
   MCP: 'MCP',
-  'mcp.configNotice': 'MCP servers are configured in config.yml.',
   'mcp.toolsTitle': 'MCP tools',
   'mcp.toolsEmpty': 'No MCP tools available.',
   'mcp.transportHttp': 'HTTP (Streamable)',
   'mcp.transportSse': 'HTTP + SSE (Legacy)',
   'MCP servers': 'MCP servers',
-  'LLM services are configured in config.yml.':
-    'LLM services are configured in config.yml.',
   'Manage AI employees, LLM services, and MCP services.':
     'Manage AI employees, LLM services, and MCP services.',
   'Connect AI employees to external tools through Model Context Protocol servers.':
@@ -606,8 +607,8 @@ export default {
   'Saving…': 'Saving…',
   Score: 'Score',
   Skills: 'Skills',
-  'Browse skills available to AI employees.':
-    'Browse skills available to AI employees.',
+  'skills.pageDescription':
+    'Browse the skills available to AI employees and review their instructions and associated tools.',
   'Search skills': 'Search skills',
   'Loading skills…': 'Loading skills…',
   'Unable to load skills.': 'Unable to load skills.',

@@ -4,7 +4,7 @@ import MCPPage from './mcp-page.js';
 
 export default function MCPServiceSettingsPage(): ReactElement {
   return (
-    <SettingsShell title='MCP services' description='Manage MCP services.'>
+    <SettingsShell title='MCP services' description='mcp.pageDescription'>
       <MCPPage />
     </SettingsShell>
   );

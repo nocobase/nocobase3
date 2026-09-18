@@ -18,6 +18,7 @@ import {
 import { Input } from '../../registry/nocobase-ai/shared/ui/input.js';
 import { SkillDetailsDrawer } from '../components/skill-details-drawer.js';
 import { useT } from '../locales/index.js';
+import { compareResourceNames } from '../resource-name-order.js';
 import { SettingsShell } from '../settings-shell.js';
 import {
   listManagedSkills,
@@ -54,14 +55,21 @@ export default function SkillsSettingsPage(): ReactElement {
   const keyword = query.trim().toLocaleLowerCase();
   const skills =
     state.status === 'ready'
-      ? state.skills.filter((skill) =>
-          [
-            skill.name,
-            skill.title,
-            skill.description,
-            ...skill.tools.flatMap((tool) => [tool.name, tool.title]),
-          ].some((value) => value.toLocaleLowerCase().includes(keyword)),
-        )
+      ? state.skills
+          .filter((skill) =>
+            [
+              skill.name,
+              skill.title,
+              skill.description,
+              ...skill.tools.flatMap((tool) => [tool.name, tool.title]),
+            ].some((value) => value.toLocaleLowerCase().includes(keyword)),
+          )
+          .sort((left, right) =>
+            compareResourceNames(
+              left.title.trim() || left.name,
+              right.title.trim() || right.name,
+            ),
+          )
       : [];
 
   function openSkill(
@@ -73,10 +81,7 @@ export default function SkillsSettingsPage(): ReactElement {
   }
 
   return (
-    <SettingsShell
-      title='Skills'
-      description='Browse skills available to AI employees.'
-    >
+    <SettingsShell title='Skills' description='skills.pageDescription'>
       <section aria-label={t('Skills')} className='flex min-w-0 flex-col gap-4'>
         <Input
           type='search'

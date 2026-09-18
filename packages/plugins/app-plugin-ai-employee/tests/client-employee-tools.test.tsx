@@ -183,6 +183,26 @@ describe('employee Tools selection', () => {
   it('shows a flat union of every scope/source with title, name, description and real switches, without add/remove/groups', async () => {
     await renderTools();
     const list = screen.getByRole('list', { name: 'Tools' });
+    expect(
+      within(list)
+        .getAllByRole('switch')
+        .map((control) => control.getAttribute('aria-label')),
+    ).toEqual([
+      'Use aiEmployeeWorkflowTaskOutput',
+      'Use Custom tool',
+      'Use Default custom',
+      'Use disabledSkillTool',
+      'Use General tool',
+      'Use getSkill',
+      'Use knowledge-base-retrieve',
+      'Use MCP search',
+      'Use missing',
+      'Use missingSkillTool',
+      'Use Skill tool',
+      'Use Specified tool',
+      'Use subAgentWebSearch',
+      'Use unscoped',
+    ]);
     expect(list).toHaveClass('divide-y', 'divide-border');
     expect(within(list).getAllByRole('listitem')).toHaveLength(
       catalog.length + 2,

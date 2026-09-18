@@ -128,8 +128,7 @@ describe('Conversation center', () => {
     const container = header.parentElement!;
     expect(container.tagName).toBe('SECTION');
     expect(container).toHaveClass('w-full', 'space-y-6', 'p-6', 'md:p-8');
-    const description =
-      'Review conversations across all users without changing their read status.';
+    const description = 'conversations.pageDescription';
     expect(within(header).getByText(description)).toBeInTheDocument();
     expect(screen.getAllByText(description)).toHaveLength(1);
 

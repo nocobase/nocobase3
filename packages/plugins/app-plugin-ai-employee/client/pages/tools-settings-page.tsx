@@ -17,6 +17,7 @@ import { Input } from '../../registry/nocobase-ai/shared/ui/input.js';
 import { ToolDetailsDrawer } from '../components/tool-details-drawer.js';
 import { ToolMetadata } from '../components/tool-metadata.js';
 import { useT } from '../locales/index.js';
+import { compareResourceNames } from '../resource-name-order.js';
 import { SettingsShell } from '../settings-shell.js';
 import {
   listManagedTools,
@@ -53,11 +54,18 @@ export default function ToolsSettingsPage(): ReactElement {
   const keyword = query.trim().toLocaleLowerCase();
   const tools =
     state.status === 'ready'
-      ? state.tools.filter((tool) =>
-          [tool.name, tool.title, tool.description].some((value) =>
-            value.toLocaleLowerCase().includes(keyword),
-          ),
-        )
+      ? state.tools
+          .filter((tool) =>
+            [tool.name, tool.title, tool.description].some((value) =>
+              value.toLocaleLowerCase().includes(keyword),
+            ),
+          )
+          .sort((left, right) =>
+            compareResourceNames(
+              left.title.trim() || left.name,
+              right.title.trim() || right.name,
+            ),
+          )
       : [];
 
   function openTool(
