@@ -37,6 +37,8 @@ Configure the AI Agent's own account and model access beforehand. The walkthroug
 
 ## Reading order
 
+Choose [Create with an AI Agent](./create-app) or [Create manually](./create-app-manually). Both paths lead to your first feature.
+
 | Step                                                         | Question it answers                               | Completion point                                            |
 | ------------------------------------------------------------ | ------------------------------------------------- | ----------------------------------------------------------- |
 | [Create an application](./create-app)                        | Where does the project live, and how does it run? | Open the application in a browser and sign in               |

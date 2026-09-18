@@ -133,7 +133,7 @@ export default workflow;
 
 Bind the `defineWorkflow()` result to a `const` annotated `WorkflowSourceAst` and default-export that binding. The application's server tsconfig enables `isolatedDeclarations`, and its `server/**/*.ts` include covers `workflow.ts`, so a bare `export default defineWorkflow({ ... })` fails `pnpm typecheck` with `error TS9037: Default exports can't be inferred with --isolatedDeclarations.` The annotated binding keeps the explicit `WorkflowSourceAst` type in the module's own declaration and compiles cleanly.
 
-The common successor `recordRoutingOutcome` runs after either branch returns. Empty branches are accepted for readability and omitted from the canonical AST. `flagForManualReview` performs one synchronous business action; it does not wait for a person, receive an approval result, or resume the workflow later.
+The common successor `recordRoutingOutcome` runs after either branch returns. Empty branches are accepted for readability and omitted from the canonical AST. `flagForManualReview` performs one background business action; it does not wait for a person, receive an approval result, or resume the workflow later.
 
 `server/calculate-risk.ts`:
 
@@ -366,7 +366,7 @@ export const run: WorkflowRunFunction = async (
 };
 ```
 
-The public function receives `args: unknown` and options with exactly `services`, `signal`, and `logger`. `services` is a read-only application service resolver with `has(token)` and `resolve(token)`: import each service owner's original public token and do not recreate a same-named token. The resolver cannot register or replace application services. `signal` is the current Workflow abort signal, and `logger` is already bound to the current Workflow execution context. The function returns/awaits an unknown value, but runtime accepts only JSON-storable results. `undefined` becomes `null`; BigInt, functions, symbols, non-finite numbers, circular values, and class instances fail. A return like `{ status: 'failed' }` is ordinary successful business data. Throw to mark execution error. Scripts cannot choose branches, suspend, resume, or drive the processor state machine.
+The processor leaves the node `PENDING` and yields before executing its module in the background. Completion saves the result and resumes the workflow; downstream nodes run only after completion. This is process-local asynchronous execution, not a durable job or a separate worker thread. The public function receives `args: unknown` and options with exactly `services`, `signal`, and `logger`. `services` is a read-only application service resolver with `has(token)` and `resolve(token)`: import each service owner's original public token and do not recreate a same-named token. The resolver cannot register or replace application services. `signal` is the current Workflow abort signal, and `logger` is already bound to the current Workflow execution context. The function returns/awaits an unknown value, but runtime accepts only JSON-storable results. `undefined` becomes `null`; BigInt, functions, symbols, non-finite numbers, circular values, and class instances fail. A return like `{ status: 'failed' }` is ordinary successful business data. Throw to mark execution error. Scripts cannot choose branches, suspend, resume, or drive the processor state machine.
 
 Honor `options.signal` in cancellable I/O and use service-owned timeout options where available. Keep secrets out of args, results, logs, and service inputs that may be logged. Make external side effects idempotent using business identifiers because workflow retries/reruns may call the script again.
 
@@ -445,3 +445,5 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 - Every run script is static, named-exported, abort-aware, and idempotent.
 - Every referenced run result has an accurate, lexically visible schema.
 - The real five-phase checker passes, then the Artifact build preserves the workflow package's runtime resources at their package-relative paths.
+
+Workflow diagnostics use the application logging service with source `workflow` and workflow, execution, and node identities where available. They share `storage/logs/app.<UTC-date>.<part>.log` by default. Set `logging.loggers.workflow.file.name: workflow` to separate them. The message-first logger passed to run modules adapts to this service; diagnostic output is not copied into the database node execution `log` field. Execution status, result, and error records remain business data.

@@ -10,6 +10,7 @@ export interface HubRoleDefinition {
 }
 
 export type HubRoleCapabilityKey =
+  | 'view-logs'
   | 'view-status'
   | 'view-resources'
   | 'create-release'
@@ -44,6 +45,11 @@ export const HUB_ROLE_CAPABILITIES: readonly HubRoleCapability[] = [
       requirement('hub.app', 'read', 'read-release', 'read-deployment'),
       requirement('hub.host', 'read'),
     ],
+  },
+  {
+    key: 'view-logs',
+    group: 'visibility',
+    requirements: [requirement('hub.app', 'read-log')],
   },
   {
     key: 'view-resources',

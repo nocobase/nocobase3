@@ -1,7 +1,4 @@
-import {
-  Application,
-  type ApplicationConfig,
-} from '@nocobase/app-server/application';
+import type { Application } from '@nocobase/app-server/application';
 import { DatabaseProvider } from '@nocobase/app-server/database';
 import { I18nProvider, i18nHttpMiddleware } from '@nocobase/app-server/i18n';
 import { CachingProvider } from '@nocobase/app-server/caching';
@@ -17,15 +14,14 @@ import {
   sessionHttpMiddleware,
 } from '@nocobase/app-server/session';
 import { healthCheckApiRoutes } from '@nocobase/app-server/router';
-import type { AppRuntimeContext } from '@nocobase/app-server/runtime';
+import {
+  createAppFromRuntime,
+  type AppRuntimeContext,
+} from '@nocobase/app-server/runtime';
 import { spaRootRoutes } from '@nocobase/app-server/spa';
 
 export function createApp(runtime: AppRuntimeContext): Application {
-  const app = new Application<ApplicationConfig>({
-    config: runtime.config,
-    mode: runtime.mode,
-    paths: runtime.configPaths,
-  });
+  const app = createAppFromRuntime(runtime);
 
   app.addServiceProvider(DatabaseProvider);
   app.addServiceProvider(I18nProvider);
@@ -42,6 +38,5 @@ export function createApp(runtime: AppRuntimeContext): Application {
   app.addRuntimeContributions(runtime);
   app.addRoutes(spaRootRoutes);
 
-  runtime.app = app;
   return app;
 }

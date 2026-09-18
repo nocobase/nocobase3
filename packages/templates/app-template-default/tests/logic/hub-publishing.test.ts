@@ -14,8 +14,8 @@ const env = {
 };
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'hub-cli-test-'));
-  await mkdir(path.join(root, 'storage'));
-  await writeFile(path.join(root, 'storage/dist.tar.gz'), 'artifact');
+  await mkdir(path.join(root, 'storage/exports'), { recursive: true });
+  await writeFile(path.join(root, 'storage/exports/dist.tar.gz'), 'artifact');
 });
 afterEach(async () => {
   vi.unstubAllGlobals();
@@ -209,6 +209,84 @@ describe('Hub publishing client', () => {
       ).idempotencyKey,
     ).toBe('new-attempt');
   });
+  it('reports a reused deployment as history rather than a fresh deployment', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          response({
+            operationId: 'op-1',
+            status: 'succeeded',
+            reused: true,
+            createdAt: '2026-09-18T07:00:00.000Z',
+          }),
+        ),
+      ),
+    );
+    const result = await publishToHub(
+      'deploy',
+      { 'release-id': 'r1', wait: true },
+      root,
+      env,
+    );
+    expect(result).toMatchObject({
+      reused: true,
+      operationStatus: 'succeeded',
+      deploymentCreatedAt: '2026-09-18T07:00:00.000Z',
+    });
+    expect(String(result.warning)).toContain('--idempotency-key');
+  });
+
+  it('stays quiet when the Hub created the deployment for this request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          response({
+            operationId: 'op-1',
+            status: 'succeeded',
+            reused: false,
+          }),
+        ),
+      ),
+    );
+    const result = await publishToHub(
+      'deploy',
+      { 'release-id': 'r1', wait: true },
+      root,
+      env,
+    );
+    expect(result.reused).toBeUndefined();
+    expect(result.warning).toBeUndefined();
+  });
+
+  it('warns when upload --deploy reuses an existing Release and its deployment', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          response({
+            releaseId: 'r1',
+            operationId: 'op-1',
+            status: 'succeeded',
+            reused: true,
+          }),
+        ),
+      ),
+    );
+    const result = await publishToHub(
+      'upload',
+      { deploy: true, wait: true },
+      root,
+      env,
+    );
+    expect(result).toMatchObject({
+      reused: true,
+      operationStatus: 'succeeded',
+    });
+    expect(String(result.warning)).toContain('--idempotency-key');
+  });
+
   it('sends deploy and wait intent on the upload itself', async () => {
     const fetcher = vi
       .fn()
@@ -434,7 +512,7 @@ describe('CLI command output', () => {
           env.HUB_API_KEY,
           ...(operation === 'deploy'
             ? ['--release-id', 'r1']
-            : ['--file', path.join(root, 'storage/dist.tar.gz')]),
+            : ['--file', path.join(root, 'storage/exports/dist.tar.gz')]),
           ...flags,
         ],
         config,
@@ -522,7 +600,7 @@ describe('CLI command output', () => {
         '--api-key',
         env.HUB_API_KEY,
         '--file',
-        path.join(root, 'storage/dist.tar.gz'),
+        path.join(root, 'storage/exports/dist.tar.gz'),
       ],
       config,
     );
@@ -536,6 +614,50 @@ describe('CLI command output', () => {
       status: 'failure',
       error: { code: 'NO_DEPLOYMENT' },
     });
+  });
+
+  it('warns in human output when the Hub reused an earlier deployment', async () => {
+    const { Config } = await import('@oclif/core');
+    const { default: AppDeploy } = await import('../../cli/commands/deploy.js');
+    const config = await Config.load({
+      root,
+      pjson: {
+        name: 'publishing-test',
+        version: '0.0.0',
+        oclif: { bin: 'nocobase' },
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() =>
+        Promise.resolve(
+          response({
+            operationId: 'op-1',
+            status: 'succeeded',
+            reused: true,
+          }),
+        ),
+      ),
+    );
+    const command = new AppDeploy(
+      [
+        '--hub',
+        env.HUB_URL,
+        '--app-id',
+        env.HUB_APP_ID,
+        '--api-key',
+        env.HUB_API_KEY,
+        '--release-id',
+        'r1',
+      ],
+      config,
+    );
+    const log = vi.spyOn(command, 'log').mockImplementation(() => undefined);
+    const warn = vi.spyOn(command, 'warn').mockImplementation(() => undefined);
+    await command.run();
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('--idempotency-key');
   });
 
   it('allows --no-wait to return the accepted deployment status', async () => {

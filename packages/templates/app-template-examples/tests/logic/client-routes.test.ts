@@ -23,6 +23,11 @@ describe('app client routes', () => {
         },
         {
           auth: 'required',
+          name: 'notifications',
+          path: '/notifications',
+        },
+        {
+          auth: 'required',
           name: 'routeOverlays',
           path: '/route-overlays',
           children: [

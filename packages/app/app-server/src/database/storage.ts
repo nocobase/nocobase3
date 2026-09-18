@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 
 import type { DatabaseDriverRegistration } from '@nocobase/db';
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
 import { resolveAppDatabaseDriver, resolveConnections } from './manager.js';
 import { defaultConnectionName } from './plan.js';
@@ -10,7 +10,7 @@ export async function prepareAppDatabaseStorage<
   TConfig extends AppDatabaseConfig,
 >(
   config: TConfig,
-  paths?: ConfigPaths,
+  paths?: AppPaths,
   names?: readonly string[],
   drivers?: Record<string, DatabaseDriverRegistration>,
 ): Promise<void> {

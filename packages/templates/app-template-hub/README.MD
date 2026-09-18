@@ -117,12 +117,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script             | What it does                                                                 |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `pnpm dev`         | Start the API server and client with hot reload                              |
-| `pnpm build`       | Build the client and server into `dist/`                                     |
-| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
-| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
+| Script             | What it does                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `pnpm dev`         | Start the API server and client with hot reload                                      |
+| `pnpm build`       | Build the client and server into `dist/`                                             |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                                    |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/exports/dist.tar.gz` |
 
 ### Database
 
@@ -248,7 +248,7 @@ If your application has no native modules — `pg`, `mysql2`, and `tedious` are 
 
 #### Packing the build
 
-`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+`pnpm build --tar` writes `storage/exports/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
 
 The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
 
@@ -331,3 +331,17 @@ Tests live in `tests/`, never beside the source they cover. Put logic and integr
 ## License
 
 MIT
+
+## Hub storage layout
+
+New installations use `storage/hub` for the Hub database (`database/main.sqlite`), local files (`files`), desired application configurations (`desired-configs/<appId>/<deploymentId>.yml`), and logs (`logs/app`, `logs/request`, `logs/deployments/<appId>`). Host configuration is generated at `storage/host/runtime/config.yml`; Host logs and captured child output use `storage/host/logs/host` and `storage/host/logs/child-output`. Capturing child output does not change terminal forwarding. Each log directory has its own retention and size limit; deployment log limits apply per application.
+
+`storage/apps/artifacts/<appId>/<releaseId>.tar.gz` contains release archives, `storage/apps/revisions/<appId>/<sha256>` contains expanded archives, and `storage/apps/volumes/<appId>` contains runtime configurations and application-owned `storage/`. The checksum identifies the archive bytes. Hub desired configurations and Host runtime configurations have different owners; neither is a historical configuration archive. Restart recovery requires the installed revision and does not automatically re-extract a missing one.
+
+Standalone Hub source and compiled entries share the deployment directory's `storage`. Explicit storage paths take precedence over `HUB_STORAGE_DIR`; relative values resolve from the deployment directory. Embedded Hub instances use the Host-provided volume. Expanded releases use `appRevisionsDir/<appId>/<sha256>`. Directory defaults do not depend on existing files.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

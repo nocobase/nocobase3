@@ -1,5 +1,24 @@
 # @nocobase/app-plugin-database-explorer
 
+## 0.1.0-beta.3
+
+### Patch Changes
+
+- d4ca00e: Use useApiClient() for React API client access across application pages, plugins and shared examples, preserving application-scoped client resolution.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [365a9fe]
+- Updated dependencies [365a9fe]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/i18n@1.0.0-beta.4
+
 ## 0.1.0-beta.2
 
 ### Patch Changes

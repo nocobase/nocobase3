@@ -3,6 +3,8 @@ import operatorRemovalMigration from '../database/migrations/202609160008_operat
 import removeDeploymentMode from '../database/migrations/202609160006_remove_deployment_mode.js';
 import configFingerprintMigration from '../database/migrations/202609160007_release_config_fingerprint.js';
 import publishingMigration from '../database/migrations/202609160005_release_publishing.js';
+
+import logAccessMigration from '../database/migrations/202609170001_grant_hub_log_access.js';
 import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
@@ -307,6 +309,30 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     },
   );
 
+  it('grants log access only to administrators and operators and reverses it', async () => {
+    await createAuthorizationTables(database);
+    await migrate(permissionSetsMigration, 'up', database);
+    await migrate(logAccessMigration, 'up', database);
+    await migrate(logAccessMigration, 'up', database);
+    const rows = await database
+      .connection()
+      .query.selectFrom('authorizationPermissionSets')
+      .select(['key', 'grants'])
+      .orderBy('key', 'asc')
+      .execute();
+    expect(grantActions(rows[0]?.grants, 'hub.app')).toContain('read-log');
+    expect(grantActions(rows[1]?.grants, 'hub.app')).toContain('read-log');
+    expect(grantActions(rows[2]?.grants, 'hub.app')).not.toContain('read-log');
+    await migrate(logAccessMigration, 'down', database);
+    const row = await database
+      .connection()
+      .query.selectFrom('authorizationPermissionSets')
+      .select('grants')
+      .where('key', '=', 'hub-administrator')
+      .executeTakeFirst();
+    expect(grantActions(row?.grants, 'hub.app')).not.toContain('read-log');
+  });
+
   it('creates fixed Hub roles and upgrades every system administrator', async () => {
     await createAuthorizationTables(database);
     const query = database.connection().query;
@@ -511,7 +537,8 @@ function grantActions(value: unknown, resourceType: string): string[] {
     resource: { type: string };
     actions: { action: string }[];
   }[];
-  return (
-    grants.find(({ resource }) => resource.type === resourceType)?.actions ?? []
-  ).map(({ action }) => action);
+  return grants
+    .filter(({ resource }) => resource.type === resourceType)
+    .flatMap(({ actions }) => actions)
+    .map(({ action }) => action);
 }

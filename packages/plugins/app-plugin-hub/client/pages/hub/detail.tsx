@@ -34,6 +34,7 @@ import {
 } from '../../permissions.js';
 
 const TAB_LABELS: Readonly<Record<DetailTab, string>> = {
+  logs: 'detail.tabs.logs',
   deployments: 'detail.tabs.deployments',
   releases: 'detail.tabs.releases',
   development: 'detail.tabs.development',

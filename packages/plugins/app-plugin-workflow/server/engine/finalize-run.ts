@@ -1,6 +1,7 @@
 import type { WorkflowStore } from '../collections/store.js';
 import type {
   WorkflowId,
+  WorkflowLogger,
   WorkflowTerminalEvent,
   WorkflowTerminalObserver,
 } from './types.js';
@@ -15,6 +16,7 @@ export interface FinalizeWorkflowRunOptions {
   readonly output: unknown;
   readonly finishedAt?: string;
   readonly observer?: WorkflowTerminalObserver;
+  readonly logger?: WorkflowLogger;
 }
 
 export async function finalizeWorkflowRun(
@@ -54,7 +56,7 @@ export async function finalizeWorkflowRun(
       // The authoritative Workflow terminal state must survive an optional
       // projection observer being temporarily unavailable. Scheduler repairs
       // a missed fast-path notification through its persisted observer.
-      console.error('Workflow terminal observer failed', {
+      options.logger?.error('Workflow terminal observer failed', {
         runId: options.runId,
         sourceType: event.sourceType,
         sourceId: event.sourceId,

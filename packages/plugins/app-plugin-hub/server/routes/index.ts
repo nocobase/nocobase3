@@ -536,6 +536,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
             id: deployment.id,
             operationId: deployment.id,
             status: deployment.status,
+            // A reused operation was created by an earlier request, so the App may be running
+            // another Release by now. Clients must not read it as "this Release is live".
+            reused: deployment.reused === true,
+            createdAt: deployment.createdAt,
           };
         },
         202,
@@ -562,6 +566,37 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         });
       },
     );
+
+    for (const route of [
+      '/apps/:appId/logs',
+      '/apps/:appId/deployments/:deploymentId/logs',
+    ]) {
+      routes.get(route, async (context) => {
+        const appId = context.req.param('appId')!;
+        const deploymentId = context.req.param('deploymentId');
+        await requireHubAction(
+          context,
+          appId,
+          deploymentId ? 'read-deployment' : 'read-log',
+        );
+        preventSensitiveResponseCaching(context);
+        return respond(context, () =>
+          hub.readLogs(
+            appId,
+            {
+              cursor: context.req.query('cursor'),
+              level: context.req.query('level'),
+              source: context.req.query('source'),
+              search: context.req.query('search'),
+              since: context.req.query('since'),
+              until: context.req.query('until'),
+              fromStart: context.req.query('fromStart') === 'true',
+            },
+            deploymentId,
+          ),
+        );
+      });
+    }
     routes.get('/apps/:appId/deployments', async (context) => {
       await requireHubAction(
         context,
