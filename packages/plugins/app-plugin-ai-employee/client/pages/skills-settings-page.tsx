@@ -5,7 +5,6 @@ import {
   Alert,
   AlertDescription,
 } from '../../registry/nocobase-ai/shared/ui/alert.js';
-import { Badge } from '../../registry/nocobase-ai/shared/ui/badge.js';
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
 import {
   Card,
@@ -17,6 +16,7 @@ import {
 } from '../../registry/nocobase-ai/shared/ui/card.js';
 import { Input } from '../../registry/nocobase-ai/shared/ui/input.js';
 import { SkillDetailsDrawer } from '../components/skill-details-drawer.js';
+import { SkillToolBadges } from '../components/skill-tool-badges.js';
 import { useT } from '../locales/index.js';
 import { compareResourceNames } from '../resource-name-order.js';
 import { SettingsShell } from '../settings-shell.js';
@@ -83,14 +83,21 @@ export default function SkillsSettingsPage(): ReactElement {
   return (
     <SettingsShell title='Skills' description='skills.pageDescription'>
       <section aria-label={t('Skills')} className='flex min-w-0 flex-col gap-4'>
-        <Input
-          type='search'
-          aria-label={t('Search skills')}
-          placeholder={t('Search skills')}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className='max-w-md'
-        />
+        <div className='flex flex-wrap items-center justify-between gap-3'>
+          <Input
+            type='search'
+            aria-label={t('Search skills')}
+            placeholder={t('Search skills')}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className='w-full max-w-md'
+          />
+          {state.status === 'ready' ? (
+            <p aria-live='polite' className='text-sm text-muted-foreground'>
+              {t('skills.count', { count: skills.length })}
+            </p>
+          ) : null}
+        </div>
         {state.status === 'loading' ? (
           <p role='status' className='text-sm text-muted-foreground'>
             {t('Loading skills…')}
@@ -129,7 +136,7 @@ export default function SkillsSettingsPage(): ReactElement {
             {skills.map((skill) => (
               <li key={skill.name} className='min-w-0'>
                 <Card
-                  className='h-full min-w-0 cursor-pointer hover:ring-ring focus-within:ring-2 focus-within:ring-ring'
+                  className='h-64 min-w-0 cursor-pointer hover:ring-ring'
                   onClick={(event) =>
                     openSkill(
                       skill,
@@ -137,54 +144,56 @@ export default function SkillsSettingsPage(): ReactElement {
                     )
                   }
                 >
-                  <CardHeader className='min-w-0'>
-                    <CardTitle role='heading' aria-level={2}>
+                  <CardHeader className='min-w-0 shrink-0'>
+                    <CardTitle
+                      role='heading'
+                      aria-level={2}
+                      className='min-w-0'
+                    >
                       <Button
                         variant='link'
                         aria-haspopup='dialog'
-                        className='h-auto min-h-11 max-w-full justify-start whitespace-normal px-0 text-left [overflow-wrap:anywhere]'
+                        className='h-11 min-w-0 max-w-full justify-start px-0 text-left hover:no-underline'
+                        title={skill.title.trim() || skill.name}
                         onClick={(event) => {
                           event.stopPropagation();
                           openSkill(skill, event.currentTarget);
                         }}
                       >
-                        {skill.title.trim() || skill.name}
+                        <span className='truncate'>
+                          {skill.title.trim() || skill.name}
+                        </span>
                       </Button>
                     </CardTitle>
                     <CardDescription>
                       <span
                         translate='no'
-                        className='break-all font-mono text-xs'
+                        className='block truncate font-mono text-xs'
+                        title={skill.name}
                       >
                         {skill.name}
                       </span>
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className='min-w-0'>
-                    <p className='whitespace-pre-wrap [overflow-wrap:anywhere]'>
+                  <CardContent className='min-h-0 min-w-0 flex-1 overflow-hidden'>
+                    <p
+                      className='line-clamp-3 whitespace-pre-wrap [overflow-wrap:anywhere]'
+                      title={skill.description}
+                    >
                       {skill.description}
                     </p>
                   </CardContent>
                   <CardFooter
                     role='group'
                     aria-label={t('skills.tools')}
-                    className='mt-auto min-w-0 flex-wrap gap-2'
+                    className='mt-auto h-14 min-w-0 shrink-0 flex-nowrap gap-2'
                   >
                     <Wrench
                       aria-hidden='true'
                       className='size-4 shrink-0 text-muted-foreground'
                     />
                     {skill.tools.length ? (
-                      skill.tools.map((tool) => (
-                        <Badge
-                          key={tool.name}
-                          variant='secondary'
-                          translate='no'
-                          className='h-auto max-w-full whitespace-normal break-all'
-                        >
-                          {tool.name}
-                        </Badge>
-                      ))
+                      <SkillToolBadges tools={skill.tools} />
                     ) : (
                       <span className='text-muted-foreground'>
                         {t('skills.noTools')}

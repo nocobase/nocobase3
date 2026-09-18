@@ -24,8 +24,11 @@ export default {
   tools: {
     title: 'Tools',
     description:
-      'Browse the tools available to AI employees and review their sources, usage instructions, and input parameters.',
+      'Browse the tools available to AI employees and review their usage instructions and input parameters.',
     search: 'Search tools',
+    searchPlaceholder: 'Search tool names, identifiers, or introductions',
+    count_one: '{{count}} tool',
+    count_other: '{{count}} tools',
     loading: 'Loading tools…',
     error: 'Unable to load tools.',
     empty: 'No tools are available.',
@@ -36,14 +39,15 @@ export default {
     detailsDescription: 'Read about this tool and review its input schema.',
     detailsLoading: 'Loading tool details…',
     detailsError: 'Unable to load tool details.',
-    about: 'About',
+    about: 'Overview',
+    descriptionLabel: 'Tool description',
     noAbout: 'No additional documentation is available.',
-    inputSchema: 'Input schema',
-    schemaDescription:
-      'Read-only JSON schema. Viewing a tool does not execute it.',
+    inputSchema: 'Input JSON Schema',
     noSchema: 'No input schema is available.',
   },
   skills: {
+    count_one: '{{count}} skill',
+    count_other: '{{count}} skills',
     skill: 'Skill',
     description: 'Description',
     tools: 'Tools',

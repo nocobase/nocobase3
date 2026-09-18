@@ -9,6 +9,7 @@ import {
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
 import { DialogDescription } from '../../registry/nocobase-ai/shared/ui/dialog.js';
 import { CatalogDetailsDrawer } from './catalog-details-drawer.js';
+import { ToolListContent } from './tool-list-content.js';
 import {
   Tabs,
   TabsContent,
@@ -162,33 +163,24 @@ function SkillDetails({
                   {state.skill.tools.map((tool) => (
                     <li
                       key={tool.name}
-                      className='flex min-w-0 flex-col gap-2 py-4'
+                      className='flex h-32 min-w-0 items-center overflow-hidden py-4'
                     >
-                      <div className='flex flex-wrap items-center justify-between gap-2'>
-                        <h4 className='min-w-0 font-heading text-sm font-semibold [overflow-wrap:anywhere]'>
-                          {tool.title.trim() || tool.name}
-                        </h4>
-                        {!tool.available ? (
-                          <span className='inline-flex items-center gap-1.5 text-xs text-muted-foreground'>
-                            <CircleAlert
-                              aria-hidden='true'
-                              className='size-3.5'
-                            />
-                            {t('skills.toolMissing')}
-                          </span>
-                        ) : null}
-                      </div>
-                      <p
-                        translate='no'
-                        className='break-all font-mono text-xs text-muted-foreground'
-                      >
-                        {tool.name}
-                      </p>
-                      {tool.description ? (
-                        <p className='whitespace-pre-wrap text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]'>
-                          {tool.description}
-                        </p>
-                      ) : null}
+                      <ToolListContent
+                        name={tool.name}
+                        title={tool.title}
+                        about={tool.about}
+                        status={
+                          !tool.available ? (
+                            <span className='inline-flex items-center gap-1.5 text-xs text-muted-foreground'>
+                              <CircleAlert
+                                aria-hidden='true'
+                                className='size-3.5'
+                              />
+                              {t('skills.toolMissing')}
+                            </span>
+                          ) : null
+                        }
+                      />
                     </li>
                   ))}
                 </ul>

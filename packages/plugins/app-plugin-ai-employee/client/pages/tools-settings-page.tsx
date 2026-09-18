@@ -5,17 +5,10 @@ import {
   AlertDescription,
 } from '../../registry/nocobase-ai/shared/ui/alert.js';
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '../../registry/nocobase-ai/shared/ui/card.js';
+import { ChevronRight } from 'lucide-react';
+import { ToolListContent } from '../components/tool-list-content.js';
 import { Input } from '../../registry/nocobase-ai/shared/ui/input.js';
 import { ToolDetailsDrawer } from '../components/tool-details-drawer.js';
-import { ToolMetadata } from '../components/tool-metadata.js';
 import { useT } from '../locales/index.js';
 import { compareResourceNames } from '../resource-name-order.js';
 import { SettingsShell } from '../settings-shell.js';
@@ -56,7 +49,7 @@ export default function ToolsSettingsPage(): ReactElement {
     state.status === 'ready'
       ? state.tools
           .filter((tool) =>
-            [tool.name, tool.title, tool.description].some((value) =>
+            [tool.name, tool.title, tool.about].some((value) =>
               value.toLocaleLowerCase().includes(keyword),
             ),
           )
@@ -82,14 +75,21 @@ export default function ToolsSettingsPage(): ReactElement {
         aria-label={t('tools.title')}
         className='flex min-w-0 flex-col gap-4'
       >
-        <Input
-          type='search'
-          aria-label={t('tools.search')}
-          placeholder={t('tools.search')}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className='max-w-md'
-        />
+        <div className='flex flex-wrap items-center justify-between gap-3'>
+          <Input
+            type='search'
+            aria-label={t('tools.search')}
+            placeholder={t('tools.searchPlaceholder')}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className='w-full max-w-md'
+          />
+          {state.status === 'ready' ? (
+            <p aria-live='polite' className='text-sm text-muted-foreground'>
+              {t('tools.count', { count: tools.length })}
+            </p>
+          ) : null}
+        </div>
         {state.status === 'loading' ? (
           <p role='status' className='text-sm text-muted-foreground'>
             {t('tools.loading')}
@@ -119,52 +119,32 @@ export default function ToolsSettingsPage(): ReactElement {
         ) : (
           <ul
             aria-label={t('tools.title')}
-            className='grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'
+            className='min-w-0 divide-y overflow-hidden rounded-xl border bg-card'
           >
-            {tools.map((tool) => (
-              <li key={tool.name} className='min-w-0'>
-                <Card
-                  className='h-full min-w-0 cursor-pointer hover:ring-ring focus-within:ring-2 focus-within:ring-ring'
-                  onClick={(event) =>
-                    openTool(tool, event.currentTarget.querySelector('button'))
-                  }
-                >
-                  <CardHeader className='min-w-0'>
-                    <CardTitle role='heading' aria-level={2}>
-                      <Button
-                        variant='link'
-                        aria-haspopup='dialog'
-                        className='h-auto min-h-11 max-w-full justify-start whitespace-normal px-0 text-left [overflow-wrap:anywhere]'
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openTool(tool, event.currentTarget);
-                        }}
-                      >
-                        {tool.title.trim() || tool.name}
-                      </Button>
-                    </CardTitle>
-                    <CardDescription>
-                      <span
-                        translate='no'
-                        className='break-all font-mono text-xs'
-                      >
-                        {tool.name}
-                      </span>
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className='min-w-0'>
-                    <p className='whitespace-pre-wrap [overflow-wrap:anywhere]'>
-                      {tool.description}
-                    </p>
-                  </CardContent>
-                  {tool.scope || tool.source ? (
-                    <CardFooter className='mt-auto min-w-0'>
-                      <ToolMetadata tool={tool} />
-                    </CardFooter>
-                  ) : null}
-                </Card>
-              </li>
-            ))}
+            {tools.map((tool) => {
+              const title = tool.title.trim() || tool.name;
+              return (
+                <li key={tool.name} className='min-w-0'>
+                  <button
+                    type='button'
+                    aria-label={title}
+                    aria-haspopup='dialog'
+                    className='flex h-32 w-full min-w-0 cursor-pointer items-center gap-4 overflow-hidden px-5 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none'
+                    onClick={(event) => openTool(tool, event.currentTarget)}
+                  >
+                    <ToolListContent
+                      name={tool.name}
+                      title={tool.title}
+                      about={tool.about}
+                    />
+                    <ChevronRight
+                      aria-hidden='true'
+                      className='size-4 shrink-0 text-muted-foreground'
+                    />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

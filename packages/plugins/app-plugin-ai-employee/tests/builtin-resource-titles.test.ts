@@ -124,6 +124,7 @@ describe('built-in resource display titles', () => {
             name,
             title: tool?.introduction?.title,
             description: tool?.definition.description,
+            about: tool?.introduction?.about ?? '',
             available: true,
           };
         }),

@@ -14,7 +14,6 @@ import {
   type ManagedToolSummary,
 } from '../tools-management-service.js';
 import { CatalogDetailsDrawer } from './catalog-details-drawer.js';
-import { ToolMetadata } from './tool-metadata.js';
 
 type DetailState =
   | { status: 'loading' }
@@ -57,10 +56,9 @@ function ToolDetails({
         >
           {tool.name}
         </p>
-        <DialogDescription className='whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]'>
-          {tool.description || t('tools.detailsDescription')}
+        <DialogDescription className='sr-only'>
+          {t('tools.detailsDescription')}
         </DialogDescription>
-        <ToolMetadata tool={tool} />
       </div>
       <div className='flex min-w-0 flex-col gap-8 px-6 pb-8 sm:px-8'>
         {state.status === 'loading' ? (
@@ -102,15 +100,23 @@ function ToolDetails({
               )}
             </section>
             <section
+              aria-label={t('tools.descriptionLabel')}
+              className='flex min-w-0 flex-col gap-3'
+            >
+              <h4 className='font-heading text-sm font-semibold'>
+                {t('tools.descriptionLabel')}
+              </h4>
+              <p className='whitespace-pre-wrap text-sm leading-6 [overflow-wrap:anywhere]'>
+                {state.tool.description.trim() || '—'}
+              </p>
+            </section>
+            <section
               aria-label={t('tools.inputSchema')}
               className='flex min-w-0 flex-col gap-3'
             >
               <h4 className='font-heading text-sm font-semibold'>
                 {t('tools.inputSchema')}
               </h4>
-              <p className='text-sm text-muted-foreground'>
-                {t('tools.schemaDescription')}
-              </p>
               {state.tool.inputSchema === null ? (
                 <p className='text-sm text-muted-foreground'>
                   {t('tools.noSchema')}

@@ -27,6 +27,7 @@ export interface ManagedToolSummary {
   name: string;
   title: string;
   description: string;
+  about: string;
   scope: string;
   source: string;
 }
@@ -48,7 +49,6 @@ export interface ManagedToolInputSchema {
 }
 
 export interface ManagedToolDetail extends ManagedToolSummary {
-  about: string;
   inputSchema: ManagedToolInputSchema | null;
 }
 
@@ -56,6 +56,7 @@ export interface ManagedSkillTool {
   name: string;
   title: string;
   description: string;
+  about: string;
   available: boolean;
 }
 

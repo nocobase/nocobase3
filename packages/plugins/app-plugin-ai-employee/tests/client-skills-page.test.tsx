@@ -34,9 +34,16 @@ const skills: ManagedSkillSummary[] = [
         name: 'queryRecords',
         title: 'Query records',
         description: 'Read collection records',
+        about: 'Browse **business data** safely.',
         available: true,
       },
-      { name: 'missingTool', title: '', description: '', available: false },
+      {
+        name: 'missingTool',
+        title: '',
+        description: 'Do not show this description',
+        about: '',
+        available: false,
+      },
     ],
   },
   {
@@ -128,7 +135,11 @@ describe('Skills settings page', () => {
     const cards = within(list).getAllByRole('listitem');
     expect(cards).toHaveLength(2);
     const card = cards[0].querySelector('[data-slot="card"]')!;
-    expect(card).toHaveClass('h-full', 'min-w-0', 'focus-within:ring-ring');
+    expect(card).toHaveClass('h-64', 'min-w-0');
+    expect(card).not.toHaveClass(
+      'focus-within:ring-2',
+      'focus-within:ring-ring',
+    );
     expect(
       Array.from(card.children).map((node) => node.getAttribute('data-slot')),
     ).toEqual(['card-header', 'card-content', 'card-footer']);
@@ -142,23 +153,25 @@ describe('Skills settings page', () => {
     );
     const footer = within(cards[0]).getByRole('group', { name: 'Tools' });
     expect(footer).toHaveAttribute('data-slot', 'card-footer');
-    expect(footer).toHaveClass('mt-auto', 'flex-wrap', 'gap-2');
+    expect(footer).toHaveClass(
+      'mt-auto',
+      'h-14',
+      'shrink-0',
+      'flex-nowrap',
+      'gap-2',
+    );
     expect(footer.firstElementChild).toHaveClass('lucide-wrench');
     expect(footer.firstElementChild).toHaveAttribute('aria-hidden', 'true');
-    const badges = Array.from(footer.querySelectorAll('[data-slot="badge"]'));
+    const badges = Array.from(
+      footer.querySelectorAll('[data-slot="badge"]'),
+    ).filter((badge) => !badge.closest('[aria-hidden="true"]'));
     expect(badges.map((badge) => badge.textContent)).toEqual([
-      'queryRecords',
+      'Query records',
       'missingTool',
     ]);
-    expect(Array.from(footer.children).slice(1)).toEqual(badges);
     for (const badge of badges) {
       expect(badge).toHaveAttribute('data-variant', 'secondary');
-      expect(badge).toHaveClass(
-        'h-auto',
-        'max-w-full',
-        'whitespace-normal',
-        'break-all',
-      );
+      expect(badge).toHaveClass('shrink-0');
     }
     const emptyFooter = within(cards[1]).getByRole('group', { name: 'Tools' });
     expect(emptyFooter.firstElementChild).toHaveClass('lucide-wrench');
@@ -179,7 +192,22 @@ describe('Skills settings page', () => {
     });
   });
 
-  it('wraps long card metadata and tool names without hiding tools, and opens from a footer badge', async () => {
+  it('truncates long card metadata and opens from the overflow badge', async () => {
+    const bounds = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        return {
+          width: this.classList.contains('relative') ? 100 : 200,
+          height: 20,
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: 200,
+          bottom: 20,
+          toJSON: () => ({}),
+        };
+      });
     const longSkill = {
       ...skills[0],
       title: 'LongTitle'.repeat(40),
@@ -196,17 +224,22 @@ describe('Skills settings page', () => {
     await renderPage();
     const list = await screen.findByRole('list', { name: 'Skills' });
     const trigger = within(list).getByRole('button', { name: longSkill.title });
-    expect(trigger).toHaveClass(
-      'whitespace-normal',
-      '[overflow-wrap:anywhere]',
-    );
-    expect(within(list).getByText(longSkill.name)).toHaveClass('break-all');
+    expect(trigger.firstElementChild).toHaveClass('truncate');
+    expect(within(list).getByText(longSkill.name)).toHaveClass('truncate');
     expect(within(list).getByText(longSkill.description)).toHaveClass(
-      '[overflow-wrap:anywhere]',
+      'line-clamp-3',
     );
     const footer = within(list).getByRole('group', { name: 'Tools' });
-    expect(footer.querySelectorAll('[data-slot="badge"]')).toHaveLength(12);
-    fireEvent.click(within(footer).getByText(longSkill.tools[11].name));
+    const overflow = within(footer)
+      .getAllByText('+12')
+      .find((badge) => !badge.closest('[aria-hidden="true"]'))!;
+    expect(overflow).toBeVisible();
+    expect(overflow).toHaveAttribute(
+      'title',
+      longSkill.tools.map((tool) => tool.title).join(', '),
+    );
+    bounds.mockRestore();
+    fireEvent.click(overflow);
     const dialog = await screen.findByRole('dialog', { name: 'Skill details' });
     await within(dialog).findByText('No instructions are available.');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
@@ -227,6 +260,7 @@ describe('Skills settings page', () => {
     ]) {
       fireEvent.change(search, { target: { value: query } });
       expect(screen.getAllByRole('listitem')).toHaveLength(1);
+      expect(screen.getByText('1 skill')).toBeVisible();
       expect(
         screen.getByRole('button', { name: 'Data analysis' }),
       ).toBeVisible();
@@ -235,7 +269,9 @@ describe('Skills settings page', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'No skills match your search.',
     );
+    expect(screen.getByText('0 skills')).toBeVisible();
     fireEvent.change(search, { target: { value: '' } });
+    expect(screen.getByText('2 skills')).toBeVisible();
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
     expect(mocks.api.request).toHaveBeenCalledTimes(1);
   });
@@ -289,11 +325,22 @@ describe('Skills settings page', () => {
     ).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('tab', { name: 'Tools (2)' }));
     const tools = within(dialog).getByRole('tabpanel', { name: 'Tools (2)' });
-    expect(
-      within(tools).getByRole('heading', { name: 'Query records' }),
-    ).toBeVisible();
+    expect(within(tools).getByText('Query records')).toBeVisible();
     expect(within(tools).getByText('queryRecords')).toBeVisible();
-    expect(within(tools).getByText('Read collection records')).toBeVisible();
+    const about = within(tools).getByText('Browse business data safely.');
+    expect(about).toBeVisible();
+    expect(about.closest('.line-clamp-2')).toHaveAttribute(
+      'title',
+      'Browse business data safely.',
+    );
+    for (const row of within(tools).getAllByRole('listitem'))
+      expect(row).toHaveClass('h-32');
+    expect(
+      within(tools).queryByText('Read collection records'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(tools).queryByText('Do not show this description'),
+    ).not.toBeInTheDocument();
     expect(within(tools).queryByText('Available')).not.toBeInTheDocument();
     expect(within(tools).getByText('Missing')).toBeVisible();
     expect(within(dialog).getAllByRole('button')).toHaveLength(1);
@@ -572,6 +619,7 @@ describe('Skills settings page', () => {
       .mockResolvedValueOnce(detail);
     await renderPage('zh-CN');
     const list = await screen.findByRole('list', { name: '技能' });
+    expect(screen.getByText('共 2 个技能')).toBeVisible();
     expect(within(list).getAllByRole('group', { name: '工具' })).toHaveLength(
       2,
     );

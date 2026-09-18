@@ -44,7 +44,7 @@ vi.mock('../client/locales/index.js', () => ({
 const catalog = [
   {
     definition: { name: 'general', description: 'General description' },
-    introduction: { title: 'General tool' },
+    introduction: { title: 'General tool', about: 'General **introduction**' },
     scope: 'GENERAL',
     from: 'loader',
     defaultPermission: 'ALLOW',
@@ -211,7 +211,12 @@ describe('employee Tools selection', () => {
       expect(control).toHaveAttribute('data-slot', 'switch');
       expect(control.closest('details')).toBeNull();
     }
-    expect(screen.getByText('General description')).toBeVisible();
+    expect(screen.queryByText('General description')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('General introduction').closest('.line-clamp-2'),
+    ).toHaveAttribute('title', 'General introduction');
+    for (const row of within(list).getAllByRole('listitem'))
+      expect(row).toHaveClass('h-32');
     expect(screen.getByText('general')).toBeVisible();
     expect(toolSwitch('MCP search')).toBeChecked();
     expect(toolSwitch('unscoped')).not.toBeChecked();

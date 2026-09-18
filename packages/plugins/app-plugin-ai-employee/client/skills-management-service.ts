@@ -5,6 +5,7 @@ export interface ManagedSkillTool {
   name: string;
   title: string;
   description: string;
+  about: string;
   available: boolean;
 }
 

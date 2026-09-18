@@ -58,7 +58,6 @@ export class AIToolService {
     if (!tool) throw notFound('aiTools', key);
     return {
       ...summarizeTool(tool),
-      about: tool.introduction?.about ?? '',
       inputSchema: serializeToolInputSchema(tool.definition.schema),
     };
   }
@@ -181,6 +180,7 @@ function summarizeTool(tool: ToolsEntity): ManagedToolSummary {
     name: tool.definition.name,
     title: tool.introduction?.title || tool.definition.name,
     description: tool.definition.description,
+    about: tool.introduction?.about ?? '',
     scope: tool.scope,
     source: tool.from ?? '',
   };

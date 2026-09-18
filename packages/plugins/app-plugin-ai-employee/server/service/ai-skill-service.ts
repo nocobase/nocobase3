@@ -82,9 +82,16 @@ export class AISkillService {
                 name: tool.definition.name,
                 title: tool.introduction?.title || tool.definition.name,
                 description: tool.definition.description,
+                about: tool.introduction?.about ?? '',
                 available: true,
               }
-            : { name, title: name, description: '', available: false };
+            : {
+                name,
+                title: name,
+                description: '',
+                about: '',
+                available: false,
+              };
         },
       ),
     );

@@ -5,12 +5,12 @@ export interface ManagedToolSummary {
   name: string;
   title: string;
   description: string;
+  about: string;
   scope: string;
   source: string;
 }
 
 export interface ManagedToolDetail extends ManagedToolSummary {
-  about: string;
   inputSchema: Record<string, unknown> | null;
 }
 

@@ -29,6 +29,7 @@ const tools: ManagedToolSummary[] = [
     name: 'queryRecords',
     title: 'Query records',
     description: 'Read collection records',
+    about: 'Browse collection data',
     scope: 'SPECIFIED',
     source: 'builtin',
   },
@@ -36,6 +37,7 @@ const tools: ManagedToolSummary[] = [
     name: 'draft-document',
     title: '',
     description: 'Write a report',
+    about: '',
     scope: '',
     source: '',
   },
@@ -100,12 +102,12 @@ describe('Tools settings page', () => {
     const list = await screen.findByRole('list', { name: 'Tools' });
     expect(
       within(list)
-        .getAllByRole('heading', { level: 2 })
-        .map((heading) => heading.textContent),
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label')),
     ).toEqual(['alpha', 'middle', 'Zebra']);
   });
 
-  it('uses the shared shell and responsive cards with truthful metadata, fetching only summaries initially', async () => {
+  it('uses a compact single-column directory with whole-row buttons and summary counts', async () => {
     await renderPage();
     const list = await screen.findByRole('list', { name: 'Tools' });
     expect(
@@ -114,39 +116,37 @@ describe('Tools settings page', () => {
     ).toHaveClass('w-full', 'p-6', 'md:p-8');
     expect(
       screen.getByText(
-        'Browse the tools available to AI employees and review their sources, usage instructions, and input parameters.',
+        'Browse the tools available to AI employees and review their usage instructions and input parameters.',
       ),
     ).toBeVisible();
-    expect(list).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'xl:grid-cols-3');
-    const cards = within(list).getAllByRole('listitem');
+    expect(list).toHaveClass('divide-y', 'rounded-xl', 'border', 'bg-card');
+    expect(list.querySelector('[data-slot="card"]')).toBeNull();
+    expect(screen.getByText('2 tools')).toBeVisible();
+    const rows = within(list).getAllByRole('listitem');
+    const queryCard = rows[1];
+    const draftCard = rows[0];
+    const trigger = within(queryCard).getByRole('button', {
+      name: 'Query records',
+    });
+    expect(trigger).toHaveClass('w-full', 'h-32', 'focus-visible:outline-ring');
+    expect(trigger).not.toHaveClass('h-64', 'underline', 'focus-within:ring-2');
+    expect(within(draftCard).getAllByText('draft-document')).toHaveLength(1);
+    expect(draftCard.querySelector('.line-clamp-2')).toBeNull();
     expect(
-      cards.map((card) => within(card).getByRole('heading').textContent),
-    ).toEqual(['draft-document', 'Query records']);
-    const queryCard = cards[1];
-    const draftCard = cards[0];
-    const card = queryCard.querySelector('[data-slot="card"]')!;
-    expect(
-      Array.from(card.children).map((node) => node.getAttribute('data-slot')),
-    ).toEqual(['card-header', 'card-content', 'card-footer']);
-    expect(
-      within(queryCard).getByRole('heading', {
-        name: 'Query records',
-        level: 2,
-      }),
-    ).toBeVisible();
+      within(queryCard).getByText('Query records').parentElement,
+    ).toHaveClass('min-w-0', 'items-center');
     expect(within(queryCard).getByText('queryRecords')).toHaveClass(
-      'break-all',
+      'truncate',
       'font-mono',
     );
+    expect(within(queryCard).getByText('Browse collection data')).toBeVisible();
     expect(
-      within(queryCard).getByText('Read collection records'),
-    ).toBeVisible();
-    expect(
-      within(queryCard).getByText('Scope').nextElementSibling,
-    ).toHaveTextContent('SPECIFIED');
-    expect(
-      within(queryCard).getByText('Source').nextElementSibling,
-    ).toHaveTextContent('builtin');
+      within(list).queryByText('Read collection records'),
+    ).not.toBeInTheDocument();
+    expect(within(list).queryByText('Write a report')).not.toBeInTheDocument();
+    for (const text of ['Scope', 'Source', 'SPECIFIED', 'builtin']) {
+      expect(within(queryCard).queryByText(text)).not.toBeInTheDocument();
+    }
     expect(within(draftCard).queryByText('Scope')).not.toBeInTheDocument();
     expect(within(draftCard).queryByText('Source')).not.toBeInTheDocument();
     expect(
@@ -165,13 +165,35 @@ describe('Tools settings page', () => {
     });
   });
 
-  it('searches title, name and description locally without additional API requests', async () => {
+  it('renders Markdown introductions as safe plain-text summaries', async () => {
+    mocks.api.request.mockResolvedValue({
+      rows: [
+        {
+          ...tools[0],
+          about:
+            '# Read data\n\nUse **filters** and `query` with [instructions](https://example.com).\n\n![image](https://example.com/image.png)\n\n<script>alert(1)</script>',
+        },
+      ],
+    });
+    await renderPage();
+    const row = await screen.findByRole('button', { name: 'Query records' });
+    expect(row).toHaveTextContent(
+      'Read data Use filters and query with instructions.',
+    );
+    expect(row.querySelector('a, img, script, h1, strong, code')).toBeNull();
+    expect(row).not.toHaveTextContent('https://example.com');
+    expect(row).not.toHaveTextContent('alert(1)');
+    expect(row.querySelector('.line-clamp-2')).not.toBeNull();
+  });
+
+  it('searches title, name and about locally without additional API requests', async () => {
     await renderPage();
     await screen.findByRole('list', { name: 'Tools' });
     const search = screen.getByRole('searchbox', { name: 'Search tools' });
     for (const query of [' QUERY RECORDS ', 'queryRecords', 'COLLECTION']) {
       fireEvent.change(search, { target: { value: query } });
       expect(screen.getAllByRole('listitem')).toHaveLength(1);
+      expect(screen.getByText('1 tool')).toBeVisible();
       expect(
         screen.getByRole('button', { name: 'Query records' }),
       ).toBeVisible();
@@ -208,14 +230,33 @@ describe('Tools settings page', () => {
     const trigger = await screen.findByRole('button', {
       name: 'Query records',
     });
-    fireEvent.click(trigger.closest('[data-slot="card"]')!);
+    fireEvent.click(within(trigger).getByText('Browse collection data'));
     const dialog = screen.getByRole('dialog', { name: 'Tool details' });
-    expect(dialog).toHaveAccessibleDescription('Read collection records');
+    expect(dialog).toHaveAccessibleDescription(
+      'Read about this tool and review its input schema.',
+    );
     expect(
       await within(dialog).findByRole('heading', { name: 'Query guide' }),
     ).toBeVisible();
     expect(within(dialog).getByText('evidence').tagName).toBe('STRONG');
-    const schema = within(dialog).getByRole('region', { name: 'Input schema' });
+    expect(
+      within(dialog)
+        .getAllByRole('region')
+        .map((region) => region.getAttribute('aria-label')),
+    ).toEqual(['Overview', 'Tool description', 'Input JSON Schema']);
+    expect(
+      within(
+        within(dialog).getByRole('region', { name: 'Tool description' }),
+      ).getByText('Read collection records'),
+    ).toBeVisible();
+    expect(
+      within(dialog).queryByText(
+        'Read-only JSON schema. Viewing a tool does not execute it.',
+      ),
+    ).not.toBeInTheDocument();
+    const schema = within(dialog).getByRole('region', {
+      name: 'Input JSON Schema',
+    });
     const code = schema.querySelector('pre code')!;
     expect(code.textContent).toBe(JSON.stringify(detail.inputSchema, null, 2));
     expect(code.children).toHaveLength(0);
@@ -318,12 +359,13 @@ describe('Tools settings page', () => {
     },
   );
 
-  it('wraps long metadata and keeps authoritative unknown scope/source values', async () => {
+  it('truncates card metadata while keeping full details and authoritative scope/source values', async () => {
     const longTool = {
       ...tools[0],
       name: 'long-name'.repeat(40),
       title: 'LongTitle'.repeat(40),
       description: 'LongDescription'.repeat(80),
+      about: 'LongAbout'.repeat(80),
       scope: 'FUTURE_SCOPE',
       source: 'third-party-source'.repeat(30),
     };
@@ -332,19 +374,15 @@ describe('Tools settings page', () => {
       .mockResolvedValueOnce({ ...longTool, about: '', inputSchema: {} });
     await renderPage();
     const list = await screen.findByRole('list', { name: 'Tools' });
-    expect(within(list).getByText(longTool.description)).toHaveClass(
-      '[overflow-wrap:anywhere]',
-    );
-    expect(within(list).getByText(longTool.source)).toHaveClass(
-      'break-all',
-      'whitespace-normal',
-    );
+    expect(
+      within(list).getByText(longTool.about).closest('.line-clamp-2'),
+    ).not.toBeNull();
+    expect(within(list).queryByText(longTool.source)).not.toBeInTheDocument();
+    expect(within(list).queryByText(longTool.scope)).not.toBeInTheDocument();
     const trigger = within(list).getByRole('button', { name: longTool.title });
-    expect(trigger).toHaveClass(
-      'whitespace-normal',
-      '[overflow-wrap:anywhere]',
-    );
-    fireEvent.click(within(list).getByText('FUTURE_SCOPE'));
+    expect(trigger).not.toHaveClass('hover:underline');
+    expect(within(trigger).getByText(longTool.title)).toHaveClass('truncate');
+    fireEvent.click(trigger);
     const dialog = screen.getByRole('dialog', { name: 'Tool details' });
     expect(
       await within(dialog).findByText(
@@ -355,7 +393,9 @@ describe('Tools settings page', () => {
       within(dialog).getByRole('heading', { name: longTool.title }),
     ).toHaveClass('[overflow-wrap:anywhere]');
     expect(within(dialog).getByText(longTool.name)).toHaveClass('break-all');
-    expect(within(dialog).getByText('FUTURE_SCOPE')).toBeVisible();
+    for (const text of ['Scope', 'Source', longTool.scope, longTool.source]) {
+      expect(within(dialog).queryByText(text)).not.toBeInTheDocument();
+    }
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(trigger).toHaveFocus());
   });
@@ -495,8 +535,8 @@ describe('Tools settings page', () => {
     const dialog = screen.getByRole('dialog', { name: '工具详情' });
     expect(await within(dialog).findByText('暂无输入结构。')).toBeVisible();
     expect(within(dialog).getByText('暂无补充说明。')).toBeVisible();
-    expect(within(dialog).getByText('来源')).toBeVisible();
-    expect(within(dialog).getByText('范围')).toBeVisible();
+    expect(within(dialog).queryByText('来源')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('范围')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: '关闭' })).toBeVisible();
   });
 });

@@ -374,7 +374,12 @@ async function listMetadata(
               : typeof item.description === 'string'
                 ? item.description
                 : undefined,
-        about: typeof item.about === 'string' ? item.about : undefined,
+        about:
+          typeof introduction.about === 'string'
+            ? introduction.about
+            : typeof item.about === 'string'
+              ? item.about
+              : undefined,
         scope: typeof item.scope === 'string' ? item.scope : undefined,
         from: typeof item.from === 'string' ? item.from : undefined,
         defaultPermission:

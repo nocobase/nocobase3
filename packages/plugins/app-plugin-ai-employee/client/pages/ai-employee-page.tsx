@@ -47,6 +47,7 @@ import { AIEmployeeAvatar } from '../avatar.js';
 import { ConfirmDialog } from '../components/confirm-dialog.js';
 import { EmployeeCatalogStatus } from '../components/employee-catalog-status.js';
 import { EmployeeToolPermission } from '../components/employee-tool-permission.js';
+import { ToolListContent } from '../components/tool-list-content.js';
 import { TooltipProvider } from '../../registry/nocobase-ai/shared/ui/tooltip.js';
 import {
   effectiveSkillNames,
@@ -1125,27 +1126,21 @@ export default function AIEmployeePage(): ReactElement {
                           return (
                             <li
                               key={name}
-                              className='flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6'
+                              className='flex h-32 min-w-0 items-center justify-between gap-4 overflow-hidden py-4'
                             >
-                              <div className='flex min-w-0 flex-1 flex-col gap-1 [overflow-wrap:anywhere]'>
-                                <div className='font-medium'>{title}</div>
-                                {title !== name ? (
-                                  <div className='font-mono text-xs text-muted-foreground'>
-                                    {name}
-                                  </div>
-                                ) : null}
-                                {item?.description ? (
-                                  <p className='text-sm text-muted-foreground'>
-                                    {item.description}
-                                  </p>
-                                ) : null}
-                                {!item && !toolsLoading && !toolsError ? (
-                                  <p className='text-sm text-muted-foreground'>
-                                    {t('employeeTools.unavailable')}
-                                  </p>
-                                ) : null}
-                              </div>
-                              <div className='flex shrink-0 items-center justify-end gap-5'>
+                              <ToolListContent
+                                name={name}
+                                title={item?.title}
+                                about={item?.about}
+                                status={
+                                  !item && !toolsLoading && !toolsError ? (
+                                    <span className='text-xs text-muted-foreground'>
+                                      {t('employeeTools.unavailable')}
+                                    </span>
+                                  ) : null
+                                }
+                              />
+                              <div className='flex shrink-0 flex-col items-end justify-center gap-2 sm:flex-row sm:items-center sm:gap-5'>
                                 <EmployeeToolPermission
                                   item={item}
                                   setting={configuredTools.find(
