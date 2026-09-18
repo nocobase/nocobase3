@@ -1,3 +1,4 @@
+import type { Knex } from 'knex';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { RealtimeService } from '@nocobase/app-server/realtime';
 
@@ -55,6 +56,7 @@ export interface UserAdministrationService {
   enable(userId: string): Promise<AdministratedUser>;
   resetPassword(userId: string, password: string): Promise<void>;
   revokeSessions(userId: string): Promise<void>;
+  remove(userId: string, actorId: string): Promise<void>;
 }
 
 export class UserAdministrationError extends Error {
@@ -103,7 +105,9 @@ class DefaultUserAdministrationService implements UserAdministrationService {
   ): Promise<AdministratedUserPage> {
     const page = positiveInteger(input.page, 1);
     const pageSize = Math.min(positiveInteger(input.pageSize, 20), 100);
-    let query = this.options.connection.query.selectFrom('user');
+    let query = this.options.connection.query
+      .selectFrom('user')
+      .where('deletedAt', 'is', null);
     if (input.status === 'enabled')
       query = query.where('disabledAt', 'is', null);
     if (input.status === 'disabled')
@@ -146,6 +150,7 @@ class DefaultUserAdministrationService implements UserAdministrationService {
       .selectFrom('user')
       .select(userColumns)
       .where('id', '=', userId)
+      .where('deletedAt', 'is', null)
       .executeTakeFirst();
     return row ? toAdministratedUser(row) : undefined;
   }
@@ -254,6 +259,25 @@ class DefaultUserAdministrationService implements UserAdministrationService {
     await this.requireUser(userId);
     const context = await this.options.auth.administrationContext();
     await context.internalAdapter.deleteUserSessions(userId);
+    this.options.realtime?.disconnectUser(userId);
+  }
+
+  async remove(userId: string, actorId: string): Promise<void> {
+    if (userId === actorId)
+      throw new TypeError('You cannot delete your own account.');
+    await lockUserForAdministration(this.options.connection, userId);
+    if (!(await this.get(userId))) return;
+    const context = await this.options.auth.administrationContext();
+    await context.internalAdapter.updateUser(userId, {
+      disabledAt: new Date(),
+      deletedAt: new Date(),
+      deletedBy: actorId,
+    });
+    await context.internalAdapter.deleteUserSessions(userId);
+    await this.options.connection.query
+      .deleteFrom('account')
+      .where('userId', '=', userId)
+      .execute();
     this.options.realtime?.disconnectUser(userId);
   }
 
@@ -429,4 +453,23 @@ function validatePassword(
       `Password must be at most ${config.maxPasswordLength} characters`,
     );
   }
+}
+
+/** Serialize account deletion with creation of resources owned by that account. Use inside a transaction. */
+export async function lockUserForAdministration(
+  connection: DatabaseConnection,
+  userId: string,
+): Promise<void> {
+  if (connection.dialect === 'sqlite') {
+    await connection.query
+      .updateTable('user')
+      .set({ id: userId })
+      .where('id', '=', userId)
+      .execute();
+    return;
+  }
+  const physical = await connection.collections.getPhysical('user');
+  if (!physical) throw new Error('User schema is unavailable');
+  const knex = await connection.client<Knex>();
+  await knex(physical.tableName).where({ id: userId }).select('id').forUpdate();
 }

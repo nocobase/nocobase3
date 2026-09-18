@@ -206,6 +206,9 @@ describe('application config', () => {
       'system',
     );
     expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
+    expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toEqual({
+      schedule: { connection: 'database' },
+    });
     expect(
       runtime.config.get<AppQueueConfig>('queue')!.jobs?.locations,
     ).toEqual(

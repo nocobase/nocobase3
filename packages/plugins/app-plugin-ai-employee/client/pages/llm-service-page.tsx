@@ -1,8 +1,4 @@
-import {
-  apiClientToken,
-  useService,
-  type ApiClient,
-} from '@nocobase/app-client';
+import { useApiClient, type ApiClient } from '@nocobase/app-client';
 import { Check, ChevronDown, CircleAlert, Pencil, X } from 'lucide-react';
 import {
   useCallback,
@@ -32,7 +28,7 @@ import {
   CardTitle,
 } from '../../registry/nocobase-ai/shared/ui/card.js';
 export default function LLMServicePage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const t = useT();
   const [services, setServices] = useState<LLMService[]>([]);
   const [providers, setProviders] = useState<LLMProvider[]>([]);

@@ -1,3 +1,5 @@
+import { messageKey } from '../../lib/message-key.js';
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import {
   AIChatWindow,
   ChatInline,
@@ -78,6 +80,10 @@ export function ContainerShowcase({
   onValueChange: (value: ChatContainer) => void;
   windowProps: AIChatWindowProps;
 }) {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   return (
     <div className='space-y-5'>
       <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
@@ -94,9 +100,15 @@ export function ContainerShowcase({
                 <div className='mb-3 flex size-9 items-center justify-center rounded-lg border bg-background'>
                   <Icon className='size-4 text-muted-foreground' />
                 </div>
-                <CardTitle className='text-sm'>{option.title}</CardTitle>
+                <CardTitle className='text-sm'>
+                  {translateDemo(messageKey(option.title), {
+                    defaultValue: option.title,
+                  })}
+                </CardTitle>
                 <p className='min-h-15 text-xs leading-5 text-muted-foreground'>
-                  {option.description}
+                  {translateDemo(messageKey(option.description), {
+                    defaultValue: option.description,
+                  })}
                 </p>
               </CardHeader>
               <CardContent className='border-t p-3'>
@@ -106,7 +118,9 @@ export function ContainerShowcase({
                   className='w-full'
                   onClick={() => onValueChange(option.value)}
                 >
-                  {option.action}
+                  {translateDemo(messageKey(option.action), {
+                    defaultValue: option.action,
+                  })}
                 </Button>
               </CardContent>
             </Card>
@@ -117,9 +131,23 @@ export function ContainerShowcase({
       <Card className='gap-0 py-0'>
         <div className='flex min-h-12 items-center justify-between border-b px-4'>
           <div>
-            <div className='text-sm font-medium'>Container preview</div>
+            <div className='text-sm font-medium'>
+              {translateDemo('demo.containerPreview', {
+                defaultValue: 'Container preview',
+              })}
+            </div>
             <div className='text-xs text-muted-foreground'>
-              {containerOptions.find((option) => option.value === value)?.title}
+              {translateDemo(
+                messageKey(
+                  containerOptions.find((option) => option.value === value)
+                    ?.title ?? '',
+                ),
+                {
+                  defaultValue:
+                    containerOptions.find((option) => option.value === value)
+                      ?.title ?? '',
+                },
+              )}
             </div>
           </div>
           <code className='rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground'>

@@ -1,9 +1,5 @@
 import { LoaderCircle } from 'lucide-react';
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import {
   createContext,
@@ -25,7 +21,7 @@ import {
 import { useTranslation } from '@nocobase/i18n/client';
 
 import { Button } from '../../components/ui/button.js';
-import { ErrorBanner, ErrorDialog, AppDialog } from './shared.js';
+import { ErrorNotification, AppDialog } from './shared.js';
 import { Detail, RemoveApplicationDialog } from './detail.js';
 import { DeploymentDialog } from './configuration.js';
 import { UploadReleaseDialog } from './releases.js';
@@ -43,6 +39,7 @@ import type {
 import { DETAIL_TABS } from './types.js';
 import { uploadArtifact, readError, type ReadableError } from './utils.js';
 import {
+  defaultHubDetailTab,
   emptyHubCapabilities,
   loadHubCapabilities,
   resolveHubDetailTab,
@@ -71,7 +68,10 @@ interface HubAppPageContextValue {
   readonly onRollback: (deploymentId: string) => void;
   readonly onUpload: () => void;
   readonly onSaveConfiguration: (content: string) => void;
-  readonly onSaveSettings: (activation: 'lazy' | 'eager') => void;
+  readonly onSaveSettings: (settings: {
+    name: string;
+    activation: 'lazy' | 'eager';
+  }) => void;
   readonly onRemove: () => void;
   readonly onRefresh: () => void;
 }
@@ -96,7 +96,7 @@ export default function AppPage(): ReactElement {
 
 function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
-  const client = useService(apiClientToken);
+  const client = useApiClient();
   const authorization = useService(authorizationClientToken);
   const navigate = useNavigate();
   const location = useLocation();
@@ -186,7 +186,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([loadDetail(), loadHubCapabilities(authorization)])
+    void Promise.all([loadDetail(), loadHubCapabilities(authorization, appId)])
       .then(([nextDetail, nextCapabilities]) => {
         if (cancelled) return;
         setDetail(nextDetail);
@@ -218,7 +218,15 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         capabilities,
       )
     : [];
-  const defaultTab = availableTabs[0];
+  const defaultTab = detail
+    ? defaultHubDetailTab(
+        {
+          hasReleases: detail.hasReleases,
+          deployed: Boolean(detail.app.currentDeploymentId),
+        },
+        capabilities,
+      )
+    : undefined;
   const isParentEntry = Boolean(
     matchPath({ path: appPath.pathname, end: true }, location.pathname),
   );
@@ -384,7 +392,10 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     if (error) {
       return (
         <div className='space-y-4 py-8'>
-          <ErrorBanner error={error} onClose={() => setError(undefined)} />
+          <ErrorNotification
+            error={error}
+            onClose={() => setError(undefined)}
+          />
           <Button
             variant='outline'
             onClick={() => void navigate(applicationsPath.pathname)}
@@ -408,7 +419,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   if (!availableTabs.length) {
     return (
       <div className='space-y-4 py-8'>
-        <ErrorBanner
+        <ErrorNotification
           message={t('detail.noTabs', {
             defaultValue:
               'You do not have access to any tabs for this application.',
@@ -429,7 +440,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   if (explicitTabInvalid) {
     return (
       <div className='space-y-4 py-8'>
-        <ErrorBanner
+        <ErrorNotification
           message={t('detail.unavailable', {
             defaultValue: 'This application page is not available.',
           })}
@@ -524,12 +535,12 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         });
         setConfigContent(response.data.content ?? '');
       }),
-    onSaveSettings: (activation) =>
+    onSaveSettings: (settings) =>
       void perform(async () => {
         await client.request({
           path: `hub/apps/${appId}/settings`,
           method: 'PUT',
-          json: { activation },
+          json: settings,
         });
       }),
     onRemove: () => setRemoveOpen(true),
@@ -680,7 +691,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
           onUpload={() =>
             void perform(async () => {
               if (!artifact) return;
-              const uploaded = await uploadArtifact(appId, artifact);
+              const uploaded = await uploadArtifact(client, appId, artifact);
               setSelectedReleaseId(uploaded.id);
               setArtifact(undefined);
               setUploadOpen(false);
@@ -706,7 +717,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         />
       ) : null}
       {error ? (
-        <ErrorDialog error={error} onClose={() => setError(undefined)} />
+        <ErrorNotification error={error} onClose={() => setError(undefined)} />
       ) : null}
     </>
   );

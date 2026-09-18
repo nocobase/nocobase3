@@ -1,17 +1,10 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import type { ReactElement } from 'react';
 
 import { EMPTY_ARRAY } from '@/lib/constants';
 
 import { SurfaceLayout, type SurfaceCopy } from './surface-layout.js';
-
-const SETTINGS_COPY: SurfaceCopy = {
-  title: 'Settings',
-  pathPrefix: '/settings',
-  emptyTitle: 'No settings available',
-  emptyDescription:
-    'No enabled plugin contributes a settings page you have access to.',
-};
 
 export interface SettingsLayoutProps {
   readonly routeTree: readonly AppClientRegisteredRoute[];
@@ -26,7 +19,17 @@ export function SettingsLayout({
   routes = EMPTY_ARRAY,
   routeTree,
 }: SettingsLayoutProps): ReactElement {
-  return (
-    <SurfaceLayout copy={SETTINGS_COPY} routes={routes} routeTree={routeTree} />
-  );
+  const { t } = useTranslation();
+  const copy: SurfaceCopy = {
+    pathPrefix: '/settings',
+    title: t('settings.title', { defaultValue: 'Settings' }),
+    emptyTitle: t('settings.emptyTitle', {
+      defaultValue: 'No settings available',
+    }),
+    emptyDescription: t('settings.emptyDescription', {
+      defaultValue:
+        'No enabled plugin contributes a settings page you have access to.',
+    }),
+  };
+  return <SurfaceLayout copy={copy} routes={routes} routeTree={routeTree} />;
 }

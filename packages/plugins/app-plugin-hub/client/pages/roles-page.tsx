@@ -1,4 +1,6 @@
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { Check, CircleMinus, LoaderCircle } from 'lucide-react';
 import {
@@ -26,13 +28,15 @@ import {
   type HubRoleDefinition,
 } from '../roles.js';
 
+import { ErrorNotification } from './hub/shared.js';
+
 interface HubRolesResponse {
   readonly data: readonly HubRoleDefinition[];
 }
 
 export default function RolesPage(): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const [roles, setRoles] = useState<readonly HubRoleDefinition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -58,16 +62,12 @@ export default function RolesPage(): ReactElement {
   }, [load]);
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20 p-5 sm:p-8'>
-      <div className='mx-auto max-w-6xl space-y-5'>
-        <header>
-          <h1 className='text-2xl font-semibold tracking-tight'>
-            {t('roles.title')}
-          </h1>
-          <p className='mt-1 text-sm text-muted-foreground'>
-            {t('roles.description')}
-          </p>
-        </header>
+    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
+      <PageContainer>
+        <PageHeader
+          title={t('roles.title')}
+          description={t('roles.description')}
+        />
 
         {loading ? (
           <Card className='grid min-h-64 place-items-center'>
@@ -79,9 +79,7 @@ export default function RolesPage(): ReactElement {
         ) : error ? (
           <Card className='grid min-h-64 place-items-center p-6 text-center'>
             <div className='space-y-3'>
-              <p className='text-sm text-muted-foreground'>
-                {t('roles.loadFailed')}
-              </p>
+              <ErrorNotification message={t('roles.loadFailed')} />
               <Button onClick={() => void load()} variant='outline'>
                 {t('roles.retry')}
               </Button>
@@ -158,7 +156,7 @@ export default function RolesPage(): ReactElement {
             </Table>
           </Card>
         )}
-      </div>
+      </PageContainer>
     </main>
   );
 }

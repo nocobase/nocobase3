@@ -11,11 +11,9 @@ describe('KnexSchemaAdapter', () => {
   });
 
   function createClient(clientName = 'better-sqlite3') {
+    // SQL compilation does not need a native driver or a connection pool.
     const client = knex({
       client: clientName,
-      connection: {
-        filename: ':memory:',
-      },
       useNullAsDefault: true,
     });
     clients.push(client);

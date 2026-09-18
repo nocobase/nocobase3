@@ -20,6 +20,7 @@ vi.mock('@nocobase/app-client', async (importOriginal) => {
   const realtime = { subscribe: mocks.subscribe, onOpen: mocks.onOpen };
   return {
     ...actual,
+    useApiClient: () => client,
     useService: (token: unknown) =>
       token === actual.realtimeClientToken ? realtime : client,
   };

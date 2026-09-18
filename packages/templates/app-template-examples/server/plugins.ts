@@ -19,6 +19,7 @@ import {
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
 import repositoryExample from '@nocobase/app-plugin-repository-example/server';
+import scheduler from '@nocobase/app-plugin-scheduler/server';
 import file from '@nocobase/app-plugin-file/server';
 import fileExample from '@nocobase/app-plugin-file-example/server';
 import users from '@nocobase/app-plugin-users/server';
@@ -46,6 +47,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   repositoryExample,
   file,
   fileExample,
+  scheduler,
 ]);
 
 export default serverPlugins;

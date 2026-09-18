@@ -24,6 +24,10 @@ vi.mock('@nocobase/app-plugin-authentication/client', () => ({
   useAuthentication: () => authentication,
 }));
 vi.mock('@nocobase/i18n/client', () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: { defaultValue?: string }) =>
+      options?.defaultValue ?? key,
+  }),
   NamespaceScope: ({ children }: { children: React.ReactNode }) => children,
 }));
 const routes: AppClientRegisteredRoute[] = ['apps', 'users'].map((name) => ({

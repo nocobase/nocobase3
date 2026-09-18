@@ -8,6 +8,14 @@ import { AppHostSupervisor } from '@nocobase/app-host/supervisor';
 
 import { type HubPluginConfig } from '../config.js';
 import { DefaultHubService } from '../services/hub.js';
+import { authenticationToken } from '@nocobase/app-plugin-authentication';
+import { ApiKeyService } from '@nocobase/app-plugin-api-keys/server';
+import { HUB_API_KEY_CONFIG_ID } from '../api-key-auth.js';
+import { authorizationToken } from '@nocobase/app-plugin-authorization';
+import {
+  HubApiKeyService,
+  hubApiKeyServiceToken,
+} from '../services/api-keys.js';
 import { hubServiceToken } from '../tokens.js';
 
 export interface HubProviderApplication {
@@ -20,6 +28,19 @@ export class HubProvider extends ServiceProvider<HubProviderApplication> {
   private hostController?: AppHostSupervisor;
 
   public override register(): void {
+    this.app.container.singleton(
+      hubApiKeyServiceToken,
+      (resolver) =>
+        new HubApiKeyService(
+          resolver.resolve(databaseManagerToken),
+          resolver.resolve(authorizationToken),
+          new ApiKeyService(
+            resolver.resolve(authenticationToken),
+            HUB_API_KEY_CONFIG_ID,
+          ),
+          this.app.config.get<{ secret?: string }>('auth')?.secret,
+        ),
+    );
     this.app.container.singleton(hubServiceToken, (resolver) => {
       const config = this.app.config.get<HubPluginConfig>('hub')!;
       this.hostController = AppHostSupervisor.initialize({
@@ -27,6 +48,7 @@ export class HubProvider extends ServiceProvider<HubProviderApplication> {
         mode: 'managed',
       });
       return new DefaultHubService({
+        apiKeys: resolver.resolve(hubApiKeyServiceToken),
         database: resolver.resolve(databaseManagerToken),
         config,
         hostController: this.hostController,

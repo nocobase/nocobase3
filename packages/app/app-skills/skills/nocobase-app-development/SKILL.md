@@ -79,10 +79,11 @@ Read the page for the task in front of you. Do not read all of them.
 | Build a page with Tabs, add child pages or menu groups                           | [child routes and Tabs](references/client-child-routes.md)       |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode | [components and styling](references/components-and-styling.md)   |
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it     | [server routes](references/server-routes.md)                     |
+| Call an API from the frontend using the application's HTTP client                | [client API requests](references/client-api.md)                  |
 | Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
 | Create a table, alter a column, add an index, write required initial data        | [migrations and seeds](references/migrations.md)                 |
 | Switch the database, register a dialect, add a second connection                 | [database connections](references/database-connections.md)       |
-| Make text translatable, add a locale, reword a plugin's string                   | [internationalization](references/i18n.md)                       |
+| Name translation keys, add a locale, reword a plugin's string                    | [internationalization](references/i18n.md)                       |
 | Add a reusable service, share it across routes, run background or scheduled work | [services and jobs](references/services-and-jobs.md)             |
 | Write tests, choose a test layer, verify before finishing                        | [testing and verification](references/testing.md)                |
 | Understand behavior inherited from an official application template              | [template variants](references/template-variants.md)             |
@@ -184,3 +185,13 @@ After touching `client/locales/` or `server/locales/`, run `pnpm nocobase app i1
 Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the interface offers is not configured — `client/locales/` is that list, while `server/locales/` independently defines the server's translated languages. See the i18n and themes references.
 
 Navigation groups retain their expanded or collapsed state while the navigation tree stays mounted. Selecting a new page expands its ancestor groups without collapsing other groups; users can still collapse the active group manually. Keep this behavior aligned across the application, Settings, and Dev tools navigation.
+
+## Publish application releases
+
+This section applies to Default applications that include the `app upload` and `app deploy` CLI commands. Examples and Hub applications do not provide these publishing commands.
+
+Use `pnpm build --tar`, then `pnpm nocobase app upload` with `HUB_URL`, `HUB_APP_ID`, and `HUB_API_KEY`. The Hub URL includes the application's mount path. Both commands read the App root `.env` with per-value precedence: command flags > terminal/CI environment > `.env`. Keep `.env` gitignored; no `.env.local` or mode-specific files are loaded. Upload and deploy with `app upload --deploy`; upload only with `app upload`. Automation belongs in the caller’s script; Hub has no deployment-mode setting. For an existing Release use `app deploy --release-id <id>`. Add `--json` in CI, check `ok` and the process exit code, and preserve the idempotency key on network retries. A fresh deployment key requests a new deployment of the same Release. Never print API keys or put them in committed configuration. See README.MD for arguments, limits, and exit codes.
+
+Both `app deploy --release-id <id> --config ./runtime.yml` and `app upload --deploy --config ./runtime.yml` accept an optional runtime YAML file (non-empty UTF-8, at most 1 MiB). Paths resolve from the App root. Omitting `--config` reuses the current Hub configuration; on first deployment, the existing Release-template initialization still applies. Supplied configuration replaces the configuration document through the existing Hub secret handling and YAML validation; it is not merged with arbitrary existing fields and never changes the Release template or archive. `app upload --config` without `--deploy` is rejected. Use `app deploy` to apply a different configuration to an already uploaded Release; configured upload retries reuse only the originally supplied configuration. Default deployment retry identity includes supplied configuration content. Configuration content is never printed in CLI results.
+
+Deployment commands (`app deploy` and `app upload --deploy`) wait for the final result by default. Use `--no-wait` to return after acceptance; acceptance does not mean deployment succeeded. Explicit `--wait` remains supported. Upload without `--deploy` only waits for the upload. `--timeout` defaults to 600 seconds; a timeout leaves the deployment outcome unconfirmed and does not cancel it.

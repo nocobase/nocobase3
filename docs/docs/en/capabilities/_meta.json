@@ -28,6 +28,11 @@
   },
   {
     "type": "file",
+    "name": "scheduler",
+    "label": "Scheduled tasks"
+  },
+  {
+    "type": "file",
     "name": "notification",
     "label": "Notifications"
   },

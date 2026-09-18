@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 
@@ -48,18 +49,24 @@ interface OpenFilePreviewDialogProps {
   readonly onError?: (error: Error) => void;
 }
 
-function OpenFilePreviewDialog({
-  files,
-  initialIndex,
-  onOpenChange,
-  download: allowDownload,
-  labels,
-  onError,
-}: OpenFilePreviewDialogProps): ReactElement {
+function OpenFilePreviewDialog(
+  inputProps: OpenFilePreviewDialogProps,
+): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-file');
+  const {
+    files,
+    initialIndex,
+    onOpenChange,
+    download: allowDownload,
+    labels,
+    onError,
+  } = inputProps;
+
   const [index, setIndex] = useState(initialIndex);
   const file = files[index];
   if (!file) throw new Error('A preview file is required.');
-  const downloadLabel = labels?.download ?? 'Download';
+  const downloadLabel =
+    labels?.download ?? t('files.download', { defaultValue: 'Download' });
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
@@ -78,7 +85,9 @@ function OpenFilePreviewDialog({
                   type='button'
                   size='icon'
                   variant='ghost'
-                  aria-label='Previous file'
+                  aria-label={t('files.previous', {
+                    defaultValue: 'Previous file',
+                  })}
                   onClick={() =>
                     setIndex(
                       (value) => (value - 1 + files.length) % files.length,
@@ -91,7 +100,7 @@ function OpenFilePreviewDialog({
                   type='button'
                   size='icon'
                   variant='ghost'
-                  aria-label='Next file'
+                  aria-label={t('files.next', { defaultValue: 'Next file' })}
                   onClick={() =>
                     setIndex((value) => (value + 1) % files.length)
                   }

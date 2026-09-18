@@ -60,6 +60,7 @@ export async function runDatabaseCommand(
       runtime.config.get<AppDatabaseConfig>('database')!,
       {
         paths: runtime.configPaths,
+        runtimeConfig: runtime.config,
         // Plugin migrations and seeds are resolved from the registered plugins,
         // never from config.yml, so they cannot be configured away.
         contributions: createAppDatabaseTaskContributions(runtime.plugins),

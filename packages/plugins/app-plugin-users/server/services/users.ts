@@ -1,3 +1,4 @@
+import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
 import type { DatabaseManager } from '@nocobase/db';
 import type {
   AdministratedUser,
@@ -120,7 +121,14 @@ class DefaultUserManagementService implements UserManagementService {
     userId: string,
     input: Parameters<UserManagementService['update']>[1],
   ) {
-    const user = await this.services.users.update(userId, input);
+    const user = await this.services.database.transaction(
+      async (connection) => {
+        await lockUserForAdministration(connection, userId);
+        return this.services.users
+          .withConnection(connection)
+          .update(userId, input);
+      },
+    );
     return this.withRoleScopes(user, this.services.database.connection());
   }
 
@@ -130,14 +138,54 @@ class DefaultUserManagementService implements UserManagementService {
         for (const scope of this.services.roleScopes.list()) {
           await scope.assertCanDisable?.(userId, connection);
         }
+        await lockUserForAdministration(connection, userId);
         return this.services.users.withConnection(connection).disable(userId);
       },
     );
     return this.withRoleScopes(user, this.services.database.connection());
   }
 
+  async remove(userId: string, actorId: string): Promise<void> {
+    if (
+      !this.services.roleScopes
+        .list()
+        .some(
+          (scope) =>
+            typeof scope.assertCanDelete === 'function' &&
+            typeof scope.onDelete === 'function',
+        )
+    )
+      throw new UserManagementError(
+        'USER_DELETION_NOT_CONFIGURED',
+        'User deletion is not configured for this application.',
+        409,
+      );
+    if (userId === actorId)
+      throw new UserManagementError(
+        'SELF_DELETE_NOT_ALLOWED',
+        'You cannot delete your own account.',
+        409,
+      );
+    await this.services.database.transaction(async (connection) => {
+      for (const scope of this.services.roleScopes.list()) {
+        await scope.assertCanDelete?.(userId, actorId, connection);
+      }
+      const users = this.services.users.withConnection(connection);
+      if (!(await users.get(userId))) return;
+      for (const scope of this.services.roleScopes.list())
+        await scope.onDelete?.(userId, connection);
+      await users.remove(userId, actorId);
+    });
+    await this.services.onRoleScopesChanged?.(userId);
+  }
+
   async enable(userId: string): Promise<ManagedUser> {
-    const user = await this.services.users.enable(userId);
+    const user = await this.services.database.transaction(
+      async (connection) => {
+        await lockUserForAdministration(connection, userId);
+        return this.services.users.withConnection(connection).enable(userId);
+      },
+    );
     return this.withRoleScopes(user, this.services.database.connection());
   }
 
@@ -174,11 +222,12 @@ class DefaultUserManagementService implements UserManagementService {
   }
 
   async resetPassword(userId: string, password: string): Promise<void> {
-    await this.services.database.transaction((connection) =>
-      this.services.users
+    await this.services.database.transaction(async (connection) => {
+      await lockUserForAdministration(connection, userId);
+      await this.services.users
         .withConnection(connection)
-        .resetPassword(userId, password),
-    );
+        .resetPassword(userId, password);
+    });
   }
 
   revokeSessions(userId: string): Promise<void> {

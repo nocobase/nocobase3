@@ -1,3 +1,4 @@
+import addUserDeletionRecord from '../../database/migrations/202609170002_add_user_deletion_record.js';
 // @vitest-environment node
 
 import sqlite from '@nocobase/db-sqlite';
@@ -43,6 +44,32 @@ describe('@nocobase/app-plugin-authentication database migrations', () => {
       true,
     );
 
+    await connection.query
+      .insertInto('user')
+      .values({
+        id: 'existing',
+        name: 'Existing',
+        email: 'existing@example.com',
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
+    await addUserDeletionRecord.up(context);
+    expect(await client.schema.hasColumn('user', 'deleted_at')).toBe(true);
+    expect(await client.schema.hasColumn('user', 'deleted_by')).toBe(true);
+    expect(
+      await connection.query
+        .selectFrom('user')
+        .select(['id', 'deletedAt', 'deletedBy'])
+        .execute(),
+    ).toEqual([{ id: 'existing', deletedAt: null, deletedBy: null }]);
+    await addUserDeletionRecord.down?.(context);
+    expect(await client.schema.hasColumn('user', 'deleted_at')).toBe(false);
+    expect(await client.schema.hasColumn('user', 'deleted_by')).toBe(false);
+    expect(
+      await connection.query.selectFrom('user').select('id').execute(),
+    ).toEqual([{ id: 'existing' }]);
     await addUserDisabledAt.down?.(context);
     await expect(client.schema.hasColumn('user', 'disabled_at')).resolves.toBe(
       false,

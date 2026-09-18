@@ -18,7 +18,7 @@ import { repository } from '../client/model.js';
 const state = vi.hoisted(() => ({ api: undefined as ApiClient | undefined }));
 vi.mock('@nocobase/app-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@nocobase/app-client')>()),
-  useService: () => state.api,
+  useApiClient: () => state.api,
 }));
 import CrmPage from '../client/pages/crm-page.js';
 import OrdersPage from '../client/pages/orders-page.js';

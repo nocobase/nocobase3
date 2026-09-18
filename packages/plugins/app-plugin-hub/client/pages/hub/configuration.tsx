@@ -1,5 +1,4 @@
 import {
-  AlertCircle,
   Columns2,
   PanelLeft,
   PanelRight,
@@ -33,6 +32,7 @@ import type {
   ReleaseRecord,
 } from './types.js';
 import { AppDialog } from './shared.js';
+import { ErrorNotification } from './shared.js';
 import { shortId, formatDate, readError } from './utils.js';
 
 export const ConfigEditor: import('react').LazyExoticComponent<
@@ -441,7 +441,7 @@ export function DeploymentDialog({
                   : t('deployments.deploying', { defaultValue: 'Deploying…' })
                 : rollback
                   ? t('deployments.rollback', { defaultValue: 'Roll back' })
-                  : t('deployments.deploy', { defaultValue: 'Deploy' })}
+                  : t('deployments.deploy', { defaultValue: 'Deploy release' })}
             </Button>
           )}
         </>
@@ -532,26 +532,23 @@ export function DeploymentDialog({
         ) : !configReady ? (
           <div className='min-h-80 py-6'>
             {templateError ? (
-              <Alert className='border-destructive/30 text-destructive'>
-                <AlertCircle />
-                <AlertDescription>
-                  <p>
-                    {t('configuration.templateLoadFailed', {
-                      error: templateError,
-                      defaultValue: `Failed to load configuration template: ${templateError}`,
-                    })}
-                  </p>
-                  <Button
-                    variant='outline'
-                    onClick={() => {
-                      setTemplateError(undefined);
-                      setRetry((value) => value + 1);
-                    }}
-                  >
-                    {t('configuration.retry', { defaultValue: 'Retry' })}
-                  </Button>
-                </AlertDescription>
-              </Alert>
+              <>
+                <ErrorNotification
+                  message={t('configuration.templateLoadFailed', {
+                    error: templateError,
+                    defaultValue: `Failed to load configuration template: ${templateError}`,
+                  })}
+                />
+                <Button
+                  variant='outline'
+                  onClick={() => {
+                    setTemplateError(undefined);
+                    setRetry((value) => value + 1);
+                  }}
+                >
+                  {t('configuration.retry', { defaultValue: 'Retry' })}
+                </Button>
+              </>
             ) : (
               <div
                 role='status'
@@ -889,12 +886,7 @@ export function ConfigStatus({
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
   if (error) {
-    return (
-      <div className='flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive'>
-        <AlertCircle className='mt-0.5 size-4 shrink-0' />
-        <span>{error}</span>
-      </div>
-    );
+    return <ErrorNotification message={error} />;
   }
   return (
     <div className='flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-2.5 text-sm text-emerald-700'>

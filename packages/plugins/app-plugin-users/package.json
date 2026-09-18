@@ -88,6 +88,7 @@
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
+    "sonner": "^2.0.3",
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
     "@nocobase/app-plugin-authorization": "workspace:^",
@@ -113,6 +114,7 @@
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@testing-library/react": "catalog:"
   }
 }

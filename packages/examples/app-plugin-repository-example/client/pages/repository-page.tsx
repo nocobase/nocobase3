@@ -12,11 +12,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '../components/ui/sheet.js';
-import {
-  apiClientToken,
-  ApiClientError,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   useCallback,
@@ -104,7 +100,7 @@ function EntityWorkspace({
   readonly recordId?: string;
 }): ReactElement {
   const navigate = useNavigate();
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const repo = useMemo(() => repository(api, entity.key), [api, entity.key]);
   const { t } = useTranslation(NS);
   const [rows, setRows] = useState<ExampleRecord[]>([]);
@@ -770,7 +766,7 @@ function RecordEditor({
   onSave,
   onCancel,
 }: EditorProps): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t } = useTranslation(NS);
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(

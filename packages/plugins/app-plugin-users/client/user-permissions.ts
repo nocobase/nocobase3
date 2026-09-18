@@ -4,6 +4,7 @@ export const USER_MANAGEMENT_ACTIONS = [
   'create',
   'update',
   'disable',
+  'delete',
   'enable',
   'assign-role',
   'reset-password',

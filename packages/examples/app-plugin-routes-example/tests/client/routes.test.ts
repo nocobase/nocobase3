@@ -24,7 +24,7 @@ describe('client routes', () => {
     expect(settingsRoute).toMatchObject({
       name: 'routes-example',
       path: '/routes-example',
-      navigation: { title: 'Routes example' },
+      navigation: { title: 'title' },
       access: { resource: 'routes-example.settings', action: 'read' },
       componentLoader: expect.any(Function),
     });
@@ -51,7 +51,7 @@ describe('client routes', () => {
     expect(devRoute).toMatchObject({
       name: 'routes-example',
       path: '/routes-example',
-      navigation: { title: 'Routes example' },
+      navigation: { title: 'title' },
       componentLoader: expect.any(Function),
     });
     await expect(devRoute?.componentLoader()).resolves.toHaveProperty(

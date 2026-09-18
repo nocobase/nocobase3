@@ -1,12 +1,16 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { cn } from '@/lib/utils';
 import { Loader2Icon } from 'lucide-react';
 
-function Spinner({ className, ...props }: React.ComponentProps<'svg'>) {
+function Spinner(inputProps: React.ComponentProps<'svg'>) {
+  const { t } = useTranslation();
+  const { className, ...props } = inputProps;
+
   return (
     <Loader2Icon
       data-slot='spinner'
       role='status'
-      aria-label='Loading'
+      aria-label={t('status.loading', { defaultValue: 'Loading' })}
       className={cn('size-4 animate-spin', className)}
       {...props}
     />

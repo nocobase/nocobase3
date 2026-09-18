@@ -1,4 +1,4 @@
-import type { ApiClient, RemoteFindManyOptions } from '@nocobase/api-client';
+import type { ApiClient, RemoteFindManyOptions } from '@nocobase/app-client';
 import type {
   FilterAst,
   RelationSelectBranchNode,

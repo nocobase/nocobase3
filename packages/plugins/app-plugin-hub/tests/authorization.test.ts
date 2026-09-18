@@ -50,6 +50,39 @@ describe('Hub user role scope', () => {
     await database.destroy();
   });
 
+  it('leaves ownership and existing Apps unchanged when migrations run again', async () => {
+    await database
+      .query()
+      .insertInto('hubApps')
+      .values({
+        id: 'owned',
+        name: 'Owned',
+        createdBy: 'user-1',
+        enabled: false,
+        basePath: '/owned',
+        backend: 'in-process',
+        startupMode: 'lazy',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
+    const directory = '../database/migrations';
+    const migrator = createMigrator({
+      database,
+      packageName: '@nocobase/app-plugin-hub',
+      directory: fileURLToPath(new URL(directory, import.meta.url)),
+    });
+    expect((await migrator.latest()).executed).toEqual([]);
+    expect((await migrator.latest()).executed).toEqual([]);
+    expect(
+      await database
+        .query()
+        .selectFrom('hubApps')
+        .select(['id', 'createdBy'])
+        .execute(),
+    ).toEqual([{ id: 'owned', createdBy: 'user-1' }]);
+  });
+
   it('keeps exactly one Hub role without touching other Permission Sets', async () => {
     await createUser(database, 'user-1');
     await authorization.permissionSets.create({
@@ -105,6 +138,7 @@ describe('Hub user role scope', () => {
       }),
       expect.objectContaining({
         value: 'hub-viewer',
+        assignable: false,
         labelI18nKey: 'roles.names.hub-viewer',
         labelI18nNs: '@nocobase/app-plugin-hub',
       }),
@@ -113,6 +147,51 @@ describe('Hub user role scope', () => {
       labelI18nKey: 'roles.scope',
       labelI18nNs: '@nocobase/app-plugin-hub',
     });
+  });
+
+  it('preserves existing Viewers without allowing new assignments or automatic promotion', async () => {
+    await createUser(database, 'legacy');
+    await createUser(database, 'new-user');
+    await authorization.permissionSets.assign({
+      subject: { type: 'user', id: 'legacy' },
+      permissionSet: 'hub-viewer',
+    });
+    const scope = createHubUserRoleScope(authorization);
+    expect(
+      (await scope.options())
+        .filter((option) => option.assignable !== false)
+        .map((option) => option.value),
+    ).toEqual(['hub-administrator', 'hub-operator']);
+    const before = await authorization.permissionSets.listAssignments();
+    await expect(
+      database.transaction((connection) =>
+        scope.replace('new-user', 'hub-viewer', connection),
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
+    await database.transaction((connection) =>
+      scope.replace('legacy', 'hub-viewer', connection),
+    );
+    expect(await authorization.permissionSets.listAssignments()).toEqual(
+      before,
+    );
+    expect(await scope.get('legacy', database.connection())).toBe('hub-viewer');
+    expect(await scope.getMany?.(['legacy'], database.connection())).toEqual({
+      legacy: 'hub-viewer',
+    });
+    expect(
+      await scope.findUserIds?.('hub-viewer', database.connection()),
+    ).toEqual(['legacy']);
+    await database.transaction((connection) =>
+      scope.replace('legacy', 'hub-operator', connection),
+    );
+    expect(await scope.get('legacy', database.connection())).toBe(
+      'hub-operator',
+    );
+    await expect(
+      database.transaction((connection) =>
+        scope.replace('legacy', 'hub-viewer', connection),
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
   });
 
   it('loads one page of Hub roles through one batch read', async () => {
@@ -155,7 +234,7 @@ describe('Hub user role scope', () => {
     ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN', status: 409 });
     await expect(
       database.transaction((connection) =>
-        scope.replace('admin-1', 'hub-viewer', connection),
+        scope.replace('admin-1', 'hub-operator', connection),
       ),
     ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN', status: 409 });
   });
@@ -177,7 +256,7 @@ describe('Hub user role scope', () => {
       ),
     ).resolves.toBeUndefined();
     await database.transaction((connection) =>
-      scope.replace('admin-1', 'hub-viewer', connection),
+      scope.replace('admin-1', 'hub-operator', connection),
     );
     await expect(
       database.transaction((connection) =>
@@ -199,7 +278,7 @@ describe('Hub user role scope', () => {
 
     const results = await Promise.allSettled([
       database.transaction((connection) =>
-        scope.replace('admin-1', 'hub-viewer', connection),
+        scope.replace('admin-1', 'hub-operator', connection),
       ),
       database.transaction(async (connection) => {
         await scope.assertCanDisable!('admin-2', connection);

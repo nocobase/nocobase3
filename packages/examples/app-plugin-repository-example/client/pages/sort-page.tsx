@@ -1,10 +1,6 @@
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement } from 'react';
 import { CombineResultTable } from '../components/combine-result-table.js';
@@ -29,7 +25,7 @@ function SortCard({
 }: {
   readonly example: SortExample;
 }): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t } = useTranslation(NS);
   const [rows, setRows] = useState<Record<string, unknown>[]>();
   const [running, setRunning] = useState(false);

@@ -7,7 +7,7 @@ import {
   useState,
   type ReactElement,
 } from 'react';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { clientFileRepositoryManagerToken } from '@nocobase/app-plugin-file/client';
 
@@ -35,7 +35,7 @@ function messageOf(cause: unknown): string {
 export default function ProfileAvatarsPage(): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-file-example');
   const labels = useFileLabels();
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const manager = useService(clientFileRepositoryManagerToken);
   const profiles = useMemo(() => profilesRepository(api), [api]);
   const avatars = useMemo(

@@ -1,12 +1,16 @@
 import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import type { WorkflowRunFunction } from '@nocobase/app-plugin-workflow';
-import { requireCount, requireDate, type DailyMetrics } from './metrics.js';
+import {
+  requireCount,
+  resolveReportDate,
+  type DailyMetrics,
+} from './metrics.js';
 
 export async function loadMetrics(
   database: DatabaseManager,
   dateInput: unknown,
 ): Promise<DailyMetrics> {
-  const date = requireDate(dateInput);
+  const date = resolveReportDate(dateInput);
   // Aggregate in the source database instead of persisting unbounded rows in a node result.
   const row = await database
     .query('analytics')
