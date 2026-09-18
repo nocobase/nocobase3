@@ -66,7 +66,7 @@ beforeAll(async () => {
     await symlink(join(root, 'node_modules', dependency), target, 'dir');
   }
   // The independent TypeScript consumer provides declaration-only dependencies.
-  for (const dependency of ['@types/node', '@types/pg']) {
+  for (const dependency of ['@types/node']) {
     const target = join(fixture, 'node_modules', dependency);
     await mkdir(dirname(target), { recursive: true });
     await symlink(join(root, 'node_modules', dependency), target, 'dir');

@@ -42,13 +42,13 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
+    "@types/pg": "8.23.1",
     "bullmq": "catalog:",
     "ioredis": "catalog:"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
-    "@types/pg": "8.23.1",
     "eslint": "catalog:",
     "pg": "8.16.3",
     "prettier": "catalog:",
