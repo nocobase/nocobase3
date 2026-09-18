@@ -43,7 +43,7 @@ export function UserMenu(): ReactElement {
       <DropdownMenuTrigger
         openOnHover
         delay={0}
-        closeDelay={200}
+        closeDelay={0}
         aria-label={t('account.openMenu', {
           defaultValue: 'Open account menu',
         })}

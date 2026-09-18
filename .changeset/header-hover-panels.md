@@ -4,4 +4,4 @@
 "@nocobase/app-template-hub": patch
 ---
 
-Add localized header tooltips for component examples and settings, and open appearance and account panels immediately on hover while retaining click and keyboard access.
+Add localized header tooltips for component examples and settings, and open and close appearance and account panels without hover delays while retaining click and keyboard access.

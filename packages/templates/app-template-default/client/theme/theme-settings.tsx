@@ -30,7 +30,7 @@ export function ThemeSettings(): ReactElement {
       <PopoverTrigger
         openOnHover
         delay={0}
-        closeDelay={200}
+        closeDelay={0}
         render={
           <Button
             aria-label={title}
