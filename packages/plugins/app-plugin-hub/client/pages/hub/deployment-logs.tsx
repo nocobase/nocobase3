@@ -1,6 +1,6 @@
 import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Button } from '../../components/ui/button.js';
 import {
   Dialog,
@@ -13,6 +13,7 @@ import {
 import type { ApiResponse, DeploymentRecord } from './types.js';
 import { StatusBadge } from './shared.js';
 import { deploymentPhaseLabel } from './utils.js';
+import enUS from '../../locales/en-US.js';
 
 interface Event {
   readonly sequence: number;
@@ -43,6 +44,8 @@ export function DeploymentLogs({
 }): ReactElement {
   const client = useApiClient();
   const { t, i18n } = useTranslation('@nocobase/app-plugin-hub');
+  const logViewportRef = useRef<HTMLDivElement>(null);
+  const [following, setFollowing] = useState(true);
   const [events, setEvents] = useState<readonly Event[]>([]);
   const [status, setStatus] = useState(deployment.status);
   const [loaded, setLoaded] = useState(false);
@@ -88,6 +91,10 @@ export function DeploymentLogs({
       clearTimeout(timer);
     };
   }, [appId, client, deployment.id, retry]);
+  useEffect(() => {
+    const viewport = logViewportRef.current;
+    if (following && viewport) viewport.scrollTop = viewport.scrollHeight;
+  }, [events, following]);
   const durationMs =
     events.length > 1
       ? Math.max(
@@ -121,23 +128,32 @@ export function DeploymentLogs({
         ? { ...event, code: terminalFailure?.code ?? event.code }
         : event,
     );
+  const logText = [
+    `App: ${appId}`,
+    `Deployment: ${deployment.id}`,
+    `Release: ${deployment.releaseId}`,
+    ...events.map(
+      (event) =>
+        `${event.at} ${event.phase} ${event.status}${event.code ? ` ${event.code}` : ''}${event.message ? ` ${event.message}` : ''}${event.durationMs !== undefined ? ` (${event.durationMs} ms)` : ''}`,
+    ),
+  ].join('\n');
   const copy = async (): Promise<void> => {
     try {
-      await navigator.clipboard.writeText(
-        [
-          `App: ${appId}`,
-          `Deployment: ${deployment.id}`,
-          `Release: ${deployment.releaseId}`,
-          ...events.map(
-            (event) =>
-              `${event.at} ${event.phase} ${event.status}${event.code ? ` ${event.code} (${event.failedPhase ?? event.phase})` : ''}${event.message ? ` ${event.message}` : ''}`,
-          ),
-        ].join('\n'),
-      );
+      await navigator.clipboard.writeText(logText);
       setCopyState('copied');
     } catch {
       setCopyState('copyFailed');
     }
+  };
+  const download = (): void => {
+    const url = URL.createObjectURL(
+      new Blob([logText], { type: 'text/plain;charset=utf-8' }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `deployment-${deployment.id}.log`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
   return (
     <Dialog
@@ -146,7 +162,7 @@ export function DeploymentLogs({
         if (!open) onClose();
       }}
     >
-      <DialogContent className='top-0 right-0 left-auto h-svh max-h-svh w-full max-w-3xl translate-x-0 translate-y-0 rounded-none'>
+      <DialogContent className='top-0 right-0 left-auto h-svh max-h-svh w-full max-w-5xl translate-x-0 translate-y-0 rounded-none'>
         <DialogHeader className='mb-4 space-y-2 border-b pb-4 pr-8'>
           <DialogTitle>
             {t('deploymentLogs.title', { defaultValue: 'Deployment logs' })}
@@ -174,7 +190,7 @@ export function DeploymentLogs({
             ) : null}
           </div>
         </DialogHeader>
-        <DialogBody className='space-y-3'>
+        <DialogBody className='flex flex-col gap-3 overflow-hidden'>
           <p className='text-xs leading-5 text-muted-foreground'>
             {t('deploymentLogs.scope', {
               defaultValue:
@@ -224,15 +240,32 @@ export function DeploymentLogs({
               })}
             </p>
           ) : null}
-          {visibleEvents.length ? (
-            <ol className='rounded-md border bg-muted/40 p-3 font-mono text-xs leading-6'>
+          <div
+            ref={logViewportRef}
+            tabIndex={0}
+            role='region'
+            aria-label={t('deploymentLogs.output', {
+              defaultValue: 'Log output',
+            })}
+            onScroll={(event) => {
+              const viewport = event.currentTarget;
+              setFollowing(
+                viewport.scrollHeight -
+                  viewport.scrollTop -
+                  viewport.clientHeight <=
+                  32,
+              );
+            }}
+            className='min-h-0 flex-1 overflow-auto rounded-md border border-zinc-800 bg-zinc-950 p-4 text-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          >
+            <ol className='font-mono text-xs leading-5'>
               {visibleEvents.map((event) => (
                 <li
                   key={event.sequence}
-                  className={`grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 px-1 py-0.5 ${event.status === 'failed' ? 'rounded bg-destructive/10 text-destructive' : ''}`}
+                  className={`grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 px-1 ${event.status === 'failed' ? 'bg-red-950/60 text-red-300' : ''}`}
                 >
                   <time
-                    className='tabular-nums text-muted-foreground'
+                    className='select-none tabular-nums text-zinc-500'
                     dateTime={event.at}
                     title={event.at}
                   >
@@ -240,28 +273,18 @@ export function DeploymentLogs({
                       hour: '2-digit',
                       minute: '2-digit',
                       second: '2-digit',
+                      fractionalSecondDigits: 3,
                       hour12: false,
                     }).format(new Date(event.at))}
                   </time>
                   <div className='min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]'>
-                    <span className='font-semibold'>
-                      [
-                      {t(
-                        `deployments.phases.${event.failedPhase ?? event.phase}`,
-                        {
-                          defaultValue: deploymentPhaseLabel(
-                            event.failedPhase ?? event.phase,
-                          ),
-                        },
-                      )}
-                      ]
-                    </span>{' '}
                     {event.message ??
-                      t(`deploymentLogs.states.${event.status}`, {
-                        defaultValue: event.status,
-                      })}
+                      (event.phase === event.status ||
+                      event.phase === 'completed'
+                        ? enUS.deploymentLogs.states[event.status]
+                        : `${deploymentPhaseLabel(event.failedPhase ?? event.phase)}: ${enUS.deploymentLogs.states[event.status]}`)}
                     {event.durationMs !== undefined ? (
-                      <span className='ml-2 text-muted-foreground'>
+                      <span className='ml-2 text-zinc-500'>
                         ({event.durationMs} ms)
                       </span>
                     ) : null}
@@ -272,13 +295,16 @@ export function DeploymentLogs({
                           <>
                             {' '}
                             ·{' '}
-                            {t(
-                              `deploymentLogs.codes.${event.code.toLowerCase().replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())}`,
-                              {
-                                defaultValue:
-                                  'Deployment failed. No further details were recorded.',
-                              },
-                            )}
+                            {Object.entries(enUS.deploymentLogs.codes).find(
+                              ([key]) =>
+                                key ===
+                                event.code
+                                  ?.toLowerCase()
+                                  .replace(/_([a-z])/g, (_, letter: string) =>
+                                    letter.toUpperCase(),
+                                  ),
+                            )?.[1] ??
+                              enUS.deploymentLogs.codes.deploymentFailed}
                           </>
                         ) : null}
                       </span>
@@ -287,15 +313,22 @@ export function DeploymentLogs({
                 </li>
               ))}
             </ol>
-          ) : null}
+          </div>
         </DialogBody>
-        <div className='mt-4 border-t pt-4'>
+        <div className='mt-4 flex flex-wrap items-center gap-2 border-t pt-4'>
           <Button
             variant='outline'
             disabled={!events.length}
             onClick={() => void copy()}
           >
             {t('deploymentLogs.copy', { defaultValue: 'Copy diagnostics' })}
+          </Button>
+          <Button
+            variant='outline'
+            disabled={!events.length}
+            onClick={download}
+          >
+            {t('deploymentLogs.download', { defaultValue: 'Download logs' })}
           </Button>
           <span role='status' className='ml-3 text-sm'>
             {copyState

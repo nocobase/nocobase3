@@ -441,6 +441,8 @@ const enUS = {
     remove: 'Remove application',
   },
   deploymentLogs: {
+    output: 'Log output',
+    download: 'Download logs',
     details: 'Execution details',
     duration: 'Recorded duration: {{seconds}} s',
     states: {

@@ -257,6 +257,40 @@ describe('deployment log drawer', () => {
     },
   );
 
+  it('pauses automatic scrolling in history and resumes at the bottom', async () => {
+    client.request.mockResolvedValue({
+      data: {
+        items: [event],
+        nextCursor: 1,
+        status: 'succeeded',
+        legacy: false,
+        truncated: false,
+      },
+    });
+    render(
+      <DeploymentLogs
+        appId='customer'
+        deployment={deployment}
+        onClose={() => undefined}
+      />,
+    );
+    await screen.findByRole('listitem');
+    const viewport = screen.getByRole('region', { name: 'Log output' });
+    Object.defineProperties(viewport, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 200 },
+    });
+    viewport.scrollTop = 100;
+    fireEvent.scroll(viewport);
+    expect(viewport.scrollTop).toBe(100);
+    viewport.scrollTop = 800;
+    fireEvent.scroll(viewport);
+    expect(viewport.scrollTop).toBe(1000);
+    expect(
+      screen.queryByRole('button', { name: /follow/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('explains missing legacy logs', async () => {
     client.request.mockResolvedValue({
       data: {

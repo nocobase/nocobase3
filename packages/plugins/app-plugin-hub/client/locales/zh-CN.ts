@@ -404,6 +404,8 @@ const zhCN: HubResource = {
     remove: '删除应用',
   },
   deploymentLogs: {
+    output: '日志输出',
+    download: '下载日志',
     details: '执行详情',
     duration: '记录耗时：{{seconds}} 秒',
     states: {
