@@ -3,6 +3,17 @@
 Register simple page and Collection metadata with `authz.pages.add(...)` and `authz.db.collections.add(...)`. Define composed resources with `defineAuthorizationResource(name, configure)` from `@nocobase/authorization/core` and reusable data permissions with `defineDatabasePermission(configure)` from `@nocobase/app-plugin-authorization`. Both callbacks execute synchronously and return immutable builders; neither registers into an application, queries a database, or assigns permissions to a user.
 
 ```ts
+import { buildFilter } from '@nocobase/repository-input';
+import { defineAuthorizationResource } from '@nocobase/authorization/core';
+import { permissionSet } from '@nocobase/authorization/permissions';
+import { defineDatabasePermission } from '@nocobase/app-plugin-authorization';
+
+interface Quote {
+  id: string;
+  title: string;
+  amount: number;
+  preparedById: string;
+}
 const readQuotes = defineDatabasePermission((permission) =>
   permission
     .collection<Quote>('quotes')
@@ -38,10 +49,13 @@ const role = permissionSet('sales')
     resource: { type: 'page', id: 'sales.quotes' },
     actions: [{ action: 'access' }],
   })
-  .grant(target.grant({ edit: { quotes: 'recordsIOwn' } }))
-  .build();
-const defaults = defaultAccessRule(target)
-  .scope('view', 'quotes', databaseScope('recordsIOwn'))
+  .grant(
+    target.grant({
+      edit: {
+        quotes: { key: 'recordsIOwn', params: { field: 'preparedById' } },
+      },
+    }),
+  )
   .build();
 ```
 
@@ -51,7 +65,7 @@ const defaults = defaultAccessRule(target)
 
 `read` describes output fields, while `create` and `update` describe input fields. `delete()` takes no fields. Use `'*'` or `.allFields()` explicitly for all fields. `.options(...recordAccessReferences)` restricts the selectable policies and preserves option-name inference through resource references; `.default(reference)` supplies a default selection. The references must apply to the selected collection. Omitting options leaves the dynamic record-access catalogue available.
 
-Define policies with defineRecordAccess(key, configure) from @nocobase/authorization/core, then register with authz.recordAccess.add(policy). Use .resources({ type, id }) for applicability (id '*' covers one resource type), .params<P>(schema) for typed parameters, and .resolve(...) for evaluation. The context contains principal, resource, action and params; it contains no DB objects. Database policies directly use buildFilter from @nocobase/repository-input; the DB adapter validates the resulting FilterAst and converts it to executable Policy scope. Other resource plugins consume their own result types. Resolver functions are never stored in permission grants: .options(policy), .default(policy) and relation .recordAccess(policy) use policy references. Defaults, sharing and restrictions retain existing persisted keys.
+Define policies with `defineRecordAccess(key, configure)` from `@nocobase/authorization/core`, then register with `authz.recordAccess.add(policy)`. Use .resources({ type, id }) for applicability (id '*' covers one resource type), .params<P>(schema) for typed parameters, and .resolve(...) for evaluation. The context contains principal, resource, action and params; it contains no DB objects. Database policies directly use buildFilter from @nocobase/repository-input; the DB adapter validates the resulting FilterAst and converts it to executable Policy scope. Other resource plugins consume their own result types. Resolver functions are never stored in permission grants: .options(policy), .default(policy) and relation .recordAccess(policy) use policy references. Use stable policy keys because grants and rules persist their references.
 
 ## Plugin contribution protocol
 
@@ -62,25 +76,38 @@ Core's `AuthorizationActionBuilder.grant(contribution)` accepts `AuthorizationCo
 Permission declarations own their types independently of DB Policy. Their fields, relations, operation names and through structures align with Policy. For example:
 
 ```ts
+interface Order {
+  id: string;
+  title: string;
+}
+const activeTeams = {
+  key: 'customFilter',
+  params: { filter: buildFilter((f) => f.boolean('active').isTrue()) },
+};
 const deliveryPermission = defineDatabasePermission((permission) =>
   permission
     .collection<Order>('orders')
     .read((read) => read.fields('id', 'title'))
     .update((write) =>
       write
-        .relation('team', (team) =>
-          team.recordAccess('activeTeams').connect().disconnect(),
+        .relation('deliveryTeam', (team) =>
+          team.recordAccess(activeTeams).connect().disconnect(),
         )
         .relation('checks', (checks) =>
           checks
             .create((create) => create.fields('id', 'title'))
             .update((update) => update.fields('title'))
+            .upsert((upsert) =>
+              upsert
+                .create((create) => create.fields('id', 'title'))
+                .update((update) => update.fields('title')),
+            )
             .delete(),
         )
         .relation('collaborators', (teams) =>
-          teams.set((edge) =>
-            edge.through((through) => through.fields('note')),
-          ),
+          teams
+            .recordAccess(activeTeams)
+            .set((edge) => edge.through((through) => through.fields('note'))),
         ),
     ),
 );

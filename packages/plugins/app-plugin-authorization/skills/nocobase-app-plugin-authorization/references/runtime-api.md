@@ -1,6 +1,6 @@
-# @nocobase/app-plugin-authorization
+# Runtime integration and API
 
-NocoBase application integration for authorization: authenticated identities, permission sets, page and settings permissions, database field/record/relation policies, management APIs and React UI. For configuration without code, read the [user guide](../../../docs/docs/en/capabilities/authorization/index.md). For implementing a feature, read the [development Skill](skills/nocobase-app-plugin-authorization/SKILL.md).
+Use this reference inside the installed authorization Skill. Snippet variables such as `app`, `database`, `userId` and `input` are supplied by the owning App; declarations and route bodies belong in separate files as indicated.
 
 ## Installation and service
 
@@ -13,38 +13,47 @@ const authz = app.container.resolve(authorizationToken);
 
 For an independent host/test, `createAppAuthorization({ database?, connection?, config?, onUserPermissionsChanged?, onAuthenticatedPermissionsChanged? })` creates the service. `database` supplies repository integration and `connection` supplies metadata/persistence. The normal application provider supplies both. `config.permissionSets` accepts `rootSet` and `defaultSet` names (defaults `root`, `member`); `config.plugins` lists optional rule factories. Permission sets, pages and database authorization are built in.
 
-```ts
-import type { AuthorizationConfig } from '@nocobase/app-plugin-authorization/server';
-import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
-import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
-import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
+Optional rule factories and their configuration are documented only in their owning Skills. Follow [capability discovery](optional-capabilities.md) before adding one to the App; the main service does not imply those capabilities are installed.
 
-export default {
-  plugins: [defaultAccess(), sharingRules(), restrictionRules()],
-} satisfies AuthorizationConfig;
+Client registration calls factories; server registration uses the exported declarations. Merge these entries into existing lists rather than replacing other plugins:
+
+```ts
+// client/plugins.ts
+import { defineClientPlugins } from '@nocobase/app-client/plugins';
+import authentication from '@nocobase/app-plugin-authentication/client';
+import authorization from '@nocobase/app-plugin-authorization/client';
+export default defineClientPlugins([authentication(), authorization()]);
 ```
 
-Put this in the application's authorization configuration and register each optional plugin on client and server as well. Each owns its migration, store, settings page and management endpoints. See their READMEs for configuration APIs.
+```ts
+// server/plugins.ts
+import { defineServerPlugins } from '@nocobase/app-server/plugins';
+import authentication from '@nocobase/app-plugin-authentication/server';
+import authorization from '@nocobase/app-plugin-authorization/server';
+export default defineServerPlugins([authentication, authorization]);
+```
+
+Optional rule clients follow the same `plugin()` form, and their server default exports are declarations. Register only installed packages. Install their migrations before configuration writes and run the App's normal Skills synchronization after dependency changes.
 
 ## API map
 
-| Export/surface                                                                                         | Purpose                                                                                                                         |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `./server`: `authorizationToken`, `permissionSetsToken`                                                | Resolve `AppAuthorizationService` or its permission-set service                                                                 |
-| `./server`: `createAppAuthorization`, `AuthorizationConfig`                                            | Host integration and configuration                                                                                              |
-| Root or `./server`: `defineDatabasePermission`, `databaseGrant`, `databaseScope`                       | Portable typed declarations and JSON grant/scope helpers                                                                        |
-| `authz.for(identity)`, `middleware()`, `guard(request)`                                                | Request identity and authorization; [Core API](../../libs/authorization/README.md)                                              |
-| `authz.permissionSets`                                                                                 | Definition, assignment, protection and transaction APIs; [complete methods](../../libs/authorization/README.md#permission-sets) |
-| `authz.pages.add(definition)`, `pages.grant(id, actions)`                                              | Page catalog and independent `access` grant                                                                                     |
-| `authz.settings.grant(id, actions)`                                                                    | Declare settings capabilities for composed administration actions                                                               |
-| `authz.db.collections.add(definition)`                                                                 | Opt a collection into authorization                                                                                             |
-| `authz.db.grant(name, definition)`, `db.scope(recordAccess)`                                           | JSON equivalents of `databaseGrant` / `databaseScope`                                                                           |
-| `authz.db.policyFor(collection, scope, operation?)`                                                    | Resolve all CRUD operations into a `RepositoryPolicy`                                                                           |
-| `authz.db.repositories(exposures)`                                                                     | Middleware plus `principal` and `repositories` for Repository API routes                                                        |
-| `./client`: `useCan`, `useAuthorizationClient`, `authorizationClientToken`, `useAuthorizationRevision` | Session-aware visibility checks                                                                                                 |
-| `./client/management`, `./server/management`                                                           | Shared management components, options, subjects and request helpers for rule plugins                                            |
+| Export/surface                                                                                         | Purpose                                                                                                    |
+| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `./server`: `authorizationToken`, `permissionSetsToken`                                                | Resolve `AppAuthorizationService` or its permission-set service                                            |
+| `./server`: `createAppAuthorization`, `AuthorizationConfig`                                            | Host integration and configuration                                                                         |
+| Root or `./server`: `defineDatabasePermission`, `databaseGrant`, `databaseScope`                       | Portable typed declarations and JSON grant/scope helpers                                                   |
+| `authz.for(identity)`, `middleware()`, `guard(request)`                                                | Request identity and authorization; [Core API](core-api.md)                                                |
+| `authz.permissionSets`                                                                                 | Definition, assignment, protection and transaction APIs; [permission-set API](core-api.md#permission-sets) |
+| `authz.pages.add(definition)`, `pages.grant(id, actions)`                                              | Page catalog and independent `access` grant                                                                |
+| `authz.settings.grant(id, actions)`                                                                    | Declare settings capabilities for composed administration actions                                          |
+| `authz.db.collections.add(definition)`                                                                 | Opt a collection into authorization                                                                        |
+| `authz.db.grant(name, definition)`, `db.scope(recordAccess)`                                           | JSON equivalents of `databaseGrant` / `databaseScope`                                                      |
+| `authz.db.policyFor(collection, scope, operation?)`                                                    | Resolve all CRUD operations into a `RepositoryPolicy`                                                      |
+| `authz.db.repositories(exposures)`                                                                     | Middleware plus `principal` and `repositories` for Repository API routes                                   |
+| `./client`: `useCan`, `useAuthorizationClient`, `authorizationClientToken`, `useAuthorizationRevision` | Session-aware visibility checks                                                                            |
+| `./client/management`, `./server/management`                                                           | Shared management components, options, subjects and request helpers for rule plugins                       |
 
-Server exports also expose `pages`, `DatabaseResourceAuthorizer`, `DatabaseCollectionRegistry`, `collectionResolver`, `condition`, `anyScope` and `scopeAst` for custom hosts/adapters. Ordinary business code should use declarations and policies instead of constructing adapters. Types are exported alongside these APIs; [server entry](server/index.ts) is the complete export list.
+Server exports also expose `pages`, `DatabaseResourceAuthorizer`, `DatabaseCollectionRegistry`, `collectionResolver`, `condition`, `anyScope` and `scopeAst` for custom hosts/adapters. Ordinary business code should use declarations and policies instead of constructing adapters. Types are exported alongside these APIs; the exported TypeScript types supply the exact adapter interfaces.
 
 ## Declare a business operation
 
@@ -57,6 +66,8 @@ import { defineDatabasePermission } from '@nocobase/app-plugin-authorization';
 interface Quote {
   id: string;
   projectId: string;
+  preparedById: string;
+  notes: string;
   amount: number;
   status: string;
 }
@@ -68,7 +79,7 @@ const quoteData = defineDatabasePermission((p) =>
   p
     .collection<Quote>('quotes')
     .title('Quotes')
-    .read(['id', 'projectId', 'amount', 'status']),
+    .read(['id', 'projectId', 'preparedById', 'amount', 'status', 'notes']),
 );
 const projectData = defineDatabasePermission((p) =>
   p.collection<Project>('projects').title('Projects').read(['id', 'title']),
@@ -78,6 +89,9 @@ export const quotes = defineAuthorizationResource('sales.quotes', (r) =>
     .title('Quotes')
     .group('sales')
     .action('view', (a) => a.title('View').grant('quotes', quoteData))
+    .action('edit', (a) =>
+      a.title('Edit').grant('quotes', quoteData.update(['amount', 'notes'])),
+    )
     .action('submit', (a) =>
       a
         .title('Submit')
@@ -111,7 +125,8 @@ await authz.permissionSets.create(
     .grant(
       quotes.reference().grant({
         view: { quotes: 'allRecords' },
-        submit: { quotes: 'recordsICreated', projects: 'recordsIOwn' },
+        edit: { quotes: 'sales.prepared' },
+        submit: { quotes: 'sales.prepared', projects: 'sales.region' },
       }),
     )
     .build(),
@@ -122,7 +137,7 @@ await authz.permissionSets.assign({
 });
 ```
 
-The built-in scopes require the matching columns (`createdById`, `ownerId` by default); choose custom strategies for other models. Assignment activates declarations. Page access and business actions are independent. The permission workspace edits business actions, their scopes and pages; fields and relation capabilities are declared in code.
+Register the custom strategies from [the business workflow](business-module.md) before using this definition. Built-in owner/creator scopes require their matching columns; the example uses the quote preparer and project region instead. Assignment activates declarations. Page access and business actions are independent. The permission workspace edits business actions, their scopes and pages; fields and relation capabilities are declared in code.
 
 ## Enforce the operation on the server
 
@@ -206,7 +221,7 @@ const delivery = defineDatabasePermission((p) =>
 );
 ```
 
-Register `activeTeams` for the target collection before using it. Writes support create/update/upsert/connect/disconnect/set/delete; root create permits nested create/connect only. Upsert must grant both branches. Relation `recordAccess` applies to target rows: omitted means unrestricted targets within that explicitly granted relation; `[]` means no targets. Related records do not automatically inherit standalone target CRUD permissions or restrictions. Exclude direct foreign keys when association changes must go through relation policies. Static endpoint policies cannot restore missing relation grants. Because DB Policy has one scope per node, differing field/relation capabilities may conservatively intersect scopes. See [declaration details](skills/nocobase-app-plugin-authorization/references/fluent-registration.md).
+Register `activeTeams` for the target collection before using it. Writes support create/update/upsert/connect/disconnect/set/delete; root create permits nested create/connect only. Upsert must grant both branches. Relation `recordAccess` applies to target rows: omitted means unrestricted targets within that explicitly granted relation; `[]` means no targets. Related records do not automatically inherit standalone target CRUD permissions or restrictions. Exclude direct foreign keys when association changes must go through relation policies. Static endpoint policies cannot restore missing relation grants. Because DB Policy has one scope per node, differing field/relation capabilities may conservatively intersect scopes. See [declaration details](fluent-registration.md).
 
 ## Subjects and transactions
 
@@ -214,7 +229,7 @@ Use `authz.subjects.define(type, { resolveFor, filterActive, administration })` 
 
 `administration` is `{ title, selection }`: `selection: { type: 'fixed', id }` describes a fixed audience; `type: 'collection'` implements `list({ search, page, pageSize }, { authz })` returning `{ items, total }` and `resolve(ids, { authz })` returning items. Items contain `{ id, title, description? }`. The calling management endpoint already checks its settings permission. If the directory has additional read permissions or row restrictions, enforce those in both callbacks; do not invent a separate directory permission when the entry permission is sufficient. Picker visibility does not grant assignment rights. Preserve stored unknown/unreadable subject IDs.
 
-Permission-set revocation/replacement uses the database Store's transaction and lock protocol to preserve a final active administrator. For user removal/disable flows, call `permissionSets.withTransaction(connection).assertSubjectRemovable(subject)` in the same transaction as the user mutation and notify through `notifyAssignmentsChanged(subject)` after commit. See the [transaction and protection API](../../libs/authorization/README.md#permission-sets).
+Permission-set revocation/replacement uses the database Store's transaction and lock protocol to preserve a final active administrator. For user removal/disable flows, call `permissionSets.withTransaction(connection).assertSubjectRemovable(subject)` in the same transaction as the user mutation and notify through `notifyAssignmentsChanged(subject)` after commit. See the [transaction and protection API](core-api.md#permission-sets).
 
 ## Client API and page access
 
@@ -232,7 +247,7 @@ Client route declarations use `authz: { resource: { type: 'page', id: 'sales.quo
 
 ## Management HTTP API
 
-Paths below are relative to the application's `/api` prefix; all require authentication. Request/response contracts are implemented in [management](server/management). User-entered labels are strings; seeded labels may be `{ key, ns }` and should be preserved on unrelated edits.
+Paths below are relative to the application's `/api` prefix; all require authentication. The request shapes below describe the management boundary. User-entered labels are strings; seeded labels may be `{ key, ns }` and should be preserved on unrelated edits.
 
 | Method and path                                                                                                                         | Required settings capability                                                  |
 | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
@@ -253,4 +268,4 @@ The inspector evaluates one subject, resource and action, with sources, reasons,
 
 ## Administration resources
 
-Register a flat `administration` group, then a composed resource whose actions grant `authz.settings.grant(id, actions)`. Server routes independently check the underlying `settings` capability. Registering the resource only makes it configurable; assign it through a permission set to activate it. Do not register a second settings item catalog or include page grants inside composed operations. See the [system settings development reference](../../../.agents/skills/nocobase-plugin-development/references/system-settings.md) and the runnable [sales example](../../examples/app-plugin-authorization-example/README.md).
+Register a flat `administration` group, then a composed resource whose actions grant `authz.settings.grant(id, actions)`. Server routes independently check the underlying `settings` capability. Registering the resource only makes it configurable; assign it through a permission set to activate it. Do not register a second settings item catalog or include page grants inside composed operations. For page and settings implementation, use [client development](client-development.md). For seed ownership, use [code-and-seeds](code-and-seeds.md).

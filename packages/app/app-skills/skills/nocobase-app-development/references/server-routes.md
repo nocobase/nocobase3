@@ -85,46 +85,28 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
 
 Use a stable `resource`/`action` pair per operation — `read` and `create` are distinct decisions.
 
-### When the answer is not yes or no
+### Enforce record, field and relation policies
 
-`can()` answers whether the caller may perform the action at all. Many real requirements are narrower than that: _a salesperson may only see the customers they own_. There the answer is neither yes nor no — it is "yes, for these rows, and these fields".
+Read [application permission development](authorization.md) and the installed `nocobase-app-plugin-authorization` Skill before building data access. Register each governed collection explicitly in the owning provider with `authz.db.collections.add({ name, title, actions? })`; DB supplies field/relation metadata. Unregistered collections are denied even to unrestricted users.
 
-`policyFor()` returns that. It folds this request's read, create, update and delete decisions into one Repository Policy, and `withPolicy()` binds it:
+For ordinary collection CRUD, resolve and bind the policy:
 
 ```ts
 const policy = await authz.db.policyFor('customers', context.get('authz'));
 if (policy.read === false) return context.json({ code: 'FORBIDDEN' }, 403);
-
 const customers = database.repository('customers').withPolicy(policy);
 return context.json({ data: await customers.findMany() });
 ```
 
-**Let the Policy do the filtering.** The bound Repository puts the row scope in the same `WHERE` clause as everything else and refuses a field outside the allowlist, on reads and on writes alike. Fetching rows and filtering them in memory afterwards is not an implementation detail — it is a data leak whenever a bug, an early return, or a later refactor skips the filter. A row outside the scope makes `updateOne` raise `RECORD_NOT_FOUND`, which is a 404: indistinguishable from a row that does not exist, which is the point.
+For a composed business operation, call the request scope's `authorize()` once, reject denied or missing policies, and bind each table's `decision.conditions.database[collection]` policy. Do not replace it with aggregate collection authorization: grants from another business operation could widen the result. `require` rejects conditional decisions; `can` reports feature visibility rather than access to a specific record.
 
-A denied action is `false` on its node, so a route reads the Policy for its own status code rather than re-deriving the decision.
-
-Registration is what puts a collection under permissions. `authz.getResource('database.collection').items.add({ name: 'customers', title: 'Customers' })` — in the provider that owns the module — says the collection is part of the permission model; anything not registered is denied with `COLLECTION_NOT_REGISTERED`, for an administrator as much as for anyone else, because unrestricted access skips grants and not the model. That is deliberate: this application's database also holds session, migration and permission tables, and none of them should ever appear as something to grant on. Registration is always explicit, belongs in the provider that owns the module rather than in a route file, and nothing else declares a collection on the module's behalf. Repeating an identical `add()` is harmless because boot runs more than once in some hosts. The registration carries a name and an optional title and description for the permission UI, nothing more — field names, the primary key, and whether the database generates it are read from db's own Collection metadata. `recordsIOwn` and `recordsICreated` take the column to compare as `params.field`, defaulting to `ownerId` and `createdById`.
+Bound repositories enforce rows, fields and relations together. Keep multi-table writes transactional and business-state predicates in the update. Map out-of-scope `RECORD_NOT_FOUND` errors consistently without exposing hidden records. Never fetch unrestricted rows and filter them in the browser.
 
 ### Repository API endpoints
 
-When a route exposes a collection through `defineRepositoryApiRoutes()` rather than a handler of its own, `authorization.db.repositories()` authorizes it in place. It registers nothing, so the collection still needs the `add()` above — that call is where the title a permission list shows comes from, and an exposure naming a collection nobody registered is denied like any other request for it. Each exposure names the `resource` its rows belong to and declares the static Policy shape it offers; the middleware narrows that shape with the caller's grants:
+For `defineRepositoryApiRoutes`, declare static exposures with a collection `resource` and static `policy`. `authz.db.repositories(exposures)` returns middleware plus the `principal` and `repositories` passed to the route factory. Install authentication and this middleware on every exposed action; missing middleware must not fall back to unrestricted access. Exposures without `resource` do not consult authorization.
 
-```ts
-const authorize = authorization.db.repositories(repositories);
-for (const action of ['findMany', 'createOne'])
-  router.use(`/orders:${action}`, auth.required(), authorize);
-router.route(
-  '/',
-  await defineRepositoryApiRoutes({
-    principal: authorize.principal,
-    repositories: authorize.repositories,
-  }).createRouter(app),
-);
-```
-
-Mount it on every action of every exposure that names a `resource`. An action it did not run on resolves no principal, and app-server answers `403 PRINCIPAL_REQUIRED` rather than falling back to the shape. Relation rules come from the shape — a grant carries no relation model, and a member it does not mention stays as it was — so write `read` out as a node with its `fields` and `relations` rather than `true` when relations must stay readable.
-
-This is a summary. Configuring Permission Sets and binding the Repository Policy that `policyFor()` returns are covered by the authorization plugin's own Skill — read `nocobase-app-plugin-authorization` in `.agents/skills/` before building ownership rules, and its `references/orders-module.md` for a complete worked example with an `ownerId`. `@nocobase/app-plugin-authorization-example` is the same thing as an installable plugin you can run.
+Static endpoint policies only narrow user grants. Read/write relation capabilities must be explicitly granted; a relation in the static shape does not create permission. Use the authorization Skill's `references/business-module.md` for the full workflow and `references/fluent-registration.md` for field/relation declarations. The installable authorization example demonstrates quote submission and delivery responsibilities.
 
 ## Scope middleware to paths you own
 

@@ -1,0 +1,42 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "Permissions"
+  },
+  {
+    "type": "file",
+    "name": "permission-sets",
+    "label": "Permission sets and assignments"
+  },
+  {
+    "type": "file",
+    "name": "data-scopes",
+    "label": "Record scopes and rules"
+  },
+  {
+    "type": "file",
+    "name": "default-access",
+    "label": "Default access"
+  },
+  {
+    "type": "file",
+    "name": "sharing-rules",
+    "label": "Sharing rules"
+  },
+  {
+    "type": "file",
+    "name": "restriction-rules",
+    "label": "Restriction rules"
+  },
+  {
+    "type": "file",
+    "name": "inspector",
+    "label": "Inspect permission results"
+  },
+  {
+    "type": "file",
+    "name": "develop-with-ai",
+    "label": "Describe permissions to AI"
+  }
+]

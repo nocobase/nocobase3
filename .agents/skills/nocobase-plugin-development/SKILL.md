@@ -18,6 +18,7 @@ These English references adapt the plugin development guide into task-specific i
 | Choose Client components, ServiceProviders, React Providers, configuration, or API access             | [Client architecture](references/client.md)                          |
 | Build or change any plugin UI                                                                         | [shadcn components and styling](references/client-components.md)     |
 | Add pages, Settings, Dev routes, menus, Tabs, child routes, or page overrides                         | [Client routing](references/client-routing.md)                       |
+| Design configuration entities, settings permissions, routed editors and safe saves                    | [System settings](references/system-settings.md)                     |
 | Define service contracts, Tokens, dependency injection, or lifecycle                                  | [Services and Providers](references/services.md)                     |
 | Add HTTP endpoints, authorization, Repository operations, or Queue Jobs                               | [Server development](references/server.md)                           |
 | Add migrations, seeds, or package resource/checksum handling                                          | [Database resources](references/database.md)                         |

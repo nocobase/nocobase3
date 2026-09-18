@@ -16,9 +16,10 @@
     "label": "认证"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "authorization",
-    "label": "权限"
+    "label": "权限",
+    "collapsed": true
   },
   {
     "type": "dir",

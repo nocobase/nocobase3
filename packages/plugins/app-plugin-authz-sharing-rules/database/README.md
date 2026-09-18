@@ -1,32 +1,7 @@
-# Database examples
+# Database resources
 
-The files in `migrations/` and `seeds/` end in `.ts.example`, so NocoBase does
-not load or execute them.
+This plugin owns the migration in `migrations/` for sharing rules and their subject assignments. The application discovers it through the server plugin's absolute `baseDir` and executes it through its normal migration lifecycle. Run application migrations after registering the plugin; do not create or modify these tables from a business feature.
 
-To enable an example, remove only the final `.example` suffix:
+The plugin does not seed business rules. Configure initial rules through the public service API in controlled application provisioning, or use the authorization settings UI. Preserve administrator changes when provisioning runs again. See the [package API](../README.md) and the authorization example's rule declarations for usage.
 
-```text
-202609160001_authz_sharing_rules_create_records.ts.example
-202609160001_authz_sharing_rules_create_records.ts
-
-202609160002_authz_sharing_rules_create_welcome_record.ts.example
-202609160002_authz_sharing_rules_create_welcome_record.ts
-```
-
-The exported `name` must match the filename without the executable extension.
-If you rename an enabled `.ts` file, update its `name` as well.
-
-The generated `server/plugin.ts` already declares both directories. Empty
-directories and files ending in `.ts.example` contribute nothing, so the
-default configuration is safe to keep:
-
-```ts
-database: {
-  migrations: './database/migrations',
-  seeds: './database/seeds',
-},
-```
-
-The server plugin resolver ignores a configured directory when it is absent
-(for example, when a published plugin has no enabled migrations), so no extra
-configuration change is required when a directory has no executable files.
+Migrations are immutable after their introducing branch is merged. Add a new migration for schema changes, and verify both the physical schema and metadata with a migration test. Build generates the database manifest alongside compiled migrations; consumers execute the published resources.

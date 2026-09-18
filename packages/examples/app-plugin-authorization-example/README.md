@@ -1,69 +1,96 @@
-# Sales permissions example
+# @nocobase/app-plugin-authorization-example
 
-This example follows four sales responsibilities: consulting project information, preparing quotes, collaborating on a specific proposal, and fulfilling orders. These are independent exercises around related records, not a complete quote-to-order approval workflow. It contains no customer configuration or customer data.
+Runnable examples of sales collaboration and order delivery permissions. They demonstrate realistic independent responsibilities, not a complete quote-to-order workflow. For production API contracts, use the [authorization README](../../plugins/app-plugin-authorization/README.md) and [development Skill](../../plugins/app-plugin-authorization/skills/nocobase-app-plugin-authorization/SKILL.md).
 
-Run application migrations and seeds through the Examples application's normal lifecycle. The seed creates `sales_assistant`, `sales_engineer`, `sales_manager` and `sales_delivery`, with the example password `AuthzExample123!`, their editable permission sets, five projects, eight practice quotes, five accepted historical quotes, five orders and all three rule types. The same seed initializes proposal and delivery teams and their members.
+## Run the examples
 
-Open `/authorization-example` for the guide and the independently authorized `/authorization-example/projects`, `/authorization-example/quotes`, and `/authorization-example/orders` menus for records, relative to the application mount. In authorization settings, choose a business resource group, open an operation and configure each of its named scopes. There is no separate permission-set-wide scope. Default access, sharing and restriction rules select a business resource, operation and scope; the scope registration determines the table used for fields and record selection.
+Register this package's default client/server plugins with authentication, authorization and the three optional scope-rule plugins, then run the application's normal migrations and seeds. The Examples application includes this composition. Open `/authorization-example` for the guide and `/authorization-example/projects`, `/authorization-example/quotes`, `/authorization-example/orders` for the independently authorized pages; paths are relative to the application mount.
 
-The four permission sets represent jobs: Sales assistant, Sales engineer, Project manager, and Delivery specialist. Accounts and permission-set keys use job names; region and ownership are data scopes.
+Use the seeded demo accounts shown in the guide. Keep demo credentials and practice reset out of a production feature. Seeds initialize missing data without overwriting existing permissions. An unrestricted administrator can reset the fixed business practice records; this preserves permissions, team memberships and additional user-created orders. Restore authorization changes separately before repeating baseline exercises.
 
-| Account           | Role source                                              | Verification                                            |
-| ----------------- | -------------------------------------------------------- | ------------------------------------------------------- |
-| sales_assistant   | Direct sales assistant                                   | Read-only access, defaults and selected project sharing |
-| sales_engineer    | Direct sales engineer                                    | Independent quote preparer and project-region scopes    |
-| sales_manager     | Direct project manager                                   | Maintain owned projects; read quotes and orders         |
-| sales_delivery    | Direct delivery specialist                               | Order menu and delivery workflow                        |
-| sales_proposal    | Sales engineer inherited from Proposal team              | Team role, selected quote handover and restrictions     |
-| sales_dispatch    | Delivery specialist inherited from Delivery team         | Team sharing and order-only menus                       |
-| sales_coordinator | Direct project manager plus Proposal team sales engineer | Role union and independent revocation                   |
+## Responsibilities demonstrated
 
-The guide displays the current account's effective roles and whether each comes from a user or team assignment. Teams are selectable authorization subjects in permission-set assignments, sharing rules, restrictions and inspection. Memberships are resolved from the database on each authenticated request; the inspector uses the same resolver. Disabling a team or removing membership stops inheritance on the next request. A South-region project owner delegates quote-7 to the Proposal team for editing and submission, with access to parent project-3 for the submission check; removing the team's role still denies submission. The existing direct-user sharing remains independent.
+| Account             | Job source                        | Business example                                                  |
+| ------------------- | --------------------------------- | ----------------------------------------------------------------- |
+| `sales_assistant`   | Direct sales assistant            | Consult public and explicitly shared materials                    |
+| `sales_engineer`    | Direct sales engineer             | Edit prepared quotes; submit only with responsible-project access |
+| `sales_manager`     | Direct project manager            | Maintain owned projects and consult related work                  |
+| `sales_delivery`    | Direct delivery specialist        | Arrange and confirm eligible order delivery                       |
+| `sales_proposal`    | Proposal team engineer            | Take over an explicitly delegated quote                           |
+| `sales_dispatch`    | Delivery team specialist          | Inherit delivery responsibilities                                 |
+| `sales_coordinator` | Direct manager plus team engineer | Preserve personal responsibilities after team revocation          |
 
-Engineers may consult non-confidential quotes as internal reference material, but edit only quotes they prepared unless explicitly assigned a collaboration record. Preparing a quote for another region is permitted; submitting it requires regional responsibility or a specific project handover. The edit default uses preparer identity too, so it cannot reopen a colleague’s quote merely because both belong to an engineer-owned project. Project-8 is a West-region renewal owned by sales_coordinator; losing the Proposal team role or membership still leaves that account able to manage its own project. Confidentiality restrictions apply directly to this account as well as through its team.
+Engineers can edit their own out-of-region drafts without being allowed to submit them. The Proposal team can edit/submit quote-7 through explicit quote and project-3 sharing. Sharing alone does not grant Submit. The coordinator retains owned project-8 when the team source is removed; direct confidentiality restrictions remain in force. Orders reference accepted historical quotes, separate from the draft exercises; submitting a practice quote does not create an order.
 
-Registration is explicit in `server/sales-authorization.ts`. `authz.resources.add` declares action `scopes`; each scope names one underlying resource and offers configurable record-access policies. An underlying `authz.db.grant` references that scope by name. Grant helpers only return declarations; assigning a permission set activates them.
+## Source map
 
-`submit` on quotes demonstrates two independent scopes: the default project scope is the user’s region, and the quote scope is the quote’s own preparer. A sales engineer account can submit quote-2, cannot submit colleague-prepared quote-5 on the same project, and cannot submit self-prepared quote-6 on an out-of-region project. Confidential quote-4 remains excluded by restrictions. `quotes` controls quotation reads and status updates; `projects` controls the parent-project lookup. Sharing a quote does not share its project. The submission endpoint calls `authorizationScope.authorize` once for `example.sales.quotes/submit`. Its `conditions.database` contains executable policies for both tables, and `conditions.checks` contains their decisions. These policies exclude grants from other business operations; the endpoint does not call `db.policyFor` again. Ordinary repository interfaces without an operation selector aggregate all granted underlying capabilities.
+| Source                                                                                             | Reuse the pattern for                                                                   |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [sales-resources.ts](server/sales-resources.ts)                                                    | Typed business actions, independent multi-table scopes, fields, relations and pages     |
+| [sales-record-access.ts](server/sales-record-access.ts), [sales-scopes.ts](server/sales-scopes.ts) | Preparer, ownership, region and public-record strategies                                |
+| [sales-authorization.ts](server/sales-authorization.ts)                                            | Explicit registration from the provider                                                 |
+| [sales-teams.ts](server/sales-teams.ts)                                                            | Active team membership resolution and authorized subject selectors                      |
+| [routes](server/routes/index.ts)                                                                   | One composed decision, policy-bound repositories, business transitions and transactions |
+| [seed declarations](database/seed-data)                                                            | Typed permission sets, scope rules, user/team assignments and idempotent provisioning   |
+| [client routes](client/routes.ts)                                                                  | Page access independent from business operations                                        |
+| [tests](tests)                                                                                     | Production routes and persisted allow/deny outcomes                                     |
 
-Selected operation scope, default access and sharing provide positive record access. Restrictions intersect the result. Sharing never grants an operation or its fields. Business rules affect only their matching grant branch; underlying collection restrictions still constrain every branch. If a record must be excluded across all operations and direct table grants, configure that restriction on the underlying collection.
+Portable declarations perform no DB work. The provider registers them; seeds reuse typed references. Strategies close over the owning services. A composed Submit decision yields policies for quotes and projects; the route consumes both without resolving aggregate collection grants again. It separately validates positive amount, draft state and the actual parent relationship.
 
-Rules use `scopeKey` to select the declared scope and `scope` for its condition. For example, `{ action: 'submit', scopeKey: 'projects', selection: { type: 'records', ids: ['project-2'] } }` shares only the project scope. Record IDs are stored in each rule's actions JSON, separately for each action and named scope.
+## Team directory administration
 
-The seed is `database/seeds/202609220002_sales_permissions.ts`. Migrations create schema only. Submission requires a positive quote amount, draft status and an accessible parent project. Submitted quotes cannot be repriced. Delivery requires a nonempty reference and a ready order. Updates include state predicates to reject stale or repeated transitions.
+Team pickers use the calling permission-set, rule or inspector endpoint's existing management permission. The example adds no separate directory permission. Reading picker options does not grant the ability to change teams, membership or assignments; order relation selectors continue to use their business relation policies.
 
-Tests exercise production HTTP routes, SQLite persistence, permission editing, business endpoints, independent multi-table record sharing, field boundaries and migration rollback. Repository policies carry one scope and field list per operation: when grants expose different fields on different rows, the policy conservatively intersects the scopes required by those fields.
+Search and pagination execute in the database, with case-insensitive literal substring matching and stable title/ID ordering. ID resolution and active-team checks query only the requested IDs. Active-team checks use a supplied transaction so protected assignment checks observe the caller's changes consistently.
 
-Permission sets and the inspector show page access separately from business operations. Default access, sharing, and restrictions only show business data scopes; raw table permissions remain internal. Each resource displays its own actions; inspector action details include permission-set sources and the underlying database checks with default, sharing and restriction reasons.
+## Business HTTP API
 
-Register scope strategies once with `authz.recordAccess.add`. Generic `resources` declare applicability; DB-owned field checks narrow built-in choices; every operation and rule selector derives its choices from that registry. An action scope may narrow the choices with `options`, but does not register a separate strategy. Projects reuse built-in `recordsIOwn`; default quote viewing and order access use related-project ownership, while quote editing and submission use preparer identity. The public-project and regional strategies are available in both permission sets and rules, as is the custom-filter editor.
+All routes below are under `/api/authorization-example`, relative to the application mount, and require authentication. Resource IDs use the `example.sales.*` names from the declarations.
 
-The seed stores permission-set and rule titles as `{ key, ns }` descriptors. User names are ordinary fictional names. Title descriptors are preserved until explicitly renamed; no runtime title registry is required.
+| Method and path                                         | Operation                                                      |
+| ------------------------------------------------------- | -------------------------------------------------------------- |
+| `GET /context`                                          | Current roles and their direct/team sources                    |
+| `GET /sales/projects`, `/sales/quotes`, `/sales/orders` | Policy-filtered lists and operation eligibility                |
+| `POST /sales/projects/:id`                              | Edit allowed project details                                   |
+| `POST /sales/quotes/:id`                                | Edit draft amount/notes                                        |
+| `POST /sales/quotes/:id/submit`                         | Submit an eligible quote after quote and project authorization |
+| `GET /sales/orders/:id/relations`                       | Read allowed order relations                                   |
+| `POST /sales/orders/:id/relations`                      | Manage delivery team, checks and collaborators                 |
+| `POST /sales/orders/:id/deliver`                        | Confirm a ready order with a delivery reference                |
+| `POST /reset`                                           | Unrestricted administrator restores fixed practice records     |
 
-Permission sets grant page access explicitly and independently from business operations. A business view action grants database reads and does not open a page; entering a page does not grant its data operations. The delivery account can enter Orders but not Projects or Quotes. Lists show related record references; project summaries are fetched using the project view policy and never bypass it. Links preserve project/record filters, and the destination loads only its own permitted records. Quote rows show the preparer and submission eligibility, while the submission endpoint remains authoritative.
+For relation request bodies, use Repository relation values:
 
-## Repeatable exercises
+```json
+{ "deliveryTeam": { "connect": { "id": "delivery" } } }
+```
 
-Start with `sales_assistant` consulting selected project materials. As `sales_engineer`, edit and submit quote-2, consult but do not edit colleague-prepared quote-5, and prepare quote-6 without authority to submit it outside the assigned region. As `sales_proposal`, edit and submit the specifically delegated quote-7. Reset business records before retrying, then remove the team from the handover sharing rule in authorization settings: editing and submission must both stop. Restore that assignment afterwards. As `sales_coordinator`, compare work on personal project-8 with team work on quote-7; revoking the engineer permission set from the team removes only the latter. Restore the team role after the exercise. As an advanced exercise, remove each submit scope independently to inspect why both are required. Use `sales_delivery` and `sales_dispatch` to arrange and confirm delivery for order-2, comparing direct and inherited authorization for the same responsibility.
+```json
+{
+  "checks": {
+    "update": [{ "filter": { "id": "check-1" }, "values": { "done": true } }]
+  }
+}
+```
 
-Existing orders reference accepted `quote-history-*` records, separate from draft practice quotes. Submitting a practice quote does not create an order. After a transition, an unrestricted administrator can use **Reset practice records** in the guide. The confirmation explains that this restores the fixed seeded business records for all demo accounts; it preserves accounts, permission sets, rules and team memberships, and leaves additional records alone. Restore any authorization changes manually before repeating the baseline scenarios. The seed and reset share one record builder so they cannot drift.
+```json
+{
+  "collaborators": {
+    "connect": [
+      { "where": { "id": "proposal" }, "through": { "note": "Review" } }
+    ]
+  }
+}
+```
 
-Lists report each record's permitted operations using both read and write scopes and required write fields. The server remains authoritative: invalid values return 400, denied access returns 403, and a stale business state returns 409. The guide groups exercises by their account, expected result and authorization reason. Use demo accounts rather than an unrestricted administrator when verifying boundaries.
+Only active team targets are allowed. Team data, direct ownership/association foreign keys and internal join attributes are not writable through this operation. Nested create/update/upsert/delete and connect/disconnect/set are declared explicitly; a failed nested operation must roll back. Completed orders remain readable but cannot be rearranged.
 
-## Authorization declarations and seed data
+## Exercises and acceptance
 
-The server/sales-resources.ts module contains page and Collection metadata plus portable resource and data-permission declarations. The server/sales-record-access.ts module constructs record-access policies with the application's database dependency; server/sales-scopes.ts contains their query logic. The server/sales-authorization.ts module only registers these definitions. Seeds use the resource declarations' typed references without creating an application or registering resources again.
+1. As the assistant, read the public and selected shared records without acquiring edit rights.
+2. As the engineer, edit/submit quote-2; read but do not edit colleague quote-5; edit but do not submit out-of-region quote-6. Confidential quote-4 stays excluded.
+3. As the proposal user, edit/submit delegated quote-7. Remove team sharing and verify both stop; remove only the parent-project submit scope and verify submission stops.
+4. As the coordinator, compare personal project-8 and team quote-7. Revoke the team's engineer set and verify the personal project responsibility survives.
+5. As the direct and inherited delivery users, arrange eligible order relations and confirm delivery. Verify read-only users, inactive targets and protected fields are denied.
 
-`database/seed-data/` has one data module per table: users, credential accounts, regional memberships, teams, team memberships, permission sets, default-access rules, sharing rules, restriction rules, their assignments, projects, quotes, and orders. Permission and rule data use their owning plugins' fluent builders. The seed entry coordinates insert order in one transaction. Business record builders are also used by the practice reset, so reset data and initial data stay aligned.
-
-This example disables only TypeScript's `isolatedDeclarations` restriction so exported fluent declarations retain their inferred action and scope types across files. Full type checking and declaration generation remain enabled; duplicating those inferred types in handwritten interfaces would create a second permission catalogue to maintain.
-
-## Order relation exercises
-
-Run the application's migrations and seeds to initialize the complete example schema and permissions. The single `202609220001_sales_permissions` migration includes order relations; `202609220002_sales_permissions` seeds the role grants and all three scope rule types from the fluent declarations in `database/seed-data`. The delivery permission set grants `manageRelations` using the same ownership, regional sharing and public-record restrictions as delivery. Both `sales_delivery` and the delivery-team member `sales_dispatch` can arrange delivery for eligible orders; completed orders are read-only. The Orders page supports assigning/removing the delivery team, maintaining delivery checks, and connecting/replacing/disconnecting collaborators with a join-table `note`. Team targets must be active; direct `deliveryTeamId`, check `orderId`, and join-table `internalNote` are not writable through this operation.
-
-The declaration in `server/sales-resources.ts` uses fluent read and write relation builders; it also includes nested `upsert`. `GET /api/authorization-example/sales/orders/:id/relations` expands only allowed related fields. `POST` to the same endpoint accepts Repository relation values, binds the resolved operation Policy, and relies on DB for transactional enforcement. To update a check use `{ "checks": { "update": [{ "filter": { "id": "check-1" }, "values": { "done": true } }] } }`. Connect a team with `{ "deliveryTeam": { "connect": { "id": "delivery" } } }`, or add a collaborator with `{ "collaborators": { "connect": [{ "where": { "id": "proposal" }, "through": { "note": "Review" } }] } }`.
-
-The integration tests cover relation reads, denied roles, inactive targets, forbidden foreign keys and join attributes, nested create/update/upsert/delete, connect/disconnect/set, and migration rollback. Relationship writes are separate from delivery state transitions. Read access to a team does not grant team updates; this example deliberately grants only association changes for teams.
-
-The seed intentionally does not overwrite an existing example installation. These baseline exercises describe a fresh seed. Reset restores business fixtures, including project-8, but does not migrate old permission settings: align the engineer edit scope, quote edit default, handover edit sharing and direct confidentiality restrictions for sales_coordinator with the seed declarations when reusing an older installation.
+Reset business state before repeating transitions and restore changed rule/assignment configuration. Verify using ordinary accounts and direct API requests as well as UI. The tests cover page/action separation, field and row boundaries, multi-scope sharing, restrictions, membership revocation, relation rollback, seed/reset behavior and migration reversal. Use the inspector to explain sources; it does not replace execution tests.

@@ -36,16 +36,18 @@ A Permission Set groups grants for assignment to multiple users. Order ownership
 ```text
 Read the Authorization and Users Skills. Use the existing permission system for tutorial orders; do not create another roles table.
 
-Register tutorialOrders with read, create, and update actions and the tutorial fields. Map its owner attribute to ownerId. Register page resources for the order list, detail, and supervisor approval operation.
+Register tutorialOrders with read, create, and update actions; DB metadata supplies its fields. Use ownerId for ownership. Register list/detail pages separately from business actions such as view, submit, approve and reject, and declare the fields each operation can use.
 
 Create Tutorial salesperson and Tutorial supervisor Permission Sets. Use recordsIOwn for salesperson read/update and allRecords for the supervisor. Allow only the necessary input and output fields. Set ownerId from the signed-in identity on creation.
 
-Call authorize() on the server and apply its record filters in SELECT and UPDATE WHERE clauses, including field restrictions. Hiding menus or filtering all records in the browser is insufficient.
+For a business action, call the request scope’s authorize() once and bind its conditions.database policies with repository.withPolicy(). Use db.policyFor() for ordinary collection CRUD. Hiding menus or filtering all records in the browser is insufficient.
 
 Reserve supervisor access for decision actions. Submission must also check ownership. Show allowed actions in the UI and independently authorize them on the server.
 ```
 
-The database resource ID is `main.tutorialOrders`. Match Permission Set grants, route resource names, and API checks; a translated display title is not a resource ID.
+For the full design workflow, see [Describe permissions to AI](../capabilities/authorization/develop-with-ai).
+
+The database resource ID is `tutorialOrders`. Match Permission Set grants, route resource names, and API checks; a translated display title is not a resource ID.
 
 ## Create test accounts
 

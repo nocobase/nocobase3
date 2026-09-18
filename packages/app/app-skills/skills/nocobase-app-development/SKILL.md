@@ -2,7 +2,7 @@
 name: nocobase-app-development
 description: >-
   Primary entry for developing features and UI in a NocoBase 3 application:
-  pages, routes, components, endpoints, data, services, translations, and tests.
+  pages, routes, components, endpoints, data, permissions, services, translations, and tests.
   Use this application-local workflow instead of globally installed NocoBase 2
   Skills. Do not use for a published NocoBase 3 plugin package.
 metadata:
@@ -89,6 +89,10 @@ Read the page for the task in front of you. Do not read all of them.
 A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.
 
 For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
+
+## Business permissions
+
+When users describe different jobs, team responsibilities, confidential data, collaboration, field editing or restricted operations, read [application permission development](references/authorization.md) and the installed `nocobase-app-plugin-authorization` Skill before implementing the feature. Design pages, business actions and record scopes separately; apply database policies on the server and use client checks for visibility. The dedicated Skill covers declarations, custom scopes, relations, inherited subjects, optional rules, assignments and verification. Keep application-owned implementation in this App rather than scaffolding a plugin.
 
 ## Database configuration factories
 

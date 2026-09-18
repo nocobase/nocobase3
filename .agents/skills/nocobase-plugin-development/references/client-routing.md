@@ -2,6 +2,8 @@
 
 Use Client Routes for navigable browser pages. A plugin contributes all three Client surfaces through its single `routes` field and keeps each page behind a lazy `componentLoader()`.
 
+For persistent administration workflows, first read [system settings](system-settings.md) for capability design, server enforcement, editor state and verification.
+
 ## Choose the surface
 
 | Need                                                 | API                      | Declared path | Final path         |
