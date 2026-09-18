@@ -8,6 +8,40 @@ function object(value: unknown): Record<string, unknown> | undefined {
     ? (value as Record<string, unknown>)
     : undefined;
 }
+/** Display-only Boolean absorption: A AND (A OR B) = A, and its dual. */
+function simplify(value: unknown): unknown {
+  const node = object(value);
+  if (node?.kind === 'filter') return simplify(node.root);
+  if (
+    node?.kind !== 'group' ||
+    !Array.isArray(node.items) ||
+    !['and', 'or'].includes(String(node.logic))
+  )
+    return value;
+  const items = [
+    ...new Map(
+      node.items.map((item: unknown) => {
+        const normalized = simplify(item);
+        return [JSON.stringify(normalized), normalized];
+      }),
+    ).values(),
+  ];
+  const reduced = items.filter((item) => {
+    const group = object(item);
+    return !(
+      group?.kind === 'group' &&
+      group.logic !== node.logic &&
+      Array.isArray(group.items) &&
+      group.items.some((child: unknown) =>
+        items.some(
+          (other) =>
+            other !== item && JSON.stringify(other) === JSON.stringify(child),
+        ),
+      )
+    );
+  });
+  return reduced.length === 1 ? reduced[0] : { ...node, items: reduced };
+}
 function Condition({ value }: { value: unknown }): ReactElement {
   const t = useAuthorizationTranslation();
   const node = object(value);
@@ -74,7 +108,7 @@ export function InspectionConditions({
         {value.scope === true ? (
           <p className='text-sm'>{t('labels.allRecords')}</p>
         ) : (
-          <Condition value={value.scope} />
+          <Condition value={simplify(value.scope)} />
         )}
       </section>
       {lists.length ? (

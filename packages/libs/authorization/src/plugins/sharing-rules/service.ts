@@ -89,7 +89,9 @@ export class SharingRuleService<TTransaction = unknown>
     return rules
       .flatMap((rule) => {
         const configured = rule.actions.find(
-          (action) => action.action === input.action,
+          (action) =>
+            action.action === input.action &&
+            action.scopeKey === input.scopeKey,
         );
         return rule.resource.type === input.resource.type &&
           (rule.resource.id === '*' ||
@@ -100,7 +102,11 @@ export class SharingRuleService<TTransaction = unknown>
           : [];
       })
       .map(({ rule, configured }) => ({
-        source: { plugin: this.id, id: rule.key },
+        source: {
+          plugin: this.id,
+          id: rule.key,
+          ...(rule.title === undefined ? {} : { title: rule.title }),
+        },
         effect: 'expand' as const,
         value:
           configured.selection.type === 'records'

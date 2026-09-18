@@ -152,3 +152,8 @@ export const userManagementServiceToken: ServiceToken<UserManagementService> =
   createServiceToken<UserManagementService>(
     '@nocobase/app-plugin-users/service',
   );
+
+export interface UsersConfig {
+  /** Disable when an application provides its own assignment scope, such as Hub. */
+  readonly permissionSets?: boolean;
+}

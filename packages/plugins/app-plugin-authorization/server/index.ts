@@ -16,6 +16,8 @@ export type {
 } from './database/index.js';
 export {
   condition,
+  anyScope,
+  scopeAst,
   defineRecordAccessPolicy,
   type RecordAccessPolicy,
 } from './database/index.js';
@@ -52,3 +54,9 @@ export type {
   SubjectOption,
   SubjectSelectionContext,
 } from './subjects.js';
+
+export { DatabaseResourceAuthorizer } from './database/authorizer.js';
+export {
+  DatabaseCollectionRegistry,
+  collectionResolver,
+} from './database/index.js';

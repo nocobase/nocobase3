@@ -67,13 +67,13 @@ const messages = {
     labels: {
       all: 'Full access',
       scoped: 'Limited access',
-      none: 'Not granted',
+      none: 'No access',
       bypass: 'Unrestricted',
     },
     descriptions: {
       all: 'Full access',
       scoped: 'Limited access',
-      none: 'Not granted',
+      none: 'No access',
       bypass: 'Unrestricted: grants are not consulted',
     },
   },
@@ -128,6 +128,7 @@ const messages = {
     none: 'No subjects selected',
   },
   editors: {
+    resourceGroup: 'Resource group',
     actions: 'Actions',
     actionsPlaceholder: 'read, create, update',
     addCondition: 'Add condition',
@@ -158,6 +159,25 @@ const messages = {
     who: 'Who',
   },
   permissionWorkspace: {
+    categories: {
+      business: 'Business permissions',
+      administration: 'Administration',
+    },
+    specifyScope: 'Specify scope: {{scope}}',
+    inheritScope:
+      'If unspecified, configured default scopes, sharing and restriction rules still apply.',
+    configurePermission: 'Configure permission',
+    noOperationGrant:
+      'This permission set does not grant this operation. Choose Configure permission to set its data scope.',
+    features: 'Feature permissions',
+    dataScope: 'Data scope',
+    dataScopeHelp:
+      'Filters the permissions from this permission set, including shared records. No restriction adds no filter and does not grant records.',
+    appliesTo: 'Applies to',
+    moduleGranted: 'Full access',
+    modulePartial: 'Limited access',
+    moduleNotGranted: 'No access',
+
     selectAll: 'Select all',
     selectFiltered: 'Select matching resources',
     selectGroup: 'Select all in {{group}}',
@@ -172,7 +192,7 @@ const messages = {
     grantAccess: 'Click to grant access',
     revokeAccess: 'Click to remove this grant',
     clickScope: 'Click a scope icon to change access.',
-    mode: { none: 'Not granted', all: 'Full access', custom: 'Custom scope' },
+    mode: { none: 'No access', all: 'Full access', custom: 'Custom scope' },
     createFields: 'Fields users can fill in',
     updateFields: 'Fields users can modify',
     readFields: 'Fields users can view',
@@ -231,6 +251,28 @@ const messages = {
     conditionRequired: 'Add at least one condition.',
   },
   inspector: {
+    summary: {
+      all: 'This operation is allowed.',
+      scoped:
+        'This operation is allowed only within the applicable record and field limits.',
+      none: 'This operation is not allowed. Granting records alone does not grant the operation.',
+      error:
+        'The check could not be completed. This is not a permission denial.',
+      context: 'Select a specific user to evaluate this scope.',
+    },
+    dataAccess: 'Which data is accessible',
+    subjectHint: '“Me” refers to the person being inspected.',
+    scopeAndFields: 'View effective conditions and fields',
+    technicalHint:
+      'Raw authorization result for troubleshooting, including underlying page and table checks.',
+    selectedRecords: '{{count}} selected records',
+    databaseActions: {
+      read: 'Read',
+      create: 'Create',
+      update: 'Update',
+      delete: 'Delete',
+    },
+
     subjectType: 'Subject type',
     subject: 'Subject',
     selectSubject: 'Select a subject',
@@ -238,24 +280,18 @@ const messages = {
     noRegisteredResources: 'No resources are registered for this type yet.',
     status: {
       context: 'User context required',
-      all: 'Full access',
-      scoped: 'Limited access',
-      none: 'No access',
+      all: 'Allowed',
+      scoped: 'Allowed with limits',
+      none: 'Not allowed',
       error: 'Inspection failed',
-    },
-    sources: {
-      'permission-sets': 'Permission set',
-      'default-access': 'Default access',
-      'sharing-rules': 'Sharing rule',
-      'restriction-rules': 'Restriction rule',
     },
     reasonCodes: {
       USER_CONTEXT_REQUIRED:
         'This scope depends on a specific user and cannot be resolved from this subject alone.',
-      GRANT_MATCHED: 'Permission set grants this action',
+      GRANT_MATCHED: 'This operation is granted',
       SCOPE_EXPANDED: 'Expands accessible records',
       SCOPE_RESTRICTED: 'Restricts accessible records',
-      NO_OBJECT_PERMISSION: 'No permission set grants this action',
+      NO_OBJECT_PERMISSION: 'This operation has not been granted',
       NO_RECORD_ACCESS: 'No accessible record scope',
       UNRESTRICTED_ACCESS: 'Unrestricted access',
     },
@@ -302,6 +338,7 @@ const messages = {
       'The decision holds only for what these conditions select, shown as the core returned them.',
   },
   permissionSets: {
+    builtIn: { root: 'System administrator', member: 'Member' },
     page: {
       title: 'Permission Sets',
       description:

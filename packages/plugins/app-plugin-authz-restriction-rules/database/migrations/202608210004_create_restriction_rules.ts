@@ -30,23 +30,7 @@ const migration: MigrationDefinition = defineMigration({
         });
       },
     );
-    await builder.createCollection(
-      'authorizationRestrictionRuleRecords',
-      (collection) => {
-        collection.string('id', { length: 64 }).notNull();
-        collection.string('restrictionRuleId', { length: 64 }).notNull();
-        collection.string('action', { length: 255 }).notNull();
-        collection.string('recordId', { length: 255 }).notNull();
-        collection.datetime('createdAt').notNull();
-        collection.primary('id', { name: 'pk_authz_restriction_records' });
-        collection.unique(['restrictionRuleId', 'action', 'recordId'], {
-          name: 'uq_authz_restrict_records_rule_action_record',
-        });
-        collection.index('restrictionRuleId', {
-          name: 'idx_authz_restrict_records_rule',
-        });
-      },
-    );
+
     await builder.createCollection(
       'authorizationRestrictionRuleAssignments',
       (collection) => {
@@ -67,7 +51,6 @@ const migration: MigrationDefinition = defineMigration({
   },
   async down({ builder }) {
     await builder.dropCollection('authorizationRestrictionRuleAssignments');
-    await builder.dropCollection('authorizationRestrictionRuleRecords');
     await builder.dropCollection('authorizationRestrictionRules');
   },
 });

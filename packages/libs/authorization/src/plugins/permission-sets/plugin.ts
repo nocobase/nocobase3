@@ -1,3 +1,4 @@
+import type { AuthorizationTitle } from '../../core/titles.js';
 import type {
   AuthorizationSubjectRegistry,
   AuthorizationGrant,
@@ -22,7 +23,7 @@ import { requireStore } from '../internal/store.js';
 
 export interface CreatePermissionSetInput {
   key: string;
-  title?: string;
+  title?: AuthorizationTitle;
   grants: readonly PermissionGrant[];
 }
 
@@ -415,7 +416,11 @@ class PermissionSetService<TTransaction = unknown>
     return sets.flatMap((set) =>
       set.grants.flatMap((grant) =>
         grant.actions.map((action): AuthorizationGrant => ({
-          source: { plugin: 'permission-sets', id: set.key },
+          source: {
+            plugin: 'permission-sets',
+            id: set.key,
+            ...(set.title === undefined ? {} : { title: set.title }),
+          },
           resource: grant.resource,
           action: action.action,
           ...(action.policy === undefined ? {} : { policy: action.policy }),

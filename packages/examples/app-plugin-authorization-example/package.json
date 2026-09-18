@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-plugin-authorization-example",
   "displayName": "Authorization Example App Plugin",
-  "description": "A per-user task list demonstrating authorized Repository API routes and an owner-stamping custom route.",
+  "description": "Sales permissions example with business resources, role data scopes, default access, sharing and restrictions.",
   "version": "0.0.1",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -32,7 +32,6 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
-    "database",
     "skills"
   ],
   "publishConfig": {
@@ -69,7 +68,9 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "@nocobase/authorization": "workspace:^",
+    "better-auth": "catalog:"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
@@ -83,7 +84,11 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "react": "^19.0.0",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@nocobase/app-plugin-authz-default-access": "workspace:^",
+    "@nocobase/app-plugin-authz-sharing-rules": "workspace:^",
+    "@nocobase/app-plugin-authz-restriction-rules": "workspace:^",
+    "react-router": "catalog:"
   },
   "devDependencies": {
     "@nocobase/api-client": "workspace:*",

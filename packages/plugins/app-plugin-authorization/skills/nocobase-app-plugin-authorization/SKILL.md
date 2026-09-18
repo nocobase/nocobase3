@@ -14,11 +14,11 @@ For a complete end-to-end implementation, read [references/orders-module.md](ref
 
 ## Choose the right layer
 
-- Use `authz.resources.add()` when a module owns a new resource type and needs to define how that resource is authorized.
+- Use `authz.resourceTypes.add()` when a module owns a new resource type and needs to define how that resource is authorized.
 - Use `authz.db.repositories()` when a module exposes collections through `defineRepositoryApiRoutes()`. It authorizes endpoints for explicitly registered collections.
 - Use `authz.guard()` for an HTTP route or action that needs one authorization check before the handler runs.
 - Use `authz.db.policyFor()` when the handler reads or writes a registered collection: it returns a Repository Policy to bind with `repository.withPolicy()`.
-- Use `context.get('authz').authorize()` when a handler needs one action's raw decision rather than a Policy.
+- For composed business operations, call `context.get('authz').authorize()` once. Reject denied results, then pass each table's `decision.conditions.database[collection]` to `repository.withPolicy`. The result already includes scoped database policies and underlying `conditions.checks`; do not call `require` or `db.policyFor` again. `can` on composed resources is feature visibility only; `require` rejects conditional decisions.
 - Use Permission Sets and the authorization settings API/UI for business configuration. Do not hard-code end-user assignments in a feature route.
 
 Do not add a second permission system inside a module. The module should keep its normal service/repository API and add an authorization check immediately before the operation.
@@ -169,7 +169,7 @@ Prefer the authorization settings UI for administrator-managed assignments. Use 
 For a module operation that is not a database collection, register a resource handler. The handler receives the request context and the grant service; it should return a permit, deny, or conditional decision.
 
 ```ts
-authz.resources.add({
+authz.resourceTypes.add({
   resourceType: 'files.download',
   async authorize(request, context) {
     const grants = await context.grants.resolve({
@@ -198,13 +198,13 @@ When a permission does not behave as expected, inspect in this order:
 5. Check Default Access, Sharing Rules, and Restriction Rules for that action.
 6. Call `authz.explain()` with the same resource, action, and params used by the module. The returned reasons identify the authorization decision and its contributing constraints.
 
-`authz.explain()` remains the way to settle one concrete request. The Permission Inspector under Settings → Authorization asks the same question from the browser: pick a person, a resource and an action, and it reports the effect, each reason with the plugin that gave it, and the conditions when the decision is conditional, exactly as the core returned them. It is gated by `settings.authorization.permission-sets/read`. Otherwise the settings pages edit one layer each and report nothing across layers, because each authorization plugin owns its own rules.
+`authz.explain()` remains the way to settle one concrete request. The Permission Inspector under Settings → Authorization asks the same question from the browser: pick a person, a resource and an action, and it reports the effect, each reason with the plugin that gave it, and the conditions when the decision is conditional, exactly as the core returned them. It is gated by `settings.authorization.inspector/inspect`. Otherwise the settings pages edit one layer each and report nothing across layers, because each authorization plugin owns its own rules.
 
 Do not treat a successful permission snapshot as proof that a database query is safe: a snapshot contains grants, while database authorization may still narrow the rows and fields a Policy allows.
 
 ## Resource registration
 
-Use `authz.getResource(type).groups.add({ id, title, children })` for display groups and `authz.getResource(type).items.add(...)` for grantable items. Groups support recursive children and have IDs unique within the resource type. Generic items use `{ id, title, group?, actions }`; database items retain `{ name, title?, description?, group? }`. Omit `group` for a root item. Groups do not grant permissions. The settings and page resources are built in; do not add `pages()` to application configuration. The settings resource and owns module-qualified IDs such as `authorization.permission-sets` and `ai.models`. Register each module's groups and items from its owning provider. Page resources follow the same grouping contract; the permission picker derives navigation-only groups from client routes and merges their grantable pages with server declarations. Do not use the removed `authz.db.collections` API or the old `authorization.settings` resource type.
+Register user-facing groups with `authz.resourceGroups.add({ name, title, category })` and resources with `authz.resources.add({ name, title, group, actions })`. Groups are flat; category is `business` (default) or `administration`, for presentation only. Management options expose only these composed resources, even when no business group exists. Page, collection and custom handlers belong to `authz.resourceTypes` and are never exposed directly. Settings resources use this same catalog and reference underlying permissions through `authz.settings.grant(id, actions)`, which returns declarations without granting access. Backend routes still check `settings` permissions. Do not register settings display items with `getResource('settings').groups/items`. Only resources with data scopes appear in data-rule editors.
 
 ## Register selectable subject types
 
@@ -223,3 +223,25 @@ Their settings routes use entry-level `parent: 'authorization'` to join this plu
 The authorization React provider runs inside the authentication provider and clears the permission snapshot before rendering a new session. Keep both providers registered. The client discards obsolete permission responses after invalidation; custom menus and route guards should subscribe with `useAuthorizationRevision()` and rerun checks when its value changes. Cached Refine checks must include the revision in their query parameters and disable previous-result placeholders so protected content stays hidden while new permissions load. Frontend checks do not replace server authorization.
 
 Explicit route domain checks use `access: { resource: 'type:id', action: 'action' }` (for example `hub.app:*` and `upload-release`). Do not use a bare domain type as the resource: a plain name is interpreted as a page id. These snapshot checks do not enforce record ownership; keep the server's authorization boundary.
+
+## Predefined permission-set titles
+
+Titles accept plain strings or `{ key, ns }` translation descriptors, directly on permission sets and rules. Built-in and example seeds persist descriptors; ordinary user-entered names remain strings. Render titles with the existing i18n translator. Preserve descriptors when saving unrelated edits; a user rename replaces the title with a string. User names are ordinary data and must not be translated as role names.
+
+Permission-set CRUD uses `read`, `create`, `update`, and `delete`; assigning and revoking subjects both require `assign` on `settings/authorization.permission-sets`. The inspector owns `settings/authorization.inspector` with action `inspect`, including its options and subject-picker endpoints. Subject providers still enforce their own directory query permissions. Default access uses `read` and `configure`; configure covers saving and clearing defaults regardless of whether a rule already exists.
+
+## Business action scope choices
+
+A custom resource item can declare `actionScopes[action]` with a `policyType` and named `fields`, each containing `key`, `title`, `defaultValue` and finite `options: [{ value, title }]`. The existing Permission Sets workspace renders these choices in its configuration drawer and preserves custom action policies when saving. Titles can be localization descriptors. This is presentation metadata; the resource's `authorize` handler must validate policy values, apply matching defaults and compile the actual grants.
+
+For a business operation example, read the authorization example plugin's `server/sales-authorization.ts` and business routes. Permission sets configure named operation scopes; business endpoints obtain the complete repository policy before executing queries and validate workflow transitions separately.
+
+## Composed business action scopes
+
+Register flat business groups with `authz.resourceGroups.add` and resources with `authz.resources.add`. An action may declare `scopes: { key: { title, resource, options?, defaultValue? } }`; every scope binds one underlying database collection. Reference the key in `authz.db.grant(collection, { read: { scope: key, fields: ... } })`. Permission-set action policies use `{ type: 'resource', [key]: recordAccessPolicy }`. An empty selection uses default access and sharing. No global `authz.dataScopes` registry is needed.
+
+Default access, sharing and restriction rules may target `{ type: 'resource', id: businessResourceName }`, with each action entry specifying `action` and `scopeKey`. Records and conditions belong to that scope's collection. Sharing never grants the operation itself and never follows relations implicitly. Use `authz.db.policyFor(collection, requestScope, { resource: businessResourceName, action })` when an endpoint must enforce only that operation's grants. Omit the third argument for ordinary aggregate underlying authorization. Collection-level restriction rules still apply across every grant branch.
+
+Record-access policies have one global registry, `authz.db.recordAccess`. Policies may declare `collections` and `requiredFields` to limit applicability. Omit action scope `options` to use all applicable policies; specify it only to narrow that list. Permission-set scopes and all rule selectors share these choices, including custom filters. Business resource groups replace page/table categories in management when composed resources are present. Inspector rows show each resource’s own actions; action details explain the business grant and underlying database checks.
+
+Register inherited authorization subjects, such as teams, with `authz.subjects.define(type, { resolveFor, filterActive, administration })`. `resolveFor(principal)` returns current subject IDs; authenticated requests and user inspection resolve these memberships server-side. `filterActive` excludes disabled or deleted subjects. A manually constructed `authz.for(identity)` uses the supplied identity; include resolved subjects explicitly outside HTTP middleware.

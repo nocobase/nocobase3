@@ -7,3 +7,7 @@ export {
 } from '../stores/connection.js';
 export { createAuthorizationAdministration } from '../administration.js';
 export { describeCollection } from '../database/index.js';
+
+export * from './rule-validation.js';
+
+export { settingsApi } from './settings-resource.js';

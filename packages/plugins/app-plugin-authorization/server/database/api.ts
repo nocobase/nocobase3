@@ -1,4 +1,6 @@
+import { DatabaseCollectionRegistry } from './collection-registry.js';
 import type {
+  ResourceAuthorizationCheck,
   AuthorizationDecision,
   AuthorizationScope,
 } from '@nocobase/authorization/core';
@@ -13,6 +15,7 @@ import {
 import { UNRESTRICTED_ACCESS } from './authorizer.js';
 import type {
   DatabaseAccessScope,
+  DatabaseAuthorizationParams,
   DatabaseAuthorizationConditions,
   DatabaseGrantDefinition,
   DatabaseRecordAccess,
@@ -20,12 +23,14 @@ import type {
 import { RecordAccessPolicyRegistry } from './record-access-registry.js';
 
 export interface DatabaseApi {
+  readonly collections: DatabaseCollectionRegistry;
   readonly recordAccess: RecordAccessPolicyRegistry;
   grant(resource: string, definition: DatabaseGrantDefinition): PermissionGrant;
   scope(recordAccess: DatabaseRecordAccess): DatabaseAccessScope;
   policyFor(
     collection: string,
     scope: AuthorizationScope,
+    operation?: { resource: string; action: string },
   ): Promise<RepositoryPolicy>;
   repositories(
     exposures: readonly RepositoryAuthorizationExposure[],
@@ -37,9 +42,10 @@ export interface DatabaseAuthorizationApi {
 }
 
 export class DatabaseAuthorizationService implements DatabaseApi {
+  readonly collections: DatabaseCollectionRegistry =
+    new DatabaseCollectionRegistry();
   readonly recordAccess: RecordAccessPolicyRegistry;
   private host: Authorization | undefined;
-
   constructor(recordAccess: RecordAccessPolicyRegistry) {
     this.recordAccess = recordAccess;
   }
@@ -97,12 +103,20 @@ export class DatabaseAuthorizationService implements DatabaseApi {
   async policyFor(
     collection: string,
     scope: AuthorizationScope,
+    operation?: { resource: string; action: string },
   ): Promise<RepositoryPolicy> {
     const resource = { type: 'database.collection', id: collection };
     const decide = async (
       action: string,
     ): Promise<true | false | DatabasePolicyNode> =>
-      foldDecision(action, await scope.authorize({ resource, action }));
+      foldDecision(
+        action,
+        await scope.authorize<DatabaseAuthorizationParams>({
+          resource,
+          action,
+          params: operation ? { operation } : {},
+        }),
+      );
     const [read, create, update, remove] = await Promise.all([
       decide('read'),
       decide('create'),
@@ -123,6 +137,53 @@ export class DatabaseAuthorizationService implements DatabaseApi {
 interface DatabasePolicyNode {
   readonly scope: true | DatabaseAuthorizationConditions['scope'];
   readonly fields: readonly string[];
+}
+
+/** Translate resolved checks only; this never runs authorization again. */
+export function composeDatabasePolicies(
+  checks: readonly ResourceAuthorizationCheck[],
+): Readonly<Record<string, RepositoryPolicy>> {
+  type MutablePolicy = {
+    -readonly [K in keyof RepositoryPolicy]: RepositoryPolicy[K];
+  };
+  const policies: Record<string, MutablePolicy> = Object.create(null) as Record<
+    string,
+    MutablePolicy
+  >;
+  for (const check of checks) {
+    if (check.resource.type !== 'database.collection') continue;
+    const policy = (policies[check.resource.id] ??= {
+      read: false,
+      create: false,
+      update: false,
+      delete: false,
+    });
+    const node = foldDecision(check.action, check.decision);
+    switch (check.action) {
+      case 'read':
+        policy.read = node;
+        break;
+      case 'create':
+        policy.create =
+          typeof node === 'boolean' ? node : { ...node, scope: true };
+        break;
+      case 'update':
+        policy.update = node;
+        break;
+      case 'delete':
+        policy.delete =
+          typeof node === 'boolean' ? node : { scope: node.scope };
+        break;
+    }
+  }
+  return policies;
+}
+
+declare module '@nocobase/authorization/core' {
+  interface ResourceAuthorizationConditions {
+    /** Policies for the tables used by this operation; other operations remain denied. */
+    database?: Readonly<Record<string, RepositoryPolicy>>;
+  }
 }
 
 function foldDecision(

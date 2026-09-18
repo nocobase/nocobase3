@@ -1,3 +1,4 @@
+import users from './users.js';
 import {
   defaultAppConfigs,
   type AppConfigFactory,
@@ -18,6 +19,7 @@ import snowflake from './snowflake.js';
 import hub from './hub.js';
 
 const defaultConfigs: AppConfigFactory<{
+  users: ReturnType<typeof users>;
   auth: ReturnType<typeof auth>;
   authorization: ReturnType<typeof authorization>;
   session: ReturnType<typeof session>;
@@ -33,6 +35,7 @@ const defaultConfigs: AppConfigFactory<{
   snowflake: ReturnType<typeof snowflake>;
   hub: ReturnType<typeof hub>;
 }> = defaultAppConfigs({
+  users,
   auth,
   authorization,
   session,

@@ -114,12 +114,19 @@ export class DatabaseResourceAuthorizer {
         `One or more requested fields are not registered for ${resourceId}`,
       );
     }
-    const grants = await grantsService.resolve({
+    const resolvedGrants = await grantsService.resolve({
       principal: request.principal,
       subjects: request.subjects,
       resource: { type: 'database.collection', id: resourceId },
       action: request.action,
     });
+    const grants = params?.operation
+      ? resolvedGrants.filter(
+          (grant) =>
+            grant.origin?.resource.id === params.operation?.resource &&
+            grant.origin?.action === params.operation?.action,
+        )
+      : resolvedGrants;
     const configs = grants.flatMap(toDatabaseGrant);
     if (configs.length === 0) {
       return this.deny(
@@ -159,10 +166,14 @@ export class DatabaseResourceAuthorizer {
               request.action,
               configs,
               constraints,
+              params?.fields,
             );
       const explanation = [
         ...reasons,
-        ...constraints.map((constraint) => ({
+        ...[
+          ...constraints,
+          ...configs.flatMap((config) => config.branchConstraints ?? []),
+        ].map((constraint) => ({
           code:
             constraint.effect === 'expand'
               ? 'SCOPE_EXPANDED'
@@ -267,29 +278,89 @@ export class DatabaseResourceAuthorizer {
     action: string,
     configs: readonly DatabaseActionGrant[],
     constraints: readonly AccessConstraint[],
+    requestedFields?: import('./model.js').DatabaseAuthorizationFieldRequest,
   ): Promise<DatabaseScope> {
-    const scopes = configs.flatMap((config) => config.recordAccess ?? []);
-    const positive = await this.compileScopes(
-      principal,
-      resource,
-      action,
-      scopes,
-    );
-    positive.push(
-      ...(await this.compileConstraints(
-        constraints.filter((constraint) => constraint.effect === 'expand'),
-        principal,
-        resource,
-        action,
-      )),
+    // Each grant keeps its own fields and role filters through scope evaluation.
+    const branches = await Promise.all(
+      configs.map(async (config) => {
+        const positive = await this.compileScopes(
+          principal,
+          resource,
+          action,
+          config.recordAccess ?? [],
+        );
+        positive.push(
+          ...(await this.compileConstraints(
+            [...constraints, ...(config.branchConstraints ?? [])].filter(
+              (item) => item.effect === 'expand',
+            ),
+            principal,
+            resource,
+            action,
+          )),
+        );
+        const branchRestrictions = await this.compileConstraints(
+          (config.branchConstraints ?? []).filter(
+            (item) => item.effect === 'restrict',
+          ),
+          principal,
+          resource,
+          action,
+        );
+        return {
+          config,
+          scope: allScopes([anyScope(positive), ...branchRestrictions]),
+        };
+      }),
     );
     const restrictions = await this.compileConstraints(
-      constraints.filter((constraint) => constraint.effect === 'restrict'),
+      constraints.filter((item) => item.effect === 'restrict'),
       principal,
       resource,
       action,
     );
-    return allScopes([anyScope(positive), ...restrictions]);
+    const fields = resolveDatabaseFields(configs);
+    const requested = {
+      ...requestedFields,
+      ...(action === 'read'
+        ? { output: resolveActionFields(action, fields, resource) }
+        : { input: resolveActionFields(action, fields, resource) }),
+    };
+    const required: DatabaseScope[] = [
+      anyScope(branches.map((branch) => branch.scope)),
+    ];
+    for (const direction of [
+      'input',
+      'output',
+      'filter',
+      'sort',
+      'group',
+    ] as const) {
+      for (const field of requested[direction] ?? []) {
+        if (
+          branches.every((branch) =>
+            databaseFieldsAllowed(
+              { [direction]: [field] },
+              resolveDatabaseFields([branch.config]),
+            ),
+          )
+        )
+          continue;
+        required.push(
+          anyScope(
+            branches
+              .filter((branch) =>
+                databaseFieldsAllowed(
+                  { [direction]: [field] },
+                  resolveDatabaseFields([branch.config]),
+                ),
+              )
+              .map((branch) => branch.scope),
+          ),
+        );
+      }
+    }
+    return allScopes([...required, ...restrictions]);
   }
 
   private async compileConstraints(
@@ -342,6 +413,10 @@ export class DatabaseResourceAuthorizer {
       if (!policy) {
         throw new Error(`Unknown Record Access policy: ${config.key}`);
       }
+      if (policy.collections && !policy.collections.includes(resource.name))
+        throw new TypeError(
+          'Record access policy is not applicable to this collection',
+        );
       const value: unknown = await policy.resolve({
         principal,
         collection: resource,

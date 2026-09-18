@@ -2,12 +2,6 @@
 import path from 'node:path';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
-import {
-  createAppAuthorization,
-  permissionSetsToken,
-  type AppAuthorizationService,
-  authorizationToken,
-} from '@nocobase/app-plugin-authorization';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import type { Application } from '@nocobase/app-server/application';
 import {
@@ -16,7 +10,6 @@ import {
 } from '@nocobase/service-provider';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { beforeEach, afterEach, expect, it } from 'vitest';
-import ArticlesProvider from '../../server/providers/articles.ts';
 import { articlesRoutes } from '../../server/routes/articles.ts';
 
 const database = () =>
@@ -27,7 +20,6 @@ const database = () =>
   });
 let db: ReturnType<typeof database>;
 let router: Hono;
-let authz: AppAuthorizationService;
 let app: Application;
 beforeEach(async () => {
   db = database();
@@ -48,26 +40,11 @@ beforeEach(async () => {
             '../../database/main/migrations',
           ),
         },
-        {
-          packageName: 'authorization',
-          directory: path.resolve(
-            import.meta.dirname,
-            '../../../../plugins/app-plugin-authorization/database/migrations',
-          ),
-        },
       ],
     })
     .latest();
-  // Articles are a database collection granted through Permission Sets, and
-  // `rootSet` is what makes holding `root` bypass those grants.
-  authz = createAppAuthorization({
-    connection: db.connection(),
-    config: { permissionSets: { rootSet: 'root' } },
-  });
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, db);
-  container.instance(authorizationToken, authz);
-  container.instance(permissionSetsToken, authz.permissionSets);
   const required = (): MiddlewareHandler => async (c, next) => {
     const user = c.req.header('x-test-user');
     if (!user) return c.json({ error: 'unauthenticated' }, 401);
@@ -80,7 +57,6 @@ beforeEach(async () => {
     ? T
     : never);
   app = { container } as Application;
-  await new ArticlesProvider(app).boot();
   router = await articlesRoutes.createRouter(app);
   router.get('/unrelated', (c) => c.text('public'));
 });
@@ -107,42 +83,17 @@ const request = (
     },
     ...(input ? { body: JSON.stringify(input) } : {}),
   });
-// `id` is generated, so a write grant names the columns the route stores.
-const writableFields = [
-  'title',
-  'summary',
-  'content',
-  'status',
-  'publishedAt',
-  'createdAt',
-  'updatedAt',
-];
-async function grant(filter = 'allRecords') {
-  await authz.permissionSets.create({
-    key: 'editor',
-    grants: [
-      authz.db.grant('articles', {
-        read: { fields: { output: '*' }, recordAccess: [filter] },
-        create: { fields: { input: writableFields } },
-        update: { fields: { input: writableFields }, recordAccess: [filter] },
-      }),
-    ],
-  });
-  await authz.permissionSets.assign({
-    permissionSet: 'editor',
-    subject: { type: 'user', id: 'alice' },
-  });
-}
-it('rejects anonymous and unauthorized access without leaking middleware', async () => {
+it('requires sign-in without permission sets or leaking middleware', async () => {
   expect((await request('/articles', 'GET', undefined, null)).status).toBe(401);
-  expect((await request('/articles')).status).toBe(403);
-  expect((await request('/articles', 'POST', body)).status).toBe(403);
+  expect((await request('/articles')).status).toBe(200);
+  expect((await request('/articles', 'POST', body)).status).toBe(201);
+  expect((await request('/articles', 'POST', body, null)).status).toBe(401);
+  expect((await request('/articles/1', 'PUT', body, null)).status).toBe(401);
   expect((await request('/unrelated', 'GET', undefined, null)).status).toBe(
     200,
   );
 });
 it('creates, filters, edits and publishes articles with server timestamps', async () => {
-  await grant();
   expect((await request('/articles', 'POST', body)).status).toBe(201);
   expect(
     (await request('/articles', 'POST', { ...body, title: '' })).status,
@@ -175,71 +126,6 @@ it('creates, filters, edits and publishes articles with server timestamps', asyn
     total: 0,
   });
 });
-it('applies authorized record ranges to counts, lists and updates', async () => {
-  await authz.permissionSets.create({
-    key: 'restricted',
-    grants: [
-      authz.db.grant('articles', {
-        read: {
-          fields: { output: '*' },
-          recordAccess: [
-            {
-              key: 'customFilter',
-              params: {
-                filter: {
-                  kind: 'condition',
-                  path: ['status'],
-                  operator: '$eq',
-                  value: 'published',
-                },
-              },
-            },
-          ],
-        },
-        update: {
-          fields: { input: writableFields },
-          recordAccess: [
-            {
-              key: 'customFilter',
-              params: {
-                filter: {
-                  kind: 'condition',
-                  path: ['status'],
-                  operator: '$eq',
-                  value: 'published',
-                },
-              },
-            },
-          ],
-        },
-      }),
-    ],
-  });
-  await authz.permissionSets.assign({
-    permissionSet: 'restricted',
-    subject: { type: 'user', id: 'alice' },
-  });
-  const seeder = db.createSeeder({
-    directory: path.resolve(import.meta.dirname, '../../database/main/seeds'),
-    packageName: 'articles',
-  });
-  await seeder.run();
-  expect(await (await request('/articles')).json()).toMatchObject({
-    total: 3,
-    data: expect.arrayContaining([
-      expect.objectContaining({ updatedAt: '2026-09-08T00:00:00.000Z' }),
-    ]),
-  });
-  const draft = await db
-    .query()
-    .selectFrom('articles')
-    .select('id')
-    .where('status', '=', 'draft')
-    .executeTakeFirstOrThrow();
-  expect((await request(`/articles/${draft.id}`, 'PUT', body)).status).toBe(
-    404,
-  );
-});
 it('seeds six articles once and preserves user edits', async () => {
   const seeder = db.createSeeder({
     directory: path.resolve(import.meta.dirname, '../../database/main/seeds'),
@@ -259,34 +145,4 @@ it('seeds six articles once and preserves user edits', async () => {
   expect(rows.find((row) => row.title === '欢迎来到文章中心')?.content).toBe(
     'User edit',
   );
-});
-it('initializes article permissions for administrators only and preserves later revocations', async () => {
-  await authz.permissionSets.create({
-    key: 'root',
-    grants: [],
-  });
-  await authz.permissionSets.assign({
-    permissionSet: 'root',
-    subject: { type: 'user', id: 'admin' },
-  });
-  // Collection has already been registered during the first boot.
-  await new ArticlesProvider(app).boot();
-  expect((await request('/articles', 'GET', undefined, 'admin')).status).toBe(
-    200,
-  );
-  expect((await request('/articles')).status).toBe(403);
-  const [assignment] =
-    await authz.permissionSets.listAssignments('articles-manager');
-  await authz.permissionSets.revoke(assignment.id);
-  await new ArticlesProvider(app).boot();
-  // Booting again neither recreates the set nor restores the assignment.
-  await expect(
-    authz.permissionSets.listAssignments('articles-manager'),
-  ).resolves.toEqual([]);
-  // The administrator still reaches the route, because holding the superuser
-  // set bypasses authorization rather than relying on this grant.
-  expect((await request('/articles', 'GET', undefined, 'admin')).status).toBe(
-    200,
-  );
-  expect((await request('/articles')).status).toBe(403);
 });

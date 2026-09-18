@@ -29,6 +29,19 @@ export class RecordAccessPolicyRegistry {
     return this.policies.get(key);
   }
 
+  listFor(collection: {
+    name: string;
+    fields: readonly string[];
+  }): readonly RecordAccessPolicy[] {
+    return this.list().filter(
+      (policy) =>
+        (!policy.collections || policy.collections.includes(collection.name)) &&
+        (!policy.requiredFields ||
+          policy.requiredFields.every((field) =>
+            collection.fields.includes(field),
+          )),
+    );
+  }
   list(): readonly RecordAccessPolicy[] {
     return [...this.policies.values()];
   }

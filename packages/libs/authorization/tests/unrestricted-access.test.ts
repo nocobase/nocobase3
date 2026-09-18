@@ -51,7 +51,7 @@ function recordingResource(): {
       id: 'recording',
       requiresGrants: true,
       setup(authz): void {
-        authz.resources.add({
+        authz.resourceTypes.add({
           resourceType: 'database.collection',
           async authorize(request, context) {
             await context.constraints.resolve(request);
@@ -90,7 +90,7 @@ describe('unrestricted access', () => {
     const authorization = createAuthorization({
       plugins: [permissionSets({ store: superuserStore() })],
     });
-    authorization.resources.add({
+    authorization.resourceTypes.add({
       resourceType: 'test-resource',
       authorize: async () => ({ effect: 'deny', reasons: [] }),
     });

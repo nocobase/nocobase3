@@ -111,7 +111,7 @@ function recordingResource(): {
       id: 'recording',
       requiresGrants: true,
       setup(authz): void {
-        authz.resources.add({
+        authz.resourceTypes.add({
           resourceType: 'database.collection',
           async authorize(request, context) {
             const grants = await context.grants.resolve(request);
@@ -374,7 +374,7 @@ describe('official authorization plugins', () => {
     const authorization = createAuthorization({
       plugins: [permissionSets({ store })],
     });
-    authorization.resources.add({
+    authorization.resourceTypes.add({
       resourceType: 'test-resource',
       async authorize(request, context) {
         await context.grants.resolve(request);
@@ -403,6 +403,7 @@ describe('official authorization plugins', () => {
     const rules = new MockSharingRuleStore([
       {
         key: 'shared-order',
+        title: 'Shared orders',
         resource,
         actions: [
           {
@@ -416,6 +417,7 @@ describe('official authorization plugins', () => {
     const restrictions = new MockRestrictionRuleStore([
       {
         key: 'owned-only',
+        title: { key: 'owned', ns: 'orders' },
         resource,
         actions: [
           {
@@ -446,12 +448,20 @@ describe('official authorization plugins', () => {
     expect(handler.received).toEqual([
       [
         {
-          source: { plugin: 'sharing-rules', id: 'shared-order' },
+          source: {
+            plugin: 'sharing-rules',
+            id: 'shared-order',
+            title: 'Shared orders',
+          },
           effect: 'expand',
           value: { type: 'ids', ids: ['order-1', 'order-2'] },
         },
         {
-          source: { plugin: 'restriction-rules', id: 'owned-only' },
+          source: {
+            plugin: 'restriction-rules',
+            id: 'owned-only',
+            title: { key: 'owned', ns: 'orders' },
+          },
           effect: 'restrict',
           value: { type: 'database', recordAccess: 'recordsIOwn' },
         },
@@ -574,7 +584,7 @@ describe('official authorization plugins', () => {
       requiresGrants: true,
       setup(authz): void {
         const grants = authz.grants;
-        authz.resources.add({
+        authz.resourceTypes.add({
           resourceType: 'file.object',
           async authorize(request) {
             const resolved = await grants.resolve(request);
@@ -619,7 +629,7 @@ it('loads built-in rule lists once per inspection scope and reloads them in the 
       {
         id: 'batch-test',
         setup(authorization) {
-          authorization.resources.add({
+          authorization.resourceTypes.add({
             resourceType: 'batch',
             async authorize(request, context) {
               await context.constraints.resolve(request);
@@ -652,5 +662,5 @@ it('does not install application settings or management routes', () => {
     plugins: [permissionSets({ store: new MockPermissionSetStore() })],
   });
   expect(authorization.routes.list()).toEqual([]);
-  expect(authorization.resources.get('settings')).toBeUndefined();
+  expect(authorization.resourceTypes.get('settings')).toBeUndefined();
 });

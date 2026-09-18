@@ -21,7 +21,7 @@ export default {
     newTitle: 'New sharing rule',
     editorDescription: 'Open access to selected records for an audience.',
     ruleHeading: 'Basic information',
-    ruleDescription: 'Name the rule and choose the collection to share.',
+    ruleDescription: 'Name the rule and choose the resource to share.',
     ruleName: 'Rule name',
     accessHeading: 'Actions and record scope',
     accessDescription: 'Choose records independently for each action.',

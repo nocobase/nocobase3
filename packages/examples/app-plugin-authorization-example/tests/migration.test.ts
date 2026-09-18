@@ -1,45 +1,54 @@
-// @vitest-environment node
-import path from 'node:path';
-import { createDatabaseManager } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
-import type { Knex } from 'knex';
+import {
+  createDatabaseManager,
+  InMemoryCollectionMetadataStore,
+} from '@nocobase/db';
 import { expect, it } from 'vitest';
+import migration from '../database/migrations/202609220001_sales_permissions.js';
 
-it('creates the tasks collection and reverses it', async () => {
+it('creates the final sales schema and metadata in one reversible migration', async () => {
   const database = createDatabaseManager({
     drivers: { sqlite },
+    metadataStore: new InMemoryCollectionMetadataStore(),
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
+  const connection = database.connection();
+  const context = {
+    connection,
+    builder: connection.builder,
+    query: connection.query,
+  };
+  const collections = [
+    'authorizationExampleTeams',
+    'authorizationExampleTeamMembers',
+    'authorizationExampleSalesMembers',
+    'authorizationExampleProjects',
+    'authorizationExampleQuotes',
+    'authorizationExampleOrders',
+  ];
   try {
-    const migrator = database.createMigrator({
-      directory: path.resolve(import.meta.dirname, '../database/migrations'),
-      packageName: '@nocobase/app-plugin-authorization-example',
-    });
-    await migrator.latest();
-    const client = await database.connection().client<Knex>();
-    const columns = await client('authorization_example_tasks').columnInfo();
-    expect(Object.keys(columns)).toEqual([
-      'id',
-      'title',
-      'status',
-      'owner_id',
-      'created_at',
-      'updated_at',
-    ]);
-    expect(columns.title).toMatchObject({ nullable: false });
-    expect(columns.owner_id).toMatchObject({ nullable: false });
-    expect(
-      await client('sqlite_master')
-        .where({ type: 'index', tbl_name: 'authorization_example_tasks' })
-        .pluck('name'),
-    ).toEqual(
-      expect.arrayContaining(['idx_authorization_example_tasks_owner_id']),
+    await migration.up(context);
+    for (const name of collections) {
+      expect(await connection.collections.get(name)).toBeDefined();
+      expect(await connection.collections.getPhysical(name)).toBeDefined();
+    }
+    const quotes = await connection.collections.get(
+      'authorizationExampleQuotes',
     );
-
-    await migrator.rollback();
-    expect(await client.schema.hasTable('authorization_example_tasks')).toBe(
-      false,
+    expect(quotes?.fields?.map((field) => field.name)).toEqual(
+      expect.arrayContaining(['preparedById', 'preparedByName']),
     );
+    const physical = await connection.collections.getPhysical(
+      'authorizationExampleQuotes',
+    );
+    expect(physical?.columns.map((column) => column.columnName)).toEqual(
+      expect.arrayContaining(['prepared_by_id', 'prepared_by_name']),
+    );
+    await migration.down!(context);
+    for (const name of collections) {
+      expect(await connection.collections.get(name)).toBeUndefined();
+      expect(await connection.collections.getPhysical(name)).toBeUndefined();
+    }
   } finally {
     await database.destroy();
   }

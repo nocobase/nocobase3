@@ -16,6 +16,8 @@ import type { AuthorizationOptions } from '../client/authorization-client.js';
 
 const mocks = vi.hoisted(() => ({
   authz: {
+    can: vi.fn(async () => true),
+    onPermissionsInvalidated: vi.fn(() => () => {}),
     loadOptions: vi.fn(),
     listUsers: vi.fn(),
     listPermissionSets: vi.fn(),

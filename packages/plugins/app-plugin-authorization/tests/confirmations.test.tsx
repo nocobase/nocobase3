@@ -13,6 +13,8 @@ import EditPage from '../client/pages/permission-set-edit-page.js';
 import { translate } from './locale-harness.js';
 
 const api = vi.hoisted(() => ({
+  can: vi.fn(async () => true),
+  onPermissionsInvalidated: vi.fn(() => () => {}),
   listPermissionSets: vi.fn(),
   deletePermissionSet: vi.fn(),
   invalidatePermissions: vi.fn(),

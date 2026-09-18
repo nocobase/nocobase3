@@ -1,3 +1,4 @@
+import { resourceSections } from './resource-sections.js';
 import { Checkbox } from './ui/checkbox.js';
 import { SelectField } from './select-field.js';
 import { CustomFilterEditor } from './filter-editor.js';
@@ -48,25 +49,29 @@ export function ResourceEditor({
   onChange: (value: { type: string; id: string }) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
-  const selected = options.resourceTypes.find((item) => item.value === type);
+  const sections = resourceSections(options);
+  const selected =
+    sections.find(
+      (item) =>
+        item.value === type &&
+        item.resources.some((resource) => resource.value === id),
+    ) ?? sections.find((item) => item.value === type);
   return (
     <>
-      <Field label={t('editors.resourceType')}>
+      <Field label={t('editors.resourceGroup')}>
         <SelectField
-          aria-label={t('editors.resourceType')}
+          aria-label={t('editors.resourceGroup')}
           className={selectClass}
-          value={type}
+          value={selected?.key ?? type}
           onValueChange={(selectedValue) => {
-            const next = options.resourceTypes.find(
-              (item) => item.value === selectedValue,
-            );
+            const next = sections.find((item) => item.key === selectedValue);
             onChange({
-              type: selectedValue,
+              type: next?.value ?? selectedValue,
               id: next?.resources[0]?.value ?? '',
             });
           }}
-          options={options.resourceTypes.map((item) => ({
-            value: item.value,
+          options={sections.map((item) => ({
+            value: item.key,
             label: item.label,
           }))}
         />
@@ -169,6 +174,7 @@ export function ActionsEditor({
 }
 
 export function ScopeEditor({
+  compact = false,
   options,
   fields = [],
   allowIds = true,
@@ -176,6 +182,7 @@ export function ScopeEditor({
   value,
   onChange,
 }: {
+  compact?: boolean;
   options: AuthorizationOptions;
   fields?: readonly string[];
   allowIds?: boolean;
@@ -184,6 +191,69 @@ export function ScopeEditor({
   onChange: (value: AccessScope) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
+  if (compact)
+    return (
+      <div className='min-w-0 space-y-2 text-sm font-normal'>
+        <SelectField
+          aria-label={t('editors.recordScope')}
+          className={selectClass}
+          value={
+            value.type === 'database'
+              ? recordAccessKey(value.recordAccess) === 'allRecords'
+                ? 'all'
+                : `policy:${recordAccessKey(value.recordAccess)}`
+              : value.type
+          }
+          options={[
+            { value: 'all', label: t('labels.allRecords') },
+            ...(allowIds
+              ? [{ value: 'ids', label: t('editors.specificRecordIds') }]
+              : []),
+            ...options.recordAccessPolicies
+              .filter((policy) => policy.value !== 'allRecords')
+              .map((policy) => ({
+                value: `policy:${policy.value}`,
+                label: policy.label,
+              })),
+          ]}
+          onValueChange={(selected) =>
+            onChange(
+              selected === 'ids'
+                ? { type: 'ids', ids: [] }
+                : selected === 'all'
+                  ? { type: 'all' }
+                  : {
+                      type: 'database',
+                      recordAccess:
+                        selected === 'policy:customFilter'
+                          ? {
+                              key: 'customFilter',
+                              params: { filter: emptyFilter() },
+                            }
+                          : selected.slice(7),
+                    },
+            )
+          }
+        />
+        {value.type === 'ids' && (
+          <RecordScopeEditor
+            records={records}
+            value={value.ids}
+            onChange={(ids) => onChange({ type: 'ids', ids })}
+          />
+        )}
+        {value.type === 'database' &&
+          recordAccessKey(value.recordAccess) === 'customFilter' && (
+            <CustomFilterEditor
+              fields={fields}
+              value={value.recordAccess}
+              onChange={(recordAccess) =>
+                onChange({ type: 'database', recordAccess })
+              }
+            />
+          )}
+      </div>
+    );
   return (
     <div className='grid gap-3'>
       <Field label={t('editors.recordScope')}>
@@ -358,7 +428,7 @@ function RecordScopeEditor({
       <div className='max-h-56 divide-y overflow-y-auto rounded-md border'>
         {visible.map((record) => (
           <label
-            className='flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-muted/20'
+            className='flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-muted/20'
             key={record.id}
           >
             <Checkbox
@@ -373,7 +443,7 @@ function RecordScopeEditor({
               }
             />
             <span>
-              <span className='block text-sm font-medium'>{record.label}</span>
+              <span className='block text-sm font-normal'>{record.label}</span>
               {record.description ? (
                 <span className='block text-xs text-muted-foreground'>
                   {record.description}

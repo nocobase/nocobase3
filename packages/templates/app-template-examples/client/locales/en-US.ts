@@ -164,7 +164,7 @@ const enUS = {
     authorization: {
       title: 'Authorization',
       description:
-        'See a route authorized by Permission Sets: each user works with the tasks they own, and a superuser sees them all.',
+        'Configure sales feature permissions and data scopes with default access, sharing and restriction rules.',
     },
     files: {
       title: 'File management',
@@ -196,8 +196,7 @@ const enUS = {
     filter: 'Filter by status',
     search: 'Search titles…',
     loading: 'Loading articles…',
-    loadError:
-      'Unable to load articles. Check your connection and article permissions.',
+    loadError: 'Unable to load articles. Check your connection and try again.',
     retry: 'Try again',
     empty: 'No matching articles',
     emptyHint: 'Try another search or create your first article.',

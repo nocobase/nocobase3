@@ -7,7 +7,12 @@ export const createAuthorization: typeof createCoreAuthorization = (options) =>
       {
         id: 'test-settings',
         setup(authz) {
-          authz.resources.add(settingsResource);
+          authz.resourceTypes.add(settingsResource);
+          authz.resourceGroups.add({
+            name: 'authorization',
+            title: 'Authorization',
+            category: 'administration',
+          });
         },
       },
       ...options.plugins,

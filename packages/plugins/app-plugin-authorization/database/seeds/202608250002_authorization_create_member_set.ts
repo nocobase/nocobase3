@@ -18,7 +18,10 @@ const seed: SeedDefinition = defineSeed({
         .values({
           id: crypto.randomUUID(),
           key: MEMBER,
-          title: 'Member',
+          title: JSON.stringify({
+            key: 'permissionSets.builtIn.member',
+            ns: '@nocobase/app-plugin-authorization',
+          }),
           // No grants. The pages every signed-in user must reach declare `access: false` on the route itself, so the
           // member set carries nothing an administrator could delete and nothing a route rename could invalidate.
           grants: JSON.stringify([]),

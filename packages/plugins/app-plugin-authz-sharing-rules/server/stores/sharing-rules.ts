@@ -1,3 +1,7 @@
+import {
+  encodeAuthorizationTitle,
+  decodeAuthorizationTitle,
+} from '@nocobase/authorization/core';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { DatabaseConnectionSource } from '@nocobase/app-plugin-authorization/server/management';
 import type {
@@ -7,7 +11,6 @@ import type {
 import type { SharingRuleStore } from '@nocobase/authorization/sharing-rules';
 
 const RULES = 'authorizationSharingRules';
-const RECORDS = 'authorizationSharingRuleRecords';
 const ASSIGNMENTS = 'authorizationSharingRuleAssignments';
 
 export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnection> {
@@ -27,7 +30,6 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
         .insertInto(RULES)
         .values(this.toValues(rule, id, now, now))
         .execute();
-      await this.replaceRecords(connection, id, rule.actions);
       await this.replaceAssignments(connection, id, rule.subjects);
     });
     return rule;
@@ -48,11 +50,6 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
         .where('id', '=', id)
         .execute();
       await connection.query
-        .deleteFrom(RECORDS)
-        .where('sharingRuleId', '=', id)
-        .execute();
-      await this.replaceRecords(connection, id, rule.actions);
-      await connection.query
         .deleteFrom(ASSIGNMENTS)
         .where('sharingRuleId', '=', id)
         .execute();
@@ -70,10 +67,6 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
         .executeTakeFirst();
       if (!current) return;
       const id = String(current.id);
-      await connection.query
-        .deleteFrom(RECORDS)
-        .where('sharingRuleId', '=', id)
-        .execute();
       await connection.query
         .deleteFrom(ASSIGNMENTS)
         .where('sharingRuleId', '=', id)
@@ -97,9 +90,8 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
       .where('key', '=', key)
       .executeTakeFirst();
     if (!row) return undefined;
-    const records = await this.loadRecords([String(row.id)]);
     const assignments = await this.loadAssignments([String(row.id)]);
-    return this.fromRow(row, records, assignments);
+    return this.fromRow(row, assignments);
   }
 
   async list(): Promise<readonly SharingRule[]> {
@@ -116,61 +108,12 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
       ])
       .orderBy('key', 'asc')
       .execute();
-    const records = await this.loadRecords(rows.map((row) => String(row.id)));
     const assignments = await this.loadAssignments(
       rows.map((row) => String(row.id)),
     );
-    return rows.map((row) => this.fromRow(row, records, assignments));
+    return rows.map((row) => this.fromRow(row, assignments));
   }
 
-  private async replaceRecords(
-    connection: DatabaseConnection,
-    sharingRuleId: string,
-    actions: readonly SharingRuleAction[],
-  ): Promise<void> {
-    const records = actions.flatMap((action) =>
-      action.selection.type === 'records'
-        ? action.selection.ids.map((recordId) => ({
-            action: action.action,
-            recordId,
-          }))
-        : [],
-    );
-    if (records.length === 0) return;
-    const now = new Date();
-    await connection.query
-      .insertInto(RECORDS)
-      .values(
-        records.map((record) => ({
-          id: crypto.randomUUID(),
-          sharingRuleId,
-          action: record.action,
-          recordId: record.recordId,
-          createdAt: now,
-        })),
-      )
-      .execute();
-  }
-
-  private async loadRecords(
-    ruleIds: readonly string[],
-  ): Promise<ReadonlyMap<string, readonly string[]>> {
-    if (ruleIds.length === 0) return new Map();
-    const rows = await this.connection()
-      .query.selectFrom(RECORDS)
-      .select(['sharingRuleId', 'action', 'recordId'])
-      .where('sharingRuleId', 'in', ruleIds)
-      .orderBy('recordId', 'asc')
-      .execute();
-    const result = new Map<string, string[]>();
-    for (const row of rows) {
-      const id = recordKey(String(row.sharingRuleId), String(row.action));
-      const values = result.get(id) ?? [];
-      values.push(String(row.recordId));
-      result.set(id, values);
-    }
-    return result;
-  }
   private async replaceAssignments(
     connection: DatabaseConnection,
     ruleId: string,
@@ -226,16 +169,10 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
   private toUpdateValues(rule: SharingRule): Record<string, unknown> {
     return {
       key: rule.key,
-      title: rule.title ?? null,
+      title: encodeAuthorizationTitle(rule.title),
       resourceType: rule.resource.type,
       resourceId: rule.resource.id,
-      actions: JSON.stringify(
-        rule.actions.map((action) =>
-          action.selection.type === 'records'
-            ? { ...action, selection: { type: 'records', ids: [] } }
-            : action,
-        ),
-      ),
+      actions: JSON.stringify(rule.actions),
       reason: rule.reason ?? null,
       updatedAt: new Date(),
     };
@@ -243,27 +180,12 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
 
   private fromRow(
     row: object,
-    records: ReadonlyMap<string, readonly string[]>,
     assignments: ReadonlyMap<string, SharingRule['subjects']>,
   ): SharingRule {
     const value = row as Record<string, unknown>;
-    const title = optionalString(value.title, 'sharing rule title');
+    const title = decodeAuthorizationTitle(value.title);
     const reason = optionalString(value.reason, 'sharing rule reason');
-    const actions = parseJson<readonly SharingRuleAction[]>(
-      value.actions,
-      [],
-    ).map((action) =>
-      action.selection.type === 'records'
-        ? {
-            ...action,
-            selection: {
-              type: 'records' as const,
-              ids:
-                records.get(recordKey(String(value.id), action.action)) ?? [],
-            },
-          }
-        : action,
-    );
+    const actions = parseJson<readonly SharingRuleAction[]>(value.actions, []);
     return {
       key: String(value.key),
       ...(title === undefined ? {} : { title }),
@@ -276,10 +198,6 @@ export class DatabaseSharingRuleStore implements SharingRuleStore<DatabaseConnec
       ...(reason === undefined ? {} : { reason }),
     };
   }
-}
-
-function recordKey(ruleId: string, action: string): string {
-  return `${ruleId}\u0000${action}`;
 }
 
 function parseJson<T>(value: unknown, fallback: T): T {

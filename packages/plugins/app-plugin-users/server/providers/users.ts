@@ -1,3 +1,4 @@
+import { createApplicationUserRoleScope } from '../services/permission-set-scope.js';
 import { databaseManagerToken } from '@nocobase/db';
 import {
   authorizationToken,
@@ -9,6 +10,7 @@ import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import {
+  type UsersConfig,
   userManagementServiceToken,
   userRoleScopeRegistryToken,
 } from '../tokens.js';
@@ -33,6 +35,7 @@ const ACCOUNT_PAGE_SIZE = 100;
 
 export class UsersProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-plugin-users';
+  private releasePermissionSetScope?: () => void;
   private releaseSubjectType?: () => void;
 
   public override register(): void {
@@ -60,6 +63,19 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
   }
 
   public override boot(): Promise<void> {
+    if (
+      !this.releasePermissionSetScope &&
+      this.app.container.has(permissionSetsToken) &&
+      this.app.config.get<UsersConfig>('users')?.permissionSets !== false
+    ) {
+      this.releasePermissionSetScope = this.app.container
+        .resolve(userRoleScopeRegistryToken)
+        .register(
+          createApplicationUserRoleScope(
+            this.app.container.resolve(permissionSetsToken),
+          ),
+        );
+    }
     // An application may be assembled without authorization.
     if (!this.app.container.has(authorizationToken)) return Promise.resolve();
     const authorization = this.app.container.resolve(authorizationToken);
@@ -112,7 +128,7 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
         },
       },
     );
-    authorization.resources.add({
+    authorization.resourceTypes.add({
       resourceType: 'user',
       async authorize(request, context) {
         if (!USER_ACTIONS.has(request.action)) {
@@ -161,6 +177,8 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
   }
 
   public override shutdown(): Promise<void> {
+    this.releasePermissionSetScope?.();
+    this.releasePermissionSetScope = undefined;
     this.releaseSubjectType?.();
     this.releaseSubjectType = undefined;
     return Promise.resolve();

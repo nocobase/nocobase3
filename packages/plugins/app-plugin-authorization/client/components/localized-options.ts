@@ -34,6 +34,7 @@ export function localizeOptions(
     }));
   return {
     ...raw,
+    resourceGroups: raw.resourceGroups?.map(option),
     resourceTypes: raw.resourceTypes.map((type) => ({
       ...option(type),
       groups: type.groups && groups(type.groups),
@@ -41,6 +42,25 @@ export function localizeOptions(
       resources: type.resources.map((resource) => ({
         ...option(resource),
         actions: resource.actions?.map(option),
+        ruleScopes: resource.ruleScopes?.map((scope) => ({
+          ...scope,
+          label: text(scope.label),
+        })),
+        actionScopes:
+          resource.actionScopes &&
+          Object.fromEntries(
+            Object.entries(resource.actionScopes).map(([key, config]) => [
+              key,
+              {
+                ...config,
+                fields: config.fields.map((field) => ({
+                  ...field,
+                  label: text(field.label),
+                  options: field.options.map(option),
+                })),
+              },
+            ]),
+          ),
       })),
     })),
     subjectTypes: raw.subjectTypes.map(option),

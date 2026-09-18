@@ -7,10 +7,11 @@ import type {
 } from '@nocobase/app-plugin-authorization/client/management';
 export interface SharingRule {
   key: string;
-  title?: string;
+  title?: string | { key: string; ns: string };
   resource: { type: string; id: string };
   actions: readonly {
     action: string;
+    scopeKey?: string;
     selection:
       | { type: 'records'; ids: readonly string[] }
       | { type: 'policy'; policy: AccessScope };

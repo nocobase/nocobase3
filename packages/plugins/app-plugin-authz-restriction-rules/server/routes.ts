@@ -14,6 +14,7 @@ import {
 import type { RestrictionRulesAuthorizationApi } from '@nocobase/authorization/restriction-rules';
 import {
   createRuleOptionsRoutes,
+  validateDatabaseScopeRule,
   createAuthorizationAdministration,
   describeCollection,
 } from '@nocobase/app-plugin-authorization/server/management';
@@ -62,7 +63,9 @@ const contributions: readonly AppApiRouteContribution<AppPluginApplication>[] =
           'restriction-rules',
         ),
       );
-      const handler = createRestrictionRulesHandler(api);
+      const handler = createRestrictionRulesHandler(api, (rule) =>
+        validateDatabaseScopeRule(authorization, rule),
+      );
       routes.all('/restriction-rules', (context) =>
         handler({
           request: context.req.raw,

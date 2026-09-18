@@ -24,26 +24,8 @@ const migration: MigrationDefinition = defineMigration({
         });
       },
     );
-    await builder.createCollection(
-      'authorizationDefaultAccessRuleRecords',
-      (collection) => {
-        collection.string('id', { length: 64 }).notNull();
-        collection.string('defaultAccessRuleId', { length: 64 }).notNull();
-        collection.string('action', { length: 255 }).notNull();
-        collection.string('recordId', { length: 255 }).notNull();
-        collection.datetime('createdAt').notNull();
-        collection.primary('id', { name: 'pk_authz_default_access_records' });
-        collection.unique(['defaultAccessRuleId', 'action', 'recordId'], {
-          name: 'uq_authz_default_records_rule_action_record',
-        });
-        collection.index('defaultAccessRuleId', {
-          name: 'idx_authz_default_records_rule',
-        });
-      },
-    );
   },
   async down({ builder }) {
-    await builder.dropCollection('authorizationDefaultAccessRuleRecords');
     await builder.dropCollection('authorizationDefaultAccessRules');
   },
 });

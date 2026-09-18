@@ -13,9 +13,17 @@ export {
   ResourceGroups,
   ResourceItems,
   type ResourceItem,
+  type ResourceItemDefinition,
+  type ResourceActionScopes,
   type ResourceGroup,
   type RegisteredResource,
   type AuthorizationResourceItems,
   type ResourceTitle,
 } from './registry.js';
 export * from './types.js';
+
+export * from './resource-actions.js';
+
+export * from './business-resources.js';
+
+export * from './titles.js';

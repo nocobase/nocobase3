@@ -32,13 +32,10 @@ const TABLES = [
   'authorization_permission_sets',
   'authorization_permission_set_assignments',
   'authorization_default_access_rules',
-  'authorization_default_access_rule_records',
   'authorization_sharing_rules',
   'authorization_sharing_rule_assignments',
-  'authorization_sharing_rule_records',
   'authorization_restriction_rules',
   'authorization_restriction_rule_assignments',
-  'authorization_restriction_rule_records',
 ] as const;
 
 describe('authorization table migrations', () => {

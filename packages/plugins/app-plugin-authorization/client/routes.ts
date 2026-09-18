@@ -76,8 +76,8 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
           order: 100,
         },
         access: {
-          resource: 'settings.authorization.permission-sets',
-          action: 'read',
+          resource: 'settings.authorization.inspector',
+          action: 'inspect',
         },
         componentLoader: () => import('./pages/inspector-page.js'),
       },

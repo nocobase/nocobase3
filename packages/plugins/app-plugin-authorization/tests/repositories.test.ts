@@ -302,7 +302,7 @@ async function createSet(
     .values({
       id: crypto.randomUUID(),
       key,
-      title: key,
+      title: JSON.stringify(key),
       grants: JSON.stringify(grants),
       createdAt: now,
       updatedAt: now,

@@ -7,7 +7,7 @@ function setup() {
       {
         id: 'pages',
         setup(authz) {
-          authz.resources.add({
+          authz.resourceTypes.add({
             resourceType: 'page',
             authorize: async () => ({ effect: 'deny', reasons: [] }),
           });

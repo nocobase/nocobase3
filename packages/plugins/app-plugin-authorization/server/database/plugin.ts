@@ -1,6 +1,7 @@
 import type { AuthorizationPlugin } from '@nocobase/authorization/core';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
+  composeDatabasePolicies,
   DatabaseAuthorizationService,
   type DatabaseAuthorizationApi,
 } from './api.js';
@@ -22,11 +23,14 @@ export interface DatabaseAuthorizationPlugin extends AuthorizationPlugin<
 }
 
 export function databaseAuthorization(): DatabaseAuthorizationPlugin {
-  const collections = new DatabaseCollectionRegistry();
   const recordAccess = new RecordAccessPolicyRegistry();
   const api = new DatabaseAuthorizationService(recordAccess);
+  const collections = api.collections;
   return {
     id: 'database',
+    composeConditions: (checks) => ({
+      database: composeDatabasePolicies(checks),
+    }),
     requiresGrants: true,
     authorizationApi: { db: api },
     setup(authz): void {
@@ -39,16 +43,29 @@ export function databaseAuthorization(): DatabaseAuthorizationPlugin {
           ? { resolveCollection: collectionResolver(authz.connection) }
           : {}),
       });
-      authz.resources.add<
+      authz.resourceTypes.add<
         DatabaseAuthorizationParams,
         DatabaseCollectionRegistry
       >({
         resourceType: 'database.collection',
         items: collections,
-        authorize: (request, context) =>
-          authorizer.authorize(request, context.grants, context.constraints),
-        authorizeUnrestricted: (request) =>
-          authorizer.authorizeUnrestricted(request),
+        actions: ['read', 'create', 'update', 'delete'].map((name) => ({
+          name,
+          authorize: (request, context) =>
+            authorizer.authorize(
+              {
+                ...request,
+                params: request.params as DatabaseAuthorizationParams,
+              },
+              context.grants,
+              context.constraints,
+            ),
+          authorizeUnrestricted: (request) =>
+            authorizer.authorizeUnrestricted({
+              ...request,
+              params: request.params as DatabaseAuthorizationParams,
+            }),
+        })),
       });
     },
   };

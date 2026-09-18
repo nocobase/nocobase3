@@ -1,1 +1,1 @@
-export default { resourceTitle: 'Default Access' };
+export default { resourceTitle: 'Default Data Scope' };

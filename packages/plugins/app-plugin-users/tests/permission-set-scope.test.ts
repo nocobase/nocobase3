@@ -13,9 +13,9 @@ import {
 } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createApplicationUserRoleScope } from '../../server/providers/user-roles.js';
+import { createApplicationUserRoleScope } from '../server/services/permission-set-scope.js';
 
-describe('examples application user role scope', () => {
+describe('built-in user permission-set scope', () => {
   let database: DatabaseManager;
   let authorization: Authorization & PermissionSetsAuthorizationApi;
 
@@ -30,12 +30,12 @@ describe('examples application user role scope', () => {
     await migratePackage(
       database,
       '@nocobase/app-plugin-authentication',
-      '../../../../plugins/app-plugin-authentication/database/migrations',
+      '../../app-plugin-authentication/database/migrations',
     );
     await migratePackage(
       database,
       '@nocobase/app-plugin-authorization',
-      '../../../../plugins/app-plugin-authorization/database/migrations',
+      '../../app-plugin-authorization/database/migrations',
     );
     // The two code-owned sets the plugin names, which is what the role picker
     // has to leave alone.
@@ -44,7 +44,10 @@ describe('examples application user role scope', () => {
     });
     await authorization.permissionSets.create({
       key: 'root',
-      title: 'Root',
+      title: {
+        key: 'permissionSets.builtIn.root',
+        ns: '@nocobase/app-plugin-authorization',
+      },
       grants: [],
     });
     await authorization.permissionSets.create({
@@ -88,9 +91,9 @@ describe('examples application user role scope', () => {
       },
       {
         value: 'root',
-        label: 'Root',
-        labelI18nKey: 'page.systemAdministrator',
-        labelI18nNs: '@nocobase/app-plugin-users',
+        label: 'permissionSets.builtIn.root',
+        labelI18nKey: 'permissionSets.builtIn.root',
+        labelI18nNs: '@nocobase/app-plugin-authorization',
         assignable: false,
         removable: false,
       },
@@ -173,8 +176,6 @@ describe('examples application user role scope', () => {
         {
           value: 'owner',
           label: 'Owner',
-          labelI18nKey: 'page.systemAdministrator',
-          labelI18nNs: '@nocobase/app-plugin-users',
           assignable: false,
           removable: false,
         },
@@ -203,7 +204,12 @@ describe('examples application user role scope', () => {
     await expect(scope.options()).resolves.toEqual([
       { value: 'content-editor', label: 'Content editor' },
       { value: 'plugin-internal', label: 'Plugin internal' },
-      { value: 'root', label: 'Root' },
+      {
+        value: 'root',
+        label: 'permissionSets.builtIn.root',
+        labelI18nKey: 'permissionSets.builtIn.root',
+        labelI18nNs: '@nocobase/app-plugin-authorization',
+      },
     ]);
     await database.transaction((connection) =>
       scope.replace('admin-1', ['content-editor'], connection),

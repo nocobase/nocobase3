@@ -1,3 +1,4 @@
+import { titleText, type Translate } from '../../i18n.js';
 import { incompleteFilter, policyFilter } from '../../components/filter-ast.js';
 import type {
   AuthorizationOptions,
@@ -20,16 +21,25 @@ export function nextDraftId(): number {
 
 export function toInput(draft: Draft): {
   key: string;
-  title?: string;
+  title?: string | { key: string; ns: string };
   grants: readonly PermissionGrant[];
 } {
   return {
     key: draft.key.trim(),
-    ...(draft.title.trim() ? { title: draft.title.trim() } : {}),
+    ...(draft.title.trim()
+      ? {
+          title:
+            draft.title === draft.initialTitle
+              ? draft.originalTitle
+              : draft.title.trim(),
+        }
+      : {}),
     grants: draft.grants.map((grant) => ({
       resource: grant.resource,
       actions: grant.actions.map((action) =>
-        grant.resource.type === 'database.collection'
+        grant.resource.type === 'database.collection' &&
+        (!grant.policies?.[action] ||
+          grant.policies[action]?.type === 'database')
           ? {
               action,
               policy: databasePolicyForAction(
@@ -37,7 +47,12 @@ export function toInput(draft: Draft): {
                 grant.database[action] ?? defaultDatabaseActionDraft(),
               ),
             }
-          : { action },
+          : {
+              action,
+              ...(grant.policies?.[action]
+                ? { policy: grant.policies[action] }
+                : {}),
+            },
       ),
     })),
   };
@@ -60,24 +75,50 @@ export function empty(): Draft {
 }
 
 export function hasEmptyCustomFilter(draft: Draft): boolean {
-  return draft.grants.some((grant) =>
-    Object.values(grant.database).some((value) => {
-      if (recordAccessKey(value.recordAccess) !== 'customFilter') return false;
-      return incompleteFilter(policyFilter(value.recordAccess));
-    }),
+  return draft.grants.some(
+    (grant) =>
+      Object.values(grant.policies ?? {}).some(
+        (policy) =>
+          policy?.type === 'resource' &&
+          Object.values(policy).some((value) => {
+            if (
+              !value ||
+              typeof value !== 'object' ||
+              !('key' in value) ||
+              value.key !== 'customFilter'
+            )
+              return false;
+            return incompleteFilter(
+              policyFilter(value as { key: string; params?: unknown }),
+            );
+          }),
+      ) ||
+      Object.values(grant.database).some((value) => {
+        if (recordAccessKey(value.recordAccess) !== 'customFilter')
+          return false;
+        return incompleteFilter(policyFilter(value.recordAccess));
+      }),
   );
 }
 
-export function fromSet(set: PermissionSet): Draft {
+export function fromSet(
+  set: PermissionSet,
+  t: Translate = (key) => key,
+): Draft {
   return {
     originalKey: set.key,
     key: set.key,
-    title: set.title ?? '',
+    title: titleText(set.title, t),
+    originalTitle: set.title,
+    initialTitle: titleText(set.title, t),
     grants: set.grants.map((grant) => {
       return {
         id: nextDraftId(),
         resource: grant.resource,
         actions: grant.actions.map((action) => action.action),
+        policies: Object.fromEntries(
+          grant.actions.map((action) => [action.action, action.policy]),
+        ),
         database: Object.fromEntries(
           grant.actions.map((action) => [
             action.action,

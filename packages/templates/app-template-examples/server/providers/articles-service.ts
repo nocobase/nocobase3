@@ -2,10 +2,7 @@ import {
   RepositoryError,
   type DatabaseManager,
   type FilterBuilder,
-  type RepositoryPolicy,
-  type RepositoryRecord,
   type Row,
-  type ScopedRepository,
 } from '@nocobase/db';
 
 interface ArticleInput {
@@ -20,13 +17,13 @@ const PAGE_SIZE = 12;
 export class ArticlesService {
   constructor(private readonly database: DatabaseManager) {}
 
-  async list(
-    options: { page: number; search: string; status?: string },
-    allowed: readonly string[],
-    policy: RepositoryPolicy,
-  ): Promise<{ data: Row[]; total: number; page: number }> {
+  async list(options: {
+    page: number;
+    search: string;
+    status?: string;
+  }): Promise<{ data: Row[]; total: number; page: number }> {
     const { page, search, status } = options;
-    const repository = this.scoped(policy);
+    const repository = this.database.repository('articles');
     const filter =
       search || status
         ? {
@@ -41,7 +38,6 @@ export class ArticlesService {
       repository.count(filter),
       repository.findMany({
         ...filter,
-        select: (select) => select.fields(...allowed),
         sort: (sort) => [
           sort.field('updatedAt').desc(),
           sort.field('id').desc(),
@@ -53,9 +49,9 @@ export class ArticlesService {
     return { data: data.map(serializeArticle), total, page };
   }
 
-  async create(input: ArticleInput, policy: RepositoryPolicy): Promise<void> {
+  async create(input: ArticleInput): Promise<void> {
     const now = new Date();
-    await this.scoped(policy).createOne({
+    await this.database.repository('articles').createOne({
       values: {
         ...input,
         publishedAt: input.status === 'published' ? now : null,
@@ -65,12 +61,8 @@ export class ArticlesService {
     });
   }
 
-  async update(
-    id: number,
-    input: ArticleInput,
-    policy: RepositoryPolicy,
-  ): Promise<boolean> {
-    const repository = this.scoped(policy);
+  async update(id: number, input: ArticleInput): Promise<boolean> {
+    const repository = this.database.repository('articles');
     const current = await repository.findOne({ filter: { id } });
     if (!current) return false;
     const now = new Date();
@@ -86,7 +78,7 @@ export class ArticlesService {
         },
       });
     } catch (error) {
-      // The update scope may be narrower than the read scope that found it.
+      // The record may have been deleted after it was read.
       if (
         error instanceof RepositoryError &&
         error.code === 'RECORD_NOT_FOUND'
@@ -96,12 +88,6 @@ export class ArticlesService {
       throw error;
     }
     return true;
-  }
-
-  private scoped(
-    policy: RepositoryPolicy,
-  ): ScopedRepository<Partial<RepositoryRecord>> {
-    return this.database.repository('articles').withPolicy(policy);
   }
 }
 

@@ -1,102 +1,49 @@
-# @nocobase/app-plugin-authorization-example
+# Sales permissions example
 
-A per-user task list, small enough to read in one sitting, that shows the two
-ways an application route meets `@nocobase/app-plugin-authorization`.
+This example uses fictional projects, quotes, orders, accounts and regions to demonstrate composed business operations, named operation scopes, default access, sharing and restrictions. It contains no customer configuration or customer data.
 
-Every row in `authorizationExampleTasks` belongs to whoever created it. The
-seeded Permission Set gives each signed-in user `recordsIOwn` record access, so
-an ordinary account reads, updates and deletes only its own rows, while a
-holder of the root set bypasses grants and sees everyone's.
+Run application migrations and seeds through the Examples application's normal lifecycle. The seed creates `sales_assistant`, `sales_engineer`, `sales_manager` and `sales_delivery`, with the example password `AuthzExample123!`, their editable permission sets, four projects, seven practice quotes, four accepted historical quotes, four orders and all three rule types. The same seed initializes proposal and delivery teams and their members.
 
-## The registration
+Open `/authorization-example` for the guide and the independently authorized `/authorization-example/projects`, `/authorization-example/quotes`, and `/authorization-example/orders` menus for records, relative to the application mount. In authorization settings, choose a business resource group, open an operation and configure each of its named scopes. There is no separate permission-set-wide scope. Default access, sharing and restriction rules select a business resource, operation and scope; the scope registration determines the table used for fields and record selection.
 
-A collection is grantable only once an application registers it, and the
-registration carries the title the permission UI shows. This plugin does that
-from a service provider, `AuthorizationExampleProvider`, rather than from a
-route file:
+The four permission sets represent jobs: Sales assistant, Sales engineer, Project manager, and Delivery specialist. Accounts and permission-set keys use job names; region and ownership are data scopes.
 
-```ts
-this.app.container
-  .resolve(authorizationToken)
-  .getResource('database.collection')
-  .items.add({
-    name: COLLECTION,
-    title: 'Authorization example: tasks',
-    description: 'Tasks each signed-in user owns.',
-  });
-```
+| Account           | Role source                                              | Verification                                            |
+| ----------------- | -------------------------------------------------------- | ------------------------------------------------------- |
+| sales_assistant   | Direct sales assistant                                   | Read-only access, defaults and selected project sharing |
+| sales_engineer    | Direct sales engineer                                    | Independent quote preparer and project-region scopes    |
+| sales_manager     | Direct project manager                                   | Maintain owned projects; read quotes and orders         |
+| sales_delivery    | Direct delivery specialist                               | Order menu and delivery workflow                        |
+| sales_proposal    | Sales engineer inherited from Proposal team              | Team role, selected quote handover and restrictions     |
+| sales_dispatch    | Delivery specialist inherited from Delivery team         | Team sharing and order-only menus                       |
+| sales_coordinator | Direct project manager plus Proposal team sales engineer | Role union and independent revocation                   |
 
-Boot is where a declaration like this belongs; a route file builds routes.
-`authorization.repositories()` registers nothing, so without the provider every
-request for the collection is denied with `COLLECTION_NOT_REGISTERED`.
+The guide displays the current account's effective roles and whether each comes from a user or team assignment. Teams are selectable authorization subjects in permission-set assignments, sharing rules, restrictions and inspection. Memberships are resolved from the database on each authenticated request; the inspector uses the same resolver. Disabling a team or removing membership stops inheritance on the next request. A selected quote handover shares both quote-7 and its South-region parent project-3 for submission with Proposal team; removing the team's role still denies submission. The existing direct-user sharing remains independent.
 
-## The two routes
+Registration is explicit in `server/sales-authorization.ts`. `authz.resources.add` declares action `scopes`; each scope names one underlying resource and offers configurable record-access policies. An underlying `authz.db.grant` references that scope by name. Grant helpers only return declarations; assigning a permission set activates them.
 
-**The generated Repository API, authorized in place.** `authorization.repositories()`
-returns a Hono middleware carrying the `principal` and `repositories` that
-`defineRepositoryApiRoutes()` needs. Mounted on each endpoint by name, it folds
-the caller's grants for the exposure's `resource` into a Repository Policy and
-narrows the exposure's declared shape with it:
+`submit` on quotes demonstrates two independent scopes: the default project scope is the user’s region, and the quote scope is the quote’s own preparer. A sales engineer account can submit quote-2, cannot submit colleague-prepared quote-5 on the same project, and cannot submit self-prepared quote-6 on an out-of-region project. Confidential quote-4 remains excluded by restrictions. `quotes` controls quotation reads and status updates; `projects` controls the parent-project lookup. Sharing a quote does not share its project. The submission endpoint calls `authorizationScope.authorize` once for `example.sales.quotes/submit`. Its `conditions.database` contains executable policies for both tables, and `conditions.checks` contains their decisions. These policies exclude grants from other business operations; the endpoint does not call `db.policyFor` again. Ordinary repository interfaces without an operation selector aggregate all granted underlying capabilities.
 
-```ts
-const authorize = authorization.repositories(repositories);
-for (const { name, actions } of repositories)
-  for (const action of Object.keys(actions))
-    router.use(`/${name}:${action}`, authentication.required(), authorize);
-```
+Selected operation scope, default access and sharing provide positive record access. Restrictions intersect the result. Sharing never grants an operation or its fields. Business rules affect only their matching grant branch; underlying collection restrictions still constrain every branch. If a record must be excluded across all operations and direct table grants, configure that restriction on the underlying collection.
 
-Mount it on every action. One it did not run on resolves no principal, and
-app-server answers `403 PRINCIPAL_REQUIRED` rather than falling back to the
-shape. Guard each path by name, too: a wildcard would reach a contribution
-mounted beside this one.
+Rules use `scopeKey` to select the declared scope and `scope` for its condition. For example, `{ action: 'submit', scopeKey: 'projects', selection: { type: 'records', ids: ['project-2'] } }` shares only the project scope. Record IDs are stored in each rule's actions JSON, separately for each action and named scope.
 
-**A hand-written create.** The generated endpoint takes its values from the
-request body, so a caller could name their own `ownerId` and become the owner
-of a row they should not have. `POST /authorization-example/tasks` accepts a
-title and nothing else, stamps the owner from the principal, and binds the same
-Policy through `repository.withPolicy()`, so the grant still decides whether
-the write happens at all. A refusal surfaces as 403, mapped from the
-`WRITE_FORBIDDEN` and `FIELD_WRITE_FORBIDDEN` codes the Repository raises.
+The seed is `database/seeds/202609220002_sales_permissions.ts`. Migrations create schema only. Submission requires a positive quote amount, draft status and an accessible parent project. Submitted quotes cannot be repriced. Delivery requires a nonempty reference and a ready order. Updates include state predicates to reject stale or repeated transitions.
 
-## The `read` node
+Tests exercise production HTTP routes, SQLite persistence, permission editing, business endpoints, independent multi-table record sharing, field boundaries and migration rollback. Repository policies carry one scope and field list per operation: when grants expose different fields on different rows, the policy conservatively intersects the scopes required by those fields.
 
-The exposure writes `read` out as a node with its `fields` and `relations`
-rather than as `true`:
+Permission sets, default access, sharing, restrictions and the inspector use the same flat business groups. These configuration screens always omit underlying page and table categories, including when no business groups are registered. Each resource displays its own actions; inspector action details include permission-set sources and the underlying database checks with default, sharing and restriction reasons.
 
-```ts
-read: { scope: true, fields: [...], relations: {} },
-```
+Register scope strategies once with `authz.db.recordAccess.add`. Optional `collections` and `requiredFields` declare applicability; every operation and rule selector derives its choices from that registry. An action scope may narrow the choices with `options`, but does not register a separate strategy. Projects reuse built-in `recordsIOwn`; quotes and orders use a related-project ownership strategy. The public-project and regional strategies are available in both permission sets and rules, as is the custom-filter editor.
 
-A grant carries no relation model, and narrowing replaces a `true` member
-wholesale with the grant's patch — which would leave the read with no readable
-relations at all. Writing the node keeps the shape's relation rules, whatever
-the grant says about scope and fields.
+The seed stores permission-set and rule titles as `{ key, ns }` descriptors. User names are ordinary fictional names. Title descriptors are preserved until explicitly renamed; no runtime title registry is required.
 
-## The seed
+Each view action grants only its corresponding page. The delivery account can enter Orders but not Projects or Quotes. Lists show related record references; project summaries are fetched using the project view policy and never bypass it. Links preserve project/record filters, and the destination loads only its own permitted records. Quote rows show the preparer and submission eligibility, while the submission endpoint remains authoritative.
 
-`202609150002_authorization_example_grant_members` creates the
-`authorization-example-member` Permission Set and assigns it to
-`authenticated:*`. Its grant names one resource and four actions: `read` and
-`delete` and `update` under `recordsIOwn`, and a `create` that lists every
-column the route stores, timestamps included — a write grant has to, because
-`fields.input` is an allowlist and the server stamps `createdAt` and
-`updatedAt` itself.
+## Repeatable exercises
 
-The seed writes the rows directly rather than calling the running
-authorization, because a seed sees only `query` and `connection`. It is a no-op
-when the authorization plugin's tables are absent, so the example still
-installs into an application assembled without it, and it seeds no tasks: rows
-are owned, so the page starts empty for each user.
+Start with `sales_assistant` for read-only defaults and selected project sharing, then `sales_engineer` for quote-2 (allowed), quote-5 (another preparer) and quote-6 (another region). Use `sales_proposal` for the separate quote-7 handover: neither its preparer nor its project matches the team's default scope. Removing either shared scope prevents submission. Team membership or role removal also prevents submission, while `sales_coordinator` retains its directly assigned project-manager role. Use `sales_delivery` and `sales_dispatch` to compare direct and inherited delivery permissions.
 
-## The page
+Existing orders reference accepted `quote-history-*` records, separate from draft practice quotes. Submitting a practice quote does not create an order. After a transition, an unrestricted administrator can use **Reset practice records** in the guide. The confirmation explains that this restores the fixed seeded business records for all demo accounts; it preserves accounts, permission sets, rules and team memberships, and leaves additional records alone. Restore any authorization changes manually before repeating the baseline scenarios. The seed and reset share one record builder so they cannot drift.
 
-`/authorization-example` lists the caller's tasks through `findMany`, adds one
-through the custom route, toggles `status` through `updateOne` and removes one
-through `deleteOne`. A 403 renders as a short notice rather than as an error,
-because holding no grant is a configuration a user can be told about.
-
-## Verification
-
-```bash
-pnpm --filter @nocobase/app-plugin-authorization-example check
-```
+Lists report each record's permitted operations using both read and write scopes and required write fields. The server remains authoritative: invalid values return 400, denied access returns 403, and a stale business state returns 409. The guide groups exercises by their account, expected result and authorization reason. Use demo accounts rather than an unrestricted administrator when verifying boundaries.

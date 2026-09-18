@@ -1,3 +1,5 @@
+import { parseAuthorizationTitle } from '@nocobase/authorization/core';
+
 import type { AuthorizationRouteRequest as PermissionSetHandlerInput } from '@nocobase/authorization/core';
 import { Hono } from 'hono';
 import { AuthorizationDeniedError } from '@nocobase/authorization/core';
@@ -51,6 +53,7 @@ export const PERMISSION_SETS_ROUTE_PATH = '/permission-sets';
 
 export function createPermissionSetHandler(
   api: PermissionSetAdministrationApi,
+  validate: (input: CreatePermissionSetInput) => void = () => {},
 ): (input: PermissionSetHandlerInput) => Promise<Response> {
   const routes = new Hono<PermissionSetHandlerEnv>();
 
@@ -100,7 +103,13 @@ export function createPermissionSetHandler(
   routes.use('/permission-sets/*', async (context, next) => {
     await context.env.authorization.require({
       resource: { type: 'settings', id: 'authorization.permission-sets' },
-      action: permissionSetAdministrationAction(context.req.method),
+      action:
+        (context.req.method === 'POST' &&
+          /^\/permission-sets\/[^/]+\/assignments$/.test(context.req.path)) ||
+        (context.req.method === 'DELETE' &&
+          /^\/permission-sets\/assignments\/[^/]+$/.test(context.req.path))
+          ? 'assign'
+          : permissionSetAdministrationAction(context.req.method),
     });
     await next();
   });
@@ -112,8 +121,9 @@ export function createPermissionSetHandler(
 
   routes.post('/permission-sets', async (context) => {
     const input = parsePermissionSetInput(await context.req.json());
+    validate(input);
     api.assertWritable(input.key, 'create');
-    return context.json({ data: await api.create(input) }, 201);
+    return context.json({ data: summarize(api, await api.create(input)) }, 201);
   });
 
   routes.get('/permission-sets/effective/:type/:id', async (context) => {
@@ -122,7 +132,9 @@ export function createPermissionSetHandler(
       id: context.req.param('id'),
     };
     return context.json({
-      data: await api.getEffective({ principal }),
+      data: (await api.getEffective({ principal })).map((set) =>
+        summarize(api, set),
+      ),
     });
   });
 
@@ -166,9 +178,10 @@ export function createPermissionSetHandler(
   routes.put('/permission-sets/:key', async (context) => {
     const key = context.req.param('key');
     const input = parsePermissionSetInput(await context.req.json());
+    validate(input);
     api.assertWritable(key, 'update');
     if (input.key !== key) api.assertWritable(input.key, 'update');
-    return context.json({ data: await api.update(key, input) });
+    return context.json({ data: summarize(api, await api.update(key, input)) });
   });
 
   routes.delete('/permission-sets/:key', async (context) => {
@@ -221,7 +234,7 @@ function permissionSetAdministrationAction(method: string): string {
 function parsePermissionSetInput(value: unknown): CreatePermissionSetInput {
   const input = recordValue(value, 'Permission Set');
   const key = stringValue(input.key, 'Permission Set key');
-  const title = optionalStringValue(input.title, 'Permission Set title');
+  const title = parseAuthorizationTitle(input.title);
   if (!Array.isArray(input.grants)) {
     throw new TypeError('Permission Set grants must be an array');
   }

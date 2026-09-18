@@ -26,7 +26,10 @@ const seed: SeedDefinition = defineSeed({
         .values({
           id: crypto.randomUUID(),
           key: ROOT,
-          title: 'Root',
+          title: JSON.stringify({
+            key: 'permissionSets.builtIn.root',
+            ns: '@nocobase/app-plugin-authorization',
+          }),
           // Superuser access is a bypass declared in code, not a grant list.
           grants: JSON.stringify([]),
           createdAt: now,

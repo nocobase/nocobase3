@@ -22,7 +22,7 @@ export interface PermissionSetProtection {
 
 export interface PermissionSet {
   key: string;
-  title?: string;
+  title?: string | { key: string; ns: string };
   grants: readonly PermissionGrant[];
   /** Present when the set is protected; `allow` lists the operations the generic API still performs. */
   readonly protection?: PermissionSetProtection;
@@ -38,7 +38,7 @@ export interface PermissionSetAssignment {
 
 export interface PermissionSetInput {
   key: string;
-  title?: string;
+  title?: string | { key: string; ns: string };
   grants: readonly PermissionGrant[];
 }
 
@@ -50,11 +50,34 @@ export type LocalizedText =
   string | { key: string; ns: string; defaultValue?: string };
 
 export interface SelectOption<Text = string> {
+  category?: 'business' | 'administration';
   value: string;
   label: Text;
   description?: Text;
 }
 export interface ResourceOption<Text = string> extends SelectOption<Text> {
+  ruleScopes?: readonly {
+    action: string;
+    scopeKey: string;
+    label: Text;
+    collection: string;
+    policies?: readonly string[];
+  }[];
+  actionScopes?: Readonly<
+    Record<
+      string,
+      {
+        policyType: string;
+        fields: readonly {
+          key: string;
+          collectionFields?: readonly string[];
+          label: Text;
+          defaultValue: string;
+          options: readonly SelectOption<Text>[];
+        }[];
+      }
+    >
+  >;
   group?: string;
   actions?: readonly SelectOption<Text>[];
 }
@@ -62,6 +85,7 @@ export interface ResourceGroupOption<Text = string> extends SelectOption<Text> {
   children?: readonly ResourceGroupOption<Text>[];
 }
 export interface ResourceTypeOption<Text = string> {
+  category?: 'business' | 'administration';
   groups?: readonly ResourceGroupOption<Text>[];
   value: string;
   label: Text;
@@ -82,6 +106,7 @@ export interface SubjectOption {
 }
 export type SubjectSettings = string;
 export interface AuthorizationOptions<Text = string> {
+  resourceGroups?: readonly SelectOption<Text>[];
   plugins: readonly string[];
   resourceTypes: readonly ResourceTypeOption<Text>[];
   subjectTypes: readonly SubjectTypeOption<Text>[];
@@ -125,6 +150,7 @@ export type AuthorizationEffect = 'permit' | 'conditional' | 'deny';
 
 /** What the core decided, with why, and what it holds for when conditional. */
 export interface AuthorizationDecision {
+  checks?: readonly AuthorizationInspection[];
   effect: AuthorizationEffect;
   conditions?: Readonly<Record<string, unknown>> & { type: string };
   reasons: readonly AuthorizationReason[];
@@ -258,9 +284,11 @@ export class AuthorizationClient {
   inspect(input: AuthorizationInspectInput): Promise<AuthorizationDecision> {
     return this.send<AuthorizationDecision>('authz/inspect', 'POST', input);
   }
-  inspectConfigured(
-    subject: AuthorizationSubject,
-  ): Promise<{ unrestricted: boolean; types: readonly string[] }> {
+  inspectConfigured(subject: AuthorizationSubject): Promise<{
+    unrestricted: boolean;
+    types: readonly string[];
+    resources: readonly { type: string; id: string }[];
+  }> {
     return this.send('authz/inspect/configured', 'POST', { subject });
   }
   inspectBatch(

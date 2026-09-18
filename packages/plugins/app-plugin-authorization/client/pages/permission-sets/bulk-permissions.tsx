@@ -1,3 +1,4 @@
+import { actionMark } from './labels.js';
 import { ScopeMark } from '../../components/scope-marks.js';
 import type { ReactElement } from 'react';
 import type {
@@ -33,7 +34,7 @@ export function BulkPermissionToggle({
   const targets = items
     .map((item) => ({
       item,
-      actions: actions
+      actions: (item.actions ?? actions)
         .filter(
           (action) =>
             !item.actions ||
@@ -55,6 +56,21 @@ export function BulkPermissionToggle({
           ?.actions.includes(action),
       ).length,
     0,
+  );
+  const full = targets.every(({ item, actions }) =>
+    actions.every((action) => {
+      const grant = grants.get(resourceKey(type, item.value));
+      if (!grant?.actions.includes(action)) return false;
+      const config = item.actionScopes?.[action];
+      return (
+        (!config && actionMark(grant, action) === 'all') ||
+        config?.fields.every(
+          (field) =>
+            (grant.policies?.[action]?.[field.key] ?? field.defaultValue) ===
+            'allRecords',
+        )
+      );
+    }),
   );
   const checked = total > 0 && selected === total;
   return (
@@ -85,7 +101,9 @@ export function BulkPermissionToggle({
         onChange({ ...draft, grants: [...next.values()] });
       }}
     >
-      <ScopeMark value={checked ? 'all' : selected ? 'scoped' : 'none'} />
+      <ScopeMark
+        value={checked && full ? 'all' : selected ? 'scoped' : 'none'}
+      />
     </button>
   );
 }

@@ -22,7 +22,13 @@ type RestrictionRulesAdministrationApi = Omit<
 
 export function createRestrictionRulesHandler(
   api: RestrictionRulesAdministrationApi,
+  validate: (rule: RestrictionRule) => void = () => {},
 ): AuthorizationRouteHandler {
+  const checked = (value: unknown): RestrictionRule => {
+    const rule = parseRestrictionRule(value);
+    validate(rule);
+    return rule;
+  };
   const routes = createSettingsRouter();
 
   routes.get(RESTRICTION_RULES_ROUTE_PATH, async (context) => {
@@ -42,7 +48,7 @@ export function createRestrictionRulesHandler(
     );
     return context.json(
       {
-        data: await api.create(parseRestrictionRule(await context.req.json())),
+        data: await api.create(checked(await context.req.json())),
       },
       201,
     );
@@ -57,7 +63,7 @@ export function createRestrictionRulesHandler(
     return context.json({
       data: await api.update(
         context.req.param('key'),
-        parseRestrictionRule(await context.req.json()),
+        checked(await context.req.json()),
       ),
     });
   });

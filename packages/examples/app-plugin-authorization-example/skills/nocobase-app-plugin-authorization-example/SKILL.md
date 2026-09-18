@@ -1,54 +1,14 @@
 ---
 name: nocobase-app-plugin-authorization-example
-description: Use the NocoBase 3 authorization example plugin to demonstrate authorized Repository API endpoints, an owner-stamping custom route, and a seeded Permission Set that scopes rows with recordsIOwn.
+description: Explore the fictional sales permission example in a NocoBase v3 application.
 ---
 
-# Authorization example
+Use the registered authorization example plugin and normal application migrations and seeds. Open `/authorization-example` for example accounts and `/authorization-example/projects`, `/authorization-example/quotes`, and `/authorization-example/orders` for independently authorized business menus. All paths are relative to the application mount.
 
-This plugin owns one collection, `authorizationExampleTasks`, and one page,
-`/authorization-example`. Use it when explaining how an application route meets
-`@nocobase/app-plugin-authorization`. Do not use it as a task manager or store
-unrelated data in its table.
+Configure `example-sales-*` permission sets through authorization settings. Business groups contain flat resource actions. Each action declares named scopes bound to specific tables. Configure default access, sharing and restrictions by business resource, action and scopeKey. Use one `authorize` result and its `conditions.database` policies in business endpoints; generic interfaces aggregate underlying grants. Sharing records does not grant an operation or automatically share related quotes. Never copy real customer data into this example.
 
-## Prerequisites and registration
+Scope policies are registered globally through `authz.db.recordAccess.add`, with `collections` and `requiredFields` determining applicability. Permission sets and all three rule editors share those choices. Projects reuse `recordsIOwn`; quote submission uses its independent `preparedById` through `example.sales.prepared`, while orders use parent-project ownership. Submission checks the project region independently. Business configuration hides underlying page/table categories and groups resources by sales collaboration and delivery. The inspector lists each resource’s own operations and explains both feature grants and underlying checks.
 
-The application must register `@nocobase/app-plugin-authentication`,
-`@nocobase/app-plugin-authorization` and this plugin on the Server, and this
-plugin's Client factory. Apply migrations and seeds before opening the page.
+Keep four job-based permission sets: sales assistant, sales engineer, project manager and delivery specialist. Team subjects use `example.sales.team`; membership and active-state data live in the example team tables. Register membership resolution with `subjects.define(...).resolveFor` so authenticated requests and inspection agree. Seed both user and team assignments, never replace all direct assignments with team roles. Use sales_proposal and sales_dispatch to verify team-only access and sales_coordinator to verify direct-plus-inherited role union.
 
-## Public surfaces
-
-- Client factory: `@nocobase/app-plugin-authorization-example/client`.
-- Server definition: `@nocobase/app-plugin-authorization-example/server`.
-- Page: `/authorization-example`, relative to the application mount point.
-- Repository: `authorizationExampleTasks`, with `findMany`, `findOne`, `count`,
-  `updateOne` and `deleteOne`. There is no `createOne`: creating goes through
-  `POST /authorization-example/tasks`, which takes a title and stamps the owner
-  from the principal.
-
-## What it demonstrates
-
-- A service provider registering the collection at boot, with the title the
-  permission UI shows. Registration is explicit and belongs in a provider, not
-  in a route file; nothing registers a collection on your behalf.
-- `authorization.repositories(exposures)` narrowing a static Policy shape with
-  the caller's grants, mounted on each endpoint by name.
-- Writing `read` as a node with `fields` and `relations` rather than `true`,
-  because a grant patch carries no relation model and replaces a `true` member
-  wholesale.
-- A hand-written route that binds the same Policy through
-  `repository.withPolicy()` because the value it writes is the server's to
-  decide, never the request body's.
-- A seed that writes Permission Set rows in the shape `authz.db.grant()`
-  emits, idempotently, and does nothing when the authorization tables are
-  absent.
-
-## Ownership and verification
-
-The plugin owns its migration, seed, provider, routes, page and locale strings. An
-application reaches it through public package exports; do not import private
-source paths. For a schema change write a new migration after the existing one
-has shipped rather than editing it.
-
-`pnpm --filter @nocobase/app-plugin-authorization-example check` runs lint,
-formatting, typecheck, real SQLite route tests and build.
+Use `sales_assistant`, `sales_engineer`, `sales_manager` and `sales_delivery` for direct roles. The independent team handover uses quote-7 and project-3; removing either shared scope must deny submission. Keep accepted order-source quotes separate from draft exercises. Only unrestricted administrators can reset the fixed business records through the guide's confirmation; resetting never changes authorization configuration or memberships. Restore rule changes manually before rerunning baseline exercises.

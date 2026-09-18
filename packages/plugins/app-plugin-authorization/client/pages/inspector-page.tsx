@@ -1,6 +1,18 @@
+import {
+  useSubjectNames,
+  subjectKey,
+} from '../components/use-subject-names.js';
+import { resourceSections } from '../components/resource-sections.js';
+import { Checkbox } from '../components/ui/checkbox.js';
 import { SubjectPicker } from '../components/subject-picker.js';
 import { useResourceOptions } from '../components/use-resource-options.js';
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+} from 'react';
 import { useSearchParams } from 'react-router';
 import {
   ChevronDown,
@@ -35,7 +47,7 @@ const authz = getAuthorizationClient();
 const pageSize = 20;
 export default function InspectorPage(): ReactElement {
   const t = useAuthorizationTranslation();
-  const page = useAuthorizationPageData('authz/permission-sets/options');
+  const page = useAuthorizationPageData('authz/inspector/options');
   const options = useResourceOptions(page.options);
   return (
     <PermissionsPage
@@ -68,11 +80,18 @@ function Inspector({
         : undefined,
     [subjectType, subjectId],
   );
+  const names = useSubjectNames(
+    'inspector',
+    options.subjectTypes,
+    subject ? [subject] : [],
+  );
+  const sections = useMemo(() => resourceSections(options), [options]);
   const type =
-    options.resourceTypes.find((item) => item.value === params.get('type')) ??
-    options.resourceTypes.find((item) => item.resources.length > 0) ??
-    options.resourceTypes[0];
+    sections.find((item) => item.key === params.get('type')) ??
+    sections.find((item) => item.resources.length > 0) ??
+    sections[0];
   const search = params.get('search') ?? '';
+  const configuredOnly = params.get('configuredOnly') === 'true';
   const requestedPage = Number(params.get('page'));
   const requestedPageNumber =
     Number.isSafeInteger(requestedPage) && requestedPage > 0
@@ -90,6 +109,7 @@ function Inspector({
     key: string;
     unrestricted: boolean;
     types: readonly string[];
+    resources: readonly { type: string; id: string }[];
   }>();
   const configurationKey = JSON.stringify([subject, revision]);
   useEffect(() => {
@@ -109,14 +129,39 @@ function Inspector({
   }, [subject, configurationKey]);
   const [detail, setDetail] = useState<AuthorizationInspection>();
   const [detailKey, setDetailKey] = useState('');
+  const configuredResources = useMemo(
+    () =>
+      new Set(
+        configured?.key === configurationKey
+          ? configured.resources
+              ?.filter((resource) => resource.type === type?.value)
+              .map((resource) => resource.id)
+          : [],
+      ),
+    [configured, configurationKey, type],
+  );
+  const configurationLoading =
+    !!subject && configured?.key !== configurationKey && !error;
   const filtered = useMemo(
     () =>
-      (type?.resources ?? []).filter((item) =>
-        `${item.label} ${item.value}`
-          .toLowerCase()
-          .includes(search.toLowerCase()),
+      (type?.resources ?? []).filter(
+        (item) =>
+          `${item.label} ${item.value}`
+            .toLowerCase()
+            .includes(search.toLowerCase()) &&
+          (!configuredOnly ||
+            (configured?.key === configurationKey && configured.unrestricted) ||
+            configuredResources.has(item.value) ||
+            configuredResources.has('*')),
       ),
-    [type, search],
+    [
+      type,
+      search,
+      configuredOnly,
+      configured,
+      configurationKey,
+      configuredResources,
+    ],
   );
   const page = Math.min(
     requestedPageNumber,
@@ -131,11 +176,11 @@ function Inspector({
       ...new Map(
         [
           ...(type?.actions ?? []),
-          ...visible.flatMap((item) => item.actions ?? []),
+          ...(type?.resources ?? []).flatMap((item) => item.actions ?? []),
         ].map((item) => [item.value, item]),
       ).values(),
     ],
-    [type, visible],
+    [type],
   );
   const checks = useMemo(
     () =>
@@ -191,13 +236,17 @@ function Inspector({
       active = false;
     };
   }, [queryKey]);
-  const loading = !!subject && loadedKey !== queryKey && !error;
+  const loading =
+    !!subject &&
+    !error &&
+    (loadedKey !== queryKey || (configuredOnly && configurationLoading));
   const selectedResource =
     detail && type?.resources.find((item) => item.value === detail.resource.id);
   return (
     <div className='space-y-4'>
       <div className='flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3'>
         <SubjectPicker
+          settings='inspector'
           types={options.subjectTypes}
           selectedType={subjectType}
           value={subject}
@@ -235,47 +284,70 @@ function Inspector({
       ) : (
         <div className='flex min-h-[60vh] gap-3'>
           <nav
-            aria-label={t('editors.resourceType')}
+            aria-label={t('editors.resourceGroup')}
             className='w-40 shrink-0 space-y-1 rounded-lg border bg-card p-2'
           >
-            <h2 className='px-3 py-2 text-xs font-medium text-muted-foreground'>
-              {t('editors.resourceType')}
-            </h2>
-            {options.resourceTypes.map((item) => (
-              <Button
-                key={item.value}
-                className='w-full justify-start'
-                variant={item === type ? 'outline' : 'ghost'}
-                aria-label={item.label}
-                aria-current={item === type ? 'page' : undefined}
-                onClick={() => {
-                  change('type', item.value);
-                  setCollapsed(new Set());
-                }}
-              >
-                <span className='flex-1 text-left'>{item.label}</span>
-                {configured?.key === configurationKey &&
-                (configured.unrestricted ||
-                  configured.types.includes(item.value)) ? (
-                  <span
-                    role='img'
-                    title={t('permissionWorkspace.configured')}
-                    aria-label={t('permissionWorkspace.configured')}
-                    className='shrink-0 text-muted-foreground'
-                  >
-                    <Shield className='size-3.5' aria-hidden='true' />
-                  </span>
-                ) : null}
-              </Button>
+            {sections.map((item, index) => (
+              <Fragment key={item.key}>
+                {item.category &&
+                  item.category !== sections[index - 1]?.category && (
+                    <div
+                      className={`flex items-center gap-2 px-3 pb-2 text-xs font-semibold text-foreground ${index > 0 ? 'mt-4 border-t pt-4' : 'pt-2'}`}
+                    >
+                      <span
+                        className='h-3 w-0.5 rounded-full bg-primary'
+                        aria-hidden='true'
+                      />
+                      {t(`permissionWorkspace.categories.${item.category}`)}
+                    </div>
+                  )}
+                <Button
+                  key={item.key}
+                  className='w-full justify-start'
+                  variant={item === type ? 'outline' : 'ghost'}
+                  aria-label={item.label}
+                  aria-current={item === type ? 'page' : undefined}
+                  onClick={() => {
+                    change('type', item.key);
+                    setCollapsed(new Set());
+                  }}
+                >
+                  <span className='flex-1 text-left'>{item.label}</span>
+                  {configured?.key === configurationKey &&
+                  (configured.unrestricted ||
+                    configured.types.includes(item.value)) ? (
+                    <span
+                      role='img'
+                      title={t('permissionWorkspace.configured')}
+                      aria-label={t('permissionWorkspace.configured')}
+                      className='shrink-0 text-muted-foreground'
+                    >
+                      <Shield className='size-3.5' aria-hidden='true' />
+                    </span>
+                  ) : null}
+                </Button>
+              </Fragment>
             ))}
           </nav>
           <div className='min-w-0 flex-1 space-y-3'>
-            <SearchField
-              label={t('permissionSets.picker.searchResources')}
-              placeholder={t('permissionSets.picker.searchResources')}
-              value={search}
-              onChange={(value) => change('search', value)}
-            />
+            <div className='flex items-center gap-3'>
+              <SearchField
+                className='min-w-0 sm:max-w-none'
+                label={t('permissionSets.picker.searchResources')}
+                placeholder={t('permissionSets.picker.searchResources')}
+                value={search}
+                onChange={(value) => change('search', value)}
+              />
+              <label className='flex shrink-0 items-center gap-2 whitespace-nowrap text-sm text-muted-foreground'>
+                <Checkbox
+                  checked={configuredOnly}
+                  onCheckedChange={(checked) =>
+                    change('configuredOnly', checked ? 'true' : '')
+                  }
+                />
+                {t('permissionWorkspace.configuredOnly')}
+              </label>
+            </div>
             {error ? <ErrorBox value={error} /> : null}
             <div
               aria-busy={loading}
@@ -284,12 +356,10 @@ function Inspector({
               <table className='w-full table-fixed text-sm'>
                 <thead className='sticky top-0 z-10 bg-background'>
                   <tr>
-                    <th className='p-3 text-left'>{t('common.resource')}</th>
-                    {actions.map((action) => (
-                      <th key={action.value} className='w-24 p-3 text-center'>
-                        {action.label}
-                      </th>
-                    ))}
+                    <th className='w-[32%] p-3 text-left'>
+                      {t('common.resource')}
+                    </th>
+                    <th className='p-3 text-left'>{t('editors.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -300,7 +370,7 @@ function Inspector({
                           key={`group:${row.group.value}`}
                           className='border-t bg-muted/30'
                         >
-                          <td colSpan={actions.length + 1}>
+                          <td colSpan={2}>
                             <button
                               className='flex w-full items-center gap-2 py-2 text-left font-medium'
                               style={{ paddingLeft: 12 + row.depth * 16 }}
@@ -332,75 +402,86 @@ function Inspector({
                           >
                             {row.item.label}
                           </td>
-                          {actions.map((action) => {
-                            const result =
-                              loadedKey === queryKey
-                                ? results?.find(
-                                    (item) =>
-                                      item.resource.id === row.item.value &&
-                                      item.action === action.value,
-                                  )
-                                : undefined;
-                            const supported = (
-                              row.item.actions ??
-                              type?.actions ??
-                              []
-                            ).some((item) => item.value === action.value);
-                            const status =
-                              result &&
-                              inspectionStatus(
-                                result.decision,
-                                options.collections.find(
-                                  (item) => item.name === row.item.value,
-                                )?.fields,
-                              );
-                            return (
-                              <td key={action.value} className='text-center'>
-                                {!supported ? (
-                                  '—'
-                                ) : !result ? (
-                                  <span className='text-muted-foreground'>
-                                    {loading ? '…' : '—'}
-                                  </span>
-                                ) : (
-                                  <Button
-                                    variant='ghost'
-                                    size='icon'
-                                    aria-label={`${row.item.label}: ${action.label}`}
-                                    onClick={() => {
-                                      setDetailKey(queryKey);
-                                      setDetail(result);
-                                    }}
-                                  >
-                                    {status === 'context' ? (
-                                      <CircleHelp
-                                        className='size-4 text-muted-foreground'
-                                        aria-label={t(
-                                          'inspector.status.context',
-                                        )}
-                                      />
-                                    ) : status === 'error' ? (
-                                      <CircleAlert
-                                        className='size-4 text-destructive'
-                                        aria-label={t('inspector.failed')}
-                                      />
-                                    ) : (
-                                      <ScopeMark
-                                        value={status!}
-                                        label={t(`inspector.status.${status}`)}
-                                      />
-                                    )}
-                                  </Button>
-                                )}
-                              </td>
-                            );
-                          })}
+                          <td className='p-2'>
+                            <div className='flex min-w-0 flex-wrap gap-x-3 gap-y-1'>
+                              {(row.item.actions ?? type?.actions ?? []).map(
+                                (action) => {
+                                  const result =
+                                    loadedKey === queryKey
+                                      ? results?.find(
+                                          (item) =>
+                                            item.resource.id ===
+                                              row.item.value &&
+                                            item.action === action.value,
+                                        )
+                                      : undefined;
+                                  const status =
+                                    result &&
+                                    inspectionStatus(
+                                      result.decision,
+                                      options.collections.find(
+                                        (item) => item.name === row.item.value,
+                                      )?.fields,
+                                    );
+                                  return (
+                                    <span
+                                      key={action.value}
+                                      className='inline-flex items-center'
+                                    >
+                                      {!result ? (
+                                        <span className='text-muted-foreground'>
+                                          {loading ? '…' : '—'}
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type='button'
+                                          aria-haspopup='dialog'
+                                          className='inline-flex items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring'
+                                          aria-label={`${row.item.label}: ${action.label}`}
+                                          onClick={() => {
+                                            setDetailKey(queryKey);
+                                            setDetail(result);
+                                          }}
+                                        >
+                                          <span className='inline-flex size-6 shrink-0 items-center justify-center'>
+                                            {status === 'context' ? (
+                                              <CircleHelp
+                                                className='size-4 text-muted-foreground'
+                                                aria-label={t(
+                                                  'inspector.status.context',
+                                                )}
+                                              />
+                                            ) : status === 'error' ? (
+                                              <CircleAlert
+                                                className='size-4 text-destructive'
+                                                aria-label={t(
+                                                  'inspector.failed',
+                                                )}
+                                              />
+                                            ) : (
+                                              <ScopeMark
+                                                value={status!}
+                                                label={t(
+                                                  `inspector.status.${status}`,
+                                                )}
+                                              />
+                                            )}
+                                          </span>
+                                          <span>{action.label}</span>
+                                        </button>
+                                      )}
+                                    </span>
+                                  );
+                                },
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ),
                   )}
                 </tbody>
               </table>
-              {!visible.length ? (
+              {!visible.length && !loading ? (
                 <p className='p-8 text-center text-muted-foreground'>
                   {t(
                     type?.resources.length
@@ -449,12 +530,15 @@ function Inspector({
       {detail && detailKey === queryKey && loadedKey === queryKey ? (
         <RuleDrawer
           title={`${selectedResource?.label ?? detail.resource.id} · ${actions.find((item) => item.value === detail.action)?.label ?? detail.action}`}
-          description={`${options.subjectTypes.find((item) => item.value === subject?.type)?.label ?? subject?.type} · ${subject?.id}`}
+          description={`${options.subjectTypes.find((item) => item.value === subject?.type)?.label ?? subject?.type} · ${subject ? (names[subjectKey(subject)] ?? subject.id) : ''}`}
           onClose={() => setDetail(undefined)}
         >
           <div className='overflow-y-auto p-6'>
             <Decision
               value={detail.decision}
+              options={options}
+              resource={selectedResource}
+              action={detail.action}
               fields={
                 options.collections.find(
                   (item) => item.name === detail.resource.id,

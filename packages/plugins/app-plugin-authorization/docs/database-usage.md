@@ -259,3 +259,24 @@ router.route(
 
 `authz.explain()` 返回完整 Decision 和原因，可用于调试和审计。生产代码仍应采用默认
 拒绝策略。
+
+## 组合业务操作
+
+组合操作只调用一次 `authorize`，从返回的 `conditions.database` 直接取各张表的 Repository Policy。这里已经合并本次操作的默认范围、共享和限制规则，不再调用 `require` 或 `db.policyFor`。
+
+```ts
+const decision = await c.var.authz.authorize({
+  resource: { type: 'resource', id: 'example.sales.orders' },
+  action: 'view',
+});
+if (decision.effect === 'deny' || !decision.conditions?.database) {
+  throw new AuthorizationDeniedError(decision);
+}
+const policy = decision.conditions.database[ORDERS];
+const items =
+  policy.read === false
+    ? []
+    : await database.repository(ORDERS).withPolicy(policy).findMany();
+```
+
+`conditions.checks` 保留各底层资源操作的判定依据。多表操作分别使用各表的策略；未被该操作引用的 CRUD 动作保持拒绝，其他业务操作的授权不会扩大这些策略。有条件的结果必须通过 `withPolicy` 执行；组合资源的 `can` 仅用于功能入口展示，`require` 不会将有条件结果当作已执行。

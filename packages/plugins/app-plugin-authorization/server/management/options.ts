@@ -8,10 +8,11 @@ import { databaseScopeRuleOptions } from '../routes/options.js';
 export function createSubjectRoutes(
   authorization: AppAuthorizationService,
   settings: string,
+  action = 'read',
 ): Hono<AuthorizationEnv> {
   const routes = new Hono<AuthorizationEnv>();
   routes.get(`/${settings}/subjects/:type`, async (context) => {
-    await admin(context, settings, 'read');
+    await admin(context, settings, action);
     const selection = authorization.subjects.get(context.req.param('type'))
       ?.administration?.selection;
     if (!selection || selection.type !== 'collection')
@@ -33,7 +34,7 @@ export function createSubjectRoutes(
     return context.json({ data });
   });
   routes.post(`/${settings}/subjects/:type/resolve`, async (context) => {
-    await admin(context, settings, 'read');
+    await admin(context, settings, action);
     const selection = authorization.subjects.get(context.req.param('type'))
       ?.administration?.selection;
     if (!selection || selection.type !== 'collection')

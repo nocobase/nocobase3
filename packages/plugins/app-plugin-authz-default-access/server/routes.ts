@@ -14,6 +14,7 @@ import {
 import type { DefaultAccessAuthorizationApi } from '@nocobase/authorization/default-access';
 import {
   createRuleOptionsRoutes,
+  validateDatabaseScopeRule,
   createAuthorizationAdministration,
   describeCollection,
 } from '@nocobase/app-plugin-authorization/server/management';
@@ -62,7 +63,9 @@ const contributions: readonly AppApiRouteContribution<AppPluginApplication>[] =
           'default-access',
         ),
       );
-      const handler = createDefaultAccessHandler(api);
+      const handler = createDefaultAccessHandler(api, (rule) =>
+        validateDatabaseScopeRule(authorization, rule),
+      );
       routes.all('/default-access', (context) =>
         handler({
           request: context.req.raw,

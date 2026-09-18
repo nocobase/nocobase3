@@ -1,3 +1,4 @@
+import type { AuthorizationGrantSource } from './grants.js';
 import type {
   AuthorizationIdentity,
   AuthorizationSubject,
@@ -16,12 +17,13 @@ export type AccessConstraintValue =
   | ResourceAccessScope;
 
 export interface AccessConstraint {
-  source: { plugin: string; id: string };
+  source: AuthorizationGrantSource;
   effect: 'expand' | 'restrict';
   value: AccessConstraintValue;
 }
 
 export interface ResolveAccessConstraintsInput {
+  scopeKey?: string;
   principal: Principal;
   subjects?: readonly AuthorizationSubject[];
   resource: ResourceRef;
@@ -75,7 +77,7 @@ export class AccessConstraintRegistry {
     );
     return {
       resolve: (input) => {
-        const key = `${input.resource.type}\u0000${input.resource.id}\u0000${input.action}`;
+        const key = `${input.resource.type}\u0000${input.resource.id}\u0000${input.action}\u0000${input.scopeKey ?? ''}`;
         let result = cache.get(key);
         if (!result) {
           result = Promise.all(

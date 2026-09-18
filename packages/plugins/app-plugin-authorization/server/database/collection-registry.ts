@@ -1,3 +1,7 @@
+import {
+  ResourceActionRegistry,
+  type ResourceActionDeclaration,
+} from '@nocobase/authorization/core';
 import { sameOptionText, type OptionText } from '../i18n.js';
 
 /**
@@ -11,6 +15,7 @@ export interface DatabaseCollectionRegistration {
   readonly title?: OptionText;
   readonly description?: OptionText;
   readonly group?: string;
+  readonly actions?: readonly ResourceActionDeclaration[];
 }
 
 /**
@@ -20,6 +25,8 @@ export interface DatabaseCollectionRegistration {
  * every grant.
  */
 export class DatabaseCollectionRegistry {
+  readonly actionRegistry: ResourceActionRegistry =
+    new ResourceActionRegistry();
   private readonly registrations = new Map<
     string,
     DatabaseCollectionRegistration
@@ -39,14 +46,29 @@ export class DatabaseCollectionRegistry {
       if (
         sameOptionText(existing.title, registration.title) &&
         sameOptionText(existing.description, registration.description) &&
-        existing.group === registration.group
+        existing.group === registration.group &&
+        (existing.actions ?? []).length ===
+          (registration.actions ?? []).length &&
+        (existing.actions ?? []).every(
+          (action, index) => action === registration.actions?.[index],
+        )
       )
         return;
       throw new Error(
         `Database Collection already registered: ${registration.name}`,
       );
     }
-    this.registrations.set(registration.name, structuredClone(registration));
+    const actions = registration.actions ?? [
+      'read',
+      'create',
+      'update',
+      'delete',
+    ];
+    this.actionRegistry.add(registration.name, actions);
+    this.registrations.set(registration.name, {
+      ...registration,
+      ...(registration.actions ? { actions: [...registration.actions] } : {}),
+    });
   }
 
   has(name: string): boolean {
@@ -54,6 +76,9 @@ export class DatabaseCollectionRegistry {
   }
 
   list(): readonly DatabaseCollectionRegistration[] {
-    return structuredClone([...this.registrations.values()]);
+    return [...this.registrations.values()].map((registration) => ({
+      ...registration,
+      ...(registration.actions ? { actions: [...registration.actions] } : {}),
+    }));
   }
 }

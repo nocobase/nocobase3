@@ -84,7 +84,7 @@ interface PostAuthorizationParams {
   post: Post;
 }
 
-authz.resources.add<PostAuthorizationParams>({
+authz.resourceTypes.add<PostAuthorizationParams>({
   resourceType: 'post',
 
   async authorize(request) {

@@ -1,3 +1,4 @@
+import { databaseAuthorization } from '../server/database/index.js';
 import { createAuthorization } from './authorization-fixture.js';
 import { createConfigPaths } from '@nocobase/app-server/config';
 import {
@@ -24,7 +25,7 @@ import { MockPermissionSetStore } from './mock-permission-set-store.js';
 const decisions: AuthorizationPlugin = {
   id: 'test-decisions',
   setup(authz) {
-    authz.resources.add({
+    authz.resourceTypes.add({
       resourceType: 'test.resource',
       authorize: (request): Promise<AuthorizationDecision> =>
         Promise.resolve(
@@ -107,7 +108,7 @@ describe('the permission inspector endpoint', () => {
   it('inspects non-user subjects without adding authenticated-user grants', async () => {
     const authz = await authorization({ settings: true });
     const seen: unknown[] = [];
-    authz.resources.add({
+    authz.resourceTypes.add({
       resourceType: 'subject-check',
       authorize(request) {
         seen.push({ principal: request.principal, subjects: request.subjects });
@@ -173,7 +174,11 @@ describe('the permission inspector endpoint', () => {
     const response = await send(await mountedRouter(authz));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      data: { unrestricted: false, types: ['database.collection'] },
+      data: {
+        unrestricted: false,
+        types: ['database.collection'],
+        resources: [{ type: 'database.collection', id: '*' }],
+      },
     });
   });
 
@@ -293,6 +298,7 @@ async function authorization({
     plugins: [
       identity,
       decisions,
+      databaseAuthorization(),
       permissionSets({ store: new MockPermissionSetStore() }),
     ],
   }) as unknown as Authorization;
@@ -301,8 +307,8 @@ async function authorization({
     grants: settings
       ? [
           {
-            resource: { type: 'settings', id: '*' },
-            actions: [{ action: 'read' }],
+            resource: { type: 'settings', id: 'authorization.inspector' },
+            actions: [{ action: 'inspect' }],
           },
         ]
       : [],
@@ -330,3 +336,13 @@ async function mountedRouter(authorization: Authorization): Promise<Hono> {
   });
   return new Hono().route('/api', routes);
 }
+
+it('allows inspector options without permission-set read access', async () => {
+  const router = await mountedRouter(await authorization({ settings: true }));
+  expect((await router.request('/api/authz/inspector/options')).status).toBe(
+    200,
+  );
+  expect(
+    (await router.request('/api/authz/permission-sets/options')).status,
+  ).toBe(403);
+});

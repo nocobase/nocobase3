@@ -316,7 +316,7 @@ describe('@nocobase/app-plugin-users resource authorization', () => {
     const add = vi.fn();
     const container = new ServiceContainer();
     container.instance(authorizationToken, {
-      resources: { add },
+      resourceTypes: { add },
       subjects: { define: vi.fn() },
     } as unknown as Authorization);
     const provider = new UsersProvider({

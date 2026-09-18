@@ -1,61 +1,36 @@
-import type { ResourceGroup } from '@nocobase/authorization/core';
 import type { DatabaseConnection } from '@nocobase/db';
 import { describeCollection } from '../database/index.js';
-import { optionText, optionLabel, type OptionText } from '../i18n.js';
+import { optionText, optionLabel } from '../i18n.js';
 import type { AppAuthorizationService } from '../tokens.js';
 
-/** One grantable Collection: its registration, plus the fields db reports. */
 interface DatabaseCollectionOption {
-  group?: string;
   readonly name: string;
-  readonly title?: OptionText;
-  readonly description?: OptionText;
   readonly fields: readonly string[];
 }
 
-/** Display text stays literal or retains its translation descriptor on the wire. */
-interface Option {
-  readonly value: string;
-  readonly label: OptionText;
-  readonly description?: OptionText;
-}
-
-const crudActions = ['read', 'create', 'update', 'delete'] as const;
-export async function permissionSetOptions(
+/** Only explicitly composed operations are user-configurable. Categories arrange them, never expose underlying handlers. */
+async function managementOptions(
   authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
-): Promise<object> {
+) {
   const collections = await databaseCollections(authz, connection);
-  const access = [actionOption('access')];
   return {
     plugins: ['permission-sets', 'pages', 'database'],
-    resourceTypes: [
-      {
-        value: 'page',
-        groups: authz.resources.get('page')
-          ? resourceGroupOptions(authz.getResource('page').groups.list())
-          : [],
-        label: optionLabel('options.resourceTypes.page', 'Pages'),
-        resources: [
-          ...(authz.resources.get('page')
-            ? authz
-                .getResource('page')
-                .items.list()
-                .map((item) => ({
-                  value: item.id,
-                  label: optionText(item.title, item.id),
-                  ...(item.group ? { group: item.group } : {}),
-                  actions: item.actions.map((action) => actionOption(action)),
-                }))
-            : []),
-        ],
-        actions: access,
-      },
-      databaseResourceOptions(collections, authz),
-      administrationOptions(authz),
-    ],
+    resourceGroups: authz.resourceGroups.list().map((group) => ({
+      value: group.name,
+      category: group.category ?? 'business',
+      label: optionText(group.title, group.name),
+    })),
+    resourceTypes: businessResourceOptions(authz, collections),
     subjectTypes: subjectTypeOptions(authz),
-    ...databaseOptions(authz, collections),
+    collections: collections.map(({ name, fields }) => ({ name, fields })),
+    recordAccessPolicies: authz.db.recordAccess.list().map((policy) => ({
+      value: policy.key,
+      label: optionText(policy.title, policy.key),
+      ...(policy.description === undefined
+        ? {}
+        : { description: optionText(policy.description, '') }),
+    })),
   };
 }
 
@@ -63,141 +38,39 @@ export async function databaseScopeRuleOptions(
   authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
 ): Promise<object> {
-  const collections = await databaseCollections(authz, connection);
-  const collection = databaseResourceOptions(collections, authz);
-  const withoutCreate = (actions: readonly Option[]): readonly Option[] =>
-    actions.filter((action) => action.value !== 'create');
+  const options = await managementOptions(authz, connection);
   return {
+    ...options,
     plugins: ['database'],
-    resourceTypes: [
-      {
-        ...collection,
-        resources: collection.resources.map((resource) => ({
-          ...resource,
-          actions: withoutCreate(resource.actions),
-        })),
-        actions: withoutCreate(collection.actions),
-      },
-    ],
-    subjectTypes: subjectTypeOptions(authz),
-    ...databaseOptions(authz, collections),
+    resourceTypes: options.resourceTypes
+      .map((type) => {
+        const resources = type.resources.filter(
+          (resource) => resource.ruleScopes.length > 0,
+        );
+        return {
+          ...type,
+          resources,
+          groups: type.groups.filter((group) =>
+            resources.some((resource) => resource.group === group.value),
+          ),
+        };
+      })
+      .filter((type) => type.resources.length > 0),
   };
 }
 
-function resourceGroupOptions(groups: readonly ResourceGroup[]): object[] {
-  return groups.map((group) => ({
-    value: group.id,
-    label: optionText(group.title, group.id),
-    ...(group.children
-      ? { children: resourceGroupOptions(group.children) }
-      : {}),
-  }));
-}
-
-function administrationOptions(authz: AppAuthorizationService): object {
-  const settings = authz.getResource('settings');
-  const resources = settings.items.list();
-  return {
-    value: 'settings',
-    label: optionLabel('options.resourceTypes.settings', 'Admin settings'),
-    groups: resourceGroupOptions(settings.groups.list()),
-    resources: resources.map((resource) => ({
-      value: resource.id,
-      ...(resource.group ? { group: resource.group } : {}),
-      label: optionText(resource.title, resource.id),
-      actions: resource.actions.map((action) => actionOption(action)),
-    })),
-    actions: [
-      ...new Set(resources.flatMap((resource) => resource.actions)),
-    ].map((action) => actionOption(action)),
-  };
-}
-
-/**
- * The Collections an application can grant on: the registered ones, and only
- * those. The field pickers still read their fields from db, which owns them.
- */
 async function databaseCollections(
   authz: AppAuthorizationService,
   connection: DatabaseConnection | undefined,
 ): Promise<readonly DatabaseCollectionOption[]> {
   if (!connection) return [];
   const described = await Promise.all(
-    authz
-      .getResource('database.collection')
-      .items.list()
-      .map(async (registration) => {
-        const collection = await describeCollection(
-          connection,
-          registration.name,
-        );
-        return collection === undefined
-          ? undefined
-          : { ...registration, fields: collection.fields };
-      }),
+    authz.db.collections.list().map(async ({ name }) => {
+      const collection = await describeCollection(connection, name);
+      return collection && { name, fields: collection.fields };
+    }),
   );
   return described.filter((item) => item !== undefined);
-}
-
-function databaseResourceOptions(
-  collections: readonly DatabaseCollectionOption[],
-  authz: AppAuthorizationService,
-): {
-  groups: object[];
-  value: string;
-  label: OptionText;
-  resources: readonly (Option & { actions: readonly Option[] })[];
-  actions: readonly Option[];
-} {
-  const actions = crudActions.map((value) => actionOption(value));
-  return {
-    value: 'database.collection',
-    groups: resourceGroupOptions(
-      authz.getResource('database.collection').groups.list(),
-    ),
-    label: optionLabel(
-      'options.resourceTypes.collection',
-      'Database collections',
-    ),
-    resources: collections.map((collection) => ({
-      value: collection.name,
-      ...(collection.group ? { group: collection.group } : {}),
-      label: optionText(collection.title, collection.name),
-      ...(collection.description === undefined
-        ? {}
-        : {
-            description: optionText(collection.description, ''),
-          }),
-      actions,
-    })),
-    actions,
-  };
-}
-
-/** Built-in action vocabulary with a readable fallback for custom actions. */
-function actionOption(value: string): Option {
-  return {
-    value,
-    label: optionLabel(`options.actions.${value}`, sentenceCase(value)),
-  };
-}
-
-function databaseOptions(
-  authz: AppAuthorizationService,
-  collections: readonly DatabaseCollectionOption[],
-): object {
-  return {
-    collections: collections.map(({ name, fields }) => ({ name, fields })),
-    recordAccessPolicies: authz.db.recordAccess.list().map((policy) => ({
-      value: policy.key,
-      label: optionText(policy.title, policy.key),
-      ...(policy.description === undefined
-        ? {}
-        : {
-            description: optionText(policy.description, ''),
-          }),
-    })),
-  };
 }
 
 function subjectTypeOptions(authz: AppAuthorizationService): readonly object[] {
@@ -217,6 +90,102 @@ function subjectTypeOptions(authz: AppAuthorizationService): readonly object[] {
   });
 }
 
-function sentenceCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+function businessResourceOptions(
+  authz: AppAuthorizationService,
+  collections: readonly DatabaseCollectionOption[],
+) {
+  const definitions = authz.resources.definitionsList();
+  const fieldsByCollection = new Map(
+    collections.map(({ name, fields }) => [name, fields]),
+  );
+  if (!definitions.length) return [];
+  return [
+    {
+      value: 'resource',
+      label: optionLabel('options.resourceTypes.business', 'Business features'),
+      groups: authz.resourceGroups.list().map((group) => ({
+        value: group.name,
+        category: group.category ?? 'business',
+        label: optionText(group.title, group.name),
+      })),
+      actions: [
+        ...new Set(
+          definitions.flatMap((resource) =>
+            resource.actions.map((action) => action.name),
+          ),
+        ),
+      ].map((value) => ({
+        value,
+        label: optionLabel(
+          `options.actions.${value}`,
+          value.charAt(0).toUpperCase() + value.slice(1),
+        ),
+      })),
+      resources: definitions.map((resource) => {
+        const scopes = resource.actions.flatMap((action) =>
+          Object.entries(action.scopes ?? {}).map(([key, scope]) => {
+            const fields = fieldsByCollection.get(scope.resource.id) ?? [];
+            const policies = authz.db.recordAccess
+              .listFor({ name: scope.resource.id, fields })
+              .filter(
+                (policy) =>
+                  !scope.options || scope.options.includes(policy.key),
+              );
+            return { action: action.name, key, scope, fields, policies };
+          }),
+        );
+        return {
+          value: resource.name,
+          label: optionText(resource.title, resource.name),
+          group: resource.group,
+          actions: resource.actions.map((action) => ({
+            value: action.name,
+            label: optionText(action.title, action.name),
+          })),
+          ruleScopes: scopes.map(({ action, key, scope, policies }) => ({
+            action,
+            scopeKey: key,
+            label: optionText(scope.title, key),
+            collection: scope.resource.id,
+            policies: policies.map((policy) => policy.key),
+          })),
+          actionScopes: Object.fromEntries(
+            resource.actions.flatMap((action) => {
+              const fields = scopes
+                .filter((scope) => scope.action === action.name)
+                .map(({ key, scope, fields, policies }) => ({
+                  key,
+                  collectionFields: fields,
+                  label: optionText(scope.title, key),
+                  defaultValue: scope.defaultValue ?? '',
+                  options: [
+                    {
+                      value: '',
+                      label: optionLabel(
+                        'options.defaultAndSharing',
+                        'Default access and sharing',
+                      ),
+                    },
+                    ...policies.map((policy) => ({
+                      value: policy.key,
+                      label: optionText(policy.title, policy.key),
+                    })),
+                  ],
+                }));
+              return fields.length
+                ? [[action.name, { policyType: 'resource', fields }]]
+                : [];
+            }),
+          ),
+        };
+      }),
+    },
+  ];
+}
+
+export async function permissionSetOptions(
+  authz: AppAuthorizationService,
+  connection: DatabaseConnection | undefined,
+): Promise<object> {
+  return managementOptions(authz, connection);
 }

@@ -166,4 +166,69 @@ describe('authorization plugin database stores', () => {
       { key: 'owned-orders-only' },
     ]);
   });
+  it('round-trips independent record IDs for two scopes of the same operation', async () => {
+    const authorization = createAuthorization({
+      connection: database.connection(),
+      plugins: [
+        permissionSets({
+          store: new DatabasePermissionSetStore(() => database.connection()),
+        }),
+        defaultAccess(),
+        sharingRules(),
+        restrictionRules(),
+      ],
+    });
+    const resource = { type: 'resource', id: 'sales.submit' };
+    const actions = [
+      {
+        action: 'submit',
+        scopeKey: 'projects',
+        scope: { type: 'ids', ids: ['shared-id', 'project-2'] },
+      },
+      {
+        action: 'submit',
+        scopeKey: 'quotes',
+        scope: { type: 'ids', ids: ['shared-id', 'quote-2'] },
+      },
+    ];
+    await authorization.defaultAccess.set({ resource, actions });
+    await authorization.restrictionRules.create({
+      key: 'scoped-restrictions',
+      resource,
+      actions,
+      subjects: [],
+    });
+    const sharingActions = actions.map(({ action, scopeKey, scope }) => ({
+      action,
+      scopeKey,
+      selection: { type: 'records' as const, ids: scope.ids },
+    }));
+    await authorization.sharingRules.create({
+      key: 'scoped-sharing',
+      resource,
+      actions: sharingActions,
+      subjects: [],
+    });
+    await expect(
+      authorization.defaultAccess.get(resource.type, resource.id),
+    ).resolves.toMatchObject({ actions });
+    await expect(
+      authorization.restrictionRules.get('scoped-restrictions'),
+    ).resolves.toMatchObject({ actions });
+    await expect(
+      authorization.sharingRules.get('scoped-sharing'),
+    ).resolves.toMatchObject({ actions: sharingActions });
+    await authorization.defaultAccess.delete(resource.type, resource.id);
+    await authorization.restrictionRules.delete('scoped-restrictions');
+    await authorization.sharingRules.delete('scoped-sharing');
+    await expect(
+      authorization.defaultAccess.get(resource.type, resource.id),
+    ).resolves.toBeUndefined();
+    await expect(
+      authorization.restrictionRules.get('scoped-restrictions'),
+    ).resolves.toBeUndefined();
+    await expect(
+      authorization.sharingRules.get('scoped-sharing'),
+    ).resolves.toBeUndefined();
+  });
 });

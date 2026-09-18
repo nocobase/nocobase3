@@ -69,13 +69,13 @@ describe('@nocobase/app-plugin-authorization routes', () => {
   });
 
   it.each([
-    { existing: undefined, expected: 'create' },
+    { existing: undefined, expected: 'configure' },
     {
       existing: {
         resource: { type: 'database.collection', id: 'orders' },
         actions: [],
       },
-      expected: 'update',
+      expected: 'configure',
     },
   ])(
     'checks $expected when setting default access',
@@ -407,9 +407,11 @@ async function protectedFixture(): Promise<{
     grants: [
       {
         resource: { type: 'settings', id: '*' },
-        actions: ['read', 'create', 'update', 'delete'].map((action) => ({
-          action,
-        })),
+        actions: ['read', 'create', 'update', 'delete', 'assign'].map(
+          (action) => ({
+            action,
+          }),
+        ),
       },
     ],
   });

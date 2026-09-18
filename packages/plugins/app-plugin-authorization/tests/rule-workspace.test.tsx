@@ -20,6 +20,8 @@ import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 const authz = vi.hoisted(() => ({
+  can: vi.fn(async () => true),
+  onPermissionsInvalidated: vi.fn(() => () => {}),
   listDefaultAccess: vi.fn(),
   listDefaultAccessRecords: vi.fn(),
   setDefaultAccess: vi.fn(),
@@ -285,7 +287,7 @@ it('labels the resource type sidebar without adding a synthetic table group', as
     </MemoryRouter>,
   );
   expect(
-    screen.getByRole('heading', { name: en.editors.resourceType }),
+    screen.getByRole('navigation', { name: en.editors.resourceGroup }),
   ).toBeInTheDocument();
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Orders: Read' })).toBeEnabled(),

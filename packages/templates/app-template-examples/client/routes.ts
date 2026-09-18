@@ -94,6 +94,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'required',
+    access: false,
     componentLoader: () => import('./pages/articles.js'),
     name: 'articles',
     navigation: { title: 'navigation.articles', icon: FileText },

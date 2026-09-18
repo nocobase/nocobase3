@@ -23,7 +23,7 @@ export default {
     newTitle: 'New restriction rule',
     editorDescription: 'Limit the effective record scope for an audience.',
     ruleHeading: 'Basic information',
-    ruleDescription: 'Name the rule and choose the collection to restrict.',
+    ruleDescription: 'Name the rule and choose the resource to restrict.',
     ruleName: 'Rule name',
     assignmentsHeading: 'Applies to',
     assignmentsDescription: 'Choose who is subject to this restriction.',

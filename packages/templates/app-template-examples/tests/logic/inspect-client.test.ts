@@ -172,7 +172,27 @@ describe('client inspection', () => {
       {
         auth: 'required',
         id: '@nocobase/app-plugin-authorization-example:authorization-example',
+        path: '/',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example-overview',
         path: '/authorization-example',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example-projects',
+        path: '/authorization-example/projects',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example-quotes',
+        path: '/authorization-example/quotes',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example-orders',
+        path: '/authorization-example/orders',
       },
       {
         auth: 'guest',

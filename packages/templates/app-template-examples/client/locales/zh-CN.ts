@@ -153,8 +153,7 @@ const zhCN: AppResource = {
     },
     authorization: {
       title: '权限控制',
-      description:
-        '体验由权限集授权的路由：每个用户只处理自己的任务，超级用户可以看到全部。',
+      description: '配置销售功能权限和数据范围，体验默认访问、共享与限制规则。',
     },
     files: {
       title: '文件管理',
@@ -183,7 +182,7 @@ const zhCN: AppResource = {
     filter: '按状态筛选',
     search: '搜索文章标题…',
     loading: '正在加载文章…',
-    loadError: '文章加载失败，请检查网络连接和文章访问权限。',
+    loadError: '文章加载失败，请检查网络连接后重试。',
     retry: '重试',
     empty: '没有找到文章',
     emptyHint: '换个关键词，或创建你的第一篇文章。',

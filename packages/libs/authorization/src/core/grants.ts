@@ -1,3 +1,4 @@
+import type { AuthorizationTitle } from './titles.js';
 import type {
   AuthorizationIdentity,
   AuthorizationSubject,
@@ -6,6 +7,8 @@ import type {
 } from './types.js';
 
 export interface AuthorizationGrantSource {
+  /** Display metadata supplied by the source, never used to determine access. */
+  title?: AuthorizationTitle;
   plugin: string;
   id: string;
 }
@@ -16,6 +19,7 @@ export interface AuthorizationPolicy {
 }
 
 export interface AuthorizationGrant {
+  origin?: { resource: ResourceRef; action: string; scopeKey?: string };
   source: AuthorizationGrantSource;
   resource: ResourceRef;
   action: string;

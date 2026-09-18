@@ -1,4 +1,7 @@
-import { settingsResource } from './management/settings-resource.js';
+import {
+  settingsResource,
+  settingsApi,
+} from './management/settings-resource.js';
 import {
   createPermissionSetHandler,
   PERMISSION_SETS_ROUTE_PATH,
@@ -20,7 +23,11 @@ import {
   type PermissionSetsAuthorizationApi,
   type PermissionSetsPlugin,
 } from '@nocobase/authorization/permissions';
-import { pages } from './pages-authorization.js';
+import {
+  pages,
+  type PagesApi,
+  type PagesPlugin,
+} from './pages-authorization.js';
 import { DatabaseConnectionHandle } from './stores/connection.js';
 import { DatabasePermissionSetStore } from './stores/permission-sets.js';
 
@@ -62,7 +69,9 @@ export function createAppAuthorization(
   options: CreateAppAuthorizationOptions,
 ): Authorization &
   PermissionSetsAuthorizationApi<DatabaseConnection> &
-  DatabaseAuthorizationApi {
+  DatabaseAuthorizationApi & {
+    pages: PagesApi;
+  } {
   const sets = options.config?.permissionSets;
   const database = databaseAuthorization();
   const connection = new DatabaseConnectionHandle(
@@ -84,27 +93,117 @@ export function createAppAuthorization(
   const plugins: readonly [
     PermissionSetsPlugin<DatabaseConnection>,
     DatabaseAuthorizationPlugin,
+    PagesPlugin,
     ...AuthorizationPlugin[],
   ] = [
     {
       ...permissionSetPlugin,
       setup(authz) {
         permissionSetPlugin.setup?.(authz);
-        authz.resources.add(settingsResource);
-        authz.getResource('settings').groups.add({
-          id: 'authorization',
+        authz.resourceTypes.add(settingsResource);
+
+        authz.resourceGroups.add({
+          name: 'authorization',
           title: { key: 'options.settingsModules.authorization' },
+          category: 'administration',
         });
-        authz.getResource('settings').items.add({
-          id: 'authorization.permission-sets',
+        authz.resources.add({
+          name: 'authorization.permission-sets',
           title: { key: 'options.settings.permission-sets' },
           group: 'authorization',
-          actions: ['read', 'create', 'update', 'delete'],
+          actions: [
+            {
+              name: 'read',
+              title: { key: 'options.actions.read' },
+              grants: [
+                settingsApi.grant('authorization.permission-sets', ['read']),
+              ],
+            },
+            {
+              name: 'create',
+              title: { key: 'options.actions.create' },
+              grants: [
+                settingsApi.grant('authorization.permission-sets', ['create']),
+              ],
+            },
+            {
+              name: 'update',
+              title: { key: 'options.actions.update' },
+              grants: [
+                settingsApi.grant('authorization.permission-sets', ['update']),
+              ],
+            },
+            {
+              name: 'delete',
+              title: { key: 'options.actions.delete' },
+              grants: [
+                settingsApi.grant('authorization.permission-sets', ['delete']),
+              ],
+            },
+            {
+              name: 'assign',
+              title: { key: 'options.actions.assign' },
+              grants: [
+                settingsApi.grant('authorization.permission-sets', ['assign']),
+              ],
+            },
+          ],
+        });
+        authz.resources.add({
+          name: 'authorization.inspector',
+          title: { key: 'options.settings.inspector' },
+          group: 'authorization',
+          actions: [
+            {
+              name: 'inspect',
+              title: { key: 'options.actions.inspect' },
+              grants: [
+                settingsApi.grant('authorization.inspector', ['inspect']),
+              ],
+            },
+          ],
         });
         authz.routes.add(
           PERMISSION_SETS_ROUTE_PATH,
           createPermissionSetHandler(
             permissionSetPlugin.authorizationApi!.permissionSets,
+            (input) => {
+              for (const grant of input.grants)
+                for (const action of grant.actions)
+                  if (grant.resource.type === 'resource') {
+                    const expanded = authz.resources.expand({
+                      source: { plugin: 'permission-sets', id: input.key },
+                      resource: grant.resource,
+                      ...action,
+                    });
+                    for (const target of expanded) {
+                      if (target.resource.type !== 'database.collection')
+                        continue;
+                      const policies = target.policy?.recordAccess;
+                      if (!Array.isArray(policies)) continue;
+                      for (const value of policies) {
+                        const key: unknown =
+                          typeof value === 'string'
+                            ? value
+                            : value && typeof value === 'object'
+                              ? Reflect.get(value, 'key')
+                              : undefined;
+                        if (typeof key !== 'string')
+                          throw new TypeError('Invalid record access policy');
+                        const policy =
+                          database.authorizationApi.db.recordAccess.get(key);
+                        if (
+                          !policy ||
+                          (policy.collections &&
+                            !policy.collections.includes(target.resource.id))
+                        )
+                          throw new TypeError(
+                            'Unknown or inapplicable record access policy',
+                          );
+                      }
+                    }
+                  }
+            },
           ),
         );
       },
@@ -128,6 +227,8 @@ export function createAppAuthorization(
     const session = readAuthSession(request.http.var.auth);
     request.principal = { type: 'user', id: session.user.id };
     request.subjects.add({ type: 'authenticated', id: '*' });
+    for (const subject of await authz.subjects.resolveFor(request.principal))
+      request.subjects.add(subject);
     await next();
   });
   authz.onGrantsChanged(async (subject) => {
@@ -138,6 +239,7 @@ export function createAppAuthorization(
     }
   });
   database.authorizationApi.db.installInto(authz);
+  Object.assign(authz, { settings: settingsApi });
   return authz;
 }
 

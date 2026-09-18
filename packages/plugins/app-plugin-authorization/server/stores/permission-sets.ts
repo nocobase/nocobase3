@@ -1,3 +1,7 @@
+import {
+  encodeAuthorizationTitle,
+  decodeAuthorizationTitle,
+} from '@nocobase/authorization/core';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { DatabaseConnectionSource } from './connection.js';
 import type { Knex } from 'knex';
@@ -72,7 +76,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
       .values({
         id: crypto.randomUUID(),
         key: input.key,
-        title: input.title ?? null,
+        title: encodeAuthorizationTitle(input.title),
         grants: JSON.stringify(input.grants),
         createdAt: now,
         updatedAt: now,
@@ -90,7 +94,7 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
         .updateTable('authorizationPermissionSets')
         .set({
           key: input.key,
-          title: input.title ?? null,
+          title: encodeAuthorizationTitle(input.title),
           grants: JSON.stringify(input.grants),
           updatedAt: new Date(),
         })
@@ -190,9 +194,7 @@ function permissionSetFromRow(row: object): PermissionSet {
   const grants = rowValue(row, 'grants');
   return {
     key: scalarString(key, 'Permission Set key'),
-    ...(title == null
-      ? {}
-      : { title: scalarString(title, 'Permission Set title') }),
+    ...(title == null ? {} : { title: decodeAuthorizationTitle(title) }),
     grants: jsonValue<PermissionGrant[]>(grants, []),
   };
 }

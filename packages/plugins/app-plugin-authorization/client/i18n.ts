@@ -14,3 +14,13 @@ export function useAuthorizationTranslation(): Translate {
   const { t } = useTranslation(AUTHORIZATION_NAMESPACE);
   return t;
 }
+
+export function titleText(
+  value: string | { key: string; ns: string } | undefined,
+  t: Translate,
+  fallback = '',
+): string {
+  return typeof value === 'object'
+    ? t(value.key, { ns: value.ns, defaultValue: value.key })
+    : (value ?? fallback);
+}

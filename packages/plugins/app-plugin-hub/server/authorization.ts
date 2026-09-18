@@ -61,18 +61,18 @@ export function protectHubPermissionSets(
 }
 
 export function registerHubResources(
-  authorization: Pick<Authorization, 'resources'>,
+  authorization: Pick<Authorization, 'resourceTypes'>,
 ): void {
   registerGrantBackedResource(authorization, 'hub.app', HUB_APP_ACTIONS);
   registerGrantBackedResource(authorization, 'hub.host', new Set(['read']));
 }
 
 function registerGrantBackedResource(
-  authorization: Pick<Authorization, 'resources'>,
+  authorization: Pick<Authorization, 'resourceTypes'>,
   resourceType: 'hub.app' | 'hub.host',
   actions: ReadonlySet<string>,
 ): void {
-  authorization.resources.add({
+  authorization.resourceTypes.add({
     resourceType,
     async authorize(request, context) {
       if (!actions.has(request.action)) {

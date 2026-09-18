@@ -40,6 +40,8 @@ export type AppClientRouteComponentLoader =
   () => Promise<AppClientRouteComponentModule>;
 
 export interface AppClientRoutePageDefinition {
+  /** Group name in this package, or packageName:name for another package; contribution roots only. */
+  readonly parent?: string;
   readonly name: string;
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
@@ -51,6 +53,8 @@ export interface AppClientRoutePageDefinition {
 }
 
 export interface AppClientRouteGroupDefinition {
+  /** Group name in this package, or packageName:name for another package; contribution roots only. */
+  readonly parent?: string;
   readonly name: string;
   readonly path?: string;
   readonly auth?: AppClientRouteAuth;
@@ -86,7 +90,7 @@ export type AppClientSettingIcon = ComponentType<{
 }>;
 
 /**
- * Navigation metadata for a child Route of the built-in Settings Route.
+ * Navigation metadata shared by App, Settings and Dev routes.
  */
 export interface AppClientSettingsRouteNavigation {
   /** Lower values appear first among siblings; defaults to 0, with ties in registration order. */
@@ -110,7 +114,7 @@ export interface AppClientRouteBreadcrumb {
 }
 
 export interface AppClientSettingsRoutePageDefinition {
-  /** Existing settings group to append to; only valid on contribution roots. */
+  /** Existing group on this surface to append to; only valid on contribution roots. */
   readonly parent?: string;
   readonly name: string;
   /** Path relative to the built-in Settings Route. */
@@ -131,7 +135,7 @@ export interface AppClientSettingsRoutePageDefinition {
  * them. Children may be pages or further navigation groups.
  */
 export interface AppClientSettingsRouteGroupDefinition {
-  /** Existing settings group to append to; only valid on contribution roots. */
+  /** Existing group on this surface to append to; only valid on contribution roots. */
   readonly parent?: string;
   readonly name: string;
   /** Path segment relative to the built-in Settings Route. */
@@ -598,13 +602,13 @@ export function resolveAppClientContributions(
   // Routes and settings share one path space: a setting is mounted at `/settings/<id>`, which a route is free to
   // declare too. Both register here so the collision is reported whichever one the resolver reaches first.
   const claimedPaths = new Map<string, ClaimedPath>();
-  const settings: AppClientRegisteredSetting[] = [];
-  const settingGroups: AppClientRegisteredSettingGroup[] = [];
-  const devRoutes: AppClientRegisteredDevRoute[] = [];
-  const devRouteGroups: AppClientRegisteredDevRouteGroup[] = [];
   const reactProviders: AppClientRegisteredReactProvider[] = [];
   const reactProviderIds = new Set<string>();
-  const settingsContributions: SettingsRouteInput[] = [];
+  const inputs: Record<RouteSurface, RouteInput[]> = {
+    app: [],
+    settings: [],
+    dev: [],
+  };
 
   for (const contribution of contributions) {
     const packageName = normalizePackageName(contribution.packageName);
@@ -613,30 +617,11 @@ export function resolveAppClientContributions(
     const routeContributions = normalizeRouteContributions(contribution.routes);
     for (const routeContribution of routeContributions) {
       const surface = routeContribution.parent;
-      if (surface === 'settings') {
-        settingsContributions.push({
-          definitions: routeContribution.routes,
-          packageName,
-          source,
-        });
-        continue;
-      }
-      const tree = resolveRouteTree(
-        routeContribution.routes,
+      inputs[surface].push({
+        definitions: routeContribution.routes,
         packageName,
         source,
-        surface,
-        surface === 'app' ? '' : `/${surface}`,
-        undefined,
-        routeIds,
-        claimedPaths,
-      );
-      if (surface === 'app') {
-        routes.push(...tree);
-      } else {
-        const targetTree = devRouteTree;
-        targetTree.push(...tree);
-      }
+      });
     }
 
     for (const reactProvider of contribution.reactProviders ?? []) {
@@ -656,167 +641,118 @@ export function resolveAppClientContributions(
     }
   }
 
-  const assembled = assembleSettingsRoutes(settingsContributions);
-  settingsRouteTree.push(
-    ...resolveRouteTree(
-      assembled.roots,
-      '',
-      'plugin',
-      'settings',
-      '/settings',
-      undefined,
-      routeIds,
-      claimedPaths,
-      assembled.owners,
-    ),
-  );
-  const projectNavigation = (
-    surface: AppClientNavigationSurface,
-    groups: AppClientRegisteredSettingGroup[],
-    nodes: readonly AppClientRegisteredRoute[],
-    groupId?: string,
-  ): AppClientRegisteredSetting[] =>
-    nodes.flatMap((node) => {
-      if (!node.componentLoader) {
-        const children = projectNavigation(
-          surface,
-          groups,
-          node.children ?? [],
-          node.id,
-        );
-        groups.push(
-          Object.freeze({
-            id: node.id,
-            title: node.navigation!.title,
-            surface,
-            ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
-            packageName: node.packageName,
-            source: node.source,
-            settings: Object.freeze(children),
-          }),
-        );
-        return children;
-      }
-      const setting: AppClientRegisteredSetting = Object.freeze({
-        id: node.id,
-        path: node.path,
-        title: node.navigation?.title ?? node.name,
-        navigation: !!node.navigation,
+  const trees = { app: routes, settings: settingsRouteTree, dev: devRouteTree };
+  for (const surface of ['app', 'settings', 'dev'] as const) {
+    trees[surface].push(
+      ...resolveRouteTree(assembleRoutes(inputs[surface], surface), {
         surface,
-        packageName: node.packageName,
-        source: node.source,
-        pageLoader: node.componentLoader,
-        ...(node.access !== undefined && node.access !== false
-          ? { access: node.access }
-          : {}),
-        ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
-        ...(groupId ? { groupId } : {}),
-      });
-      return [
-        setting,
-        ...projectNavigation(surface, groups, node.children ?? [], groupId),
-      ];
-    });
-  settings.push(
-    ...projectNavigation('settings', settingGroups, settingsRouteTree),
-  );
-  devRoutes.push(...projectNavigation('dev', devRouteGroups, devRouteTree));
+        parentPath: surface === 'app' ? '' : `/${surface}`,
+        ids: routeIds,
+        claimed: claimedPaths,
+      }),
+    );
+  }
+  const settingsNavigation = projectNavigation('settings', settingsRouteTree);
+  const devNavigation = projectNavigation('dev', devRouteTree);
 
   return Object.freeze({
     routes: Object.freeze(routes),
     settingsRouteTree: Object.freeze(settingsRouteTree),
     devRouteTree: Object.freeze(devRouteTree),
-    settings: Object.freeze(settings),
-    settingGroups: Object.freeze(settingGroups),
-    devRoutes: Object.freeze(devRoutes),
-    devRouteGroups: Object.freeze(devRouteGroups),
+    settings: Object.freeze(settingsNavigation.pages),
+    settingGroups: Object.freeze(settingsNavigation.groups),
+    devRoutes: Object.freeze(devNavigation.pages),
+    devRouteGroups: Object.freeze(devNavigation.groups),
     reactProviders: sortReactProviders(reactProviders),
   });
 }
 
-interface SettingsRouteInput {
-  definitions: readonly AppClientSettingsRouteDefinition[];
+type RouteSurface = 'app' | AppClientNavigationSurface;
+type RouteDefinition =
+  AppClientRouteDefinition | AppClientSettingsRouteDefinition;
+
+interface RouteInput {
+  definitions: readonly RouteDefinition[];
   packageName: string;
   source: AppClientContributionSource;
 }
 
-function assembleSettingsRoutes(inputs: readonly SettingsRouteInput[]): {
-  roots: AppClientSettingsRouteDefinition[];
-  owners: WeakMap<
-    object,
-    { packageName: string; source: AppClientContributionSource }
-  >;
-} {
-  const roots: AppClientSettingsRouteDefinition[] = [];
-  const groups = new Map<string, AppClientSettingsRouteDefinition>();
-  const owners = new WeakMap<
-    object,
-    { packageName: string; source: AppClientContributionSource }
-  >();
-  const pending: { node: AppClientSettingsRouteDefinition; parent: string }[] =
-    [];
-  const all: AppClientSettingsRouteDefinition[] = [];
+interface RouteNode {
+  definition: RouteDefinition;
+  packageName: string;
+  source: AppClientContributionSource;
+  children?: RouteNode[];
+}
+
+function assembleRoutes(
+  inputs: readonly RouteInput[],
+  surface: RouteSurface,
+): RouteNode[] {
+  const roots: RouteNode[] = [];
+  const groups = new Map<string, RouteNode>();
+  const pending: { node: RouteNode; parent: string }[] = [];
+  const all: RouteNode[] = [];
+  const groupId = (name: string, packageName: string): string =>
+    surface === 'app'
+      ? `${packageName}:${normalizeContributionName(name, packageName, 'route')}`
+      : normalizeSettingId(name, packageName, describeSurface(surface));
   for (const input of inputs) {
-    const copy = (
-      definition: AppClientSettingsRouteDefinition,
-      nested: boolean,
-    ): AppClientSettingsRouteDefinition => {
+    const copy = (definition: RouteDefinition, nested: boolean): RouteNode => {
       if (nested && definition.parent !== undefined)
         throw new Error(
-          `Settings route "${definition.name}" cannot declare parent inside children.`,
+          `${surface} route "${definition.name}" cannot declare parent inside children.`,
         );
-      const node = {
-        ...definition,
+      const node: RouteNode = {
+        definition,
+        packageName: input.packageName,
+        source: input.source,
         ...(definition.children
           ? { children: definition.children.map((child) => copy(child, true)) }
           : {}),
       };
-      owners.set(node, input);
       all.push(node);
-      if (!node.componentLoader) {
-        const name = normalizeSettingId(
-          node.name,
-          input.packageName,
-          'setting',
-        );
-        if (groups.has(name))
+      if (!definition.componentLoader) {
+        const id = groupId(definition.name, input.packageName);
+        const previous = groups.get(id);
+        if (previous)
           throw new Error(
-            `Client setting group "${name}" from plugin "${input.packageName}" is already registered by "${owners.get(groups.get(name)!)!.packageName}".`,
+            `Client ${surface === 'app' ? 'route' : describeSurface(surface)} group "${id}" from plugin "${input.packageName}" is already registered by "${previous.packageName}".`,
           );
-        groups.set(name, node);
+        groups.set(id, node);
       }
       return node;
     };
     for (const definition of input.definitions) {
       const node = copy(definition, false);
       if (definition.parent === undefined) roots.push(node);
-      else
+      else {
+        const parent = definition.parent.trim();
         pending.push({
           node,
-          parent: normalizeSettingId(
-            definition.parent,
-            input.packageName,
-            'setting parent',
-          ),
+          parent:
+            surface === 'app' && parent.includes(':')
+              ? parent
+              : groupId(parent, input.packageName),
         });
+      }
     }
   }
   for (const { node, parent } of pending) {
     const target = groups.get(parent);
     if (!target)
       throw new Error(
-        `Settings route "${node.name}" from "${owners.get(node)!.packageName}" references missing group "${parent}" (the target must be a group, not a page).`,
+        `${surface} route "${node.definition.name}" from "${node.packageName}" references missing group "${parent}" (the target must be a group, not a page).`,
       );
     if (!target.children)
-      throw new Error(`Settings group "${parent}" must declare children.`);
-    (target.children as AppClientSettingsRouteDefinition[]).push(node);
+      throw new Error(`${surface} group "${parent}" must declare children.`);
+    target.children.push(node);
   }
-  const visiting = new Set<object>();
-  const visited = new Set<object>();
-  const visit = (node: AppClientSettingsRouteDefinition): void => {
+  const visiting = new Set<RouteNode>();
+  const visited = new Set<RouteNode>();
+  const visit = (node: RouteNode): void => {
     if (visiting.has(node))
       throw new Error(
-        `Circular settings parent relationship at "${node.name}".`,
+        `Circular ${surface} parent relationship at "${node.definition.name}".`,
       );
     if (visited.has(node)) return;
     visiting.add(node);
@@ -825,17 +761,70 @@ function assembleSettingsRoutes(inputs: readonly SettingsRouteInput[]): {
     visited.add(node);
   };
   for (const node of all) visit(node);
-  const sort = (nodes: AppClientSettingsRouteDefinition[]): void => {
+  const sort = (nodes: RouteNode[]): void => {
     nodes.sort(
-      (a, b) => (a.navigation?.order ?? 0) - (b.navigation?.order ?? 0),
+      (a, b) =>
+        (a.definition.navigation?.order ?? 0) -
+        (b.definition.navigation?.order ?? 0),
     );
-    for (const node of nodes) {
-      if (node.children)
-        sort(node.children as AppClientSettingsRouteDefinition[]);
-    }
+    for (const node of nodes) if (node.children) sort(node.children);
   };
   sort(roots);
-  return { roots, owners };
+  return roots;
+}
+
+function projectNavigation(
+  surface: AppClientNavigationSurface,
+  nodes: readonly AppClientRegisteredRoute[],
+  groupId?: string,
+): {
+  pages: AppClientRegisteredSetting[];
+  groups: AppClientRegisteredSettingGroup[];
+} {
+  const pages: AppClientRegisteredSetting[] = [];
+  const groups: AppClientRegisteredSettingGroup[] = [];
+  for (const node of nodes) {
+    const children = projectNavigation(
+      surface,
+      node.children ?? [],
+      node.componentLoader ? groupId : node.id,
+    );
+    if (!node.componentLoader) {
+      groups.push(
+        ...children.groups,
+        Object.freeze({
+          id: node.id,
+          title: node.navigation!.title,
+          surface,
+          ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
+          packageName: node.packageName,
+          source: node.source,
+          settings: Object.freeze(children.pages),
+        }),
+      );
+    } else {
+      pages.push(
+        Object.freeze({
+          id: node.id,
+          path: node.path,
+          title: node.navigation?.title ?? node.name,
+          navigation: !!node.navigation,
+          surface,
+          packageName: node.packageName,
+          source: node.source,
+          pageLoader: node.componentLoader,
+          ...(node.access !== undefined && node.access !== false
+            ? { access: node.access }
+            : {}),
+          ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
+          ...(groupId ? { groupId } : {}),
+        }),
+      );
+      groups.push(...children.groups);
+    }
+    pages.push(...children.pages);
+  }
+  return { pages, groups };
 }
 
 function normalizeRouteContributions(
@@ -990,37 +979,24 @@ function normalizeSettingTitle(
   return normalized;
 }
 
-function resolveRouteTree(
-  definitions: readonly (
-    AppClientRouteDefinition | AppClientSettingsRouteDefinition
-  )[],
-  packageName: string,
-  source: AppClientContributionSource,
-  surface: 'app' | AppClientNavigationSurface,
-  parentPath: string,
-  parentAuth: AppClientRouteAuth | undefined,
-  ids: Map<string, string>,
-  claimed: Map<string, ClaimedPath>,
-  owners?: WeakMap<
-    object,
-    { packageName: string; source: AppClientContributionSource }
-  >,
-): readonly AppClientRegisteredRoute[] {
-  const siblingNames = new Set<string>();
-  return Object.freeze(
-    definitions.map((route) => {
-      const owner = owners?.get(route);
-      const routePackage = owner?.packageName ?? packageName;
-      const routeSource = owner?.source ?? source;
-      return resolveNode(route, routePackage, routeSource);
-    }),
-  );
+interface RouteResolveContext {
+  surface: RouteSurface;
+  parentPath: string;
+  parentAuth?: AppClientRouteAuth;
+  ids: Map<string, string>;
+  claimed: Map<string, ClaimedPath>;
+}
 
-  function resolveNode(
-    route: AppClientRouteDefinition | AppClientSettingsRouteDefinition,
-    packageName: string,
-    source: AppClientContributionSource,
-  ): AppClientRegisteredRoute {
+function resolveRouteTree(
+  nodes: readonly RouteNode[],
+  context: RouteResolveContext,
+): readonly AppClientRegisteredRoute[] {
+  const { surface, parentPath, parentAuth, ids, claimed } = context;
+  const siblingNames = new Set<string>();
+  return Object.freeze(nodes.map(resolveNode));
+
+  function resolveNode(node: RouteNode): AppClientRegisteredRoute {
+    const { definition: route, packageName, source } = node;
     const name =
       surface === 'app'
         ? normalizeContributionName(route.name, packageName, 'route')
@@ -1041,22 +1017,13 @@ function resolveRouteTree(
       throw new Error(
         `Client route "${id}" must define a componentLoader function.`,
       );
-    if (surface === 'dev' && 'parent' in route && route.parent !== undefined)
-      throw new Error(
-        'Explicit parent is supported only on settings route contributions.',
-      );
     const kind = surface === 'app' ? 'route' : describeSurface(surface);
     if (!isPage && !route.children)
       throw new Error(
         `Client ${kind} "${id}" must define a componentLoader function.`,
       );
-    if (
-      !isPage &&
-      (!route.navigation || (surface !== 'settings' && !route.children?.length))
-    )
-      throw new Error(
-        `Client ${kind} group "${id}" must define at least one child and navigation.`,
-      );
+    if (!isPage && !route.navigation)
+      throw new Error(`Client ${kind} group "${id}" must define navigation.`);
     const rawPath = route.path;
     if (isPage && rawPath === undefined)
       throw new Error(`Client route "${id}" must define a path.`);
@@ -1195,19 +1162,13 @@ function resolveRouteTree(
             ),
           }
         : {}),
-      ...(route.children
+      ...(node.children
         ? {
-            children: resolveRouteTree(
-              route.children,
-              packageName,
-              source,
-              surface,
-              path,
-              auth,
-              ids,
-              claimed,
-              owners,
-            ),
+            children: resolveRouteTree(node.children, {
+              ...context,
+              parentPath: path,
+              parentAuth: auth,
+            }),
           }
         : {}),
     });

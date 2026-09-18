@@ -82,8 +82,8 @@ describe('@nocobase/app-plugin-notification provider', () => {
     expect(registerJob).toHaveBeenCalledOnce();
     expect(close).toHaveBeenCalledOnce();
     const authorization = container.resolve(authorizationToken);
-    expect(authorization.resources.add).toHaveBeenCalledOnce();
-    const add = authorization.resources.add as unknown as ReturnType<
+    expect(authorization.resourceTypes.add).toHaveBeenCalledOnce();
+    const add = authorization.resourceTypes.add as unknown as ReturnType<
       typeof vi.fn
     >;
     const handler = add.mock.calls[0]?.[0] as {
@@ -140,7 +140,7 @@ function createContainer(withDatabase: boolean): ServiceContainer {
     registerJob: vi.fn(),
   } as unknown as NocoBaseQueueManager);
   container.instance(authorizationToken, {
-    resources: { add: vi.fn() },
+    resourceTypes: { add: vi.fn() },
   } as unknown as Authorization);
   return container;
 }

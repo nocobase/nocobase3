@@ -14,6 +14,7 @@ import {
 import type { SharingRulesAuthorizationApi } from '@nocobase/authorization/sharing-rules';
 import {
   createRuleOptionsRoutes,
+  validateDatabaseScopeRule,
   createAuthorizationAdministration,
   describeCollection,
 } from '@nocobase/app-plugin-authorization/server/management';
@@ -62,7 +63,9 @@ const contributions: readonly AppApiRouteContribution<AppPluginApplication>[] =
           'sharing-rules',
         ),
       );
-      const handler = createSharingRulesHandler(api);
+      const handler = createSharingRulesHandler(api, (rule) =>
+        validateDatabaseScopeRule(authorization, rule),
+      );
       routes.all('/sharing-rules', (context) =>
         handler({
           request: context.req.raw,

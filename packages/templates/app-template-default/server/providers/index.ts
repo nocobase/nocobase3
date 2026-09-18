@@ -1,9 +1,5 @@
 import type { ApplicationServiceProviderConstructor } from '@nocobase/app-server/application';
 
-import UserRolesProvider from './user-roles.js';
-
-const serviceProviders: readonly ApplicationServiceProviderConstructor[] = [
-  UserRolesProvider,
-];
+const serviceProviders: readonly ApplicationServiceProviderConstructor[] = [];
 
 export default serviceProviders;

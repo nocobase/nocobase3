@@ -1,3 +1,5 @@
+import { titleText } from '../../i18n.js';
+import { useSettingsActions } from '../../components/use-settings-actions.js';
 import {
   Outlet,
   useLocation,
@@ -45,6 +47,7 @@ export function PermissionSetsPanel({
   const isNew = location.pathname === `${base}/new`;
   const assignmentsTab = location.pathname.endsWith('/assignments');
   const t = useAuthorizationTranslation();
+  const title = (set: PermissionSet) => titleText(set.title, t, set.key);
   const [sets, setSets] = useState<readonly PermissionSet[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<Draft | undefined>(() =>
@@ -70,7 +73,15 @@ export function PermissionSetsPanel({
   const [pending, setPending] = useState<string>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const current = sets.find((item) => item.key === permissionSetKey);
-  const capabilities = permissionSetCapabilities(current);
+  const allowed = useSettingsActions('authorization.permission-sets');
+  const protection = permissionSetCapabilities(current);
+  const capabilities = {
+    ...protection,
+    canUpdate: protection.canUpdate && allowed.update,
+    canDelete: protection.canDelete && allowed.delete,
+    canAssign: protection.canAssign && allowed.assign,
+    canRevoke: protection.canRevoke && allowed.assign,
+  };
   const dirty = Boolean(draft && JSON.stringify(draft) !== baseline);
   const setPath = (key: string, tab = 'permissions'): string =>
     `${base}/edit/${encodeURIComponent(key)}${tab === 'permissions' ? '' : `/${tab}`}`;
@@ -95,7 +106,7 @@ export function PermissionSetsPanel({
   const [draftSource, setDraftSource] = useState({ current, isNew });
   if (draftSource.current !== current || draftSource.isNew !== isNew) {
     setDraftSource({ current, isNew });
-    const next = isNew ? empty() : current ? fromSet(current) : undefined;
+    const next = isNew ? empty() : current ? fromSet(current, t) : undefined;
     setDraft(next);
     setBaseline(next ? JSON.stringify(next) : '');
     setRevision((value) => value + 1);
@@ -136,21 +147,24 @@ export function PermissionSetsPanel({
     else void navigate(path);
   }
   function discard(): void {
-    const next = isNew ? empty() : current ? fromSet(current) : undefined;
+    const next = isNew ? empty() : current ? fromSet(current, t) : undefined;
     setDraft(next);
     setBaseline(next ? JSON.stringify(next) : '');
     setRevision((value) => value + 1);
   }
   async function save(): Promise<void> {
-    if (!draft || (!isNew && !capabilities.canUpdate)) return;
+    if (!draft || (isNew ? !allowed.create : !capabilities.canUpdate)) return;
     setBusy(true);
     setErrorCause(undefined);
     try {
       const inputDraft =
         current && !isNew
           ? editingDetails
-            ? { ...fromSet(current), title: draft.title }
-            : { ...fromSet(current), grants: draft.grants }
+            ? { ...fromSet(current, t), title: draft.title }
+            : {
+                ...fromSet(current, t),
+                grants: draft.grants,
+              }
           : draft;
       const input = toInput(inputDraft);
       if (
@@ -171,7 +185,7 @@ export function PermissionSetsPanel({
           ? items.map((item) => (item.key === saved.key ? saved : item))
           : [...items, saved],
       );
-      const next = fromSet(saved);
+      const next = fromSet(saved, t);
       setDraft(next);
       setBaseline(JSON.stringify(next));
       setRevision((value) => value + 1);
@@ -261,7 +275,7 @@ export function PermissionSetsPanel({
       key={`${permissionSetKey ?? 'new'}:${revision}`}
       embedded
       showDetails={editingDetails}
-      readOnly={!isNew && !capabilities.canUpdate}
+      readOnly={isNew ? !allowed.create : !capabilities.canUpdate}
       options={options}
       draft={draft}
       busy={busy}
@@ -296,7 +310,7 @@ export function PermissionSetsPanel({
               variant='ghost'
               aria-label={t('permissionSets.list.create')}
               title={t('permissionSets.list.create')}
-              disabled={busy}
+              disabled={busy || !allowed.create}
               onClick={() => go(`${base}/new`)}
             >
               <Plus className='size-4' />
@@ -327,7 +341,7 @@ export function PermissionSetsPanel({
           >
             {sets
               .filter((item) =>
-                `${item.title} ${item.key}`
+                `${title(item)} ${item.key}`
                   .toLowerCase()
                   .includes(search.toLowerCase()),
               )
@@ -335,7 +349,7 @@ export function PermissionSetsPanel({
                 <button
                   key={item.key}
                   type='button'
-                  aria-label={item.title ?? item.key}
+                  aria-label={title(item)}
                   disabled={busy}
                   aria-current={
                     item.key === permissionSetKey ? 'page' : undefined
@@ -343,9 +357,7 @@ export function PermissionSetsPanel({
                   className='block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted aria-[current=page]:bg-primary/10 aria-[current=page]:font-medium aria-[current=page]:text-primary'
                   onClick={() => go(setPath(item.key, section))}
                 >
-                  <span className='block truncate'>
-                    {item.title ?? item.key}
-                  </span>
+                  <span className='block truncate'>{title(item)}</span>
                   <span className='block truncate text-xs text-muted-foreground'>
                     {item.key}
                   </span>
@@ -357,7 +369,7 @@ export function PermissionSetsPanel({
       <section className='flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground'>
         <header className='flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3'>
           <h2 className='truncate text-lg font-semibold'>
-            {draft?.title ||
+            {(current ? title(current) : draft?.title) ||
               (isNew
                 ? t('permissionSets.editor.newTitle')
                 : t('permissionSets.page.title'))}
@@ -437,7 +449,7 @@ export function PermissionSetsPanel({
         }}
       >
         {t('permissionSets.detail.confirmDeleteBody', {
-          title: current?.title ?? current?.key ?? '',
+          title: current ? title(current) : '',
         })}
       </ConfirmDialog>
     </div>

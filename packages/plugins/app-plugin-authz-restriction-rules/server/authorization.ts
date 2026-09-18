@@ -5,7 +5,10 @@ import {
   type RestrictionRulesAuthorizationApi,
   type RestrictionRuleStore,
 } from '@nocobase/authorization/restriction-rules';
-import { DatabaseConnectionHandle } from '@nocobase/app-plugin-authorization/server/management';
+import {
+  DatabaseConnectionHandle,
+  settingsApi,
+} from '@nocobase/app-plugin-authorization/server/management';
 import { DatabaseRestrictionRuleStore } from './stores/restriction-rules.js';
 
 export interface RestrictionRulesOptions {
@@ -28,14 +31,55 @@ export function restrictionRules(
     setup(authz) {
       connection.set(authz.connection);
       plugin.setup?.(authz);
-      authz.getResource('settings').items.add({
-        id: 'authorization.restriction-rules',
+      authz.resources.add({
+        name: 'authorization.restriction-rules',
         group: 'authorization',
         title: {
           key: 'resourceTitle',
           ns: '@nocobase/app-plugin-authz-restriction-rules',
         },
-        actions: ['read', 'create', 'update', 'delete'],
+        actions: [
+          {
+            name: 'read',
+            title: {
+              key: 'options.actions.read',
+              ns: '@nocobase/app-plugin-authorization',
+            },
+            grants: [
+              settingsApi.grant('authorization.restriction-rules', ['read']),
+            ],
+          },
+          {
+            name: 'create',
+            title: {
+              key: 'options.actions.create',
+              ns: '@nocobase/app-plugin-authorization',
+            },
+            grants: [
+              settingsApi.grant('authorization.restriction-rules', ['create']),
+            ],
+          },
+          {
+            name: 'update',
+            title: {
+              key: 'options.actions.update',
+              ns: '@nocobase/app-plugin-authorization',
+            },
+            grants: [
+              settingsApi.grant('authorization.restriction-rules', ['update']),
+            ],
+          },
+          {
+            name: 'delete',
+            title: {
+              key: 'options.actions.delete',
+              ns: '@nocobase/app-plugin-authorization',
+            },
+            grants: [
+              settingsApi.grant('authorization.restriction-rules', ['delete']),
+            ],
+          },
+        ],
       });
     },
   };

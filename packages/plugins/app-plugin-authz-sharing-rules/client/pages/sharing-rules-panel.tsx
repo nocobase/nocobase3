@@ -1,3 +1,6 @@
+import { titleText } from '@nocobase/app-plugin-authorization/client/management';
+import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
+import { BusinessRuleScopes } from '@nocobase/app-plugin-authorization/client/management';
 import type { SharingRule } from '../api.js';
 import { Checkbox } from '../components/ui/checkbox.js';
 import { SelectField } from '@nocobase/app-plugin-authorization/client/management';
@@ -78,6 +81,8 @@ export function SharingRulesPanel({
   );
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
+  const [sectionKey, setSectionKey] = useState('');
+  const sections = useMemo(() => resourceSections(options), [options]);
   const [page, setPage] = useState(1);
   const [errorCause, setErrorCause] = useState<unknown>();
   const error = errorCause === undefined ? undefined : message(t, errorCause);
@@ -94,14 +99,22 @@ export function SharingRulesPanel({
   }, [load]);
   const visibleRules = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const section = sections.find((item) => item.key === sectionKey);
+    const selectedRules = section
+      ? rules.filter(
+          (rule) =>
+            rule.resource.type === section.value &&
+            section.resources.some((item) => item.value === rule.resource.id),
+        )
+      : rules;
     return query
-      ? rules.filter((rule) =>
-          [rule.title, rule.key, rule.resource.id].some((value) =>
+      ? selectedRules.filter((rule) =>
+          [titleText(rule.title, t), rule.key, rule.resource.id].some((value) =>
             value?.toLowerCase().includes(query),
           ),
         )
-      : rules;
-  }, [rules, search]);
+      : selectedRules;
+  }, [rules, search, sections, sectionKey, t]);
   const pagedRules = pageSlice(visibleRules, page);
   // Narrowing the search can leave the current page past the end of the list.
   function changeSearch(value: string): void {
@@ -159,6 +172,25 @@ export function SharingRulesPanel({
     <>
       {error ? <ErrorBox value={error} /> : null}
       <ManagementToolbar
+        filters={
+          options.resourceGroups?.length ? (
+            <SelectField
+              aria-label={t('editors.resourceGroup')}
+              value={sectionKey}
+              onValueChange={(value) => {
+                setSectionKey(value);
+                setPage(1);
+              }}
+              options={[
+                { value: '', label: t('common.all') },
+                ...sections.map((section) => ({
+                  value: section.key,
+                  label: section.label,
+                })),
+              ]}
+            />
+          ) : undefined
+        }
         search={search}
         searchLabel={t('sharingRules.search')}
         searchPlaceholder={t('sharingRules.search')}
@@ -167,7 +199,14 @@ export function SharingRulesPanel({
         onAction={() => edit()}
       />
       <ManagementTable>
-        <Table className='min-w-[58rem]'>
+        <Table className='min-w-[64rem] table-fixed'>
+          <colgroup>
+            <col className='w-[25%]' />
+            <col className='w-[12%]' />
+            <col className='w-[21%]' />
+            <col />
+            <col className='w-20' />
+          </colgroup>
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
               <TableHead className='px-5 py-3 font-medium'>
@@ -177,13 +216,10 @@ export function SharingRulesPanel({
                 {t('common.resource')}
               </TableHead>
               <TableHead className='px-5 py-3 font-medium'>
-                {t('sharingRules.recordsSharedHeader')}
-              </TableHead>
-              <TableHead className='px-5 py-3 font-medium'>
                 {t('sharingRules.sharedWithHeader')}
               </TableHead>
               <TableHead className='px-5 py-3 font-medium'>
-                {t('sharingRules.accessHeader')}
+                {t('sharingRules.accessHeading')}
               </TableHead>
               <TableHead className='w-20 px-5 py-3' />
             </TableRow>
@@ -191,37 +227,126 @@ export function SharingRulesPanel({
           <TableBody>
             {pagedRules.map((rule) => (
               <TableRow key={rule.key}>
-                <TableCell className='px-5 py-4'>
+                <TableCell className='px-5 py-4 align-top'>
                   <button
                     type='button'
                     className='font-medium text-primary hover:underline'
                     onClick={() => edit(rule)}
                   >
-                    {rule.title || humanize(rule.key)}
+                    {titleText(rule.title, t, humanize(rule.key))}
                   </button>
-                  <p className='text-xs text-muted-foreground'>{rule.key}</p>
+                  <p className='mt-1 break-all text-xs text-muted-foreground'>
+                    {rule.key}
+                  </p>
                 </TableCell>
-                <TableCell className='px-5 py-4'>
+                <TableCell className='px-5 py-4 align-top'>
                   {resourceLabel(options, rule)}
                 </TableCell>
-                <TableCell className='px-5 py-4'>
-                  {selectionLabel(t, rule, options)}
+                <TableCell className='px-5 py-4 align-top'>
+                  <div className='flex flex-wrap gap-x-3 gap-y-1'>
+                    {rule.subjects.map((subject) => (
+                      <span key={subjectKey(subject)} className='inline-block'>
+                        {subjectNames[subjectKey(subject)] ??
+                          `${subject.type}: ${subject.id}`}
+                      </span>
+                    ))}
+                  </div>
                 </TableCell>
-                <TableCell className='px-5 py-4'>
-                  {rule.subjects
-                    .map(
-                      (subject) =>
-                        subjectNames[subjectKey(subject)] ??
-                        `${subject.type}: ${subject.id}`,
-                    )
-                    .join(' · ')}
-                </TableCell>
-                <TableCell className='px-5 py-4'>
-                  {rule.actions
-                    .map((item) =>
-                      actionLabel(options, rule.resource.type, item.action),
-                    )
-                    .join(', ')}
+                <TableCell className='px-5 py-4 align-top whitespace-normal break-words'>
+                  <div className='space-y-2 text-sm'>
+                    {[...new Set(rule.actions.map((item) => item.action))].map(
+                      (action) => {
+                        const entries = rule.actions.filter(
+                          (item) => item.action === action,
+                        );
+                        const declared = options.resourceTypes
+                          .find((type) => type.value === rule.resource.type)
+                          ?.resources.find(
+                            (resource) => resource.value === rule.resource.id,
+                          )?.ruleScopes;
+                        const grouped =
+                          (declared?.filter(
+                            (target) => target.action === action,
+                          ).length ?? entries.length) > 1;
+                        return (
+                          <div key={action}>
+                            {grouped && (
+                              <div className='mb-1'>
+                                {actionLabel(
+                                  options,
+                                  rule.resource.type,
+                                  action,
+                                  rule.resource.id,
+                                )}
+                              </div>
+                            )}
+                            <div
+                              className={
+                                grouped ? 'ml-1 space-y-1 border-l pl-3' : ''
+                              }
+                            >
+                              {entries.map((item) => {
+                                const targets = options.resourceTypes
+                                  .find(
+                                    (type) => type.value === rule.resource.type,
+                                  )
+                                  ?.resources.find(
+                                    (resource) =>
+                                      resource.value === rule.resource.id,
+                                  )?.ruleScopes;
+                                const scopeLabel = targets?.find(
+                                  (target) =>
+                                    target.action === item.action &&
+                                    target.scopeKey === item.scopeKey,
+                                )?.label;
+                                const multiple =
+                                  (targets?.filter(
+                                    (target) => target.action === item.action,
+                                  ).length ?? 0) > 1;
+                                return (
+                                  <div
+                                    key={JSON.stringify([
+                                      item.action,
+                                      item.scopeKey,
+                                    ])}
+                                    className='flex flex-wrap items-baseline gap-x-2 gap-y-1'
+                                  >
+                                    <span>
+                                      {multiple
+                                        ? (scopeLabel ?? item.scopeKey)
+                                        : actionLabel(
+                                            options,
+                                            rule.resource.type,
+                                            item.action,
+                                            rule.resource.id,
+                                          )}
+                                    </span>
+                                    <span
+                                      aria-hidden='true'
+                                      className='text-muted-foreground'
+                                    >
+                                      →
+                                    </span>
+                                    <span>
+                                      {item.selection.type === 'records'
+                                        ? t('labels.selectedRecords', {
+                                            count: item.selection.ids.length,
+                                          })
+                                        : policyLabel(
+                                            t,
+                                            item.selection.policy,
+                                            options,
+                                          )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
@@ -231,7 +356,7 @@ export function SharingRulesPanel({
               </TableRow>
             ))}
             {visibleRules.length === 0 ? (
-              <EmptyTableRow colSpan={6}>
+              <EmptyTableRow colSpan={5}>
                 {rules.length === 0
                   ? t('sharingRules.emptyNone')
                   : t('sharingRules.emptySearch')}
@@ -257,7 +382,7 @@ export function SharingRulesPanel({
         }}
       >
         {t('sharingRules.confirmDeleteBody', {
-          title: draft?.title || humanize(originalKey ?? ''),
+          title: titleText(draft?.title, t, humanize(originalKey ?? '')),
         })}
       </ConfirmDialog>
       {draft ? (
@@ -303,7 +428,7 @@ export function SharingRulesPanel({
                 <div className='grid gap-4 sm:grid-cols-2'>
                   <Field label={t('sharingRules.ruleName')}>
                     <Input
-                      value={draft.title ?? ''}
+                      value={titleText(draft.title, t)}
                       onChange={(event) =>
                         setDraft({ ...draft, title: event.target.value })
                       }
@@ -329,14 +454,20 @@ export function SharingRulesPanel({
                       setDraft({
                         ...draft,
                         resource,
-                        actions: firstActions(
-                          options,
-                          resource.type,
-                          resource.id,
-                        ).map((action) => ({
-                          action,
-                          selection: { type: 'records' as const, ids: [] },
-                        })),
+                        actions:
+                          resource.type === 'resource'
+                            ? []
+                            : firstActions(
+                                options,
+                                resource.type,
+                                resource.id,
+                              ).map((action) => ({
+                                action,
+                                selection: {
+                                  type: 'records' as const,
+                                  ids: [],
+                                },
+                              })),
                       })
                     }
                   />
@@ -379,13 +510,42 @@ export function SharingRulesPanel({
                     {t('sharingRules.accessDescription')}
                   </p>
                 </div>
-                <SharingActionsEditor
-                  options={options}
-                  resourceType={draft.resource.type}
-                  collection={draft.resource.id}
-                  value={draft.actions}
-                  onChange={(actions) => setDraft({ ...draft, actions })}
-                />
+                {draft.resource.type === 'resource' ? (
+                  <BusinessRuleScopes
+                    options={options}
+                    resourceId={draft.resource.id}
+                    value={draft.actions.map((item) => ({
+                      action: item.action,
+                      scopeKey: item.scopeKey,
+                      scope:
+                        item.selection.type === 'records'
+                          ? { type: 'ids', ids: item.selection.ids }
+                          : item.selection.policy,
+                    }))}
+                    onChange={(actions) =>
+                      setDraft({
+                        ...draft,
+                        actions: actions.map((item) => ({
+                          action: item.action,
+                          scopeKey: item.scopeKey,
+                          selection:
+                            item.scope.type === 'ids'
+                              ? { type: 'records', ids: item.scope.ids }
+                              : { type: 'policy', policy: item.scope },
+                        })),
+                      })
+                    }
+                    loadRecords={loadBusinessRecords}
+                  />
+                ) : (
+                  <SharingActionsEditor
+                    options={options}
+                    resourceType={draft.resource.type}
+                    collection={draft.resource.id}
+                    value={draft.actions}
+                    onChange={(actions) => setDraft({ ...draft, actions })}
+                  />
+                )}
               </section>
             </>
           </RuleForm>
@@ -397,9 +557,8 @@ export function SharingRulesPanel({
 
 function fresh(options: AuthorizationOptions): SharingRule {
   const type =
-    options.resourceTypes.find(
-      (item) => item.value === 'database.collection',
-    ) ?? options.resourceTypes[0];
+    options.resourceTypes.find((item) => item.value === 'resource') ??
+    options.resourceTypes[0];
   return {
     key: '',
     title: '',
@@ -407,14 +566,17 @@ function fresh(options: AuthorizationOptions): SharingRule {
       type: type?.value ?? 'database.collection',
       id: type?.resources[0]?.value ?? '',
     },
-    actions: firstActions(
-      options,
-      type?.value ?? '',
-      type?.resources[0]?.value,
-    ).map((action) => ({
-      action,
-      selection: { type: 'records' as const, ids: [] },
-    })),
+    actions:
+      type?.value === 'resource'
+        ? []
+        : firstActions(
+            options,
+            type?.value ?? '',
+            type?.resources[0]?.value,
+          ).map((action) => ({
+            action,
+            selection: { type: 'records' as const, ids: [] },
+          })),
     subjects: [],
     reason: '',
   };
@@ -668,24 +830,6 @@ function resourceLabel(
     rule.resource.id
   );
 }
-function selectionLabel(
-  t: Translate,
-  rule: SharingRule,
-  options: AuthorizationOptions,
-): string {
-  return rule.actions
-    .map((item) =>
-      t('labels.actionScope', {
-        action: actionLabel(options, rule.resource.type, item.action),
-        scope:
-          item.selection.type === 'records'
-            ? t('labels.selectedRecords', { count: item.selection.ids.length })
-            : policyLabel(t, item.selection.policy, options),
-      }),
-    )
-    .join(' · ');
-}
-
 function humanize(value: string): string {
   return value
     .replace(/[._-]+/g, ' ')
@@ -709,3 +853,6 @@ function policyLabel(
     key
   );
 }
+
+const loadBusinessRecords = (collection: string) =>
+  authz.listSharingRecords(collection);

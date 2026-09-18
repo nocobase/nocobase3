@@ -20,7 +20,7 @@ export default {
     newTitle: '新建共享规则',
     editorDescription: '选择要共享的记录范围和用户。',
     ruleHeading: '基本信息',
-    ruleDescription: '为规则命名，并选择要共享的数据表。',
+    ruleDescription: '为规则命名，并选择要共享的资源。',
     ruleName: '规则名称',
     accessHeading: '操作与记录范围',
     accessDescription: '为每个操作分别选择记录。',

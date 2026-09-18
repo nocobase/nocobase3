@@ -19,6 +19,7 @@ type DefaultAccessAdministrationApi = Omit<DefaultAccessApi, 'withTransaction'>;
 
 export function createDefaultAccessHandler(
   api: DefaultAccessAdministrationApi,
+  validate: (rule: DefaultAccessRule) => void = () => {},
 ): AuthorizationRouteHandler {
   const routes = createSettingsRouter();
 
@@ -27,15 +28,14 @@ export function createDefaultAccessHandler(
     return context.json({ data: await api.list() });
   });
 
-  // An upsert: which permission it needs depends on whether the rule is there.
   routes.put(DEFAULT_ACCESS_ROUTE_PATH, async (context) => {
     const rule = parseDefaultAccessRule(await context.req.json());
-    const existing = await api.get(rule.resource.type, rule.resource.id);
     await requireSettings(
       context.env.authorization,
       'default-access',
-      existing ? 'update' : 'create',
+      'configure',
     );
+    validate(rule);
     return context.json({ data: await api.set(rule) });
   });
 
@@ -43,7 +43,7 @@ export function createDefaultAccessHandler(
     await requireSettings(
       context.env.authorization,
       'default-access',
-      'delete',
+      'configure',
     );
     await api.delete(context.req.param('type'), context.req.param('id'));
     return context.body(null, 204);

@@ -14,12 +14,11 @@ const authz = createAuthorization({
 ```
 
 本包只定义 Store 契约 `SharingRuleStore`，插件必须由调用方提供一个 Store，本包不带任何存储
-实现，也不依赖 `@nocobase/db`。`@nocobase/app-plugin-authorization` 提供数据库 Store，
+实现，也不依赖 `@nocobase/db`。`@nocobase/app-plugin-authz-sharing-rules` 提供数据库 Store，
 并与创建下面这些表的 migration 一起发布：
 
 - `authorizationSharingRules` 保存规则和条件范围
 - `authorizationSharingRuleAssignments` 保存接收主体
-- `authorizationSharingRuleRecords` 保存显式选择的记录 ID
 
 ## 分享指定对象
 
@@ -46,7 +45,7 @@ await authz.sharingRules.create({
 });
 ```
 
-`ids` 会按 Action 写入 `authorizationSharingRuleRecords`，不会作为 JSON 数组保存在规则表。
+`ids` 直接保存在规则表的 `actions` JSON 中，同一动作的不同 `scopeKey` 保留各自的记录选择。
 
 ## 按条件分享
 

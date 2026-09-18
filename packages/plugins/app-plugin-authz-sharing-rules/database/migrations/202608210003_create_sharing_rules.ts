@@ -29,25 +29,6 @@ const migration: MigrationDefinition = defineMigration({
       },
     );
     await builder.createCollection(
-      'authorizationSharingRuleRecords',
-      (collection) => {
-        collection.string('id', { length: 64 }).notNull();
-        collection.string('sharingRuleId', { length: 64 }).notNull();
-        collection.string('action', { length: 255 }).notNull();
-        collection.string('recordId', { length: 255 }).notNull();
-        collection.datetime('createdAt').notNull();
-        collection.primary('id', {
-          name: 'pk_authorization_sharing_rule_records',
-        });
-        collection.unique(['sharingRuleId', 'action', 'recordId'], {
-          name: 'uq_authz_sharing_records_rule_action_record',
-        });
-        collection.index('sharingRuleId', {
-          name: 'idx_authorization_sharing_rule_records_rule',
-        });
-      },
-    );
-    await builder.createCollection(
       'authorizationSharingRuleAssignments',
       (collection) => {
         collection.string('id', { length: 64 }).notNull();
@@ -67,7 +48,6 @@ const migration: MigrationDefinition = defineMigration({
   },
   async down({ builder }) {
     await builder.dropCollection('authorizationSharingRuleAssignments');
-    await builder.dropCollection('authorizationSharingRuleRecords');
     await builder.dropCollection('authorizationSharingRules');
   },
 });

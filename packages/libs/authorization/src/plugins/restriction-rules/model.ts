@@ -1,3 +1,4 @@
+import type { AuthorizationTitle } from '../../core/titles.js';
 import type {
   AccessConstraintValue,
   AuthorizationSubject,
@@ -6,7 +7,7 @@ import type {
 
 export interface RestrictionRule {
   key: string;
-  title?: string;
+  title?: AuthorizationTitle;
   resource: ResourceRef;
   actions: readonly RestrictionRuleAction[];
   subjects: readonly AuthorizationSubject[];
@@ -15,5 +16,6 @@ export interface RestrictionRule {
 
 export interface RestrictionRuleAction {
   action: string;
+  scopeKey?: string;
   scope: AccessConstraintValue;
 }

@@ -1,3 +1,7 @@
+import {
+  parseAuthorizationTitle,
+  type AuthorizationTitle,
+} from '@nocobase/authorization/core';
 import type {
   AccessConstraintValue,
   AuthorizationSubject,
@@ -61,19 +65,27 @@ export function scope(value: unknown): AccessConstraintValue {
   throw new TypeError(`Unknown scope type: ${type}`);
 }
 
-export function actionScopes(
-  value: unknown,
-): readonly { action: string; scope: AccessConstraintValue }[] {
+export function actionScopes(value: unknown): readonly {
+  action: string;
+  scopeKey?: string;
+  scope: AccessConstraintValue;
+}[] {
   if (!Array.isArray(value)) throw new TypeError('actions must be an array');
   return value.map((entry) => {
     const item = object(entry, 'action');
-    return { action: string(item.action, 'action'), scope: scope(item.scope) };
+    return {
+      action: string(item.action, 'action'),
+      ...(item.scopeKey === undefined
+        ? {}
+        : { scopeKey: string(item.scopeKey, 'scopeKey') }),
+      scope: scope(item.scope),
+    };
   });
 }
 
 export interface ParsedRuleBase {
   key: string;
-  title?: string;
+  title?: AuthorizationTitle;
   resource: ResourceRef;
   subjects: readonly AuthorizationSubject[];
   reason?: string;
@@ -83,7 +95,7 @@ export interface ParsedRuleBase {
 export function ruleBase(input: Record<string, unknown>): ParsedRuleBase {
   return {
     key: string(input.key, 'key'),
-    ...(input.title ? { title: string(input.title, 'title') } : {}),
+    ...(input.title ? { title: parseAuthorizationTitle(input.title) } : {}),
     resource: resource(input.resource),
     subjects: subjects(input.subjects),
     ...(input.reason ? { reason: string(input.reason, 'reason') } : {}),

@@ -123,10 +123,10 @@ describe('scope controls', () => {
       screen.getByRole('button', { name: 'Custom scope' }),
     ).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(
-      screen.getByRole('button', { name: 'Not granted', exact: true }),
+      screen.getByRole('button', { name: 'No access', exact: true }),
     );
     expect(
-      screen.getByRole('button', { name: 'Not granted', exact: true }),
+      screen.getByRole('button', { name: 'No access', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(popup, { key: 'Escape' });
     await waitFor(() =>
@@ -135,7 +135,7 @@ describe('scope controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Orders: Read' }));
     await screen.findByRole('dialog');
     expect(
-      screen.getByRole('button', { name: 'Not granted', exact: true }),
+      screen.getByRole('button', { name: 'No access', exact: true }),
     ).toHaveAttribute('aria-pressed', 'true');
   });
 });

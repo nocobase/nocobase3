@@ -104,7 +104,9 @@ class DefaultAccessService<TTransaction = unknown>
     return rules
       .flatMap((rule) => {
         const configured = rule.actions.find(
-          (action) => action.action === input.action,
+          (action) =>
+            action.action === input.action &&
+            action.scopeKey === input.scopeKey,
         );
         return rule.resource.type === input.resource.type &&
           (rule.resource.id === '*' ||

@@ -1,6 +1,6 @@
 export default {
-  resourceTitle: 'Default Access',
-  navigation: { title: 'Default Access' },
+  resourceTitle: 'Default Data Scope',
+  navigation: { title: 'Default Data Scope' },
   defaultAccess: {
     supportedScope:
       'Only resource types that support data scopes are shown. Configure the default record scope for each action here.',
@@ -20,9 +20,9 @@ export default {
     customScope: 'Specific scope',
 
     page: {
-      title: 'Default Access',
+      title: 'Default Data Scope',
       description:
-        'Default access expands the baseline record scope for users with the relevant action permission. It does not grant action or field permissions; sharing and restriction rules also apply.',
+        'Default data scope expands the baseline record scope for users with the relevant action permission. It does not grant action or field permissions; sharing and restriction rules also apply.',
     },
     search: 'Search rules',
     create: 'Set default access',
@@ -31,7 +31,7 @@ export default {
     emptyNone:
       'No default access configured. Permission sets and other rules determine access.',
     emptySearch: 'No default access rules match your search.',
-    pagerLabel: 'Default access rules',
+    pagerLabel: 'Default data scope rules',
     editTitle: 'Edit default access',
     newTitle: 'Set default access',
     editorDescription:

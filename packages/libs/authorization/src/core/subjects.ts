@@ -23,6 +23,10 @@ export interface AuthorizationSubjectTypeExtensions {}
 export interface AuthorizationSubjectType<
   TTransaction = unknown,
 > extends AuthorizationSubjectTypeExtensions {
+  /** Subjects of this type inherited by a principal, such as current team memberships. */
+  resolveFor?(
+    principal: AuthorizationIdentity['principal'],
+  ): Promise<readonly string[]>;
   /**
    * Narrows the ids of this one type to the ones that still confer anything.
    * Batched on purpose: one query answers the whole set. The caller's
@@ -58,6 +62,20 @@ export class AuthorizationSubjectRegistry {
 
   get(type: string): AuthorizationSubjectType<unknown> | undefined {
     return this.types.get(type);
+  }
+
+  async resolveFor(
+    principal: AuthorizationIdentity['principal'],
+  ): Promise<readonly AuthorizationSubject[]> {
+    const subjects = await Promise.all(
+      [...this.types.entries()].map(async ([type, definition]) =>
+        ((await definition.resolveFor?.(principal)) ?? []).map((id) => ({
+          type,
+          id,
+        })),
+      ),
+    );
+    return this.filterActive(subjects.flat());
   }
 
   list(): readonly string[] {

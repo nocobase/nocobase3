@@ -1,4 +1,10 @@
 import type { AuthorizationGrantService } from './grants.js';
+import type {
+  ResourceAuthorizationCheck,
+  ResourceAuthorizationConditions,
+  BusinessResources,
+  BusinessResourceGroups,
+} from './business-resources.js';
 import type { ResourceHandlerRegistry } from './registry.js';
 import type { AuthorizationMiddleware } from './middleware.js';
 import type { AccessConstraintRegistry } from './constraints.js';
@@ -9,7 +15,9 @@ export interface AuthorizationPluginSetup<TConnection = unknown> {
   /** The handle the host passed to `createAuthorization`, never inspected here. */
   readonly connection?: TConnection;
   readonly grants: AuthorizationGrantService;
-  readonly resources: ResourceHandlerRegistry;
+  readonly resources: BusinessResources;
+  readonly resourceTypes: ResourceHandlerRegistry;
+  readonly resourceGroups: BusinessResourceGroups;
   readonly getResource: ResourceHandlerRegistry['getResource'];
   readonly constraints: AccessConstraintRegistry;
   readonly subjects: AuthorizationSubjectRegistry;
@@ -29,6 +37,10 @@ export interface AuthorizationPlugin<
   requiresGrants?: boolean;
   /** Adds an authorization-owned API to the created Authorization instance. */
   authorizationApi?: TAuthorizationApi;
+  /** Convert already-resolved composed checks into executable plugin conditions. */
+  composeConditions?(
+    checks: readonly ResourceAuthorizationCheck[],
+  ): Partial<Omit<ResourceAuthorizationConditions, 'type' | 'checks'>>;
   setup?(authz: AuthorizationPluginSetup<TConnection>): void;
 }
 

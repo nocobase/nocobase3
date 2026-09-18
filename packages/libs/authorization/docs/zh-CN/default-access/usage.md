@@ -14,14 +14,12 @@ const authz = createAuthorization({
 ```
 
 本包只定义 Store 契约 `DefaultAccessStore`，插件必须由调用方提供一个 Store，本包不带任何存储
-实现，也不依赖 `@nocobase/db`。`@nocobase/app-plugin-authorization` 提供数据库 Store，
+实现，也不依赖 `@nocobase/db`。`@nocobase/app-plugin-authz-default-access` 提供数据库 Store，
 并与创建下面这些表的 migration 一起发布：
 
 - `authorizationDefaultAccessRules`
-- `authorizationDefaultAccessRuleRecords`
 
-显式选择的记录按 Action 保存在 `authorizationDefaultAccessRuleRecords`，规则表不保存
-大段 ID 数组。
+显式记录 ID 与每个 Action 的范围一起保存在规则表的 `actions` JSON 中；同一动作的不同 `scopeKey` 保留各自的 ID。
 
 ## 设置默认范围
 

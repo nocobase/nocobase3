@@ -21,7 +21,9 @@ export function ManagementToolbar({
   onSearch,
   actionLabel,
   onAction,
+  filters,
 }: {
+  filters?: ReactNode;
   search: string;
   /** What the field searches, for anyone who cannot see the placeholder. */
   searchLabel?: string;
@@ -40,6 +42,7 @@ export function ManagementToolbar({
         value={search}
         onChange={onSearch}
       />
+      {filters}
       <FilterBarSpacer />
       <Button onClick={onAction}>{actionLabel}</Button>
     </FilterBar>

@@ -20,7 +20,7 @@ export default {
     newTitle: '新建限制规则',
     editorDescription: '为指定用户设置记录访问范围的上限。',
     ruleHeading: '基本信息',
-    ruleDescription: '为规则命名，并选择要限制的数据表。',
+    ruleDescription: '为规则命名，并选择要限制的资源。',
     ruleName: '规则名称',
     assignmentsHeading: '适用对象',
     assignmentsDescription: '选择谁受这条限制约束。',

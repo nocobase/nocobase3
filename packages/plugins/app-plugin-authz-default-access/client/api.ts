@@ -6,7 +6,7 @@ import type {
 } from '@nocobase/app-plugin-authorization/client/management';
 export interface DefaultAccessRule {
   resource: { type: string; id: string };
-  actions: readonly { action: string; scope: AccessScope }[];
+  actions: readonly { action: string; scopeKey?: string; scope: AccessScope }[];
 }
 class DefaultAccessClient {
   private get api(): ApiClient {

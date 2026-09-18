@@ -73,7 +73,9 @@ export class RestrictionRuleService<TTransaction = unknown>
     return rules
       .flatMap((rule) => {
         const configured = rule.actions.find(
-          (action) => action.action === input.action,
+          (action) =>
+            action.action === input.action &&
+            action.scopeKey === input.scopeKey,
         );
         return restrictionMatches(rule, input) &&
           appliesToSubject(rule.subjects, subjects) &&
@@ -82,7 +84,11 @@ export class RestrictionRuleService<TTransaction = unknown>
           : [];
       })
       .map(({ rule, configured }) => ({
-        source: { plugin: this.id, id: rule.key },
+        source: {
+          plugin: this.id,
+          id: rule.key,
+          ...(rule.title === undefined ? {} : { title: rule.title }),
+        },
         effect: 'restrict' as const,
         value: configured.scope,
       }));

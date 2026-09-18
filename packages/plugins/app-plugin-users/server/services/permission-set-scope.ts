@@ -1,50 +1,12 @@
-import type { Application } from '@nocobase/app-server/application';
-import {
-  permissionSetsToken,
-  type PermissionSetsApi,
-} from '@nocobase/app-plugin-authorization';
+import type { PermissionSetsApi } from '@nocobase/app-plugin-authorization';
 import {
   UserManagementError,
   UserRoleScopeError,
-  userRoleScopeRegistryToken,
   type UserRoleScope,
-  type UserRoleScopeRegistry,
   type UserRoleValue,
-} from '@nocobase/app-plugin-users/server/tokens';
+} from '../tokens.js';
 import type { DatabaseConnection } from '@nocobase/db';
-import { ServiceProvider } from '@nocobase/service-provider';
-
 const USERS_I18N_NAMESPACE = '@nocobase/app-plugin-users';
-
-export default class UserRolesProvider extends ServiceProvider<Application> {
-  public readonly name = 'app/user-roles';
-  private unregister?: () => void;
-
-  public override boot(): Promise<void> {
-    if (this.unregister) return Promise.resolve();
-    if (
-      !this.app.container.has(permissionSetsToken) ||
-      !this.app.container.has(userRoleScopeRegistryToken)
-    ) {
-      return Promise.resolve();
-    }
-    const permissionSets = this.app.container.resolve(permissionSetsToken);
-    const registry = this.app.container.resolve<UserRoleScopeRegistry>(
-      userRoleScopeRegistryToken,
-    );
-    this.unregister = registry.register(
-      createApplicationUserRoleScope(permissionSets),
-    );
-    return Promise.resolve();
-  }
-
-  public override shutdown(): Promise<void> {
-    this.unregister?.();
-    this.unregister = undefined;
-    return Promise.resolve();
-  }
-}
-
 /**
  * The role picker for the Permission Sets this application assigns directly.
  * A set that confers unrestricted access is shown but never assigned or
@@ -57,7 +19,7 @@ export function createApplicationUserRoleScope(
     permissionSets.isUnrestricted(key);
   return {
     key: 'app',
-    label: 'Roles',
+    label: 'Permission sets',
     labelI18nKey: 'page.roles',
     labelI18nNs: USERS_I18N_NAMESPACE,
     selection: 'multiple',
@@ -65,13 +27,24 @@ export function createApplicationUserRoleScope(
     async options() {
       const state = await directRoleState(permissionSets);
       return state.permissionSets.map((permissionSet) => {
+        const titleDescriptor =
+          typeof permissionSet.title === 'object'
+            ? permissionSet.title
+            : undefined;
         return {
           value: permissionSet.key,
-          label: permissionSet.title?.trim() || permissionSet.key,
+          label:
+            (typeof permissionSet.title === 'string'
+              ? permissionSet.title.trim()
+              : permissionSet.title?.key) || permissionSet.key,
+          ...(titleDescriptor
+            ? {
+                labelI18nKey: titleDescriptor.key,
+                labelI18nNs: titleDescriptor.ns,
+              }
+            : {}),
           ...(isUnrestricted(permissionSet.key)
             ? {
-                labelI18nKey: 'page.systemAdministrator',
-                labelI18nNs: USERS_I18N_NAMESPACE,
                 assignable: false,
                 removable: false,
               }

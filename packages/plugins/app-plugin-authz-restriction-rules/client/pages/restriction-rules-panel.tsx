@@ -1,3 +1,7 @@
+import { titleText } from '@nocobase/app-plugin-authorization/client/management';
+import { SelectField } from '@nocobase/app-plugin-authorization/client/management';
+import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
+import { BusinessRuleScopes } from '@nocobase/app-plugin-authorization/client/management';
 import type { RestrictionRule } from '../api.js';
 import { incompleteScope } from '@nocobase/app-plugin-authorization/client/management';
 import {
@@ -38,7 +42,6 @@ import {
 import {
   ErrorBox,
   errorMessage as message,
-  NoticeBox,
 } from '@nocobase/app-plugin-authorization/client/management';
 import {
   EmptyTableRow,
@@ -72,6 +75,8 @@ export function RestrictionRulesPanel({
   );
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState('');
+  const [sectionKey, setSectionKey] = useState('');
+  const sections = useMemo(() => resourceSections(options), [options]);
   const [page, setPage] = useState(1);
   const [errorCause, setErrorCause] = useState<unknown>();
   const error = errorCause === undefined ? undefined : message(t, errorCause);
@@ -80,7 +85,7 @@ export function RestrictionRulesPanel({
     readonly import('@nocobase/app-plugin-authorization/client/management').AuthorizationRecordOption[]
   >([]);
   useEffect(() => {
-    if (!draft?.resource.id) return;
+    if (!draft?.resource.id || draft.resource.type === 'resource') return;
     let active = true;
     void authz.listRestrictionRecords(draft.resource.id).then(
       (items) => {
@@ -93,7 +98,7 @@ export function RestrictionRulesPanel({
     return () => {
       active = false;
     };
-  }, [draft?.resource.id]);
+  }, [draft?.resource.id, draft?.resource.type]);
   const load = useCallback(async (): Promise<void> => {
     try {
       setRules(await authz.listRestrictionRules());
@@ -106,14 +111,22 @@ export function RestrictionRulesPanel({
   }, [load]);
   const visibleRules = useMemo(() => {
     const query = search.trim().toLowerCase();
+    const section = sections.find((item) => item.key === sectionKey);
+    const selectedRules = section
+      ? rules.filter(
+          (rule) =>
+            rule.resource.type === section.value &&
+            section.resources.some((item) => item.value === rule.resource.id),
+        )
+      : rules;
     return query
-      ? rules.filter((rule) =>
-          [rule.title, rule.key, rule.resource.id].some((value) =>
+      ? selectedRules.filter((rule) =>
+          [titleText(rule.title, t), rule.key, rule.resource.id].some((value) =>
             value?.toLowerCase().includes(query),
           ),
         )
-      : rules;
-  }, [rules, search]);
+      : selectedRules;
+  }, [rules, search, sections, sectionKey, t]);
   const pagedRules = pageSlice(visibleRules, page);
   // Narrowing the search can leave the current page past the end of the list.
   function changeSearch(value: string): void {
@@ -161,8 +174,26 @@ export function RestrictionRulesPanel({
   return (
     <>
       {error ? <ErrorBox value={error} /> : null}
-      <NoticeBox>{t('restrictionRules.notice')}</NoticeBox>
       <ManagementToolbar
+        filters={
+          options.resourceGroups?.length ? (
+            <SelectField
+              aria-label={t('editors.resourceGroup')}
+              value={sectionKey}
+              onValueChange={(value) => {
+                setSectionKey(value);
+                setPage(1);
+              }}
+              options={[
+                { value: '', label: t('common.all') },
+                ...sections.map((section) => ({
+                  value: section.key,
+                  label: section.label,
+                })),
+              ]}
+            />
+          ) : undefined
+        }
         search={search}
         searchLabel={t('restrictionRules.search')}
         searchPlaceholder={t('restrictionRules.search')}
@@ -171,23 +202,27 @@ export function RestrictionRulesPanel({
         onAction={() => edit()}
       />
       <ManagementTable>
-        <Table className='min-w-[56rem]'>
+        <Table className='min-w-[64rem] table-fixed'>
+          <colgroup>
+            <col className='w-[25%]' />
+            <col className='w-[12%]' />
+            <col className='w-[21%]' />
+            <col />
+            <col className='w-20' />
+          </colgroup>
           <TableHeader className='bg-muted/30 uppercase'>
             <TableRow>
               <TableHead className='px-5 py-3 font-medium'>
                 {t('restrictionRules.ruleHeader')}
               </TableHead>
               <TableHead className='px-5 py-3 font-medium'>
-                {t('restrictionRules.appliesToHeader')}
-              </TableHead>
-              <TableHead className='px-5 py-3 font-medium'>
                 {t('common.resource')}
               </TableHead>
               <TableHead className='px-5 py-3 font-medium'>
-                {t('restrictionRules.restrictedActionsHeader')}
+                {t('restrictionRules.appliesToHeader')}
               </TableHead>
               <TableHead className='px-5 py-3 font-medium'>
-                {t('restrictionRules.allowedScopeHeader')}
+                {t('restrictionRules.accessHeading')}
               </TableHead>
               <TableHead className='w-20 px-5 py-3' />
             </TableRow>
@@ -195,41 +230,125 @@ export function RestrictionRulesPanel({
           <TableBody>
             {pagedRules.map((rule) => (
               <TableRow key={rule.key}>
-                <TableCell className='px-5 py-4'>
+                <TableCell className='px-5 py-4 align-top whitespace-normal break-words'>
                   <button
                     type='button'
-                    className='font-medium text-primary hover:underline'
+                    className='text-left font-medium text-primary hover:underline'
                     onClick={() => edit(rule)}
                   >
-                    {rule.title || humanize(rule.key)}
+                    {titleText(rule.title, t, humanize(rule.key))}
                   </button>
-                  <p className='text-xs text-muted-foreground'>
-                    {rule.reason || rule.key}
+                  <p className='mt-1 break-all text-xs text-muted-foreground'>
+                    {rule.key}
                   </p>
+                  {rule.reason && (
+                    <p className='mt-1 text-xs text-muted-foreground'>
+                      {rule.reason}
+                    </p>
+                  )}
                 </TableCell>
-                <TableCell className='px-5 py-4'>
-                  {rule.subjects
-                    .map(
-                      (subject) =>
-                        subjectNames[subjectKey(subject)] ??
-                        `${subject.type}: ${subject.id}`,
-                    )
-                    .join(' · ')}
-                </TableCell>
-                <TableCell className='px-5 py-4'>
+                <TableCell className='px-5 py-4 align-top whitespace-normal break-words'>
                   {resourceLabel(options, rule)}
                 </TableCell>
-                <TableCell className='px-5 py-4'>
-                  {rule.actions
-                    .map((item) =>
-                      actionLabel(options, rule.resource.type, item.action),
-                    )
-                    .join(', ')}
+                <TableCell className='px-5 py-4 align-top whitespace-normal break-words'>
+                  <div className='flex flex-wrap gap-x-3 gap-y-1'>
+                    {rule.subjects.map((subject) => (
+                      <span key={subjectKey(subject)} className='inline-block'>
+                        {subjectNames[subjectKey(subject)] ??
+                          `${subject.type}: ${subject.id}`}
+                      </span>
+                    ))}
+                  </div>
                 </TableCell>
-                <TableCell className='px-5 py-4'>
-                  {scopeLabel(t, rule, options)}
+                <TableCell className='px-5 py-4 align-top whitespace-normal break-words'>
+                  <div className='space-y-2 text-sm'>
+                    {[...new Set(rule.actions.map((item) => item.action))].map(
+                      (action) => {
+                        const entries = rule.actions.filter(
+                          (item) => item.action === action,
+                        );
+                        const declared = options.resourceTypes
+                          .find((type) => type.value === rule.resource.type)
+                          ?.resources.find(
+                            (resource) => resource.value === rule.resource.id,
+                          )?.ruleScopes;
+                        const grouped =
+                          (declared?.filter(
+                            (target) => target.action === action,
+                          ).length ?? entries.length) > 1;
+                        return (
+                          <div key={action}>
+                            {grouped && (
+                              <div className='mb-1'>
+                                {actionLabel(
+                                  options,
+                                  rule.resource.type,
+                                  action,
+                                  rule.resource.id,
+                                )}
+                              </div>
+                            )}
+                            <div
+                              className={
+                                grouped ? 'ml-1 space-y-1 border-l pl-3' : ''
+                              }
+                            >
+                              {entries.map((item) => {
+                                const targets = options.resourceTypes
+                                  .find(
+                                    (type) => type.value === rule.resource.type,
+                                  )
+                                  ?.resources.find(
+                                    (resource) =>
+                                      resource.value === rule.resource.id,
+                                  )?.ruleScopes;
+                                const scopeLabel = targets?.find(
+                                  (target) =>
+                                    target.action === item.action &&
+                                    target.scopeKey === item.scopeKey,
+                                )?.label;
+                                const multiple =
+                                  (targets?.filter(
+                                    (target) => target.action === item.action,
+                                  ).length ?? 0) > 1;
+                                return (
+                                  <div
+                                    key={JSON.stringify([
+                                      item.action,
+                                      item.scopeKey,
+                                    ])}
+                                    className='flex flex-wrap items-baseline gap-x-2 gap-y-1'
+                                  >
+                                    <span>
+                                      {multiple
+                                        ? (scopeLabel ?? item.scopeKey)
+                                        : actionLabel(
+                                            options,
+                                            rule.resource.type,
+                                            item.action,
+                                            rule.resource.id,
+                                          )}
+                                    </span>
+                                    <span
+                                      aria-hidden='true'
+                                      className='text-muted-foreground'
+                                    >
+                                      →
+                                    </span>
+                                    <span>
+                                      {accessScopeLabel(t, item.scope, options)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      },
+                    )}
+                  </div>
                 </TableCell>
-                <TableCell className='px-5 py-4 text-right'>
+                <TableCell className='px-5 py-4 text-right align-top'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
                     {t('common.edit')}
                   </Button>
@@ -237,7 +356,7 @@ export function RestrictionRulesPanel({
               </TableRow>
             ))}
             {visibleRules.length === 0 ? (
-              <EmptyTableRow colSpan={6}>
+              <EmptyTableRow colSpan={5}>
                 {rules.length === 0
                   ? t('restrictionRules.emptyNone')
                   : t('restrictionRules.emptySearch')}
@@ -263,7 +382,7 @@ export function RestrictionRulesPanel({
         }}
       >
         {t('restrictionRules.confirmDeleteBody', {
-          title: draft?.title || humanize(originalKey ?? ''),
+          title: titleText(draft?.title, t, humanize(originalKey ?? '')),
         })}
       </ConfirmDialog>
       {draft ? (
@@ -311,7 +430,7 @@ export function RestrictionRulesPanel({
                 <div className='grid gap-4 sm:grid-cols-2'>
                   <Field label={t('restrictionRules.ruleName')}>
                     <Input
-                      value={draft.title ?? ''}
+                      value={titleText(draft.title, t)}
                       onChange={(event) =>
                         setDraft({ ...draft, title: event.target.value })
                       }
@@ -337,14 +456,17 @@ export function RestrictionRulesPanel({
                       setDraft({
                         ...draft,
                         resource,
-                        actions: firstActions(
-                          options,
-                          resource.type,
-                          resource.id,
-                        ).map((action) => ({
-                          action,
-                          scope: defaultScope(options),
-                        })),
+                        actions:
+                          resource.type === 'resource'
+                            ? []
+                            : firstActions(
+                                options,
+                                resource.type,
+                                resource.id,
+                              ).map((action) => ({
+                                action,
+                                scope: defaultScope(options),
+                              })),
                       })
                     }
                   />
@@ -387,15 +509,25 @@ export function RestrictionRulesPanel({
                     {t('restrictionRules.accessDescription')}
                   </p>
                 </div>
-                <ActionScopesEditor
-                  options={options}
-                  resourceType={draft.resource.type}
-                  resourceId={draft.resource.id}
-                  fields={collectionFields(options, draft.resource.id)}
-                  records={records}
-                  value={draft.actions}
-                  onChange={(actions) => setDraft({ ...draft, actions })}
-                />
+                {draft.resource.type === 'resource' ? (
+                  <BusinessRuleScopes
+                    options={options}
+                    resourceId={draft.resource.id}
+                    value={draft.actions}
+                    onChange={(actions) => setDraft({ ...draft, actions })}
+                    loadRecords={loadBusinessRecords}
+                  />
+                ) : (
+                  <ActionScopesEditor
+                    options={options}
+                    resourceType={draft.resource.type}
+                    resourceId={draft.resource.id}
+                    fields={collectionFields(options, draft.resource.id)}
+                    records={records}
+                    value={draft.actions}
+                    onChange={(actions) => setDraft({ ...draft, actions })}
+                  />
+                )}
               </section>
             </>
           </RuleForm>
@@ -414,9 +546,8 @@ function collectionFields(
 
 function fresh(options: AuthorizationOptions): RestrictionRule {
   const type =
-    options.resourceTypes.find(
-      (item) => item.value === 'database.collection',
-    ) ?? options.resourceTypes[0];
+    options.resourceTypes.find((item) => item.value === 'resource') ??
+    options.resourceTypes[0];
   return {
     key: '',
     title: '',
@@ -424,11 +555,14 @@ function fresh(options: AuthorizationOptions): RestrictionRule {
       type: type?.value ?? 'database.collection',
       id: type?.resources[0]?.value ?? '',
     },
-    actions: firstActions(
-      options,
-      type?.value ?? '',
-      type?.resources[0]?.value,
-    ).map((action) => ({ action, scope: defaultScope(options) })),
+    actions:
+      type?.value === 'resource'
+        ? []
+        : firstActions(
+            options,
+            type?.value ?? '',
+            type?.resources[0]?.value,
+          ).map((action) => ({ action, scope: defaultScope(options) })),
     subjects: [],
     reason: '',
   };
@@ -446,20 +580,6 @@ function resourceLabel(
   );
 }
 
-function scopeLabel(
-  t: Translate,
-  rule: RestrictionRule,
-  options: AuthorizationOptions,
-): string {
-  return rule.actions
-    .map((item) =>
-      t('labels.actionScope', {
-        action: actionLabel(options, rule.resource.type, item.action),
-        scope: accessScopeLabel(t, item.scope, options),
-      }),
-    )
-    .join(' · ');
-}
 function accessScopeLabel(
   t: Translate,
   scope: import('@nocobase/app-plugin-authorization/client/management').AccessScope,
@@ -482,3 +602,6 @@ function humanize(value: string): string {
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
+
+const loadBusinessRecords = (collection: string) =>
+  authz.listRestrictionRecords(collection);

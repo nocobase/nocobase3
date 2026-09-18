@@ -129,6 +129,36 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     await migrate(permissionSetsMigration, 'up', database);
     await migrate(permissionSetsMigration, 'up', database);
 
+    const titles = await query
+      .selectFrom('authorizationPermissionSets')
+      .select(['key', 'title'])
+      .where('key', 'in', ['hub-administrator', 'hub-operator', 'hub-viewer'])
+      .orderBy('key', 'asc')
+      .execute();
+    expect(titles).toEqual([
+      {
+        key: 'hub-administrator',
+        title: JSON.stringify({
+          key: 'roles.names.hub-administrator',
+          ns: '@nocobase/app-plugin-hub',
+        }),
+      },
+      {
+        key: 'hub-operator',
+        title: JSON.stringify({
+          key: 'roles.names.hub-operator',
+          ns: '@nocobase/app-plugin-hub',
+        }),
+      },
+      {
+        key: 'hub-viewer',
+        title: JSON.stringify({
+          key: 'roles.names.hub-viewer',
+          ns: '@nocobase/app-plugin-hub',
+        }),
+      },
+    ]);
+
     const sets = await query
       .selectFrom('authorizationPermissionSets')
       .select(['key', 'grants'])

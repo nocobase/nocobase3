@@ -100,22 +100,17 @@ describe('locale-independent option descriptors', () => {
 
     expect(response.status).toBe(200);
     const { data } = await readOptions(response);
-    const pageType = resourceType(data, 'page');
-    expect(pageType.label).toBe('Pages');
-    expect(pageType.actions).toEqual([{ value: 'access', label: 'Access' }]);
-    expect(pageType.resources).toEqual([]);
-    const settings = resourceType(data, 'settings');
-    expect(settings.label).toBe('Admin settings');
+    expect(data.resourceTypes.map((type) => type.value)).toEqual(['resource']);
+    const settings = resourceType(data, 'resource');
+    expect(settings.groups).toContainEqual({
+      value: 'authorization',
+      label: 'Authorization',
+      category: 'administration',
+    });
     expect(settings.resources[0]).toMatchObject({
       value: 'authorization.permission-sets',
       label: 'Permission Sets',
     });
-    expect(resourceType(data, 'database.collection').actions).toEqual([
-      { value: 'read', label: 'Read' },
-      { value: 'create', label: 'Create' },
-      { value: 'update', label: 'Update' },
-      { value: 'delete', label: 'Delete' },
-    ]);
     expect(data.subjectTypes[0]).toMatchObject({
       value: 'authenticated',
       label: 'All signed-in users',
@@ -239,32 +234,53 @@ describe('locale-independent option descriptors', () => {
 
   it('includes resources registered by another settings module', async () => {
     const authz = authorization();
-    authz.getResource('settings').groups.add({ id: 'ai', title: 'AI' });
-    authz.getResource('settings').items.add({
-      id: 'ai.models',
+    authz.resourceGroups.add({
+      name: 'ai',
+      title: 'AI',
+      category: 'administration',
+    });
+    authz.resources.add({
+      name: 'ai.models',
       title: 'Models',
       group: 'ai',
-      actions: ['read', 'update'],
+      actions: [
+        {
+          name: 'read',
+          title: 'Read',
+          grants: [authz.settings.grant('ai.models', ['read'])],
+        },
+        {
+          name: 'update',
+          title: 'Update',
+          grants: [authz.settings.grant('ai.models', ['update'])],
+        },
+      ],
     });
     const router = await mountedRouter(authz);
     const response = await router.request('/api/authz/permission-sets/options');
     const { data } = await readOptions(response);
-    const settings = resourceType(data, 'settings');
+    const settings = resourceType(data, 'resource');
     expect(settings).toMatchObject({
       groups: [
-        { value: 'authorization', label: 'Authorization' },
-        { value: 'ai', label: 'AI' },
+        {
+          value: 'authorization',
+          label: 'Authorization',
+          category: 'administration',
+        },
+        { value: 'ai', label: 'AI', category: 'administration' },
       ],
     });
-    expect(settings.resources).toContainEqual({
-      value: 'ai.models',
-      label: 'Models',
-      group: 'ai',
-      actions: [
-        { value: 'read', label: 'Read' },
-        { value: 'update', label: 'Update' },
-      ],
-    });
+    expect(settings.resources).toContainEqual(
+      expect.objectContaining({
+        value: 'ai.models',
+        label: 'Models',
+        group: 'ai',
+        actions: [
+          { value: 'read', label: 'Read' },
+          { value: 'update', label: 'Update' },
+        ],
+      }),
+    );
   });
 
   it('answers in Chinese when the request asks for it', async () => {
@@ -276,12 +292,13 @@ describe('locale-independent option descriptors', () => {
     );
 
     const { data } = await readOptions(response, 'zh-CN');
-    const pageType = resourceType(data, 'page');
-    expect(pageType.label).toBe('页面');
-    expect(pageType.actions).toEqual([{ value: 'access', label: '访问' }]);
-    expect(pageType.resources).toEqual([]);
-    const settings = resourceType(data, 'settings');
-    expect(settings.label).toBe('后台设置');
+    expect(data.resourceTypes.map((type) => type.value)).toEqual(['resource']);
+    const settings = resourceType(data, 'resource');
+    expect(settings.groups).toContainEqual({
+      value: 'authorization',
+      label: '权限管理',
+      category: 'administration',
+    });
     expect(settings.resources[0]).toMatchObject({
       value: 'authorization.permission-sets',
       label: '权限集',
@@ -296,9 +313,19 @@ describe('locale-independent option descriptors', () => {
 
   it('sends a registered string as it was written, in every language', async () => {
     const authz = authorization();
-    authz
-      .getResource('database.collection')
-      .items.add({ name: 'orders', title: 'Orders' });
+    authz.resourceGroups.add({ name: 'sales', title: 'Sales' });
+    authz.resources.add({
+      name: 'orders',
+      title: 'Orders',
+      group: 'sales',
+      actions: [
+        {
+          name: 'view',
+          title: 'View',
+          grants: [authz.pages.grant('orders', ['access'])],
+        },
+      ],
+    });
     const router = await mountedRouter(authz);
 
     const labels = await Promise.all(
@@ -308,7 +335,9 @@ describe('locale-independent option descriptors', () => {
           locale ? { headers: { 'accept-language': locale } } : undefined,
         );
         const { data } = await readOptions(response);
-        return resourceType(data, 'database.collection').resources[0]?.label;
+        return resourceType(data, 'resource').resources.find(
+          (item) => item.value === 'orders',
+        )?.label;
       }),
     );
 
@@ -317,9 +346,18 @@ describe('locale-independent option descriptors', () => {
 
   it('resolves a registered key through the catalogue of its namespace', async () => {
     const authz = authorization();
-    authz.getResource('database.collection').items.add({
+    authz.resourceGroups.add({ name: 'sales', title: 'Sales' });
+    authz.resources.add({
       name: 'orders',
       title: { key: 'options.resourceTypes.collection' },
+      group: 'sales',
+      actions: [
+        {
+          name: 'view',
+          title: 'View',
+          grants: [authz.pages.grant('orders', ['access'])],
+        },
+      ],
     });
     authz.db.recordAccess.add(
       defineRecordAccessPolicy({
@@ -337,9 +375,11 @@ describe('locale-independent option descriptors', () => {
     );
 
     const { data } = await readOptions(response, 'zh-CN');
-    expect(resourceType(data, 'database.collection').resources[0]?.label).toBe(
-      '数据表',
-    );
+    expect(
+      resourceType(data, 'resource').resources.find(
+        (item) => item.value === 'orders',
+      )?.label,
+    ).toBe('数据表');
     expect(data.recordAccessPolicies).toContainEqual({
       value: 'regional',
       label: 'My Region',

@@ -1,79 +1,71 @@
+import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
+import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
+import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
+import defaultRoutes from '../../../plugins/app-plugin-authz-default-access/server/routes.js';
+import sharingRoutes from '../../../plugins/app-plugin-authz-sharing-rules/server/routes.js';
+import restrictionRoutes from '../../../plugins/app-plugin-authz-restriction-rules/server/routes.js';
+import { apiRoutes as authorizationRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
 import path from 'node:path';
 import { Auth, authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
   createAppAuthorization,
-  type AppAuthorizationService,
 } from '@nocobase/app-plugin-authorization';
-import { createApiClient, type ApiClient } from '@nocobase/app-client';
 import { createConfigPaths } from '@nocobase/app-server/config';
-import {
-  createDatabaseManager,
-  databaseManagerToken,
-  type DatabaseManager,
-  type QueryAdapter,
-} from '@nocobase/db';
+import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { vi } from 'vitest';
-import grantSeed from '../database/seeds/202609150002_authorization_example_grant_members.js';
+import setupSeed from '../database/seeds/202609220002_sales_permissions.js';
 import { AuthorizationExampleProvider } from '../server/providers/authorization-example.js';
-import { apiRoutes, createRoutes } from '../server/routes/index.js';
-
-/** The Permission Set `createAppAuthorization` protects as unrestricted. */
-const ROOT_SET = 'root';
-
-export interface FixtureOptions {
-  /** Leave the example's Permission Set unseeded to test an ungranted caller. */
-  grant?: boolean;
-  /** Give this user id the root set, which bypasses every grant. */
-  root?: string;
-}
-
-export interface Fixture {
-  readonly database: DatabaseManager;
-  readonly authorization: AppAuthorizationService;
-  readonly router: Hono;
-  /** An API client signed in as `userId`. */
-  client(userId: string): ApiClient;
-}
-
-export async function createFixture(
-  options: FixtureOptions = {},
-): Promise<Fixture> {
+import { apiRoutes } from '../server/routes/index.js';
+export async function createFixture() {
   const database = createDatabaseManager({
     drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
+  for (const name of [
+    'authentication',
+    'authorization',
+    'authz-default-access',
+    'authz-sharing-rules',
+    'authz-restriction-rules',
+  ])
+    await database
+      .createMigrator({
+        directory: path.resolve(
+          import.meta.dirname,
+          `../../../plugins/app-plugin-${name}/database/migrations`,
+        ),
+        packageName: `@nocobase/app-plugin-${name}`,
+        tableName: `${name}Migrations`,
+      })
+      .latest();
   await database
     .createMigrator({
       directory: path.resolve(import.meta.dirname, '../database/migrations'),
       packageName: '@nocobase/app-plugin-authorization-example',
     })
     .latest();
-  // The routes are authorized, so the tables the grants live in have to be in
-  // place before a request reaches them. Its own ledger, so this example's
-  // migrator never sees these entries.
-  await database
-    .createMigrator({
-      directory: path.resolve(
-        import.meta.dirname,
-        '../../../plugins/app-plugin-authorization/database/migrations',
-      ),
-      packageName: '@nocobase/app-plugin-authorization',
-      tableName: 'authorizationMigrations',
-    })
-    .latest();
   const connection = database.connection();
-  if (options.grant !== false)
-    await grantSeed.run({ query: connection.query, connection });
-  if (options.root) await grantRootSet(connection.query, options.root);
-
-  const container = new ServiceContainer();
-  container.instance(databaseManagerToken, database);
-  const authorization = createAppAuthorization({ connection });
-  container.instance(authorizationToken, authorization);
+  await setupSeed.run({ query: connection.query, connection });
+  const users = Object.fromEntries(
+    (
+      await connection.query
+        .selectFrom('user')
+        .select(['id', 'username'])
+        .execute()
+    ).map((row) => [
+      String(row.username).replace('sales_', ''),
+      String(row.id),
+    ]),
+  );
+  const authorization = createAppAuthorization({
+    connection,
+    config: { plugins: [defaultAccess(), sharingRules(), restrictionRules()] },
+  });
+  users.admin = 'test-administrator';
   const authentication = new Auth({
     connection,
     secret: 'authorization-example-test-secret-at-least-32-characters',
@@ -101,8 +93,10 @@ export async function createFixture(
       },
     };
   });
+  const container = new ServiceContainer();
+  container.instance(databaseManagerToken, database);
+  container.instance(authorizationToken, authorization);
   container.instance(authenticationToken, authentication);
-
   const router = new Hono();
   const app = {
     appName: 'example',
@@ -112,50 +106,28 @@ export async function createFixture(
     container,
     router,
   };
-  // The provider registers the Collection at boot; the routes only authorize.
   await new AuthorizationExampleProvider(app).boot();
-  for (const contribution of [apiRoutes, createRoutes])
-    router.route('/main/api', await contribution.createRouter(app));
-
+  router.route('/api', await apiRoutes.createRouter(app));
+  router.route('/api', await authorizationRoutes.createRouter(app));
+  for (const route of [
+    ...defaultRoutes,
+    ...sharingRoutes,
+    ...restrictionRoutes,
+  ])
+    router.route('/api', await route.createRouter(app));
   return {
     database,
     authorization,
+    users,
     router,
-    client: (userId) =>
-      createApiClient({
-        baseURL: 'http://example.test/main/api',
-        headers: { 'x-test-user': userId },
-        fetch: async (input, init) => router.fetch(new Request(input, init)),
+    request: (user: string, path: string, body?: unknown) =>
+      router.request(`/api/authorization-example/${path}`, {
+        method: body ? 'POST' : 'GET',
+        headers: {
+          'x-test-user': users[user] ?? user,
+          'Content-Type': 'application/json',
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
       }),
   };
-}
-
-/** The root set confers unrestricted access; holding it skips every grant. */
-async function grantRootSet(
-  query: QueryAdapter,
-  userId: string,
-): Promise<void> {
-  const now = new Date();
-  await query
-    .insertInto('authorizationPermissionSets')
-    .values({
-      id: crypto.randomUUID(),
-      key: ROOT_SET,
-      title: 'Root',
-      grants: JSON.stringify([]),
-      createdAt: now,
-      updatedAt: now,
-    })
-    .execute();
-  await query
-    .insertInto('authorizationPermissionSetAssignments')
-    .values({
-      id: `user:${userId}:${ROOT_SET}`,
-      subjectType: 'user',
-      subjectId: userId,
-      permissionSetKey: ROOT_SET,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .execute();
 }

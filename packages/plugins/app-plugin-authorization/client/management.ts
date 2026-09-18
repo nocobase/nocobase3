@@ -17,3 +17,11 @@ export * from './components/use-subject-names.js';
 export * from './i18n.js';
 export * from './pages/page-support.js';
 export * from './runtime.js';
+
+export * from './components/use-settings-actions.js';
+
+export { BusinessRuleScopes } from './components/business-rule-scopes.js';
+
+export { resourceSections } from './components/resource-sections.js';
+
+export { titleText } from './i18n.js';

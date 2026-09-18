@@ -1,6 +1,8 @@
 import {
   AuthorizationDeniedError,
   type AuthorizationEnv,
+  type AuthorizationScope,
+  type ResourceRef,
 } from '@nocobase/authorization/core';
 import type { Auth } from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection } from '@nocobase/db';
@@ -38,8 +40,16 @@ export function createAuthorizationRoutes(
   });
   routes.route('/', createSubjectRoutes(authorization, 'permission-sets'));
 
+  routes.get('/inspector/options', async (context) => {
+    await admin(context, 'inspector', 'inspect');
+    return context.json({
+      data: await permissionSetOptions(authorization, connection),
+    });
+  });
+  routes.route('/', createSubjectRoutes(authorization, 'inspector', 'inspect'));
+
   routes.post('/inspect/configured', async (context) => {
-    await admin(context, 'permission-sets', 'read');
+    await admin(context, 'inspector', 'inspect');
     const input = await body(context);
     const subject = reference(
       input && typeof input === 'object'
@@ -49,9 +59,25 @@ export function createAuthorizationRoutes(
     if (!subject) return context.json({ code: 'INVALID_SUBJECT' }, 400);
     const sets = await authorization.permissionSets.getEffective({
       principal: subject,
-      subjects:
-        subject.type === 'user' ? [{ type: 'authenticated', id: '*' }] : [],
+      subjects: [
+        ...(subject.type === 'user'
+          ? [{ type: 'authenticated', id: '*' }]
+          : []),
+        ...(await authorization.subjects.resolveFor(subject)),
+      ],
     });
+    const resources = [
+      ...new Map(
+        sets.flatMap((set) =>
+          set.grants
+            .filter((grant) => grant.actions.length > 0)
+            .map(
+              (grant) =>
+                [JSON.stringify(grant.resource), grant.resource] as const,
+            ),
+        ),
+      ).values(),
+    ];
     return context.json({
       data: {
         unrestricted: sets.some(
@@ -59,21 +85,14 @@ export function createAuthorizationRoutes(
             authorization.permissionSets.protection(set.key)?.unrestricted ===
             true,
         ),
-        types: [
-          ...new Set(
-            sets.flatMap((set) =>
-              set.grants
-                .filter((grant) => grant.actions.length > 0)
-                .map((grant) => grant.resource.type),
-            ),
-          ),
-        ],
+        types: [...new Set(resources.map((resource) => resource.type))],
+        resources,
       },
     });
   });
 
   routes.post('/inspect/batch', async (context) => {
-    await admin(context, 'permission-sets', 'read');
+    await admin(context, 'inspector', 'inspect');
     const input = await body(context);
     const subject = reference(
       input && typeof input === 'object'
@@ -101,8 +120,12 @@ export function createAuthorizationRoutes(
       return context.json({ code: 'INVALID_INSPECTION_BATCH' }, 400);
     const scope = authorization.for({
       principal: subject,
-      subjects:
-        subject.type === 'user' ? [{ type: 'authenticated', id: '*' }] : [],
+      subjects: [
+        ...(subject.type === 'user'
+          ? [{ type: 'authenticated', id: '*' }]
+          : []),
+        ...(await authorization.subjects.resolveFor(subject)),
+      ],
     });
     const results = [];
     // Bound concurrent rule queries and share one request-scoped grant cache.
@@ -114,7 +137,7 @@ export function createAuthorizationRoutes(
             return {
               resource,
               action,
-              decision: await scope.explain({ resource, action }),
+              decision: await explainOperation(scope, resource, action),
             };
           }),
         )),
@@ -125,10 +148,9 @@ export function createAuthorizationRoutes(
 
   // Why one person reaches one resource, built only on the core's explanation
   // so it knows nothing about which plugins an application installed. It
-  // reveals another person's access, so it is gated like the Permission Sets it
-  // is mostly explaining.
+  // reveals another person's access, so it requires inspector permission.
   routes.post('/inspect', async (context) => {
-    await admin(context, 'permission-sets', 'read');
+    await admin(context, 'inspector', 'inspect');
     const input = readInspectRequest(await body(context));
     if (!input)
       return context.json(
@@ -140,15 +162,20 @@ export function createAuthorizationRoutes(
       );
     // The identity the request middleware builds: the principal, plus the
     // audience subject every signed-in user carries.
-    const decision = await authorization
-      .for({
-        principal: input.subject,
-        subjects:
-          input.subject.type === 'user'
-            ? [{ type: 'authenticated', id: '*' }]
-            : [],
-      })
-      .explain({ resource: input.resource, action: input.action });
+    const scope = authorization.for({
+      principal: input.subject,
+      subjects: [
+        ...(input.subject.type === 'user'
+          ? [{ type: 'authenticated', id: '*' }]
+          : []),
+        ...(await authorization.subjects.resolveFor(input.subject)),
+      ],
+    });
+    const decision = await explainOperation(
+      scope,
+      input.resource,
+      input.action,
+    );
     // Passed through as the core gave it: reasons name the plugin they came
     // from, and conditions are not interpreted here.
     return context.json({ data: decision });
@@ -237,4 +264,14 @@ async function admin(
     resource: { type: 'settings', id: `authorization.${resourceId}` },
     action,
   });
+}
+
+async function explainOperation(
+  scope: AuthorizationScope,
+  resource: ResourceRef,
+  action: string,
+) {
+  const decision = await scope.explain({ resource, action });
+  if (resource.type !== 'resource') return decision;
+  return { ...decision, checks: decision.conditions?.checks ?? [] };
 }

@@ -36,3 +36,20 @@ declare module '@nocobase/authorization/core' {
     settings: import('@nocobase/authorization/core').ResourceItems;
   }
 }
+
+export const settingsApi = {
+  grant(
+    name: string,
+    actions: readonly string[],
+  ): import('@nocobase/authorization/permissions').PermissionGrant {
+    return {
+      resource: { type: 'settings', id: name },
+      actions: actions.map((action) => ({ action })),
+    };
+  },
+};
+declare module '@nocobase/authorization/core' {
+  interface Authorization {
+    settings: typeof settingsApi;
+  }
+}

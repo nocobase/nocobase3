@@ -42,11 +42,17 @@ export function actionLabel(
   options: AuthorizationOptions,
   type: string,
   action: string,
+  resourceId?: string,
 ): string {
   return (
     options.resourceTypes
       .find((item) => item.value === type)
-      ?.actions.find((item) => item.value === action)?.label ?? humanize(action)
+      ?.resources.find((item) => item.value === resourceId)
+      ?.actions?.find((item) => item.value === action)?.label ??
+    options.resourceTypes
+      .find((item) => item.value === type)
+      ?.actions.find((item) => item.value === action)?.label ??
+    humanize(action)
   );
 }
 

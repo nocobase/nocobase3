@@ -13,11 +13,13 @@ import { ErrorBox, errorMessage } from './feedback.js';
 
 const authz = getAuthorizationClient();
 export function SubjectPicker({
+  settings = 'permission-sets',
   types,
   selectedType,
   value,
   onChange,
 }: {
+  settings?: string;
   types: readonly SubjectTypeOption[];
   selectedType?: string;
   value: AuthorizationSubject | undefined;
@@ -49,7 +51,7 @@ export function SubjectPicker({
     let current = true;
     const timer = setTimeout(() => {
       void authz
-        .listSubjects('permission-sets', type.value, {
+        .listSubjects(settings, type.value, {
           search,
           page,
           pageSize: 30,
@@ -71,11 +73,11 @@ export function SubjectPicker({
       current = false;
       clearTimeout(timer);
     };
-  }, [type, search, page, queryKey, t]);
+  }, [settings, type, search, page, queryKey, t]);
   useEffect(() => {
     if (!value || type?.selection?.type !== 'collection') return;
     let current = true;
-    void authz.resolveSubjects('permission-sets', value.type, [value.id]).then(
+    void authz.resolveSubjects(settings, value.type, [value.id]).then(
       (items) => {
         if (current) setSelected({ key: selectedKey, item: items[0] });
       },
@@ -87,7 +89,7 @@ export function SubjectPicker({
     return () => {
       current = false;
     };
-  }, [value, type, selectedKey, t]);
+  }, [settings, value, type, selectedKey, t]);
   const data = result?.key === queryKey ? result : undefined;
   const selectedItem =
     selected?.key === selectedKey ? selected?.item : undefined;

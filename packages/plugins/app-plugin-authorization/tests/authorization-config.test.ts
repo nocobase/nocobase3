@@ -253,12 +253,7 @@ describe('what an application configures about its own authorization', () => {
         plugins: ['database'],
         // Only what the application registered; db supplies the fields.
         collections: [{ name: 'orders', fields: orderFields }],
-        resourceTypes: [
-          {
-            value: 'database.collection',
-            resources: [{ value: 'orders', label: 'Orders' }],
-          },
-        ],
+        resourceTypes: [],
       },
     });
     await expect(records.json()).resolves.toEqual({ data: [] });

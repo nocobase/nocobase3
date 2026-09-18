@@ -1,3 +1,4 @@
+import { resourceSections } from '../../components/resource-sections.js';
 import { Checkbox } from '../../components/ui/checkbox.js';
 import {
   useEffect,
@@ -7,7 +8,7 @@ import {
   type ReactElement,
 } from 'react';
 import { Dialog } from '@base-ui/react/dialog';
-import { ArrowLeft, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import type {
   AuthorizationOptions,
   ResourceOption,
@@ -16,19 +17,15 @@ import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { useAuthorizationTranslation } from '../../i18n.js';
-import {
-  defaultDatabaseActionDraft,
-  newGrantForResource,
-  resourceKey,
-} from './drafts.js';
+import { defaultDatabaseActionDraft, resourceKey } from './drafts.js';
 import { actionMark, collectionFields } from './labels.js';
 import './database-presentation.js';
-import { ScopeMark, ScopeLegend } from '../../components/scope-marks.js';
+import { ScopeMark } from '../../components/scope-marks.js';
 import { RecordAccessEditor } from './database-policy.js';
 import { FieldMatrix } from './field-matrix.js';
 import { ResourceTypeList } from './resource-tree.js';
-import { BulkPermissionToggle } from './bulk-permissions.js';
-import { descendantGroups, resourceRows } from './resource-groups.js';
+import { ModulePermissions } from './module-permissions.js';
+import { resourceRows } from './resource-groups.js';
 import type { Draft, GrantDraft } from './types.js';
 
 export function PermissionSetEditor({
@@ -62,6 +59,11 @@ export function PermissionSetEditor({
     () => new Set(),
   );
   const [customizing, setCustomizing] = useState(false);
+  const [businessGroup, setBusinessGroup] = useState(
+    () =>
+      resourceSections(options).find((section) => section.value === 'resource')
+        ?.key ?? '',
+  );
   const [search, setSearch] = useState('');
   const [configuredOnly, setConfiguredOnly] = useState(false);
   const [active, setActive] = useState<{ grant: GrantDraft; action: string }>();
@@ -105,12 +107,13 @@ export function PermissionSetEditor({
   const query = search.trim().toLowerCase();
   const visible = resources.filter(
     (item) =>
+      (type !== 'resource' || !businessGroup || item.group === businessGroup) &&
       (!configuredOnly ||
         Boolean(current.get(resourceKey(type, item.value))?.actions.length)) &&
       (!query || `${item.label} ${item.value}`.toLowerCase().includes(query)),
   );
   const rows = resourceRows(
-    resourceType?.groups ?? [],
+    type === 'resource' ? [] : (resourceType?.groups ?? []),
     visible,
     query ? new Set() : collapsed,
   );
@@ -153,11 +156,16 @@ export function PermissionSetEditor({
   }
   function choose(grant: GrantDraft, action: string, mode: string): void {
     if (readOnly) return;
-    setCustomizing(mode === 'custom');
+    setCustomizing(
+      mode === 'custom' &&
+        (active?.action === action || grant.actions.includes(action)),
+    );
     if (mode === 'custom') {
       setActive({ grant, action });
       return;
     }
+    const scoped = resources.find((item) => item.value === grant.resource.id)
+      ?.actionScopes?.[action];
     const next = {
       ...grant,
       actions:
@@ -165,14 +173,28 @@ export function PermissionSetEditor({
           ? grant.actions.filter((item) => item !== action)
           : [...new Set([...grant.actions, action])],
     };
-    if (grant.resource.type === 'database.collection' && mode === 'all')
+    if (
+      grant.resource.type === 'database.collection' &&
+      !scoped &&
+      mode === 'all'
+    )
       next.database = {
         ...grant.database,
         [action]: { input: '*', output: '*', recordAccess: 'allRecords' },
       };
+    if (scoped && mode !== 'none' && !next.policies?.[action])
+      next.policies = {
+        ...next.policies,
+        [action]: {
+          type: scoped.policyType,
+          ...Object.fromEntries(
+            scoped.fields.map((field) => [field.key, field.defaultValue]),
+          ),
+        },
+      };
     update(next);
     setActive(
-      grant.resource.type === 'database.collection'
+      grant.resource.type === 'database.collection' && !scoped
         ? { grant: next, action }
         : undefined,
     );
@@ -287,427 +309,138 @@ export function PermissionSetEditor({
               </div>
             </div>
           ) : (
-            <div
-              ref={configurationRef}
-              className='relative isolate flex min-h-0 flex-1 overflow-hidden'
-            >
-              <aside className='w-44 shrink-0 overflow-auto border-r bg-muted/15 xl:w-52'>
-                <ResourceTypeList
-                  label={t('permissionSets.picker.resourceTypes')}
-                  types={options.resourceTypes}
-                  grants={draft.grants}
-                  type={type}
-                  onSelect={(next) => {
-                    setType(next);
-                    setCollapsed(new Set());
-                    setSearch('');
-                    setLimit(80);
-                    setActive(undefined);
-                  }}
-                />
-              </aside>
-              <section
-                className='flex min-h-0 min-w-0 flex-1 flex-col'
-                aria-label={t('permissionSets.picker.resources')}
+            <>
+              <div
+                ref={configurationRef}
+                className='relative isolate flex min-h-0 flex-1 overflow-hidden'
               >
-                <div className='flex shrink-0 flex-wrap items-center gap-3 border-b p-3'>
-                  <Input
-                    className='min-w-32 flex-1'
-                    aria-label={t('permissionSets.picker.searchResources')}
-                    placeholder={t('permissionSets.picker.searchResources')}
-                    value={search}
-                    onChange={(event) => {
-                      setSearch(event.target.value);
+                <aside className='w-44 shrink-0 overflow-auto border-r bg-muted/15 xl:w-52'>
+                  <ResourceTypeList
+                    label={t('permissionSets.picker.resourceTypes')}
+                    types={resourceSections(options).map((section) => ({
+                      ...section,
+                      value: section.key,
+                      resourceType: section.value,
+                    }))}
+                    grants={draft.grants}
+                    type={type === 'resource' ? businessGroup : type}
+                    onSelect={(key) => {
+                      const section = resourceSections(options).find(
+                        (item) => item.key === key,
+                      )!;
+                      setType(section.value);
+                      setBusinessGroup(section.key);
+                      setCollapsed(new Set());
+                      setSearch('');
                       setLimit(80);
+                      setActive(undefined);
                     }}
                   />
-                  <label className='flex items-center gap-2 text-xs text-muted-foreground'>
-                    <Checkbox
-                      checked={configuredOnly}
-                      onCheckedChange={(checked) => setConfiguredOnly(checked)}
+                </aside>
+                <section
+                  className='flex min-h-0 min-w-0 flex-1 flex-col'
+                  aria-label={t('permissionSets.picker.resources')}
+                >
+                  <div className='flex shrink-0 flex-wrap items-center gap-3 border-b p-3'>
+                    <Input
+                      className='min-w-32 flex-1'
+                      aria-label={t('permissionSets.picker.searchResources')}
+                      placeholder={t('permissionSets.picker.searchResources')}
+                      value={search}
+                      onChange={(event) => {
+                        setSearch(event.target.value);
+                        setLimit(80);
+                      }}
                     />
-                    {t('permissionWorkspace.configuredOnly')}
-                  </label>
-                </div>
-                <div className='flex shrink-0 items-center justify-between gap-3 px-4 py-2'>
-                  <p className='text-xs text-muted-foreground'>
-                    {t('permissionWorkspace.clickScope')}
-                  </p>
-                </div>
-                <div className='min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]'>
-                  <table
-                    className='w-full table-fixed text-sm'
-                    style={{ minWidth: `${20 + actions.length * 8}rem` }}
-                  >
-                    <colgroup>
-                      <col />
-                      {actions.map((action) => (
-                        <col key={action.value} style={{ width: '8rem' }} />
-                      ))}
-                    </colgroup>
-                    <thead className='sticky top-0 z-10 bg-background'>
-                      <tr className='border-b'>
-                        <th className='min-w-40 px-4 py-3 text-left font-medium'>
-                          {resourceType?.label}
-                        </th>
-                        {actions.map((action) => (
-                          <th
-                            className='min-w-32 px-2 py-3 text-center font-medium'
-                            key={action.value}
-                          >
-                            {type !== 'database.collection' ? (
-                              <span className='relative inline-flex'>
-                                <span className='absolute right-full top-1/2 mr-1 -translate-y-1/2 whitespace-nowrap'>
-                                  {action.label}
-                                </span>
-                                <BulkPermissionToggle
-                                  items={visible}
-                                  actions={[action]}
-                                  type={type}
-                                  draft={draft}
-                                  disabled={busy || readOnly}
-                                  label={`${action.label}: ${t(query || configuredOnly ? 'permissionWorkspace.selectFiltered' : 'permissionWorkspace.selectAll')}`}
-                                  onChange={onChange}
-                                />
-                              </span>
-                            ) : (
-                              action.label
-                            )}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.slice(0, limit).map((row) => {
-                        if (row.kind === 'group')
-                          return (
-                            <tr
-                              key={`group:${row.group.value}`}
-                              className='border-b bg-muted/20'
-                            >
-                              <td
-                                colSpan={
-                                  type === 'database.collection'
-                                    ? actions.length + 1
-                                    : 1
-                                }
-                              >
-                                <div className='flex items-center gap-3 pr-4'>
-                                  <button
-                                    type='button'
-                                    aria-expanded={
-                                      query
-                                        ? true
-                                        : !collapsed.has(row.group.value)
-                                    }
-                                    className='flex min-w-0 flex-1 items-center gap-2 py-2 pr-4 text-left text-sm font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring'
-                                    style={{ paddingLeft: 16 + row.depth * 20 }}
-                                    onClick={() =>
-                                      setCollapsed((previous) => {
-                                        const next = new Set(previous);
-                                        if (next.has(row.group.value))
-                                          next.delete(row.group.value);
-                                        else next.add(row.group.value);
-                                        return next;
-                                      })
-                                    }
-                                  >
-                                    {!query &&
-                                    collapsed.has(row.group.value) ? (
-                                      <ChevronRight className='size-4' />
-                                    ) : (
-                                      <ChevronDown className='size-4' />
-                                    )}
-                                    {row.group.label}
-                                  </button>
-                                </div>
-                              </td>
-                              {type !== 'database.collection'
-                                ? actions.map((action) => (
-                                    <td
-                                      key={action.value}
-                                      className='px-2 py-1.5 text-center'
-                                    >
-                                      <BulkPermissionToggle
-                                        items={visible.filter(
-                                          (item) =>
-                                            item.group &&
-                                            descendantGroups(
-                                              [row.group],
-                                              row.group.value,
-                                            ).includes(item.group),
-                                        )}
-                                        actions={[action]}
-                                        type={type}
-                                        draft={draft}
-                                        disabled={busy || readOnly}
-                                        label={`${action.label}: ${t('permissionWorkspace.selectGroup', { group: row.group.label })}`}
-                                        onChange={onChange}
-                                      />
-                                    </td>
-                                  ))
-                                : null}
-                            </tr>
-                          );
-                        const item = row.item;
-                        const grant =
-                          current.get(resourceKey(type, item.value)) ??
-                          newGrantForResource(type, item.value);
-                        return (
-                          <tr
-                            className='border-b hover:bg-muted/20'
-                            key={`item:${item.value}`}
-                          >
-                            <td
-                              className='py-1.5 pr-4'
-                              style={{ paddingLeft: 16 + row.depth * 20 }}
-                            >
-                              <div className='flex min-w-0 items-center gap-2 whitespace-nowrap'>
-                                <span
-                                  className='truncate font-medium'
-                                  title={item.label}
-                                >
-                                  {item.label}
-                                </span>
-                                <span
-                                  className='truncate text-xs text-muted-foreground'
-                                  title={item.value}
-                                >
-                                  {item.value}
-                                </span>
-                              </div>
-                            </td>
-                            {actions.map((action) => (
-                              <td
-                                className='px-2 py-1.5 text-center'
-                                key={action.value}
-                              >
-                                {item.actions &&
-                                !item.actions.some(
-                                  (candidate) =>
-                                    candidate.value === action.value,
-                                ) ? null : type !== 'database.collection' ? (
-                                  <button
-                                    type='button'
-                                    disabled={readOnly}
-                                    className='inline-flex rounded-md p-1 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring'
-                                    aria-label={`${item.label}: ${action.label}`}
-                                    aria-pressed={grant.actions.includes(
-                                      action.value,
-                                    )}
-                                    title={t(
-                                      grant.actions.includes(action.value)
-                                        ? 'permissionWorkspace.revokeAccess'
-                                        : 'permissionWorkspace.grantAccess',
-                                    )}
-                                    onClick={() =>
-                                      choose(
-                                        grant,
-                                        action.value,
-                                        grant.actions.includes(action.value)
-                                          ? 'none'
-                                          : 'all',
-                                      )
-                                    }
-                                  >
-                                    <ScopeMark
-                                      value={actionMark(grant, action.value)}
-                                    />
-                                  </button>
-                                ) : (
-                                  <Dialog.Root
-                                    modal={false}
-                                    onOpenChange={(open) => {
-                                      setCustomizing(false);
-                                      setActive(
-                                        open
-                                          ? { grant, action: action.value }
-                                          : undefined,
-                                      );
-                                    }}
-                                  >
-                                    <Dialog.Trigger
-                                      className='inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-muted/30 p-1 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring'
-                                      aria-label={`${item.label}: ${action.label}`}
-                                    >
-                                      <ScopeMark
-                                        value={actionMark(grant, action.value)}
-                                      />
-                                      <ChevronDown className='size-3 text-muted-foreground' />
-                                    </Dialog.Trigger>
-                                    <Dialog.Portal container={configurationRef}>
-                                      <Dialog.Popup className='absolute inset-y-0 right-0 z-30 flex w-full max-w-md flex-col overflow-hidden border-l bg-background text-left text-foreground shadow-xl'>
-                                        <header className='flex shrink-0 items-center justify-between gap-3 border-b p-3'>
-                                          <Dialog.Title className='text-sm font-semibold'>
-                                            {item.label} · {action.label}
-                                          </Dialog.Title>
-                                          <Dialog.Close
-                                            className='rounded-md p-1 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring'
-                                            aria-label={t(
-                                              'permissionWorkspace.backResources',
-                                            )}
-                                          >
-                                            <X className='size-4' />
-                                          </Dialog.Close>
-                                        </header>
-                                        <div
-                                          className='flex shrink-0 gap-1 border-b p-3'
-                                          role='group'
-                                          aria-label={t(
-                                            'permissionWorkspace.configureScope',
-                                          )}
-                                        >
-                                          {['none', 'all', 'custom'].map(
-                                            (mode) => {
-                                              const mark = actionMark(
-                                                grant,
-                                                action.value,
-                                              );
-                                              const currentMode =
-                                                customizing || mark === 'scoped'
-                                                  ? 'custom'
-                                                  : mark;
-                                              return (
-                                                <button
-                                                  key={mode}
-                                                  disabled={readOnly}
-                                                  type='button'
-                                                  aria-pressed={
-                                                    currentMode === mode
-                                                  }
-                                                  className='flex-1 rounded-md px-2 py-2 text-sm hover:bg-muted aria-pressed:bg-primary/10 aria-pressed:font-medium aria-pressed:text-primary focus-visible:ring-2 focus-visible:ring-ring'
-                                                  onClick={() =>
-                                                    choose(
-                                                      grant,
-                                                      action.value,
-                                                      mode,
-                                                    )
-                                                  }
-                                                >
-                                                  {t(
-                                                    `permissionWorkspace.mode.${mode}`,
-                                                  )}
-                                                </button>
-                                              );
-                                            },
-                                          )}
-                                        </div>
-                                        {selected &&
-                                        active &&
-                                        (customizing ||
-                                          actionMark(grant, action.value) ===
-                                            'scoped') ? (
-                                          <fieldset
-                                            disabled={readOnly}
-                                            className='min-h-0 flex-1 space-y-5 overflow-y-auto p-4'
-                                          >
-                                            {active.action !== 'create' ? (
-                                              <RecordAccessEditor
-                                                action={active.action}
-                                                fields={collectionFields(
-                                                  options,
-                                                  selected.resource.id,
-                                                )}
-                                                options={options}
-                                                value={
-                                                  (
-                                                    selected.database[
-                                                      active.action
-                                                    ] ??
-                                                    defaultDatabaseActionDraft(
-                                                      options,
-                                                    )
-                                                  ).recordAccess
-                                                }
-                                                onChange={(recordAccess) =>
-                                                  update({
-                                                    ...selected,
-                                                    actions: [
-                                                      ...new Set([
-                                                        ...selected.actions,
-                                                        active.action,
-                                                      ]),
-                                                    ],
-                                                    database: {
-                                                      ...selected.database,
-                                                      [active.action]: {
-                                                        ...(selected.database[
-                                                          active.action
-                                                        ] ??
-                                                          defaultDatabaseActionDraft(
-                                                            options,
-                                                          )),
-                                                        recordAccess,
-                                                      },
-                                                    },
-                                                  })
-                                                }
-                                              />
-                                            ) : null}
-                                            {active.action !== 'delete' ? (
-                                              <FieldMatrix
-                                                options={options}
-                                                grant={selected}
-                                                action={active.action}
-                                                onChange={(database) =>
-                                                  update({
-                                                    ...selected,
-                                                    actions: [
-                                                      ...new Set([
-                                                        ...selected.actions,
-                                                        active.action,
-                                                      ]),
-                                                    ],
-                                                    database,
-                                                  })
-                                                }
-                                              />
-                                            ) : null}
-                                          </fieldset>
-                                        ) : (
-                                          <p className='p-4 text-sm text-muted-foreground'>
-                                            {t(
-                                              actionMark(
-                                                grant,
-                                                action.value,
-                                              ) === 'all'
-                                                ? 'permissionWorkspace.fullScopeHint'
-                                                : 'permissionWorkspace.noScopeHint',
-                                            )}
-                                          </p>
-                                        )}
-                                      </Dialog.Popup>
-                                    </Dialog.Portal>
-                                  </Dialog.Root>
-                                )}
-                              </td>
-                            ))}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  {!visible.length ? (
-                    <p className='p-6 text-sm text-muted-foreground'>
-                      {t('permissionSets.picker.noResources')}
+                    <label className='flex items-center gap-2 text-xs text-muted-foreground'>
+                      <Checkbox
+                        checked={configuredOnly}
+                        onCheckedChange={(checked) =>
+                          setConfiguredOnly(checked)
+                        }
+                      />
+                      {t('permissionWorkspace.configuredOnly')}
+                    </label>
+                  </div>
+                  <div className='flex shrink-0 items-center justify-between gap-3 px-4 py-2'>
+                    <p className='text-xs text-muted-foreground'>
+                      {t('permissionWorkspace.clickScope')}
                     </p>
-                  ) : null}
-                  {rows.length > limit ? (
-                    <Button
-                      className='m-3'
-                      type='button'
-                      variant='outline'
-                      onClick={() => setLimit(limit + 80)}
-                    >
-                      {t('permissionWorkspace.showMore')}
-                    </Button>
-                  ) : null}
-                </div>
-                <div className='shrink-0 border-t p-3'>
-                  <ScopeLegend values={['all', 'scoped', 'none']} />
-                </div>
-              </section>
-            </div>
+                  </div>
+                  <div className='min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]'>
+                    {
+                      <ModulePermissions
+                        container={configurationRef}
+                        type={type}
+                        label={
+                          type === 'resource'
+                            ? (options.resourceGroups?.find(
+                                (group) => group.value === businessGroup,
+                              )?.label ?? type)
+                            : (resourceType?.label ?? type)
+                        }
+                        rows={rows.slice(0, limit)}
+                        items={visible}
+                        actions={actions}
+                        draft={draft}
+                        disabled={busy || readOnly}
+                        filtered={Boolean(query) || configuredOnly}
+                        collapsed={query ? new Set() : collapsed}
+                        onCollapse={(id) =>
+                          setCollapsed((previous) => {
+                            const next = new Set(previous);
+                            if (next.has(id)) next.delete(id);
+                            else next.add(id);
+                            return next;
+                          })
+                        }
+                        onChange={onChange}
+                        onToggle={choose}
+                      />
+                    }
+                    {!visible.length ? (
+                      <p className='p-6 text-sm text-muted-foreground'>
+                        {t('permissionSets.picker.noResources')}
+                      </p>
+                    ) : null}
+                    {rows.length > limit ? (
+                      <Button
+                        className='m-3'
+                        type='button'
+                        variant='outline'
+                        onClick={() => setLimit(limit + 80)}
+                      >
+                        {t('permissionWorkspace.showMore')}
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className='shrink-0 border-t p-3'>
+                    {
+                      <div className='flex flex-wrap gap-4 text-xs text-muted-foreground'>
+                        {(['all', 'scoped', 'none'] as const).map((value) => {
+                          const label = t(
+                            value === 'all'
+                              ? 'permissionWorkspace.moduleGranted'
+                              : value === 'scoped'
+                                ? 'permissionWorkspace.modulePartial'
+                                : 'permissionWorkspace.moduleNotGranted',
+                          );
+                          return (
+                            <span
+                              key={value}
+                              className='flex items-center gap-2'
+                            >
+                              <ScopeMark value={value} legend label={label} />
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    }
+                  </div>
+                </section>
+              </div>
+            </>
           )}
         </fieldset>
         {embedded && !readOnly ? (
@@ -738,6 +471,106 @@ export function PermissionSetEditor({
           </footer>
         ) : null}
       </form>
+      <Dialog.Root
+        open={Boolean(active)}
+        onOpenChange={(open) => {
+          if (!open) setActive(undefined);
+        }}
+      >
+        <Dialog.Portal container={configurationRef}>
+          <Dialog.Popup className='absolute inset-y-0 right-0 z-30 flex w-full max-w-md flex-col border-l bg-white shadow-xl'>
+            <header className='flex items-center justify-between border-b p-3'>
+              <Dialog.Title>
+                {resources.find((item) => item.value === selected?.resource.id)
+                  ?.label ?? selected?.resource.id}{' '}
+                ·{' '}
+                {actions.find((item) => item.value === active?.action)?.label ??
+                  active?.action}
+              </Dialog.Title>
+              <Dialog.Close aria-label={t('permissionWorkspace.backResources')}>
+                <X className='size-4' />
+              </Dialog.Close>
+            </header>
+            {selected && active ? (
+              <>
+                <div className='flex gap-2 border-b p-3'>
+                  {['none', 'all', 'custom'].map((mode) => (
+                    <button
+                      type='button'
+                      key={mode}
+                      aria-pressed={
+                        mode === 'custom'
+                          ? customizing ||
+                            actionMark(selected, active.action) === 'scoped'
+                          : !customizing &&
+                            actionMark(selected, active.action) ===
+                              (mode === 'all' ? 'all' : 'none')
+                      }
+                      disabled={readOnly}
+                      onClick={() => choose(selected, active.action, mode)}
+                    >
+                      {t(`permissionWorkspace.mode.${mode}`)}
+                    </button>
+                  ))}
+                </div>
+                {(customizing ||
+                  actionMark(selected, active.action) === 'scoped') && (
+                  <fieldset
+                    disabled={readOnly}
+                    className='space-y-5 overflow-auto p-4'
+                  >
+                    {active.action !== 'create' && (
+                      <RecordAccessEditor
+                        action={active.action}
+                        fields={collectionFields(options, selected.resource.id)}
+                        options={options}
+                        value={
+                          (
+                            selected.database[active.action] ??
+                            defaultDatabaseActionDraft(options)
+                          ).recordAccess
+                        }
+                        onChange={(recordAccess) =>
+                          update({
+                            ...selected,
+                            actions: [
+                              ...new Set([...selected.actions, active.action]),
+                            ],
+                            database: {
+                              ...selected.database,
+                              [active.action]: {
+                                ...(selected.database[active.action] ??
+                                  defaultDatabaseActionDraft(options)),
+                                recordAccess,
+                              },
+                            },
+                          })
+                        }
+                      />
+                    )}
+                    {active.action !== 'delete' && (
+                      <FieldMatrix
+                        options={options}
+                        grant={selected}
+                        action={active.action}
+                        onChange={(database) =>
+                          update({
+                            ...selected,
+                            actions: [
+                              ...new Set([...selected.actions, active.action]),
+                            ],
+                            database,
+                          })
+                        }
+                      />
+                    )}
+                  </fieldset>
+                )}
+              </>
+            ) : null}
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
       <ConfirmDialog
         open={confirmClose}
         title={t('permissionWorkspace.discardTitle')}

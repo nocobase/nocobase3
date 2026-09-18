@@ -54,5 +54,9 @@ export function atPath(request: Request, path: string): Request {
   const url = new URL(request.url);
   if (url.pathname === path) return request;
   url.pathname = path;
-  return new Request(url, request);
+  return new Request(url, {
+    method: request.method,
+    headers: request.headers,
+    ...(request.body ? { body: request.body, duplex: 'half' } : {}),
+  });
 }

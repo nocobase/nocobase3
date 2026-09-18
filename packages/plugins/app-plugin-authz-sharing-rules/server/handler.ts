@@ -21,7 +21,13 @@ type SharingRulesAdministrationApi = Omit<SharingRulesApi, 'withTransaction'>;
 
 export function createSharingRulesHandler(
   api: SharingRulesAdministrationApi,
+  validate: (rule: SharingRule) => void = () => {},
 ): AuthorizationRouteHandler {
+  const checked = (value: unknown): SharingRule => {
+    const rule = parseSharingRule(value);
+    validate(rule);
+    return rule;
+  };
   const routes = createSettingsRouter();
 
   routes.get(SHARING_RULES_ROUTE_PATH, async (context) => {
@@ -32,7 +38,7 @@ export function createSharingRulesHandler(
   routes.post(SHARING_RULES_ROUTE_PATH, async (context) => {
     await requireSettings(context.env.authorization, 'sharing-rules', 'create');
     return context.json(
-      { data: await api.create(parseSharingRule(await context.req.json())) },
+      { data: await api.create(checked(await context.req.json())) },
       201,
     );
   });
@@ -42,7 +48,7 @@ export function createSharingRulesHandler(
     return context.json({
       data: await api.update(
         context.req.param('key'),
-        parseSharingRule(await context.req.json()),
+        checked(await context.req.json()),
       ),
     });
   });
@@ -72,6 +78,9 @@ function sharingActions(value: unknown): SharingRule['actions'] {
     if (selection.type === 'records') {
       return {
         action: string(item.action, 'action'),
+        ...(item.scopeKey === undefined
+          ? {}
+          : { scopeKey: string(item.scopeKey, 'scopeKey') }),
         selection: {
           type: 'records' as const,
           ids: strings(selection.ids, 'ids'),
@@ -86,6 +95,9 @@ function sharingActions(value: unknown): SharingRule['actions'] {
     }
     return {
       action: string(item.action, 'action'),
+      ...(item.scopeKey === undefined
+        ? {}
+        : { scopeKey: string(item.scopeKey, 'scopeKey') }),
       selection: { type: 'policy' as const, policy },
     };
   });

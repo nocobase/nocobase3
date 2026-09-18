@@ -12,6 +12,8 @@ export interface RecordAccessPolicyContext<P> {
 
 export interface RecordAccessPolicy<P = unknown> {
   key: string;
+  collections?: readonly string[];
+  requiredFields?: readonly string[];
   title?: OptionText;
   description?: OptionText;
   paramsSchema?: unknown;
@@ -22,6 +24,8 @@ export interface RecordAccessPolicy<P = unknown> {
 
 export interface DefineRecordAccessPolicyOptions<P = unknown> {
   key: string;
+  collections?: readonly string[];
+  requiredFields?: readonly string[];
   title?: OptionText;
   description?: OptionText;
   paramsSchema?: unknown;
@@ -63,6 +67,7 @@ export function recordsIOwn(): RecordAccessPolicy<
 > {
   return defineRecordAccessPolicy<RecordOwnerParams | undefined>({
     key: 'recordsIOwn',
+    requiredFields: ['ownerId'],
     title: { key: 'options.recordAccessPolicies.recordsIOwn' },
     resolve: ({ principal, collection, params }) =>
       condition(
@@ -78,6 +83,7 @@ export function recordsICreated(): RecordAccessPolicy<
 > {
   return defineRecordAccessPolicy<RecordOwnerParams | undefined>({
     key: 'recordsICreated',
+    requiredFields: ['createdById'],
     title: { key: 'options.recordAccessPolicies.recordsICreated' },
     resolve: ({ principal, collection, params }) =>
       condition(

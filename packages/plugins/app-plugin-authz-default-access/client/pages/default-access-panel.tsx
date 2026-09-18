@@ -1,16 +1,14 @@
+import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
+import { BusinessRuleScopes } from '@nocobase/app-plugin-authorization/client/management';
+import { useSettingsActions } from '@nocobase/app-plugin-authorization/client/management';
 import type { DefaultAccessRule } from '../api.js';
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from '../components/ui/tooltip.js';
 import { Checkbox } from '../components/ui/checkbox.js';
 import { SelectField } from '@nocobase/app-plugin-authorization/client/management';
 import { incompleteScope } from '@nocobase/app-plugin-authorization/client/management';
 import { Menu } from '@base-ui/react/menu';
 import { ScopeMark } from '@nocobase/app-plugin-authorization/client/management';
 import { useSearchParams } from 'react-router';
-import { ChevronDown, ChevronRight, CircleHelp } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
   Fragment,
   useCallback,
@@ -66,15 +64,16 @@ export function DefaultAccessPanel({
   options: AuthorizationOptions;
 }): ReactElement {
   const t = useAuthorizationTranslation();
+  const allowed = useSettingsActions('authorization.default-access');
   const [loaded, setLoaded] = useState(false);
   const [rules, setRules] = useState<readonly DefaultAccessRule[]>([]);
   const [params, setParams] = useSearchParams();
   const search = params.get('search') ?? '';
   const configured = params.get('configured') === '1';
   const groupFilter = params.get('group') ?? '';
+  const sections = resourceSections(options);
   const resourceType =
-    options.resourceTypes.find((item) => item.value === params.get('type')) ??
-    options.resourceTypes[0];
+    sections.find((item) => item.key === params.get('type')) ?? sections[0];
   const page = Math.max(1, Number(params.get('page')) || 1);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -152,7 +151,7 @@ export function DefaultAccessPanel({
   );
   useEffect(() => {
     let active = true;
-    if (!draft?.resource.id) return;
+    if (!draft?.resource.id || draft.resource.type === 'resource') return;
     void authz.listDefaultAccessRecords(draft.resource.id).then(
       (items) => {
         if (active) setRecords(items);
@@ -164,7 +163,7 @@ export function DefaultAccessPanel({
     return () => {
       active = false;
     };
-  }, [draft?.resource.id]);
+  }, [draft?.resource.id, draft?.resource.type]);
   const actions = [
     ...new Map(
       (resourceType ? [resourceType] : []).flatMap((type) =>
@@ -177,6 +176,9 @@ export function DefaultAccessPanel({
   const visible = rows.filter(
     (row) =>
       row.resource.type === resourceType?.value &&
+      Boolean(
+        resourceType?.resources.some((item) => item.value === row.resource.id),
+      ) &&
       (!configured || row.actions.length > 0) &&
       (!groupFilter || resourcePath(options, row) === groupFilter) &&
       `${row.label} ${row.resource.id} ${resourcePath(options, row)}`
@@ -184,7 +186,7 @@ export function DefaultAccessPanel({
         .includes(search.toLowerCase()),
   );
   async function save(clear = false) {
-    if (!draft || busy) return;
+    if (!draft || busy || !allowed.configure) return;
     setBusy(true);
     setErrorCause(undefined);
     try {
@@ -221,8 +223,8 @@ export function DefaultAccessPanel({
     action: string,
     mode: string,
   ): Promise<void> {
-    if (busy) return;
-    if (mode === 'custom') {
+    if (busy || !allowed.configure) return;
+    if (mode === 'custom' || row.resource.type === 'resource') {
       edit(row);
       return;
     }
@@ -249,37 +251,21 @@ export function DefaultAccessPanel({
       <>
         <div className='flex min-h-[60vh] gap-3'>
           <nav
-            aria-label={t('editors.resourceType')}
+            aria-label={t('editors.resourceGroup')}
             className='w-40 shrink-0 space-y-1 rounded-lg border bg-card p-2'
           >
-            <div className='flex items-center gap-1 px-3 py-2 text-muted-foreground'>
-              <h2 className='text-xs font-medium'>
-                {t('editors.resourceType')}
-              </h2>
-              <Tooltip>
-                <TooltipTrigger
-                  aria-label={t('defaultAccess.supportedScope')}
-                  className='inline-flex size-5 items-center justify-center rounded-sm hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-                >
-                  <CircleHelp className='size-3.5' />
-                </TooltipTrigger>
-                <TooltipContent side='right'>
-                  {t('defaultAccess.supportedScope')}
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            {options.resourceTypes.map((type) => (
+            {sections.map((type) => (
               <button
-                key={type.value}
+                key={type.key}
                 aria-current={
-                  type.value === resourceType?.value ? 'page' : undefined
+                  type.key === resourceType?.key ? 'page' : undefined
                 }
                 className='flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-muted aria-[current=page]:bg-primary/10 aria-[current=page]:text-primary aria-[current=page]:font-medium'
                 onClick={() => {
                   setParams(
                     (current) => {
                       const next = new URLSearchParams(current);
-                      next.set('type', type.value);
+                      next.set('type', type.key);
                       next.delete('group');
                       next.delete('page');
                       return next;
@@ -338,17 +324,23 @@ export function DefaultAccessPanel({
                 <Table className='min-w-[36rem] table-fixed'>
                   <TableHeader className='sticky top-0 z-10 bg-background'>
                     <TableRow>
-                      <TableHead className='w-64 px-5 py-3'>
+                      <TableHead className='w-[32%] px-5 py-3'>
                         {t('common.resource')}
                       </TableHead>
-                      {actions.map((action) => (
-                        <TableHead
-                          key={action.value}
-                          className='w-28 px-2 py-3 text-center'
-                        >
-                          {action.label}
+                      {resourceType?.value === 'resource' ? (
+                        <TableHead className='px-2 py-3'>
+                          {t('editors.actions')}
                         </TableHead>
-                      ))}
+                      ) : (
+                        actions.map((action) => (
+                          <TableHead
+                            key={action.value}
+                            className='w-28 px-2 py-3 text-center'
+                          >
+                            {action.label}
+                          </TableHead>
+                        ))
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -365,7 +357,11 @@ export function DefaultAccessPanel({
                           {grouped ? (
                             <TableRow className='bg-muted/40'>
                               <TableCell
-                                colSpan={actions.length + 1}
+                                colSpan={
+                                  resourceType?.value === 'resource'
+                                    ? 2
+                                    : actions.length + 1
+                                }
                                 className='p-0'
                               >
                                 <button
@@ -404,51 +400,144 @@ export function DefaultAccessPanel({
                                       {row.resource.id}
                                     </p>
                                   </TableCell>
-                                  {actions.map((action) => {
-                                    const type = options.resourceTypes.find(
-                                      (item) =>
-                                        item.value === row.resource.type,
-                                    );
-                                    const supported = (
-                                      type?.resources.find(
+                                  {row.resource.type === 'resource' ? (
+                                    <TableCell className='px-2 py-2'>
+                                      <div className='flex flex-wrap gap-x-3 gap-y-1'>
+                                        {options.resourceTypes
+                                          .find(
+                                            (type) =>
+                                              type.value === row.resource.type,
+                                          )
+                                          ?.resources.find(
+                                            (item) =>
+                                              item.value === row.resource.id,
+                                          )
+                                          ?.actions?.map((action) => {
+                                            const scopes = row.actions.filter(
+                                              (item) =>
+                                                item.action === action.value,
+                                            );
+                                            return (
+                                              <button
+                                                key={action.value}
+                                                type='button'
+                                                aria-label={`${row.label}: ${action.label}`}
+                                                disabled={
+                                                  busy ||
+                                                  !loaded ||
+                                                  !allowed.configure
+                                                }
+                                                onClick={() => edit(row)}
+                                                className='inline-flex items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left text-sm hover:bg-muted'
+                                              >
+                                                <ScopeMark
+                                                  value={
+                                                    !scopes.length
+                                                      ? 'none'
+                                                      : scopes.every(
+                                                            (item) =>
+                                                              item.scope
+                                                                .type === 'all',
+                                                          )
+                                                        ? 'all'
+                                                        : 'scoped'
+                                                  }
+                                                />
+                                                <span>{action.label}</span>
+                                              </button>
+                                            );
+                                          })}
+                                      </div>
+                                    </TableCell>
+                                  ) : (
+                                    actions.map((action) => {
+                                      const type = options.resourceTypes.find(
                                         (item) =>
-                                          item.value === row.resource.id,
-                                      )?.actions ??
-                                      type?.actions ??
-                                      []
-                                    ).some(
-                                      (item) => item.value === action.value,
-                                    );
-                                    const current = row.actions.find(
-                                      (item) => item.action === action.value,
-                                    );
-                                    return (
-                                      <TableCell
-                                        key={action.value}
-                                        className='px-2 py-2 text-center'
-                                      >
-                                        {supported || current ? (
-                                          <DefaultScopeControl
-                                            label={`${row.label}: ${action.label}`}
-                                            scope={current?.scope}
-                                            options={options}
-                                            disabled={busy || !loaded}
-                                            onChange={(mode) =>
-                                              void quickChange(
-                                                row,
-                                                action.value,
-                                                mode,
-                                              )
-                                            }
-                                          />
-                                        ) : (
-                                          <span className='text-muted-foreground'>
-                                            —
-                                          </span>
-                                        )}
-                                      </TableCell>
-                                    );
-                                  })}
+                                          item.value === row.resource.type,
+                                      );
+                                      const supported = (
+                                        type?.resources.find(
+                                          (item) =>
+                                            item.value === row.resource.id,
+                                        )?.actions ??
+                                        type?.actions ??
+                                        []
+                                      ).some(
+                                        (item) => item.value === action.value,
+                                      );
+                                      const current = row.actions.find(
+                                        (item) => item.action === action.value,
+                                      );
+                                      return (
+                                        <TableCell
+                                          key={action.value}
+                                          className='px-2 py-2 text-center'
+                                        >
+                                          {row.resource.type === 'resource' &&
+                                          supported ? (
+                                            <button
+                                              type='button'
+                                              aria-label={`${row.label}: ${action.label}`}
+                                              disabled={
+                                                busy ||
+                                                !loaded ||
+                                                !allowed.configure
+                                              }
+                                              onClick={() => edit(row)}
+                                              className='inline-flex items-center gap-1 rounded-md border bg-muted/30 p-1 hover:bg-muted'
+                                            >
+                                              <ScopeMark
+                                                value={
+                                                  current ? 'scoped' : 'none'
+                                                }
+                                              />
+                                              {
+                                                row.actions.filter(
+                                                  (item) =>
+                                                    item.action ===
+                                                    action.value,
+                                                ).length
+                                              }
+                                              /
+                                              {type?.resources
+                                                .find(
+                                                  (item) =>
+                                                    item.value ===
+                                                    row.resource.id,
+                                                )
+                                                ?.ruleScopes?.filter(
+                                                  (scope) =>
+                                                    scope.action ===
+                                                    action.value,
+                                                ).length ?? 0}
+                                            </button>
+                                          ) : supported || current ? (
+                                            <DefaultScopeControl
+                                              label={`${row.label}: ${action.label}`}
+                                              scope={current?.scope}
+                                              options={options}
+                                              disabled={
+                                                busy ||
+                                                !loaded ||
+                                                !allowed.configure
+                                              }
+                                              onChange={(mode) =>
+                                                void quickChange(
+                                                  row,
+                                                  action.value,
+                                                  mode,
+                                                )
+                                              }
+                                            />
+                                          ) : (
+                                            <span className='text-muted-foreground'>
+                                              —
+                                            </span>
+                                          )}
+                                        </TableCell>
+                                      );
+                                    })
+                                  )}
                                 </TableRow>
                               ))
                             : null}
@@ -456,7 +545,13 @@ export function DefaultAccessPanel({
                       );
                     })}
                     {!paged.length ? (
-                      <EmptyTableRow colSpan={actions.length + 1}>
+                      <EmptyTableRow
+                        colSpan={
+                          resourceType?.value === 'resource'
+                            ? 2
+                            : actions.length + 1
+                        }
+                      >
                         {!loaded
                           ? t('common.loading')
                           : t('defaultAccess.emptySearch')}
@@ -500,125 +595,148 @@ export function DefaultAccessPanel({
           busy={busy}
           onClose={close}
         >
-          <RuleForm
-            footer={
-              <>
-                <Button
-                  className='mr-auto text-destructive'
-                  variant='ghost'
-                  disabled={
-                    busy ||
-                    !rows.find((row) => row.key === draft.key)?.actions.length
-                  }
-                  onClick={() => setConfirmClear(true)}
-                >
-                  {t('ruleWorkspace.clearDefaults')}
-                </Button>
-                <Button disabled={busy || !dirty} onClick={() => void save()}>
-                  {t('defaultAccess.save')}
-                </Button>
-              </>
-            }
+          <fieldset
+            disabled={!allowed.configure}
+            className='min-h-0 flex-1 overflow-auto'
           >
-            {error ? <ErrorBox value={error} /> : null}
-            {actions
-              .filter((action) => {
-                const type = options.resourceTypes.find(
-                  (item) => item.value === draft.resource.type,
-                );
-                return (
-                  (
-                    type?.resources.find(
-                      (item) => item.value === draft.resource.id,
-                    )?.actions ??
-                    type?.actions ??
-                    []
-                  ).some((item) => item.value === action.value) ||
-                  draft.actions.some((item) => item.action === action.value)
-                );
-              })
-              .map((action) => {
-                const current = draft.actions.find(
-                  (item) => item.action === action.value,
-                );
-                const change = (scope?: AccessScope) =>
-                  setDraft({
-                    ...draft,
-                    actions: scope
-                      ? current
-                        ? draft.actions.map((item) =>
-                            item.action === action.value
-                              ? { ...item, scope }
-                              : item,
-                          )
-                        : [...draft.actions, { action: action.value, scope }]
-                      : draft.actions.filter(
-                          (item) => item.action !== action.value,
-                        ),
-                  });
-                return (
-                  <section key={action.value} className='space-y-4'>
-                    <label className='flex flex-wrap items-center justify-between gap-3 font-medium'>
-                      {action.label}
-                      <SelectField
-                        aria-label={action.label}
-                        className='h-9 min-w-48 rounded-md border bg-background px-3 text-sm font-normal'
-                        value={
-                          !current
-                            ? 'unset'
-                            : current.scope.type === 'all'
-                              ? 'all'
-                              : 'custom'
-                        }
-                        onValueChange={(selectedValue) =>
-                          change(
-                            selectedValue === 'unset'
-                              ? undefined
-                              : selectedValue === 'all'
-                                ? { type: 'all' }
-                                : {
-                                    type: 'database',
-                                    recordAccess:
-                                      options.recordAccessPolicies.find(
-                                        (item) => item.value !== 'allRecords',
-                                      )?.value ?? 'customFilter',
-                                  },
-                          )
-                        }
-                        options={[
-                          {
-                            value: 'unset',
-                            label: t('defaultAccess.noDefault'),
-                          },
-                          { value: 'all', label: t('labels.allRecords') },
-                          {
-                            value: 'custom',
-                            label: t('defaultAccess.customScope'),
-                          },
-                        ]}
-                      />
-                    </label>
-                    {current && current.scope.type !== 'all' ? (
-                      <ScopeEditor
-                        options={options}
-                        fields={
-                          options.collections.find(
-                            (item) => item.name === draft.resource.id,
-                          )?.fields
-                        }
-                        records={records}
-                        value={current.scope}
-                        onChange={change}
-                      />
-                    ) : !current ? (
-                      <p className='text-sm text-muted-foreground'>
-                        {t('ruleWorkspace.unsetHint')}
-                      </p>
-                    ) : null}
-                  </section>
-                );
-              })}
-          </RuleForm>
+            <RuleForm
+              footer={
+                <>
+                  <Button
+                    className='mr-auto text-destructive'
+                    variant='ghost'
+                    disabled={
+                      busy ||
+                      !allowed.configure ||
+                      !rows.find((row) => row.key === draft.key)?.actions.length
+                    }
+                    onClick={() => setConfirmClear(true)}
+                  >
+                    {t('ruleWorkspace.clearDefaults')}
+                  </Button>
+                  <Button
+                    disabled={busy || !dirty || !allowed.configure}
+                    onClick={() => void save()}
+                  >
+                    {t('defaultAccess.save')}
+                  </Button>
+                </>
+              }
+            >
+              {error ? <ErrorBox value={error} /> : null}
+              {draft.resource.type === 'resource' ? (
+                <BusinessRuleScopes
+                  options={options}
+                  resourceId={draft.resource.id}
+                  value={draft.actions}
+                  onChange={(actions) => setDraft({ ...draft, actions })}
+                  loadRecords={loadBusinessRecords}
+                />
+              ) : (
+                actions
+                  .filter((action) => {
+                    const type = options.resourceTypes.find(
+                      (item) => item.value === draft.resource.type,
+                    );
+                    return (
+                      (
+                        type?.resources.find(
+                          (item) => item.value === draft.resource.id,
+                        )?.actions ??
+                        type?.actions ??
+                        []
+                      ).some((item) => item.value === action.value) ||
+                      draft.actions.some((item) => item.action === action.value)
+                    );
+                  })
+                  .map((action) => {
+                    const current = draft.actions.find(
+                      (item) => item.action === action.value,
+                    );
+                    const change = (scope?: AccessScope) =>
+                      setDraft({
+                        ...draft,
+                        actions: scope
+                          ? current
+                            ? draft.actions.map((item) =>
+                                item.action === action.value
+                                  ? { ...item, scope }
+                                  : item,
+                              )
+                            : [
+                                ...draft.actions,
+                                { action: action.value, scope },
+                              ]
+                          : draft.actions.filter(
+                              (item) => item.action !== action.value,
+                            ),
+                      });
+                    return (
+                      <section key={action.value} className='space-y-4'>
+                        <label className='flex flex-wrap items-center justify-between gap-3 font-medium'>
+                          {action.label}
+                          <SelectField
+                            aria-label={action.label}
+                            className='h-9 min-w-48 rounded-md border bg-background px-3 text-sm font-normal'
+                            value={
+                              !current
+                                ? 'unset'
+                                : current.scope.type === 'all'
+                                  ? 'all'
+                                  : 'custom'
+                            }
+                            onValueChange={(selectedValue) =>
+                              change(
+                                selectedValue === 'unset'
+                                  ? undefined
+                                  : selectedValue === 'all'
+                                    ? { type: 'all' }
+                                    : {
+                                        type: 'database',
+                                        recordAccess:
+                                          options.recordAccessPolicies.find(
+                                            (item) =>
+                                              item.value !== 'allRecords',
+                                          )?.value ?? 'customFilter',
+                                      },
+                              )
+                            }
+                            options={[
+                              {
+                                value: 'unset',
+                                label: t('defaultAccess.noDefault'),
+                              },
+                              { value: 'all', label: t('labels.allRecords') },
+                              {
+                                value: 'custom',
+                                label: t('defaultAccess.customScope'),
+                              },
+                            ]}
+                          />
+                        </label>
+                        {current && current.scope.type !== 'all' ? (
+                          <ScopeEditor
+                            options={options}
+                            fields={
+                              options.collections.find(
+                                (item) => item.name === draft.resource.id,
+                              )?.fields
+                            }
+                            records={records}
+                            value={current.scope}
+                            onChange={change}
+                          />
+                        ) : !current ? (
+                          <p className='text-sm text-muted-foreground'>
+                            {t('ruleWorkspace.unsetHint')}
+                          </p>
+                        ) : null}
+                      </section>
+                    );
+                  })
+              )}
+            </RuleForm>
+          </fieldset>
           <ConfirmDialog
             open={confirmClear}
             title={t('defaultAccess.confirmDeleteTitle')}
@@ -677,7 +795,9 @@ function resourcePath(options: AuthorizationOptions, row: Row): string {
     return undefined;
   }
   return [
-    type?.label ?? row.resource.type,
+    ...(row.resource.type === 'resource'
+      ? []
+      : [type?.label ?? row.resource.type]),
     ...(find(type?.groups ?? [], []) ?? []),
   ].join(' / ');
 }
@@ -742,3 +862,6 @@ function DefaultScopeControl({
     </Menu.Root>
   );
 }
+
+const loadBusinessRecords = (collection: string) =>
+  authz.listDefaultAccessRecords(collection);

@@ -23,6 +23,7 @@ describe('Permission Set handler', () => {
             { action: 'create' },
             { action: 'update' },
             { action: 'delete' },
+            { action: 'assign' },
           ],
         },
       ],
@@ -154,6 +155,7 @@ describe('Permission Set handler', () => {
             { action: 'create' },
             { action: 'update' },
             { action: 'delete' },
+            { action: 'assign' },
           ],
         },
       ],
@@ -351,4 +353,89 @@ describe('Permission Set handler', () => {
       await (await router.request('/permission-sets/reader')).json(),
     ).toEqual({ data: { key: 'reader', grants: [] } });
   });
+});
+
+it('separates editing permission sets from managing assignments', async () => {
+  const authorization = createAuthorization({
+    plugins: [permissionSets({ store: new MockPermissionSetStore() })],
+  });
+  await authorization.permissionSets.create({ key: 'target', grants: [] });
+  for (const action of ['update', 'assign']) {
+    await authorization.permissionSets.create({
+      key: action,
+      grants: [
+        {
+          resource: { type: 'settings', id: 'authorization.permission-sets' },
+          actions: [{ action }],
+        },
+      ],
+    });
+    await authorization.permissionSets.assign({
+      permissionSet: action,
+      subject: { type: 'user', id: action },
+    });
+  }
+  const handler = createPermissionSetHandler(authorization.permissionSets);
+  const call = (user: string, path: string, method: string, body: unknown) =>
+    handler({
+      request: new Request(`http://test${path}`, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      authorization: authorization.for({
+        principal: { type: 'user', id: user },
+      }),
+      path,
+    });
+  const assignment = { subject: { type: 'user', id: 'alice' } };
+  expect(
+    (
+      await call('update', '/permission-sets/target', 'PUT', {
+        key: 'target',
+        title: 'Edited',
+        grants: [],
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await call(
+        'update',
+        '/permission-sets/target/assignments',
+        'POST',
+        assignment,
+      )
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await call('assign', '/permission-sets/target', 'PUT', {
+        key: 'target',
+        grants: [],
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await call(
+        'assign',
+        '/permission-sets/target/assignments',
+        'POST',
+        assignment,
+      )
+    ).status,
+  ).toBe(201);
+  const [created] =
+    await authorization.permissionSets.listAssignments('target');
+  expect(
+    (
+      await call(
+        'assign',
+        `/permission-sets/assignments/${created.id}`,
+        'DELETE',
+        null,
+      )
+    ).status,
+  ).toBe(204);
 });

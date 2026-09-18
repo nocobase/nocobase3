@@ -9,6 +9,8 @@ import {
 } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({
+  can: vi.fn(async () => true),
+  onPermissionsInvalidated: vi.fn(() => () => {}),
   listPermissionSets: vi.fn(),
   listAssignments: vi.fn(),
   updatePermissionSet: vi.fn(),
@@ -233,4 +235,24 @@ describe('permission set workspace', () => {
       screen.queryByRole('button', { name: 'Save permission set' }),
     ).not.toBeInTheDocument();
   });
+});
+
+it('translates preset labels while keeping the stored title in the edit form', async () => {
+  api.listPermissionSets.mockResolvedValue([
+    {
+      key: 'root',
+
+      grants: [],
+      title: {
+        key: 'permissionSets.builtIn.root',
+        ns: '@nocobase/app-plugin-authorization',
+      },
+    },
+  ]);
+  mount('/sets/edit/root/details');
+  expect(
+    await screen.findByRole('button', { name: 'System administrator' }),
+  ).toBeInTheDocument();
+  expect(screen.getByDisplayValue('System administrator')).toBeInTheDocument();
+  expect(api.listPermissionSets).toHaveBeenCalledTimes(1);
 });

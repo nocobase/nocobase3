@@ -7,9 +7,9 @@ import type {
 } from '@nocobase/app-plugin-authorization/client/management';
 export interface RestrictionRule {
   key: string;
-  title?: string;
+  title?: string | { key: string; ns: string };
   resource: { type: string; id: string };
-  actions: readonly { action: string; scope: AccessScope }[];
+  actions: readonly { action: string; scopeKey?: string; scope: AccessScope }[];
   subjects: readonly AuthorizationSubject[];
   reason?: string;
 }

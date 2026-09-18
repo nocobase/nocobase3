@@ -1,56 +1,82 @@
+import {
+  ResourceItems,
+  type ResourceItemDefinition,
+} from '@nocobase/authorization/core';
+import type { PermissionGrant } from '@nocobase/authorization/permissions';
 import type {
   AuthorizationGrant,
   AuthorizationPlugin,
   AuthorizationReason,
 } from '@nocobase/authorization/core';
 
-export type PagesPlugin = AuthorizationPlugin;
+export interface PagesApi {
+  add(definition: Omit<ResourceItemDefinition, 'id'> & { name: string }): void;
+  grant(name: string, actions: readonly string[]): PermissionGrant;
+}
+export type PagesPlugin = AuthorizationPlugin<{ pages: PagesApi }>;
 
 export function pages(): PagesPlugin {
+  const items = new ResourceItems();
   return {
+    authorizationApi: {
+      pages: {
+        add: ({ name, ...definition }) =>
+          items.add({ ...definition, id: name }),
+        grant: (name, actions) => ({
+          resource: { type: 'page', id: name },
+          actions: actions.map((action) => ({ action })),
+        }),
+      },
+    },
     id: 'pages',
     requiresGrants: true,
     setup(authz): void {
-      authz.resources.add({
+      authz.resourceTypes.add({
         resourceType: 'page',
-        async authorize(request, context) {
-          if (request.action !== 'access') {
-            return {
-              effect: 'deny',
-              reasons: [
-                {
-                  code: 'PAGE_ACTION_NOT_SUPPORTED',
-                  message: `Page authorization does not support action "${request.action}"`,
-                  plugin: 'pages',
-                },
-              ],
-            };
-          }
-          const grants = await context.grants.resolve({
-            principal: request.principal,
-            subjects: request.subjects,
-            resource: request.resource,
-            action: request.action,
-          });
-          const staticGrants = grants.filter(
-            (grant) => grant.policy === undefined,
-          );
-          return staticGrants.length > 0
-            ? {
-                effect: 'permit',
-                reasons: staticGrants.map((grant) => grantReason(grant)),
+        items,
+        actions: [
+          {
+            name: 'access',
+            async authorize(request, context) {
+              if (request.action !== 'access') {
+                return {
+                  effect: 'deny',
+                  reasons: [
+                    {
+                      code: 'PAGE_ACTION_NOT_SUPPORTED',
+                      message: `Page authorization does not support action "${request.action}"`,
+                      plugin: 'pages',
+                    },
+                  ],
+                };
               }
-            : {
-                effect: 'deny',
-                reasons: [
-                  {
-                    code: 'PAGE_ACCESS_DENIED',
-                    message: `Access to page "${request.resource.id}" is not allowed`,
-                    plugin: 'pages',
-                  },
-                ],
-              };
-        },
+              const grants = await context.grants.resolve({
+                principal: request.principal,
+                subjects: request.subjects,
+                resource: request.resource,
+                action: request.action,
+              });
+              const staticGrants = grants.filter(
+                (grant) => grant.policy === undefined,
+              );
+              return staticGrants.length > 0
+                ? {
+                    effect: 'permit',
+                    reasons: staticGrants.map((grant) => grantReason(grant)),
+                  }
+                : {
+                    effect: 'deny',
+                    reasons: [
+                      {
+                        code: 'PAGE_ACCESS_DENIED',
+                        message: `Access to page "${request.resource.id}" is not allowed`,
+                        plugin: 'pages',
+                      },
+                    ],
+                  };
+            },
+          },
+        ],
       });
     },
   };

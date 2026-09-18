@@ -100,7 +100,8 @@
     "clsx": "catalog:",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "react-router": "catalog:"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",
@@ -113,6 +114,10 @@
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
+    "jsdom": "catalog:",
+    "react-dom": "catalog:"
   }
 }

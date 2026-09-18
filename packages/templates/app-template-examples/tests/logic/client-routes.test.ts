@@ -131,7 +131,7 @@ describe('app client routes', () => {
       { name: 'routeChildPageDialog', authorizedAs: null },
       { name: 'routeChildPageOnboarding', authorizedAs: null },
       { name: 'routeChildPageRenewal', authorizedAs: null },
-      { name: 'articles', authorizedAs: 'articles' },
+      { name: 'articles', authorizedAs: null },
       { name: 'numeric-examples', authorizedAs: 'numeric-examples' },
       { name: 'external-crm', authorizedAs: 'external-crm' },
     ]);

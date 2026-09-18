@@ -5,7 +5,10 @@ import {
   type DefaultAccessAuthorizationApi,
   type DefaultAccessStore,
 } from '@nocobase/authorization/default-access';
-import { DatabaseConnectionHandle } from '@nocobase/app-plugin-authorization/server/management';
+import {
+  DatabaseConnectionHandle,
+  settingsApi,
+} from '@nocobase/app-plugin-authorization/server/management';
 import { DatabaseDefaultAccessStore } from './stores/default-access.js';
 
 export interface DefaultAccessOptions {
@@ -27,14 +30,35 @@ export function defaultAccess(
     setup(authz) {
       connection.set(authz.connection);
       plugin.setup?.(authz);
-      authz.getResource('settings').items.add({
-        id: 'authorization.default-access',
+      authz.resources.add({
+        name: 'authorization.default-access',
         group: 'authorization',
         title: {
           key: 'resourceTitle',
           ns: '@nocobase/app-plugin-authz-default-access',
         },
-        actions: ['read', 'create', 'update', 'delete'],
+        actions: [
+          {
+            name: 'read',
+            title: {
+              key: 'options.actions.read',
+              ns: '@nocobase/app-plugin-authorization',
+            },
+            grants: [
+              settingsApi.grant('authorization.default-access', ['read']),
+            ],
+          },
+          {
+            name: 'configure',
+            title: {
+              key: 'options.actions.configure',
+              ns: '@nocobase/app-plugin-authorization',
+            },
+            grants: [
+              settingsApi.grant('authorization.default-access', ['configure']),
+            ],
+          },
+        ],
       });
     },
   };

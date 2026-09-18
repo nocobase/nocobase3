@@ -70,9 +70,9 @@ describe('@nocobase/app-plugin-authorization client', () => {
       'settings.authorization.permission-sets',
       'settings.authorization.permission-sets',
       'settings.authorization.permission-sets',
+      // The inspector has its own permission.
       'settings.authorization.permission-sets',
-      // The inspector belongs to no one plugin; it is gated with its neighbours.
-      'settings.authorization.permission-sets',
+      'settings.authorization.inspector',
     ]);
     // The group and every page carry an icon, so the navigation never falls back to a bare row. A lucide icon is a
     // forwardRef object rather than a plain function, so this checks for a renderable rather than for a typeof.
@@ -397,6 +397,10 @@ describe('@nocobase/app-plugin-authorization client', () => {
         access: false,
       }),
       route({ name: 'orders', navigation: { title: 'navigation.orders' } }),
+      route({
+        name: 'orders-detail',
+        access: { resource: 'orders', action: 'access' },
+      }),
       route({
         name: 'hub',
         // Authorized as something other than a page.
