@@ -143,3 +143,69 @@ it('awaits every snapshot handler before retry and excludes later registrations'
     await harness.close();
   }
 });
+
+it('prepares an entire batch before writing and normalizes root JSON values once', async () => {
+  const harness = await createBackendHarness(createInMemoryBackendFactory());
+  const selected = selectedBackend();
+  const service = createQueueService({
+    namespace: harness.namespace,
+    queueBackend:
+      selected === 'postgres13'
+        ? 'postgres'
+        : selected === 'cluster'
+          ? 'redis'
+          : selected,
+    connection: harness.connection,
+  });
+  const received: unknown[] = [];
+  service.consumer('jobs').consume(async (_channel, message) => {
+    received.push(message);
+  });
+  let serialized = 0;
+  const producer = service.producer('jobs');
+  try {
+    await service.setup();
+    await expect(
+      producer.publishMany([
+        {
+          channel: 'first',
+          message: {
+            toJSON: () => {
+              serialized++;
+              return 'must not write';
+            },
+          },
+        },
+        { channel: 'second', message: 1n },
+      ]),
+    ).rejects.toThrow();
+    expect(serialized).toBe(1);
+    let ids = 0;
+    await expect(
+      producer.publishMany(
+        [
+          { channel: 'first', message: 'must not write' },
+          { channel: 'second', message: 'must not write' },
+        ],
+        {
+          jobIdProducer: () => {
+            if (++ids === 2) throw new Error('ID rejected');
+            return 'valid-id';
+          },
+        },
+      ),
+    ).rejects.toThrow('ID rejected');
+    await producer.publishMany([
+      { channel: 'root', message: null },
+      { channel: 'root', message: undefined },
+      { channel: 'root', message: false },
+      { channel: 'root', message: 0 },
+      { channel: 'root', message: ['text', null] },
+    ]);
+    await expect.poll(() => received.length, { timeout: 5000 }).toBe(5);
+    expect(received).toEqual([null, {}, false, 0, ['text', null]]);
+  } finally {
+    await service.shutdown();
+    await harness.close();
+  }
+});
