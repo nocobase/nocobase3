@@ -52,7 +52,7 @@ export function createPostgresMigrationResource(
         const client = await postgresDeadline.run(deadline, () =>
           connection.pool.connect(),
         );
-        let primary: unknown;
+        const failures: unknown[] = [];
         const queryable: PgQueryable = {
           async query<R>(
             text: string,
@@ -63,23 +63,25 @@ export function createPostgresMigrationResource(
                 const remaining = Math.floor(deadline - performance.now());
                 if (closed || remaining <= 0)
                   throw new Error('PostgreSQL migration deadline exceeded');
-                await client.query(
-                  "SELECT set_config('statement_timeout', $1, false)",
-                  [`${remaining}ms`],
+                await postgresDeadline.run(deadline, () =>
+                  client.query(
+                    "SELECT set_config('statement_timeout', $1, false)",
+                    [`${remaining}ms`],
+                  ),
                 );
               }
               return await postgresDeadline.run(deadline, () =>
                 client.query<R>(text, params),
               );
             } catch (error) {
-              if (primary !== undefined && primary !== error)
-                throw new AggregateError(
-                  [primary, error],
-                  'PostgreSQL migration and rollback failed',
-                  { cause: error },
-                );
-              primary = error;
-              throw error;
+              if (text !== 'ROLLBACK') throw error;
+              // The official migrator awaits ROLLBACK before rethrowing its
+              // initiating error, which can originate outside query(). Defer
+              // only the rollback rejection until that error reaches our outer
+              // boundary. This result never makes resource.run() succeed: the
+              // actual failed rollback is retained and the lease is destroyed.
+              failures.push(error);
+              return { rows: [] };
             }
           },
         };
@@ -134,9 +136,22 @@ export function createPostgresMigrationResource(
               );
           }
           if (key !== undefined) migratedTargets.add(key);
+        } catch (error) {
+          failures.unshift(error);
         } finally {
-          client.release(true);
+          try {
+            client.release(true);
+          } catch (error) {
+            failures.push(error);
+          }
         }
+        if (failures.length === 1) throw failures[0];
+        if (failures.length > 1)
+          throw new AggregateError(
+            failures,
+            'PostgreSQL migration and cleanup failed',
+            { cause: failures[0] },
+          );
       })()),
     close: (): Promise<void> =>
       (closing ??= (async (): Promise<void> => {
