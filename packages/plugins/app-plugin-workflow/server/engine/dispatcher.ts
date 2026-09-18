@@ -1,3 +1,4 @@
+import { bindWorkflowLogger } from './logger.js';
 import { randomUUID } from 'node:crypto';
 
 import type { DatabaseManager } from '@nocobase/db';
@@ -101,7 +102,9 @@ export default class Dispatcher {
     input: unknown,
     options: WorkflowEventOptions,
   ): Promise<Processor | WorkflowRun | null | void> {
-    const logger = this.getLogger(workflow.id);
+    const logger = bindWorkflowLogger(this.getLogger(workflow.id), {
+      workflowId: workflow.id,
+    });
     if (!options.force && !options.manually && !workflow.enabled) {
       logger.warn(`Workflow "${workflow.key}" is disabled; event ignored`);
       return;
@@ -358,7 +361,10 @@ export default class Dispatcher {
   }
 
   private async process(plan: ExecutionPlan): Promise<Processor> {
-    const logger = this.getLogger(plan.workflow.id);
+    const logger = bindWorkflowLogger(this.getLogger(plan.workflow.id), {
+      workflowId: plan.workflow.id,
+      executionId: plan.execution.id,
+    });
     return this.withExecutionLock(plan.execution.id, async () => {
       const workflowResourceRoot =
         (await this.options.resolveWorkflowResourceRoot?.(

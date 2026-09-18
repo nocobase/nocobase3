@@ -1,3 +1,4 @@
+import type { Logger } from '@nocobase/logging';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -21,6 +22,7 @@ const WEB_SOCKET_OPEN = 1;
 const CLOSE_GOING_AWAY = 1001;
 
 export interface RealtimeServiceOptions {
+  logger?: Pick<Logger, 'error'>;
   maxSubscriptionsPerConnection?: number;
 }
 
@@ -436,7 +438,12 @@ export function createRealtimeService(
       try {
         listener(count);
       } catch (error) {
-        console.error(error);
+        if (options.logger)
+          options.logger.error(
+            { err: error },
+            'Realtime subscription listener failed',
+          );
+        else console.error(error);
       }
     }
   }

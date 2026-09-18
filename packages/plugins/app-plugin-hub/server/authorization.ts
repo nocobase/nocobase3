@@ -37,6 +37,7 @@ const HUB_APP_ACTIONS = new Set([
   HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
+  'read-log',
   HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',

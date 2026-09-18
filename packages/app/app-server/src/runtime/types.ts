@@ -1,3 +1,4 @@
+import type { AppRuntimeLogging } from '../logging/config.js';
 import type { EnvMap } from '../config/index.js';
 import type { AppConfigAccessor } from '../config/index.js';
 import type { ApplicationFetchHandler } from '../application/index.js';
@@ -18,13 +19,8 @@ export interface AppInstance extends AppServer {
   readonly config: AppConfigAccessor;
 }
 
-export interface AppPathOptions {
-  readonly rootDir: string;
-  readonly serverDir: string;
-  readonly databaseDir?: string;
-  readonly clientDir?: string;
-  readonly storageDir?: string;
-}
+export type { AppPathOptions, AppPaths } from '../config/paths.js';
+import type { AppPathOptions } from '../config/paths.js';
 
 /**
  * The host-owned runtime boundary passed to an application factory.
@@ -34,6 +30,7 @@ export interface AppPathOptions {
  * provide the information available in their respective runtime modes.
  */
 export interface AppScope extends AppLifecycle {
+  readonly logging?: AppRuntimeLogging;
   readonly mode?: 'embedded' | 'standalone';
   readonly id: string;
   readonly appName?: string;

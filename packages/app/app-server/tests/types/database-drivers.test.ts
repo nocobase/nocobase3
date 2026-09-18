@@ -87,7 +87,7 @@ it('infers the exact connection union from factories and descriptors', () => {
       connections: {
         main: {
           dialect: 'sqlite',
-          filename: runtime.configPaths.storage('main.sqlite'),
+          filename: runtime.paths.storage('main.sqlite'),
           metadataStore: 'database/main/collections',
           migrations: { autoRun: true },
           seeds: { autoRun: false },

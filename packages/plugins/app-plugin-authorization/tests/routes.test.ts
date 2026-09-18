@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
   authenticationToken,
@@ -39,7 +39,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
       appName: 'main',
       publicBasePath: '/main',
       config: { app: { name: 'main', publicBasePath: '/main' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
+      paths: createAppPaths({ rootDir: '/missing' }),
       router: new Hono(),
       container,
     });
@@ -89,7 +89,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
         appName: 'main',
         publicBasePath: '/main',
         config: { app: { name: 'main', publicBasePath: '/main' } },
-        paths: createConfigPaths({ rootDir: '/missing' }),
+        paths: createAppPaths({ rootDir: '/missing' }),
         router: new Hono(),
         container,
       });
@@ -147,7 +147,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
       appName: 'main',
       publicBasePath: '',
       config: { app: { name: 'main', publicBasePath: '' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
+      paths: createAppPaths({ rootDir: '/missing' }),
       router: new Hono(),
       container,
     });
@@ -210,7 +210,7 @@ describe('@nocobase/app-plugin-authorization routes', () => {
       appName: 'main',
       publicBasePath: '',
       config: { app: { name: 'main', publicBasePath: '' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
+      paths: createAppPaths({ rootDir: '/missing' }),
       router: new Hono(),
       container,
     });

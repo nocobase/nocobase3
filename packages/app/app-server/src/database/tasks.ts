@@ -6,7 +6,7 @@ import {
 } from './plan.js';
 import type { DatabaseDriverRegistration, DatabaseManager } from '@nocobase/db';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import {
   createAppDatabaseManager,
   resolveAppDatabaseDriver,
@@ -49,7 +49,7 @@ export class AppDatabaseTaskError extends Error {
 }
 
 export interface AppDatabasePlanExecutionOptions {
-  readonly paths?: ConfigPaths;
+  readonly paths?: AppPaths;
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
   readonly fresh?: boolean;
 }

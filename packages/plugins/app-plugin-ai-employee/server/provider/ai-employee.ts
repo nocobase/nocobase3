@@ -105,7 +105,11 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
           .resolve(loggingToken)
           .getLogger('ai-employee'),
         skillsDirectories: [
-          path.resolve(this.app.paths.root(), 'ai/skills'),
+          {
+            directory: path.resolve(this.app.paths.root(), 'ai/skills'),
+            source: 'application',
+            optional: true,
+          },
           ...configuredSkillDirectories,
         ],
       }),

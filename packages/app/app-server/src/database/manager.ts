@@ -7,7 +7,7 @@ import {
   type DatabaseManager,
 } from '@nocobase/db';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import { resolveAppMetadataStore } from './collections-directory.js';
 import type {
   AppDatabaseConfig,
@@ -25,7 +25,7 @@ import type {
  */
 export function createAppDatabaseManager<TConfig extends AppDatabaseConfig>(
   config: TConfig,
-  paths?: ConfigPaths,
+  paths?: AppPaths,
   drivers?: Record<string, DatabaseDriverRegistration>,
 ): DatabaseManager | undefined {
   if (config.default === 'none') {
@@ -60,7 +60,7 @@ export function createAppDatabaseManager<TConfig extends AppDatabaseConfig>(
 
 export function resolveConnections(
   connections: AppDatabaseConfig['connections'],
-  paths: ConfigPaths | undefined,
+  paths: AppPaths | undefined,
   drivers?: Record<string, DatabaseDriverRegistration>,
   sharedMetadataStore?: AppDatabaseConfig['metadataStore'],
   /** The top-level task configuration, whose legacy `migrations`/`seeds` apply to the default connection. */
@@ -126,7 +126,7 @@ function bookkeepingTables(
 
 function normalizeConnection(
   connection: ConnectionConfig,
-  paths: ConfigPaths | undefined,
+  paths: AppPaths | undefined,
   drivers?: Record<string, DatabaseDriverRegistration>,
 ): ConnectionConfig {
   const driver = resolveAppDatabaseDriver(connection.dialect, drivers);

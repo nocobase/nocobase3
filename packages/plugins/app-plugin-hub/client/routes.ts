@@ -39,6 +39,21 @@ export function createHubRoutes(
               access: { resource: 'hub.app:*', action: 'read-deployment' },
               componentLoader: () =>
                 import('./pages/hub/tabs/deployments-page.js'),
+              children: [
+                {
+                  name: 'hub-deployment-logs',
+                  path: ':deploymentId/logs',
+                  access: { resource: 'hub.app:*', action: 'read-deployment' },
+                  componentLoader: () =>
+                    import('./pages/hub/tabs/deployment-logs-page.js'),
+                },
+              ],
+            },
+            {
+              name: 'hub-app-logs',
+              path: 'logs',
+              access: { resource: 'hub.app:*', action: 'read-log' },
+              componentLoader: () => import('./pages/hub/tabs/logs-page.js'),
             },
             {
               name: 'hub-app-releases',

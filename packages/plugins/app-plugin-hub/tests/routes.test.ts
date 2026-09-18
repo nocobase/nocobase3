@@ -15,6 +15,35 @@ import { apiRoutes } from '../server/routes/index.js';
 import { hubServiceToken, type HubService } from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-hub API routes', () => {
+  it.each([
+    '/hub/apps/customer/logs',
+    '/hub/apps/customer/deployments/deployment-1/logs',
+  ])('protects logs and disables response caching: %s', async (url) => {
+    const readLogs = vi.fn<HubService['readLogs']>().mockResolvedValue({
+      entries: [],
+      cursor: '',
+      available: false,
+      hasMore: false,
+      reset: false,
+      enabled: true,
+    });
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', { readLogs }),
+    );
+    const response = await router.request(url);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(readLogs).toHaveBeenCalled();
+    for (const role of ['anonymous', 'member'] as const) {
+      const denied = await apiRoutes.createRouter(
+        createApplication(role, { readLogs }),
+      );
+      expect((await denied.request(url)).status).toBe(
+        role === 'anonymous' ? 401 : 403,
+      );
+    }
+  });
+
   it('returns a paginated App catalog and passes query options', async () => {
     const listAppsPage = vi
       .fn<HubService['listAppsPage']>()

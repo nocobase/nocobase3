@@ -20,7 +20,7 @@ A dialect must be imported and registered in code before a connection can use it
 
 ### SQLite paths
 
-TypeScript connections require `filename`, normally `runtime.configPaths.storage('database.sqlite')`. YAML also accepts `database: database.sqlite`: the SQLite driver resolves it under the application's storage directory. Absolute paths remain absolute, and `:memory:` is preserved.
+TypeScript connections require `filename`, normally `runtime.paths.storage('database.sqlite')`. YAML also accepts `database: database.sqlite`: the SQLite driver resolves it under the application's storage directory. Absolute paths remain absolute, and `:memory:` is preserved.
 
 The YAML `database` alias takes precedence over `filename` during normalization. If changing `filename` appears to have no effect, check for an existing `database` override. Use `filename` in typed code; the YAML alias is not part of `SqliteConnectionConfig`.
 
@@ -92,7 +92,7 @@ export default defineAppDatabaseConfig((runtime) => ({
   connections: {
     main: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('database.sqlite'),
+      filename: runtime.paths.storage('database.sqlite'),
       schemaManagement: 'managed',
     },
     analytics: {

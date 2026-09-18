@@ -111,6 +111,40 @@ describe('timeout reaper', () => {
     });
   });
 
+  it('logs observer failures without losing the authoritative terminal state', async () => {
+    const expired = await insertRun({
+      eventKey: 'observer-failure',
+      status: EXECUTION_STATUS.STARTED,
+      expiresAt: minutesFromNow(-1),
+      sourceType: 'schedule',
+      sourceId: 'occurrence-failed',
+    });
+    const failure = new Error('observer unavailable');
+    const logger = {
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+    };
+    const terminalObserver = vi.fn(async () => {
+      throw failure;
+    });
+    const reaper = createTimeoutReaper({ database, logger, terminalObserver });
+    await expect(reaper.sweep()).resolves.toBe(1);
+    expect((await readRun(expired)).status).toBe(EXECUTION_STATUS.ABORTED);
+    expect(logger.error).toHaveBeenCalledWith(
+      'Workflow terminal observer failed',
+      {
+        runId: expired,
+        sourceType: 'schedule',
+        sourceId: 'occurrence-failed',
+        error: failure,
+      },
+    );
+    await expect(reaper.sweep()).resolves.toBe(0);
+    expect(terminalObserver).toHaveBeenCalledTimes(1);
+  });
+
   it('leaves runs that are not expired, not started, or have no deadline', async () => {
     const pending = await insertRun({
       eventKey: 'still-running',

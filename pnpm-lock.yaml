@@ -502,6 +502,9 @@ importers:
 
   packages/app/app-host:
     dependencies:
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../app-server
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../app-websocket
@@ -518,9 +521,6 @@ importers:
         specifier: ^7.4.3
         version: 7.5.22
     devDependencies:
-      '@nocobase/app-server':
-        specifier: workspace:*
-        version: link:../app-server
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -2711,6 +2711,9 @@ importers:
       '@nocobase/i18n':
         specifier: workspace:^
         version: link:../../libs/i18n
+      '@nocobase/logging':
+        specifier: workspace:^
+        version: link:../../libs/logging
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -2735,6 +2738,9 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.8
+      react-day-picker:
+        specifier: 10.0.1
+        version: 10.0.1(@types/react@19.2.18)(react@19.2.8)
       react-router:
         specifier: 'catalog:'
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2754,9 +2760,6 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
-      '@nocobase/logging':
-        specifier: workspace:*
-        version: link:../../libs/logging
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
