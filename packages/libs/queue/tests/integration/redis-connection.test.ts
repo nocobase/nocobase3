@@ -288,3 +288,120 @@ it.skipIf(selectedBackend() !== 'redis')(
     }
   },
 );
+
+it.skipIf(selectedBackend() !== 'redis')(
+  'recovers Worker regular and blocking transports after reconnect handshake bytes are dropped',
+  async () => {
+    const { createTcpProxy } = await import('../helpers/tcp-proxy.js');
+    const proxy = await createTcpProxy(
+      Number(process.env.QUEUE_TEST_REDIS_PORT),
+    );
+    const namespace = `${process.env.QUEUE_TEST_RUN}-handshake-watchdog`;
+    const consumer = createQueueService({
+      namespace,
+      queueBackend: 'redis',
+      // Keep a failed recovery assertion from spending the test's remaining
+      // budget draining BullMQ's connection-error retry delay in finally.
+      shutdownTimeoutMs: 1000,
+      cancellationGraceMs: 250,
+      connection: { host: '127.0.0.1', port: proxy.port },
+    });
+    const producer = createQueueService({
+      namespace,
+      queueBackend: 'redis',
+      shutdownTimeoutMs: 1000,
+      cancellationGraceMs: 250,
+      connection: {
+        host: '127.0.0.1',
+        port: Number(process.env.QUEUE_TEST_REDIS_PORT),
+      },
+    });
+    const received: unknown[] = [];
+    consumer.consumer('jobs').consume(async (_channel, message) => {
+      received.push(message);
+    });
+    const publish = producer.producer('jobs');
+    const failures: unknown[] = [];
+    const cleanupWithin = async (
+      stage: string,
+      operation: Promise<unknown>,
+      timeoutMs: number,
+    ): Promise<void> => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          operation,
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(
+              () => reject(new Error(`${stage} exceeded ${timeoutMs}ms`)),
+              timeoutMs,
+            );
+          }),
+        ]);
+      } catch (error) {
+        failures.push(error);
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    try {
+      await consumer.setup();
+      await producer.setup();
+      await publish.publish('before', 1);
+      await expect.poll(() => received).toEqual([1]);
+      const original = [...proxy.sockets];
+      proxy.blackhole(true);
+      proxy.disconnect();
+      await expect
+        .poll(() => original.every((socket) => !proxy.sockets.has(socket)))
+        .toBe(true);
+      await expect
+        .poll(() => proxy.sockets.size, { timeout: 5000 })
+        .toBeGreaterThanOrEqual(6);
+      // Let the new TCP connections transmit their handshake into the blackhole.
+      // Restoring forwarding cannot replay those discarded protocol bytes.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const handshakes = [...proxy.sockets];
+      proxy.blackhole(false);
+      await publish.publish('after', 2);
+      await expect
+        .poll(() => received, {
+          timeout: 15000,
+          message: 'Worker delivery after reconnect handshake recovery',
+        })
+        .toEqual([1, 2]);
+      // Both Worker transports (two proxy socket pairs) were actually ended.
+      expect(
+        handshakes.filter((socket) => !proxy.sockets.has(socket)).length,
+      ).toBeGreaterThanOrEqual(4);
+      await consumer.shutdown();
+      await expect.poll(() => proxy.sockets.size).toBe(0);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(proxy.sockets.size).toBe(0);
+    } catch (error) {
+      failures.push(error);
+    } finally {
+      // Preserve the recovery failure, observe both service shutdowns, and
+      // always close the fault injector even if service cleanup stalls.
+      await cleanupWithin(
+        'Reconnect service cleanup',
+        Promise.allSettled([consumer.shutdown(), producer.shutdown()]).then(
+          (results) => {
+            for (const result of results)
+              if (result.status === 'rejected') failures.push(result.reason);
+          },
+        ),
+        7000,
+      );
+      await cleanupWithin('Reconnect proxy cleanup', proxy.close(), 1000);
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1)
+      throw new AggregateError(
+        failures,
+        'Reconnect recovery or cleanup failed',
+        { cause: failures[0] },
+      );
+  },
+  25000,
+);
