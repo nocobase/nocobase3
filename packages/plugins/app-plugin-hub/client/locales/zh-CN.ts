@@ -356,6 +356,17 @@ const zhCN: HubResource = {
     visibility: '可见性',
   },
   configuration: {
+    importConfig: '导入文件',
+    importDraftNotice:
+      '文件仅导入编辑器，检查并提交后才会生效。撤销导入也会丢弃导入后的编辑。',
+    undoImport: '撤销导入',
+    importError:
+      '请选择非空、UTF-8 编码且不超过 1 MiB 的 .yml 或 .yaml 文件，内容须为有效的 YAML 对象。',
+    replaceDraft: '导入将覆盖已编辑的草稿，是否继续？',
+    confirmImport: '替换草稿',
+    importWarning:
+      '部署前请确认目标数据库：部署可能执行数据库迁移。版本包必须包含对应数据库驱动；localhost、路径和环境变量均以部署环境为准。撤销导入也会丢弃导入后的编辑。',
+    importedFrom: '导入自 {{name}} · 可编辑',
     title: '配置',
     description: '此应用使用的配置来源。',
     configFile: '配置文件',

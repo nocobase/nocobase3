@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ExternalLink,
   FileCode2,
+  FileUp,
   Info,
   LoaderCircle,
   Sparkles,
@@ -19,6 +20,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useRef,
   useState,
   type ReactElement,
   type ReactNode,
@@ -84,6 +86,201 @@ const CONFIG_MODES: readonly {
   },
 ];
 
+function useConfigImport({
+  content,
+  initial,
+  importContext,
+  onContent,
+  disabled,
+}: {
+  content: string;
+  initial: string;
+  importContext: string;
+  onContent: (value: string) => void;
+  disabled: boolean;
+}) {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const importRequestRef = useRef(0);
+  const contentRef = useRef(content);
+  useEffect(() => {
+    contentRef.current = content;
+  }, [content]);
+  type ImportState = {
+    context: string;
+    importing?: boolean;
+    importError?: string;
+    pendingImport?: { name: string; content: string };
+    importedConfig?: { name: string; previous: string };
+  };
+
+  const [importState, setImportState] = useState<ImportState>({
+    context: importContext,
+  });
+  const {
+    importing = false,
+    importError,
+    pendingImport,
+    importedConfig,
+  } = importState.context === importContext ? importState : {};
+  const updateImport = (patch: Partial<Omit<ImportState, 'context'>>): void => {
+    setImportState((previous) => ({
+      ...(previous.context === importContext
+        ? previous
+        : { context: importContext }),
+      ...patch,
+    }));
+  };
+  useEffect(() => {
+    return () => {
+      importRequestRef.current += 1;
+    };
+  }, [importContext]);
+  const applyImport = (file: { name: string; content: string }): void => {
+    updateImport({
+      importedConfig: { name: file.name, previous: contentRef.current },
+      pendingImport: undefined,
+    });
+    onContent(file.content);
+  };
+  const importFile = async (file: File): Promise<void> => {
+    const request = ++importRequestRef.current;
+    updateImport({
+      importError: undefined,
+      pendingImport: undefined,
+      importing: true,
+    });
+    try {
+      if (
+        !/\.ya?ml$/i.test(file.name) ||
+        file.size === 0 ||
+        file.size > 1024 * 1024
+      )
+        throw new Error('invalid file');
+      const value = new TextDecoder('utf-8', { fatal: true }).decode(
+        await file.arrayBuffer(),
+      );
+      if (!value.trim() || validateConfigDocument(value, t))
+        throw new Error('invalid yaml');
+      if (request !== importRequestRef.current) return;
+      const next = { name: file.name, content: value };
+      if (contentRef.current !== initial) updateImport({ pendingImport: next });
+      else applyImport(next);
+    } catch {
+      if (request === importRequestRef.current)
+        updateImport({
+          importError: t('configuration.importError', {
+            defaultValue:
+              'Choose a non-empty UTF-8 .yml or .yaml file up to 1 MiB with a valid YAML object.',
+          }),
+        });
+    } finally {
+      if (request === importRequestRef.current)
+        updateImport({ importing: false });
+    }
+  };
+  return {
+    importedConfig,
+    blocked: importing || Boolean(pendingImport),
+    reset: () => setImportState({ context: importContext }),
+    controls: (
+      <div className='flex flex-wrap items-center gap-1'>
+        <input
+          ref={importInputRef}
+          type='file'
+          tabIndex={-1}
+          accept='.yml,.yaml'
+          className='sr-only'
+          aria-label={t('configuration.importConfig', {
+            defaultValue: 'Import file',
+          })}
+          disabled={disabled || importing}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) void importFile(file);
+          }}
+        />
+        <Button
+          variant='ghost'
+          size='sm'
+          disabled={disabled || importing}
+          onClick={() => importInputRef.current?.click()}
+        >
+          <FileUp className='size-3.5' />
+          {t('configuration.importConfig', {
+            defaultValue: 'Import file',
+          })}
+        </Button>
+        {importedConfig && (
+          <Button
+            variant='ghost'
+            size='sm'
+            disabled={disabled || importing}
+            onClick={() => {
+              onContent(importedConfig.previous);
+              updateImport({
+                importedConfig: undefined,
+                pendingImport: undefined,
+                importError: undefined,
+              });
+            }}
+          >
+            {t('configuration.undoImport', {
+              defaultValue: 'Undo import',
+            })}
+          </Button>
+        )}
+      </div>
+    ),
+    notices: (
+      <>
+        {importError && (
+          <p role='alert' className='px-4 py-2 text-sm text-destructive'>
+            {importError}
+          </p>
+        )}
+        {pendingImport && (
+          <div
+            role='alert'
+            className='flex flex-wrap items-center gap-2 border-b px-4 py-3 text-sm'
+          >
+            <p>
+              {t('configuration.replaceDraft', {
+                defaultValue: 'Importing replaces your edited draft. Continue?',
+              })}
+            </p>
+            <Button
+              size='sm'
+              disabled={disabled}
+              onClick={() => applyImport(pendingImport)}
+            >
+              {t('configuration.confirmImport', {
+                defaultValue: 'Replace draft',
+              })}
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={() => updateImport({ pendingImport: undefined })}
+            >
+              {t('releases.cancel', { defaultValue: 'Cancel' })}
+            </Button>
+          </div>
+        )}
+        {importedConfig && (
+          <p className='border-b px-4 py-2 text-xs text-muted-foreground'>
+            {t('configuration.importDraftNotice', {
+              defaultValue:
+                'Imported into the editor only. Review and submit to apply changes. Undo import also discards edits made after importing.',
+            })}
+          </p>
+        )}
+      </>
+    ),
+  };
+}
+
 export function Configuration({
   mode,
   content,
@@ -101,6 +298,13 @@ export function Configuration({
   const source = CONFIG_MODES.find((item) => item.value === mode);
   const [draft, setDraft] = useState(content);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const configImport = useConfigImport({
+    content: draft,
+    initial: content,
+    importContext: `${mode}:${content}`,
+    onContent: setDraft,
+    disabled: busy || !canUpdate || reviewOpen,
+  });
   const validationError = validateConfigDocument(draft, t);
   const changed = draft !== content;
   return (
@@ -133,12 +337,22 @@ export function Configuration({
       {mode === 'file' ? (
         <div className='space-y-4'>
           <div className='overflow-hidden rounded-xl border'>
-            <div className='border-b bg-muted/20 px-4 py-3'>
+            <div className='flex flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-4 py-3'>
               <span className='flex items-center gap-2 text-sm font-medium'>
                 <FileCode2 className='size-4' />{' '}
                 {t('configuration.fileName', { defaultValue: 'config.yml' })}
               </span>
+              {canUpdate && configImport.controls}
             </div>
+            {canUpdate && configImport.notices}
+            {configImport.importedConfig && (
+              <p className='border-b px-4 py-2 text-xs text-muted-foreground break-all'>
+                {t('configuration.importedFrom', {
+                  name: configImport.importedConfig.name,
+                  defaultValue: `Imported from ${configImport.importedConfig.name} · Editable`,
+                })}
+              </p>
+            )}
             <Suspense fallback={<ConfigEditorFallback />}>
               <ConfigEditor
                 value={draft}
@@ -156,7 +370,12 @@ export function Configuration({
               <ConfigReloadNotice />
               <div className='flex justify-end'>
                 <Button
-                  disabled={busy || !changed || validationError !== null}
+                  disabled={
+                    busy ||
+                    configImport.blocked ||
+                    !changed ||
+                    validationError !== null
+                  }
                   onClick={() => setReviewOpen(true)}
                 >
                   {busy
@@ -201,7 +420,12 @@ export function Configuration({
                 {t('configuration.back', { defaultValue: 'Back' })}
               </Button>
               <Button
-                disabled={busy || !changed || validationError !== null}
+                disabled={
+                  busy ||
+                  configImport.blocked ||
+                  !changed ||
+                  validationError !== null
+                }
                 onClick={() => {
                   setReviewOpen(false);
                   onSave(draft);
@@ -323,6 +547,20 @@ export function DeploymentDialog({
   const [templateError, setTemplateError] = useState<string>();
   const [releaseTemplate, setReleaseTemplate] = useState('');
   const [loadedReleaseId, setLoadedReleaseId] = useState<string>();
+  const configImport = useConfigImport({
+    content,
+    initial:
+      app.app.currentDeploymentId && baselineMode === 'file'
+        ? baselineContent
+        : releaseTemplate,
+    importContext: `${releaseId}:${mode}`,
+    onContent: (value) => {
+      onContent(value);
+      setVisibleConfig('both');
+    },
+    disabled: busy || loadedReleaseId !== releaseId,
+  });
+  const { importedConfig } = configImport;
   const editingConfig = step > 0;
   const configReady = loadedReleaseId === releaseId && releaseId !== undefined;
   useEffect(() => {
@@ -409,6 +647,7 @@ export function DeploymentDialog({
               disabled={
                 !release ||
                 busy ||
+                configImport.blocked ||
                 (step === 1 &&
                   (!configReady ||
                     mode === 'managed' ||
@@ -426,6 +665,7 @@ export function DeploymentDialog({
             <Button
               disabled={
                 busy ||
+                configImport.blocked ||
                 !release ||
                 !configReady ||
                 mode === 'managed' ||
@@ -471,7 +711,13 @@ export function DeploymentDialog({
                   </span>
                 </div>
               ) : (
-                <ConfigModePicker value={mode} onChange={onMode} />
+                <ConfigModePicker
+                  value={mode}
+                  onChange={(nextMode) => {
+                    if (nextMode !== mode) configImport.reset();
+                    onMode(nextMode);
+                  }}
+                />
               )}
             </div>
           ) : null}
@@ -488,6 +734,7 @@ export function DeploymentDialog({
                 key={item.id}
                 onClick={() => {
                   if (item.id !== releaseId) {
+                    configImport.reset();
                     setLoadedReleaseId(undefined);
                     setTemplateError(undefined);
                   }
@@ -645,6 +892,15 @@ export function DeploymentDialog({
                         </div>
                       </div>
                     </div>
+                    {configImport.notices}
+                    {importedConfig && (
+                      <p className='border-b px-4 py-2 text-xs text-muted-foreground'>
+                        {t('configuration.importWarning', {
+                          defaultValue:
+                            'Check the target database before deployment: migrations may run. Database drivers must be included in the release; localhost, paths and environment variables refer to the deployment environment. Undo import also discards edits made after importing.',
+                        })}
+                      </p>
+                    )}
                     <div className='[--config-merge-gutter:24px]'>
                       <div
                         className={`grid ${visibleConfig === 'both' ? 'grid-cols-[minmax(0,1fr)_var(--config-merge-gutter)_minmax(0,1fr)]' : 'grid-cols-1'} border-b bg-muted/20`}
@@ -676,27 +932,35 @@ export function DeploymentDialog({
                           hidden={visibleConfig === 'current'}
                           className='px-4 py-2.5'
                         >
-                          <p className='text-xs font-medium'>
-                            {t('configuration.deploymentDraft', {
-                              defaultValue: 'Deployment draft',
-                            })}
-                          </p>
-                          <p className='mt-0.5 text-xs text-muted-foreground'>
-                            {baselineMode === 'file' &&
-                            app.app.currentDeploymentId
-                              ? t('configuration.fromCurrentDeployment', {
-                                  id: shortId(app.app.currentDeploymentId),
-                                  defaultValue: `From current deployment ${shortId(app.app.currentDeploymentId)} · Editable`,
+                          <div className='flex flex-wrap items-center justify-between gap-2'>
+                            <p className='text-xs font-medium'>
+                              {t('configuration.deploymentDraft', {
+                                defaultValue: 'Deployment draft',
+                              })}
+                            </p>
+                            {configImport.controls}
+                          </div>
+                          <p className='mt-0.5 break-all text-xs text-muted-foreground'>
+                            {importedConfig
+                              ? t('configuration.importedFrom', {
+                                  name: importedConfig.name,
+                                  defaultValue: `Imported from ${importedConfig.name} · Editable`,
                                 })
-                              : release?.hasConfigTemplate
-                                ? t('configuration.fromReleaseTemplate', {
-                                    defaultValue:
-                                      'From Release template · Editable',
+                              : baselineMode === 'file' &&
+                                  app.app.currentDeploymentId
+                                ? t('configuration.fromCurrentDeployment', {
+                                    id: shortId(app.app.currentDeploymentId),
+                                    defaultValue: `From current deployment ${shortId(app.app.currentDeploymentId)} · Editable`,
                                   })
-                                : t('configuration.emptyDraft', {
-                                    defaultValue:
-                                      'Empty configuration · Editable',
-                                  })}
+                                : release?.hasConfigTemplate
+                                  ? t('configuration.fromReleaseTemplate', {
+                                      defaultValue:
+                                        'From Release template · Editable',
+                                    })
+                                  : t('configuration.emptyDraft', {
+                                      defaultValue:
+                                        'Empty configuration · Editable',
+                                    })}
                           </p>
                         </div>
                       </div>

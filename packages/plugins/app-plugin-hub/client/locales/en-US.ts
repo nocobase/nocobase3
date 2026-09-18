@@ -387,6 +387,17 @@ const enUS = {
     visibility: 'Visibility',
   },
   configuration: {
+    importConfig: 'Import file',
+    importDraftNotice:
+      'Imported into the editor only. Review and submit to apply changes. Undo import also discards edits made after importing.',
+    undoImport: 'Undo import',
+    importError:
+      'Choose a non-empty UTF-8 .yml or .yaml file up to 1 MiB with a valid YAML object.',
+    replaceDraft: 'Importing replaces your edited draft. Continue?',
+    confirmImport: 'Replace draft',
+    importWarning:
+      'Check the target database before deployment: migrations may run. Database drivers must be included in the release; localhost, paths and environment variables refer to the deployment environment. Undo import also discards edits made after importing.',
+    importedFrom: 'Imported from {{name}} · Editable',
     title: 'Configuration',
     description: 'Configuration source used by this application.',
     configFile: 'Config file',
