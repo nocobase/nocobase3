@@ -39,9 +39,15 @@ describe('Server inspection', () => {
     expect(inspection).not.toHaveProperty('limitations');
     expect(inspection.plugins[0]).not.toHaveProperty('rootDir');
     expect(Array.isArray(inspection.locales)).toBe(true);
-    expect(formatAppServerInspection(inspection)).toContain(
+    expect(inspection).not.toHaveProperty('jobs');
+    for (const plugin of inspection.plugins) {
+      expect(plugin.contributions).not.toHaveProperty('jobLocations');
+    }
+    const formatted = formatAppServerInspection(inspection);
+    expect(formatted).not.toContain('   jobs:');
+    expect(formatted).toContain(
       'Runtime Provider, Route, locale, database, and Job behavior is not inspected.',
     );
-    expect(formatAppServerInspection(inspection)).toContain('locales:');
+    expect(formatted).toContain('locales:');
   });
 });

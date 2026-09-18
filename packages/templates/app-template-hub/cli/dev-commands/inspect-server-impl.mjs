@@ -62,9 +62,6 @@ export function formatAppServerInspection(inspection) {
     if (databaseContributions.length > 0) {
       lines.push(`   database: ${databaseContributions.join(', ')}`);
     }
-    if (plugin.contributions.jobLocations > 0) {
-      lines.push(`   jobs: ${plugin.contributions.jobLocations}`);
-    }
     lines.push('');
   }
   if (inspection.issues.length === 0) {

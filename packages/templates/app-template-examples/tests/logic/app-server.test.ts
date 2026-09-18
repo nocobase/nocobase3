@@ -1405,7 +1405,6 @@ function createResolvedTestServerPlugins(
         packageName: definition.packageName,
         version: 'test',
         rootDir: `/test/plugins/${definition.packageName}`,
-        jobLocations: [],
       },
     })),
   };
