@@ -1,7 +1,8 @@
+import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
-import type { ConfigPaths } from '@nocobase/app-server/config';
+import type { AppPaths } from '@nocobase/app-server/config';
 
 export type InstallDatabaseDialect = 'sqlite' | 'postgres' | 'mysql';
 
@@ -19,7 +20,7 @@ export interface InstallDatabaseConfigInput {
 }
 
 export interface ConfigureInstallationOptions {
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly generateSecret?: () => string;
 }
 
@@ -45,10 +46,10 @@ export async function configureInstallation(
   options: ConfigureInstallationOptions,
 ): Promise<ConfigureInstallationResult> {
   const config = parseInstallDatabaseConfig(input);
-  const configPath = options.paths.root('config.yml');
+  const configPath = path.join(options.paths.deploymentRootDir, 'config.yml');
   if (
     ['config.yaml', 'config.toml', 'config.json'].some((name) =>
-      existsSync(options.paths.root(name)),
+      existsSync(path.join(options.paths.deploymentRootDir, name)),
     )
   ) {
     throw new InstallConfigurationError(

@@ -11,7 +11,7 @@ import { expect, it } from 'vitest';
 import { objectProvider } from '@nocobase/config/providers/object';
 import { AppConfig } from '../src/config/index.js';
 import { DatabaseProvider } from '../src/database/provider.js';
-import { createConfigPaths } from '../src/config/paths.js';
+import { createAppPaths } from '../src/config/paths.js';
 import { planAppRuntimeDatabaseTasks as planAppDatabaseTasks } from '../src/database/plan.js';
 import {
   executeAppDatabasePlan,
@@ -151,7 +151,7 @@ it('initializes queue storage through the database provider before business prov
   const provider = new DatabaseProvider({
     config: appConfig,
     container,
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    paths: createAppPaths({ rootDir: process.cwd() }),
     databaseTaskContributions: contributions,
   });
   provider.register();

@@ -9,19 +9,19 @@ import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
  * than settings, so they are declared here and cannot be overridden from
  * config.yml; a connection may only use a dialect listed here.
  */
-export default defineAppDatabaseConfig((runtime) => ({
+export default defineAppDatabaseConfig(({ paths }) => ({
   drivers: { sqlite, postgres, mysql, oracle },
   default: 'main',
   connections: {
     main: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('database.sqlite'),
+      filename: paths.storage('database.sqlite'),
       schemaManagement: 'managed',
       debug: false,
     },
     analytics: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('analytics.sqlite'),
+      filename: paths.storage('analytics.sqlite'),
       schemaManagement: 'managed',
       migrations: { autoRun: true },
       seeds: { autoRun: true },
@@ -41,7 +41,7 @@ export default defineAppDatabaseConfig((runtime) => ({
      */
     externalCrm: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('external-crm.sqlite'),
+      filename: paths.storage('external-crm.sqlite'),
       schemaManagement: 'external',
       naming: { underscored: true, tablePrefix: 'crm_' },
     },

@@ -57,7 +57,7 @@ export default class AppCollectionsGenerate extends Command {
       result = await generateAppCollectionsArtifact(
         runtime.config.get<AppDatabaseConfig>('database')!,
         {
-          paths: runtime.configPaths,
+          paths: runtime.paths,
           connection: flags.connection,
           all: flags.all,
           check: flags.check,

@@ -1,10 +1,16 @@
-import { mkdtemp, rm, readdir } from 'node:fs/promises';
+import {
+  createAppFromRuntime,
+  resolveAppRuntime,
+  defineAppRuntime,
+} from '../src/runtime/index.js';
+import { defineServerPlugins } from '../src/plugins/index.js';
+import { mkdtemp, rm, readdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { expect, it, vi } from 'vitest';
 import { readJournal } from '@nocobase/logging';
 import { Application } from '../src/application/index.js';
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import { AppConfig, createAppPaths } from '../src/config/index.js';
 import {
   LoggingProvider,
   loggingToken,
@@ -29,16 +35,32 @@ it('honors the Host logging policy and writes identities to the persistent App v
       },
     },
   });
-  const app = new Application({
-    config,
-    paths: createConfigPaths({ rootDir: root }),
-    runtimeLogging: {
-      enabled: true,
-      level: 'warn',
-      console: false,
-      bindings: { deploymentId: 'deployment-1', runtimeId: 'runtime-1' },
+  await writeFile(
+    path.join(root, 'package.json'),
+    JSON.stringify({ name: 'logging-fixture' }),
+  );
+  const runtime = await resolveAppRuntime(
+    defineAppRuntime({
+      createAppConfig: () => config,
+      plugins: defineServerPlugins([]),
+      serviceProviders: [],
+      routes: [],
+    }),
+    {
+      id: 'customer',
+      basePath: '/customer',
+      mode: 'embedded',
+      paths: { rootDir: root },
+      registerDisposer() {},
+      logging: {
+        file: { enabled: true },
+        level: 'warn',
+        console: false,
+        bindings: { deploymentId: 'deployment-1', runtimeId: 'runtime-1' },
+      },
     },
-  });
+  );
+  const app = createAppFromRuntime(runtime);
   app.addServiceProvider(LoggingProvider);
   try {
     await app.start();
@@ -97,7 +119,7 @@ it.each([
     });
     const app = new Application({
       config,
-      paths: createConfigPaths({ rootDir: root }),
+      paths: createAppPaths({ rootDir: root }),
       runtimeLogging: {
         file: { enabled: false },
         console: consolePolicy,
@@ -171,7 +193,7 @@ it.each([true, false])(
     });
     const app = new Application({
       config,
-      paths: createConfigPaths({ rootDir: root }),
+      paths: createAppPaths({ rootDir: root }),
       runtimeLogging: {
         level: 'info',
         file: { enabled, maxFileSizeMB: 1, maxTotalSizeMB: 10 },

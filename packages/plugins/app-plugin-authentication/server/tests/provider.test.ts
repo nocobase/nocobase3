@@ -5,7 +5,7 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { type Caching } from '@nocobase/caching';
 import { cachingToken } from '@nocobase/app-server/caching';
 import { LoggingProvider, loggingToken } from '@nocobase/app-server/logging';
-import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
+import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { realtimePrincipalResolverToken } from '@nocobase/app-server/realtime';
 import { Hono } from 'hono';
@@ -47,7 +47,7 @@ describe('authentication provider', () => {
       publicBasePath: '/main',
       config,
       container,
-      paths: createConfigPaths({ rootDir: '/test/app' }),
+      paths: createAppPaths({ rootDir: '/test/app' }),
       router: new Hono(),
     };
     const loggingProvider = new LoggingProvider(app);
@@ -92,7 +92,7 @@ describe('authentication provider', () => {
       publicBasePath: '/main',
       config,
       container,
-      paths: createConfigPaths({ rootDir: '/test/app' }),
+      paths: createAppPaths({ rootDir: '/test/app' }),
       router: new Hono(),
     });
 
@@ -205,7 +205,7 @@ describe('authentication provider', () => {
         server: { host: '127.0.0.1', port: 13001, startLog: true },
       }),
       container,
-      paths: createConfigPaths({ rootDir: '/test/app' }),
+      paths: createAppPaths({ rootDir: '/test/app' }),
       router: new Hono(),
     }).register();
     container.resolve(authenticationToken);
@@ -234,7 +234,7 @@ describe('authentication provider', () => {
         server: { host: '127.0.0.1', port: 13000, startLog: true },
       }),
       container,
-      paths: createConfigPaths({ rootDir: '/test/app' }),
+      paths: createAppPaths({ rootDir: '/test/app' }),
       router: new Hono(),
     }).register();
     container.resolve(authenticationToken);

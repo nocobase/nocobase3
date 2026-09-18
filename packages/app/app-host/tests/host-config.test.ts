@@ -38,23 +38,6 @@ describe('loadAppHostConfig', () => {
     expect(config.appRevisionsDir).toBe(
       path.join(rootDir, 'storage/apps/revisions'),
     );
-    expect(config.appDeploymentsDir).toBeUndefined();
-    await expect(
-      loadAppHostConfig({
-        rootDir,
-        environment: {
-          APP_HOST_MODE: 'managed',
-          APP_REVISIONS_DIR: './revisions',
-          APP_DEPLOYMENTS_DIR: './deployments',
-        },
-      }),
-    ).rejects.toThrow('cannot be combined');
-    await expect(
-      loadAppHostConfig({
-        rootDir,
-        environment: { APP_REVISIONS_DIR: './revisions' },
-      }),
-    ).rejects.toThrow('managed mode');
   });
 
   it('uses pretty logging outside production', async () => {
@@ -82,7 +65,7 @@ describe('loadAppHostConfig', () => {
             location: './storage/releases',
             visibility: 'private',
           },
-          appDeploymentsDir: './storage/apps',
+          appRevisionsDir: './storage/apps',
           appVolumesDir: './storage/volumes',
         },
       }),
@@ -101,7 +84,7 @@ describe('loadAppHostConfig', () => {
         driver: 'fs',
         location: path.join(rootDir, 'storage/releases'),
       },
-      appDeploymentsDir: path.join(rootDir, 'storage/apps'),
+      appRevisionsDir: path.join(rootDir, 'storage/apps'),
       appVolumesDir: path.join(rootDir, 'storage/volumes'),
     });
   });
@@ -131,13 +114,13 @@ describe('loadAppHostConfig', () => {
 
     expect(config.artifact).toMatchObject({
       driver: 'fs',
-      location: path.join(rootDir, 'storage/app-artifacts'),
+      location: path.join(rootDir, 'storage/apps/artifacts'),
     });
-    expect(config.appDeploymentsDir).toBe(
-      path.join(rootDir, 'storage/app-deployments'),
+    expect(config.appRevisionsDir).toBe(
+      path.join(rootDir, 'storage/apps/revisions'),
     );
     expect(config.appVolumesDir).toBe(
-      path.join(rootDir, 'storage/app-volumes'),
+      path.join(rootDir, 'storage/apps/volumes'),
     );
   });
 

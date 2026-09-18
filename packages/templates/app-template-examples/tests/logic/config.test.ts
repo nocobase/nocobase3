@@ -78,7 +78,7 @@ describe('application config', () => {
         resolveAppMetadataStore(undefined, {
           name: 'externalCrm',
           external: true,
-          paths: runtime.configPaths,
+          paths: runtime.paths,
         }),
       ).toEqual({
         type: 'directory',
@@ -91,7 +91,7 @@ describe('application config', () => {
         database,
         ['migrations', 'seeds'],
         {
-          paths: runtime.configPaths,
+          paths: runtime.paths,
           contributions: createAppDatabaseTaskContributions(runtime.plugins),
           autoRun: true,
         },

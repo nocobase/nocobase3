@@ -24,7 +24,6 @@ import { finished, pipeline } from 'node:stream/promises';
 import type { NocoBaseDriveDisk } from '@nocobase/drive';
 import { x as extractTar } from 'tar';
 
-import { DeploymentPhases } from './deployment-phases.js';
 import type { Logger } from '@nocobase/logging';
 
 import type { DeploymentCatalog } from './deployment/catalog.ts';
@@ -51,7 +50,6 @@ export interface ArtifactResolver {
 }
 
 export interface DriveArtifactResolverOptions {
-  appDeploymentsDir?: string;
   /** Managed content-addressed layout: <app>/<checksum>. */
   appRevisionsDir?: string;
   localArtifactDir?: string;
@@ -67,7 +65,6 @@ interface InstalledArtifactMetadata {
 }
 
 const INSTALLED_ARTIFACT_FILE = '.nocobase-artifact.json';
-const REVISION_DIRECTORY = 'revisions';
 const DEFAULT_EXPANDED_REVISION_LIMIT = 3;
 
 export class DriveArtifactResolver implements ArtifactResolver {
@@ -75,9 +72,8 @@ export class DriveArtifactResolver implements ArtifactResolver {
     validateArtifactReference(reference);
     await this.revisionPrunes.get(reference.appId);
     const targetDir = path.join(
-      this.appDeploymentsDir,
+      this.appRevisionsDir,
       reference.appId,
-      ...(this.flatRevisions ? [] : [REVISION_DIRECTORY]),
       reference.checksum.toLowerCase(),
     );
     const artifact = await this.resolveInstalledArtifact(
@@ -94,8 +90,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
     this.activeRevisionByApp.set(reference.appId, targetDir);
     return artifact;
   }
-  readonly appDeploymentsDir: string;
-  private readonly flatRevisions: boolean;
+  readonly appRevisionsDir: string;
   readonly localArtifactDir?: string;
   readonly logger?: Logger;
   readonly expandedRevisionLimit?: number;
@@ -107,13 +102,8 @@ export class DriveArtifactResolver implements ArtifactResolver {
     readonly catalog: DeploymentCatalog,
     options: DriveArtifactResolverOptions,
   ) {
-    if (options.appRevisionsDir && options.appDeploymentsDir)
-      throw new Error('Configure only appRevisionsDir or appDeploymentsDir');
-    this.flatRevisions = options.appRevisionsDir !== undefined;
-    this.appDeploymentsDir = path.resolve(
-      options.appRevisionsDir ??
-        options.appDeploymentsDir ??
-        catalog.deploymentsDir,
+    this.appRevisionsDir = path.resolve(
+      options.appRevisionsDir ?? catalog.deploymentsDir,
     );
     this.localArtifactDir = options.localArtifactDir
       ? path.resolve(options.localArtifactDir)
@@ -134,23 +124,15 @@ export class DriveArtifactResolver implements ArtifactResolver {
     // Host serializes deployments; finish the previous commit's cleanup before
     // any candidate revision is read or activated by the next operation.
     await this.revisionPrunes.get(reference.appId);
-    await mkdir(this.appDeploymentsDir, { recursive: true, mode: 0o700 });
+    await mkdir(this.appRevisionsDir, { recursive: true, mode: 0o700 });
 
-    if (this.flatRevisions || this.expandedRevisionLimit !== undefined) {
-      return this.resolveRevision(reference);
-    }
-
-    return this.resolveReplaceable(reference);
+    return this.resolveRevision(reference);
   }
 
   private async resolveRevision(
     reference: ArtifactReference,
   ): Promise<ResolvedArtifact> {
-    const revisionRoot = path.join(
-      this.appDeploymentsDir,
-      reference.appId,
-      ...(this.flatRevisions ? [] : [REVISION_DIRECTORY]),
-    );
+    const revisionRoot = path.join(this.appRevisionsDir, reference.appId);
     await mkdir(revisionRoot, { recursive: true, mode: 0o700 });
 
     const checksum = reference.checksum.toLowerCase();
@@ -257,6 +239,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
         cacheHit: false,
         commit: async (): Promise<void> => {
           if (settled) return;
+          await this.catalog.selectRevision(reference.appId, checksum);
           settled = true;
           this.pruneRevisionsInBackground(revisionRoot, targetDir, reference);
         },
@@ -273,167 +256,6 @@ export class DriveArtifactResolver implements ArtifactResolver {
         await rm(targetDir, { recursive: true, force: true });
       }
       throw error;
-    } finally {
-      await rm(archivePath, { force: true });
-      await rm(stagingDir, { recursive: true, force: true });
-    }
-  }
-
-  private async resolveReplaceable(
-    reference: ArtifactReference,
-  ): Promise<ResolvedArtifact> {
-    const nonce = `${process.pid}.${randomUUID()}`;
-    const archivePath = path.join(
-      this.appDeploymentsDir,
-      `.${reference.appId}.${nonce}.tar.gz`,
-    );
-    const stagingDir = path.join(
-      this.appDeploymentsDir,
-      `.${reference.appId}.${nonce}.staging`,
-    );
-    const targetDir = path.join(this.appDeploymentsDir, reference.appId);
-    const backupDir = path.join(
-      this.appDeploymentsDir,
-      `.${reference.appId}.${nonce}.previous`,
-    );
-    let hasBackup = false;
-    let installed = false;
-    const startedAt = Date.now();
-    // Records each phase as it finishes so a later failure can say what had already worked.
-    const phases = new DeploymentPhases();
-    let currentPhase = 'artifact download';
-
-    try {
-      const installedArtifact = await this.resolveInstalledArtifact(
-        reference,
-        targetDir,
-        false,
-        false,
-      );
-      if (installedArtifact) {
-        this.logger?.info(
-          {
-            appId: reference.appId,
-            artifactKey: reference.key,
-            artifactVersion: reference.version,
-            artifactChecksum: reference.checksum,
-            cacheHit: true,
-            durationMs: Date.now() - startedAt,
-          },
-          'Reused installed app artifact',
-        );
-        return installedArtifact;
-      }
-
-      deploymentLog('resolving', 'Reading release artifact');
-      const checksumStartedAt = Date.now();
-      const localPath = this.localArtifactPath(reference.key);
-      const actualChecksum = localPath
-        ? await hashLocalArtifact(localPath)
-        : await downloadArtifact(this.disk, reference.key, archivePath);
-      const checksumDurationMs = Date.now() - checksumStartedAt;
-      deploymentLog('verifying', 'Verifying artifact checksum', {
-        durationMs: checksumDurationMs,
-      });
-      phases.complete('artifact download', checksumDurationMs);
-      currentPhase = 'checksum verification';
-      if (actualChecksum !== reference.checksum) {
-        throw new Error(
-          `Artifact checksum mismatch for app "${reference.appId}": expected "${reference.checksum}", received "${actualChecksum}"`,
-        );
-      }
-
-      currentPhase = 'extract';
-      await mkdir(stagingDir, { recursive: true, mode: 0o700 });
-      deploymentLog('extracting', 'Extracting release artifact');
-      const extractStartedAt = Date.now();
-      await extractTar({
-        cwd: stagingDir,
-        file: localPath ?? archivePath,
-        gzip: true,
-        preservePaths: false,
-        strict: true,
-        filter: assertSafeArchiveEntry,
-      });
-      const extractDurationMs = Date.now() - extractStartedAt;
-      phases.complete('extract', extractDurationMs);
-      currentPhase = 'discovery';
-      deploymentLog('preparing', 'Validating application entry point', {
-        extractDurationMs,
-      });
-      const discoveryStartedAt = Date.now();
-      const stagedDefinition = await this.catalog.discoverAt(
-        reference.appId,
-        stagingDir,
-      );
-      assertArtifactIdentity(stagedDefinition, reference);
-      await writeInstalledArtifactMetadata(stagingDir, reference);
-      const discoveryDurationMs = Date.now() - discoveryStartedAt;
-      phases.complete('discovery', discoveryDurationMs);
-      currentPhase = 'revision swap';
-
-      const swapStartedAt = Date.now();
-      try {
-        await rename(targetDir, backupDir);
-        hasBackup = true;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      }
-      await rename(stagingDir, targetDir);
-      installed = true;
-      const definition = await this.catalog.discoverAt(
-        reference.appId,
-        targetDir,
-      );
-      const swapDurationMs = Date.now() - swapStartedAt;
-
-      this.logger?.info(
-        {
-          appId: reference.appId,
-          artifactKey: reference.key,
-          artifactVersion: reference.version,
-          artifactChecksum: reference.checksum,
-          cacheHit: false,
-          checksumDurationMs,
-          extractDurationMs,
-          discoveryDurationMs,
-          swapDurationMs,
-          durationMs: Date.now() - startedAt,
-        },
-        'Installed app artifact',
-      );
-
-      let settled = false;
-      return {
-        reference,
-        definition,
-        cacheHit: false,
-        commit: async (): Promise<void> => {
-          if (settled) return;
-          settled = true;
-          if (hasBackup) {
-            this.removeInBackground(backupDir, reference);
-          }
-        },
-        rollback: async (): Promise<void> => {
-          if (settled) return;
-          settled = true;
-          if (installed) {
-            await rm(targetDir, { recursive: true, force: true });
-          }
-          if (hasBackup) {
-            await rename(backupDir, targetDir);
-          }
-        },
-      };
-    } catch (error) {
-      if (installed) {
-        await rm(targetDir, { recursive: true, force: true });
-      }
-      if (hasBackup) {
-        await rename(backupDir, targetDir);
-      }
-      throw phases.failure(currentPhase, error);
     } finally {
       await rm(archivePath, { force: true });
       await rm(stagingDir, { recursive: true, force: true });
@@ -496,6 +318,10 @@ export class DriveArtifactResolver implements ArtifactResolver {
       ...artifact,
       commit: async (): Promise<void> => {
         if (settled) return;
+        await this.catalog.selectRevision(
+          artifact.reference.appId,
+          artifact.reference.checksum.toLowerCase(),
+        );
         settled = true;
         this.pruneRevisionsInBackground(
           revisionRoot,
@@ -545,31 +371,6 @@ export class DriveArtifactResolver implements ArtifactResolver {
         );
       });
     this.revisionPrunes.set(reference.appId, pruning);
-  }
-
-  private removeInBackground(
-    directory: string,
-    reference: ArtifactReference,
-  ): void {
-    const startedAt = Date.now();
-    void rm(directory, { recursive: true, force: true })
-      .then(() => {
-        this.logger?.info(
-          {
-            appId: reference.appId,
-            artifactKey: reference.key,
-            directory,
-            durationMs: Date.now() - startedAt,
-          },
-          'Removed previous app artifact in background',
-        );
-      })
-      .catch((error: unknown) => {
-        this.logger?.warn(
-          { err: error, appId: reference.appId, directory },
-          'Failed to remove previous app artifact in background',
-        );
-      });
   }
 }
 

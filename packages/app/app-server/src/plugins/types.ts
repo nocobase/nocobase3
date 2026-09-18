@@ -7,7 +7,7 @@ import type { Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
 import type { LocalesModule } from '@nocobase/i18n';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import type { AppRouteContribution } from '../router/index.js';
 
 export interface AppPluginApplication<TConfig = object> {
@@ -21,7 +21,7 @@ export interface AppPluginApplication<TConfig = object> {
   readonly mode?: 'standalone' | 'embedded';
   readonly publicBasePath: string;
   readonly config: AppConfigAccessor & Partial<Record<never, TConfig>>;
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly router: Hono;
   readonly container: ServiceContainer;
 }

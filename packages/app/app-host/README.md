@@ -6,7 +6,7 @@ From the repository root:
 
 ```bash
 pnpm --filter @nocobase/app-host build
-APP_DEPLOYMENTS_DIR="$PWD/packages/app/app-host/fixtures/app-dist" pnpm --filter @nocobase/app-host start
+APP_REVISIONS_DIR="$PWD/packages/app/app-host/fixtures/app-dist" pnpm --filter @nocobase/app-host start
 ```
 
 The workspace start scripts use `tsx` because internal package exports resolve
@@ -16,7 +16,7 @@ resolve to compiled JavaScript instead.
 When embedding `AppHostSupervisor`, use `driver: 'auto'` to follow the loaded package: a supervisor loaded from TypeScript launches the source CLI with `tsx`, while a supervisor loaded from compiled JavaScript launches the compiled CLI with Node. This selection is independent of `NODE_ENV`, so an installed package can run in development without shipping its sources. An omitted driver still defaults to `node`; explicit `node` and `tsx` selections keep their existing behavior.
 
 By default the host listens on `127.0.0.1:3000` and discovers deployed apps
-from `./storage/app-deployments` in the current working directory.
+from `./storage/apps/revisions` in the current working directory.
 
 The CLI loads the `host` namespace once at startup. It accepts `.yml`, `.yaml`,
 and `.json` files. Set `APP_HOST_CONFIG_PATH` to an explicit file or extensionless
@@ -31,25 +31,25 @@ host:
     port: 3000
   artifact:
     driver: fs
-    location: ./storage/app-artifacts
+    location: ./storage/apps/artifacts
     visibility: private
   logging:
     level: info
-  appDeploymentsDir: ./storage/app-deployments
-  appVolumesDir: ./storage/app-volumes
+  appRevisionsDir: ./storage/apps/revisions
+  appVolumesDir: ./storage/apps/volumes
 ```
 
 The Host owns its logging lifecycle. Both development and production write JSON Lines to `storage/host/logs/host.<UTC-date>.<part>.log` and independently emit terminal output. `host.logging.console.pretty` defaults to true in development and false in production. Configure `host.logging.file` with `enabled`, `name`, `retentionDays`, `maxFileSizeMB`, and `maxTotalSizeMB`; `APP_HOST_LOG_LEVEL` overrides the level. The Host selects source `host` explicitly, so no `default` option is needed. See [logging configuration](../../libs/logging/README.md).
 
-Hosted App runtime logs, including lifecycle and initialization failures, belong to `storage/app-volumes/<appId>/storage/logs/app.<UTC-date>.<part>.log`. App sources share that file unless `logging.loggers.<source>.file.name` selects a separate file. The Host passes capture policy and App/deployment/runtime identities to compatible application runtimes. Hub deployment journals remain separate, with one file per deployment operation.
+Hosted App runtime logs, including lifecycle and initialization failures, belong to `storage/apps/volumes/<appId>/storage/logs/app.<UTC-date>.<part>.log`. App sources share that file unless `logging.loggers.<source>.file.name` selects a separate file. The Host passes capture policy and App/deployment/runtime identities to compatible application runtimes. Hub deployment journals remain separate, with one file per deployment operation.
 
 The directories have separate lifecycles:
 
 ```text
 storage/
-  app-artifacts/             immutable release archives
-  app-deployments/<appId>/   standalone package or managed revision cache
-  app-volumes/<appId>/       persistent config.yml/yaml/json and storage/
+  apps/artifacts/           immutable release archives
+  apps/revisions/<appId>/   standalone package or managed revision cache
+  apps/volumes/<appId>/      persistent configuration and storage/
 ```
 
 ## Host modes
@@ -70,7 +70,7 @@ Node IPC channel. Each artifact reference identifies one immutable `.tar.gz`
 object by Drive key, version, app ID, and SHA-256 checksum. The host reads that
 object through its configured `@nocobase/drive` FS or S3 disk, verifies it,
 expands it to the immutable
-`app-deployments/<appId>/revisions/<sha256>` directory, prepares writable
+`apps/revisions/<appId>/<sha256>` directory, prepares writable
 storage at `app-volumes/<appId>/storage`, and reports reconciled state back to
 the Hub. Each Runtime keeps the exact revision root it was started from, so an
 old Runtime cannot observe the new Runtime's code or static assets while it is
@@ -214,6 +214,8 @@ See `fixtures/app-dist/README.md` for the adapter's HTTP-only boundary.
 
 ### Managed revision directory
 
-Managed callers may set `appRevisionsDir` (configuration `host.appRevisionsDir`, environment `APP_REVISIONS_DIR`) to store expanded archives at `<root>/<appId>/<sha256>` without the legacy `revisions` layer. This option is mutually exclusive with `appDeploymentsDir` / `APP_DEPLOYMENTS_DIR` and is rejected in standalone mode. Legacy managed roots retain `<root>/<appId>/revisions/<sha256>`; standalone deployment discovery is unchanged. Preserve installed metadata when migrating and keep volumes separate. Restore requires an installed revision; a missing one requires deployment again.
+Set `appRevisionsDir` (configuration `host.appRevisionsDir`, environment `APP_REVISIONS_DIR`) to store expanded archives at `<root>/<appId>/<sha256>`. Restore requires installed revision metadata; a missing revision requires deployment again. Application volumes remain separate.
 
 Supervisor callers may set `childOutputDir` to capture stdout/stderr as bounded JSON Lines with retention, independently of terminal forwarding. Host logging uses `logging.file.directory`; neither directory is inferred from the generated Host configuration path.
+
+Successful artifact deployment records the selected checksum in `<appId>/.active-revision` atomically. Standalone rescans and restarts use that revision; a failed candidate leaves the selection unchanged. Managed recovery continues to use the desired deployment set. Manually supplied standalone applications may still place their package directly under `<appId>/`.

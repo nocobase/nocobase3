@@ -3,7 +3,7 @@ import type { ExecutionContext, Hono } from 'hono';
 import type { AppConfigAccessor } from '../config/index.js';
 import { type AppIdentityConfig } from '../config/index.js';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import {
   type AppHttpMiddleware,
   type AppRouteContribution,
@@ -48,7 +48,7 @@ export interface ApplicationOptions<
 > {
   readonly config: TConfig;
   readonly mode?: 'standalone' | 'embedded';
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly websocket?: ApplicationWebSocketFactory;
   readonly runtimeLogging?: AppRuntimeLogging;
 }
@@ -83,7 +83,7 @@ export class Application<
   public readonly runtimeLogging: AppRuntimeLogging | undefined;
   public readonly config: TConfig;
   public readonly mode: 'standalone' | 'embedded';
-  public readonly paths: ConfigPaths;
+  public readonly paths: AppPaths;
   public readonly container: ServiceContainer;
   public readonly fetch: ApplicationFetchHandler = async (
     request,

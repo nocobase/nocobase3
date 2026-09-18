@@ -19,13 +19,8 @@ export interface AppInstance extends AppServer {
   readonly config: AppConfigAccessor;
 }
 
-export interface AppPathOptions {
-  readonly rootDir: string;
-  readonly serverDir: string;
-  readonly databaseDir?: string;
-  readonly clientDir?: string;
-  readonly storageDir?: string;
-}
+export type { AppPathOptions, AppPaths } from '../config/paths.js';
+import type { AppPathOptions } from '../config/paths.js';
 
 /**
  * The host-owned runtime boundary passed to an application factory.

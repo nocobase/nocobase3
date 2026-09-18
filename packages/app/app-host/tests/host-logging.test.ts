@@ -34,7 +34,7 @@ it('writes production host logs under storage/host/logs', async () => {
   });
   const host = createAppHost({
     mode: config.mode,
-    appDeploymentsDir: config.appDeploymentsDir,
+    appRevisionsDir: config.appRevisionsDir,
     appVolumesDir: config.appVolumesDir,
     artifact: config.artifact,
     logging: config.logging,

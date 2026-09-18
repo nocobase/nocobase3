@@ -204,14 +204,7 @@ export class DefaultHubService implements HubService {
   }
 
   private desiredConfigPath(appId: string, deploymentId: string): string {
-    return this.options.config.desiredConfigsDir
-      ? path.join(this.desiredConfigsDir(), appId, `${deploymentId}.yml`)
-      : path.join(
-          this.desiredConfigsDir(),
-          appId,
-          'configs',
-          `config.${deploymentId}.yml`,
-        );
+    return path.join(this.desiredConfigsDir(), appId, `${deploymentId}.yml`);
   }
 
   private deploymentLogPath(appId: string, deploymentId: string): string {
@@ -1904,7 +1897,6 @@ export class DefaultHubService implements HubService {
           : {}),
         server: { host: '127.0.0.1', port: 3000 },
         artifact: normalizeArtifactConfig(this.options.config.artifact),
-        appDeploymentsDir: this.options.config.host.appDeploymentsDir,
         appRevisionsDir: this.options.config.host.appRevisionsDir,
         appVolumesDir: this.options.config.host.appVolumesDir,
       },

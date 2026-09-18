@@ -43,7 +43,6 @@ export interface AppHostSupervisorOptions {
   mode?: AppHostMode;
   enabled?: boolean;
   targetUrl?: string;
-  appDeploymentsDir?: string;
   appRevisionsDir?: string;
   appVolumesDir?: string;
   configPath?: string;
@@ -73,7 +72,6 @@ export interface AppHostSupervisorInfo {
   targetUrl?: string;
   pid?: number;
   activeLeases: number;
-  appDeploymentsDir?: string;
   appRevisionsDir?: string;
   appVolumesDir?: string;
   configPath?: string;
@@ -123,7 +121,6 @@ export class AppHostSupervisor {
   private readonly mode: AppHostMode;
   private readonly driver: AppHostDriver;
   private readonly externalUrl?: URL;
-  private readonly appDeploymentsDir?: string;
   private readonly appRevisionsDir?: string;
   private readonly appVolumesDir?: string;
   private readonly configPath?: string;
@@ -164,9 +161,6 @@ export class AppHostSupervisor {
     this.enabled = options.enabled ?? true;
     this.externalUrl = normalizeUrl(options.targetUrl);
     this.driver = this.resolveDriver(options);
-    if (options.appDeploymentsDir && options.appRevisionsDir)
-      throw new Error('Configure only appRevisionsDir or appDeploymentsDir');
-    this.appDeploymentsDir = options.appDeploymentsDir;
     this.appRevisionsDir = options.appRevisionsDir;
     this.appVolumesDir = options.appVolumesDir;
     this.configPath = options.configPath;
@@ -237,7 +231,6 @@ export class AppHostSupervisor {
         this.externalUrl?.toString() ?? this.managedChild?.targetUrl.toString(),
       pid: this.managedChild?.child.pid,
       activeLeases: this.activeLeases,
-      appDeploymentsDir: this.appDeploymentsDir,
       appRevisionsDir: this.appRevisionsDir,
       appVolumesDir: this.appVolumesDir,
       configPath: this.configPath,
@@ -575,7 +568,6 @@ export class AppHostSupervisor {
       APP_HOST_BIND: this.host,
       APP_HOST_MODE: this.mode,
       APP_HOST_SESSION: this.session ?? undefined,
-      APP_DEPLOYMENTS_DIR: this.appDeploymentsDir,
       APP_REVISIONS_DIR: this.appRevisionsDir,
       APP_VOLUMES_DIR: this.appVolumesDir,
       APP_HOST_CONFIG_PATH: this.configPath,

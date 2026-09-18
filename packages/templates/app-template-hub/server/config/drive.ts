@@ -1,15 +1,14 @@
-import { hubStoragePath } from '../storage.js';
 import {
   defineAppConfig,
   type AppConfigFactory,
 } from '@nocobase/app-server/config';
 import type { AppDriveConfig } from '@nocobase/drive';
 
-const drive: AppConfigFactory<AppDriveConfig> = defineAppConfig((runtime) => {
+const drive: AppConfigFactory<AppDriveConfig> = defineAppConfig(({ paths }) => {
   const disks: AppDriveConfig['disks'] = {
     local: {
       driver: 'fs',
-      location: hubStoragePath(runtime, 'hub/files', ''),
+      location: paths.storage('hub/files'),
       visibility: 'private',
     },
     s3: {

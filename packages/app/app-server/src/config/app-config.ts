@@ -15,7 +15,7 @@ import type {
   AppConfigReloadResult,
   AppConfigSource,
 } from './app-config-types.js';
-import type { ConfigPaths } from './types.js';
+import type { AppPaths } from './types.js';
 
 export class AppConfig {
   private readonly sources: AppConfigSource[] = [];
@@ -187,30 +187,11 @@ function resolveConfigFilePath(filePath: string): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
-/**
- * Locate the application config file when no path was configured explicitly.
- *
- * A source checkout keeps `config.yml` at the application root. A built application runs with its root pointing at
- * `dist/`, while `pnpm build --tar` packs `config.example.yml` next to `dist/` rather than inside it, so a deployment
- * writes its `config.yml` there. The root is searched first so a file inside `dist/` keeps working, then the parent of
- * a `dist/` root. When no file exists anywhere the in-root candidate is returned, which keeps the install flow writing
- * to the location it has always used.
- *
- * The returned path carries no extension unless a file was found; `AppConfig.loadFile` completes it.
- */
+/** Resolve deployment configuration independently of the compiled code directory. */
 export function resolveDefaultAppConfigFile(
-  paths: Pick<ConfigPaths, 'root'>,
+  paths: Pick<AppPaths, 'deploymentRootDir'>,
 ): string {
-  const rootDir = paths.root();
-  const candidates = [path.join(rootDir, 'config')];
-  if (path.basename(rootDir) === 'dist') {
-    candidates.push(path.join(path.dirname(rootDir), 'config'));
-  }
-
-  for (const candidate of candidates) {
-    const resolved = resolveConfigFilePath(candidate);
-    if (existsSync(resolved)) return resolved;
-  }
-
-  return candidates[0];
+  const candidate = path.join(paths.deploymentRootDir, 'config');
+  const resolved = resolveConfigFilePath(candidate);
+  return existsSync(resolved) ? resolved : candidate;
 }

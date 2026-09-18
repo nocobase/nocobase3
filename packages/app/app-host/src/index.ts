@@ -72,7 +72,6 @@ export interface AppHostOptions {
   mode?: AppHostMode;
   port?: number;
   host?: string;
-  appDeploymentsDir?: string;
   appRevisionsDir?: string;
   appVolumesDir?: string;
   artifact?: AppDriveDiskConfig;
@@ -99,13 +98,6 @@ export interface AppHost {
 
 export function createAppHost(options: AppHostOptions = {}): AppHost {
   const mode = resolveAppHostMode(options.mode);
-  if (
-    options.appRevisionsDir &&
-    (mode !== 'managed' || options.appDeploymentsDir)
-  )
-    throw new Error(
-      'appRevisionsDir requires managed mode and cannot be combined with appDeploymentsDir',
-    );
   const logging = createLogging(
     options.logging ?? {
       level: 'info',
@@ -114,13 +106,13 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   );
   const logger = logging.getLogger('host');
   const deploymentCatalog = new DeploymentCatalog({
-    deploymentsDir: options.appRevisionsDir ?? options.appDeploymentsDir,
+    deploymentsDir: options.appRevisionsDir,
     volumesDir: options.appVolumesDir,
   });
   const moduleLoader = new AppModuleLoader();
   const artifact = options.artifact ?? {
     driver: 'fs',
-    location: path.resolve(process.cwd(), 'storage', 'app-artifacts'),
+    location: path.resolve(process.cwd(), 'storage', 'apps', 'artifacts'),
     visibility: 'private',
   };
   const drive = createDriveManager({
@@ -130,9 +122,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   const artifactResolver =
     options.artifactResolver ??
     new DriveArtifactResolver(drive.use('artifact'), deploymentCatalog, {
-      ...(options.appRevisionsDir
-        ? { appRevisionsDir: options.appRevisionsDir }
-        : { appDeploymentsDir: deploymentCatalog.deploymentsDir }),
+      appRevisionsDir: deploymentCatalog.deploymentsDir,
       localArtifactDir:
         artifact.driver === 'fs' ? artifact.location : undefined,
       logger: logger.child({ component: 'artifact-resolver' }),
@@ -390,7 +380,6 @@ export async function startAppHostFromEnv(): Promise<AppHost> {
     mode: config.mode,
     port: config.server.port,
     host: config.server.host,
-    appDeploymentsDir: config.appDeploymentsDir,
     appRevisionsDir: config.appRevisionsDir,
     appVolumesDir: config.appVolumesDir,
     artifact: config.artifact,
@@ -503,12 +492,12 @@ async function managementApi(
       mode,
       packages: {
         appHost: '@nocobase/app-host',
-        appDeploymentsDir: deploymentCatalog.deploymentsDir,
+        appRevisionsDir: deploymentCatalog.deploymentsDir,
         appVolumesDir: deploymentCatalog.volumesDir,
       },
       examples: [
-        'add app-deployments/acme/dist/server/embedded.js, then call POST /__apps/rescan',
-        'put hashed static files under app-deployments/acme/dist/client/assets for /acme/assets/*',
+        'add storage/apps/revisions/acme/dist/server/embedded.js, then call POST /__apps/rescan',
+        'put hashed static files under storage/apps/revisions/acme/dist/client/assets for /acme/assets/*',
         'curl -X POST http://localhost:3000/__apps/rescan',
         'curl -X POST http://localhost:3000/__apps/acme/activate',
         'curl -X POST http://localhost:3000/__apps/acme/deploy',
@@ -636,7 +625,7 @@ async function managementApi(
     return jsonResponse(
       {
         error:
-          'App creation through API is disabled. Add app-deployments/<app>/dist/server/embedded.js and call POST /__apps/rescan.',
+          'App creation through API is disabled. Add storage/apps/revisions/<app>/dist/server/embedded.js and call POST /__apps/rescan.',
       },
       {
         status: 405,

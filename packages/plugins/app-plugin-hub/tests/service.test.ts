@@ -123,7 +123,7 @@ describe('@nocobase/app-plugin-hub service', () => {
         host: {
           enabled: true,
           driver: 'tsx',
-          appDeploymentsDir: path.join(rootDir, 'app-deployments'),
+          appRevisionsDir: path.join(rootDir, 'app-deployments'),
           appVolumesDir: path.join(rootDir, 'app-volumes'),
           configPath: path.join(rootDir, 'hub', 'host-config.yml'),
         },
@@ -266,7 +266,7 @@ describe('@nocobase/app-plugin-hub service', () => {
       ),
     ).toEqual([]);
     expect(
-      await readdir(path.join(rootDir, 'hub/app-configs/customer/configs')),
+      await readdir(path.join(rootDir, 'hub/app-configs/customer')),
     ).toEqual([]);
   });
 
@@ -1753,9 +1753,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     const completed = await waitForDeployment(service, 'customer', rollback.id);
     expect(completed.config.path).not.toBe(first.config.path);
-    expect(path.basename(completed.config.path!)).toBe(
-      `config.${completed.id}.yml`,
-    );
+    expect(path.basename(completed.config.path!)).toBe(`${completed.id}.yml`);
     await vi.waitFor(async () => {
       await expect(stat(first.config.path!)).rejects.toMatchObject({
         code: 'ENOENT',

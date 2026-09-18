@@ -6,10 +6,7 @@ import {
   type AppDatabaseTasksResult,
 } from '@nocobase/app-server/database';
 import type { AppDatabaseTask } from '@nocobase/app-server/database';
-import type {
-  AppConfigAccessor,
-  ConfigPaths,
-} from '@nocobase/app-server/config';
+import type { AppConfigAccessor, AppPaths } from '@nocobase/app-server/config';
 import {
   createAppDatabaseTaskContributions,
   type ResolvedAppServerPlugins,
@@ -33,7 +30,7 @@ export async function runDatabaseCommand(
   },
   resolveRuntime: () => Promise<{
     config: AppConfigAccessor;
-    configPaths: ConfigPaths;
+    paths: AppPaths;
     plugins: ResolvedAppServerPlugins;
   }>,
 ): Promise<void> {
@@ -59,7 +56,7 @@ export async function runDatabaseCommand(
     result = await runAppDatabaseTasks(
       runtime.config.get<AppDatabaseConfig>('database')!,
       {
-        paths: runtime.configPaths,
+        paths: runtime.paths,
         runtimeConfig: runtime.config,
         // Plugin migrations and seeds are resolved from the registered plugins,
         // never from config.yml, so they cannot be configured away.

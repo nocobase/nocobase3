@@ -50,7 +50,7 @@ describe('managed host reconciliation', () => {
       const fixture = await createFixture();
       const host = createAppHost({
         mode: 'managed',
-        appDeploymentsDir: fixture.deploymentsDir,
+        appRevisionsDir: fixture.deploymentsDir,
         appVolumesDir: fixture.volumesDir,
         artifact: fsArtifact(fixture.artifactDir),
         evictionIntervalMs: 0,
@@ -70,8 +70,7 @@ describe('managed host reconciliation', () => {
         .spyOn(fsPromises, 'readdir')
         .mockImplementation(async (...args: Parameters<typeof original>) => {
           if (
-            String(args[0]) ===
-            path.join(fixture.deploymentsDir, 'customer', 'revisions')
+            String(args[0]) === path.join(fixture.deploymentsDir, 'customer')
           ) {
             pruningStarted = true;
             await gate;
@@ -107,7 +106,7 @@ describe('managed host reconciliation', () => {
     const fixture = await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: fixture.deploymentsDir,
+      appRevisionsDir: fixture.deploymentsDir,
       appVolumesDir: fixture.volumesDir,
       artifact: fsArtifact(fixture.artifactDir),
       evictionIntervalMs: 0,
@@ -162,7 +161,7 @@ describe('managed host reconciliation', () => {
     const fixture = await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: fixture.deploymentsDir,
+      appRevisionsDir: fixture.deploymentsDir,
       appVolumesDir: fixture.volumesDir,
       artifact: fsArtifact(fixture.artifactDir),
       evictionIntervalMs: 0,
@@ -183,7 +182,7 @@ describe('managed host reconciliation', () => {
     const fixture = await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: fixture.deploymentsDir,
+      appRevisionsDir: fixture.deploymentsDir,
       appVolumesDir: fixture.volumesDir,
       artifact: fsArtifact(fixture.artifactDir),
       evictionIntervalMs: 0,
@@ -219,7 +218,7 @@ describe('managed host reconciliation', () => {
     const fixture = await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: fixture.deploymentsDir,
+      appRevisionsDir: fixture.deploymentsDir,
       appVolumesDir: fixture.volumesDir,
       artifact: fsArtifact(fixture.artifactDir),
       evictionIntervalMs: 0,
@@ -287,7 +286,7 @@ describe('managed host reconciliation', () => {
     const fixture = await createFixture();
     const options = {
       mode: 'managed' as const,
-      appDeploymentsDir: fixture.deploymentsDir,
+      appRevisionsDir: fixture.deploymentsDir,
       appVolumesDir: fixture.volumesDir,
       artifact: fsArtifact(fixture.artifactDir),
       evictionIntervalMs: 0,
@@ -332,7 +331,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -380,7 +379,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -448,7 +447,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -475,7 +474,7 @@ describe('managed host reconciliation', () => {
     const replacement = await createArtifact(fixture, '1.2.4');
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -505,7 +504,7 @@ describe('managed host reconciliation', () => {
     const { deploymentsDir, volumesDir, artifactDir } = fixture;
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -555,7 +554,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -586,7 +585,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -617,7 +616,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -640,7 +639,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -663,7 +662,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -693,7 +692,7 @@ describe('managed host reconciliation', () => {
       mode: 'managed',
       host: '127.0.0.1',
       port: 0,
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -723,7 +722,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -742,7 +741,7 @@ describe('managed host reconciliation', () => {
       await createFixture();
     const host = createAppHost({
       mode: 'managed',
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -780,7 +779,7 @@ describe('managed host reconciliation', () => {
       mode: 'managed',
       host: '127.0.0.1',
       port: 0,
-      appDeploymentsDir: deploymentsDir,
+      appRevisionsDir: deploymentsDir,
       appVolumesDir: volumesDir,
       artifact: fsArtifact(artifactDir),
       evictionIntervalMs: 0,
@@ -806,14 +805,14 @@ describe('managed host reconciliation', () => {
   });
 });
 
-it('deploys a release artifact into app-deployments in standalone mode', async () => {
+it('deploys a release artifact into immutable revisions in standalone mode', async () => {
   const { deploymentsDir, volumesDir, artifact, artifactDir } =
     await createFixture();
   const host = createAppHost({
     mode: 'standalone',
     host: '127.0.0.1',
     port: 0,
-    appDeploymentsDir: deploymentsDir,
+    appRevisionsDir: deploymentsDir,
     appVolumesDir: volumesDir,
     artifact: fsArtifact(artifactDir),
     evictionIntervalMs: 0,
@@ -837,7 +836,11 @@ it('deploys a release artifact into app-deployments in standalone mode', async (
   expect(response.status).toBe(200);
   expect(host.registry.isActive('customer')).toBe(true);
   expect(host.registry.definition('customer')?.rootDir).toBe(
-    path.join(deploymentsDir, 'customer'),
+    revisionDirectory(deploymentsDir, artifact),
+  );
+  const catalog = new DeploymentCatalog({ deploymentsDir, volumesDir });
+  expect((await catalog.discover())[0]?.rootDir).toBe(
+    revisionDirectory(deploymentsDir, artifact),
   );
 });
 
@@ -936,7 +939,6 @@ function revisionDirectory(
   return path.join(
     deploymentsDir,
     artifact.appId,
-    'revisions',
     artifact.checksum.toLowerCase(),
   );
 }
@@ -946,7 +948,7 @@ async function revisionNames(
   appId: string,
 ): Promise<string[]> {
   return (
-    await readdir(path.join(deploymentsDir, appId, 'revisions'), {
+    await readdir(path.join(deploymentsDir, appId), {
       withFileTypes: true,
     })
   )

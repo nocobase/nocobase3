@@ -350,4 +350,10 @@ Navigation groups retain their expanded or collapsed state while the navigation 
 
 ## Storage paths
 
-New Hub installations use `hub/`, `host/`, and `apps/{artifacts,revisions,volumes}` under one persistent storage root outside `dist`; build exports use `storage/exports`. Define defaults through `server/storage.ts`. Keep desired configurations, deployment logs and child-output directories explicit, independent of Host config placement. Existing roots keep legacy defaults until the offline `app storage migrate` command is applied. Do not move live data or rewrite deployed artifacts. See README.MD for migration, retry and rollback rules. Never treat standalone Host deployments as managed revision caches.
+Hub uses `hub/`, `host/`, and `apps/{artifacts,revisions,volumes}` under one persistent storage root outside compiled code; build exports use `storage/exports`. Define module paths with `paths.storage(...)` and standalone storage policy in `server/paths.ts`. Keep desired configurations, deployment logs and child-output directories explicit and independent of Host config placement. Expanded releases use `<appId>/<sha256>`; restart recovery requires installed metadata.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

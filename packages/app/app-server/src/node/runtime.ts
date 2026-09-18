@@ -64,13 +64,17 @@ export async function createStandaloneServer(
   options: CreateStandaloneServerOptions,
 ): Promise<StandaloneServer> {
   const {
-    appRuntime: _appRuntime,
+    appRuntime,
     createServer,
     proxy: configureProxy,
     ...serverOptions
   } = options;
   const scope = createStandaloneRuntimeScope(
-    resolveStandaloneServerScopeOptions(serverOptions),
+    resolveStandaloneServerScopeOptions({
+      ...serverOptions,
+      deploymentRootDir:
+        serverOptions.deploymentRootDir ?? appRuntime.deploymentRootDir,
+    }),
   );
 
   try {
@@ -153,7 +157,14 @@ export function resolveStandaloneAppRuntime(
   definition: AppRuntimeDefinition,
   options: CreateStandaloneRuntimeScopeOptions,
 ): Promise<ResolvedAppRuntime> {
-  return resolveAppRuntime(definition, createStandaloneRuntimeScope(options));
+  return resolveAppRuntime(
+    definition,
+    createStandaloneRuntimeScope({
+      ...options,
+      deploymentRootDir:
+        options.deploymentRootDir ?? definition.deploymentRootDir,
+    }),
+  );
 }
 
 async function startStandaloneServer(

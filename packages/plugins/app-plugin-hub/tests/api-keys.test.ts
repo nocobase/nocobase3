@@ -1099,7 +1099,7 @@ describe('Hub API Key HTTP boundary', () => {
         host: {
           enabled: true,
           driver: 'tsx',
-          appDeploymentsDir: path.join(root, 'deployments'),
+          appRevisionsDir: path.join(root, 'deployments'),
           appVolumesDir: path.join(root, 'volumes'),
           configPath: path.join(root, 'host.yml'),
         },

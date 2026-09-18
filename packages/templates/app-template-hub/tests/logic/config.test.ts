@@ -44,7 +44,7 @@ describe('application config', () => {
   beforeAll(async () => {
     configRoot = await mkdtemp(path.join(os.tmpdir(), 'app-config-test-'));
     configPath = path.join(configRoot, 'config.yml');
-    await writeFile(configPath, 'hub:\n  storageLayout: v2\n');
+    await writeFile(configPath, '{}\n');
   });
   afterAll(async () => {
     await rm(configRoot, { recursive: true, force: true });
@@ -57,12 +57,11 @@ describe('application config', () => {
       configPath,
       env: { HUB_STORAGE_DIR: storage },
     });
-    expect(runtime.configPaths.storage()).toBe(storage);
+    expect(runtime.paths.storage()).toBe(storage);
     expect(runtime.paths.storageDir).toBe(storage);
     expect(runtime.config.get('hub.host.appRevisionsDir')).toBe(
       path.join(storage, 'apps/revisions'),
     );
-    expect(runtime.config.get('hub.host.appDeploymentsDir')).toBeUndefined();
     expect(runtime.config.get('hub.host.configPath')).toBe(
       path.join(storage, 'host/runtime/config.yml'),
     );

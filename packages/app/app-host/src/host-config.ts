@@ -38,7 +38,6 @@ export interface AppHostConfig {
   };
   artifact: AppDriveDiskConfig;
   logging: LoggingConfig;
-  appDeploymentsDir?: string;
   appRevisionsDir?: string;
   appVolumesDir: string;
   maxActiveApps?: number;
@@ -74,11 +73,11 @@ export async function loadAppHostConfig(
         server: { host: '127.0.0.1', port: 3000 },
         artifact: {
           driver: 'fs',
-          location: path.join(rootDir, 'storage', 'app-artifacts'),
+          location: path.join(rootDir, 'storage', 'apps', 'artifacts'),
           visibility: 'private',
         },
         logging: createDefaultHostLoggingConfig(rootDir, environment.NODE_ENV),
-        appVolumesDir: path.join(rootDir, 'storage', 'app-volumes'),
+        appVolumesDir: path.join(rootDir, 'storage', 'apps', 'volumes'),
       },
     }),
   );
@@ -92,7 +91,6 @@ export async function loadAppHostConfig(
         APP_HOST_BIND: envString('host.server.host'),
         APP_HOST_PORT: envInteger('host.server.port'),
         PORT: envInteger('host.server.port'),
-        APP_DEPLOYMENTS_DIR: envString('host.appDeploymentsDir'),
         APP_REVISIONS_DIR: envString('host.appRevisionsDir'),
         APP_VOLUMES_DIR: envString('host.appVolumesDir'),
         MAX_ACTIVE_APPS: envInteger('host.maxActiveApps'),
@@ -161,20 +159,10 @@ function decodeAppHostConfig(config: Config, rootDir: string): AppHostConfig {
   const host = required(hostConfig.string('server.host'), 'host.server.host');
   const port = positiveInteger(hostConfig, 'server.port');
   const revisions = hostConfig.string('appRevisionsDir');
-  const deployments = hostConfig.string('appDeploymentsDir');
-  if (revisions && (mode !== 'managed' || deployments))
-    throw new Error(
-      'appRevisionsDir requires managed mode and cannot be combined with appDeploymentsDir',
-    );
-  const appRevisionsDir = revisions
-    ? resolveConfigDirectory(revisions, rootDir)
-    : undefined;
-  const appDeploymentsDir = revisions
-    ? undefined
-    : resolveConfigDirectory(
-        deployments ?? path.join(rootDir, 'storage', 'app-deployments'),
-        rootDir,
-      );
+  const appRevisionsDir = resolveConfigDirectory(
+    revisions ?? 'storage/apps/revisions',
+    rootDir,
+  );
   const appVolumesDir = resolveConfigDirectory(
     required(hostConfig.string('appVolumesDir'), 'host.appVolumesDir'),
     rootDir,
@@ -199,7 +187,6 @@ function decodeAppHostConfig(config: Config, rootDir: string): AppHostConfig {
     server: { host, port },
     artifact,
     logging: { ...hostConfig.cut('logging').raw() },
-    appDeploymentsDir,
     appRevisionsDir,
     appVolumesDir,
     maxActiveApps: optionalPositiveInteger(hostConfig, 'maxActiveApps'),

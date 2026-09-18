@@ -82,9 +82,8 @@ logging:
     # Set true for human-readable terminal output.
     pretty: false
 
-# New installations use v2. Existing installations retain the legacy layout until storage:migrate.
+# Hub, Host, releases and application volumes use separate storage directories.
 hub:
-  # storageLayout: v2
   logging:
     deployments:
       enabled: true

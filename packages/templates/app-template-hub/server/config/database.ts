@@ -1,4 +1,3 @@
-import { hubStoragePath } from '../storage.js';
 import sqlite from '@nocobase/db-sqlite';
 import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
 
@@ -7,17 +6,13 @@ import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
  * than settings, so they are declared here and cannot be overridden from
  * config.yml; a connection may only use a dialect listed here.
  */
-export default defineAppDatabaseConfig((runtime) => ({
+export default defineAppDatabaseConfig(({ paths }) => ({
   drivers: { sqlite },
   default: 'main',
   connections: {
     main: {
       dialect: 'sqlite',
-      filename: hubStoragePath(
-        runtime,
-        'hub/database/main.sqlite',
-        'database.sqlite',
-      ),
+      filename: paths.storage('hub/database/main.sqlite'),
       schemaManagement: 'managed',
       debug: false,
     },
