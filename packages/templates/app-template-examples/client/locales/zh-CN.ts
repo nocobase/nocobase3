@@ -1,6 +1,12 @@
 import type { AppResource } from './en-US.js';
 
 const zhCN: AppResource = {
+  notifications: { unreadLabel: '通知中心，{{count}} 条未读' },
+  overrides: {
+    '@nocobase/app-plugin-notification-in-app': {
+      inbox: { title: '通知中心' },
+    },
+  },
   routeOverlays: {
     title: '路由弹窗与抽屉',
     description:
@@ -111,6 +117,10 @@ const zhCN: AppResource = {
     },
   },
   examples: {
+    notifications: {
+      title: '通知中心',
+      description: '查看发给你的站内通知，筛选未读消息并管理已读状态。',
+    },
     routeOverlays: {
       title: '路由弹窗与抽屉',
       description:
@@ -258,6 +268,7 @@ const zhCN: AppResource = {
     signingOut: '正在退出…',
   },
   navigation: {
+    notifications: '通知中心',
     numbers: '数字类型',
     externalCrm: '外部 CRM',
     routeOverlays: '路由弹窗与抽屉',
