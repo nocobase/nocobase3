@@ -128,8 +128,12 @@ describe('@nocobase/app-plugin-users Client routes', () => {
 
   it('loads every user action for button-level access control', async () => {
     const can = vi.fn(
-      (_resource: { type: string; id: string }, action: string) =>
-        Promise.resolve(action === 'update'),
+      ({
+        action,
+      }: {
+        resource: { type: string; id: string };
+        action: string;
+      }) => Promise.resolve(action === 'update'),
     );
 
     await expect(loadUserCapabilities({ can }, 'user-1')).resolves.toEqual({
@@ -138,8 +142,7 @@ describe('@nocobase/app-plugin-users Client routes', () => {
     });
     expect(can.mock.calls).toEqual(
       USER_MANAGEMENT_ACTIONS.map((action) => [
-        { type: 'user', id: 'user-1' },
-        action,
+        { resource: { type: 'user', id: 'user-1' }, action },
       ]),
     );
   });
@@ -153,7 +156,7 @@ describe('@nocobase/app-plugin-users Client routes', () => {
         {
           name: 'users',
           path: '/users',
-          access: { resource: 'users', action: 'access' },
+          authz: { resource: { type: 'page', id: 'users' }, action: 'access' },
         },
       ],
     });
@@ -177,7 +180,7 @@ describe('@nocobase/app-plugin-users Client routes', () => {
           name: 'users',
           path: '/team/users',
           auth: 'required',
-          access: { resource: 'users', action: 'access' },
+          authz: { resource: { type: 'page', id: 'users' }, action: 'access' },
           navigation: { title: 'nav.users', icon: UsersRound },
         },
       ],

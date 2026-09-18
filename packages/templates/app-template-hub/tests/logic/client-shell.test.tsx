@@ -16,13 +16,9 @@ import {
 } from '@nocobase/app-plugin-authentication/client';
 import {
   AuthorizationClient,
+  type AuthorizationCheck,
   authorizationClientToken,
 } from '@nocobase/app-plugin-authorization/client';
-import {
-  Refine,
-  type AccessControlProvider,
-  type AuthProvider,
-} from '@refinedev/core';
 import {
   act,
   fireEvent,
@@ -54,7 +50,7 @@ describe('application shell', () => {
   });
 
   it('wraps authenticated application pages with navigation and user controls', async () => {
-    renderApplication('/', createAuthProvider(true));
+    renderApplication('/', true);
 
     expect(
       await screen.findByRole('navigation', { name: 'Application navigation' }),
@@ -92,11 +88,12 @@ describe('application shell', () => {
   it.each([true, false])(
     'shows the Settings entry only when a page is accessible (%s)',
     async (allowed) => {
-      const can = vi.fn(async ({ resource }: { resource?: string }) => ({
-        can: resource !== 'preferences' || allowed,
-      }));
-      renderApplication('/', createAuthProvider(true), [], {
-        accessControlProvider: { can },
+      const can = vi.fn(
+        async ({ resource }: AuthorizationCheck) =>
+          resource.id !== 'preferences' || allowed,
+      );
+      renderApplication('/', true, [], {
+        authorization: { can },
         settingsRouteTree: [
           createRoute(
             'preferences',
@@ -113,7 +110,7 @@ describe('application shell', () => {
       await waitFor(() =>
         expect(can).toHaveBeenCalledWith(
           expect.objectContaining({
-            resource: 'preferences',
+            resource: { type: 'page', id: 'preferences' },
             action: 'access',
           }),
         ),
@@ -144,7 +141,7 @@ describe('application shell', () => {
       navigation: { title: 'Orders' },
       children: [child],
     };
-    renderApplication('/orders/42', createAuthProvider(true), [parent]);
+    renderApplication('/orders/42', true, [parent]);
     expect(await screen.findByText('Order detail')).toBeVisible();
     expect(screen.getByText('Orders layout')).toBeVisible();
     expect(
@@ -173,7 +170,7 @@ describe('application shell', () => {
       navigation: { title: 'Orders' },
       children: [child],
     };
-    renderApplication('/orders', createAuthProvider(true), [parent]);
+    renderApplication('/orders', true, [parent]);
     expect(await screen.findByRole('link', { name: 'Orders' })).toHaveAttribute(
       'href',
       '/orders',
@@ -191,7 +188,7 @@ describe('application shell', () => {
   });
 
   it('collapses and expands the desktop navigation', async () => {
-    renderApplication('/', createAuthProvider(true));
+    renderApplication('/', true);
 
     const sidebar = await screen.findByRole('complementary', {
       name: 'Application navigation',
@@ -210,7 +207,7 @@ describe('application shell', () => {
   });
 
   it('opens and closes the mobile navigation without changing the route', async () => {
-    renderApplication('/', createAuthProvider(true));
+    renderApplication('/', true);
     await screen.findByRole('navigation', { name: 'Application navigation' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
@@ -227,7 +224,7 @@ describe('application shell', () => {
   });
 
   it('keeps guest pages outside the application shell', async () => {
-    renderApplication('/login', createAuthProvider(false), [
+    renderApplication('/login', false, [
       createRoute('login', '/login', 'guest', GuestPage),
     ]);
 
@@ -266,7 +263,10 @@ describe('application shell', () => {
           expect.objectContaining({
             packageName: '@nocobase/app-plugin-api-keys',
             path: '/settings/api-keys',
-            access: { resource: 'api-keys', action: 'access' },
+            authz: {
+              resource: { type: 'page', id: 'api-keys' },
+              action: 'access',
+            },
           }),
         ]),
       );
@@ -278,9 +278,9 @@ describe('application shell', () => {
         ),
       });
       const authClient = createTestAuthClient(true);
-      const can = vi.fn(async () => ({ can: allowed }));
-      renderApplication('/settings/api-keys', createAuthProvider(true), [], {
-        accessControlProvider: { can },
+      const can = vi.fn(async () => allowed);
+      renderApplication('/settings/api-keys', true, [], {
+        authorization: { can },
         settingsRouteTree,
         authClient,
         i18n,
@@ -312,17 +312,20 @@ describe('application shell', () => {
         ).not.toBeInTheDocument();
       }
       expect(can).toHaveBeenCalledWith(
-        expect.objectContaining({ resource: 'api-keys', action: 'access' }),
+        expect.objectContaining({
+          resource: { type: 'page', id: 'api-keys' },
+          action: 'access',
+        }),
       );
     },
   );
 
   it('redirects the authorized Hub root through the Hub access rule', async () => {
-    const can = vi.fn().mockResolvedValue({ can: true });
+    const can = vi.fn().mockResolvedValue(true);
     const rootDefinition = applicationRoutes[0].routes[0];
     renderApplication(
       '/',
-      createAuthProvider(true),
+      true,
       [
         {
           ...rootDefinition,
@@ -333,27 +336,32 @@ describe('application shell', () => {
         },
         {
           ...createRoute('apps', '/apps', 'required', ApplicationsPage),
-          access: { resource: 'hub', action: 'access' },
+          authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
         },
       ],
-      { accessControlProvider: { can } },
+      { authorization: { can } },
     );
 
     expect(
       await screen.findByRole('heading', { name: 'Applications page' }),
     ).toBeVisible();
     expect(can).toHaveBeenCalledWith(
-      expect.objectContaining({ resource: 'hub', action: 'access' }),
+      expect.objectContaining({
+        resource: { type: 'page', id: 'hub' },
+        action: 'access',
+      }),
     );
     expect(can).not.toHaveBeenCalledWith(
-      expect.objectContaining({ resource: 'applications-root' }),
+      expect.objectContaining({
+        resource: { type: 'page', id: 'applications-root' },
+      }),
     );
   });
 
   it('shows a protected navigation entry as selected when access is allowed', async () => {
     renderApplication(
       '/users',
-      createAuthProvider(true),
+      true,
       [
         createRoute(
           'users',
@@ -366,8 +374,8 @@ describe('application shell', () => {
         ),
       ],
       {
-        accessControlProvider: {
-          can: vi.fn().mockResolvedValue({ can: true }),
+        authorization: {
+          can: vi.fn().mockResolvedValue(true),
         },
       },
     );
@@ -379,10 +387,10 @@ describe('application shell', () => {
   });
 
   it('never discloses a protected navigation entry when access is denied', async () => {
-    const can = vi.fn().mockResolvedValue({ can: false });
+    const can = vi.fn().mockResolvedValue(false);
     renderApplication(
       '/users',
-      createAuthProvider(true),
+      true,
       [
         createRoute(
           'users',
@@ -395,7 +403,7 @@ describe('application shell', () => {
         ),
       ],
       {
-        accessControlProvider: { can },
+        authorization: { can },
       },
     );
 
@@ -406,7 +414,10 @@ describe('application shell', () => {
       await screen.findByRole('heading', { name: 'Access denied' }),
     ).toBeVisible();
     expect(can).toHaveBeenCalledWith(
-      expect.objectContaining({ resource: 'users', action: 'access' }),
+      expect.objectContaining({
+        resource: { type: 'page', id: 'users' },
+        action: 'access',
+      }),
     );
     expect(
       screen.queryByRole('link', { name: 'User management' }),
@@ -416,7 +427,7 @@ describe('application shell', () => {
   it('orders Hub navigation and puts users before roles', async () => {
     renderApplication(
       '/users',
-      createAuthProvider(true),
+      true,
       [
         createRoute(
           'roles',
@@ -444,8 +455,8 @@ describe('application shell', () => {
         ),
       ],
       {
-        accessControlProvider: {
-          can: vi.fn().mockResolvedValue({ can: true }),
+        authorization: {
+          can: vi.fn().mockResolvedValue(true),
         },
       },
     );
@@ -465,10 +476,10 @@ describe('application shell', () => {
 
 function renderApplication(
   initialEntry: string,
-  authProvider: AuthProvider,
+  authenticated: boolean,
   routes: readonly AppClientRegisteredRoute[] = [],
   options: {
-    readonly accessControlProvider?: AccessControlProvider;
+    readonly authorization?: Pick<AuthorizationClient, 'can'>;
     readonly authClient?: ReturnType<typeof createTestAuthClient>;
     readonly i18n?: I18nRuntime;
     readonly settingsRouteTree?: readonly AppClientRegisteredRoute[];
@@ -480,12 +491,13 @@ function renderApplication(
         createRoute('home', '/', 'required', HomePage, 'application'),
         ...routes,
       ];
-  const authenticated =
-    (authProvider as TestAuthProvider).authenticated ?? true;
   const authClient = options.authClient ?? createTestAuthClient(authenticated);
   const authorizationClient = new AuthorizationClient({
     request: vi.fn(),
   } as never);
+  vi.spyOn(authorizationClient, 'can').mockImplementation(
+    (request) => options.authorization?.can(request) ?? Promise.resolve(true),
+  );
   const apiClient = {
     request: vi.fn().mockResolvedValue({
       fallback: false,
@@ -509,30 +521,11 @@ function renderApplication(
       <AuthenticationProvider>
         <MemoryRouter initialEntries={[initialEntry]}>
           <AppThemeProvider>
-            <Refine
-              accessControlProvider={options.accessControlProvider}
-              authProvider={authProvider}
-              dataProvider={{
-                getList: vi.fn(),
-                getMany: vi.fn(),
-                getOne: vi.fn(),
-                create: vi.fn(),
-                createMany: vi.fn(),
-                update: vi.fn(),
-                updateMany: vi.fn(),
-                deleteOne: vi.fn(),
-                deleteMany: vi.fn(),
-                getApiUrl: vi.fn(),
-                custom: vi.fn(),
-              }}
-              options={{ disableTelemetry: true }}
-            >
-              <AppRouter
-                devRouteTree={[]}
-                clientRoutes={clientRoutes}
-                settingsRouteTree={options.settingsRouteTree ?? []}
-              />
-            </Refine>
+            <AppRouter
+              devRouteTree={[]}
+              clientRoutes={clientRoutes}
+              settingsRouteTree={options.settingsRouteTree ?? []}
+            />
           </AppThemeProvider>
         </MemoryRouter>
       </AuthenticationProvider>
@@ -545,28 +538,6 @@ function renderApplication(
       content
     ),
   );
-}
-
-interface TestAuthProvider extends AuthProvider {
-  readonly authenticated: boolean;
-}
-
-function createAuthProvider(authenticated: boolean): TestAuthProvider {
-  return {
-    authenticated,
-    check: async () => ({ authenticated }),
-    getIdentity: async () =>
-      authenticated
-        ? {
-            email: 'alice@example.com',
-            fullName: 'Alice',
-            id: 1,
-          }
-        : null,
-    login: vi.fn(),
-    logout: vi.fn().mockResolvedValue({ success: true }),
-    onError: async (error) => ({ error }),
-  };
 }
 
 function createTestAuthClient(authenticated: boolean) {
@@ -611,7 +582,9 @@ function createRoute(
     path,
     source,
     ...(navigationTitle ? { navigation: { title: navigationTitle } } : {}),
-    ...(protectedRoute ? { access: { resource: name, action: 'access' } } : {}),
+    ...(protectedRoute
+      ? { authz: { resource: { type: 'page', id: name }, action: 'access' } }
+      : { authz: 'skip' as const }),
   };
 }
 

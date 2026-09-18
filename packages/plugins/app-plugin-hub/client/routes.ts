@@ -8,11 +8,11 @@ import { Boxes, ShieldCheck, KeyRound } from 'lucide-react';
 import type { HubClientOptions } from './plugin.js';
 
 export const HUB_APPLICATIONS_ACCESS = {
-  resource: 'hub',
+  resource: { type: 'page', id: 'hub' },
   action: 'access',
 } as const;
 export const HUB_USER_ACCESS = {
-  resource: 'users',
+  resource: { type: 'page', id: 'users' },
   action: 'access',
 } as const;
 
@@ -24,7 +24,7 @@ export function createHubRoutes(
       name: 'hub',
       path: normalizeHubRoutePath(options.applicationsPath ?? '/hub'),
       auth: 'required',
-      access: HUB_APPLICATIONS_ACCESS,
+      authz: HUB_APPLICATIONS_ACCESS,
       navigation: { title: 'navigation.applications', icon: Boxes },
       componentLoader: () => import('./pages/hub-page.js'),
       children: [
@@ -36,14 +36,20 @@ export function createHubRoutes(
             {
               name: 'hub-app-deployments',
               path: 'deployments',
-              access: { resource: 'hub.app:*', action: 'read-deployment' },
+              authz: {
+                resource: { type: 'hub.app', id: '*' },
+                action: 'read-deployment',
+              },
               componentLoader: () =>
                 import('./pages/hub/tabs/deployments-page.js'),
               children: [
                 {
                   name: 'hub-deployment-logs',
                   path: ':deploymentId/logs',
-                  access: { resource: 'hub.app:*', action: 'read-deployment' },
+                  authz: {
+                    resource: { type: 'hub.app', id: '*' },
+                    action: 'read-deployment',
+                  },
                   componentLoader: () =>
                     import('./pages/hub/tabs/deployment-logs-page.js'),
                 },
@@ -52,34 +58,49 @@ export function createHubRoutes(
             {
               name: 'hub-app-logs',
               path: 'logs',
-              access: { resource: 'hub.app:*', action: 'read-log' },
+              authz: {
+                resource: { type: 'hub.app', id: '*' },
+                action: 'read-log',
+              },
               componentLoader: () => import('./pages/hub/tabs/logs-page.js'),
             },
             {
               name: 'hub-app-releases',
               path: 'releases',
-              access: { resource: 'hub.app:*', action: 'read-release' },
+              authz: {
+                resource: { type: 'hub.app', id: '*' },
+                action: 'read-release',
+              },
               componentLoader: () =>
                 import('./pages/hub/tabs/releases-page.js'),
             },
             {
               name: 'hub-app-development',
               path: 'development',
-              access: { resource: 'hub.app:*', action: 'upload-release' },
+              authz: {
+                resource: { type: 'hub.app', id: '*' },
+                action: 'upload-release',
+              },
               componentLoader: () =>
                 import('./pages/hub/tabs/development-page.js'),
             },
             {
               name: 'hub-app-resources',
               path: 'resources',
-              access: { resource: 'hub.app:*', action: 'read-config' },
+              authz: {
+                resource: { type: 'hub.app', id: '*' },
+                action: 'read-config',
+              },
               componentLoader: () =>
                 import('./pages/hub/tabs/resources-page.js'),
             },
             {
               name: 'hub-app-configuration',
               path: 'configuration',
-              access: { resource: 'hub.app:*', action: 'read-config' },
+              authz: {
+                resource: { type: 'hub.app', id: '*' },
+                action: 'read-config',
+              },
               componentLoader: () =>
                 import('./pages/hub/tabs/configuration-page.js'),
             },
@@ -99,7 +120,7 @@ export function createHubRoutes(
       name: 'hub-roles',
       path: normalizeHubRoutePath(options.rolesPath),
       auth: 'required',
-      access: HUB_USER_ACCESS,
+      authz: HUB_USER_ACCESS,
       navigation: { title: 'navigation.roles', icon: ShieldCheck },
       componentLoader: () => import('./pages/roles-page.js'),
     });
@@ -108,7 +129,10 @@ export function createHubRoutes(
     name: 'hub-api-keys',
     path: normalizeHubRoutePath(options.apiKeysPath ?? '/api-keys'),
     auth: 'required',
-    access: { resource: 'hub.app:*', action: 'manage-api-keys' },
+    authz: {
+      resource: { type: 'hub.app', id: '*' },
+      action: 'manage-api-keys',
+    },
     navigation: { title: 'navigation.apiKeys', icon: KeyRound },
     componentLoader: () => import('./pages/api-keys-page.js'),
   });

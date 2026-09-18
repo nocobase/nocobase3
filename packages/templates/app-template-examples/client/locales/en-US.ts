@@ -71,8 +71,6 @@ const enUS = {
   'navigation.brandApps': 'NocoBase applications',
   'auth.passwordMismatch': "Passwords don't match.",
   'status.deniedDescription': 'You do not have permission to access {{label}}.',
-  'status.settingFailedDescription':
-    'Setting {{label}} from {{packageName}} could not be loaded.',
   'status.routeFailedDescription':
     'Route {{label}} from {{packageName}} could not be loaded.',
   shell: {

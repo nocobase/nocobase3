@@ -14,7 +14,10 @@ it('gives each business menu its own page access check', () => {
     ).toMatchObject({
       auth: 'required',
       path: `/authorization-example/${name}`,
-      access: { resource: `page:example.sales.${name}`, action: 'access' },
+      authz: {
+        resource: { type: 'page', id: `example.sales.${name}` },
+        action: 'access',
+      },
     });
   }
   expect(

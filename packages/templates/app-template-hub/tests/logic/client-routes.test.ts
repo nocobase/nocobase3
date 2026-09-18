@@ -26,7 +26,7 @@ describe('app client routes', () => {
           path: '/',
         },
         {
-          access: { resource: 'hub', action: 'access' },
+          authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
           auth: 'required',
           name: 'applications-legacy',
           path: '/hub',
@@ -99,14 +99,9 @@ describe('app client routes', () => {
   });
 });
 
-/**
- * Every `auth: 'required'` page and the page-grant identifier it is authorized as: the route name when the page takes
- * the default check, the resource an explicit `access` names, or `null` when the page is not authorized at all —
- * either because it declared `access: false` or because it is nested under another page.
- */
+/** Page authorization comes directly from the registered tree. */
 function pageAuthorizations(
   routes: readonly AppClientRegisteredRoute[],
-  hasPageAncestor = false,
 ): { name: string; authorizedAs: string | null }[] {
   return routes.flatMap((route) => [
     ...(route.componentLoader && route.auth === 'required'
@@ -114,19 +109,14 @@ function pageAuthorizations(
           {
             name: route.name,
             authorizedAs:
-              route.access === false
+              route.authz === 'skip'
                 ? null
-                : route.access
-                  ? route.access.resource
-                  : hasPageAncestor
-                    ? null
-                    : route.name,
+                : route.authz.resource.type === 'page'
+                  ? route.authz.resource.id
+                  : `${route.authz.resource.type}:${route.authz.resource.id}`,
           },
         ]
       : []),
-    ...pageAuthorizations(
-      route.children ?? [],
-      hasPageAncestor || Boolean(route.componentLoader),
-    ),
+    ...pageAuthorizations(route.children ?? []),
   ]);
 }

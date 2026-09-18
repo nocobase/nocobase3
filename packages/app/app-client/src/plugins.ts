@@ -20,13 +20,13 @@ const RESERVED_APPLICATION_ROUTE_PATHS = new Set([
 
 export type AppClientRouteAuth = 'required' | 'guest' | 'optional';
 
-/**
- * Authorization for an application route. An object names the resource and action checked before the page loads.
- * `false` opts the page out of authorization entirely: every signed-in user reaches it, and no permission change can
- * take it away. Omitting the field leaves the page on the default `resource: name, action: 'access'` check.
- */
-export type AppClientRouteAccess =
-  { readonly resource: string; readonly action: string } | false;
+/** Authorization checked before this page loads; skip does not bypass parent guards. */
+export type AppClientRouteAuthz =
+  | 'skip'
+  | {
+      readonly resource: { readonly type: string; readonly id: string };
+      readonly action: string;
+    };
 
 export type AppClientContributionSource = 'application' | 'plugin';
 
@@ -45,7 +45,7 @@ export interface AppClientRoutePageDefinition {
   readonly name: string;
   readonly path: string;
   readonly auth?: AppClientRouteAuth;
-  readonly access?: AppClientRouteAccess;
+  readonly authz?: AppClientRouteAuthz;
   readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader: AppClientRouteComponentLoader;
@@ -71,7 +71,7 @@ export interface AppClientRegisteredRoute {
   readonly name: string;
   readonly path: string;
   readonly auth: AppClientRouteAuth;
-  readonly access?: AppClientRouteAccess;
+  readonly authz: AppClientRouteAuthz;
   readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
   readonly componentLoader?: AppClientRouteComponentLoader;
@@ -122,10 +122,7 @@ export interface AppClientSettingsRoutePageDefinition {
   readonly breadcrumb?: AppClientRouteBreadcrumb;
   readonly navigation?: AppClientSettingsRouteNavigation;
   /** Authorization checked before the page is loaded. */
-  readonly access?: {
-    readonly resource: string;
-    readonly action: string;
-  };
+  readonly authz?: AppClientRouteAuthz;
   readonly componentLoader: AppClientRouteComponentLoader;
   readonly children?: readonly AppClientSettingsRouteDefinition[];
 }
@@ -195,7 +192,7 @@ export interface AppClientRegisteredSetting {
   readonly navigation: boolean;
   readonly surface: AppClientNavigationSurface;
   readonly icon?: AppClientSettingIcon;
-  readonly access?: { readonly resource: string; readonly action: string };
+  readonly authz: AppClientRouteAuthz;
   readonly pageLoader: AppClientRouteComponentLoader;
   readonly groupId?: string;
   readonly packageName: string;
@@ -840,9 +837,7 @@ function projectNavigation(
           packageName: node.packageName,
           source: node.source,
           pageLoader: node.componentLoader,
-          ...(node.access !== undefined && node.access !== false
-            ? { access: node.access }
-            : {}),
+          authz: node.authz,
           ...(node.navigation?.icon ? { icon: node.navigation.icon } : {}),
           ...(groupId ? { groupId } : {}),
         }),
@@ -1010,6 +1005,7 @@ interface RouteResolveContext {
   surface: RouteSurface;
   parentPath: string;
   parentAuth?: AppClientRouteAuth;
+  hasPageAncestor?: boolean;
   ids: Map<string, string>;
   claimed: Map<string, ClaimedPath>;
 }
@@ -1175,11 +1171,7 @@ function resolveRouteTree(
       source,
       ...(breadcrumb ? { breadcrumb } : {}),
       ...(navigation ? { navigation } : {}),
-      // `access: false` is a declaration, not an absence: testing for truthiness here would drop it and put the
-      // page back on the default check it opted out of.
-      ...('access' in route && route.access !== undefined
-        ? { access: route.access }
-        : {}),
+      authz: normalizeRouteAuthz(route, id, isPage, auth, context),
       ...(isPage
         ? {
             componentLoader: wrapRouteComponentLoader(
@@ -1195,11 +1187,61 @@ function resolveRouteTree(
               ...context,
               parentPath: path,
               parentAuth: auth,
+              hasPageAncestor: context.hasPageAncestor || isPage,
             }),
           }
         : {}),
     });
   }
+}
+
+function normalizeRouteAuthz(
+  route: RouteNode['definition'],
+  id: string,
+  isPage: boolean,
+  auth: AppClientRouteAuth,
+  context: RouteResolveContext,
+): AppClientRouteAuthz {
+  if ('access' in route) {
+    throw new Error(
+      `Client route "${id}" uses removed access; declare authz instead.`,
+    );
+  }
+  const value = 'authz' in route ? route.authz : undefined;
+  if (value !== undefined) {
+    if (!isPage)
+      throw new Error(`Client route group "${id}" cannot declare authz.`);
+    if (value === 'skip') return value;
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      !('resource' in value) ||
+      !value.resource ||
+      typeof value.resource !== 'object' ||
+      typeof value.resource.type !== 'string' ||
+      !value.resource.type.trim() ||
+      typeof value.resource.id !== 'string' ||
+      !value.resource.id.trim() ||
+      typeof value.action !== 'string' ||
+      !value.action.trim()
+    )
+      throw new Error(
+        `Client route "${id}" must use authz "skip" or { resource: { type, id }, action }.`,
+      );
+    return Object.freeze({
+      resource: Object.freeze({ ...value.resource }),
+      action: value.action,
+    });
+  }
+  return isPage &&
+    auth === 'required' &&
+    context.surface === 'app' &&
+    !context.hasPageAncestor
+    ? Object.freeze({
+        resource: Object.freeze({ type: 'page', id: route.name.trim() }),
+        action: 'access',
+      })
+    : 'skip';
 }
 
 function normalizeRouteAuth(

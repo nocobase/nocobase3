@@ -180,10 +180,10 @@ export default function UsersPage(): ReactElement {
                 }),
           }),
           loadUserCapabilities(authorization, '*'),
-          authorization.can(
-            { type: 'settings', id: 'authorization.inspector' },
-            'inspect',
-          ),
+          authorization.can({
+            resource: { type: 'settings', id: 'authorization.inspector' },
+            action: 'inspect',
+          }),
         ]);
       const capabilityEntries: readonly (readonly [
         string,

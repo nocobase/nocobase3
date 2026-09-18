@@ -14,12 +14,15 @@ import { translate } from './locale-harness.js';
 
 const api = vi.hoisted(() => ({
   can: vi.fn(async () => true),
+  getPermissionsRevision: () => 0,
   onPermissionsInvalidated: vi.fn(() => () => {}),
   listPermissionSets: vi.fn(),
   deletePermissionSet: vi.fn(),
   invalidatePermissions: vi.fn(),
 }));
-vi.mock('../client/runtime.js', () => ({ getAuthorizationClient: () => api }));
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => api,
+}));
 
 async function renderDetail(onDelete: () => void): Promise<void> {
   api.listPermissionSets.mockResolvedValue([

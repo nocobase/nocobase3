@@ -21,8 +21,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@nocobase/app-plugin-authentication/client', () => ({
   useAuthentication: () => ({ session: mocks.session, isPending: false }),
 }));
-vi.mock('@refinedev/core', () => ({
-  useCan: () => ({ data: { can: mocks.allowed } }),
+vi.mock('@nocobase/app-plugin-authorization/client', () => ({
+  useCan: () => ({ can: mocks.allowed }),
 }));
 vi.mock('@nocobase/app-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@nocobase/app-client')>();

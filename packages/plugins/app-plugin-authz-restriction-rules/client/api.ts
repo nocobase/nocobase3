@@ -1,5 +1,5 @@
-import type { ApiClient } from '@nocobase/app-client';
-import { getAuthorizationApiClient } from '@nocobase/app-plugin-authorization/client/management';
+import { useApiClient, type ApiClient } from '@nocobase/app-client';
+import { useMemo } from 'react';
 import type {
   AccessScope,
   AuthorizationSubject,
@@ -14,9 +14,7 @@ export interface RestrictionRule {
   reason?: string;
 }
 class RestrictionRulesClient {
-  private get api(): ApiClient {
-    return getAuthorizationApiClient();
-  }
+  constructor(private readonly api: ApiClient) {}
   listRestrictionRules(): Promise<readonly RestrictionRule[]> {
     return this.get<readonly RestrictionRule[]>('authz/restriction-rules');
   }
@@ -62,4 +60,7 @@ class RestrictionRulesClient {
       .then((response) => response.data);
   }
 }
-export const authz: RestrictionRulesClient = new RestrictionRulesClient();
+export function useRestrictionRulesClient(): RestrictionRulesClient {
+  const api = useApiClient();
+  return useMemo(() => new RestrictionRulesClient(api), [api]);
+}

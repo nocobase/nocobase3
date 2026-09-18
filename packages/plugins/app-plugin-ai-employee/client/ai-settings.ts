@@ -47,7 +47,7 @@ export function createAISettings(): AppClientSettingsRoutePageDefinition {
     name: 'ai',
     path: '/ai',
     navigation: { title: 'AI Employee', icon: Bot },
-    access: { resource: 'ai.settings', action: 'read' },
+    authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
     componentLoader: () => import('./pages/settings-page.js'),
   };
 }

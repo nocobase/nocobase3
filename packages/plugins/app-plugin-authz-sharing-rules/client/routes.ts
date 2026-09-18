@@ -10,8 +10,8 @@ const routes: AppClientRouteContribution = defineSettingsRoutes([
     path: '/sharing-rules',
     navigation: { title: 'navigation.title', icon: Share2 },
     breadcrumb: { title: 'navigation.title' },
-    access: {
-      resource: 'settings.authorization.sharing-rules',
+    authz: {
+      resource: { type: 'settings', id: 'authorization.sharing-rules' },
       action: 'read',
     },
     componentLoader: () => import('./pages/sharing-rules-page.js'),

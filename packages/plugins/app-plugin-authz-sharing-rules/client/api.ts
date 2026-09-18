@@ -1,5 +1,5 @@
-import type { ApiClient } from '@nocobase/app-client';
-import { getAuthorizationApiClient } from '@nocobase/app-plugin-authorization/client/management';
+import { useApiClient, type ApiClient } from '@nocobase/app-client';
+import { useMemo } from 'react';
 import type {
   AccessScope,
   AuthorizationSubject,
@@ -20,9 +20,7 @@ export interface SharingRule {
   reason?: string;
 }
 class SharingRulesClient {
-  private get api(): ApiClient {
-    return getAuthorizationApiClient();
-  }
+  constructor(private readonly api: ApiClient) {}
   listSharingRules(): Promise<readonly SharingRule[]> {
     return this.get<readonly SharingRule[]>('authz/sharing-rules');
   }
@@ -64,4 +62,7 @@ class SharingRulesClient {
       .then((response) => response.data);
   }
 }
-export const authz: SharingRulesClient = new SharingRulesClient();
+export function useSharingRulesClient(): SharingRulesClient {
+  const api = useApiClient();
+  return useMemo(() => new SharingRulesClient(api), [api]);
+}

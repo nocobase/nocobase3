@@ -7,13 +7,11 @@ import type {
   SubjectSettings,
   SubjectTypeOption,
 } from '../authorization-client.js';
-import { getAuthorizationClient } from '../runtime.js';
+import { useAuthorizationClient } from '../use-authorization-client.js';
 import { useAuthorizationTranslation } from '../i18n.js';
 import { Button } from './ui/button.js';
 import { SearchField } from './filters.js';
 import { errorMessage } from './feedback.js';
-
-const authz = getAuthorizationClient();
 
 export function SubjectsEditor({
   types,
@@ -28,6 +26,7 @@ export function SubjectsEditor({
   excluded?: readonly AuthorizationSubject[];
   onChange: (value: readonly AuthorizationSubject[]) => void;
 }): ReactElement {
+  const authz = useAuthorizationClient();
   const t = useAuthorizationTranslation();
   const collections = types.filter(
     (type) => type.selection?.type === 'collection',
@@ -74,7 +73,7 @@ export function SubjectsEditor({
       active = false;
       clearTimeout(timer);
     };
-  }, [settings, type, search, page, identity]);
+  }, [authz, settings, type, search, page, identity]);
   const selected = new Set(value.map(key));
   const assigned = new Set(excluded.map(key));
   function toggle(subject: AuthorizationSubject, checked: boolean): void {

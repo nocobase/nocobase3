@@ -1,4 +1,19 @@
 import type { ApiClient } from '@nocobase/app-client';
+import type {
+  ResourceRef,
+  AuthorizationPermissionsSnapshot,
+} from '@nocobase/authorization/core';
+
+export type {
+  ResourceRef,
+  AuthorizationPermission,
+  AuthorizationPermissionsSnapshot,
+} from '@nocobase/authorization/core';
+
+export interface AuthorizationCheck {
+  resource: ResourceRef;
+  action: string;
+}
 
 export interface PermissionGrantAction {
   action: string;
@@ -169,15 +184,6 @@ export interface AuthorizationInspection {
   decision: AuthorizationDecision;
 }
 
-interface PermissionsSnapshot {
-  permissions: readonly {
-    resource: { type: string; id: string };
-    actions: readonly string[];
-  }[];
-  /** True when the identity has unrestricted access; an unrestricted set has no grants. */
-  unrestricted: boolean;
-}
-
 interface DataResponse<T> {
   data: T;
 }
@@ -186,16 +192,13 @@ interface DataResponse<T> {
 const USER_PAGE_SIZE = 200;
 
 export class AuthorizationClient {
-  private snapshot?: Promise<PermissionsSnapshot>;
+  private snapshot?: Promise<AuthorizationPermissionsSnapshot>;
   private permissionsRevision = 0;
   private readonly invalidationListeners = new Set<() => void>();
 
   constructor(private readonly api: ApiClient) {}
 
-  async can(
-    resource: { type: string; id: string },
-    action: string,
-  ): Promise<boolean> {
+  async can({ resource, action }: AuthorizationCheck): Promise<boolean> {
     const snapshot = await this.permissions();
     if (snapshot.unrestricted) return true;
     return snapshot.permissions.some(
@@ -207,10 +210,10 @@ export class AuthorizationClient {
     );
   }
 
-  permissions(): Promise<PermissionsSnapshot> {
+  permissions(): Promise<AuthorizationPermissionsSnapshot> {
     if (!this.snapshot) {
-      const request: Promise<PermissionsSnapshot> = this.api
-        .request<DataResponse<PermissionsSnapshot>>({
+      const request: Promise<AuthorizationPermissionsSnapshot> = this.api
+        .request<DataResponse<AuthorizationPermissionsSnapshot>>({
           path: 'authz/permissions',
         })
         .then(

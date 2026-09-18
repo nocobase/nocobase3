@@ -10,7 +10,7 @@ import { Database } from 'lucide-react';
  * grant rather than two.
  */
 export const DATABASE_EXPLORER_ACCESS = {
-  resource: 'database-explorer',
+  resource: { type: 'page', id: 'database-explorer' },
   action: 'access',
 } as const;
 
@@ -27,7 +27,7 @@ const routes: AppClientRouteContribution = defineSettingsRoutes([
   {
     name: 'database-explorer',
     path: '/database-explorer',
-    access: DATABASE_EXPLORER_ACCESS,
+    authz: DATABASE_EXPLORER_ACCESS,
     navigation: { title: 'nav.databaseExplorer', icon: Database },
     componentLoader: () => import('./pages/database-explorer-page.js'),
     children: [
@@ -37,13 +37,13 @@ const routes: AppClientRouteContribution = defineSettingsRoutes([
       {
         name: 'database-explorer.fields',
         path: 'fields',
-        access: DATABASE_EXPLORER_ACCESS,
+        authz: DATABASE_EXPLORER_ACCESS,
         componentLoader: () => import('./pages/collection-fields.js'),
       },
       {
         name: 'database-explorer.columns',
         path: 'columns',
-        access: DATABASE_EXPLORER_ACCESS,
+        authz: DATABASE_EXPLORER_ACCESS,
         componentLoader: () => import('./pages/collection-columns.js'),
       },
     ],

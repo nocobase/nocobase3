@@ -4,14 +4,13 @@ import type {
   SubjectOption,
   SubjectTypeOption,
 } from '../authorization-client.js';
-import { getAuthorizationClient } from '../runtime.js';
+import { useAuthorizationClient } from '../use-authorization-client.js';
 import { useAuthorizationTranslation } from '../i18n.js';
 import { SearchField } from './filters.js';
 import { SelectField } from './select-field.js';
 import { Button } from './ui/button.js';
 import { ErrorBox, errorMessage } from './feedback.js';
 
-const authz = getAuthorizationClient();
 export function SubjectPicker({
   settings = 'permission-sets',
   types,
@@ -25,6 +24,7 @@ export function SubjectPicker({
   value: AuthorizationSubject | undefined;
   onChange: (value: AuthorizationSubject | undefined, type: string) => void;
 }): ReactElement {
+  const authz = useAuthorizationClient();
   const t = useAuthorizationTranslation();
   const available = types.filter((item) => item.selection);
   const [activeType, setActiveType] = useState('');
@@ -73,7 +73,7 @@ export function SubjectPicker({
       current = false;
       clearTimeout(timer);
     };
-  }, [settings, type, search, page, queryKey, t]);
+  }, [authz, settings, type, search, page, queryKey, t]);
   useEffect(() => {
     if (!value || type?.selection?.type !== 'collection') return;
     let current = true;
@@ -89,7 +89,7 @@ export function SubjectPicker({
     return () => {
       current = false;
     };
-  }, [settings, value, type, selectedKey, t]);
+  }, [authz, settings, value, type, selectedKey, t]);
   const data = result?.key === queryKey ? result : undefined;
   const selectedItem =
     selected?.key === selectedKey ? selected?.item : undefined;

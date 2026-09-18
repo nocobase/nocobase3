@@ -10,8 +10,8 @@ const authz = vi.hoisted(() => ({
   listSubjects: vi.fn(),
   resolveSubjects: vi.fn(),
 }));
-vi.mock('../client/runtime.js', () => ({
-  getAuthorizationClient: () => authz,
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => authz,
 }));
 vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');

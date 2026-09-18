@@ -1,11 +1,11 @@
 vi.mock('../../app-plugin-authz-restriction-rules/client/api.js', () => ({
-  authz: mocks.authz,
+  useRestrictionRulesClient: () => mocks.authz,
 }));
 vi.mock('../../app-plugin-authz-sharing-rules/client/api.js', () => ({
-  authz: mocks.authz,
+  useSharingRulesClient: () => mocks.authz,
 }));
 vi.mock('../../app-plugin-authz-default-access/client/api.js', () => ({
-  authz: mocks.authz,
+  useDefaultAccessClient: () => mocks.authz,
 }));
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
@@ -17,6 +17,7 @@ import type { AuthorizationOptions } from '../client/authorization-client.js';
 const mocks = vi.hoisted(() => ({
   authz: {
     can: vi.fn(async () => true),
+    getPermissionsRevision: () => 0,
     onPermissionsInvalidated: vi.fn(() => () => {}),
     loadOptions: vi.fn(),
     listUsers: vi.fn(),
@@ -27,8 +28,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../client/runtime.js', () => ({
-  getAuthorizationClient: () => mocks.authz,
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => mocks.authz,
 }));
 vi.mock('@nocobase/app-client', () => ({
   useClientApplication: () => ({ runtime: { routes: [] } }),

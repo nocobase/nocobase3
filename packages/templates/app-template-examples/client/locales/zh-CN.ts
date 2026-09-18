@@ -67,8 +67,6 @@ const zhCN: AppResource = {
   'navigation.brandApps': 'NocoBase 应用',
   'auth.passwordMismatch': '两次输入的密码不一致。',
   'status.deniedDescription': '你没有访问 {{label}} 的权限。',
-  'status.settingFailedDescription':
-    '无法加载 {{packageName}} 的设置 {{label}}。',
   'status.routeFailedDescription':
     '无法加载 {{packageName}} 的路由 {{label}}。',
   shell: {

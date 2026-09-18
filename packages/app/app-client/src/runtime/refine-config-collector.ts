@@ -19,6 +19,11 @@ export interface AppClientRefineConfigCollector {
 export function createRefineConfigCollector(
   defaults: AppClientRefineConfig,
 ): AppClientRefineConfigCollector {
+  if (Object.hasOwn(defaults, 'accessControlProvider')) {
+    throw new Error(
+      'Refine accessControlProvider is not supported. Use the application authorization client.',
+    );
+  }
   const owners = new Map<RefineProperty, string>();
   const resourceContributions: ResourceContribution[] = [];
   const liveEventHandlers: RefineLiveEventHandler[] = [];
@@ -30,7 +35,6 @@ export function createRefineConfigCollector(
   let authProvider: AppClientRefineConfig['authProvider'];
   let liveProvider: AppClientRefineConfig['liveProvider'];
   let notificationProvider: AppClientRefineConfig['notificationProvider'];
-  let accessControlProvider: AppClientRefineConfig['accessControlProvider'];
   let auditLogProvider: AppClientRefineConfig['auditLogProvider'];
   let i18nProvider: AppClientRefineConfig['i18nProvider'];
   let onLiveEvent: AppClientRefineConfig['onLiveEvent'];
@@ -104,12 +108,6 @@ export function createRefineConfigCollector(
         claim('notificationProvider', packageName);
         notificationProvider = value;
       },
-      setAccessControlProvider(
-        value: NonNullable<AppClientRefineConfig['accessControlProvider']>,
-      ): void {
-        claim('accessControlProvider', packageName);
-        accessControlProvider = value;
-      },
       setAuditLogProvider(
         value: NonNullable<AppClientRefineConfig['auditLogProvider']>,
       ): void {
@@ -170,9 +168,6 @@ export function createRefineConfigCollector(
       notificationProvider: owners.has('notificationProvider')
         ? notificationProvider
         : defaults.notificationProvider,
-      accessControlProvider: owners.has('accessControlProvider')
-        ? accessControlProvider
-        : defaults.accessControlProvider,
       auditLogProvider: owners.has('auditLogProvider')
         ? auditLogProvider
         : defaults.auditLogProvider,

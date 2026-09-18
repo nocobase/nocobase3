@@ -24,13 +24,12 @@ import { ConfirmDialog } from '../../components/confirm-dialog.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { useAuthorizationTranslation } from '../../i18n.js';
-import { getAuthorizationClient } from '../../runtime.js';
+import { useAuthorizationClient } from '../../use-authorization-client.js';
 import { empty, fromSet, hasEmptyCustomFilter, toInput } from './drafts.js';
 import { PermissionSetEditor } from './editor.js';
 import { Assignments } from './assignments-tab.js';
 import type { Draft } from './types.js';
 
-const authz = getAuthorizationClient();
 export interface PermissionWorkspaceContext {
   content: ReactElement;
 }
@@ -46,6 +45,7 @@ export function PermissionSetsPanel({
   const { permissionSetKey } = useParams();
   const isNew = location.pathname === `${base}/new`;
   const assignmentsTab = location.pathname.endsWith('/assignments');
+  const authz = useAuthorizationClient();
   const t = useAuthorizationTranslation();
   const title = (set: PermissionSet) => titleText(set.title, t, set.key);
   const [sets, setSets] = useState<readonly PermissionSet[]>([]);
@@ -92,7 +92,7 @@ export function PermissionSetsPanel({
     } catch (cause) {
       setErrorCause(cause);
     }
-  }, []);
+  }, [authz]);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -134,7 +134,7 @@ export function PermissionSetsPanel({
     return () => {
       cancelled = true;
     };
-  }, [permissionSetKey, assignmentsTab]);
+  }, [authz, permissionSetKey, assignmentsTab]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent): void => event.preventDefault();

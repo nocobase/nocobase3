@@ -1,8 +1,8 @@
 import {
-  apiClientToken,
-  realtimeClientToken,
-  type AppClientRefineConfig,
-} from '@nocobase/app-client';
+  type AuthorizationCheck,
+  authorizationClientToken as clientToken,
+} from '@nocobase/app-plugin-authorization/client';
+import { apiClientToken, realtimeClientToken } from '@nocobase/app-client';
 import { AuthorizationServiceProvider } from '../../app-plugin-authorization/client/service-provider.js';
 import { createHubRoutes } from '../client/routes.js';
 import { fileURLToPath } from 'node:url';
@@ -341,36 +341,31 @@ describe('Hub role API permissions', () => {
         subscribe: () => () => {},
         onOpen: () => () => {},
       } as never);
-      const setAccessControlProvider =
-        vi.fn<
-          (
-            value: NonNullable<AppClientRefineConfig['accessControlProvider']>,
-          ) => void
-        >();
       const provider = new AuthorizationServiceProvider({
         container,
-        refine: { setAccessControlProvider },
       } as never);
       provider.register();
       await provider.boot();
-      const { can } = setAccessControlProvider.mock.calls[0]![0];
-      expect(await can({ resource: 'hub.app:*', action: 'remove' })).toEqual({
-        can: role !== 'hub-viewer',
-      });
+      const can = (check: AuthorizationCheck) =>
+        container.resolve(clientToken).can(check);
+      expect(
+        await can({ resource: { type: 'hub.app', id: '*' }, action: 'remove' }),
+      ).toBe(role !== 'hub-viewer');
       const routes = createHubRoutes().routes;
       const tabs = routes[0]!.children![0]!.children!;
       for (const tab of tabs) {
-        if (!tab.access) continue;
+        if (!('authz' in tab) || !tab.authz || tab.authz === 'skip') continue;
         const allowed =
           role !== 'hub-viewer' ||
           ['deployments', 'releases'].includes(tab.path!);
-        expect(await can(tab.access), `${role}: ${tab.name}`).toEqual({
-          can: allowed,
-        });
+        expect(await can(tab.authz), `${role}: ${tab.name}`).toBe(allowed);
       }
-      expect(await can(routes[1]!.access!)).toEqual({
-        can: role === 'hub-administrator' || role === 'hub-operator',
-      });
+      const apiKeysAuthz = routes[1]!.authz;
+      if (!apiKeysAuthz || apiKeysAuthz === 'skip')
+        throw new Error('API keys must declare authorization');
+      expect(await can(apiKeysAuthz)).toBe(
+        role === 'hub-administrator' || role === 'hub-operator',
+      );
       await provider.shutdown();
     },
   );

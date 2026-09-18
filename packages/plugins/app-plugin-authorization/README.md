@@ -48,7 +48,7 @@ authz.resources.add({
 });
 ```
 
-The server checks `{ resource: { type: 'settings', id: 'ai.models' }, action: 'update' }`. Registering the operation does not grant it: a permission set must grant the composed operation and be assigned to the requesting subject. Explicit client checks such as `access: { resource: 'type:id', action: 'action' }` only control visibility and do not replace server enforcement.
+The server checks `{ resource: { type: 'settings', id: 'ai.models' }, action: 'update' }`. Registering the operation does not grant it: a permission set must grant the composed operation and be assigned to the requesting subject. Explicit client checks such as `authz: { resource: { type: 'type', id: 'id' }, action: 'action' }` only control visibility and do not replace server enforcement.
 
 ## Selectable authorization subjects
 

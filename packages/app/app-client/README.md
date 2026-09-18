@@ -355,3 +355,9 @@ pnpm --filter @nocobase/app-client build
 
 After changing a public contract, also validate the default template and the
 plugins that consume the changed fields.
+
+## Authorization
+
+Application authorization is provided by `@nocobase/app-plugin-authorization/client`. Use `useCan` for reactive visibility checks and `useAuthorizationClient` or `authorizationClientToken` for the current application client. `AppClientRefineConfig` excludes `accessControlProvider`, and the Refine registry has no `setAccessControlProvider` setter.
+
+Client route authentication uses `auth: 'required' | 'guest' | 'optional'`. Authorization uses `authz: 'skip' | { resource: { type, id }, action }`; skip applies only to the current page. Route registration normalizes omitted authorization: authenticated App pages without a page ancestor check `{ resource: { type: 'page', id: name }, action: 'access' }`, while child pages, Settings, Dev, guest and optional pages add no check. Page guards, menus and permission discovery consume the normalized result. The removed `access` field and string resource declarations are rejected.

@@ -13,7 +13,6 @@ describe('client ServiceProvider', () => {
     const refine: AppClientRefineRegistry = {
       addLiveEventHandler: vi.fn(),
       addResources: vi.fn(),
-      setAccessControlProvider: vi.fn(),
       setAuditLogProvider: vi.fn(),
       setAuthProvider: vi.fn(),
       setChildren: vi.fn(),

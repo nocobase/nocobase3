@@ -61,16 +61,16 @@ Never write the deployment base path into a route. The application is mounted so
 | `guest`    | Sign-in, registration, password reset. A signed-in user is redirected away    |
 | `optional` | Pages that work signed in or out and adapt themselves                         |
 
-Descendants inherit their entry route’s auth mode and cannot switch it. App pages without a page ancestor retain the default `resource: name, action: access` check; nested pages add a check only when they declare `access`. Every parent check must pass before its children render.
+Descendants inherit their entry route’s auth mode and cannot switch it. Authenticated App pages without a page ancestor retain the default `{ resource: { type: 'page', id: name }, action: 'access' }` check; nested pages add a check only when they declare `authz`. Every parent check must pass before its children render. Registration normalizes every route to an explicit `authz` request or `'skip'`; menus, page loaders, and permission discovery consume that result. Omitted authorization on Settings, Dev, guest, and optional pages resolves to `'skip'`. An explicit request is checked independently of `auth`. Route groups cannot declare `authz`.
 
 ### Opting a page out of authorization
 
-`access: false` on an app route means being signed in is enough. The page is not authorized at all: every signed-in user reaches it, and no permission change can take it away.
+`authz: 'skip'` skips only the current page's authorization check. Its authentication mode, parent guards, and server authorization still apply.
 
 ```ts
 defineAppRoutes([
   {
-    access: false,
+    authz: 'skip',
     auth: 'required',
     name: 'home',
     path: '/',
@@ -79,9 +79,9 @@ defineAppRoutes([
 ]);
 ```
 
-Use it for a page that must never be lockable — the landing page a signed-in user has to land on. It is not a way to postpone adding permissions to a page. Removing `access: false` later takes the page away from everyone who holds no grant for it, so a page that should be restricted eventually is declared restricted now.
+Use `'skip'` for pages such as the signed-in landing page that need no additional authorization. Replacing it with a permission request restricts the page to users granted that permission.
 
-A route's `name` is the stable identifier page grants are stored against, and the Permission Sets page lists the grantable pages from these route declarations. Renaming a route is therefore a data change rather than a refactor: stored grants naming the old name have to be migrated, or they silently stop granting anything.
+The Permission Sets page lists page resources from normalized `authz` requests and deduplicates their ids. Default checks use the route's `name` as the page resource id; explicit checks use `authz.resource.id`. Renaming a default-authorized route changes its permission identifier, so stored grants must be migrated.
 
 `auth` governs browser navigation. It is not server security: an endpoint the page calls must authenticate independently. See [server routes](server-routes.md).
 
@@ -103,19 +103,19 @@ defineSettingsRoutes([
     name: 'orders',
     path: '/orders',
     navigation: { title: 'Orders' },
-    access: { resource: 'orders.settings', action: 'read' },
+    authz: { resource: { type: 'settings', id: 'orders' }, action: 'read' },
     componentLoader: () => import('./pages/orders-settings.js'),
   },
 ]);
 ```
 
-`navigation` puts the page in the settings navigation. The header shows the Settings entry only when at least one such page is accessible. `access` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
+`navigation` puts the page in the settings navigation. The header shows the Settings entry only when at least one such page is accessible. `authz` is checked before the page loads; when it is denied the page disappears from navigation and a direct URL will not load the component.
 
-A settings page without `access` is open to every signed-in user who can reach the settings area. Declare `access` explicitly on anything sensitive, and enforce the same rule on the server.
+A settings page without `authz` is open to every signed-in user who can reach the settings area. Declare `authz` explicitly on anything sensitive, and enforce the same rule on the server.
 
 ### Dev routes
 
-`defineDevRoutes()` pages are absent from a production build, along with any module only they import. This is a build boundary, not a permission boundary. A page that must be restricted in production is a settings route with `access`, enforced by the server.
+`defineDevRoutes()` pages are absent from a production build, along with any module only they import. This is a build boundary, not a permission boundary. A page that must be restricted in production is a settings route with `authz`, enforced by the server.
 
 ## Putting the page in the sidebar
 
@@ -193,7 +193,7 @@ Do not declare product routes in any of them. They render routes; `client/routes
 - The page renders at its path, and at `/main` plus its path in the browser.
 - The sidebar shows the entry, with the right label in every language, and highlights it when open.
 - A signed-out visit to a `required` page redirects to sign-in.
-- A settings page with `access` disappears from navigation when denied, and its direct URL does not load the component.
+- A settings page with `authz` disappears from navigation when denied, and its direct URL does not load the component.
 - The page's chunk loads on navigation rather than in the initial bundle.
 
 ## Contributing to another plugin's settings group
@@ -207,7 +207,7 @@ defineSettingsRoutes([
     name: 'audit-logs',
     path: '/audit-logs',
     navigation: { title: 'navigation.auditLogs' },
-    access: { resource: 'settings.audit-logs', action: 'read' },
+    authz: { resource: { type: 'settings', id: 'audit-logs' }, action: 'read' },
     componentLoader: () => import('./pages/audit-logs.js'),
   },
 ]);
@@ -218,3 +218,9 @@ Without `parent`, the root entry keeps its existing placement under Settings. En
 Account-menu sign-out checks the Better Auth result for an error before refreshing the session. Keep failures visible through the localized error toast; do not simulate sign-out by redirecting while the server session remains valid.
 
 The authorization provider clears the permission snapshot before rendering a new session. Route navigation and page guards subscribe to the authorization revision; preserve these checks when customizing the shell so account changes and permission updates take effect without a reload. Pending checks hide protected content, and failed checks deny access.
+
+## Checking feature visibility
+
+Use `useCan` from `@nocobase/app-plugin-authorization/client` for buttons and other permission-dependent UI: `useCan({ resource: { type: 'page', id: 'orders' }, action: 'access' })`. Its `{ can, isPending, error, retry }` result follows the current session and realtime permission updates; pending and failed checks do not allow access. Non-React consumers resolve `authorizationClientToken` and call `client.can({ resource, action })`. Page guards and navigation use this authorization client directly, without Refine permission hooks. Route `authz` declarations use the same `{ resource: { type, id }, action }` request; no string adapter is involved. Client visibility never replaces authorization on the endpoint.
+
+Resolve the current application authorization client with `useAuthorizationClient()` in React or `authorizationClientToken` from its service container elsewhere. Refine access-control configuration and global authorization client accessors are not supported. Setting routes declare domain actions such as `read` and `update`; there is no `list`/`show`/`edit` translation.

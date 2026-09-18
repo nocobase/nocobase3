@@ -12,7 +12,7 @@ it('checks each standalone detail route against its list page permission', () =>
     );
     expect(detail).toMatchObject({
       auth: 'required',
-      access: { resource: name, action: 'access' },
+      authz: { resource: { type: 'page', id: name }, action: 'access' },
     });
     expect(detail?.navigation).toBeUndefined();
   }

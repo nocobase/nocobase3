@@ -20,7 +20,7 @@ export function HeaderActions(): ReactElement {
   const { t } = useTranslation();
   const routes = useClientApplication().runtime.settingsRouteTree;
   // Use the same access checks as Settings navigation so the entry never opens an empty surface.
-  const { items } = useRouteNavigation(routes, true);
+  const { items } = useRouteNavigation(routes);
   const hasSettings = navigationPages(items).length > 0;
 
   return (

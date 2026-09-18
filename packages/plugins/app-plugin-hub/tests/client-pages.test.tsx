@@ -248,8 +248,7 @@ describe('Hub client pages', () => {
 
   it('hides deletion when the App removal permission is denied', async () => {
     mocks.authorization.can.mockImplementation(
-      (_resource: unknown, action: string) =>
-        Promise.resolve(action !== 'remove'),
+      ({ action }: { action: string }) => Promise.resolve(action !== 'remove'),
     );
     renderAppPage('/apps/customer/settings');
     await screen.findByText('Application settings');
@@ -686,7 +685,7 @@ describe('Hub client pages', () => {
       }),
     );
     mocks.authorization.can.mockImplementation(
-      (_resource: unknown, action: string) =>
+      ({ action }: { action: string }) =>
         Promise.resolve(
           action !== 'read-release' && action !== 'read-deployment',
         ),
@@ -774,7 +773,7 @@ describe('Hub client pages', () => {
 
   it('renders an unavailable state for an explicit Tab without access', async () => {
     mocks.authorization.can.mockImplementation(
-      (_resource: unknown, action: string) =>
+      ({ action }: { action: string }) =>
         Promise.resolve(action !== 'read-release'),
     );
     renderAppPage('/apps/customer/releases');

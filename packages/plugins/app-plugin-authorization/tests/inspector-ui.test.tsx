@@ -25,8 +25,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@nocobase/app-client', () => ({
   useClientApplication: () => ({ runtime: { routes: mocks.routes } }),
 }));
-vi.mock('../client/runtime.js', () => ({
-  getAuthorizationClient: () => mocks,
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => mocks,
 }));
 vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');
@@ -252,6 +252,10 @@ it('includes client-registered pages and their groups in the inspection batch', 
           name: 'customers',
           packageName: '@test/pages',
           auth: 'required',
+          authz: {
+            resource: { type: 'page', id: 'customers' },
+            action: 'access',
+          },
           componentLoader: async () => ({ default: () => null }),
           navigation: { title: 'Customers' },
         },

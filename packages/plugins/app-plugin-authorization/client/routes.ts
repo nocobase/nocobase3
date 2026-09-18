@@ -16,8 +16,8 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
         path: '/permission-sets',
         navigation: { title: 'navigation.permissionSets', icon: KeyRound },
         breadcrumb: { title: 'navigation.permissionSets' },
-        access: {
-          resource: 'settings.authorization.permission-sets',
+        authz: {
+          resource: { type: 'settings', id: 'authorization.permission-sets' },
           action: 'read',
         },
         componentLoader: () => import('./pages/permission-sets-page.js'),
@@ -25,8 +25,11 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
           {
             name: 'new',
             path: '/new',
-            access: {
-              resource: 'settings.authorization.permission-sets',
+            authz: {
+              resource: {
+                type: 'settings',
+                id: 'authorization.permission-sets',
+              },
               action: 'read',
             },
             componentLoader: () => import('./pages/permission-set-new-page.js'),
@@ -34,8 +37,11 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
           {
             name: 'edit',
             path: '/edit/:permissionSetKey',
-            access: {
-              resource: 'settings.authorization.permission-sets',
+            authz: {
+              resource: {
+                type: 'settings',
+                id: 'authorization.permission-sets',
+              },
               action: 'read',
             },
             componentLoader: () =>
@@ -44,8 +50,11 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
               {
                 name: 'assignments',
                 path: '/assignments',
-                access: {
-                  resource: 'settings.authorization.permission-sets',
+                authz: {
+                  resource: {
+                    type: 'settings',
+                    id: 'authorization.permission-sets',
+                  },
                   action: 'read',
                 },
                 componentLoader: () =>
@@ -54,8 +63,11 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
               {
                 name: 'details',
                 path: '/details',
-                access: {
-                  resource: 'settings.authorization.permission-sets',
+                authz: {
+                  resource: {
+                    type: 'settings',
+                    id: 'authorization.permission-sets',
+                  },
                   action: 'read',
                 },
                 componentLoader: () =>
@@ -75,8 +87,8 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
           icon: ScanSearch,
           order: 100,
         },
-        access: {
-          resource: 'settings.authorization.inspector',
+        authz: {
+          resource: { type: 'settings', id: 'authorization.inspector' },
           action: 'inspect',
         },
         componentLoader: () => import('./pages/inspector-page.js'),

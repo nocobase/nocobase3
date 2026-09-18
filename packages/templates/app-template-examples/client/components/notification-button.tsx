@@ -4,17 +4,17 @@ import {
   useNotificationInAppRuntime,
 } from '@nocobase/app-plugin-notification-in-app/client';
 import { useTranslation } from '@nocobase/i18n/client';
-import { useCan } from '@refinedev/core';
+import { useCan } from '@nocobase/app-plugin-authorization/client';
 import { Bell } from 'lucide-react';
 import { Link } from 'react-router';
 
 export function NotificationButton() {
   const { session, isPending } = useAuthentication();
-  const { data: access } = useCan({
-    resource: 'notifications',
+  const { can } = useCan({
+    resource: { type: 'page', id: 'notifications' },
     action: 'access',
   });
-  if (isPending || !session?.user || !access?.can) return null;
+  if (isPending || !session?.user || !can) return null;
   return (
     <NotificationInAppProvider key={session.user.id}>
       <NotificationLink />

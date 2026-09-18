@@ -1,45 +1,15 @@
-import { useEffect, useState } from 'react';
-import { getAuthorizationClient } from '../runtime.js';
+import { useCan } from '../use-can.js';
 
-const actions = ['create', 'update', 'delete', 'assign', 'configure'] as const;
-type Action = (typeof actions)[number];
+type Action = 'create' | 'update' | 'delete' | 'assign';
+
 export function useSettingsActions(
   id: string,
 ): Readonly<Record<Action, boolean>> {
-  const [allowed, setAllowed] = useState<ReadonlySet<string>>(() => new Set());
-  useEffect(() => {
-    let active = true;
-    const client = getAuthorizationClient();
-    const load = () => {
-      void Promise.all(
-        actions.map(
-          async (action) =>
-            [
-              action,
-              await client.can({ type: 'settings', id }, action),
-            ] as const,
-        ),
-      )
-        .then((results) => {
-          if (active)
-            setAllowed(
-              new Set(
-                results.filter(([, can]) => can).map(([action]) => action),
-              ),
-            );
-        })
-        .catch(() => {
-          if (active) setAllowed(new Set());
-        });
-    };
-    load();
-    const unsubscribe = client.onPermissionsInvalidated(load);
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [id]);
-  return Object.fromEntries(
-    actions.map((action) => [action, allowed.has(action)]),
-  ) as Record<Action, boolean>;
+  const resource = { type: 'settings', id };
+  return {
+    create: useCan({ resource, action: 'create' }).can,
+    update: useCan({ resource, action: 'update' }).can,
+    delete: useCan({ resource, action: 'delete' }).can,
+    assign: useCan({ resource, action: 'assign' }).can,
+  };
 }

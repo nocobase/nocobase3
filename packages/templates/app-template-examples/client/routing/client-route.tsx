@@ -3,57 +3,33 @@ import type {
   AppClientRegisteredRoute,
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
-import { useAuthorizationRevision } from '@nocobase/app-plugin-authorization/client';
+import { useCan } from '@nocobase/app-plugin-authorization/client';
 import { NamespaceScope } from '@nocobase/i18n/client';
-import { useCan } from '@refinedev/core';
 import { type ReactElement, useEffect, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 import { Loading } from '@/components/loading';
 import { Button } from '@/components/ui/button';
 
-import { describeRoutePage, type ClientPageDescriptor } from './client-page.js';
-
 export interface ClientRouteProps {
   readonly route: AppClientRegisteredRoute;
-  readonly defaultAccess?: boolean;
 }
 
-export function ClientRoute({
-  route,
-  defaultAccess,
-}: ClientRouteProps): ReactElement {
-  return <ClientPage page={describeRoutePage(route, defaultAccess)} />;
-}
-
-export interface ClientPageProps {
-  readonly page: ClientPageDescriptor;
-}
-
-export function ClientPage({ page }: ClientPageProps): ReactElement {
-  const { access, checkAccess, componentLoader } = page;
-  const authorizationRevision = useAuthorizationRevision();
-  const { data: accessResult, isLoading: accessLoading } = useCan({
-    resource: access.resource,
-    action: access.action,
-    // Keep cached page decisions tied to the current permission snapshot.
-    params: { authorizationRevision },
-    queryOptions: {
-      enabled: checkAccess,
-      placeholderData: undefined,
-      staleTime: 0,
-      refetchOnMount: 'always',
-    },
-  });
+export function ClientRoute({ route }: ClientRouteProps): ReactElement {
+  const { authz, componentLoader } = route;
+  const checkAccess = authz !== 'skip';
+  const { can: allowed, isPending: accessLoading } = useCan(
+    authz === 'skip' ? undefined : authz,
+  );
   const [componentModule, setComponentModule] =
     useState<AppClientRouteComponentModule>();
   const [loadError, setLoadError] = useState<unknown>();
 
   useEffect(() => {
-    if (checkAccess && accessResult?.can !== true) return;
+    if (checkAccess && !allowed) return;
     let active = true;
 
-    componentLoader().then(
+    componentLoader!().then(
       (module) => {
         if (active) {
           setComponentModule(module);
@@ -69,15 +45,14 @@ export function ClientPage({ page }: ClientPageProps): ReactElement {
     return () => {
       active = false;
     };
-  }, [accessResult?.can, checkAccess, componentLoader]);
+  }, [allowed, checkAccess, componentLoader]);
 
   if (loadError) {
-    return <ClientPageError page={page} />;
+    return <ClientPageError route={route} />;
   }
 
   if (checkAccess && accessLoading) return <ClientPageLoading />;
-  if (checkAccess && accessResult?.can !== true)
-    return <ClientPageDenied page={page} />;
+  if (checkAccess && !allowed) return <ClientPageDenied route={route} />;
 
   if (!componentModule) {
     return <ClientPageLoading />;
@@ -86,18 +61,18 @@ export function ClientPage({ page }: ClientPageProps): ReactElement {
   const Component = componentModule.default;
 
   return (
-    <ErrorBoundary fallback={<ClientPageError page={page} />}>
+    <ErrorBoundary fallback={<ClientPageError route={route} />}>
       {/* The owning package is the page's namespace, so a plugin page translates with a bare useTranslation(). */}
-      <NamespaceScope ns={page.packageName}>
+      <NamespaceScope ns={route.packageName}>
         <Component />
       </NamespaceScope>
     </ErrorBoundary>
   );
 }
 
-function ClientPageDenied(inputProps: ClientPageProps): ReactElement {
+function ClientPageDenied(inputProps: ClientRouteProps): ReactElement {
   const { t } = useTranslation();
-  const { page } = inputProps;
+  const { route } = inputProps;
 
   return (
     <section className='grid min-h-[calc(100svh-4rem)] place-items-center px-6'>
@@ -107,8 +82,8 @@ function ClientPageDenied(inputProps: ClientPageProps): ReactElement {
         </h1>
         <p className='text-sm text-muted-foreground'>
           {t('status.deniedDescription', {
-            label: page.label,
-            defaultValue: `You do not have permission to access ${page.label}.`,
+            label: route.name,
+            defaultValue: `You do not have permission to access ${route.name}.`,
           })}
         </p>
       </section>
@@ -127,9 +102,9 @@ function ClientPageLoading(): ReactElement {
   );
 }
 
-function ClientPageError(inputProps: ClientPageProps): ReactElement {
+function ClientPageError(inputProps: ClientRouteProps): ReactElement {
   const { t } = useTranslation();
-  const { page } = inputProps;
+  const { route } = inputProps;
 
   return (
     <section className='grid min-h-[calc(100svh-4rem)] place-items-center px-6'>
@@ -138,16 +113,11 @@ function ClientPageError(inputProps: ClientPageProps): ReactElement {
           {t('status.pageFailed', { defaultValue: 'Unable to load page' })}
         </h1>
         <p className='text-sm text-muted-foreground'>
-          {t(
-            page.kind === 'setting'
-              ? 'status.settingFailedDescription'
-              : 'status.routeFailedDescription',
-            {
-              label: page.label,
-              packageName: page.packageName,
-              defaultValue: `${page.kind === 'setting' ? 'Setting' : 'Route'} ${page.label} from ${page.packageName} could not be loaded.`,
-            },
-          )}
+          {t('status.routeFailedDescription', {
+            label: route.name,
+            packageName: route.packageName,
+            defaultValue: `Route ${route.name} from ${route.packageName} could not be loaded.`,
+          })}
         </p>
         <Button onClick={() => window.location.reload()}>
           {t('status.retry', { defaultValue: 'Retry' })}

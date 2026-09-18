@@ -24,8 +24,8 @@ const mocks = vi.hoisted(() => ({
   loadOptions: vi.fn(),
   resolveSubjects: vi.fn(),
 }));
-vi.mock('../client/runtime.js', () => ({
-  getAuthorizationClient: () => mocks,
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => mocks,
 }));
 
 it('switches option labels and fixed subjects without refetching or losing edits', async () => {

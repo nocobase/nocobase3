@@ -27,7 +27,7 @@ import type {
   AuthorizationOptions,
   AuthorizationSubject,
 } from '../authorization-client.js';
-import { getAuthorizationClient } from '../runtime.js';
+import { useAuthorizationClient } from '../use-authorization-client.js';
 import { useAuthorizationTranslation } from '../i18n.js';
 import { PermissionsPage } from '../components/page-shell.js';
 import { SearchField } from '../components/filters.js';
@@ -43,7 +43,6 @@ import { resourceRows } from './permission-sets/resource-groups.js';
 import { inspectionStatus } from './inspector-status.js';
 import { Decision } from './inspector-decision.js';
 
-const authz = getAuthorizationClient();
 const pageSize = 20;
 export default function InspectorPage(): ReactElement {
   const t = useAuthorizationTranslation();
@@ -69,6 +68,7 @@ function Inspector({
   options: AuthorizationOptions;
 }): ReactElement {
   const t = useAuthorizationTranslation();
+  const authz = useAuthorizationClient();
   const [params, setParams] = useSearchParams();
   const subjectType =
     params.get('subjectType') ?? (params.has('user') ? 'user' : undefined);
@@ -126,7 +126,7 @@ function Inspector({
     return () => {
       active = false;
     };
-  }, [subject, configurationKey]);
+  }, [authz, subject, configurationKey]);
   const [detail, setDetail] = useState<AuthorizationInspection>();
   const [detailKey, setDetailKey] = useState('');
   const configuredResources = useMemo(
@@ -235,7 +235,7 @@ function Inspector({
     return () => {
       active = false;
     };
-  }, [queryKey]);
+  }, [authz, queryKey]);
   const loading =
     !!subject &&
     !error &&

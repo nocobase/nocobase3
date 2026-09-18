@@ -22,7 +22,7 @@ describe('@nocobase/app-plugin-hub', () => {
       name: 'hub',
       path: '/hub',
       auth: 'required',
-      access: { resource: 'hub', action: 'access' },
+      authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
       navigation: { title: 'navigation.applications', icon: Boxes },
     });
     await expect(routes.routes[0]?.componentLoader?.()).resolves.toMatchObject({
@@ -126,19 +126,22 @@ describe('@nocobase/app-plugin-hub', () => {
         {
           name: 'hub',
           path: '/apps',
-          access: { resource: 'hub', action: 'access' },
+          authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
           navigation: { title: 'navigation.applications', icon: Boxes },
         },
         {
           name: 'hub-roles',
           path: '/roles',
-          access: { resource: 'users', action: 'access' },
+          authz: { resource: { type: 'page', id: 'users' }, action: 'access' },
           navigation: { title: 'navigation.roles', icon: ShieldCheck },
         },
         {
           name: 'hub-api-keys',
           path: '/api-keys',
-          access: { resource: 'hub.app:*', action: 'manage-api-keys' },
+          authz: {
+            resource: { type: 'hub.app', id: '*' },
+            action: 'manage-api-keys',
+          },
           navigation: { title: 'navigation.apiKeys', icon: KeyRound },
         },
       ],

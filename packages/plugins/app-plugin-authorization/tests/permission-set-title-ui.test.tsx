@@ -9,11 +9,14 @@ import { PermissionSetsPanel } from '../client/pages/permission-sets/panel.js';
 import DetailsPage from '../client/pages/permission-set-details-page.js';
 const api = vi.hoisted(() => ({
   can: vi.fn(async () => true),
+  getPermissionsRevision: () => 0,
   onPermissionsInvalidated: vi.fn(() => () => {}),
   listPermissionSets: vi.fn(),
   listAssignments: vi.fn(),
 }));
-vi.mock('../client/runtime.js', () => ({ getAuthorizationClient: () => api }));
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => api,
+}));
 
 it('switches preset names in place without refetching or translating editable data', async () => {
   api.listPermissionSets.mockResolvedValue([

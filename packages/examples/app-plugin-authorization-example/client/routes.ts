@@ -12,28 +12,37 @@ const routes: readonly AppClientRouteContribution[] = [
         {
           name: 'authorization-example-overview',
           path: '/authorization-example',
-          access: false,
+          authz: 'skip',
           navigation: { title: 'overview' },
           componentLoader: () => import('./pages/overview-page.js'),
         },
         {
           name: 'authorization-example-projects',
           path: '/authorization-example/projects',
-          access: { resource: 'page:example.sales.projects', action: 'access' },
+          authz: {
+            resource: { type: 'page', id: 'example.sales.projects' },
+            action: 'access',
+          },
           navigation: { title: 'sales.projects' },
           componentLoader: () => import('./pages/projects-page.js'),
         },
         {
           name: 'authorization-example-quotes',
           path: '/authorization-example/quotes',
-          access: { resource: 'page:example.sales.quotes', action: 'access' },
+          authz: {
+            resource: { type: 'page', id: 'example.sales.quotes' },
+            action: 'access',
+          },
           navigation: { title: 'sales.quotes' },
           componentLoader: () => import('./pages/quotes-page.js'),
         },
         {
           name: 'authorization-example-orders',
           path: '/authorization-example/orders',
-          access: { resource: 'page:example.sales.orders', action: 'access' },
+          authz: {
+            resource: { type: 'page', id: 'example.sales.orders' },
+            action: 'access',
+          },
           navigation: { title: 'sales.orders' },
           componentLoader: () => import('./pages/orders-page.js'),
         },

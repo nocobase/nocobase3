@@ -1,11 +1,11 @@
 vi.mock('../../app-plugin-authz-restriction-rules/client/api.js', () => ({
-  authz: authz,
+  useRestrictionRulesClient: () => authz,
 }));
 vi.mock('../../app-plugin-authz-sharing-rules/client/api.js', () => ({
-  authz: authz,
+  useSharingRulesClient: () => authz,
 }));
 vi.mock('../../app-plugin-authz-default-access/client/api.js', () => ({
-  authz: authz,
+  useDefaultAccessClient: () => authz,
 }));
 import { selectOption } from './select-option.js';
 // @vitest-environment jsdom
@@ -21,6 +21,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { AuthorizationOptions } from '../client/authorization-client.js';
 const authz = vi.hoisted(() => ({
   can: vi.fn(async () => true),
+  getPermissionsRevision: () => 0,
   onPermissionsInvalidated: vi.fn(() => () => {}),
   listDefaultAccess: vi.fn(),
   listDefaultAccessRecords: vi.fn(),
@@ -30,8 +31,8 @@ const authz = vi.hoisted(() => ({
   listSharingRules: vi.fn(),
   listSharingRecords: vi.fn(),
 }));
-vi.mock('../client/runtime.js', () => ({
-  getAuthorizationClient: () => authz,
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => authz,
 }));
 vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');

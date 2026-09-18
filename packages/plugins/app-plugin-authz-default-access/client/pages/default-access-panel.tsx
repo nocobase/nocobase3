@@ -1,6 +1,6 @@
 import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
 import { BusinessRuleScopes } from '@nocobase/app-plugin-authorization/client/management';
-import { useSettingsActions } from '@nocobase/app-plugin-authorization/client/management';
+import { useCan } from '@nocobase/app-plugin-authorization/client';
 import type { DefaultAccessRule } from '../api.js';
 import { Checkbox } from '../components/ui/checkbox.js';
 import { SelectField } from '@nocobase/app-plugin-authorization/client/management';
@@ -23,7 +23,7 @@ import type {
   AuthorizationRecordOption,
   ResourceGroupOption,
 } from '@nocobase/app-plugin-authorization/client/management';
-import { authz } from '../api.js';
+import { useDefaultAccessClient } from '../api.js';
 import { useAuthorizationTranslation, type Translate } from '../i18n.js';
 import { Button } from '../components/ui/button.js';
 import {
@@ -63,8 +63,16 @@ export function DefaultAccessPanel({
 }: {
   options: AuthorizationOptions;
 }): ReactElement {
+  const authz = useDefaultAccessClient();
+  const loadBusinessRecords = useCallback(
+    (collection: string) => authz.listDefaultAccessRecords(collection),
+    [authz],
+  );
   const t = useAuthorizationTranslation();
-  const allowed = useSettingsActions('authorization.default-access');
+  const { can: canConfigure } = useCan({
+    resource: { type: 'settings', id: 'authorization.default-access' },
+    action: 'configure',
+  });
   const [loaded, setLoaded] = useState(false);
   const [rules, setRules] = useState<readonly DefaultAccessRule[]>([]);
   const [params, setParams] = useSearchParams();
@@ -106,7 +114,7 @@ export function DefaultAccessPanel({
     } catch (cause) {
       setErrorCause(cause);
     }
-  }, []);
+  }, [authz]);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -163,7 +171,7 @@ export function DefaultAccessPanel({
     return () => {
       active = false;
     };
-  }, [draft?.resource.id, draft?.resource.type]);
+  }, [authz, draft?.resource.id, draft?.resource.type]);
   const actions = [
     ...new Map(
       (resourceType ? [resourceType] : []).flatMap((type) =>
@@ -186,7 +194,7 @@ export function DefaultAccessPanel({
         .includes(search.toLowerCase()),
   );
   async function save(clear = false) {
-    if (!draft || busy || !allowed.configure) return;
+    if (!draft || busy || !canConfigure) return;
     setBusy(true);
     setErrorCause(undefined);
     try {
@@ -223,7 +231,7 @@ export function DefaultAccessPanel({
     action: string,
     mode: string,
   ): Promise<void> {
-    if (busy || !allowed.configure) return;
+    if (busy || !canConfigure) return;
     if (mode === 'custom' || row.resource.type === 'resource') {
       edit(row);
       return;
@@ -425,7 +433,7 @@ export function DefaultAccessPanel({
                                                 disabled={
                                                   busy ||
                                                   !loaded ||
-                                                  !allowed.configure
+                                                  !canConfigure
                                                 }
                                                 onClick={() => edit(row)}
                                                 className='inline-flex items-center gap-1 rounded-md py-1 pl-1 pr-2 text-left text-sm hover:bg-muted'
@@ -479,9 +487,7 @@ export function DefaultAccessPanel({
                                               type='button'
                                               aria-label={`${row.label}: ${action.label}`}
                                               disabled={
-                                                busy ||
-                                                !loaded ||
-                                                !allowed.configure
+                                                busy || !loaded || !canConfigure
                                               }
                                               onClick={() => edit(row)}
                                               className='inline-flex items-center gap-1 rounded-md border bg-muted/30 p-1 hover:bg-muted'
@@ -517,9 +523,7 @@ export function DefaultAccessPanel({
                                               scope={current?.scope}
                                               options={options}
                                               disabled={
-                                                busy ||
-                                                !loaded ||
-                                                !allowed.configure
+                                                busy || !loaded || !canConfigure
                                               }
                                               onChange={(mode) =>
                                                 void quickChange(
@@ -596,7 +600,7 @@ export function DefaultAccessPanel({
           onClose={close}
         >
           <fieldset
-            disabled={!allowed.configure}
+            disabled={!canConfigure}
             className='min-h-0 flex-1 overflow-auto'
           >
             <RuleForm
@@ -607,7 +611,7 @@ export function DefaultAccessPanel({
                     variant='ghost'
                     disabled={
                       busy ||
-                      !allowed.configure ||
+                      !canConfigure ||
                       !rows.find((row) => row.key === draft.key)?.actions.length
                     }
                     onClick={() => setConfirmClear(true)}
@@ -615,7 +619,7 @@ export function DefaultAccessPanel({
                     {t('ruleWorkspace.clearDefaults')}
                   </Button>
                   <Button
-                    disabled={busy || !dirty || !allowed.configure}
+                    disabled={busy || !dirty || !canConfigure}
                     onClick={() => void save()}
                   >
                     {t('defaultAccess.save')}
@@ -862,6 +866,3 @@ function DefaultScopeControl({
     </Menu.Root>
   );
 }
-
-const loadBusinessRecords = (collection: string) =>
-  authz.listDefaultAccessRecords(collection);

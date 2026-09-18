@@ -55,13 +55,18 @@ import {
   defaultScope,
   firstActions,
 } from '@nocobase/app-plugin-authorization/client/management';
-import { authz } from '../api.js';
+import { useRestrictionRulesClient } from '../api.js';
 
 export function RestrictionRulesPanel({
   options,
 }: {
   options: AuthorizationOptions;
 }): ReactElement {
+  const authz = useRestrictionRulesClient();
+  const loadBusinessRecords = useCallback(
+    (collection: string) => authz.listRestrictionRecords(collection),
+    [authz],
+  );
   const t = useAuthorizationTranslation();
   const [rules, setRules] = useState<readonly RestrictionRule[]>([]);
   const subjectNames = useSubjectNames(
@@ -98,14 +103,14 @@ export function RestrictionRulesPanel({
     return () => {
       active = false;
     };
-  }, [draft?.resource.id, draft?.resource.type]);
+  }, [authz, draft?.resource.id, draft?.resource.type]);
   const load = useCallback(async (): Promise<void> => {
     try {
       setRules(await authz.listRestrictionRules());
     } catch (cause) {
       setErrorCause(cause);
     }
-  }, []);
+  }, [authz]);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -602,6 +607,3 @@ function humanize(value: string): string {
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
-
-const loadBusinessRecords = (collection: string) =>
-  authz.listRestrictionRecords(collection);

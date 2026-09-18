@@ -55,11 +55,7 @@ export function SurfaceLayout({
   const { t } = useTranslation();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
-  const {
-    items: navEntries,
-    loading,
-    denied,
-  } = useRouteNavigation(routeTree, true);
+  const { items: navEntries, loading, denied } = useRouteNavigation(routeTree);
   const selectedKey = selectedNavigationId(
     routeTree,
     location.pathname,
@@ -230,7 +226,7 @@ export function SurfaceLayout({
             </select>
             <RouteTreeProvider routes={allRoutes}>
               <Routes>
-                {renderRouteTree(routeTree, copy.pathPrefix, false, true)}
+                {renderRouteTree(routeTree, copy.pathPrefix)}
                 {renderRouteTree(routes, copy.pathPrefix)}
               </Routes>
             </RouteTreeProvider>

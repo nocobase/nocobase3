@@ -7,9 +7,9 @@ import {
 
 const appRoutes: AppClientRouteContribution = defineAppRoutes([
   {
-    // Every signed-in user reaches the landing page. `access: false` takes it out of page authorization entirely, so
+    // Every signed-in user reaches the landing page. `authz: 'skip'` takes it out of page authorization entirely, so
     // no permission change can leave a user signed in with nowhere to land.
-    access: false,
+    authz: 'skip',
     auth: 'required',
     componentLoader: () => import('./pages/home.js'),
     name: 'home',
@@ -101,7 +101,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
   },
   {
     auth: 'required',
-    access: false,
+    authz: 'skip',
     componentLoader: () => import('./pages/articles.js'),
     name: 'articles',
     navigation: { title: 'navigation.articles', icon: FileText },

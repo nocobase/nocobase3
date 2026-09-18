@@ -1,9 +1,12 @@
+import {
+  type AuthorizationCheck,
+  authorizationClientToken as clientToken,
+} from '@nocobase/app-plugin-authorization/client';
 import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
 import {
   apiClientToken,
   realtimeClientToken,
   type ApiClient,
-  type AppClientRefineConfig,
   type RealtimeClient,
 } from '@nocobase/app-client';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -64,7 +67,11 @@ describe('@nocobase/app-plugin-authorization client', () => {
       '/settings/authorization/inspector',
     ]);
     expect(
-      resolved.settings.map((setting) => setting.access?.resource),
+      resolved.settings.map((setting) =>
+        setting.authz === 'skip'
+          ? undefined
+          : `${setting.authz.resource.type}.${setting.authz.resource.id}`,
+      ),
     ).toEqual([
       'settings.authorization.permission-sets',
       'settings.authorization.permission-sets',
@@ -166,12 +173,10 @@ describe('@nocobase/app-plugin-authorization client', () => {
       reconnect: vi.fn(),
       close: vi.fn(),
     } satisfies RealtimeClient;
-    const setAccessControlProvider = vi.fn();
     container.instance(apiClientToken, api);
     container.instance(realtimeClientToken, realtime);
     const provider = new AuthorizationServiceProvider({
       container,
-      refine: { setAccessControlProvider },
     } as never);
 
     provider.register();
@@ -184,7 +189,6 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(container.resolve(authorizationClientToken)).toBeInstanceOf(
       AuthorizationClient,
     );
-    expect(setAccessControlProvider).toHaveBeenCalledOnce();
     expect(realtime.subscribe).toHaveBeenCalledTimes(2);
     expect(realtime.onOpen).toHaveBeenCalledOnce();
   });
@@ -388,25 +392,32 @@ describe('@nocobase/app-plugin-authorization client', () => {
       route({
         name: 'home',
         // Declared unconditional: signed in is enough, so there is nothing to grant or withhold.
-        access: false,
+        authz: 'skip',
       }),
       route({ name: 'orders', navigation: { title: 'navigation.orders' } }),
       route({
+        name: 'orders-alias',
+        authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
+      }),
+      route({
         name: 'orders-detail',
-        access: { resource: 'orders', action: 'access' },
+        authz: {
+          resource: { type: 'page', id: 'orders-detail' },
+          action: 'access',
+        },
       }),
       route({
         name: 'hub',
         // Authorized as something other than a page.
-        access: { resource: 'hub', action: 'access' },
+        authz: { resource: { type: 'hub.app', id: '*' }, action: 'read' },
       }),
-      route({ name: 'login', auth: 'guest' }),
+      route({ name: 'login', auth: 'guest', authz: 'skip' }),
       route({ name: 'group', componentLoader: undefined }),
       route({
         name: 'reports',
         children: [
           // Nested under a page, so the parent's check is the only one.
-          route({ name: 'report-detail' }),
+          route({ name: 'report-detail', authz: 'skip' }),
         ],
       }),
       route({
@@ -419,6 +430,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
 
     expect(grantablePages(routes)).toEqual([
       { name: 'orders', packageName: 'app', title: 'navigation.orders' },
+      { name: 'orders-detail', packageName: 'app' },
       { name: 'reports', packageName: 'app' },
       { name: 'inside-group', packageName: 'app' },
     ]);
@@ -468,6 +480,7 @@ function route(
     id: overrides.name,
     path: `/${overrides.name}`,
     auth: 'required',
+    authz: { resource: { type: 'page', id: overrides.name }, action: 'access' },
     packageName: 'app',
     source: 'application',
     componentLoader: async () => ({ default: () => null }),
@@ -520,13 +533,13 @@ describe('permission snapshot lifecycle', () => {
       .mockResolvedValueOnce(denied)
       .mockResolvedValueOnce(granted);
     const client = new AuthorizationClient({ request } as never);
-    expect(await client.can(resource, 'access')).toBe(true);
-    expect(await client.can(resource, 'access')).toBe(true);
+    expect(await client.can({ resource, action: 'access' })).toBe(true);
+    expect(await client.can({ resource, action: 'access' })).toBe(true);
     expect(request).toHaveBeenCalledTimes(1);
     client.invalidatePermissions();
-    expect(await client.can(resource, 'access')).toBe(false);
+    expect(await client.can({ resource, action: 'access' })).toBe(false);
     client.invalidatePermissions();
-    expect(await client.can(resource, 'access')).toBe(true);
+    expect(await client.can({ resource, action: 'access' })).toBe(true);
     expect(request).toHaveBeenCalledTimes(3);
     expect(client.getPermissionsRevision()).toBe(2);
   });
@@ -540,13 +553,13 @@ describe('permission snapshot lifecycle', () => {
         .mockReturnValueOnce(old.promise)
         .mockResolvedValueOnce(denied);
       const client = new AuthorizationClient({ request } as never);
-      const oldCheck = client.can(resource, 'access');
+      const oldCheck = client.can({ resource, action: 'access' });
       client.invalidatePermissions();
-      expect(await client.can(resource, 'access')).toBe(false);
+      expect(await client.can({ resource, action: 'access' })).toBe(false);
       if (outcome === 'resolve') old.resolve(granted);
       else old.reject(new Error('Previous session expired'));
       expect(await oldCheck).toBe(false);
-      expect(await client.can(resource, 'access')).toBe(false);
+      expect(await client.can({ resource, action: 'access' })).toBe(false);
       expect(request).toHaveBeenCalledTimes(2);
     },
   );
@@ -557,8 +570,10 @@ describe('permission snapshot lifecycle', () => {
       .mockRejectedValueOnce(new Error('Offline'))
       .mockResolvedValueOnce(granted);
     const client = new AuthorizationClient({ request } as never);
-    await expect(client.can(resource, 'access')).rejects.toThrow('Offline');
-    expect(await client.can(resource, 'access')).toBe(true);
+    await expect(client.can({ resource, action: 'access' })).rejects.toThrow(
+      'Offline',
+    );
+    expect(await client.can({ resource, action: 'access' })).toBe(true);
   });
 });
 
@@ -587,43 +602,43 @@ describe('explicit domain route permissions', () => {
       subscribe: () => () => {},
       onOpen: () => () => {},
     } as never);
-    const setAccessControlProvider =
-      vi.fn<
-        (
-          value: NonNullable<AppClientRefineConfig['accessControlProvider']>,
-        ) => void
-      >();
     const provider = new AuthorizationServiceProvider({
       container,
-      refine: { setAccessControlProvider },
     } as never);
     provider.register();
     await provider.boot();
-    const { can } = setAccessControlProvider.mock.calls[0]![0];
-    expect(
-      await can({ resource: 'hub.app:*', action: 'upload-release' }),
-    ).toEqual({ can: true });
-    expect(
-      await can({ resource: 'hub.app:*', action: 'manage-api-keys' }),
-    ).toEqual({ can: false });
-    expect(await can({ resource: 'report:one', action: 'read' })).toEqual({
-      can: true,
-    });
-    expect(await can({ resource: 'report:two', action: 'read' })).toEqual({
-      can: false,
-    });
-    expect(await can({ resource: 'report:', action: 'read' })).toEqual({
-      can: false,
-    });
-    expect(await can({ resource: 'hub', action: 'access' })).toEqual({
-      can: true,
-    });
+    const can = (check: AuthorizationCheck) =>
+      container.resolve(clientToken).can(check);
     expect(
       await can({
-        resource: 'settings.authorization.permission-sets',
-        action: 'list',
+        resource: { type: 'hub.app', id: '*' },
+        action: 'upload-release',
       }),
-    ).toEqual({ can: true });
+    ).toBe(true);
+    expect(
+      await can({
+        resource: { type: 'hub.app', id: '*' },
+        action: 'manage-api-keys',
+      }),
+    ).toBe(false);
+    expect(
+      await can({ resource: { type: 'report', id: 'one' }, action: 'read' }),
+    ).toBe(true);
+    expect(
+      await can({ resource: { type: 'report', id: 'two' }, action: 'read' }),
+    ).toBe(false);
+    expect(
+      await can({ resource: { type: 'report', id: '' }, action: 'read' }),
+    ).toBe(false);
+    expect(
+      await can({ resource: { type: 'page', id: 'hub' }, action: 'access' }),
+    ).toBe(true);
+    expect(
+      await can({
+        resource: { type: 'settings', id: 'authorization.permission-sets' },
+        action: 'read',
+      }),
+    ).toBe(true);
     await provider.shutdown();
   });
 });

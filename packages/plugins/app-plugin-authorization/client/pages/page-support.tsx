@@ -11,7 +11,7 @@ import type {
   AuthorizationOptions,
   LocalizedText,
 } from '../authorization-client.js';
-import { getAuthorizationClient } from '../runtime.js';
+import { useAuthorizationClient } from '../use-authorization-client.js';
 import { errorMessage as message } from '../components/feedback.js';
 import { useAuthorizationTranslation } from '../i18n.js';
 import {
@@ -24,8 +24,6 @@ import {
   userDirectory,
   type UserDirectory,
 } from '../components/user-directory.js';
-
-const authz = getAuthorizationClient();
 
 /** What a settings page knows before its options have arrived. */
 export interface AuthorizationPageData {
@@ -41,6 +39,7 @@ export interface AuthorizationPageData {
 export function useAuthorizationPageData(
   optionsPath: string,
 ): AuthorizationPageData {
+  const authz = useAuthorizationClient();
   const t = useAuthorizationTranslation();
   const [state, setState] = useState<{
     options?: AuthorizationOptions<LocalizedText>;
@@ -74,7 +73,7 @@ export function useAuthorizationPageData(
     return () => {
       active = false;
     };
-  }, [attempt, optionsPath]);
+  }, [authz, attempt, optionsPath]);
   return {
     ...state,
     options,
@@ -89,6 +88,7 @@ export function useAuthorizationPageData(
  */
 // eslint-disable-next-line react-refresh/only-export-components
 export function useUserDirectory(): UserDirectory {
+  const authz = useAuthorizationClient();
   const t = useAuthorizationTranslation();
   const [state, setState] = useState<{ users: UserDirectory; error?: unknown }>(
     () => ({ users: userDirectory([]) }),
@@ -106,7 +106,7 @@ export function useUserDirectory(): UserDirectory {
     return () => {
       active = false;
     };
-  }, []);
+  }, [authz]);
   return state.error === undefined
     ? state.users
     : unavailableUserDirectory(t, state.error);

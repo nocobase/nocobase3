@@ -10,8 +10,8 @@ const routes: AppClientRouteContribution = defineSettingsRoutes([
     path: '/restriction-rules',
     navigation: { title: 'navigation.title', icon: ShieldBan },
     breadcrumb: { title: 'navigation.title' },
-    access: {
-      resource: 'settings.authorization.restriction-rules',
+    authz: {
+      resource: { type: 'settings', id: 'authorization.restriction-rules' },
       action: 'read',
     },
     componentLoader: () => import('./pages/restriction-rules-page.js'),

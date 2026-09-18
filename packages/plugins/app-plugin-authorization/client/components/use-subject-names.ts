@@ -4,9 +4,8 @@ import type {
   SubjectSettings,
   SubjectTypeOption,
 } from '../authorization-client.js';
-import { getAuthorizationClient } from '../runtime.js';
+import { useAuthorizationClient } from '../use-authorization-client.js';
 
-const authz = getAuthorizationClient();
 export function subjectKey(subject: AuthorizationSubject): string {
   return JSON.stringify([subject.type, subject.id]);
 }
@@ -16,6 +15,7 @@ export function useSubjectNames(
   types: readonly SubjectTypeOption[],
   subjects: readonly AuthorizationSubject[],
 ): Readonly<Record<string, string>> {
+  const authz = useAuthorizationClient();
   const identity = JSON.stringify([
     settings,
     types
@@ -69,7 +69,7 @@ export function useSubjectNames(
     return () => {
       active = false;
     };
-  }, [identity]);
+  }, [authz, identity]);
   return {
     ...(state?.identity === identity ? state.names : {}),
     ...Object.fromEntries(

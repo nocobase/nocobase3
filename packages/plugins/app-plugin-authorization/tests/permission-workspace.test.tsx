@@ -10,6 +10,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({
   can: vi.fn(async () => true),
+  getPermissionsRevision: () => 0,
   onPermissionsInvalidated: vi.fn(() => () => {}),
   listPermissionSets: vi.fn(),
   listAssignments: vi.fn(),
@@ -17,7 +18,9 @@ const api = vi.hoisted(() => ({
   createPermissionSet: vi.fn(),
   invalidatePermissions: vi.fn(),
 }));
-vi.mock('../client/runtime.js', () => ({ getAuthorizationClient: () => api }));
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => api,
+}));
 vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };

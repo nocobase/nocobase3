@@ -38,7 +38,7 @@ const routes: readonly AppClientRouteContribution[] = [
       name: 'orders',
       path: '/orders',
       navigation: { title: 'navigation.orders' },
-      access: { resource: 'orders.settings', action: 'read' },
+      authz: { resource: { type: 'settings', id: 'orders' }, action: 'read' },
       componentLoader: () => import('./pages/orders-settings-page.js'),
     },
   ]),
@@ -63,9 +63,9 @@ Each page module must default-export a React component. Declaration modules rema
 
 App Routes accept `auth: 'required' | 'guest' | 'optional'`. Omitted authentication defaults to `required`; child Routes inherit their ancestor's value and cannot change it. Reserved authentication paths such as `/login`, `/register`, `/forgot-password`, and `/reset-password` must use `guest`.
 
-Settings and Dev Routes require an authenticated user. A Settings page containing sensitive administration UI should also declare a stable `access` resource and action. If access is denied, the page is omitted from available navigation and its loader is not run.
+Settings and Dev Routes require an authenticated user. A Settings page containing sensitive administration UI should also declare a stable `authz` resource and action. If access is denied, the page is omitted from available navigation and its loader is not run.
 
-Client `auth` and `access` control navigation and page loading only. Every Server Route called by the page must install and test its own authentication and authorization. Similar Client and Server route names create no automatic connection.
+Client `auth` and `authz` control navigation and page loading only. Every Server Route called by the page must install and test its own authentication and authorization. Similar Client and Server route names create no automatic connection.
 
 ## Navigation, breadcrumbs, groups, and child pages
 

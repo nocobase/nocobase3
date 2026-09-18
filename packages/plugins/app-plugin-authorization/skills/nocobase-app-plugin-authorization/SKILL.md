@@ -23,6 +23,12 @@ For a complete end-to-end implementation, read [references/orders-module.md](ref
 
 Do not add a second permission system inside a module. The module should keep its normal service/repository API and add an authorization check immediately before the operation.
 
+## Client visibility checks
+
+Import `useCan`, `useAuthorizationClient`, and `authorizationClientToken` from `@nocobase/app-plugin-authorization/client`. In React, call `useCan({ resource: { type: 'page', id: 'orders' }, action: 'access' })`; it returns `{ can, isPending, error, retry }` and follows session and realtime permission invalidation. Pending or failed checks return `can: false`. Pass `{ enabled: false }` as the second argument to skip a check. Outside React, resolve the token from the application container and call `client.can({ resource, action })`. The former two-argument signature is not supported.
+
+Client checks use the current identity's permission snapshot for visibility; server endpoints still enforce authorization and data conditions. Use type-only imports for `ResourceRef` and `AuthorizationPermissionsSnapshot`. Route `authz` and domain checks use `{ resource: { type, id }, action }` directly; `authz: 'skip'` skips only the current page's check. Permission checks do not require a Refine provider.
+
 ## Fluent registration
 
 For new code, use [plugin-owned fluent builders](references/fluent-registration.md) to compose business actions with typed database field permissions and named record scopes, plus independent page-access grants. The sales authorization example demonstrates independent scopes on a multi-table operation.
@@ -224,9 +230,9 @@ Their settings routes use entry-level `parent: 'authorization'` to join this plu
 
 ## Session-aware client permissions
 
-The authorization React provider runs inside the authentication provider and clears the permission snapshot before rendering a new session. Keep both providers registered. The client discards obsolete permission responses after invalidation; custom menus and route guards should subscribe with `useAuthorizationRevision()` and rerun checks when its value changes. Cached Refine checks must include the revision in their query parameters and disable previous-result placeholders so protected content stays hidden while new permissions load. Frontend checks do not replace server authorization.
+The authorization React provider runs inside the authentication provider and clears the permission snapshot before rendering a new session. Keep both providers registered. The client discards obsolete permission responses after invalidation; custom menus and route guards should subscribe with `useAuthorizationRevision()` and rerun checks when its value changes. `useCan` handles session and revision changes and hides stale grants while checks are pending or fail. Frontend checks do not replace server authorization.
 
-Explicit route domain checks use `access: { resource: 'type:id', action: 'action' }` (for example `hub.app:*` and `upload-release`). Do not use a bare domain type as the resource: a plain name is interpreted as a page id. These snapshot checks do not enforce record ownership; keep the server's authorization boundary.
+Explicit route domain checks use `authz: { resource: { type: 'type', id: 'id' }, action: 'action' }` (for example `hub.app:*` and `upload-release`). Always provide both resource type and id; string resource declarations are not supported. These snapshot checks do not enforce record ownership; keep the server's authorization boundary.
 
 ## Predefined permission-set titles
 
@@ -249,3 +255,5 @@ Default access, sharing and restriction rules may target `{ type: 'resource', id
 Record-access policies have one global registry, `authz.recordAccess`. Policies declare generic `resources`; DB alone interprets field requirements and filter results. Omit action scope `options` to use all applicable policies; specify it only to narrow that list. Permission-set scopes and all rule selectors share these choices, including custom filters. Permission sets and the inspector configure registered pages independently from business operations. Business groups compose database grants only; administration groups compose system capabilities. Raw table permissions remain internal, and no composed operation may include page grants. Inspector rows show each resource’s own actions; action details explain the business grant and underlying database checks.
 
 Register inherited authorization subjects, such as teams, with `authz.subjects.define(type, { resolveFor, filterActive, administration })`. `resolveFor(principal)` returns current subject IDs; authenticated requests and user inspection resolve these memberships server-side. `filterActive` excludes disabled or deleted subjects. A manually constructed `authz.for(identity)` uses the supplied identity; include resolved subjects explicitly outside HTTP middleware.
+
+Management components resolve `useAuthorizationClient()` inside their React component or Hook. Do not capture a client at module scope or create a fallback API client. Independent rule clients receive the application API through `useApiClient()`. Route actions use their declared domain names without CRUD aliases, and a page named `authorization` requires a normal page grant.

@@ -64,7 +64,7 @@ describe('settings parent contributions', () => {
         name: 'audit',
         path: '/audit',
         navigation: { title: 'Audit' },
-        access: { resource: 'audit', action: 'read' },
+        authz: { resource: { type: 'page', id: 'audit' }, action: 'access' },
         componentLoader: page,
       },
     ]);
@@ -78,7 +78,7 @@ describe('settings parent contributions', () => {
         path: '/settings/authorization/audit',
         groupId: 'authorization',
         packageName: '@example/rules',
-        access: { resource: 'audit', action: 'read' },
+        authz: { resource: { type: 'page', id: 'audit' }, action: 'access' },
       });
       expect(result.settingGroups[0]?.settings).toHaveLength(2);
       expect(result.settingsRouteTree[0]?.children?.[1]?.packageName).toBe(

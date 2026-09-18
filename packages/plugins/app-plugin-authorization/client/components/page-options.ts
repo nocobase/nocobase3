@@ -19,27 +19,19 @@ export interface GrantablePage {
   readonly group?: string;
 }
 
-/**
- * The pages of the client route registry that page grants can name.
- *
- * A route is grantable when it loads a component, requires authentication, and declares no `access`: a route naming an
- * explicit resource is authorized as that resource rather than as a page, and one declaring `access: false` is
- * unconditional, so neither can be granted or withheld here. A route nested under another page is not separately
- * authorized either — its parent's check is the only one — which mirrors how the application renders the tree.
- */
+/** Discover page grants from the normalized route authorization contract. */
 export function grantablePages(
   routes: readonly AppClientRegisteredRoute[],
-  hasPageAncestor: boolean = false,
   group?: string,
 ): readonly GrantablePage[] {
-  return routes.flatMap((route) => [
+  const pages = routes.flatMap((route) => [
     ...(route.componentLoader &&
-    route.auth === 'required' &&
-    route.access === undefined &&
-    !hasPageAncestor
+    route.authz !== 'skip' &&
+    route.authz.resource.type === 'page' &&
+    route.authz.action === 'access'
       ? [
           {
-            name: route.name,
+            name: route.authz.resource.id,
             ...(group ? { group } : {}),
             packageName: route.packageName,
             ...(route.navigation?.title === undefined
@@ -50,10 +42,15 @@ export function grantablePages(
       : []),
     ...grantablePages(
       route.children ?? [],
-      hasPageAncestor || Boolean(route.componentLoader),
       !route.componentLoader && route.navigation ? route.name : group,
     ),
   ]);
+  const seen = new Set<string>();
+  return pages.filter((page) => {
+    if (seen.has(page.name)) return false;
+    seen.add(page.name);
+    return true;
+  });
 }
 
 /**

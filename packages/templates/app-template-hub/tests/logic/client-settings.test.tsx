@@ -16,11 +16,6 @@ import {
   AuthorizationClient,
   authorizationClientToken,
 } from '@nocobase/app-plugin-authorization/client';
-import {
-  Refine,
-  type AccessControlProvider,
-  type AuthProvider,
-} from '@refinedev/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter, Outlet, useParams } from 'react-router';
@@ -56,6 +51,7 @@ describe('settings centre', () => {
         name: 'broken',
         path: `/${surface}/broken`,
         auth: 'required',
+        authz: 'skip',
         packageName: 'test',
         source: 'application',
         navigation: { title: 'Broken page' },
@@ -142,6 +138,7 @@ describe('settings centre', () => {
   it('hides the Settings entry in dev tools when no settings are registered', async () => {
     const devRoute: AppClientRegisteredSetting = {
       id: 'playground',
+      authz: 'skip',
       navigation: true,
       packageName: '@nocobase/app-plugin-test',
       pageLoader: async () => ({
@@ -206,6 +203,7 @@ describe('settings centre', () => {
     renderSettings('/settings/workflow/item-1', undefined, SETTINGS, GROUPS, [
       {
         auth: 'required',
+        authz: 'skip',
         id: '@nocobase/app-plugin-test:workflow-detail',
         name: 'workflow-detail',
         packageName: '@nocobase/app-plugin-test',
@@ -227,12 +225,16 @@ describe('settings centre', () => {
     const loader = vi.fn(async () => ({ default: () => <h3>App overlay</h3> }));
     renderSettings(
       '/settings/overlay',
-      { can: async ({ resource }) => ({ can: resource !== 'overlay' }) },
+      { can: async ({ resource }) => resource.id !== 'overlay' },
       [],
       [],
       [
         {
           auth: 'required',
+          authz: {
+            resource: { type: 'page', id: 'overlay' },
+            action: 'access',
+          },
           id: 'overlay',
           name: 'overlay',
           packageName: 'test',
@@ -246,12 +248,57 @@ describe('settings centre', () => {
     expect(loader).not.toHaveBeenCalled();
   });
 
+  it('does not bypass a denied parent when its child skips authorization', async () => {
+    const parentLoader = vi.fn(async () => ({ default: () => <Outlet /> }));
+    const childLoader = vi.fn(async () => ({
+      default: () => <h3>Skipped child</h3>,
+    }));
+    const parent: AppClientRegisteredRoute = {
+      auth: 'required',
+      authz: { resource: { type: 'page', id: 'parent' }, action: 'access' },
+      id: 'parent',
+      name: 'parent',
+      path: '/settings/parent',
+      packageName: 'test',
+      source: 'plugin',
+      componentLoader: parentLoader,
+      children: [
+        {
+          auth: 'required',
+          authz: 'skip',
+          id: 'child',
+          name: 'child',
+          path: '/settings/parent/child',
+          packageName: 'test',
+          source: 'plugin',
+          navigation: { title: 'Skipped child' },
+          componentLoader: childLoader,
+        },
+      ],
+    };
+    renderSettings(
+      '/settings/parent/child',
+      { can: async () => false },
+      [],
+      [],
+      [],
+      [parent],
+    );
+    expect(await screen.findByText('No settings available')).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Skipped child' }),
+    ).not.toBeInTheDocument();
+    expect(parentLoader).not.toHaveBeenCalled();
+    expect(childLoader).not.toHaveBeenCalled();
+  });
+
   it('keeps the parent layout when a nested page denies access', async () => {
     const loader = vi.fn(async () => ({
       default: () => <h3>Secret child</h3>,
     }));
     const parent: AppClientRegisteredRoute = {
       auth: 'required',
+      authz: 'skip',
       id: 'parent',
       name: 'parent',
       packageName: 'test',
@@ -274,14 +321,14 @@ describe('settings centre', () => {
           packageName: 'test',
           source: 'plugin',
           path: '/settings/parent/child',
-          access: { resource: 'secret', action: 'read' },
+          authz: { resource: { type: 'page', id: 'secret' }, action: 'access' },
           componentLoader: loader,
         },
       ],
     };
     renderSettings(
       '/settings/parent/child',
-      { can: async ({ resource }) => ({ can: resource !== 'secret' }) },
+      { can: async ({ resource }) => resource.id !== 'secret' },
       [],
       [],
       [],
@@ -301,6 +348,7 @@ describe('settings centre', () => {
       [
         {
           auth: 'required',
+          authz: 'skip',
           id: 'group',
           name: 'group',
           path: '/',
@@ -309,6 +357,7 @@ describe('settings centre', () => {
           children: [
             {
               auth: 'required',
+              authz: 'skip',
               id: 'page',
               name: 'page',
               path: '/settings/grouped',
@@ -328,9 +377,8 @@ describe('settings centre', () => {
 
   it('drops a group whose every page the user is denied', async () => {
     renderSettings('/settings', {
-      can: async ({ resource }) => ({
-        can: !resource?.startsWith('authorization.settings.'),
-      }),
+      can: async ({ resource }) =>
+        !resource?.startsWith('authorization.settings.'),
     });
 
     expect(await screen.findByText('Workflow General page')).toBeVisible();
@@ -361,11 +409,10 @@ describe('settings centre', () => {
     expect(await screen.findByText('Permission Sets page')).toBeVisible();
   });
 
-  it('hides a setting the access control provider denies, and does not land on it', async () => {
+  it('hides a setting the authorization client denies, and does not land on it', async () => {
     renderSettings('/settings/authorization/permission-sets', {
-      can: async ({ resource }) => ({
-        can: resource !== 'authorization.settings.permission-sets',
-      }),
+      can: async ({ resource }) =>
+        resource.id !== 'authorization.settings.permission-sets',
     });
 
     // The denied setting is neither reachable directly nor listed, so the redirect falls through to the next one.
@@ -375,13 +422,13 @@ describe('settings centre', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('treats a provider that throws as a denial', async () => {
+  it('treats a client that throws as a denial', async () => {
     renderSettings('/settings/authorization/permission-sets', {
       can: async ({ resource }) => {
-        if (resource === 'authorization.settings.permission-sets') {
+        if (resource.id === 'authorization.settings.permission-sets') {
           throw new Error('provider unavailable');
         }
-        return { can: true };
+        return true;
       },
     });
 
@@ -394,8 +441,8 @@ describe('settings centre', () => {
   it('explains itself when every setting is denied', async () => {
     renderSettings(
       '/settings',
-      { can: async () => ({ can: false }) },
-      SETTINGS.filter((setting) => setting.access !== undefined),
+      { can: async () => false },
+      SETTINGS.filter((setting) => setting.authz !== 'skip'),
     );
 
     expect(
@@ -404,7 +451,7 @@ describe('settings centre', () => {
   });
 
   it('leaves a setting without an access rule visible even when the provider denies everything', async () => {
-    renderSettings('/settings', { can: async () => ({ can: false }) });
+    renderSettings('/settings', { can: async () => false });
 
     // `workflow/general` declares no access rule, so reaching the settings centre is the only check it has.
     expect(await screen.findByText('Workflow General page')).toBeVisible();
@@ -503,7 +550,7 @@ const GROUPS: readonly AppClientRegisteredSettingGroup[] = [AUTHORIZATION];
 
 function renderSettings(
   initialEntry: string,
-  accessControlProvider?: AccessControlProvider,
+  authorization?: Pick<AuthorizationClient, 'can'>,
   settings: readonly AppClientRegisteredSetting[] = SETTINGS,
   groups: readonly AppClientRegisteredSettingGroup[] = GROUPS,
   routes: readonly AppClientRegisteredRoute[] = [],
@@ -513,33 +560,15 @@ function renderSettings(
   renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
-        <Refine
-          accessControlProvider={accessControlProvider}
-          authProvider={createAuthProvider()}
-          dataProvider={{
-            getList: vi.fn(),
-            getMany: vi.fn(),
-            getOne: vi.fn(),
-            create: vi.fn(),
-            createMany: vi.fn(),
-            update: vi.fn(),
-            updateMany: vi.fn(),
-            deleteOne: vi.fn(),
-            deleteMany: vi.fn(),
-            getApiUrl: vi.fn(),
-            custom: vi.fn(),
-          }}
-          options={{ disableTelemetry: true }}
-        >
-          <AppRouter
-            devRouteTree={[]}
-            clientRoutes={routes}
-            settingsRouteTree={settingsRouteTree}
-          />
-        </Refine>
+        <AppRouter
+          devRouteTree={[]}
+          clientRoutes={routes}
+          settingsRouteTree={settingsRouteTree}
+        />
       </AppThemeProvider>
     </MemoryRouter>,
     settingsRouteTree,
+    authorization,
   );
 }
 
@@ -551,45 +580,16 @@ function renderApp(
 ): void {
   renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <AppThemeProvider>
-        <Refine
-          authProvider={createAuthProvider()}
-          dataProvider={{
-            getList: vi.fn(),
-            getMany: vi.fn(),
-            getOne: vi.fn(),
-            create: vi.fn(),
-            createMany: vi.fn(),
-            update: vi.fn(),
-            updateMany: vi.fn(),
-            deleteOne: vi.fn(),
-            deleteMany: vi.fn(),
-            getApiUrl: vi.fn(),
-            custom: vi.fn(),
-          }}
-          options={{ disableTelemetry: true }}
-        >
-          {element}
-        </Refine>
-      </AppThemeProvider>
+      <AppThemeProvider>{element}</AppThemeProvider>
     </MemoryRouter>,
     settingsRouteTree,
   );
 }
 
-function createAuthProvider(): AuthProvider {
-  return {
-    check: async () => ({ authenticated: true }),
-    getIdentity: async () => ({ id: 1, fullName: 'Alice' }),
-    login: vi.fn(),
-    logout: vi.fn().mockResolvedValue({ success: true }),
-    onError: async (error) => ({ error }),
-  };
-}
-
 function renderWithAuthentication(
   element: ReactElement,
   settingsRouteTree: readonly AppClientRegisteredRoute[],
+  authorization?: Pick<AuthorizationClient, 'can'>,
 ): void {
   const authClient = {
     getSession: vi.fn().mockResolvedValue({
@@ -608,6 +608,9 @@ function renderWithAuthentication(
   const authorizationClient = new AuthorizationClient({
     request: vi.fn(),
   } as never);
+  vi.spyOn(authorizationClient, 'can').mockImplementation(
+    (request) => authorization?.can(request) ?? Promise.resolve(true),
+  );
   const app = {
     runtime: { settingsRouteTree },
     services: {
@@ -635,8 +638,13 @@ function createSetting(
 ): AppClientRegisteredSetting {
   return {
     ...(accessResource === undefined
-      ? {}
-      : { access: { resource: accessResource, action: 'read' } }),
+      ? { authz: 'skip' as const }
+      : {
+          authz: {
+            resource: { type: 'settings', id: accessResource },
+            action: 'read',
+          },
+        }),
     ...(icon === undefined ? {} : { icon }),
     ...(groupId === undefined ? {} : { groupId }),
     id,
@@ -666,7 +674,7 @@ function toRouteTree(
     packageName: setting.packageName,
     source: setting.source,
     componentLoader: setting.pageLoader,
-    access: setting.access,
+    authz: setting.authz,
     ...(setting.navigation !== false
       ? { navigation: { title: setting.title, icon: setting.icon } }
       : {}),
@@ -680,6 +688,7 @@ function toRouteTree(
             name: entry.group.id,
             path: '/settings',
             auth: 'required',
+            authz: 'skip',
             packageName: entry.group.packageName,
             source: entry.group.source,
             navigation: { title: entry.group.title, icon: entry.group.icon },

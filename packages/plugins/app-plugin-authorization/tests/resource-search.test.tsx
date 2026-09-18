@@ -7,8 +7,8 @@ import { expect, it, vi } from 'vitest';
 import locales from '../client/locales/index.js';
 import { PermissionSetEditor } from '../client/pages/permission-sets/editor.js';
 
-vi.mock('../client/runtime.js', () => ({
-  getAuthorizationClient: () => ({ listPermissionSets: async () => [] }),
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => ({ listPermissionSets: async () => [] }),
 }));
 
 it('finds resources by translated label, original label and identifier', async () => {

@@ -25,7 +25,10 @@ describe('client routes', () => {
       name: 'routes-example',
       path: '/routes-example',
       navigation: { title: 'title' },
-      access: { resource: 'routes-example.settings', action: 'read' },
+      authz: {
+        resource: { type: 'page', id: 'routes-example.settings' },
+        action: 'access',
+      },
       componentLoader: expect.any(Function),
     });
     await expect(appRoute?.componentLoader()).resolves.toHaveProperty(

@@ -84,7 +84,10 @@ describe('client plugin definitions', () => {
           {
             name: 'index',
             path: '/feature/',
-            access: { resource: 'feature.dashboard', action: 'access' },
+            authz: {
+              resource: { type: 'page', id: 'feature.dashboard' },
+              action: 'access',
+            },
             componentLoader: async () => ({ default: () => null }),
           },
         ]),
@@ -109,7 +112,10 @@ describe('client plugin definitions', () => {
       id: '@nocobase/app-plugin-feature:index',
       path: '/feature',
       source: 'plugin',
-      access: { resource: 'feature.dashboard', action: 'access' },
+      authz: {
+        resource: { type: 'page', id: 'feature.dashboard' },
+        action: 'access',
+      },
     });
     expect(
       resolved.reactProviders.map((reactProvider) => reactProvider.id),
@@ -119,7 +125,7 @@ describe('client plugin definitions', () => {
     ]);
   });
 
-  it('keeps `access: false` on the registered route instead of dropping it as absent', () => {
+  it('normalizes skipped and default authorization during registration', () => {
     const resolved = resolveAppClientContributions([
       {
         packageName: '@nocobase/app-plugin-feature',
@@ -127,7 +133,7 @@ describe('client plugin definitions', () => {
           {
             name: 'landing',
             path: '/feature/landing',
-            access: false,
+            authz: 'skip',
             componentLoader: async () => ({ default: () => null }),
           },
           {
@@ -139,11 +145,11 @@ describe('client plugin definitions', () => {
       },
     ]);
 
-    // `false` is a declaration, not an absence: copying the field with a truthiness test would turn the opt-out back
-    // into "not declared", which is the default `resource: name, action: 'access'` check it exists to avoid.
-    expect(resolved.routes[0].access).toBe(false);
-    expect(resolved.routes[0]).toHaveProperty('access');
-    expect(resolved.routes[1]).not.toHaveProperty('access');
+    expect(resolved.routes[0].authz).toBe('skip');
+    expect(resolved.routes[1].authz).toEqual({
+      resource: { type: 'page', id: 'reports' },
+      action: 'access',
+    });
   });
 
   it('supports guest and optional routes while protecting reserved paths', () => {
@@ -573,8 +579,11 @@ describe('client settings', () => {
                 name: 'permission-sets',
                 path: '/permission-sets',
                 navigation: { title: 'Permission Sets' },
-                access: {
-                  resource: 'settings.authorization.permission-sets',
+                authz: {
+                  resource: {
+                    type: 'settings',
+                    id: 'authorization.permission-sets',
+                  },
                   action: 'read',
                 },
                 componentLoader: page,

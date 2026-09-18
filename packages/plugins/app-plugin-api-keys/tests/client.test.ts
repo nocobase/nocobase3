@@ -25,7 +25,10 @@ describe('@nocobase/app-plugin-api-keys Client', () => {
         {
           name: 'api-keys',
           path: '/api-keys',
-          access: { resource: 'api-keys', action: 'access' },
+          authz: {
+            resource: { type: 'page', id: 'api-keys' },
+            action: 'access',
+          },
           navigation: { title: 'nav.apiKeys', icon: KeyRound },
         },
       ],

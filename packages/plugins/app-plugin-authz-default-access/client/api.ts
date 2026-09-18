@@ -1,5 +1,5 @@
-import type { ApiClient } from '@nocobase/app-client';
-import { getAuthorizationApiClient } from '@nocobase/app-plugin-authorization/client/management';
+import { useApiClient, type ApiClient } from '@nocobase/app-client';
+import { useMemo } from 'react';
 import type {
   AccessScope,
   AuthorizationRecordOption,
@@ -9,9 +9,7 @@ export interface DefaultAccessRule {
   actions: readonly { action: string; scopeKey?: string; scope: AccessScope }[];
 }
 class DefaultAccessClient {
-  private get api(): ApiClient {
-    return getAuthorizationApiClient();
-  }
+  constructor(private readonly api: ApiClient) {}
   listDefaultAccess(): Promise<readonly DefaultAccessRule[]> {
     return this.get<readonly DefaultAccessRule[]>('authz/default-access');
   }
@@ -49,4 +47,7 @@ class DefaultAccessClient {
       .then((response) => response.data);
   }
 }
-export const authz: DefaultAccessClient = new DefaultAccessClient();
+export function useDefaultAccessClient(): DefaultAccessClient {
+  const api = useApiClient();
+  return useMemo(() => new DefaultAccessClient(api), [api]);
+}

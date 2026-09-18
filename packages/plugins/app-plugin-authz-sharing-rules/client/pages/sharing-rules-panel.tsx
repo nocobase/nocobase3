@@ -61,13 +61,18 @@ import {
   defaultScope,
   firstActions,
 } from '@nocobase/app-plugin-authorization/client/management';
-import { authz } from '../api.js';
+import { useSharingRulesClient } from '../api.js';
 
 export function SharingRulesPanel({
   options,
 }: {
   options: AuthorizationOptions;
 }): ReactElement {
+  const authz = useSharingRulesClient();
+  const loadBusinessRecords = useCallback(
+    (collection: string) => authz.listSharingRecords(collection),
+    [authz],
+  );
   const t = useAuthorizationTranslation();
   const [rules, setRules] = useState<readonly SharingRule[]>([]);
   const subjectNames = useSubjectNames(
@@ -93,7 +98,7 @@ export function SharingRulesPanel({
     } catch (cause) {
       setErrorCause(cause);
     }
-  }, []);
+  }, [authz]);
   useEffect(() => {
     void Promise.resolve().then(load);
   }, [load]);
@@ -596,6 +601,7 @@ function SharingActionsEditor({
   onChange: (value: SharingRule['actions']) => void;
 }): ReactElement {
   const t = useAuthorizationTranslation();
+  const authz = useSharingRulesClient();
   const [records, setRecords] = useState<
     readonly import('@nocobase/app-plugin-authorization/client/management').AuthorizationRecordOption[]
   >([]);
@@ -613,7 +619,7 @@ function SharingActionsEditor({
     return () => {
       active = false;
     };
-  }, [collection]);
+  }, [authz, collection]);
   return (
     <div className='space-y-3'>
       <ActionsEditor
@@ -853,6 +859,3 @@ function policyLabel(
     key
   );
 }
-
-const loadBusinessRecords = (collection: string) =>
-  authz.listSharingRecords(collection);

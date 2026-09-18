@@ -1,10 +1,9 @@
-import { useService } from '@nocobase/app-client';
 import { useCallback, useSyncExternalStore } from 'react';
 
-import { authorizationClientToken } from './tokens.js';
+import { useAuthorizationClient } from './use-authorization-client.js';
 
 export function useAuthorizationRevision(): number {
-  const client = useService(authorizationClientToken);
+  const client = useAuthorizationClient();
   const subscribe = useCallback(
     (listener: () => void) => client.onPermissionsInvalidated(listener),
     [client],

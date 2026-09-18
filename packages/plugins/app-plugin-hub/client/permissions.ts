@@ -100,7 +100,7 @@ export async function loadHubCapabilities(
 ): Promise<HubCapabilities> {
   const allowed = await Promise.all(
     HUB_APP_ACTIONS.map((action) =>
-      authorization.can({ type: 'hub.app', id: appId }, action),
+      authorization.can({ resource: { type: 'hub.app', id: appId }, action }),
     ),
   );
   return Object.fromEntries(

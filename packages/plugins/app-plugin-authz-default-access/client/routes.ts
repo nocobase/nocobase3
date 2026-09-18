@@ -10,8 +10,8 @@ const routes: AppClientRouteContribution = defineSettingsRoutes([
     path: '/default-access',
     navigation: { title: 'navigation.title', icon: LockKeyhole },
     breadcrumb: { title: 'navigation.title' },
-    access: {
-      resource: 'settings.authorization.default-access',
+    authz: {
+      resource: { type: 'settings', id: 'authorization.default-access' },
       action: 'read',
     },
     componentLoader: () => import('./pages/default-access-page.js'),
