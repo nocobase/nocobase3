@@ -12,7 +12,12 @@
   {
     "type": "file",
     "name": "create-app",
-    "label": "Create an application"
+    "label": "Create with an AI Agent"
+  },
+  {
+    "type": "file",
+    "name": "create-app-manually",
+    "label": "Create manually"
   },
   {
     "type": "file",
