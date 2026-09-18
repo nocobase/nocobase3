@@ -27,6 +27,7 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 - Resolve the original `queueServiceToken` from `@nocobase/app-server/queue`. In `boot()`, register with `queue.consumer(name).consume(handler)` without I/O and retain its async unregister function. Await it in `shutdown()` before releasing handler dependencies; never await it from inside its own handler.
 - The App's core `QueueServiceProvider` owns `createQueueService()`, `setup()` in `start()`, and final shutdown after consumer providers. Do not create or stop shared Workers in application or plugin providers. Make domain dependencies ready before consumption begins.
 - Publish with `queue.producer(name).publish(channel, payload, { delay: 1_000 })`; delay is numeric milliseconds and the receipt is not completion. Default `inMemory` is asynchronous, App-private, and loses jobs on restart; persistence requires explicit backend configuration. Read the services-and-jobs reference for identity, retries, and shutdown boundaries.
+- Pass `{ nodeEnv: runtime.env.NODE_ENV }` to `QueueServiceProvider` in `app.ts`, not through queue configuration. Memory initialization warnings are suppressed only for `develop` and `development`; the provider never reads the process environment.
 - Read configuration through the typed config, not `process.env`, inside providers and routes.
 - Schema changes are migrations in `../database/main/migrations/`, spelled out explicitly and never importing an evolving definition.
 

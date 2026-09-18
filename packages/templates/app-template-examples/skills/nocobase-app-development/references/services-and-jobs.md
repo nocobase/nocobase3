@@ -78,6 +78,8 @@ Work that should not block a response — sending mail, calling a slow third par
 
 The core `QueueServiceProvider` binds a lazy singleton created with `createQueueService()` from `@nocobase/queue`. Register custom backend factories before setup begins. Construction, provider registration, and handler registration during `boot()` do not connect or consume. The App owns `setup()` through the core provider's `start()`, and owns `shutdown()` after application and plugin providers have unsubscribed. A consumer provider must not create or close a shared Worker or call the shared service's lifecycle methods.
 
+`server/app.ts` passes application environment context separately: `app.addServiceProvider(QueueServiceProvider, { nodeEnv: runtime.env.NODE_ENV })`. This is a provider constructor option, not `queue.environment` or a backend option. The provider never reads `process.env`. Both `develop` and `development` suppress the memory warning; all other values, including an omitted `nodeEnv`, warn exactly `Queue is running in memory mode. Jobs will be lost on restart.` on each memory queue's first successful initialization. Merely declaring queue configuration, registering the provider, or resolving the singleton does not warn. Keep LoggingProvider before QueueServiceProvider and QueueServiceProvider before plugin providers.
+
 ### Register a handler through a provider
 
 This example assumes an application-owned `searchServiceToken` exported from `server/providers/search.ts`, whose service implements `rebuildIndex(collection: string, signal: AbortSignal): Promise<void>`. Register that service's provider before this consumer so reverse shutdown keeps it alive until unregistration completes.

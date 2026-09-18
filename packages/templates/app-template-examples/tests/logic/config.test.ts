@@ -20,13 +20,39 @@ import {
   type AppQueueServiceConfig,
   type AppSessionConfigInput,
 } from '@nocobase/app-server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { Application } from '@nocobase/app-server/application';
+import { QueueServiceProvider } from '@nocobase/app-server/queue';
+import { createApp } from '../../server/app.js';
 
 import appRuntime from '../../server/runtime.ts';
 
 const templateRootDir = fileURLToPath(new URL('../..', import.meta.url));
 
 describe('application config', () => {
+  it.each(['develop', 'development', 'production', undefined])(
+    'passes App environment %s directly to QueueServiceProvider',
+    async (nodeEnv) => {
+      const runtime = await resolveStandaloneAppRuntime(appRuntime, {
+        rootDir: templateRootDir,
+        env: {
+          NODE_ENV: nodeEnv,
+          AUTH_SECRET: 'test-auth-secret-at-least-32-characters',
+        },
+      });
+      const addProvider = vi.spyOn(Application.prototype, 'addServiceProvider');
+      try {
+        createApp(runtime);
+        expect(addProvider).toHaveBeenCalledWith(QueueServiceProvider, {
+          nodeEnv: runtime.env.NODE_ENV,
+        });
+        expect(runtime.config.get('queue')).not.toHaveProperty('environment');
+      } finally {
+        addProvider.mockRestore();
+      }
+    },
+  );
+
   it('supplies analytics for main-only configs and honors file overrides', async () => {
     const directory = mkdtempSync(
       path.join(tmpdir(), 'examples-analytics-config-'),
@@ -138,7 +164,6 @@ describe('application config', () => {
     );
     expect(runtime.config.get<AppQueueServiceConfig>('queue')).toEqual({
       queueBackend: 'inMemory',
-      environment: runtime.env.NODE_ENV,
     });
     expect(runtime.config.get<AppSessionConfigInput>('session')!.default).toBe(
       'memory',
@@ -167,7 +192,6 @@ describe('application config', () => {
     expect(runtime.config.get('server.port')).toBe(14001);
     expect(runtime.config.get<AppQueueServiceConfig>('queue')).toEqual({
       queueBackend: 'inMemory',
-      environment: 'production',
     });
     expect(runtime.config.get('session.stores.redis.host')).toBe('127.0.0.1');
     expect(runtime.config.get('logging.pretty')).toBe(false);

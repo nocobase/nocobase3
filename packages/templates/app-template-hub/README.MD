@@ -283,6 +283,8 @@ Configuration is resolved from the file, environment variables, and defaults in 
 
 `QueueServiceProvider` owns an independent QueueService for this application. It binds the service without connecting, starts it with the App, and shuts it down after consumer providers have awaited their handler unregistration. The default backend is private, asynchronous `inMemory`: no Redis connection is implicit, and jobs are lost on restart. Configure `queue` explicitly for Redis or PostgreSQL persistence; the default namespace is the App name, and unrelated applications sharing a backend need distinct namespaces.
 
+`server/app.ts` supplies `{ nodeEnv: runtime.env.NODE_ENV }` as the `QueueServiceProvider` constructor option, separately from queue configuration. Both `develop` and `development` suppress the memory warning; other values, including an omitted environment, warn only when a memory queue is first successfully initialized. The provider does not read the process environment.
+
 Resolve `queueServiceToken` from `@nocobase/app-server/queue`, register consumers in provider `boot()`, and publish through `producer(queue).publish(channel, payload, { delay: 1_000 })`. Delay is numeric milliseconds; the `{ jobId }` receipt confirms publication, not handler completion. There is no job-directory discovery, and the retired `queue.jobs` plugin contribution is rejected. See [services and background jobs](skills/nocobase-app-development/references/services-and-jobs.md) for the complete lifecycle and dependency pattern.
 
 ## Testing

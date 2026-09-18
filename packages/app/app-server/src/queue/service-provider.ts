@@ -5,14 +5,25 @@ import type { AppPluginApplication } from '../plugins/index.js';
 import { loggingToken } from '../logging/index.js';
 import { queueServiceToken } from './token.js';
 
+export interface QueueServiceProviderOptions {
+  /** Application-owned environment context, not queue/backend configuration. */
+  nodeEnv?: string;
+}
+
 /** Owns the application-scoped queue service, never a process-global worker. */
 export class QueueServiceProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-server/queue-service';
 
+  public constructor(
+    app: AppPluginApplication,
+    private readonly options: QueueServiceProviderOptions = {},
+  ) {
+    super(app);
+  }
+
   public override register(): void {
     this.app.container.singleton(queueServiceToken, (container) => {
-      const { environment, ...configured } =
-        this.app.config.get<AppQueueServiceConfig>('queue') ?? {};
+      const configured = this.app.config.get<AppQueueServiceConfig>('queue');
       const logger = container
         .resolve(loggingToken)
         .getLogger()
@@ -26,7 +37,10 @@ export class QueueServiceProvider extends ServiceProvider<AppPluginApplication> 
         {
           logger,
           onInMemoryQueueInitialized: (identity) => {
-            if (environment !== 'develop' && environment !== 'development')
+            if (
+              this.options.nodeEnv !== 'develop' &&
+              this.options.nodeEnv !== 'development'
+            )
               logger.warn(
                 identity,
                 'Queue is running in memory mode. Jobs will be lost on restart.',
