@@ -77,6 +77,7 @@ export function LanguageSwitcher({
         >
           {locales.map((definition) => (
             <DropdownMenuRadioItem
+              closeOnClick
               key={definition.locale}
               value={definition.locale}
               disabled={switching}

@@ -11,8 +11,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { ThemeSettings } from '../../client/theme/theme-settings';
 import { UserMenu } from '../../client/shell/user-menu';
 
-const { signOut } = vi.hoisted(() => ({
+const { signOut, changeLocale } = vi.hoisted(() => ({
   signOut: vi.fn(async () => ({ error: null })),
+  changeLocale: vi.fn(),
 }));
 
 vi.mock('@nocobase/i18n/client', () => ({
@@ -54,6 +55,7 @@ vi.mock('@nocobase/app-plugin-i18n/client', () => ({
         { locale: 'zh-CN', label: '中文' },
       ],
       setLocale: async (value: string) => {
+        changeLocale(value);
         setLocale(value);
         return { fallback: false };
       },
@@ -107,10 +109,15 @@ describe('header hover panels', () => {
 
 describe('closing after changing preferences', () => {
   it.each(['hover', 'click'] as const)(
-    'closes appearance after changing color mode (%s)',
+    'uses default dismissal after changing appearance (%s)',
     async (method) => {
       const user = userEvent.setup();
-      render(<ThemeSettings />);
+      render(
+        <>
+          <ThemeSettings />
+          <button>Outside</button>
+        </>,
+      );
       const trigger = screen.getByRole('button', { name: 'Appearance' });
       if (method === 'click') await user.click(trigger);
       else await user.hover(trigger);
@@ -130,11 +137,18 @@ describe('closing after changing preferences', () => {
       expect(compact).toBeChecked();
       fireEvent.mouseLeave(panel, { relatedTarget: document.body });
       fireEvent.mouseMove(document.body, { clientX: 1000, clientY: 1000 });
-      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger).toHaveAttribute(
+        'aria-expanded',
+        method === 'click' ? 'true' : 'false',
+      );
+      if (method === 'click') {
+        await user.click(screen.getByRole('button', { name: 'Outside' }));
+        expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      }
     },
   );
   it.each(['hover', 'click'] as const)(
-    'closes account after changing language (%s)',
+    'closes account immediately after selecting a language (%s)',
     async (method) => {
       const user = userEvent.setup();
       render(<UserMenu />);
@@ -161,20 +175,13 @@ describe('closing after changing preferences', () => {
       fireEvent.mouseMove(submenu);
       fireEvent.pointerDown(chinese, { pointerType: 'mouse' });
       fireEvent.click(chinese);
-      await waitFor(() => expect(language).toHaveTextContent('中文'));
-      expect(trigger).toHaveAttribute('aria-expanded', 'true');
-      // Portalled submenu and parent form one region, in both directions.
-      fireEvent.mouseLeave(submenu, { relatedTarget: panel });
-      fireEvent.mouseEnter(panel, { relatedTarget: submenu });
-      fireEvent.mouseMove(panel);
-      expect(trigger).toHaveAttribute('aria-expanded', 'true');
-      fireEvent.mouseLeave(panel, { relatedTarget: submenu });
-      fireEvent.mouseEnter(submenu, { relatedTarget: panel });
-      fireEvent.mouseMove(submenu);
-      expect(trigger).toHaveAttribute('aria-expanded', 'true');
-      fireEvent.mouseLeave(submenu, { relatedTarget: document.body });
-      fireEvent.mouseMove(document.body, { clientX: 1000, clientY: 1000 });
-      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      await waitFor(() =>
+        expect(trigger).toHaveAttribute('aria-expanded', 'false'),
+      );
+      await waitFor(() =>
+        expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
+      );
+      expect(changeLocale).toHaveBeenCalledWith('zh-CN');
     },
   );
 });
@@ -240,18 +247,5 @@ it('keeps Sign out reachable when the language submenu shields the parent menu',
   expect(signOutItem).toBeVisible();
   fireEvent.click(signOutItem);
   await waitFor(() => expect(signOut).toHaveBeenCalledOnce());
-  expect(trigger).toHaveAttribute('aria-expanded', 'false');
-  // The geometry guard must not suppress a real exit, even from a click-opened menu.
-  fireEvent.click(trigger);
-  expect(trigger).toHaveAttribute('aria-expanded', 'true');
-  const reopenedPanel = screen.getByRole('menu');
-  vi.spyOn(reopenedPanel, 'getBoundingClientRect').mockReturnValue(
-    new DOMRect(100, 100, 256, 160),
-  );
-  fireEvent.mouseLeave(reopenedPanel, {
-    relatedTarget: document.body,
-    clientX: 400,
-    clientY: 300,
-  });
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });

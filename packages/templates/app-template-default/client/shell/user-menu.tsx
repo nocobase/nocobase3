@@ -2,7 +2,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
 import { toast } from 'sonner';
 import { LogOut, UserRound } from 'lucide-react';
-import { useRef, useState, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 
 import {
   DropdownMenu,
@@ -30,8 +30,6 @@ export function UserMenu(): ReactElement {
       }
     : null;
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const { t } = useTranslation();
 
   const name =
@@ -41,12 +39,10 @@ export function UserMenu(): ReactElement {
   const initials = getInitials(name);
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu>
       <DropdownMenuTrigger
-        ref={triggerRef}
         openOnHover
         delay={0}
-        closeDelay={0}
         aria-label={t('account.openMenu', {
           defaultValue: 'Open account menu',
         })}
@@ -64,30 +60,7 @@ export function UserMenu(): ReactElement {
           </span>
         )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align='end'
-        className='w-64'
-        onMouseLeave={(event) => {
-          // React keeps portalled language submenus in this hover boundary.
-          // Leaving the entire menu must also close it after selecting a language.
-          if (
-            event.relatedTarget instanceof Node &&
-            triggerRef.current?.contains(event.relatedTarget)
-          )
-            return;
-          // A submenu's safe corridor can disable pointer events on this menu.
-          // Ignore the resulting synthetic leave while the pointer is still over it.
-          const rect = event.currentTarget.getBoundingClientRect();
-          if (
-            event.clientX >= rect.left &&
-            event.clientX < rect.right &&
-            event.clientY >= rect.top &&
-            event.clientY < rect.bottom
-          )
-            return;
-          setOpen(false);
-        }}
-      >
+      <DropdownMenuContent align='end' className='w-64'>
         <div className='px-2 py-1.5'>
           <p className='truncate text-sm font-medium'>{name}</p>
           {identity?.email ? (

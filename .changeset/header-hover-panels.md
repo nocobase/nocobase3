@@ -4,4 +4,4 @@
 "@nocobase/app-template-hub": patch
 ---
 
-Add localized header tooltips for component examples and settings, and open and close appearance and account panels without hover delays while retaining click and keyboard access. Close preference panels on pointer exit even after theme or language selections, while keeping portalled language submenus interactive and Sign out reachable when moving past the language submenu.
+Add localized header tooltips for component examples and settings, and open appearance and account panels immediately on hover using the built-in shadcn behavior. Preserve click, touch, keyboard, and default dismissal behavior; close the account menu when selecting a language.
