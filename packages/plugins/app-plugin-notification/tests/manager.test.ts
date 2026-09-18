@@ -5,10 +5,16 @@ import type { DatabaseManager } from '@nocobase/db';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createNotificationManager } from '../server/manager.js';
-import type {
-  NotificationAttemptRecord,
-  NotificationDeliveryRecord,
+import {
+  createDatabaseNotificationStore,
+  type NotificationAttemptRecord,
+  type NotificationDeliveryRecord,
+  type NotificationStore,
 } from '../server/store.js';
+import {
+  NOTIFICATION_DELIVERY_CHANNEL,
+  NOTIFICATION_QUEUE_NAME,
+} from '../server/delivery-job.js';
 import type {
   NotificationProviderCapabilities,
   NotificationStatusSnapshot,
@@ -914,6 +920,125 @@ describe('NotificationManager registration', () => {
     await database.destroy();
   });
 
+  it('reconciles a failed queue publication and ignores a queued redelivery of the accepted Delivery', async () => {
+    const database = await createNotificationTestDatabase();
+    const store = createDatabaseNotificationStore(database);
+    const send = vi.fn(async () => ({ status: 'accepted' }) as const);
+    // Control only intervals: the real memory Worker and polling keep real timers.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { manager, queue } = await createEmailManagerHarness({
+      database,
+      store,
+      send,
+      reconcileIntervalMs: 1_000,
+    });
+    const producer = queue.producer(NOTIFICATION_QUEUE_NAME);
+    const publicationError = new Error('First notification publication failed');
+    const publish = vi
+      .spyOn(producer, 'publish')
+      .mockRejectedValueOnce(publicationError);
+    const listReady = vi.spyOn(store, 'listReady');
+
+    try {
+      await manager.start();
+      expect(listReady).toHaveBeenCalledOnce();
+      listReady.mockClear();
+      const result = await manager.send({
+        idempotencyKey: 'notification-enqueue-recovery',
+        to: { type: 'email', address: 'buyer@example.com' },
+        channels: ['email'],
+        content: { body: 'Recover this persisted delivery.' },
+      });
+      expect(result.deliveries).toHaveLength(1);
+      const deliveryId = result.deliveries[0]!.id;
+      expect(publish).toHaveBeenCalledExactlyOnceWith(
+        NOTIFICATION_DELIVERY_CHANNEL,
+        { deliveryId },
+      );
+      await expect(publish.mock.results[0]!.value).rejects.toBe(
+        publicationError,
+      );
+      expect(listReady).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+
+      // Read through a fresh production store, not the send result or a mock cache.
+      const persisted = createDatabaseNotificationStore(database);
+      await expect(
+        persisted.getLogByIdempotencyKey(result.idempotencyKey),
+      ).resolves.toMatchObject({
+        id: result.notificationId,
+        status: 'pending',
+      });
+      await expect(persisted.getDelivery(deliveryId)).resolves.toMatchObject({
+        id: deliveryId,
+        notificationId: result.notificationId,
+        status: 'pending',
+        attemptCount: 0,
+      });
+      await expect(persisted.listAttempts(deliveryId)).resolves.toEqual([]);
+
+      // Run the manager-owned periodic reconciler, without another send or retry.
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect
+        .poll(() => manager.getNotification(result.notificationId))
+        .toMatchObject({
+          status: 'completed',
+          terminal: true,
+          summary: { total: 1, accepted: 1, pending: 0 },
+        });
+      expect(listReady).toHaveBeenCalledOnce();
+      await expect(listReady.mock.results[0]!.value).resolves.toMatchObject([
+        { id: deliveryId, status: 'pending' },
+      ]);
+      expect(publish).toHaveBeenCalledTimes(2);
+      expect(publish).toHaveBeenNthCalledWith(
+        2,
+        NOTIFICATION_DELIVERY_CHANNEL,
+        { deliveryId },
+      );
+      const recoveredReceipt = await publish.mock.results[1]!.value;
+      const accepted = await persisted.getDelivery(deliveryId);
+      expect(accepted).toMatchObject({ status: 'accepted', attemptCount: 1 });
+      const attempts = await persisted.listAttempts(deliveryId);
+      expect(attempts).toHaveLength(1);
+      expect(attempts[0]).toMatchObject({ sequence: 1, status: 'accepted' });
+      expect(send).toHaveBeenCalledOnce();
+
+      // A new queue job with the same business ID must reach the production handler.
+      const deliveryRead = vi.spyOn(store, 'getDelivery');
+      const duplicateReceipt = await producer.publish(
+        NOTIFICATION_DELIVERY_CHANNEL,
+        { deliveryId },
+      );
+      expect(duplicateReceipt.jobId).not.toBe(recoveredReceipt.jobId);
+      await expect.poll(() => deliveryRead.mock.calls).toEqual([[deliveryId]]);
+      // Unregistration awaits in-flight handler settlement, not just queue receipt.
+      await manager.close();
+      expect(send).toHaveBeenCalledOnce();
+      await expect(persisted.getDelivery(deliveryId)).resolves.toEqual(
+        accepted,
+      );
+      await expect(persisted.listAttempts(deliveryId)).resolves.toEqual(
+        attempts,
+      );
+      await expect(
+        persisted.getLog(result.notificationId),
+      ).resolves.toMatchObject({ status: 'completed' });
+    } finally {
+      try {
+        await manager.close();
+      } finally {
+        try {
+          await queue.shutdown();
+        } finally {
+          await database.destroy();
+          vi.useRealTimers();
+          vi.restoreAllMocks();
+        }
+      }
+    }
+  });
+
   it('deduplicates repeated sends and rejects reuse with different content', async () => {
     const send = vi.fn(async () => ({ status: 'accepted' }) as const);
     const { manager, queue } = await createEmailManagerHarness({ send });
@@ -1528,7 +1653,9 @@ async function createEmailManagerHarness(input: {
     input: NotificationProviderSendInput,
   ) => Promise<ProviderSendResult>;
   readonly capabilities?: NotificationProviderCapabilities;
-  readonly store?: FakeNotificationStore;
+  readonly database?: DatabaseManager;
+  readonly store?: NotificationStore;
+  readonly reconcileIntervalMs?: number;
   readonly prepare?: (message: object) => object | Promise<object>;
 }) {
   const queue = createQueueService({
@@ -1537,8 +1664,9 @@ async function createEmailManagerHarness(input: {
   await queue.setup();
   const store = input.store ?? new FakeNotificationStore();
   const manager = createNotificationManager({
-    database: {} as DatabaseManager,
+    database: input.database ?? ({} as DatabaseManager),
     queue,
+    reconcileIntervalMs: input.reconcileIntervalMs,
     logger: createLogger({ level: 'silent' }),
     config: {
       channels: [
