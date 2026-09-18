@@ -1,9 +1,15 @@
+import { removeUserApiKeys } from '@nocobase/app-plugin-api-keys/server';
+import { HUB_API_KEY_CONFIG_ID } from './api-key-auth.js';
+import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
+import { HUB_RELEASE_ACTIONS } from '../shared/permissions.js';
+import type { DatabaseConnection } from '@nocobase/db';
 import type {
   Authorization,
   PermissionSetsApi,
 } from '@nocobase/app-plugin-authorization';
 import {
   UserManagementError,
+  UserRoleScopeError,
   type UserRoleScope,
   type UserRoleValue,
 } from '@nocobase/app-plugin-users/server/tokens';
@@ -14,19 +20,27 @@ export const HUB_PERMISSION_SET_KEYS: readonly [
   'hub-viewer',
 ] = ['hub-administrator', 'hub-operator', 'hub-viewer'] as const;
 
+export const HUB_ACTIVE_ROLE_KEYS = [
+  'hub-administrator',
+  'hub-operator',
+] as const;
+
 export const HUB_ADMINISTRATOR: 'hub-administrator' =
   HUB_PERMISSION_SET_KEYS[0];
 
 const HUB_APP_ACTIONS = new Set([
   'read',
+  'read-all',
   'create',
   'update-settings',
   'remove',
+  'manage-api-keys',
   'read-release',
-  'upload-release',
+  HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
-  'deploy',
+  'read-log',
+  HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',
   'update-config',
@@ -62,15 +76,27 @@ export function protectHubPermissionSets(
 
 export function registerHubResources(
   authorization: Pick<Authorization, 'resourceTypes'>,
+  connection: DatabaseConnection,
 ): void {
-  registerGrantBackedResource(authorization, 'hub.app', HUB_APP_ACTIONS);
-  registerGrantBackedResource(authorization, 'hub.host', new Set(['read']));
+  registerGrantBackedResource(
+    authorization,
+    'hub.app',
+    HUB_APP_ACTIONS,
+    connection,
+  );
+  registerGrantBackedResource(
+    authorization,
+    'hub.host',
+    new Set(['read']),
+    connection,
+  );
 }
 
 function registerGrantBackedResource(
   authorization: Pick<Authorization, 'resourceTypes'>,
   resourceType: 'hub.app' | 'hub.host',
   actions: ReadonlySet<string>,
+  connection: DatabaseConnection,
 ): void {
   authorization.resourceTypes.add({
     resourceType,
@@ -87,14 +113,37 @@ function registerGrantBackedResource(
           ],
         };
       }
+      // read-all is a catalog scope check, derived only from the Hub Administrator's read grant.
       const grants = await context.grants.resolve({
         principal: request.principal,
         subjects: request.subjects,
         resource: request.resource,
-        action: request.action,
+        action: request.action === 'read-all' ? 'read' : request.action,
       });
       const staticGrants = grants.filter((grant) => grant.policy === undefined);
-      return staticGrants.length
+      const administrator = staticGrants.some(
+        (grant) =>
+          grant.source.plugin === 'permission-sets' &&
+          grant.source.id === HUB_ADMINISTRATOR,
+      );
+      let ownsApp = true;
+      if (resourceType === 'hub.app' && !administrator) {
+        if (
+          request.action === 'read-all' ||
+          request.principal.type !== 'user'
+        ) {
+          ownsApp = false;
+        } else if (request.resource.id !== '*') {
+          const app = await connection.query
+            .selectFrom('hubApps')
+            .select('id')
+            .where('id', '=', request.resource.id)
+            .where('createdBy', '=', request.principal.id)
+            .executeTakeFirst();
+          ownsApp = Boolean(app);
+        }
+      }
+      return staticGrants.length && ownsApp
         ? {
             effect: 'permit',
             reasons: staticGrants.map((grant) => ({
@@ -132,24 +181,27 @@ export function createHubUserRoleScope(
       Promise.resolve([
         {
           value: 'hub-administrator',
-          label: 'Administrator',
+          label: 'Platform Administrator',
           labelI18nKey: 'roles.names.hub-administrator',
           labelI18nNs: '@nocobase/app-plugin-hub',
-          description: 'Manage applications, operations, users, and roles.',
+          description:
+            'Manage all applications, publishing API Keys, and user permissions',
         },
         {
           value: 'hub-operator',
-          label: 'Operator',
+          label: 'Application Administrator',
           labelI18nKey: 'roles.names.hub-operator',
           labelI18nNs: '@nocobase/app-plugin-hub',
-          description: 'Deploy and operate applications.',
+          description:
+            'Manage applications you create and your own publishing API Keys',
         },
         {
           value: 'hub-viewer',
-          label: 'Viewer',
+          label: 'Viewer (legacy)',
+          assignable: false,
           labelI18nKey: 'roles.names.hub-viewer',
           labelI18nNs: '@nocobase/app-plugin-hub',
-          description: 'View application and runtime status.',
+          description: 'View your own applications and runtime status.',
         },
       ]),
     async get(userId, connection) {
@@ -195,8 +247,22 @@ export function createHubUserRoleScope(
     },
     async replace(userId, value, connection) {
       const role = singleRole(value);
-      // The library refuses a replacement that would take away the last
-      // administrator who can still act, so there is nothing to check here.
+      // Serialize every Hub role change on one stable row before taking the
+      // snapshot used by the final-administrator check.
+
+      const current = await currentHubRole(permissionSets, userId, connection);
+      if (role === 'hub-viewer') {
+        if (current === role) return;
+        throw new UserManagementError(
+          'INVALID_ROLE_SCOPE_VALUE',
+          'The legacy Viewer role can no longer be assigned.',
+        );
+      }
+      if (current === HUB_ADMINISTRATOR && role !== HUB_ADMINISTRATOR) {
+        await permissionSets
+          .withTransaction(connection)
+          .assertSubjectRemovable({ type: 'user', id: userId });
+      }
       await permissionSets
         .withTransaction(connection)
         .replaceSubjectAssignments({
@@ -204,6 +270,54 @@ export function createHubUserRoleScope(
           managedPermissionSets,
           permissionSets: [role],
         });
+    },
+    onDelete: (userId, connection) =>
+      removeUserApiKeys(connection, userId, ['default', HUB_API_KEY_CONFIG_ID]),
+    async assertCanDelete(userId, actorId, connection) {
+      const actor = await connection.query
+        .selectFrom('user')
+        .select('disabledAt')
+        .where('id', '=', actorId)
+        .executeTakeFirst();
+      if (
+        !actor ||
+        actor.disabledAt != null ||
+        (await currentHubRole(permissionSets, actorId, connection)) !==
+          HUB_ADMINISTRATOR
+      ) {
+        throw new UserRoleScopeError(
+          'HUB_ADMIN_REQUIRED',
+          'Only a platform administrator can delete users.',
+          409,
+        );
+      }
+      if (
+        (await currentHubRole(permissionSets, userId, connection)) ===
+        HUB_ADMINISTRATOR
+      )
+        await permissionSets
+          .withTransaction(connection)
+          .assertSubjectRemovable({ type: 'user', id: userId });
+      await lockUserForAdministration(connection, userId);
+      const app = await connection.query
+        .selectFrom('hubApps')
+        .select('id')
+        .where('createdBy', '=', userId)
+        .executeTakeFirst();
+      if (app)
+        throw new UserRoleScopeError(
+          'USER_HAS_APPS',
+          'Transfer or delete this user’s applications before deleting the user.',
+          409,
+        );
+    },
+    async assertCanDisable(userId, connection) {
+      const current = await currentHubRole(permissionSets, userId, connection);
+      if (current === HUB_ADMINISTRATOR) {
+        await permissionSets
+          .withTransaction(connection)
+          .assertSubjectRemovable({ type: 'user', id: userId });
+      }
     },
   };
 }
@@ -230,4 +344,20 @@ function singleRole(value: UserRoleValue): string {
   }
   requireHubRole(value);
   return value;
+}
+
+async function currentHubRole(
+  permissionSets: PermissionSetsApi,
+  userId: string,
+  connection: DatabaseConnection,
+): Promise<string | undefined> {
+  const assignments = await permissionSets
+    .withTransaction(connection)
+    .listAssignments();
+  return assignments.find(
+    (assignment) =>
+      assignment.subject.type === 'user' &&
+      assignment.subject.id === userId &&
+      isHubPermissionSet(assignment.permissionSet),
+  )?.permissionSet;
 }

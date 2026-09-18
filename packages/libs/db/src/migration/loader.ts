@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   readTaskManifest,
   resolveTaskChecksum,
@@ -66,6 +67,8 @@ async function loadMigrationSource(
         join(directory, fileName),
         fileName,
         manifest,
+        source.parameters,
+        source.configuration,
       ),
     );
   }
@@ -84,6 +87,10 @@ function normalizeMigrationSources(
 
   if (options.sources !== undefined) {
     return options.sources.map((source) => ({
+      parameters: normalizeParameters(source.parameters),
+      configuration: source.configuration?.map((entry) =>
+        Object.freeze({ ...entry }),
+      ),
       packageName: validatePackageName(source.packageName),
       directory: validateDirectory(source.directory),
       extensions: source.extensions ?? options.extensions,
@@ -135,6 +142,8 @@ async function loadMigrationFile(
   filePath: string,
   fileName: string,
   manifest: TaskManifest | undefined,
+  parameters?: Readonly<Record<string, string>>,
+  configuration?: readonly Readonly<Record<string, unknown>>[],
 ): Promise<LoadedMigration> {
   const [source, fileStat] = await Promise.all([
     readFile(filePath, 'utf8'),
@@ -146,7 +155,11 @@ async function loadMigrationFile(
 
   return {
     packageName,
-    name: migration.name,
+    configuration,
+    name: parameters
+      ? `${migration.name}_${createHash('sha256').update(JSON.stringify(parameters)).digest('hex')}`
+      : migration.name,
+    ...(parameters ? { parameters } : {}),
     filePath,
     fileName,
     ...checksums,
@@ -185,6 +198,12 @@ function validateMigrationDefinition(
   if (value.name !== expectedName) {
     throw new Error(
       `Migration file ${filePath} has name "${value.name}", but file name requires "${expectedName}".`,
+    );
+  }
+
+  if (value.shouldRun !== undefined && typeof value.shouldRun !== 'function') {
+    throw new Error(
+      `Migration "${value.name}" shouldRun must be a function when provided.`,
     );
   }
 
@@ -255,4 +274,19 @@ function isValidTransactionMode(value: unknown): boolean {
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
+}
+
+function normalizeParameters(
+  parameters: Readonly<Record<string, string>> | undefined,
+): Readonly<Record<string, string>> | undefined {
+  if (parameters === undefined) return undefined;
+  const entries = Object.entries(parameters).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  if (entries.some(([, value]) => typeof value !== 'string')) {
+    throw new Error('Migration source parameters must be strings.');
+  }
+  return entries.length
+    ? Object.freeze(Object.fromEntries(entries))
+    : undefined;
 }

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createAppConfigPaths,
+  createAppPaths,
   resolveAppRouting,
   resolveAppScopeEnv,
   resolveAppScopePaths,
@@ -62,7 +62,7 @@ describe('application scope paths', () => {
   });
 
   it('creates config path accessors from resolved scope paths', () => {
-    const paths = createAppConfigPaths({
+    const paths = createAppPaths({
       rootDir: '/srv/apps/main',
       serverDir: '/srv/releases/main/server',
       databaseDir: '/srv/releases/main/database',

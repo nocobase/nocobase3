@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Toaster, toast } from 'sonner';
 import { DeploymentDialog } from '../../../../plugins/app-plugin-hub/client/pages/hub/configuration.js';
 import type {
   AppDetail,
@@ -86,6 +87,14 @@ function Dialog({
 }
 
 describe('Hub deployment configuration step', () => {
+  beforeEach(() => {
+    render(<Toaster position='top-right' />);
+  });
+
+  afterEach(() => {
+    toast.dismiss();
+  });
+
   it('starts an existing deployment draft from current config rather than the template', async () => {
     render(
       <Dialog
@@ -109,9 +118,13 @@ describe('Hub deployment configuration step', () => {
     fireEvent.click(screen.getByRole('button', { name: /vtwo/ }));
     expect(loader).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
-    expect(
-      await screen.findByText(/Failed to load configuration template/),
-    ).toBeVisible();
+    const notification = await screen.findByText(
+      /Failed to load configuration template/,
+    );
+    expect(notification).toBeVisible();
+    const toaster = notification.closest('[data-sonner-toaster]');
+    expect(toaster).toHaveAttribute('data-x-position', 'right');
+    expect(toaster).toHaveAttribute('data-y-position', 'top');
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
     expect(
       screen.queryByRole('textbox', { name: 'New configuration' }),

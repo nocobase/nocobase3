@@ -186,7 +186,6 @@ export function inspectResolvedAppServerPlugins(
         });
       }
     }
-
     return {
       order: pluginOrder,
       packageName: plugin.metadata.packageName,

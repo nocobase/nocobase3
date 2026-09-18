@@ -1,3 +1,4 @@
+import createAuthenticationTables from '../../app-plugin-authentication/database/migrations/202608200001_create_authentication_tables.js';
 import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
@@ -124,6 +125,23 @@ describe('@nocobase/app-plugin-users service', () => {
       connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
     });
     databases.push(database);
+    const connection = database.connection();
+    await createAuthenticationTables.up({
+      connection,
+      builder: connection.builder,
+      query: connection.query,
+    });
+    await connection.query
+      .insertInto('user')
+      .values({
+        id: 'user-1',
+        name: 'User',
+        email: 'user@example.com',
+        emailVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
     await database
       .connection()
       .builder.createCollection('testPasswordState', (collection) => {
@@ -404,6 +422,7 @@ function administrationService(
     disable: vi.fn(),
     enable: vi.fn(),
     resetPassword: vi.fn(),
+    remove: vi.fn(() => Promise.resolve()),
     revokeSessions: vi.fn(),
   });
   return create(initialConnection);

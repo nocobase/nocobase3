@@ -1,5 +1,110 @@
 # @nocobase/app-template-default
 
+## 1.0.0-beta.33
+
+### Minor Changes
+
+- 60fa139: Add streamed, checksum-verified Hub release uploads, persistent upload and deployment retry identities, explicit upload-and-deploy requests, and App CLI upload/deploy commands. Reuse existing upload-release and deploy authorization actions and expose minimal deployment status for CI. Preserve historical releases during canonical checksum migration. Normalize permissions returned by the generic API key service.
+
+  Support optional runtime configuration files for deploy and upload-with-deploy, with bounded streaming transport, existing configuration reuse, and configuration-aware retry checks.
+
+  Reject upload-and-deploy requests that cannot return a publishing deployment, including CLI calls without waiting. Correct the unmerged publishing migration rollback.
+
+### Patch Changes
+
+- 60fa139: Check the status of reused upload-and-deploy operations even without waiting. Report failed or cancelled deployments as failures and unconfirmed results as unknown, while preserving asynchronous acceptance for pending operations.
+- 365a9fe: Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations. Resolve AI Registry copy from the active language and localize development navigation and section headings. Translate MCP configuration guidance, tool drawer labels, and transport descriptions.
+- 60fa139: Include upload and deploy package scripts that forward arguments to the existing Hub publishing CLI, and document their usage from the application root.
+- 365a9fe: Translate application shell copy, settings and development empty states, return links, and header action labels using the application locale and its configured fallback chain.
+- 60fa139: Validate Hub publishing response envelopes, release and deployment IDs, and deployment statuses. Report malformed success responses and unknown statuses as unconfirmed outcomes with exit code 3, including when waiting is disabled.
+- 60fa139: Read Hub publishing defaults from the App root .env for upload and deploy commands, with command flags and process environment taking precedence. Ignore local credentials in version control.
+- f5b066d: Include the tests directory in the published application templates.
+- 60fa139: Reject configured upload retries that omit the original deployment configuration and report known failed or cancelled deployment retries as CLI failures even without --wait.
+- 60fa139: Remove the ambiguous app publish alias. Use app upload to upload releases and app deploy to deploy existing releases; update CLI guidance accordingly.
+- 26ac480: Add code-defined Cron scheduling with timezone support, transactional synchronization, and stable schedule identities. Applications and plugins register schedules with `SchedulerService.defineSchedule(definition)` and execution targets with `registerTarget()` during provider registration or boot.
+
+  Route scheduled jobs and workers through the application's configured logical queue, with an adapter-neutral schedule store. Keep the upstream queue dependency unmodified and store queue and scheduler timestamps compatibly with their adapters while preserving absolute instants.
+
+  Move queue storage migrations from Scheduler into the queue library, which resolves configured database connections and physical tables. Assemble these sources centrally in app-server for startup and CLI commands, rejecting overlapping active queue tables before execution. Support immutable target parameters, shared migration history and locks, upstream-compatible physical schemas, and read-only execution conditions that leave skipped migrations unapplied.
+
+  Track idempotent occurrences through the target's final outcome, including asynchronous Workflow completion and recovery with stable run references. Target registration returns a completion-reporting handle scoped to that target; long-running executions can report completion without a fixed scheduler observation timeout.
+
+  Provide an authorized, read-only schedule management page and API with paginated schedules, trigger counts, execution history, and separate schedule and execution statuses. Register `pnpm nocobase schedule sync` as a global CLI command and integrate it into all application templates.
+
+  Include application examples for custom task targets and scheduled Workflows, and agent guidance for schedule definition, target selection, asynchronous execution, diagnostics, and recovery.
+
+  Keep the database manifest CLI entry available before compilation so fresh workspace installs link the command required by package builds.
+
+  Declare the OpenTelemetry dependencies referenced by the upstream queue declarations so consumers can typecheck published Server APIs without enabling tracing or skipping library checks.
+
+- 60fa139: Wait for the final deployment result by default in app deploy and app upload --deploy. Support --no-wait for asynchronous acceptance, preserve explicit --wait compatibility, and keep upload-only commands independent of deployment polling.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [365a9fe]
+- Updated dependencies [365a9fe]
+- Updated dependencies [ec93611]
+- Updated dependencies [60fa139]
+- Updated dependencies [21d3ed4]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+- Updated dependencies [365a9fe]
+- Updated dependencies [d4ca00e]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [d4ca00e]
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.13
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.15
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.3
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+  - @nocobase/app-plugin-file@0.1.0-beta.13
+  - @nocobase/app-plugin-notification@0.1.0-beta.11
+  - @nocobase/app-plugin-users@0.0.2-beta.5
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/app-plugin-i18n@0.1.0-beta.8
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.0
+  - @nocobase/queue@0.1.0-beta.5
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/app-plugin-workflow@0.1.0-beta.18
+  - @nocobase/app-plugin-database-explorer@0.1.0-beta.3
+
+## 1.0.0-beta.32
+
+### Patch Changes
+
+- 4349a40: Preserve navigation group expansion when switching pages in the application, Settings, and Dev tools.
+- d86f6aa: Synchronize agent skills from direct NocoBase package dependencies with the new skills:sync command while preserving plugin:skills:sync compatibility, and share application development and upgrade skills through @nocobase/app-skills across all application templates.
+
+  Add package:remove to uninstall a NocoBase dependency and clean up its synchronized skills and ownership records, reusing plugin unregistration for plugin packages. Document the removal workflow in application templates and the shared development and upgrade skills.
+
+- 028dd7c: Use host-provided peers for shared database types, authorization errors, service tokens, cache registries, and repository filter metadata. Declare their production providers in all application templates so deployments with automatic peer installation disabled retain the required runtime packages. Document the provider contract for generated plugins.
+
+  Existing applications upgrading these packages must add compatible versions of their required shared peers to production dependencies: @nocobase/db, @nocobase/service-provider, @nocobase/repository-input, @nocobase/authorization, @nocobase/caching, @nocobase/i18n, and @nocobase/queue for the standard server stack, plus @nocobase/ai-employee when using its plugin. Update the lockfile and verify the production install; peer declarations do not remove incompatible historical versions automatically.
+
+- Updated dependencies [d86f6aa]
+- Updated dependencies [028dd7c]
+  - @nocobase/nb3-cli@1.0.0-beta.8
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.16
+  - @nocobase/app-plugin-authorization@0.2.0-beta.12
+  - @nocobase/app-plugin-users@0.0.2-beta.4
+  - @nocobase/app-server@1.0.0-beta.17
+  - @nocobase/authorization@0.1.0-beta.7
+  - @nocobase/db@1.0.0-beta.8
+  - @nocobase/queue@0.1.0-beta.4
+
+## 1.0.0-beta.31
+
+### Patch Changes
+
+- 1fea79a: Refresh permission snapshots, navigation, and route guards when sessions or permissions change, and discard obsolete permission responses without requiring a browser reload. Support explicit type:id domain resources in client access checks without rewriting their actions.
+- 1fea79a: Show localized sign-out errors instead of silently refreshing an active session after an API or network failure.
+- Updated dependencies [415d763]
+- Updated dependencies [1fea79a]
+  - @nocobase/app-server@1.0.0-beta.16
+  - @nocobase/app-plugin-authorization@0.2.0-beta.11
+
 ## 1.0.0-beta.30
 
 ### Patch Changes

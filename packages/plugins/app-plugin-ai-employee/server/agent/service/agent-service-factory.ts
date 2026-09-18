@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 import {
   createServiceToken,
   type ServiceResolver,
@@ -280,6 +281,9 @@ export class AgentServiceFactory {
       actor,
       ai: this.aiManager,
       database: this.databaseManager,
+      authorization: this.container.has(authorizationToken)
+        ? this.container.resolve(authorizationToken)
+        : undefined,
       logger: this.loggerService,
       repositories: this.repositoryFactory,
       aiEmployeesManager: managers.aiEmployeesManager,

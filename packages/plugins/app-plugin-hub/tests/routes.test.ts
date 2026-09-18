@@ -17,6 +17,35 @@ import { apiRoutes } from '../server/routes/index.js';
 import { hubServiceToken, type HubService } from '../server/tokens.js';
 
 describe('@nocobase/app-plugin-hub API routes', () => {
+  it.each([
+    '/hub/apps/customer/logs',
+    '/hub/apps/customer/deployments/deployment-1/logs',
+  ])('protects logs and disables response caching: %s', async (url) => {
+    const readLogs = vi.fn<HubService['readLogs']>().mockResolvedValue({
+      entries: [],
+      cursor: '',
+      available: false,
+      hasMore: false,
+      reset: false,
+      enabled: true,
+    });
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', { readLogs }),
+    );
+    const response = await router.request(url);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(readLogs).toHaveBeenCalled();
+    for (const role of ['anonymous', 'member'] as const) {
+      const denied = await apiRoutes.createRouter(
+        createApplication(role, { readLogs }),
+      );
+      expect((await denied.request(url)).status).toBe(
+        role === 'anonymous' ? 401 : 403,
+      );
+    }
+  });
+
   it('returns a paginated App catalog and passes query options', async () => {
     const listAppsPage = vi
       .fn<HubService['listAppsPage']>()
@@ -166,16 +195,6 @@ describe('@nocobase/app-plugin-hub API routes', () => {
             },
           ],
         },
-        {
-          key: 'hub-viewer',
-          title: 'Hub viewer',
-          grants: [
-            {
-              resource: { type: 'hub.app', id: '*' },
-              actions: ['read'],
-            },
-          ],
-        },
       ],
     });
   });
@@ -255,6 +274,7 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     const response = await router.request('/hub/apps/customer/releases', {
       method: 'POST',
       headers: {
+        'content-type': 'application/gzip',
         'content-length': String(256 * 1024 * 1024 + 1),
       },
       body: 'not-read',
@@ -318,11 +338,12 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     const response = await router.request('/hub/apps/customer/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ activation: 'lazy' }),
+      body: JSON.stringify({ activation: 'lazy', name: 'Renamed App' }),
     });
 
     expect(response.status).toBe(200);
     expect(updateSettings).toHaveBeenCalledWith('customer', {
+      name: 'Renamed App',
       activation: 'lazy',
     });
   });
@@ -463,6 +484,7 @@ function createApplication(
     middleware: () => async (context, next) => {
       context.set('authz', {
         identity: { principal: { type: 'user', id: role } },
+        can: async () => role === 'administrator',
         require: async () => {
           if (role !== 'administrator') {
             throw new AuthorizationDeniedError({

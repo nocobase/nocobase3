@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { usePasswordResetRequest } from '@nocobase/app-plugin-authentication/client/actions';
 import { useState, type FormEvent, type ReactElement } from 'react';
 
@@ -22,13 +23,20 @@ export interface PasswordResetRequestFormProps {
   readonly successMessage?: string;
 }
 
-export function PasswordResetRequestForm({
-  action: actionOverride,
-  className,
-  submitLabel = 'Send reset link',
-  pendingLabel = 'Sending…',
-  successMessage = 'If the account exists, a reset link has been sent.',
-}: PasswordResetRequestFormProps = {}): ReactElement {
+export function PasswordResetRequestForm(
+  inputProps: PasswordResetRequestFormProps = {},
+): ReactElement {
+  const { t } = useTranslation();
+  const {
+    action: actionOverride,
+    className,
+    submitLabel = t('auth.sendResetLink', { defaultValue: 'Send reset link' }),
+    pendingLabel = t('auth.sending', { defaultValue: 'Sending…' }),
+    successMessage = t('auth.resetSent', {
+      defaultValue: 'If the account exists, a reset link has been sent.',
+    }),
+  } = inputProps;
+
   const [email, setEmail] = useState('');
   const defaultAction = usePasswordResetRequest();
   const action = actionOverride ?? defaultAction;
@@ -41,7 +49,9 @@ export function PasswordResetRequestForm({
   return (
     <form className={className ?? 'space-y-5'} onSubmit={handleSubmit}>
       <div className='space-y-2'>
-        <Label htmlFor='email'>Email</Label>
+        <Label htmlFor='email'>
+          {t('auth.email', { defaultValue: 'Email' })}
+        </Label>
         <Input
           id='email'
           autoComplete='email'
@@ -62,12 +72,14 @@ export function PasswordResetRequestForm({
       </Button>
       <div className='pt-3 text-sm'>
         <p className='text-center text-muted-foreground'>
-          Remember your password?{' '}
+          {t('auth.rememberPassword', {
+            defaultValue: 'Remember your password?',
+          })}{' '}
           <a
             className='font-semibold text-foreground underline underline-offset-4'
             href='login'
           >
-            Sign in
+            {t('auth.signIn', { defaultValue: 'Sign in' })}
           </a>
         </p>
       </div>

@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-hub",
   "displayName": "Application Hub",
   "description": "Create, configure, release, and deploy applications through a managed app host.",
-  "version": "0.1.0-beta.7",
+  "version": "0.1.0-beta.10",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -35,7 +35,8 @@
   "files": [
     "dist",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "skills"
   ],
   "publishConfig": {
     "access": "public",
@@ -76,12 +77,13 @@
   },
   "dependencies": {
     "@nocobase/app-host": "workspace:^",
-    "@nocobase/authorization": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "hono": "catalog:",
     "tar": "^7.4.3",
-    "yaml": "^2.8.1"
+    "yaml": "^2.8.1",
+    "better-auth": "catalog:",
+    "@nocobase/logging": "workspace:^"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
@@ -101,9 +103,13 @@
     "clsx": "catalog:",
     "codemirror": "^6.0.2",
     "lucide-react": "catalog:",
+    "sonner": "^2.0.3",
     "react": "^19.0.0",
     "react-router": "catalog:",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@nocobase/app-plugin-api-keys": "workspace:^",
+    "@nocobase/authorization": "workspace:^",
+    "react-day-picker": "10.0.1"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",
@@ -116,7 +122,6 @@
     "tailwindcss": "catalog:",
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
-    "@nocobase/logging": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "knex": "catalog:",

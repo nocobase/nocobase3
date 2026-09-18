@@ -103,10 +103,10 @@ if [ ! -d "$APP_DIR/node_modules" ]; then
 fi
 
 cd "$APP_DIR"
-echo "::group::Synchronize registered plugin Skills"
+echo "::group::Synchronize NocoBase package Skills"
 # create-app reports a synchronization failure as a warning. Exercise the command
 # explicitly so an invalid published Skill cannot pass this smoke test.
-pnpm plugin:skills:sync
+pnpm skills:sync
 echo "::endgroup::"
 
 echo "::group::Boot the application with pnpm dev"

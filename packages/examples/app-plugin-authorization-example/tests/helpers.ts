@@ -11,7 +11,7 @@ import {
   authorizationToken,
   createAppAuthorization,
 } from '@nocobase/app-plugin-authorization';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -102,7 +102,7 @@ export async function createFixture() {
     appName: 'example',
     publicBasePath: '/main',
     config: { app: { name: 'example', publicBasePath: '/main' } },
-    paths: createConfigPaths({ rootDir: '/tmp/authorization-example' }),
+    paths: createAppPaths({ rootDir: '/tmp/authorization-example' }),
     container,
     router,
   };

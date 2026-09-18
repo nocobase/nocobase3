@@ -1,3 +1,4 @@
+import type { DataServices } from '../service/data-contracts.js';
 import type {
   AIEmployeeEntity,
   AIMessageInput,
@@ -76,6 +77,7 @@ export interface AgentFrontendToolService {
 }
 
 export interface AppAgentServices {
+  data: DataServices;
   aiEmployees: AgentEmployeeService;
   aiConversations: AgentConversationService;
   builtIn: AgentBuiltInService;

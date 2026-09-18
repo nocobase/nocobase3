@@ -1,5 +1,3 @@
-import { createNodeVitestConfig } from '@nocobase/dev-config/vitest/node';
+import { createReactVitestConfig } from '@nocobase/dev-config/vitest/react';
 
-export default createNodeVitestConfig({
-  test: { include: ['tests/**/*.test.ts'] },
-});
+export default createReactVitestConfig();

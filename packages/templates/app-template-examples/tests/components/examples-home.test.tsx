@@ -35,6 +35,7 @@ it.each(['en-US', 'zh-CN'])(
     expect(
       screen.getAllByRole('link').map((link) => link.getAttribute('href')),
     ).toEqual([
+      '/demo/notifications',
       '/demo/route-overlays',
       '/demo/articles',
       '/demo/numeric-examples',

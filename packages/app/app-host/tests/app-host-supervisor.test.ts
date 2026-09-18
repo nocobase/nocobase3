@@ -40,7 +40,7 @@ describe('AppHostSupervisor', () => {
     vi.stubEnv('APP_HOST_MODE', 'invalid');
     vi.stubEnv('APP_HOST_URL', 'http://ambient.invalid');
     vi.stubEnv('APP_HOST_DRIVER', 'tsx');
-    vi.stubEnv('APP_DEPLOYMENTS_DIR', '/ambient/deployments');
+    vi.stubEnv('APP_REVISIONS_DIR', '/ambient/deployments');
     try {
       const supervisor = AppHostSupervisor.initialize({ mode: 'managed' });
       try {
@@ -49,7 +49,7 @@ describe('AppHostSupervisor', () => {
           driver: 'node',
           status: 'stopped',
           targetUrl: undefined,
-          appDeploymentsDir: undefined,
+          appRevisionsDir: undefined,
         });
       } finally {
         await supervisor.shutdown();
@@ -161,7 +161,7 @@ describe('AppHostSupervisor', () => {
     const supervisor = SourceAppHostSupervisor.initialize({
       mode: 'managed',
       driver: 'auto',
-      appDeploymentsDir: fixture.appDeploymentsDir,
+      appRevisionsDir: fixture.appRevisionsDir,
       appVolumesDir: fixture.appVolumesDir,
       configPath: fixture.configPath,
       startTimeoutMs: 10_000,
@@ -259,7 +259,7 @@ describe('AppHostSupervisor', () => {
     const supervisor = InstalledSupervisor.initialize({
       mode: 'managed',
       driver: 'auto',
-      appDeploymentsDir: fixture.appDeploymentsDir,
+      appRevisionsDir: fixture.appRevisionsDir,
       appVolumesDir: fixture.appVolumesDir,
       configPath: fixture.configPath,
       startTimeoutMs: 10_000,
@@ -289,7 +289,7 @@ describe('AppHostSupervisor', () => {
     const supervisor = AppHostSupervisor.initialize({
       mode: 'managed',
       driver: 'tsx',
-      appDeploymentsDir: fixture.appDeploymentsDir,
+      appRevisionsDir: fixture.appRevisionsDir,
       appVolumesDir: fixture.appVolumesDir,
       configPath: fixture.configPath,
       startTimeoutMs: 10_000,
@@ -362,7 +362,7 @@ describe('AppHostSupervisor', () => {
 });
 
 async function createManagedFixture(rootDir: string): Promise<{
-  appDeploymentsDir: string;
+  appRevisionsDir: string;
   appVolumesDir: string;
   configPath: string;
   artifact: ArtifactReference;
@@ -371,7 +371,7 @@ async function createManagedFixture(rootDir: string): Promise<{
     new URL('../fixtures/app-dist/demo', import.meta.url),
   );
   const artifactDir = path.join(rootDir, 'app-artifacts');
-  const appDeploymentsDir = path.join(rootDir, 'app-deployments');
+  const appRevisionsDir = path.join(rootDir, 'app-deployments');
   const appVolumesDir = path.join(rootDir, 'app-volumes');
   const key = 'releases/demo/0.0.1.tar.gz';
   const archivePath = path.join(artifactDir, key);
@@ -392,13 +392,13 @@ async function createManagedFixture(rootDir: string): Promise<{
           location: artifactDir,
           visibility: 'private',
         },
-        appDeploymentsDir,
+        appRevisionsDir,
         appVolumesDir,
       },
     }),
   );
   return {
-    appDeploymentsDir,
+    appRevisionsDir,
     appVolumesDir,
     configPath,
     artifact: { key, appId: 'demo', version: '0.0.1', checksum },

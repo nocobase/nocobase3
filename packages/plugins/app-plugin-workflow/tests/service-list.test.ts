@@ -22,7 +22,11 @@ describe('workflow repositories', () => {
   beforeEach(async () => {
     database = await createTestDatabase();
     const service: WorkflowServiceApi = {
-      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      trigger: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+        runId: '1',
+      }),
       triggerRevision: async () => ({
         status: 'accepted',
         eventKey: 'test-event',
@@ -136,7 +140,11 @@ describe('workflow repositories', () => {
 
     const ensureArtifactMaterialized = vi.fn(async () => undefined);
     const repository = new WorkflowRepository(database, {
-      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      trigger: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+        runId: '1',
+      }),
       triggerRevision: async () => ({
         status: 'accepted',
         eventKey: 'test-event',
@@ -180,7 +188,11 @@ describe('workflow repositories', () => {
       createArtifact('artifact-two'),
     ];
     const service: WorkflowServiceApi = {
-      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      trigger: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+        runId: '1',
+      }),
       triggerRevision: async () => ({
         status: 'accepted',
         eventKey: 'test-event',
@@ -214,7 +226,11 @@ describe('workflow repositories', () => {
       },
     });
     const service: WorkflowServiceApi = {
-      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      trigger: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+        runId: '1',
+      }),
       triggerRevision: async () => ({
         status: 'accepted',
         eventKey: 'test-event',

@@ -1,15 +1,36 @@
+import { HUB_RELEASE_ACTIONS } from '../shared/permissions.js';
 import type { AuthorizationClient } from '@nocobase/app-plugin-authorization/client';
 import type { DetailTab } from './pages/hub/types.js';
 
-export const HUB_APP_ACTIONS = [
+export const HUB_APP_ACTIONS: readonly [
+  'manage-api-keys',
   'create',
   'update-settings',
   'remove',
   'read-release',
-  'upload-release',
+  typeof HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
-  'deploy',
+  'read-log',
+  typeof HUB_RELEASE_ACTIONS.deploy,
+  'rollback',
+  'read-config',
+  'update-config',
+  'refresh',
+  'start',
+  'stop',
+  'restart',
+] = [
+  'manage-api-keys',
+  'create',
+  'update-settings',
+  'remove',
+  'read-release',
+  HUB_RELEASE_ACTIONS.upload,
+  'read-config-template',
+  'read-deployment',
+  'read-log',
+  HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',
   'update-config',
@@ -36,8 +57,9 @@ export function visibleHubDetailTabs(
     ...(!state.hasReleases && capabilities['upload-release']
       ? (['development'] as const)
       : []),
-    ...(capabilities['read-deployment'] ? (['deployments'] as const) : []),
     ...(capabilities['read-release'] ? (['releases'] as const) : []),
+    ...(capabilities['read-deployment'] ? (['deployments'] as const) : []),
+    ...(capabilities['read-log'] ? (['logs'] as const) : []),
     ...(capabilities['read-config'] ? (['resources'] as const) : []),
     ...(state.deployed && capabilities['read-config']
       ? (['configuration'] as const)
@@ -48,6 +70,19 @@ export function visibleHubDetailTabs(
   ];
 }
 
+export function defaultHubDetailTab(
+  state: { readonly hasReleases: boolean; readonly deployed: boolean },
+  capabilities: HubCapabilities,
+): DetailTab | undefined {
+  const visible = visibleHubDetailTabs(state, capabilities);
+  const preferred = state.deployed
+    ? 'deployments'
+    : state.hasReleases
+      ? 'releases'
+      : 'development';
+  return visible.includes(preferred) ? preferred : visible[0];
+}
+
 export function resolveHubDetailTab(
   requested: DetailTab,
   state: { readonly hasReleases: boolean; readonly deployed: boolean },
@@ -56,7 +91,7 @@ export function resolveHubDetailTab(
   const visible = visibleHubDetailTabs(state, capabilities);
   return visible.includes(requested)
     ? requested
-    : (visible[0] ?? 'deployments');
+    : (defaultHubDetailTab(state, capabilities) ?? 'deployments');
 }
 
 export async function loadHubCapabilities(

@@ -1,3 +1,22 @@
+import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
+import { createReadStream } from 'node:fs';
+import { Readable } from 'node:stream';
+import { receiveArtifact, validateIdempotencyKey } from './artifact-upload.js';
+import { isPlaceholderSecret } from '@nocobase/app-server/config';
+import type { HubApiKeyService } from './api-keys.js';
+
+import { normalizeRuntimeLogging } from '@nocobase/app-server/logging';
+import {
+  appendJournal,
+  readJournal,
+  pruneJournals,
+  normalizeFileOptions,
+  createDiagnosticLogger,
+  reportLoggingFailure,
+  type Logger,
+  type JournalPage,
+  type JournalQuery,
+} from '@nocobase/logging';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   chmod,
@@ -5,6 +24,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rename,
   rm,
   writeFile,
@@ -13,6 +33,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type {
+  DeploymentLogListener,
   HostDeploymentSet,
   HostDeploymentSpec,
   HostManagementService,
@@ -25,6 +46,8 @@ import {
   type NocoBaseDriveDisk,
 } from '@nocobase/drive';
 import type { Knex } from 'knex';
+import type { AppHostSupervisorInfo } from '@nocobase/app-host/supervisor';
+import { normalizeBasePath } from '@nocobase/app-server/support';
 import { x as extractTar } from 'tar';
 import {
   parse as parseYaml,
@@ -57,7 +80,6 @@ import type {
   UpdateHubSettingsInput,
 } from '../tokens.js';
 
-const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
 const AUTH_SECRET_BYTES = 32;
 const APP_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const RELEASE_VERSION_PATTERN = /^[0-9A-Za-z][0-9A-Za-z._+-]{0,254}$/;
@@ -78,14 +100,19 @@ const EMBEDDED_ENTRY_PATH = 'dist/server/embedded.js';
 const DEFAULT_STARTUP_RESTORATION_WAIT_MS = 5_000;
 
 export interface DefaultHubServiceOptions {
+  readonly apiKeys?: Pick<HubApiKeyService, 'removeAppKeys'>;
+
+  readonly logger?: Logger;
   readonly database: DatabaseManager;
   readonly config: HubPluginConfig;
   readonly hostController: HubHostController;
+  readonly publicBasePath?: string;
   /** Upper bound on how long reads wait for startup restoration. Defaults to five seconds. */
   readonly startupRestorationWaitMs?: number;
 }
 
 export interface HubHostController {
+  getInfo(): Pick<AppHostSupervisorInfo, 'status' | 'targetUrl'>;
   onReady(listener: () => void): () => void;
   restoreDeploymentSet(
     deploymentSet: HostDeploymentSet,
@@ -94,7 +121,10 @@ export interface HubHostController {
   applyDeploymentSet(
     deploymentSet: HostDeploymentSet,
   ): Promise<{ readonly status: HostStatus }>;
-  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
+  applyDeployment(
+    deployment: HostDeploymentSpec,
+    listener?: DeploymentLogListener,
+  ): Promise<HostStatus>;
   startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus>;
   stopDeployment(appId: string): Promise<HostStatus>;
   removeDeployment(appId: string): Promise<HostStatus>;
@@ -105,7 +135,7 @@ export class HubError extends Error {
   public constructor(
     message: string,
     public readonly code: string,
-    public readonly status: 400 | 404 | 409 | 413 | 422 | 503,
+    public readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 503,
   ) {
     super(message);
     this.name = 'HubError';
@@ -113,6 +143,7 @@ export class HubError extends Error {
 }
 
 export class DefaultHubService implements HubService {
+  private readonly diagnostic: ReturnType<typeof createDiagnosticLogger>;
   private readonly disk: NocoBaseDriveDisk;
   private readonly hostController: HubHostController;
   private readonly locks = new Map<string, Promise<unknown>>();
@@ -122,6 +153,7 @@ export class DefaultHubService implements HubService {
   private unsubscribeHostReady: (() => void) | undefined;
 
   public constructor(private readonly options: DefaultHubServiceOptions) {
+    this.diagnostic = createDiagnosticLogger(options.logger);
     const drive = createDriveManager({
       default: 'artifact',
       disks: { artifact: options.config.artifact },
@@ -135,7 +167,169 @@ export class DefaultHubService implements HubService {
       recursive: true,
       mode: 0o700,
     });
+    const deployments = this.options.config.logging?.deployments;
+    if (deployments?.maxSizeMB !== undefined)
+      reportLoggingFailure(
+        'hub.logging.deployments.maxSizeMB is deprecated; use maxFileSizeMB',
+      );
+    normalizeFileOptions({
+      retentionDays: deployments?.retentionDays ?? 30,
+      maxFileSizeMB: deployments?.maxSizeMB ?? deployments?.maxFileSizeMB ?? 50,
+      maxTotalSizeMB: deployments?.maxTotalSizeMB ?? 1024,
+    });
+    normalizeFileOptions(
+      normalizeRuntimeLogging(this.options.config.logging?.apps).file ?? {},
+    );
     await this.writeHostConfig();
+  }
+
+  private deploymentLogsDir(): string {
+    return (
+      this.options.config.logging?.deployments?.directory ??
+      path.join(
+        path.dirname(this.options.config.host.configPath),
+        'deployment-logs',
+      )
+    );
+  }
+
+  private desiredConfigsDir(): string {
+    return (
+      this.options.config.desiredConfigsDir ??
+      path.join(
+        path.dirname(this.options.config.host.configPath),
+        'app-configs',
+      )
+    );
+  }
+
+  private desiredConfigPath(appId: string, deploymentId: string): string {
+    return path.join(this.desiredConfigsDir(), appId, `${deploymentId}.yml`);
+  }
+
+  private deploymentLogPath(appId: string, deploymentId: string): string {
+    if (!APP_ID_PATTERN.test(appId) || !APP_ID_PATTERN.test(deploymentId))
+      throw new HubError('Invalid log identity.', 'INVALID_LOG_ID', 400);
+    return path.join(this.deploymentLogsDir(), appId, `${deploymentId}.log`);
+  }
+
+  private logDeployment(
+    deployment: HubDeploymentRecord,
+    phase: string,
+    msg: string,
+    err?: unknown,
+  ): void {
+    const policy = this.options.config.logging?.deployments;
+    if (policy?.enabled === false) return;
+    this.appendDeploymentLog(deployment, {
+      time: new Date().toISOString(),
+      level: err ? 'error' : 'info',
+      appId: deployment.appId,
+      deploymentId: deployment.id,
+      phase,
+      msg,
+      ...(err ? { err } : {}),
+    });
+  }
+
+  private appendDeploymentLog(
+    deployment: HubDeploymentRecord,
+    entry: Parameters<typeof appendJournal>[1],
+  ): void {
+    try {
+      appendJournal(
+        this.deploymentLogPath(deployment.appId, deployment.id),
+        entry,
+        this.options.config.logging?.deployments?.maxSizeMB ??
+          this.options.config.logging?.deployments?.maxFileSizeMB ??
+          50,
+      );
+    } catch (error) {
+      reportLoggingFailure('Failed to persist deployment log', error);
+    }
+  }
+
+  public async readLogs(
+    appId: string,
+    query: JournalQuery = {},
+    deploymentId?: string,
+  ): Promise<
+    JournalPage & { enabled: boolean; status?: string; phase?: string }
+  > {
+    await this.requireApp(appId);
+    if (!APP_ID_PATTERN.test(appId))
+      throw new HubError('Invalid app ID.', 'INVALID_APP_ID', 400);
+    const deployment = deploymentId
+      ? await this.getDeployment(appId, deploymentId)
+      : undefined;
+    const policy = deployment
+      ? this.options.config.logging?.deployments
+      : normalizeRuntimeLogging(this.options.config.logging?.apps).file;
+    const directory = deployment
+      ? path.dirname(this.deploymentLogPath(appId, deployment.id))
+      : path.join(
+          this.options.config.host.appVolumesDir,
+          appId,
+          'storage',
+          'logs',
+        );
+    try {
+      const base = deployment
+        ? path.join(this.deploymentLogsDir())
+        : this.options.config.host.appVolumesDir;
+      try {
+        const canonicalBase = await realpath(base);
+        const expected = path.join(
+          canonicalBase,
+          path.relative(base, directory),
+        );
+        if ((await realpath(directory)) !== expected)
+          throw new HubError(
+            'Invalid log directory.',
+            'INVALID_LOG_DIRECTORY',
+            400,
+          );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      await pruneJournals(
+        directory,
+        {
+          retentionDays: policy?.retentionDays ?? (deployment ? 30 : 7),
+          maxSizeMB: deployment
+            ? (this.options.config.logging?.deployments?.maxTotalSizeMB ?? 1024)
+            : (normalizeRuntimeLogging(this.options.config.logging?.apps).file
+                ?.maxTotalSizeMB ??
+              policy?.maxSizeMB ??
+              500),
+        },
+        deployment && ['queued', 'deploying'].includes(deployment.status)
+          ? `${deployment.id}.log`
+          : undefined,
+      );
+      const result = await readJournal(
+        directory,
+        query,
+        deployment ? `${deployment.id}.log` : undefined,
+      );
+      return {
+        ...result,
+        enabled: policy?.enabled !== false,
+        ...(deployment
+          ? {
+              status: deployment.status,
+              phase:
+                typeof result.entries.at(-1)?.phase === 'string'
+                  ? (result.entries.at(-1)!.phase as string)
+                  : deployment.phase,
+            }
+          : {}),
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Invalid log cursor')
+        throw new HubError(error.message, 'INVALID_LOG_CURSOR', 400);
+      throw error;
+    }
   }
 
   public async listApps(): Promise<readonly HubAppSummary[]> {
@@ -194,6 +388,9 @@ export class DefaultHubService implements HubService {
     if (matchingIds) {
       countQuery = countQuery.where('id', 'in', matchingIds);
     }
+    if (options.createdBy !== undefined) {
+      countQuery = countQuery.where('createdBy', '=', options.createdBy);
+    }
     const count = await countQuery.executeTakeFirstOrThrow();
     const total = Number(count.total);
     const page = Math.min(
@@ -216,6 +413,9 @@ export class DefaultHubService implements HubService {
       .offset((page - 1) * pageSize);
     if (matchingIds) {
       appsQuery = appsQuery.where('hubApps.id', 'in', matchingIds);
+    }
+    if (options.createdBy !== undefined) {
+      appsQuery = appsQuery.where('hubApps.createdBy', '=', options.createdBy);
     }
     const apps = await appsQuery.execute<Row>();
     return {
@@ -302,7 +502,10 @@ export class DefaultHubService implements HubService {
     return await this.detail(await this.requireApp(appId));
   }
 
-  public async createApp(input: CreateHubAppInput): Promise<HubAppDetail> {
+  public async createApp(
+    input: CreateHubAppInput,
+    createdBy?: string,
+  ): Promise<HubAppDetail> {
     const id = input.id.trim();
     const name = input.name.trim();
     if (!APP_ID_PATTERN.test(id)) {
@@ -312,11 +515,35 @@ export class DefaultHubService implements HubService {
         422,
       );
     }
+    // Managed App Host reserves the /__ namespace for listener-owned routes.
+    if (id.startsWith('__')) {
+      throw new HubError(
+        'App IDs beginning with "__" are reserved by App Host.',
+        'INVALID_APP_ID',
+        422,
+      );
+    }
+    const basePath = `/${id}`;
+    const publicBasePath = normalizeBasePath(this.options.publicBasePath ?? '');
+    if (
+      publicBasePath === basePath ||
+      publicBasePath.startsWith(`${basePath}/`)
+    ) {
+      throw new HubError(
+        'App ID conflicts with the Hub public base path.',
+        'INVALID_APP_ID',
+        422,
+      );
+    }
     if (!name) {
       throw new HubError('App name is required.', 'INVALID_APP_NAME', 422);
     }
     if (await this.findApp(id)) {
-      throw new HubError(`App "${id}" already exists.`, 'APP_EXISTS', 409);
+      throw new HubError(
+        'Application ID is unavailable. Choose a different ID; application names may be repeated.',
+        'APP_EXISTS',
+        409,
+      );
     }
     const now = new Date();
     const app: HubAppRecord = {
@@ -331,7 +558,38 @@ export class DefaultHubService implements HubService {
       createdAt: now,
       updatedAt: now,
     };
-    await this.query().insertInto('hubApps').values(encodeApp(app)).execute();
+    try {
+      await this.options.database.transaction(async (connection) => {
+        if (createdBy) {
+          await lockUserForAdministration(connection, createdBy);
+          const owner = await connection.query
+            .selectFrom('user')
+            .select('disabledAt')
+            .where('id', '=', createdBy)
+            .executeTakeFirst();
+          if (!owner || owner.disabledAt != null)
+            throw new HubError(
+              'The application owner is unavailable.',
+              'APP_OWNER_UNAVAILABLE',
+              409,
+            );
+        }
+        await connection.query
+          .insertInto('hubApps')
+          .values({ ...encodeApp(app), createdBy: createdBy ?? null })
+          .execute();
+      });
+    } catch (reason) {
+      // A concurrent creator can claim the same ID after the initial check.
+      if (await this.findApp(id)) {
+        throw new HubError(
+          'Application ID is unavailable. Choose a different ID; application names may be repeated.',
+          'APP_EXISTS',
+          409,
+        );
+      }
+      throw reason;
+    }
     return await this.detail(app);
   }
 
@@ -368,46 +626,222 @@ export class DefaultHubService implements HubService {
     appId: string,
     input: CreateHubReleaseInput,
   ): Promise<HubReleaseRecord> {
+    validateIdempotencyKey(input.idempotencyKey);
     await this.requireApp(appId);
-    if (
-      input.bytes.byteLength === 0 ||
-      input.bytes.byteLength > MAX_ARTIFACT_SIZE
-    ) {
+    const shouldDeploy = input.deploymentIntent === 'explicit';
+    if (input.config !== undefined) {
+      if (!shouldDeploy)
+        throw new HubError(
+          'Configuration requires deployment.',
+          'CONFIG_REQUIRES_DEPLOY',
+          400,
+        );
+      if (
+        !input.config ||
+        input.config.mode !== 'file' ||
+        typeof input.config.content !== 'string' ||
+        !input.config.content.trim() ||
+        Buffer.byteLength(input.config.content) > 1024 * 1024
+      )
+        throw new HubError(
+          'A non-empty file configuration of at most 1 MiB is required.',
+          'INVALID_DEPLOYMENT_INPUT',
+          400,
+        );
+    }
+    const configFingerprint = input.config
+      ? sha256(new TextEncoder().encode(input.config.content))
+      : null;
+    if (input.waitForDeployment && !shouldDeploy)
       throw new HubError(
-        `Artifact must be between 1 byte and ${MAX_ARTIFACT_SIZE} bytes.`,
-        'INVALID_ARTIFACT_SIZE',
-        413,
+        'Waiting requires a deployment. Use --deploy with --wait.',
+        'WAIT_REQUIRES_DEPLOY',
+        400,
       );
-    }
-    const metadata = await inspectArtifact(input.bytes);
-    const { version } = metadata;
-    const id = randomUUID();
-    const artifactKey = `${appId}/${id}.tar.gz`;
-    const release: HubReleaseRecord = {
-      id,
-      appId,
-      version,
-      artifactKey,
-      checksum: sha256(input.bytes),
-      size: input.bytes.byteLength,
-      configTemplate: metadata.configTemplate,
-      manifest: metadata.manifest,
-      createdAt: new Date(),
-    };
-    await this.disk.put(artifactKey, input.bytes, {
-      visibility: 'private',
-      contentType: 'application/gzip',
-    });
+    if (shouldDeploy) await input.authorizeDeployment?.();
+    const staged = await receiveArtifact(
+      input.stream ?? Readable.from(input.bytes ? [input.bytes] : []),
+      input.checksum,
+    );
     try {
-      await this.query()
-        .insertInto('hubAppReleases')
-        .values(encodeRelease(release))
-        .execute();
-    } catch (error) {
-      await this.disk.delete(artifactKey).catch(() => undefined);
-      throw error;
+      const metadata = await inspectArtifact(staged.path);
+      return await this.withLock(`publish:${appId}`, async () => {
+        const current = await this.requireApp(appId);
+        const existing = await this.existingRelease(
+          appId,
+          staged.checksum,
+          input.idempotencyKey,
+          configFingerprint,
+          shouldDeploy,
+        );
+        if (existing) return existing;
+        const id = randomUUID();
+        const artifactKey = `${appId}/${id}.tar.gz`;
+        const release: HubReleaseRecord = {
+          id,
+          appId,
+          artifactKey,
+          ...metadata,
+          checksum: staged.checksum,
+          size: staged.size,
+          createdAt: new Date(),
+        };
+        if (shouldDeploy) await this.requireNoPendingDeployment(appId);
+        const deployment = shouldDeploy
+          ? await this.buildDeploymentRecord(
+              current,
+              release,
+              'deploy',
+              null,
+              input.config,
+            )
+          : null;
+        try {
+          await this.disk.putStream(
+            artifactKey,
+            createReadStream(staged.path),
+            { visibility: 'private', contentType: 'application/gzip' },
+          );
+          await this.options.database.transaction(async (connection) => {
+            await connection.query
+              .updateTable('hubApps')
+              .set({ updatedAt: new Date() })
+              .where('id', '=', appId)
+              .execute();
+            if (deployment)
+              await this.requireNoPendingDeployment(appId, connection);
+            await connection.query
+              .insertInto('hubAppReleases')
+              .values(encodeRelease(release))
+              .execute();
+            await connection.query
+              .insertInto('hubReleaseChecksums')
+              .values({
+                appId,
+                checksum: staged.checksum,
+                releaseId: id,
+                operationId: deployment?.id ?? null,
+                configFingerprint,
+              })
+              .execute();
+            if (input.idempotencyKey)
+              await connection.query
+                .insertInto('hubReleaseRequests')
+                .values({
+                  appId,
+                  requestKey: input.idempotencyKey,
+                  checksum: staged.checksum,
+                  releaseId: id,
+                })
+                .execute();
+            if (deployment)
+              await connection.query
+                .insertInto('hubAppDeployments')
+                .values(encodeDeployment(deployment))
+                .execute();
+          });
+        } catch (error) {
+          await this.disk.delete(artifactKey);
+          if (deployment?.config.path)
+            await rm(deployment.config.path, { force: true });
+          // A second Hub writer may have won the database uniqueness race.
+          const winner = await this.existingRelease(
+            appId,
+            staged.checksum,
+            input.idempotencyKey,
+            configFingerprint,
+            shouldDeploy,
+          );
+          if (winner) return winner;
+          throw error;
+        }
+        if (deployment) this.schedule(deployment);
+        return {
+          ...release,
+          reused: false,
+          operationId: deployment?.id ?? null,
+        };
+      });
+    } finally {
+      await staged.dispose();
     }
-    return release;
+  }
+
+  private async existingRelease(
+    appId: string,
+    checksum: string,
+    requestKey?: string,
+    configFingerprint: string | null = null,
+    requiresDeployment: boolean = false,
+  ): Promise<HubReleaseRecord | null> {
+    const request = requestKey
+      ? await this.query()
+          .selectFrom('hubReleaseRequests')
+          .selectAll()
+          .where('appId', '=', appId)
+          .where('requestKey', '=', requestKey)
+          .executeTakeFirst()
+      : undefined;
+    if (request && request.checksum !== checksum)
+      throw new HubError(
+        'Idempotency key was used for another artifact.',
+        'IDEMPOTENCY_CONFLICT',
+        409,
+      );
+    const canonical = await this.query()
+      .selectFrom('hubReleaseChecksums')
+      .selectAll()
+      .where('appId', '=', appId)
+      .where('checksum', '=', checksum)
+      .executeTakeFirst();
+    if (!canonical) return null;
+    if (requiresDeployment && !canonical.operationId)
+      throw new HubError(
+        `Release ${String(canonical.releaseId)} already exists without a publishing deployment. Use app deploy --release-id ${String(canonical.releaseId)} to deploy it.`,
+        'NO_DEPLOYMENT',
+        409,
+      );
+    if (requiresDeployment && canonical.configFingerprint !== configFingerprint)
+      throw new HubError(
+        'This artifact was already uploaded with different configuration. Use app deploy with the Release ID to change configuration.',
+        'IDEMPOTENCY_CONFLICT',
+        409,
+      );
+    if (requestKey && !request) {
+      try {
+        await this.query()
+          .insertInto('hubReleaseRequests')
+          .values({
+            appId,
+            requestKey,
+            checksum,
+            releaseId: canonical.releaseId,
+          })
+          .execute();
+      } catch (error) {
+        const winner = await this.query()
+          .selectFrom('hubReleaseRequests')
+          .selectAll()
+          .where('appId', '=', appId)
+          .where('requestKey', '=', requestKey)
+          .executeTakeFirst();
+        if (!winner) throw error;
+        if (winner.checksum !== checksum)
+          throw new HubError(
+            'Idempotency key was used for another artifact.',
+            'IDEMPOTENCY_CONFLICT',
+            409,
+          );
+      }
+    }
+    return {
+      ...(await this.getRelease(appId, String(canonical.releaseId))),
+      reused: true,
+      operationId:
+        typeof canonical.operationId === 'string'
+          ? canonical.operationId
+          : null,
+    };
   }
 
   public async readConfig(appId: string): Promise<HubConfigDocument> {
@@ -454,9 +888,9 @@ export class DefaultHubService implements HubService {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
       validateYamlConfig(input.content);
-      const publishedContent = ensureAuthSecret(
+      const publishedContent = ensureConfigSecrets(
         input.content,
-        extractAuthSecret(currentContent),
+        currentContent,
       );
       await writeTextAtomic(this.configPath(deployment), publishedContent);
       try {
@@ -477,61 +911,191 @@ export class DefaultHubService implements HubService {
     appId: string,
     input: DeployHubAppInput,
   ): Promise<HubDeploymentRecord> {
-    const app = await this.requireApp(appId);
-    const release = await this.getRelease(appId, input.releaseId);
-    const deployment = await this.createDeploymentRecord(
-      app,
-      release,
-      'deploy',
-      null,
-      input.config,
+    if (
+      !input ||
+      typeof input.releaseId !== 'string' ||
+      !input.releaseId.trim() ||
+      (input.config !== undefined &&
+        (!input.config ||
+          (input.config.mode !== 'file' && input.config.mode !== 'external') ||
+          (input.config.content !== undefined &&
+            typeof input.config.content !== 'string')))
+    ) {
+      throw new HubError(
+        'A Release ID and valid deployment configuration are required.',
+        'INVALID_DEPLOYMENT_INPUT',
+        400,
+      );
+    }
+    validateIdempotencyKey(input.idempotencyKey);
+    const fingerprint = sha256(
+      new TextEncoder().encode(
+        JSON.stringify({
+          releaseId: input.releaseId,
+          config: input.config
+            ? { mode: input.config.mode, content: input.config.content ?? null }
+            : null,
+        }),
+      ),
     );
-    this.schedule(app.id, deployment.id);
-    return deployment;
+    return this.withLock(`publish:${appId}`, async () => {
+      const app = await this.requireApp(appId);
+      const existing = input.idempotencyKey
+        ? await this.query()
+            .selectFrom('hubDeploymentRequests')
+            .selectAll()
+            .where('appId', '=', appId)
+            .where('requestKey', '=', input.idempotencyKey)
+            .executeTakeFirst()
+        : undefined;
+      if (existing) {
+        if (existing.fingerprint !== fingerprint)
+          throw new HubError(
+            'Idempotency key was used for another deployment.',
+            'IDEMPOTENCY_CONFLICT',
+            409,
+          );
+        return this.getDeployment(appId, String(existing.deploymentId));
+      }
+      await this.requireNoPendingDeployment(appId);
+      const release = await this.getRelease(appId, input.releaseId);
+      const deployment = await this.buildDeploymentRecord(
+        app,
+        release,
+        'deploy',
+        null,
+        input.config,
+      );
+      try {
+        await this.options.database.transaction(async (connection) => {
+          await connection.query
+            .updateTable('hubApps')
+            .set({ updatedAt: new Date() })
+            .where('id', '=', appId)
+            .execute();
+          await this.requireNoPendingDeployment(appId, connection);
+          await connection.query
+            .insertInto('hubAppDeployments')
+            .values(encodeDeployment(deployment))
+            .execute();
+          if (input.idempotencyKey)
+            await connection.query
+              .insertInto('hubDeploymentRequests')
+              .values({
+                appId,
+                requestKey: input.idempotencyKey,
+                fingerprint,
+                deploymentId: deployment.id,
+              })
+              .execute();
+        });
+      } catch (error) {
+        if (deployment.config.path)
+          await rm(deployment.config.path, { force: true });
+        const winner = input.idempotencyKey
+          ? await this.query()
+              .selectFrom('hubDeploymentRequests')
+              .selectAll()
+              .where('appId', '=', appId)
+              .where('requestKey', '=', input.idempotencyKey)
+              .executeTakeFirst()
+          : undefined;
+        if (winner) {
+          if (winner.fingerprint !== fingerprint)
+            throw new HubError(
+              'Idempotency key was used for another deployment.',
+              'IDEMPOTENCY_CONFLICT',
+              409,
+            );
+          return this.getDeployment(appId, String(winner.deploymentId));
+        }
+        throw error;
+      }
+      this.schedule(deployment);
+      return deployment;
+    });
+  }
+
+  private async requireNoPendingDeployment(
+    appId: string,
+    connection?: DatabaseConnection,
+  ): Promise<void> {
+    const pending = await (connection?.query ?? this.query())
+      .selectFrom('hubAppDeployments')
+      .select('id')
+      .where('appId', '=', appId)
+      .where('status', 'in', ['queued', 'deploying'])
+      .executeTakeFirst();
+    if (pending)
+      throw new HubError(
+        'A deployment is already in progress.',
+        'DEPLOYMENT_IN_PROGRESS',
+        409,
+      );
   }
 
   public async rollback(
     appId: string,
     input: RollbackHubAppInput,
   ): Promise<HubDeploymentRecord> {
-    const app = await this.requireApp(appId);
-    const target = await this.getDeployment(appId, input.deploymentId);
-    if (target.status !== 'succeeded') {
-      throw new HubError(
-        'Only a successful deployment can be rolled back to.',
-        'INVALID_ROLLBACK_TARGET',
-        409,
+    return this.withLock(`publish:${appId}`, async () => {
+      const app = await this.requireApp(appId);
+      await this.requireNoPendingDeployment(appId);
+      const target = await this.getDeployment(appId, input.deploymentId);
+      if (target.status !== 'succeeded') {
+        throw new HubError(
+          'Only a successful deployment can be rolled back to.',
+          'INVALID_ROLLBACK_TARGET',
+          409,
+        );
+      }
+      const release = await this.getRelease(appId, target.releaseId);
+      if (input.config && input.config.mode !== target.config.mode) {
+        throw new HubError(
+          'Rollback configuration mode must match the target deployment.',
+          'ROLLBACK_CONFIG_MODE_MISMATCH',
+          409,
+        );
+      }
+      const deployment = await this.createDeploymentRecord(
+        app,
+        release,
+        'rollback',
+        target.id,
+        input.config ?? { mode: target.config.mode },
+        target.config,
       );
-    }
-    const release = await this.getRelease(appId, target.releaseId);
-    if (input.config && input.config.mode !== target.config.mode) {
-      throw new HubError(
-        'Rollback configuration mode must match the target deployment.',
-        'ROLLBACK_CONFIG_MODE_MISMATCH',
-        409,
-      );
-    }
-    const deployment = await this.createDeploymentRecord(
-      app,
-      release,
-      'rollback',
-      target.id,
-      input.config ?? { mode: target.config.mode },
-      target.config,
-    );
-    this.schedule(app.id, deployment.id);
-    return deployment;
+      this.schedule(deployment);
+      return deployment;
+    });
   }
 
   public async updateSettings(
     appId: string,
     input: UpdateHubSettingsInput,
   ): Promise<HubAppDetail> {
-    return await this.withLock(appId, async () => {
-      assertActivation(input.activation);
+    return await this.withLock(`publish:${appId}`, async () => {
+      if (input.activation !== undefined) assertActivation(input.activation);
+      if (
+        input.name !== undefined &&
+        (typeof input.name !== 'string' ||
+          !input.name.trim() ||
+          input.name.trim().length > 255)
+      ) {
+        throw new HubError(
+          'Application name must contain 1 to 255 characters.',
+          'INVALID_APP_NAME',
+          422,
+        );
+      }
       await this.awaitStartupRestoration();
       await this.requireApp(appId);
-      await this.updateApp(appId, { startupMode: input.activation });
+      await this.updateApp(appId, {
+        ...(input.activation === undefined
+          ? {}
+          : { startupMode: input.activation }),
+        ...(input.name === undefined ? {} : { name: input.name.trim() }),
+      });
       return await this.getApp(appId);
     });
   }
@@ -637,39 +1201,48 @@ export class DefaultHubService implements HubService {
   }
 
   public async remove(appId: string): Promise<void> {
-    await this.withLock(appId, async () => {
-      const app = await this.requireApp(appId);
-      const releases = await this.listReleases(appId);
-      await this.hostController.removeDeployment(appId);
-      await this.options.database.transaction(async (connection) => {
-        await connection.query
-          .deleteFrom('hubAppReleases')
-          .where('appId', '=', appId)
-          .execute();
-        await connection.query
-          .deleteFrom('hubAppDeployments')
-          .where('appId', '=', appId)
-          .execute();
-        await connection.query
-          .deleteFrom('hubApps')
-          .where('id', '=', app.id)
-          .execute();
-      });
-      await Promise.allSettled([
-        ...releases.map((release) => this.disk.delete(release.artifactKey)),
-        rm(
-          path.join(
-            path.dirname(this.options.config.host.configPath),
-            'app-configs',
-            appId,
-          ),
-          {
+    await this.withLock(`publish:${appId}`, () =>
+      this.withLock(appId, async () => {
+        const app = await this.requireApp(appId);
+        const releases = await this.listReleases(appId);
+        await this.hostController.removeDeployment(appId);
+        await this.options.apiKeys?.removeAppKeys(appId);
+        await this.options.database.transaction(async (connection) => {
+          for (const table of [
+            'hubReleaseChecksums',
+            'hubReleaseRequests',
+            'hubDeploymentRequests',
+          ])
+            await connection.query
+              .deleteFrom(table)
+              .where('appId', '=', appId)
+              .execute();
+          await connection.query
+            .deleteFrom('hubAppReleases')
+            .where('appId', '=', appId)
+            .execute();
+          await connection.query
+            .deleteFrom('hubAppDeployments')
+            .where('appId', '=', appId)
+            .execute();
+          await connection.query
+            .deleteFrom('hubApps')
+            .where('id', '=', app.id)
+            .execute();
+        });
+        await Promise.allSettled([
+          ...releases.map((release) => this.disk.delete(release.artifactKey)),
+          rm(path.dirname(this.deploymentLogPath(appId, 'cleanup')), {
             recursive: true,
             force: true,
-          },
-        ),
-      ]);
-    });
+          }),
+          rm(path.join(this.desiredConfigsDir(), appId), {
+            recursive: true,
+            force: true,
+          }),
+        ]);
+      }),
+    );
   }
 
   public async refresh(appId: string): Promise<HubAppDetail> {
@@ -714,6 +1287,18 @@ export class DefaultHubService implements HubService {
   public async restoreDesiredState(): Promise<void> {
     await this.prepare();
     const recoveredAt = new Date();
+    const interrupted = await this.query()
+      .selectFrom('hubAppDeployments')
+      .selectAll()
+      .where('status', 'in', ['queued', 'deploying'])
+      .execute<Row>();
+    for (const row of interrupted)
+      this.logDeployment(
+        decodeDeployment(row),
+        'completed',
+        'Deployment interrupted by a Hub restart',
+        new Error('Hub restarted before deployment completion'),
+      );
     await this.query()
       .updateTable('hubAppDeployments')
       .set({
@@ -740,7 +1325,7 @@ export class DefaultHubService implements HubService {
       )
       .then(() => undefined)
       .catch((error: unknown) =>
-        console.error('Failed to restore app-host applications', error),
+        this.diagnostic.error('Failed to restore app-host applications', error),
       )
       .finally(() => {
         if (this.startupReconciliation === restoration)
@@ -776,6 +1361,8 @@ export class DefaultHubService implements HubService {
       // Host deployment identity is stable per App. Hub deployment IDs are
       // immutable operation-history identities and must not replace it.
       id: app.id,
+      operationId: deployment.id,
+      logging: this.options.config.logging?.apps,
       appId: app.id,
       artifact: {
         key: release.artifactKey,
@@ -799,7 +1386,15 @@ export class DefaultHubService implements HubService {
   }
 
   public hostUrl(): string | null {
-    return this.currentHostUrl;
+    return this.options.config.publicHostUrl ?? this.currentHostUrl;
+  }
+
+  public getHostProxyTarget(): URL | null {
+    if (!this.options.config.host.enabled) return null;
+    const info = this.hostController.getInfo();
+    return info.status === 'ready' && info.targetUrl
+      ? new URL(info.targetUrl)
+      : null;
   }
 
   public async shutdown(): Promise<void> {
@@ -859,7 +1454,7 @@ export class DefaultHubService implements HubService {
         updatedAt: current?.finishedAt ?? app.updatedAt,
       },
       runtime,
-      hostUrl: this.currentHostUrl,
+      hostUrl: this.hostUrl(),
     };
   }
 
@@ -1056,6 +1651,29 @@ export class DefaultHubService implements HubService {
     configInput?: SaveHubConfigInput,
     configBinding?: HubConfigBinding,
   ): Promise<HubDeploymentRecord> {
+    const deployment = await this.buildDeploymentRecord(
+      app,
+      release,
+      kind,
+      rollbackTargetDeploymentId,
+      configInput,
+      configBinding,
+    );
+    await this.query()
+      .insertInto('hubAppDeployments')
+      .values(encodeDeployment(deployment))
+      .execute();
+    return deployment;
+  }
+
+  private async buildDeploymentRecord(
+    app: HubAppRecord,
+    release: HubReleaseRecord,
+    kind: 'deploy' | 'rollback',
+    rollbackTargetDeploymentId: string | null,
+    configInput?: SaveHubConfigInput,
+    configBinding?: HubConfigBinding,
+  ): Promise<HubDeploymentRecord> {
     const id = randomUUID();
     const config = await this.prepareDeploymentConfig(
       app,
@@ -1081,10 +1699,6 @@ export class DefaultHubService implements HubService {
       startedAt: null,
       finishedAt: null,
     };
-    await this.query()
-      .insertInto('hubAppDeployments')
-      .values(encodeDeployment(deployment))
-      .execute();
     return deployment;
   }
 
@@ -1095,7 +1709,10 @@ export class DefaultHubService implements HubService {
     input?: SaveHubConfigInput,
     binding?: HubConfigBinding,
   ): Promise<HubConfigBinding> {
-    const mode = binding?.mode ?? input?.mode ?? 'file';
+    const active = app.currentDeploymentId
+      ? await this.getDeployment(app.id, app.currentDeploymentId)
+      : null;
+    const mode = binding?.mode ?? input?.mode ?? active?.config.mode ?? 'file';
     assertConfigMode(mode);
     if (mode === 'external') return { mode };
     let content = input?.content;
@@ -1115,23 +1732,18 @@ export class DefaultHubService implements HubService {
     // configuration that the App is already using.
     content ??= release.configTemplate ?? undefined;
     content ??= '';
-    content = ensureAuthSecret(content, extractAuthSecret(currentContent));
+    content = ensureConfigSecrets(content, currentContent);
     validateYamlConfig(content);
-    const configPath = path.join(
-      path.dirname(this.options.config.host.configPath),
-      'app-configs',
-      app.id,
-      'configs',
-      `config.${deploymentId}.yml`,
-    );
+    const configPath = path.join(this.desiredConfigPath(app.id, deploymentId));
     await writeTextAtomic(configPath, content);
     return { mode: 'file', path: configPath };
   }
 
-  private schedule(appId: string, deploymentId: string): void {
-    void this.withLock(appId, () => this.runDeployment(deploymentId)).catch(
-      () => undefined,
-    );
+  private schedule(deployment: HubDeploymentRecord): void {
+    this.logDeployment(deployment, 'queued', 'Deployment queued');
+    void this.withLock(deployment.appId, () =>
+      this.runDeployment(deployment.id),
+    ).catch(() => undefined);
   }
 
   private async getDeploymentById(
@@ -1152,6 +1764,9 @@ export class DefaultHubService implements HubService {
     const app = await this.requireApp(deployment.appId);
     const previous = await this.currentDeployment(app);
     let rejectedByHost = false;
+    let phaseWrites = Promise.resolve();
+    let lastSequence = 0;
+    let phaseError: Error | undefined;
     await this.updateDeployment(deploymentId, {
       status: 'deploying',
       phase: 'resolving',
@@ -1160,14 +1775,39 @@ export class DefaultHubService implements HubService {
       previousDeploymentId: app.currentDeploymentId,
     });
     try {
-      await this.updateDeployment(deploymentId, { phase: 'starting' });
+      this.logDeployment(deployment, 'resolving', 'Deployment started');
       const hostStatus = await this.hostController.applyDeployment(
         await this.createDeploymentSpec(
           { ...app, enabled: true },
           deployment,
           'running',
         ),
+        this.options.config.logging?.deployments?.enabled === false
+          ? undefined
+          : (entry) => {
+              if (typeof entry.sequence === 'number') {
+                if (entry.sequence <= lastSequence) return;
+                lastSequence = entry.sequence;
+              }
+              if (typeof entry.phase === 'string') {
+                const phase = entry.phase as HubDeploymentRecord['phase'];
+                phaseWrites = phaseWrites
+                  .then(() => this.updateDeployment(deploymentId, { phase }))
+                  .then(() => undefined)
+                  .catch((error: unknown) => {
+                    phaseError =
+                      error instanceof Error ? error : new Error(String(error));
+                  });
+              }
+              this.appendDeploymentLog(deployment, {
+                ...entry,
+                appId: app.id,
+                deploymentId: deployment.id,
+              });
+            },
       );
+      await phaseWrites;
+      if (phaseError) throw phaseError;
       const observed = hostStatus.deployments.find(
         (candidate) => candidate.appId === app.id,
       );
@@ -1177,6 +1817,7 @@ export class DefaultHubService implements HubService {
           observed?.error ?? 'Host did not report deployment status.',
         );
       }
+      this.logDeployment(deployment, 'completed', 'Deployment succeeded');
       const finishedAt = new Date();
       await this.options.database.transaction(async (connection) => {
         await connection.query
@@ -1202,6 +1843,15 @@ export class DefaultHubService implements HubService {
       });
       if (previous) await this.removeDeploymentConfig(previous);
     } catch (error) {
+      await phaseWrites.catch(() => undefined);
+      try {
+        this.logDeployment(deployment, 'completed', 'Deployment failed', error);
+      } catch (logError) {
+        reportLoggingFailure(
+          'Failed to persist deployment failure log',
+          logError,
+        );
+      }
       await this.updateDeployment(deploymentId, {
         status: 'failed',
         phase: 'completed',
@@ -1211,6 +1861,18 @@ export class DefaultHubService implements HubService {
       // An IPC failure can occur after activation. Keep the candidate file
       // unless the host has explicitly reported that the deployment failed.
       if (rejectedByHost) await this.removeDeploymentConfig(deployment);
+    } finally {
+      const policy = this.options.config.logging?.deployments;
+      await pruneJournals(
+        path.dirname(this.deploymentLogPath(app.id, deployment.id)),
+        {
+          retentionDays: policy?.retentionDays ?? 30,
+          maxSizeMB: policy?.maxTotalSizeMB ?? 1024,
+        },
+        `${deployment.id}.log`,
+      ).catch((error: unknown) =>
+        reportLoggingFailure('Deployment log cleanup failed', error),
+      );
     }
   }
 
@@ -1219,11 +1881,7 @@ export class DefaultHubService implements HubService {
   ): Promise<void> {
     if (deployment.config.mode !== 'file') return;
     const ownedPath = path.join(
-      path.dirname(this.options.config.host.configPath),
-      'app-configs',
-      deployment.appId,
-      'configs',
-      `config.${deployment.id}.yml`,
+      this.desiredConfigPath(deployment.appId, deployment.id),
     );
     if (deployment.config.path !== ownedPath) return;
     // Cleanup must not turn a successful deployment into a failed one.
@@ -1234,9 +1892,12 @@ export class DefaultHubService implements HubService {
     const document = {
       host: {
         mode: 'managed',
+        ...(this.options.config.host.logging
+          ? { logging: this.options.config.host.logging }
+          : {}),
         server: { host: '127.0.0.1', port: 3000 },
         artifact: normalizeArtifactConfig(this.options.config.artifact),
-        appDeploymentsDir: this.options.config.host.appDeploymentsDir,
+        appRevisionsDir: this.options.config.host.appRevisionsDir,
         appVolumesDir: this.options.config.host.appVolumesDir,
       },
     };
@@ -1266,7 +1927,7 @@ function normalizeArtifactConfig(
     : artifact;
 }
 
-async function inspectArtifact(bytes: Uint8Array): Promise<{
+async function inspectArtifact(archivePath: string): Promise<{
   readonly version: string;
   readonly configTemplate: string | null;
   readonly manifest: Record<string, unknown>;
@@ -1274,16 +1935,19 @@ async function inspectArtifact(bytes: Uint8Array): Promise<{
   const directory = await mkdtemp(
     path.join(os.tmpdir(), 'nocobase-hub-artifact-'),
   );
-  const archivePath = path.join(directory, 'release.tar.gz');
   try {
-    await writeFile(archivePath, bytes, { mode: 0o600 });
+    // tar invokes filter from stream callbacks, outside the extraction promise.
+    // Skip rejected entries and throw only after extraction has settled so that
+    // callers can handle the error and temporary files can be cleaned safely.
+    let validationError: HubError | undefined;
     await extractTar({
       cwd: directory,
       file: archivePath,
       gzip: true,
       preservePaths: false,
       strict: true,
-      filter: (entryPath: string): boolean => {
+      filter: (entryPath, entry): boolean => {
+        if (validationError) return false;
         const normalized = path.posix.normalize(
           entryPath.replaceAll('\\', '/'),
         );
@@ -1292,23 +1956,37 @@ async function inspectArtifact(bytes: Uint8Array): Promise<{
           normalized === '..' ||
           normalized.startsWith('../')
         ) {
-          throw new HubError(
+          validationError = new HubError(
             `Artifact contains unsafe path "${entryPath}".`,
             'UNSAFE_ARTIFACT',
             422,
           );
+          return false;
         }
-        return (
+        const selected =
           ARTIFACT_MANIFEST_PATHS.includes(
             normalized as (typeof ARTIFACT_MANIFEST_PATHS)[number],
           ) ||
           CONFIG_TEMPLATE_PATHS.includes(
             normalized as (typeof CONFIG_TEMPLATE_PATHS)[number],
           ) ||
-          normalized === EMBEDDED_ENTRY_PATH
-        );
+          normalized === EMBEDDED_ENTRY_PATH;
+        if (
+          selected &&
+          (!('type' in entry ? entry.type === 'File' : entry.isFile()) ||
+            entry.size > 16 * 1024 * 1024)
+        ) {
+          validationError = new HubError(
+            'Artifact metadata and entry point must be regular files no larger than 16 MiB.',
+            'INVALID_ARTIFACT',
+            422,
+          );
+          return false;
+        }
+        return selected;
       },
     });
+    if (validationError) throw validationError;
     const manifestPath = await findArtifactManifest(directory);
     await assertRegularArtifactFile(directory, EMBEDDED_ENTRY_PATH);
     const packageMetadata = JSON.parse(
@@ -1473,7 +2151,10 @@ function validateYamlConfig(content: string): void {
   }
 }
 
-function ensureAuthSecret(content: string, fallbackSecret?: string): string {
+function ensureConfigSecrets(
+  content: string,
+  fallbackContent?: string,
+): string {
   const document = parseYamlDocument(content);
   if (document.errors.length > 0) {
     throw new HubError(
@@ -1492,35 +2173,36 @@ function ensureAuthSecret(content: string, fallbackSecret?: string): string {
     );
   }
 
-  const auth = value.auth;
-  if (
-    isRecord(auth) &&
-    typeof auth.secret === 'string' &&
-    auth.secret.trim().length > 0
-  ) {
-    return content;
+  const previous: unknown = fallbackContent ? parseYaml(fallbackContent) : {};
+  let changed = false;
+  for (const key of ['auth', 'session'] as const) {
+    const section = value[key];
+    const oldSection = isRecord(previous) ? previous[key] : undefined;
+    const oldSecret = isRecord(oldSection) ? oldSection.secret : undefined;
+    const fallback =
+      typeof oldSecret === 'string' &&
+      oldSecret.trim().length > 0 &&
+      !isPlaceholderSecret(oldSecret)
+        ? oldSecret
+        : undefined;
+    // An omitted session secret uses the runtime's auth-secret fallback. Do not
+    // introduce a new key for existing apps unless a separate key was configured.
+    if (key === 'session' && section === undefined && fallback === undefined)
+      continue;
+    if (section !== undefined && !isRecord(section)) continue;
+    const secret = isRecord(section) ? section.secret : undefined;
+    if (
+      typeof secret === 'string' &&
+      secret.trim().length > 0 &&
+      !isPlaceholderSecret(secret)
+    )
+      continue;
+    // Preserve invalid non-string values for the runtime's configuration errors.
+    if (secret !== undefined && typeof secret !== 'string') continue;
+    document.setIn([key, 'secret'], fallback ?? generateAuthSecret());
+    changed = true;
   }
-  if (
-    isRecord(auth) &&
-    auth.secret !== undefined &&
-    !(typeof auth.secret === 'string' && auth.secret.trim().length === 0)
-  ) {
-    return content;
-  }
-  if (auth !== undefined && !isRecord(auth)) return content;
-
-  document.setIn(['auth', 'secret'], fallbackSecret ?? generateAuthSecret());
-  return ensureTrailingNewline(document.toString());
-}
-
-function extractAuthSecret(content: string | undefined): string | undefined {
-  if (!content) return undefined;
-  const value: unknown = parseYaml(content) as unknown;
-  if (!isRecord(value) || !isRecord(value.auth)) return undefined;
-  const secret = value.auth.secret;
-  return typeof secret === 'string' && secret.trim().length > 0
-    ? secret
-    : undefined;
+  return changed ? ensureTrailingNewline(document.toString()) : content;
 }
 
 function generateAuthSecret(): string {

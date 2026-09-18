@@ -22,3 +22,5 @@ export * from './config.js';
 export * from './drivers.js';
 export * from './manager.js';
 export * from './types.js';
+
+export * from './database/index.js';

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { ServiceContainer } from '@nocobase/service-provider';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   authenticationToken,
   type Auth,
@@ -44,7 +44,7 @@ async function fixture(installed = true, signedIn = true, permitted = true) {
         appName: 'test',
         publicBasePath: '',
         config: { app: { name: 'test', publicBasePath: '' } },
-        paths: createConfigPaths({ rootDir: '/missing' }),
+        paths: createAppPaths({ rootDir: '/missing' }),
         router,
       }),
     );

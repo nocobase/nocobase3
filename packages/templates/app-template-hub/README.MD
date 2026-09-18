@@ -6,6 +6,8 @@ You own everything in this directory. Add pages, API routes, database tables, an
 
 The primary console owns applications, Hub roles, and Users. The shared Settings entry exposes API Keys and other registered settings pages without redirecting them into the application list.
 
+The standalone listener also proxies App Host through the same public port. Requests at the Hub's exact public base path and its descendants stay in Hub; all other HTTP paths and WebSocket upgrades retain their path and query and forward to the current ready Host port. With `APP_BASE_PATH=/hub`, `/hub` and `/hub/*` serve Hub, while `/customer/*` serves the customer App. `/` also forwards to Host, whose managed mode currently returns 404 there. Host probes such as `/__live` follow the same forwarding rule. A disabled or restarting Host returns 503; an upstream connection failure returns 502. Visit App links use the same public origin through `hub.publicHostUrl: /`. Configure an outer reverse proxy to preserve public Host and protocol information.
+
 ## Getting started
 
 Start the development server:
@@ -107,7 +109,6 @@ tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
 config.yml              Your configuration, generated at setup; gitignored
 config.example.yml       Documented configuration template
-skills/                  In-depth development guides for AI agents
 ```
 
 The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are composition roots: they list what the application is made of. Reading them tells you what is loaded and in what order.
@@ -116,12 +117,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script             | What it does                                                                 |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `pnpm dev`         | Start the API server and client with hot reload                              |
-| `pnpm build`       | Build the client and server into `dist/`                                     |
-| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
-| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
+| Script             | What it does                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `pnpm dev`         | Start the API server and client with hot reload                                      |
+| `pnpm build`       | Build the client and server into `dist/`                                             |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                                    |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/exports/dist.tar.gz` |
 
 ### Database
 
@@ -133,7 +134,7 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
-Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](skills/nocobase-app-development/references/migrations.md).
+Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](.agents/skills/nocobase-app-development/references/migrations.md).
 
 ### Checks
 
@@ -153,13 +154,16 @@ Database tasks support `--connection <name>` and `--all`; no argument targets `d
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                             |
-| ------------------------------- | -------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server  |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                           |
-| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only          |
-| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`       |
+| Script                          | What it does                                                |
+| ------------------------------- | ----------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server     |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                              |
+| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills    |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only             |
+| `pnpm package:remove <name>`    | Remove a direct NocoBase package and its synchronized Skill |
+| `pnpm skills:sync`              | Sync direct NocoBase package Skills into `.agents/skills/`  |
+
+`pnpm plugin:skills:sync` remains an alias for older automation; use `pnpm skills:sync` in new scripts and documentation.
 
 Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
 
@@ -173,6 +177,20 @@ pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
 Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
 
 Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
+
+### Removing a NocoBase package
+
+Before removing a direct `@nocobase/*` dependency, search the application's imports, plugin registrations, routes, services, configuration keys, tests, and build scripts for references to it. Migrate or remove those references first. The removal command updates package metadata and synchronized Skills; it does not rewrite application source or configuration and cannot decide whether the capability is still required.
+
+```bash
+pnpm package:remove @nocobase/example
+pnpm package:remove @nocobase/example --dry-run
+pnpm package:remove @nocobase/example --json
+```
+
+For an ordinary package, the command uses the application's package manager to remove the dependency and update both `package.json` and the lockfile, then removes only the Skill directories recorded as owned by that package. For an `@nocobase/app-plugin-*` package, it reuses the `plugin:unregister` workflow so Client, Server, and CLI registrations are removed together with the dependency and its Skills. `pnpm plugin:unregister <name>` remains available when the task is specifically expressed as unregistering a plugin.
+
+An older application with the new CLI but without the script can run `pnpm nocobase package remove @nocobase/example`. If the installed CLI does not provide `package remove`, update `@nocobase/nb3-cli` first; as a compatibility fallback on a version that already provides `skills:sync`, remove the dependency with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, make sure the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing a package already absent from the manifest to `package:remove` can clean its recorded historical Skill ownership without uninstalling any other package.
 
 ### Diagnostics
 
@@ -230,7 +248,7 @@ If your application has no native modules — `pg`, `mysql2`, and `tedious` are 
 
 #### Packing the build
 
-`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+`pnpm build --tar` writes `storage/exports/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
 
 The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
 
@@ -308,8 +326,22 @@ Tests live in `tests/`, never beside the source they cover. Put logic and integr
 
 ## Working with an AI agent
 
-`AGENTS.md` describes how to build features here, and `skills/` holds the in-depth references it links to. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keeping these accurate as your application grows is what keeps agent-written code consistent with the rest of it.
+`AGENTS.md` describes how to build features here, and `.agents/skills/` contains package-owned guidance generated by `pnpm skills:sync`. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keep application-specific rules in committed `AGENTS.md` files because synchronization replaces package-owned Skill directories.
 
 ## License
 
 MIT
+
+## Hub storage layout
+
+New installations use `storage/hub` for the Hub database (`database/main.sqlite`), local files (`files`), desired application configurations (`desired-configs/<appId>/<deploymentId>.yml`), and logs (`logs/app`, `logs/request`, `logs/deployments/<appId>`). Host configuration is generated at `storage/host/runtime/config.yml`; Host logs and captured child output use `storage/host/logs/host` and `storage/host/logs/child-output`. Capturing child output does not change terminal forwarding. Each log directory has its own retention and size limit; deployment log limits apply per application.
+
+`storage/apps/artifacts/<appId>/<releaseId>.tar.gz` contains release archives, `storage/apps/revisions/<appId>/<sha256>` contains expanded archives, and `storage/apps/volumes/<appId>` contains runtime configurations and application-owned `storage/`. The checksum identifies the archive bytes. Hub desired configurations and Host runtime configurations have different owners; neither is a historical configuration archive. Restart recovery requires the installed revision and does not automatically re-extract a missing one.
+
+Standalone Hub source and compiled entries share the deployment directory's `storage`. Explicit storage paths take precedence over `HUB_STORAGE_DIR`; relative values resolve from the deployment directory. Embedded Hub instances use the Host-provided volume. Expanded releases use `appRevisionsDir/<appId>/<sha256>`. Directory defaults do not depend on existing files.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

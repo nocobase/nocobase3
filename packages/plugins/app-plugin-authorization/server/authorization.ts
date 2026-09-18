@@ -7,7 +7,7 @@ import {
   PERMISSION_SETS_ROUTE_PATH,
 } from './management/permission-sets.js';
 import './subjects.js';
-import type { DatabaseConnection } from '@nocobase/db';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import {
   createAuthorization,
   type Authorization,
@@ -59,6 +59,7 @@ interface AuthSession {
 }
 
 export interface CreateAppAuthorizationOptions {
+  database?: DatabaseManager;
   connection?: DatabaseConnection;
   onUserPermissionsChanged?(userId: string): void | Promise<void>;
   onAuthenticatedPermissionsChanged?(): void | Promise<void>;
@@ -73,7 +74,7 @@ export function createAppAuthorization(
     pages: PagesApi;
   } {
   const sets = options.config?.permissionSets;
-  const database = databaseAuthorization();
+  const database = databaseAuthorization(options.database);
   const connection = new DatabaseConnectionHandle(
     'Permission Sets',
     options.connection,

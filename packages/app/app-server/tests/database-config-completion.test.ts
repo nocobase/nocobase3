@@ -60,7 +60,7 @@ it('completes registered dialects and fields, including multiple connections', (
     source = source.replace(
       "main: { dialect: '', debug: false },",
       `main: { dialect: 'postgres', debug: false },
-       cache: { dialect: 'sqlite', filename: runtime.configPaths.storage('cache.sqlite') },`,
+       cache: { dialect: 'sqlite', filename: runtime.paths.storage('cache.sqlite') },`,
     );
     version += 1;
     const fields = service

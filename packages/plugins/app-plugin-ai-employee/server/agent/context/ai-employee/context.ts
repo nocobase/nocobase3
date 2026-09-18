@@ -477,14 +477,26 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   public async getActivatedSkillToolNames(): Promise<Set<string>> {
     const names = await this.getLoadedSkillNames();
     if (!names.length) return new Set();
-    const loaded = await this.skillsManager.getSkills(names);
-    const normalized = Array.isArray(loaded) ? loaded : [loaded];
-    const skills = new Map(
-      normalized
-        .filter((skill): skill is SkillsEntity => Boolean(skill))
-        .map((skill) => [skill.name, skill]),
+    // Persisted activation is evidence of loading, not an authorization grant.
+    // Reapply current employee/session visibility before accepting its tools.
+    const available = await this.getAvailableSkills();
+    const loadedNames = new Set(names);
+    const settings = this.skillSettings;
+    const allowedTools = settings?.tools;
+    const enforceTools =
+      Array.isArray(allowedTools) &&
+      (Boolean(settings?.toolsVersion) || allowedTools.length > 0);
+    return new Set(
+      available
+        .filter((skill) => loadedNames.has(skill.name))
+        .flatMap((skill) => skill.tools ?? [])
+        .filter(
+          (name) =>
+            !enforceTools ||
+            listSystemTools().includes(name) ||
+            allowedTools.includes(name),
+        ),
     );
-    return new Set(names.flatMap((name) => skills.get(name)?.tools ?? []));
   }
 
   public async getAvailableAIEmployees(): Promise<

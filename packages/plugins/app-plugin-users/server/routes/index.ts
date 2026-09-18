@@ -135,6 +135,16 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       });
     });
 
+    routes.delete('/:userId', async (context) => {
+      const userId = context.req.param('userId');
+      await requireUserAction(context, userId, 'delete');
+      const input = record(await context.req.json(), 'User deletion');
+      if (input.confirm !== true) throw new TypeError('Confirm user deletion.');
+      await users.remove(userId, context.get('authz').identity.principal.id);
+      logSecurityEvent(securityLogger, context, 'user.delete', userId);
+      return context.json({ data: { success: true } });
+    });
+
     routes.post('/:userId/disable', async (context) => {
       const userId = context.req.param('userId');
       await requireUserAction(context, userId, 'disable');

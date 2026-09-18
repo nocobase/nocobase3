@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/queue",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.5",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -28,7 +28,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && nocobase-db-manifests src/database dist/database",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
@@ -40,17 +40,22 @@
   },
   "dependencies": {
     "@boringnode/queue": "catalog:",
-    "@nocobase/db": "workspace:^",
     "@nocobase/logging": "workspace:^",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/instrumentation": "^0.200.0",
     "ioredis": "catalog:",
     "knex": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/db": "workspace:^"
   }
 }

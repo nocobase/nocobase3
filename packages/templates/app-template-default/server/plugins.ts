@@ -17,6 +17,7 @@ import {
   defineServerPlugins,
   type AppServerPlugins,
 } from '@nocobase/app-server/plugins';
+import scheduler from '@nocobase/app-plugin-scheduler/server';
 import file from '@nocobase/app-plugin-file/server';
 
 const serverPlugins: AppServerPlugins = defineServerPlugins([
@@ -36,6 +37,7 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   notificationProviders,
   workflow,
   file,
+  scheduler,
 ]);
 
 export default serverPlugins;

@@ -18,7 +18,7 @@ import {
   type CollectionArtifactMetadataFile,
   type CollectionArtifactSchemaFile,
 } from '@nocobase/db';
-import { createConfigPaths } from '../src/config/index.js';
+import { createAppPaths } from '../src/config/index.js';
 import {
   createAppDatabaseManager,
   generateAppCollectionsArtifact,
@@ -48,7 +48,7 @@ function fixture() {
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'collections-artifact-'));
   roots.push(root);
-  const paths = createConfigPaths({ rootDir: root });
+  const paths = createAppPaths({ rootDir: root });
   // An external database exists before the application does; nothing here
   // prepares storage for it, so the fixture stands in for the foreign system.
   mkdirSync(paths.storage('external'), { recursive: true });
@@ -93,7 +93,7 @@ export default defineMigration({ name: '${name}', async up({ builder }) {
 
 async function migrate(
   config: AppDatabaseConfig,
-  paths: ReturnType<typeof createConfigPaths>,
+  paths: ReturnType<typeof createAppPaths>,
 ) {
   const result = await runAppDatabaseTasks(config, {
     paths,

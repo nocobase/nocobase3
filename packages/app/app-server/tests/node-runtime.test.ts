@@ -5,12 +5,13 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
+import * as nodeServer from '../src/node/server.js';
 
 import { Application } from '../src/application/index.js';
 import {
   AppConfig,
   type AppConfigAccessor,
-  type ConfigPaths,
+  type AppPaths,
 } from '../src/config/index.js';
 import {
   createStandaloneServer,
@@ -36,6 +37,53 @@ afterEach(() => {
 });
 
 describe('standalone runtime server', () => {
+  it('applies proxy configuration through start as well as create', async () => {
+    let started: nodeServer.ClosableNodeAppServer | undefined;
+    const start = vi
+      .spyOn(nodeServer, 'startNodeAppServer')
+      .mockImplementation(async (app) => {
+        started = app;
+        return {} as nodeServer.NodeAppHttpServer;
+      });
+    try {
+      const standalone = defineStandaloneServer({
+        ...createStandaloneDefinition(createAppRoot(), '/main'),
+        proxy: () => ({
+          match: (pathname) => pathname.startsWith('/crm/'),
+          target: () => null,
+        }),
+      });
+      standalone.start();
+      await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+      expect(
+        (await started!.fetch(new Request('http://localhost/crm/'))).status,
+      ).toBe(503);
+      expect(
+        (await started!.fetch(new Request('http://localhost/main/status')))
+          .status,
+      ).toBe(200);
+    } finally {
+      await started?.close();
+      start.mockRestore();
+    }
+  });
+
+  it('disposes the application if proxy configuration fails', async () => {
+    const dispose = vi.fn();
+    const error = new Error('Invalid proxy configuration');
+    await expect(
+      createStandaloneServer({
+        ...createStandaloneDefinition(createAppRoot(), '/main', (scope) =>
+          scope.registerDisposer('fixture', dispose),
+        ),
+        proxy: () => {
+          throw error;
+        },
+      }),
+    ).rejects.toBe(error);
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it('composes a mounted application with lifecycle and listen metadata', async () => {
     const rootDir = createAppRoot();
     let receivedViteDevUrl: string | undefined;
@@ -132,7 +180,7 @@ function createStandaloneDefinition(
     createServer: async (scope) => {
       onCreate(scope);
       const runtime = await resolveAppRuntime(appRuntime, scope);
-      const app = createApplication(runtime.config, runtime.configPaths);
+      const app = createApplication(runtime.config, runtime.paths);
       return startApplicationInScope(scope, app);
     },
   };
@@ -163,7 +211,7 @@ function createDefinition(_publicBasePath: string): AppRuntimeDefinition {
 
 function createApplication(
   config: AppConfigAccessor,
-  paths: ConfigPaths,
+  paths: AppPaths,
 ): Application {
   const app = new Application({
     config,

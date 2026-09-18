@@ -1,6 +1,6 @@
 import { PageContainer } from '@/components/page-container';
 import { PageHeader } from '@/components/page-header';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState, type ReactElement } from 'react';
@@ -47,7 +47,7 @@ interface CrmOrder {
 }
 
 export default function ExternalCrmPage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t, i18n } = useTranslation();
   const [status, setStatus] = useState<Status>('all');
   const orders = useQuery({

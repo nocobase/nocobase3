@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -21,13 +22,93 @@ import {
   type AppQueueConfig,
   type AppSessionConfigInput,
 } from '@nocobase/app-server';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import {
+  createNotificationRegistry,
+  type NotificationConfig,
+} from '@nocobase/app-plugin-notification/server';
+import {
+  createInAppChannelDefinition,
+  createDatabaseProviderDefinition,
+  MemoryInAppStore,
+} from '@nocobase/app-plugin-notification-in-app/server';
 
 import appRuntime from '../../server/runtime.ts';
 
 const templateRootDir = fileURLToPath(new URL('../..', import.meta.url));
 
 describe('application config', () => {
+  let configRoot: string;
+  let configPath: string;
+  beforeAll(async () => {
+    configRoot = await mkdtemp(path.join(tmpdir(), 'app-config-test-'));
+    configPath = path.join(configRoot, 'config.yml');
+    await writeFile(configPath, '{}');
+  });
+  afterAll(async () => {
+    await rm(configRoot, { recursive: true, force: true });
+  });
+
+  it('offers in-app test sending by default and honors an explicit disabled configuration', async () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'examples-notification-config-'),
+    );
+    const configPath = path.join(directory, 'config.yml');
+    try {
+      writeFileSync(configPath, '{}');
+      const resolve = () =>
+        resolveStandaloneAppRuntime(appRuntime, {
+          rootDir: templateRootDir,
+          configPath,
+          env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
+        });
+      const runtime = await resolve();
+      const definition = createInAppChannelDefinition();
+      const registry = createNotificationRegistry()
+        .registerChannel(definition)
+        .registerProvider(
+          'in-app',
+          createDatabaseProviderDefinition({
+            store: new MemoryInAppStore(),
+            recipientExists: async () => true,
+          }),
+        );
+      const config = runtime.config.get<NotificationConfig>('notification')!;
+      expect(registry.testTargets(config)).toEqual([
+        expect.objectContaining({
+          channel: expect.objectContaining({ type: 'in-app' }),
+          provider: expect.objectContaining({
+            name: 'default',
+            type: 'database',
+          }),
+        }),
+      ]);
+      const channelConfig = config.channels[0]!;
+      for (const recipient of ['', 'another-user']) {
+        expect(
+          definition.test?.toSendInput({
+            actor: { userId: 'current-user' },
+            values: { recipient, title: 'Test', body: 'Hello' },
+            channelConfig,
+            providerConfig: channelConfig.providers[0]!,
+          }),
+        ).toMatchObject({
+          to: { type: 'user', id: recipient || 'current-user' },
+        });
+      }
+      writeFileSync(configPath, 'notification:\n  channels: []\n');
+      const disabled = await resolve();
+      expect(
+        registry.testTargets(
+          disabled.config.get<NotificationConfig>('notification')!,
+        ),
+      ).toEqual([]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('supplies analytics for main-only configs and honors file overrides', async () => {
     const directory = mkdtempSync(
       path.join(tmpdir(), 'examples-analytics-config-'),
@@ -65,7 +146,7 @@ describe('application config', () => {
         resolveAppMetadataStore(undefined, {
           name: 'externalCrm',
           external: true,
-          paths: runtime.configPaths,
+          paths: runtime.paths,
         }),
       ).toEqual({
         type: 'directory',
@@ -78,7 +159,7 @@ describe('application config', () => {
         database,
         ['migrations', 'seeds'],
         {
-          paths: runtime.configPaths,
+          paths: runtime.paths,
           contributions: createAppDatabaseTaskContributions(runtime.plugins),
           autoRun: true,
         },
@@ -116,6 +197,7 @@ describe('application config', () => {
   it('assembles module defaults in the runtime', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,
+      configPath,
       env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
     });
 
@@ -145,10 +227,14 @@ describe('application config', () => {
       visibility: 'private',
     });
     expect(drive.disks.public).toBeUndefined();
-    expect(runtime.config.get<AppLoggingConfig>('logging')!.default).toBe(
-      'system',
-    );
+    expect(
+      runtime.config.get<AppLoggingConfig>('logging')!.default,
+    ).toBeUndefined();
+    expect(runtime.config.get('logging.file.name')).toBe('app');
     expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
+    expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toEqual({
+      schedule: { connection: 'database' },
+    });
     expect(
       runtime.config.get<AppQueueConfig>('queue')!.jobs?.locations,
     ).toEqual(
@@ -166,6 +252,7 @@ describe('application config', () => {
   it('reloads a file-backed configuration explicitly', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,
+      configPath,
       env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
     });
 
@@ -176,22 +263,27 @@ describe('application config', () => {
   it('loads only explicit env overrides and restores defaults on reload', async () => {
     const runtime = await resolveStandaloneAppRuntime(appRuntime, {
       rootDir: templateRootDir,
+      configPath,
       env: {
         APP_SERVER_PORT: '14001',
+        APP_SERVER_START_LOG: 'false',
         REDIS_HOST: 'ignored',
         NODE_ENV: 'production',
       },
     });
     expect(runtime.config.get('server.port')).toBe(14001);
+    expect(runtime.config.get('server.startLog')).toBe(false);
     expect(runtime.config.get('queue.connections.redis.host')).toBe(
       '127.0.0.1',
     );
     expect(runtime.config.get('session.stores.redis.host')).toBe('127.0.0.1');
-    expect(runtime.config.get('logging.pretty')).toBe(false);
+    expect(runtime.config.get('logging.console.pretty')).toBe(false);
     expect(runtime.config.get('session.cookie.secure')).toBe(true);
     expect(runtime.config.get('workflow.production')).toBe(true);
     delete runtime.env.APP_SERVER_PORT;
+    delete runtime.env.APP_SERVER_START_LOG;
     await runtime.config.reload();
     expect(runtime.config.get('server.port')).toBe(13000);
+    expect(runtime.config.get('server.startLog')).toBe(true);
   });
 });

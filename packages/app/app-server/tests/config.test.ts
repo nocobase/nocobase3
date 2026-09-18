@@ -32,7 +32,7 @@ import {
   createAppDatabaseManager,
   createAppMigrator,
   createAppSeeder,
-  createConfigPaths,
+  createAppPaths,
   prepareAppDatabaseStorage,
   type AppDatabaseConfig as GenericAppDatabaseConfig,
 } from '../src/index.js';
@@ -55,7 +55,7 @@ afterEach(() => {
 
 describe('app-server config runtime', () => {
   it('supports custom database runtime paths', () => {
-    const paths = createConfigPaths({
+    const paths = createAppPaths({
       rootDir: '/tmp/app',
       databaseDir: '/tmp/app/dist/database',
     });

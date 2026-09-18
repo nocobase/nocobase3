@@ -1,3 +1,4 @@
+import { databaseManagerToken } from '@nocobase/db';
 import {
   authorizationToken,
   permissionSetsToken,
@@ -23,7 +24,10 @@ export class HubAuthorizationProvider extends ServiceProvider<AppPluginApplicati
   public override boot(): Promise<void> {
     const authorization = this.app.container.resolve(authorizationToken);
     const permissionSets = this.app.container.resolve(permissionSetsToken);
-    registerHubResources(authorization);
+    registerHubResources(
+      authorization,
+      this.app.container.resolve(databaseManagerToken).connection(),
+    );
     this.unregisterProtection = protectHubPermissionSets(permissionSets);
     this.unregisterRoleScope = this.app.container
       .resolve<UserRoleScopeRegistry>(userRoleScopeRegistryToken)

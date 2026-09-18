@@ -14,7 +14,7 @@ import {
   type DatabaseConnection,
   type DatabaseManager,
 } from '@nocobase/db';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   authenticationToken,
   type Auth,
@@ -218,7 +218,7 @@ describe('what an application configures about its own authorization', () => {
       appName: 'main',
       publicBasePath: '',
       config: { app: { name: 'main', publicBasePath: '' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
+      paths: createAppPaths({ rootDir: '/missing' }),
       router: new Hono(),
       container,
     });
@@ -340,7 +340,7 @@ async function mountedRouter(
         appName: 'main',
         publicBasePath: '',
         config: { app: { name: 'main', publicBasePath: '' } },
-        paths: createConfigPaths({ rootDir: '/missing' }),
+        paths: createAppPaths({ rootDir: '/missing' }),
         router: new Hono(),
         container,
       }),

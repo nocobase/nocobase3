@@ -1,4 +1,4 @@
-import type { DatabaseConnection } from '@nocobase/db';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type {
   AuthorizationCollection,
   ResolveAuthorizationCollection,
@@ -17,8 +17,36 @@ const relationTypes: ReadonlySet<string> = new Set([
  */
 export function collectionResolver(
   connection: DatabaseConnection,
+  database?: DatabaseManager,
 ): ResolveAuthorizationCollection {
-  return async (name) => describeCollection(connection, name);
+  return async (name) => {
+    const parts = name.split('.');
+    if (!database || parts.length !== 2)
+      return describeCollection(connection, name);
+    const [source, collection] = parts;
+    const resolved = await describeCollection(
+      database.connection(source),
+      collection,
+    );
+    return (
+      resolved && {
+        ...resolved,
+        name,
+        relations: Object.fromEntries(
+          Object.entries(resolved.relations ?? {}).map(([key, relation]) => [
+            key,
+            {
+              ...relation,
+              target: `${source}.${relation.target}`,
+              ...(relation.through
+                ? { through: `${source}.${relation.through}` }
+                : {}),
+            },
+          ]),
+        ),
+      }
+    );
+  };
 }
 
 export async function describeCollection(

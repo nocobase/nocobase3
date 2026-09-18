@@ -1,6 +1,12 @@
+import {
+  planAppRuntimeDatabaseTasks,
+  type AppRuntimeDatabaseTaskPlanOptions,
+  type AppDatabaseTask,
+  type AppDatabaseTaskKind,
+} from './plan.js';
 import type { DatabaseDriverRegistration, DatabaseManager } from '@nocobase/db';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import {
   createAppDatabaseManager,
   resolveAppDatabaseDriver,
@@ -8,12 +14,6 @@ import {
 import { createAppMigrator, type AppMigrationRunResult } from './migrator.js';
 import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
-import {
-  planAppDatabaseTasks,
-  type AppDatabaseTask,
-  type AppDatabaseTaskKind,
-  type AppDatabaseTaskPlanOptions,
-} from './plan.js';
 import type { AppDatabaseConfig } from './types.js';
 
 export interface AppDatabaseTaskResult {
@@ -49,7 +49,7 @@ export class AppDatabaseTaskError extends Error {
 }
 
 export interface AppDatabasePlanExecutionOptions {
-  readonly paths?: ConfigPaths;
+  readonly paths?: AppPaths;
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
   readonly fresh?: boolean;
 }
@@ -125,7 +125,7 @@ export async function executeAppDatabasePlan(
   return result;
 }
 
-export interface AppDatabaseTaskRunOptions extends AppDatabaseTaskPlanOptions {
+export interface AppDatabaseTaskRunOptions extends AppRuntimeDatabaseTaskPlanOptions {
   readonly kind: AppDatabaseTaskKind;
 }
 
@@ -137,7 +137,7 @@ export async function runAppDatabaseTasks(
   if (options.fresh && options.kind !== 'migrations') {
     throw new Error('--fresh is only supported for migrations.');
   }
-  const plan = planAppDatabaseTasks(config, [options.kind], options);
+  const plan = planAppRuntimeDatabaseTasks(config, [options.kind], options);
   if (!plan.length) return { ok: true, status: 'not-configured', results: [] };
   if (options.fresh) {
     for (const task of plan) {

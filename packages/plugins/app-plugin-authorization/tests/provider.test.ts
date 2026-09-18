@@ -42,6 +42,7 @@ describe('authorization provider', () => {
 
     expect(provider.name).toBe('@nocobase/app-plugin-authorization');
     expect(createAppAuthorization).toHaveBeenCalledExactlyOnceWith({
+      database,
       connection,
       config: { plugins },
       onAuthenticatedPermissionsChanged: expect.any(Function),

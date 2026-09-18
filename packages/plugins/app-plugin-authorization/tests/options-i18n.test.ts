@@ -15,7 +15,7 @@ import {
   AuthorizationDeniedError,
   type AuthorizationScope,
 } from '@nocobase/authorization/core';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   authenticationToken,
   type Auth,
@@ -436,7 +436,7 @@ async function mountedRouter(
         appName: 'main',
         publicBasePath: '',
         config: { app: { name: 'main', publicBasePath: '' } },
-        paths: createConfigPaths({ rootDir: '/missing' }),
+        paths: createAppPaths({ rootDir: '/missing' }),
         router: new Hono(),
         container,
       }),

@@ -17,6 +17,7 @@ These common requirements are already solved — install and they work. Every pa
 - [Authentication](./auth) — Accounts, passwords and sessions.
 - [Permissions](./authorization) — Roles, menu visibility, and which records each user may see.
 - [Workflow](./workflow) — Observable, versioned, multi-stage business processes.
+- [Scheduled tasks](./scheduler) — Define schedules in code and monitor, enable, or disable them in the UI.
 - [Notifications](./notification) — Email, in-app messages, and IM channels.
 - [Files](./file) — Uploads and attachments.
 - [Language switching](./i18n) — Switching the interface language.

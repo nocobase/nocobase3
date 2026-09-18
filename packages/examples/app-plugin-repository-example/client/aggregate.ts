@@ -1,6 +1,6 @@
+import type { ApiClient } from '@nocobase/app-client';
 import { loadGroupByExamples, type GroupByExample } from './group-by.js';
 import type {
-  ApiClient,
   RemoteAggregateAst,
   RemoteFilterAst,
   RemoteSelectAst,

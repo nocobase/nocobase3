@@ -2,12 +2,12 @@
   {
     "type": "file",
     "name": "index",
-    "label": "开始"
+    "label": "NocoBase 3 是什么"
   },
   {
     "type": "file",
-    "name": "what-is-nocobase",
-    "label": "NocoBase 3 是什么"
+    "name": "overview",
+    "label": "开始前准备"
   },
   {
     "type": "file",
@@ -17,6 +17,6 @@
   {
     "type": "file",
     "name": "first-feature",
-    "label": "让 AI 做第一个功能"
+    "label": "让 AI Agent 做第一个功能"
   }
 ]

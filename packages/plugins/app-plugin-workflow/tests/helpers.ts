@@ -171,6 +171,8 @@ export type TestRunInput = {
   createdAt?: string;
   input?: unknown;
   hash?: string | null;
+  sourceType?: string | null;
+  sourceId?: string | null;
 };
 
 /** Inserts a run row directly, which is how a test stages "what a crashed process left behind". */
@@ -194,6 +196,8 @@ export async function insertTestRun(
       expiresAt: input.expiresAt ?? null,
       createdAt: input.createdAt ?? nowInstant(),
       manually: false,
+      sourceType: input.sourceType ?? null,
+      sourceId: input.sourceId ?? null,
     },
     select: (select) => select.fields('id'),
   });

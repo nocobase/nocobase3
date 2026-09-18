@@ -144,6 +144,8 @@ export interface AppClientSettingsRouteGroupDefinition {
   readonly navigation: AppClientSettingsRouteNavigation;
   readonly componentLoader?: never;
   readonly children: readonly AppClientSettingsRouteDefinition[];
+  /** Append children to a group owned by another contribution instead of defining the group itself. */
+  readonly extend?: boolean;
 }
 
 /** A child Route contributed to the built-in Settings Route. */
@@ -692,6 +694,7 @@ function assembleRoutes(
   const groups = new Map<string, RouteNode>();
   const pending: { node: RouteNode; parent: string }[] = [];
   const all: RouteNode[] = [];
+  const extensions: RouteNode[] = [];
   const groupId = (name: string, packageName: string): string =>
     surface === 'app'
       ? `${packageName}:${normalizeContributionName(name, packageName, 'route')}`
@@ -711,7 +714,10 @@ function assembleRoutes(
           : {}),
       };
       all.push(node);
-      if (!definition.componentLoader) {
+      if (
+        !definition.componentLoader &&
+        !('extend' in definition && definition.extend)
+      ) {
         const id = groupId(definition.name, input.packageName);
         const previous = groups.get(id);
         if (previous)
@@ -724,7 +730,9 @@ function assembleRoutes(
     };
     for (const definition of input.definitions) {
       const node = copy(definition, false);
-      if (definition.parent === undefined) roots.push(node);
+      if (surface !== 'app' && 'extend' in definition && definition.extend)
+        extensions.push(node);
+      else if (definition.parent === undefined) roots.push(node);
       else {
         const parent = definition.parent.trim();
         pending.push({
@@ -736,6 +744,25 @@ function assembleRoutes(
         });
       }
     }
+  }
+  for (const node of extensions) {
+    const id = groupId(node.definition.name, node.packageName);
+    const owner = groups.get(id);
+    if (!owner) {
+      groups.set(id, node);
+      roots.push(node);
+      continue;
+    }
+    const path = node.definition.path;
+    if (
+      path !== undefined &&
+      path.replace(/^\/+/, '') !==
+        (owner.definition.path ?? owner.definition.name).replace(/^\/+/, '')
+    )
+      throw new Error(
+        `Client ${surface} group extension "${id}" from plugin "${node.packageName}" must use owner path "${owner.definition.path ?? owner.definition.name}".`,
+      );
+    owner.children!.push(...(node.children ?? []));
   }
   for (const { node, parent } of pending) {
     const target = groups.get(parent);

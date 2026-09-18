@@ -27,7 +27,7 @@ The default image is `ghcr.io/nocobase/hub:latest`. To use Alibaba Cloud, set th
 NOCOBASE_IMAGE=registry.cn-beijing.aliyuncs.com/nocobase/hub:latest
 ```
 
-The manual [Hub image workflow](../.github/workflows/docker-hub.yml) always publishes to both GHCR and Alibaba Cloud, with `linux/amd64` and `linux/arm64` under the same tag in each registry. Compose lets Docker select the host's architecture. Use a published `run-<run-id>-<attempt>` tag or digest to pin a specific build.
+The [Hub image workflow](../.github/workflows/docker-hub.yml) can be triggered manually and runs automatically after a successful beta release and GitHub Release publication. Dry runs and failed or cancelled releases do not publish images. Automatic builds use the package versions from that release and publish the `latest` image tag. Every build publishes to both GHCR and Alibaba Cloud, with `linux/amd64` and `linux/arm64` under the same tag in each registry. Compose lets Docker select the host's architecture. Use a published `run-<run-id>-<attempt>` tag or digest to pin a specific build.
 
 If pulling a private image returns `unauthorized`, log in to its registry with an account that can read `nocobase/hub`: `docker login ghcr.io` or `docker login registry.cn-beijing.aliyuncs.com`. Public images support anonymous pulls. GitHub Actions publishing secrets are separate from local Docker credentials.
 

@@ -56,6 +56,7 @@ export interface SelectOption<Text = string> {
   description?: Text;
 }
 export interface ResourceOption<Text = string> extends SelectOption<Text> {
+  searchText?: string;
   ruleScopes?: readonly {
     action: string;
     scopeKey: string;

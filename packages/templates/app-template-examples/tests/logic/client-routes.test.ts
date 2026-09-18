@@ -27,6 +27,11 @@ describe('app client routes', () => {
         },
         {
           auth: 'required',
+          name: 'notifications',
+          path: '/notifications',
+        },
+        {
+          auth: 'required',
           name: 'routeOverlays',
           path: '/route-overlays',
           children: [
@@ -120,6 +125,7 @@ describe('app client routes', () => {
     expect(pageAuthorizations(resolved.routes)).toEqual([
       // The landing page opted out of page authorization, so it is reachable by every signed-in user.
       { name: 'home', authorizedAs: null },
+      { name: 'notifications', authorizedAs: 'notifications' },
       { name: 'routeOverlays', authorizedAs: 'routeOverlays' },
       // Overlay children are nested under a page, so the parent's check is the only one.
       { name: 'routeDialogExample', authorizedAs: null },

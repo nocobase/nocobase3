@@ -112,7 +112,10 @@ export function PermissionSetEditor({
       (type !== 'resource' || !businessGroup || item.group === businessGroup) &&
       (!configuredOnly ||
         Boolean(current.get(resourceKey(type, item.value))?.actions.length)) &&
-      (!query || `${item.label} ${item.value}`.toLowerCase().includes(query)),
+      (!query ||
+        `${item.label} ${item.searchText ?? ''} ${item.value}`
+          .toLowerCase()
+          .includes(query)),
   );
   const rows = resourceRows(
     type === 'resource' ? [] : (resourceType?.groups ?? []),

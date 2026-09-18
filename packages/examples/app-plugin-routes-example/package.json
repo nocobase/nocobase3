@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-routes-example",
   "displayName": "Routes Example App Plugin",
   "description": "Full-stack example with server and lazy client routes.",
-  "version": "0.1.0-beta.10",
+  "version": "0.1.0-beta.11",
   "type": "module",
   "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
@@ -100,6 +100,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "react": "^19.0.0",
-    "tailwind-merge": "catalog:"
+    "tailwind-merge": "catalog:",
+    "@nocobase/i18n": "workspace:^"
   }
 }

@@ -22,6 +22,7 @@ export function useResourceOptions(
         options,
         grantablePages(routes).map((page) => ({
           value: page.name,
+          searchText: page.title,
           ...(page.group ? { group: page.group } : {}),
           label:
             page.title === undefined

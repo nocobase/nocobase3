@@ -1,10 +1,6 @@
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
-import {
-  apiClientToken,
-  ApiClientError,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
@@ -59,7 +55,7 @@ interface Trace {
   readonly output: unknown;
 }
 export default function AtomicPage(): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const repo = useMemo(() => atomicRepository(api), [api]);
   const { t } = useTranslation(NS);
   const [records, setRecords] = useState<AtomicCounter[]>([]);

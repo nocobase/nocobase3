@@ -50,6 +50,9 @@ export class AuthorizationProvider<
   /** Both tokens name one instance, so the provider owns it rather than a binding. */
   private authorization(container: ServiceResolver): AppAuthorizationService {
     this.instance ??= createAppAuthorization({
+      database: container.has(databaseManagerToken)
+        ? container.resolve(databaseManagerToken)
+        : undefined,
       connection: container.has(databaseManagerToken)
         ? container.resolve(databaseManagerToken).connection()
         : undefined,

@@ -1,3 +1,4 @@
+import type { AppRuntimeLogging } from '@nocobase/app-server/logging';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -22,6 +23,8 @@ export interface HostFileConfig {
 }
 
 export interface HostDeploymentSpec {
+  operationId?: string;
+  logging?: AppRuntimeLogging;
   id: string;
   appId: string;
   artifact: ArtifactReference;

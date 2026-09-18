@@ -1,5 +1,5 @@
 import type { AuthorizationPlugin } from '@nocobase/authorization/core';
-import type { DatabaseConnection } from '@nocobase/db';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import {
   composeDatabasePolicies,
   DatabaseAuthorizationService,
@@ -27,7 +27,9 @@ export interface DatabaseAuthorizationPlugin extends AuthorizationPlugin<
   readonly authorizationApi: { db: DatabaseAuthorizationService };
 }
 
-export function databaseAuthorization(): DatabaseAuthorizationPlugin {
+export function databaseAuthorization(
+  database?: DatabaseManager,
+): DatabaseAuthorizationPlugin {
   const api = new DatabaseAuthorizationService();
   const collections = api.collections;
   return {
@@ -51,7 +53,9 @@ export function databaseAuthorization(): DatabaseAuthorizationPlugin {
         collections,
         recordAccess: authz.recordAccess,
         ...(authz.connection
-          ? { resolveCollection: collectionResolver(authz.connection) }
+          ? {
+              resolveCollection: collectionResolver(authz.connection, database),
+            }
           : {}),
       });
       authz.resourceTypes.add<

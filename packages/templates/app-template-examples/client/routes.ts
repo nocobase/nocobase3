@@ -1,4 +1,4 @@
-import { FileText, Home, Hash, PanelsTopLeft, Plug } from 'lucide-react';
+import { Bell, FileText, Home, Hash, PanelsTopLeft, Plug } from 'lucide-react';
 import {
   defineAppRoutes,
   defineSettingsRoutes,
@@ -15,6 +15,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'home',
     navigation: { title: 'navigation.home', icon: Home },
     path: '/',
+  },
+  {
+    auth: 'required',
+    componentLoader: () => import('./pages/notifications.js'),
+    name: 'notifications',
+    navigation: { title: 'navigation.notifications', icon: Bell },
+    path: '/notifications',
   },
   {
     auth: 'required',

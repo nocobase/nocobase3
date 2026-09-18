@@ -1,4 +1,4 @@
-// Archives the deployment build as `storage/dist.tar.gz`, for `pnpm build --tar`.
+// Archives the deployment build as `storage/exports/dist.tar.gz`, for `pnpm build --tar`.
 //
 // The archive holds `dist/` as a directory rather than its contents, so extracting it anywhere produces a `dist/`
 // alongside `config.example.yml` — the same two paths a deployment starts from, in the same relative positions they
@@ -26,7 +26,7 @@ const rootDir = path.resolve(
   '..',
 );
 const distDir = path.join(rootDir, 'dist');
-const storageDir = path.join(rootDir, 'storage');
+const storageDir = path.join(rootDir, 'storage', 'exports');
 const archivePath = path.join(storageDir, 'dist.tar.gz');
 
 /** What the archive holds, relative to the application root and in the order they appear in it. */

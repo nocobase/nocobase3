@@ -1,5 +1,48 @@
 # @nocobase/app-plugin-authorization
 
+## 0.2.0-beta.13
+
+### Patch Changes
+
+- 365a9fe: Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations. Resolve AI Registry copy from the active language and localize development navigation and section headings. Translate MCP configuration guidance, tool drawer labels, and transport descriptions.
+- 365a9fe: Match translated resource names when searching permissions, preserve the pagination slot across locales, and retranslate stored upload errors when the language changes.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/authorization@0.1.0-beta.7
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.2.0-beta.12
+
+### Patch Changes
+
+- 028dd7c: Use host-provided peers for shared database types, authorization errors, service tokens, cache registries, and repository filter metadata. Declare their production providers in all application templates so deployments with automatic peer installation disabled retain the required runtime packages. Document the provider contract for generated plugins.
+
+  Existing applications upgrading these packages must add compatible versions of their required shared peers to production dependencies: @nocobase/db, @nocobase/service-provider, @nocobase/repository-input, @nocobase/authorization, @nocobase/caching, @nocobase/i18n, and @nocobase/queue for the standard server stack, plus @nocobase/ai-employee when using its plugin. Update the lockfile and verify the production install; peer declarations do not remove incompatible historical versions automatically.
+
+- Updated dependencies [028dd7c]
+  - @nocobase/app-client@1.0.0-beta.17
+  - @nocobase/app-plugin-authentication@0.1.0-beta.16
+  - @nocobase/app-server@1.0.0-beta.17
+  - @nocobase/authorization@0.1.0-beta.7
+  - @nocobase/db@1.0.0-beta.8
+
+## 0.2.0-beta.11
+
+### Patch Changes
+
+- 1fea79a: Refresh permission snapshots, navigation, and route guards when sessions or permissions change, and discard obsolete permission responses without requiring a browser reload. Support explicit type:id domain resources in client access checks without rewriting their actions.
+- Updated dependencies [415d763]
+  - @nocobase/app-server@1.0.0-beta.16
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+
 ## 0.2.0-beta.10
 
 ### Patch Changes

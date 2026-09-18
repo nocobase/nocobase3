@@ -1,5 +1,28 @@
 # @nocobase/app-plugin-notification-in-app
 
+## 0.2.0-beta.13
+
+### Patch Changes
+
+- d4ca00e: Clarify React API client access through useApiClient and retain explicit client resolution for non-React code in application and inbox Skills.
+- 365a9fe: Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations. Resolve AI Registry copy from the active language and localize development navigation and section headings. Translate MCP configuration guidance, tool drawer labels, and transport descriptions.
+- d4ca00e: Use useApiClient() for React API client access across application pages, plugins and shared examples, preserving application-scoped client resolution.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [365a9fe]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+- Updated dependencies [d4ca00e]
+- Updated dependencies [d4ca00e]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-plugin-notification@0.1.0-beta.11
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.2.0-beta.12
 
 ### Patch Changes

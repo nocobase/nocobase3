@@ -2,13 +2,11 @@ import { Link } from 'react-router';
 import { useClientApplication } from '@nocobase/app-client';
 import { PermissionSelection } from '../components/permission-selection.js';
 import { PermissionAssignmentDrawer } from '../components/permission-assignment-drawer.js';
+import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
+import { toast } from 'sonner';
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
-import {
-  ApiClientError,
-  apiClientToken,
-  useService,
-} from '@nocobase/app-client';
+import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
@@ -99,8 +97,9 @@ const EMPTY_PAGE: ManagedUserPage = {
 };
 
 export default function UsersPage(): ReactElement {
+  const { session } = useAuthentication();
   const { t } = useTranslation('@nocobase/app-plugin-users');
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const authorization = useService(authorizationClientToken);
   const users = useMemo(() => new UsersClient(api), [api]);
   const app = useClientApplication();
@@ -118,7 +117,18 @@ export default function UsersPage(): ReactElement {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>();
+  const [deleteUser, setDeleteUser] = useState<ManagedUser>();
+  const reportError = useCallback(
+    (reason: unknown) => {
+      const code = reason instanceof ApiClientError ? reason.code : undefined;
+      toast.error(
+        t(`errors.${code ?? 'operationFailed'}`, {
+          defaultValue: readError(reason, t('errors.operationFailed')),
+        }),
+      );
+    },
+    [t],
+  );
   const [editor, setEditor] = useState<ManagedUser | 'create'>();
   const [assignment, setAssignment] = useState<{
     user: ManagedUser;
@@ -153,7 +163,6 @@ export default function UsersPage(): ReactElement {
   );
   const load = useCallback(async () => {
     setLoading(true);
-    setError(undefined);
     try {
       const [nextOptions, nextPage, nextGlobalCapabilities, inspectAllowed] =
         await Promise.all([
@@ -195,11 +204,11 @@ export default function UsersPage(): ReactElement {
       setGlobalCapabilities(nextGlobalCapabilities);
       setUserCapabilities(nextUserCapabilities);
     } catch (reason) {
-      setError(reason);
+      reportError(reason);
     } finally {
       setLoading(false);
     }
-  }, [authorization, page, role, search, status, users]);
+  }, [authorization, page, role, search, status, users, reportError]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 200);
@@ -213,7 +222,6 @@ export default function UsersPage(): ReactElement {
 
   const perform = async (work: () => Promise<unknown>): Promise<void> => {
     setBusy(true);
-    setError(undefined);
     try {
       await work();
       await load();
@@ -221,7 +229,7 @@ export default function UsersPage(): ReactElement {
       if (reason instanceof ApiClientError && reason.status === 403) {
         authorization.invalidatePermissions();
       }
-      setError(reason);
+      reportError(reason);
     } finally {
       setBusy(false);
     }
@@ -240,12 +248,6 @@ export default function UsersPage(): ReactElement {
           ) : null
         }
       />
-
-      {error !== undefined ? (
-        <div className='rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'>
-          {readError(error, t('errors.operationFailed'))}
-        </div>
-      ) : null}
 
       <div className='flex flex-wrap gap-3'>
         <label className='flex h-9 min-w-64 flex-1 items-center gap-2 rounded-lg border bg-background px-3'>
@@ -343,11 +345,14 @@ export default function UsersPage(): ReactElement {
                 const canChangeState = user.disabledAt
                   ? capabilities.enable
                   : capabilities.disable;
+                const canDelete =
+                  capabilities.delete && user.id !== session?.user.id;
                 const hasActions =
                   (canInspect && !!inspector) ||
                   capabilities.update ||
                   capabilities['reset-password'] ||
                   capabilities['revoke-sessions'] ||
+                  canDelete ||
                   canChangeState;
                 return (
                   <TableRow key={user.id}>
@@ -453,6 +458,14 @@ export default function UsersPage(): ReactElement {
                                   : t('page.actions.disable')}
                               </DropdownMenuItem>
                             ) : null}
+                            {canDelete ? (
+                              <DropdownMenuItem
+                                className='text-destructive'
+                                onClick={() => setDeleteUser(user)}
+                              >
+                                {t('page.actions.delete')}
+                              </DropdownMenuItem>
+                            ) : null}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       ) : null}
@@ -532,6 +545,21 @@ export default function UsersPage(): ReactElement {
                 await users.update(editor.id, input.value);
               }
               setEditor(undefined);
+            })
+          }
+        />
+      ) : null}
+      {deleteUser && userCapabilities[deleteUser.id]?.delete ? (
+        <ConfirmDeleteDialog
+          user={deleteUser}
+          busy={busy}
+          onClose={() => setDeleteUser(undefined)}
+          onConfirm={() =>
+            void perform(async () => {
+              await users.remove(deleteUser.id);
+              setDeleteUser(undefined);
+              if (result.items.length === 1 && page > 1) setPage(page - 1);
+              toast.success(t('deletion.success'));
             })
           }
         />
@@ -894,4 +922,43 @@ function Field({
 function readError(value: unknown, fallback: string): string {
   if (value instanceof Error) return value.message;
   return fallback;
+}
+
+export function ConfirmDeleteDialog({
+  user,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  readonly user: ManagedUser;
+  readonly busy: boolean;
+  readonly onClose: () => void;
+  readonly onConfirm: () => void;
+}): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-users');
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
+      }}
+    >
+      <DialogContent className='sm:max-w-md'>
+        <DialogHeader>
+          <DialogTitle>{t('deletion.title')}</DialogTitle>
+          <DialogDescription>
+            {t('deletion.description', { name: user.name })}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant='outline' disabled={busy} onClick={onClose}>
+            {t('form.cancel')}
+          </Button>
+          <Button variant='destructive' disabled={busy} onClick={onConfirm}>
+            {t('page.actions.delete')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }

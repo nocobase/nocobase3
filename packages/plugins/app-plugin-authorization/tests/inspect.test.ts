@@ -1,6 +1,6 @@
 import { databaseAuthorization } from '../server/database/index.js';
 import { createAuthorization } from './authorization-fixture.js';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   authenticationToken,
   type Auth,
@@ -330,7 +330,7 @@ async function mountedRouter(authorization: Authorization): Promise<Hono> {
     appName: 'main',
     publicBasePath: '',
     config: { app: { name: 'main', publicBasePath: '' } },
-    paths: createConfigPaths({ rootDir: '/missing' }),
+    paths: createAppPaths({ rootDir: '/missing' }),
     router: new Hono(),
     container,
   });

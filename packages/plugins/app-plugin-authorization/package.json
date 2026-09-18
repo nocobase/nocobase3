@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-authorization",
   "displayName": "Authorization App Plugin",
   "description": "Authorization integration and permission management UI for NocoBase applications.",
-  "version": "0.2.0-beta.10",
+  "version": "0.2.0-beta.13",
   "type": "module",
   "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
@@ -102,7 +102,6 @@
     "test:types": "tsc -p tests/tsconfig.json"
   },
   "dependencies": {
-    "@nocobase/authorization": "workspace:^",
     "hono": "catalog:"
   },
   "peerDependencies": {
@@ -118,7 +117,8 @@
     "lucide-react": "catalog:",
     "react": "^19.0.0",
     "tailwind-merge": "catalog:",
-    "react-router": "catalog:"
+    "react-router": "catalog:",
+    "@nocobase/authorization": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",

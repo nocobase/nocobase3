@@ -18,7 +18,7 @@ import mysql from '@nocobase/db-mysql';
 import sqlite from '@nocobase/db-sqlite';
 import oracle from '@nocobase/db-oracle';
 import mssql from '@nocobase/db-mssql';
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import { AppConfig, createAppPaths } from '../src/config/index.js';
 import {
   createAppDatabaseManager,
   type AppDatabaseConfig as GenericAppDatabaseConfig,
@@ -45,7 +45,7 @@ function fixture() {
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'connections-'));
   roots.push(root);
-  const paths = createConfigPaths({ rootDir: root });
+  const paths = createAppPaths({ rootDir: root });
   const config: AppDatabaseConfig = {
     drivers,
     default: 'main',
@@ -539,7 +539,7 @@ export default defineMigration({ name: '001_main', async up({ builder }) {
     const source = paths.database('analytics/migrations');
     migration(source, '001_compiled', 'compiledRows');
     seed(paths.database('analytics/seeds'), 'compiledRows');
-    const compiledPaths = createConfigPaths({
+    const compiledPaths = createAppPaths({
       rootDir: root,
       databaseDir: path.join(root, 'dist/database'),
     });
