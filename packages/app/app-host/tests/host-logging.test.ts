@@ -34,7 +34,7 @@ it('writes production host logs under storage/host/logs', async () => {
   });
   const host = createAppHost({
     mode: config.mode,
-    appDeploymentsDir: config.appDeploymentsDir,
+    appRevisionsDir: config.appRevisionsDir,
     appVolumesDir: config.appVolumesDir,
     artifact: config.artifact,
     logging: config.logging,
@@ -49,7 +49,7 @@ it('writes production host logs under storage/host/logs', async () => {
   await vi.waitFor(async () => {
     files = await readdir(logDir);
     expect(files).toEqual([
-      expect.stringMatching(/^host\.\d{4}_\d{2}_\d{2}\.1\.log$/),
+      expect.stringMatching(/^host\.\d{4}-\d{2}-\d{2}\.\d{6}\.log$/),
     ]);
   });
   const content = await readFile(path.join(logDir, files[0]), 'utf8');

@@ -5,13 +5,13 @@ import {
 import type { AppSessionConfigInput } from '@nocobase/app-server/session';
 
 const session: AppConfigFactory<AppSessionConfigInput> = defineAppConfig(
-  (runtime) => ({
+  ({ paths, env }) => ({
     enabled: true,
     default: 'memory',
     cookie: {
       name: 'nocobase_session',
       path: '/',
-      secure: runtime.env.NODE_ENV === 'production',
+      secure: env.NODE_ENV === 'production',
       httpOnly: true,
       sameSite: 'lax' as const,
       partitioned: false,
@@ -30,7 +30,7 @@ const session: AppConfigFactory<AppSessionConfigInput> = defineAppConfig(
       },
       fs: {
         driver: 'fs',
-        base: runtime.configPaths.storage('sessions'),
+        base: paths.storage('sessions'),
       },
       redis: {
         driver: 'redis',

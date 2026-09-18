@@ -22,6 +22,30 @@ afterEach(() =>
 );
 
 describe('AppConfig', () => {
+  it('defers load diagnostics to the configured logger without writing CLI output', async () => {
+    const output = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const debug = vi.fn();
+    try {
+      const config = new AppConfig();
+      await config.loadAll();
+      expect(output).not.toHaveBeenCalled();
+      config.setLogger({ debug });
+      expect(debug).toHaveBeenCalledWith(
+        { durationMs: expect.any(Number) },
+        'App configuration loaded',
+      );
+      await config.reload();
+      expect(debug).toHaveBeenCalledWith(
+        { changedNamespaces: [], durationMs: expect.any(Number) },
+        'App configuration reloaded',
+      );
+      expect(output).not.toHaveBeenCalled();
+    } finally {
+      output.mockRestore();
+    }
+  });
   it.each([
     ['json', '{"feature":{"label":"file"}}'],
     ['yml', 'feature:\n  label: file\n'],

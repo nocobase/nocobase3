@@ -118,12 +118,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script             | What it does                                                                 |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `pnpm dev`         | Start the API server and client with hot reload                              |
-| `pnpm build`       | Build the client and server into `dist/`                                     |
-| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
-| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
+| Script             | What it does                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `pnpm dev`         | Start the API server and client with hot reload                                      |
+| `pnpm build`       | Build the client and server into `dist/`                                             |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                                    |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/exports/dist.tar.gz` |
 
 ### Database
 
@@ -249,7 +249,7 @@ If your application has no native modules — `pg`, `mysql2`, and `tedious` are 
 
 #### Packing the build
 
-`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+`pnpm build --tar` writes `storage/exports/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
 
 The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
 
@@ -368,10 +368,16 @@ HUB_APP_ID=crm
 HUB_API_KEY=your-publishing-key
 ```
 
-Use `app upload --deploy --json` to upload and deploy, or omit `--deploy` to upload only. Hub has no automatic/manual deployment setting; scripts decide which commands to run. `--file` defaults to `storage/dist.tar.gz`; `--timeout` defaults to 600 seconds. `app deploy --release-id <id> --json` deploys an existing Release. Uploads default to checksum-based retry identity; deploys default to an App/Release digest. Use the same `--idempotency-key` after a failed connection and a fresh key when intentionally redeploying the same Release. Exit codes are 0 for success/acceptance, 1 for a Hub rejection or failed deployment, 2 for invalid local input, and 3 for an unconfirmed outcome caused by a connection failure, timeout, malformed response, or unknown deployment status. Exit 3 does not mean the deployment failed or was cancelled: inspect the deployment in Hub and retry with the same idempotency key if necessary. `--no-wait` validates the deployment acceptance response too; it never treats an unknown status as successful acceptance.
+Use `app upload --deploy --json` to upload and deploy, or omit `--deploy` to upload only. Hub has no automatic/manual deployment setting; scripts decide which commands to run. `--file` defaults to `storage/exports/dist.tar.gz`; `--timeout` defaults to 600 seconds. `app deploy --release-id <id> --json` deploys an existing Release. Uploads default to checksum-based retry identity; deploys default to an App/Release digest. Use the same `--idempotency-key` after a failed connection and a fresh key when intentionally redeploying the same Release. Exit codes are 0 for success/acceptance, 1 for a Hub rejection or failed deployment, 2 for invalid local input, and 3 for an unconfirmed outcome caused by a connection failure, timeout, malformed response, or unknown deployment status. Exit 3 does not mean the deployment failed or was cancelled: inspect the deployment in Hub and retry with the same idempotency key if necessary. `--no-wait` validates the deployment acceptance response too; it never treats an unknown status as successful acceptance.
 
 Publishing keys reuse Hub's `upload-release` and `deploy` actions and remain restricted to their selected Apps and their owner's current permissions. Uploading with deployment needs both permissions; waiting uses a minimal deployment status endpoint under `deploy`. These commands call Hub over HTTP and never load this application's server or connect directly to Host.
 
 Both `app deploy --release-id <id> --config ./runtime.yml` and `app upload --deploy --config ./runtime.yml` accept an optional runtime YAML file (non-empty UTF-8, at most 1 MiB). Paths resolve from the App root. Omitting `--config` reuses the current Hub configuration; on first deployment, the existing Release-template initialization still applies. Supplied configuration replaces the configuration document through the existing Hub secret handling and YAML validation; it is not merged with arbitrary existing fields and never changes the Release template or archive. `app upload --config` without `--deploy` is rejected. Use `app deploy` to apply a different configuration to an already uploaded Release; configured upload retries reuse only the originally supplied configuration. Default deployment retry identity includes supplied configuration content. Configuration content is never printed in CLI results.
 
 Deployment commands (`app deploy` and `app upload --deploy`) wait for the final result by default. Use `--no-wait` to return after acceptance; acceptance does not mean deployment succeeded. Explicit `--wait` remains supported. Upload without `--deploy` only waits for the upload. `--timeout` defaults to 600 seconds; a timeout leaves the deployment outcome unconfirmed and does not cancel it.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

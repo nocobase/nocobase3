@@ -7,7 +7,7 @@ import type {
   DatabaseDriverDefinition,
 } from '@nocobase/db';
 import {
-  createConfigPaths,
+  createAppPaths,
   type AppConfigFactory,
 } from '../../src/config/index.js';
 import {
@@ -35,7 +35,7 @@ it('infers returned drivers and evaluates the configuration only when invoked', 
       connections: {
         main: {
           dialect: 'sqlite',
-          filename: runtime.configPaths.storage('database.sqlite'),
+          filename: runtime.paths.storage('database.sqlite'),
           metadataStore: 'database/main/collections',
           migrations: { autoRun: false },
           seeds: { autoRun: true },
@@ -48,9 +48,9 @@ it('infers returned drivers and evaluates the configuration only when invoked', 
   });
   expectTypeOf(factory).toEqualTypeOf<AppConfigFactory<AppDatabaseConfig>>();
   expect(called).not.toHaveBeenCalled();
-  const paths = createConfigPaths({ rootDir: '/tmp/database-config-factory' });
+  const paths = createAppPaths({ rootDir: '/tmp/database-config-factory' });
   // Only the path service is used by this callback.
-  const runtime = { configPaths: paths } as AppRuntimeContext;
+  const runtime = { paths: paths } as AppRuntimeContext;
   const config = factory(runtime);
   expect(called).toHaveBeenCalledOnce();
   expect(config.drivers?.sqlite).toBe(sqlite);

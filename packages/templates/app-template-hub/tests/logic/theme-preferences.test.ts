@@ -6,7 +6,10 @@ import {
 } from '../../client/theme/theme-preferences';
 
 describe('application appearance storage', () => {
-  it('restores Default when the saved Ant Design preset is removed', () => {
+  it('lists Compact first as the default preset', () => {
+    expect(themePresets[0].id).toBe('compact');
+  });
+  it('restores Compact when the saved Ant Design preset is removed', () => {
     const keys = themeStorageKeys('/crm/');
     localStorage.setItem(keys.preset, 'ant-design');
     localStorage.setItem(keys.mode, 'light');
@@ -14,7 +17,7 @@ describe('application appearance storage', () => {
       '/crm/',
       themePresets.map(({ id }) => id),
     );
-    expect(document.documentElement.dataset.theme).toBe('default');
+    expect(document.documentElement.dataset.theme).toBe('compact');
     expect(document.documentElement).toHaveClass('light');
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -22,6 +25,11 @@ describe('application appearance storage', () => {
     localStorage.clear();
     document.documentElement.removeAttribute('class');
     vi.stubGlobal('matchMedia', () => ({ matches: true }));
+  });
+
+  it('uses the first registered preset as the fallback', () => {
+    initializeTheme('/crm/', ['custom', 'default']);
+    expect(document.documentElement.dataset.theme).toBe('custom');
   });
 
   it('separates apps, preserves nested paths and distinguishes the root', () => {
@@ -38,20 +46,29 @@ describe('application appearance storage', () => {
 
   it('restores both preferences before React without reading another app', () => {
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'light');
-    localStorage.setItem('nocobase:crm:theme:preset', 'compact');
-    initializeTheme('/crm/', ['default', 'compact']);
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
-    expect(document.documentElement).toHaveClass('light');
-    initializeTheme('/erp/', ['default', 'compact']);
+    localStorage.setItem('nocobase:crm:theme:preset', 'default');
+    initializeTheme(
+      '/crm/',
+      themePresets.map(({ id }) => id),
+    );
     expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(document.documentElement).toHaveClass('light');
+    initializeTheme(
+      '/erp/',
+      themePresets.map(({ id }) => id),
+    );
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     expect(document.documentElement).toHaveClass('dark');
   });
 
   it('falls back on invalid values and unavailable storage', () => {
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'invalid');
     localStorage.setItem('nocobase:crm:theme:preset', 'deleted');
-    initializeTheme('/crm/', ['default', 'compact']);
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    initializeTheme(
+      '/crm/',
+      themePresets.map(({ id }) => id),
+    );
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     expect(document.documentElement).toHaveClass('dark');
     const spy = vi
       .spyOn(Storage.prototype, 'getItem')
@@ -59,7 +76,10 @@ describe('application appearance storage', () => {
         throw new Error('blocked');
       });
     expect(() =>
-      initializeTheme('/crm/', ['default', 'compact']),
+      initializeTheme(
+        '/crm/',
+        themePresets.map(({ id }) => id),
+      ),
     ).not.toThrow();
     spy.mockRestore();
   });

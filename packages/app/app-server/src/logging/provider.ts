@@ -1,54 +1,112 @@
 import {
   createLogging,
-  type LoggerConfig,
+  reportLoggingFailure,
   type LoggingConfig,
 } from '@nocobase/logging';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import type { AppPluginApplication } from '../plugins/index.js';
-import { type AppLoggingConfig } from './config.js';
+import { normalizeRuntimeLogging, type AppLoggingConfig } from './config.js';
 import { loggingToken } from './token.js';
 
 export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-server/logging';
 
   public override register(): void {
-    this.app.container.singleton(loggingToken, () =>
-      createLogging(this.createLoggingConfig()),
-    );
+    this.app.container.singleton(loggingToken, () => {
+      const logging = createLogging(this.createLoggingConfig());
+      this.app.config.setLogger?.(logging.getLogger('config'));
+      return logging;
+    });
   }
 
   private createLoggingConfig(): LoggingConfig {
-    const { pretty, ...config } =
-      this.app.config.get<AppLoggingConfig>('logging')!;
+    const config = this.app.config.get<AppLoggingConfig>('logging')!;
+    if (config.file?.maxSizeMB !== undefined)
+      reportLoggingFailure(
+        'logging.file.maxSizeMB is deprecated; use maxTotalSizeMB',
+      );
+    const policy = this.app.runtimeLogging
+      ? normalizeRuntimeLogging(this.app.runtimeLogging)
+      : undefined;
+    const policyFile = policy?.file ?? {};
+    const policyConsole =
+      typeof policy?.console === 'boolean'
+        ? { enabled: policy.console }
+        : policy?.console;
+    if (
+      policy &&
+      (config.transport ||
+        Object.values(config.loggers ?? {}).some((entry) => entry.transport))
+    ) {
+      reportLoggingFailure(
+        'Hosted logging policy overrides custom transports; use file and console settings',
+      );
+    }
+    const base = {
+      service: 'app',
+      ...config.base,
+      appId: this.app.appName,
+      ...policy?.bindings,
+    };
+    const loggers = Object.fromEntries(
+      Object.entries(config.loggers ?? {}).map(([name, entry]) => [
+        name,
+        {
+          ...entry,
+          ...(policy?.level ? { level: policy.level } : {}),
+          ...(policy ? { enabled: true, transport: undefined } : {}),
+          file: {
+            ...entry.file,
+            ...(policy ? { directory: this.app.paths.storage('logs') } : {}),
+            ...(policyFile.enabled === undefined
+              ? {}
+              : { enabled: policyFile.enabled }),
+          },
+          base: { ...entry.base, ...base },
+        },
+      ]),
+    );
+    const consoleColor = policyConsole?.color ?? config.console?.color;
     return {
       ...config,
-      transport:
-        config.transport ?? this.createDefaultTransport(pretty ?? true),
+      ...(policy ? { enabled: true, transport: undefined } : {}),
+      loggers,
+      level: policy?.level ?? config.level,
+      base,
+      file: {
+        ...config.file,
+        ...Object.fromEntries(
+          Object.entries(policyFile).filter(([, value]) => value !== undefined),
+        ),
+        maxSizeMB: undefined,
+        directory: policy
+          ? this.app.paths.storage('logs')
+          : (config.file?.directory ?? this.app.paths.storage('logs')),
+        enabled: policyFile.enabled ?? config.file?.enabled ?? true,
+        retentionDays:
+          policyFile.retentionDays ?? config.file?.retentionDays ?? 7,
+        maxTotalSizeMB:
+          policyFile.maxSizeMB ??
+          policyFile.maxTotalSizeMB ??
+          config.file?.maxSizeMB ??
+          config.file?.maxTotalSizeMB ??
+          500,
+      },
+      console: {
+        enabled:
+          policyConsole?.enabled ??
+          config.console?.enabled ??
+          config.pretty ??
+          true,
+        pretty:
+          policyConsole?.pretty ??
+          config.console?.pretty ??
+          config.pretty ??
+          false,
+        ...(consoleColor === undefined ? {} : { color: consoleColor }),
+      },
     };
-  }
-
-  private createDefaultTransport(pretty: boolean): LoggerConfig['transport'] {
-    return pretty
-      ? {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-            translateTime: 'SYS:standard',
-            ignore: 'pid,hostname',
-            singleLine: true,
-          },
-        }
-      : {
-          target: 'pino-roll',
-          options: {
-            file: this.app.paths.storage('logs/{logger}.log'),
-            frequency: 'daily',
-            dateFormat: 'yyyy_MM_dd',
-            mkdir: true,
-            limit: { count: 6, removeOtherLogFiles: true },
-          },
-        };
   }
 
   public override async shutdown(): Promise<void> {

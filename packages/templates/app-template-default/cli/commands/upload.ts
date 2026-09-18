@@ -34,7 +34,7 @@ export default class AppUpload extends Command {
     }),
     file: Flags.string({
       description: 'Artifact path.',
-      default: 'storage/dist.tar.gz',
+      default: 'storage/exports/dist.tar.gz',
     }),
     'idempotency-key': Flags.string({
       description: 'Retry identity. Defaults to artifact SHA-256.',
@@ -81,6 +81,8 @@ export default class AppUpload extends Command {
         this.log(
           `Release ${String(result.releaseId)} uploaded${result.reused ? ' (reused)' : ''}. Deployment: ${String(result.operationId ?? 'not requested')}.`,
         );
+      if (!json && typeof result.warning === 'string')
+        this.warn(result.warning);
     } catch (error) {
       const failure = !parsed
         ? new PublishingError(

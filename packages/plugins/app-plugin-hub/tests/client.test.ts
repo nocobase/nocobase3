@@ -35,6 +35,7 @@ describe('@nocobase/app-plugin-hub', () => {
       routes.routes[0]?.children?.[0]?.children?.map((route) => route.path),
     ).toEqual([
       'deployments',
+      'logs',
       'releases',
       'development',
       'resources',

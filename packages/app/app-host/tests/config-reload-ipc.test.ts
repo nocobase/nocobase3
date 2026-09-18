@@ -76,3 +76,48 @@ it('routes configuration reload through IPC and propagates results and errors', 
     else Reflect.deleteProperty(process, 'send');
   }
 });
+
+it('delivers ordered log events before completion and detaches on host exit', async () => {
+  const child = new EventEmitter() as ChildProcess;
+  Object.defineProperty(child, 'connected', { value: true });
+  child.send = ((
+    message: Record<string, unknown>,
+    callback: (error: Error | null) => void,
+  ) => {
+    callback(null);
+    child.emit('message', { ...message, kind: 'response', accepted: true });
+    child.emit('message', {
+      ...message,
+      kind: 'response',
+      log: {
+        time: '2026-09-17',
+        level: 'info',
+        msg: 'Extracting',
+        sequence: 1,
+      },
+    });
+    child.emit('message', {
+      ...message,
+      kind: 'response',
+      log: {
+        time: '2026-09-17',
+        level: 'error',
+        msg: 'Failed',
+        sequence: 2,
+        err: { stack: 'original stack' },
+      },
+    });
+    child.emit('exit', 1);
+    return true;
+  }) as ChildProcess['send'];
+  const client = new IpcHostManagementClient(child, { session: 'test' });
+  const entries: unknown[] = [];
+  await expect(
+    client.applyDeployment({ id: 'app', appId: 'app' } as never, (entry) =>
+      entries.push(entry),
+    ),
+  ).rejects.toThrow('exited');
+  expect(entries).toHaveLength(2);
+  expect(entries[1]).toMatchObject({ err: { stack: 'original stack' } });
+  expect(child.listenerCount('message')).toBe(0);
+});

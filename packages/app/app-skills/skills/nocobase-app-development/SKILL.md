@@ -17,8 +17,6 @@ Do not use it to develop a published plugin package. Plugin development has its 
 
 Do not use it to upgrade the template this application was generated from. That is `.agents/skills/nocobase-app-upgrade/`, which reconciles a newer template release against the application without reverting the user's work.
 
-For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL. Opening the parent URL redirects to the default accessible Tab with replace and preserves query parameters; explicit Tab URLs retain their selection. Follow an explicit user request for a different interaction.
-
 ## Before you start
 
 Read the application's `AGENTS.md` first for the rules that apply everywhere. This Skill's references are the detail behind it.
@@ -73,20 +71,20 @@ If an older application has the command but not the script, use `pnpm nocobase p
 
 Read the page for the task in front of you. Do not read all of them.
 
-| Task                                                                             | Read                                                             |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Add a page, choose an auth mode, add navigation, customize a plugin page         | [client pages and routes](references/client-pages-and-routes.md) |
-| Build a page with Tabs, add child pages or menu groups                           | [child routes and Tabs](references/client-child-routes.md)       |
-| Add or compose UI, add a shadcn primitive, style consistently, support dark mode | [components and styling](references/components-and-styling.md)   |
-| Add an API endpoint, a webhook, or a callback; authenticate and authorize it     | [server routes](references/server-routes.md)                     |
-| Call an API from the frontend using the application's HTTP client                | [client API requests](references/client-api.md)                  |
-| Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
-| Create a table, alter a column, add an index, write required initial data        | [migrations and seeds](references/migrations.md)                 |
-| Switch the database, register a dialect, add a second connection                 | [database connections](references/database-connections.md)       |
-| Name translation keys, add a locale, reword a plugin's string                    | [internationalization](references/i18n.md)                       |
-| Add a reusable service, share it across routes, run background or scheduled work | [services and jobs](references/services-and-jobs.md)             |
-| Write tests, choose a test layer, verify before finishing                        | [testing and verification](references/testing.md)                |
-| Understand behavior inherited from an official application template              | [template variants](references/template-variants.md)             |
+| Task                                                                                | Read                                                             |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Create a page, write a page component, configure routes or navigation               | [client pages and routes](references/client-pages-and-routes.md) |
+| Add child pages, page Tabs, Dialogs, or Drawers using child routes; add menu groups | [child routes and overlays](references/client-child-routes.md)   |
+| Add or compose UI, add a shadcn primitive, style consistently, support dark mode    | [components and styling](references/components-and-styling.md)   |
+| Add an API endpoint, a webhook, or a callback; authenticate and authorize it        | [server routes](references/server-routes.md)                     |
+| Call an API from the frontend using the application's HTTP client                   | [client API requests](references/client-api.md)                  |
+| Query or write data, resolve the database, work with transactions                   | [database and data access](references/database-and-data.md)      |
+| Create a table, alter a column, add an index, write required initial data           | [migrations and seeds](references/migrations.md)                 |
+| Switch the database, register a dialect, add a second connection                    | [database connections](references/database-connections.md)       |
+| Name translation keys, add a locale, reword a plugin's string                       | [internationalization](references/i18n.md)                       |
+| Add a reusable service, share it across routes, run background or scheduled work    | [services and jobs](references/services-and-jobs.md)             |
+| Write tests, choose a test layer, verify before finishing                           | [testing and verification](references/testing.md)                |
+| Understand behavior inherited from an official application template                 | [template variants](references/template-variants.md)             |
 
 A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.
 
@@ -141,7 +139,7 @@ These cause real damage and appear in every reference:
 - **Every server route owns its own authentication and authorization.** Mounting under `/api` authenticates nothing.
 - **A migration is immutable history and self-contained.** Never import an evolving definition into one. Never edit one whose branch is merged.
 - **Every user-visible string goes through a translation key.**
-- **Wrap page content in `PageContainer`.** When creating a page or writing a page component, use `PageContainer` from `@/components/page-container` as its outer content container so page padding and spacing stay consistent. See [components and styling](references/components-and-styling.md#page-container).
+- **Let the owning page supply `PageContainer`.** Use `PageContainer` from `@/components/page-container` for shared page padding and spacing. Inline child pages, including Tab content, render inside the parent page's container and must not add another. A covering child page uses its own `PageContainer` inside `RouteChildPage`; dialog and drawer content uses the corresponding overlay container. See [components and styling](references/components-and-styling.md#page-container).
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.
@@ -195,3 +193,15 @@ Use `pnpm build --tar`, then `pnpm nocobase app upload` with `HUB_URL`, `HUB_APP
 Both `app deploy --release-id <id> --config ./runtime.yml` and `app upload --deploy --config ./runtime.yml` accept an optional runtime YAML file (non-empty UTF-8, at most 1 MiB). Paths resolve from the App root. Omitting `--config` reuses the current Hub configuration; on first deployment, the existing Release-template initialization still applies. Supplied configuration replaces the configuration document through the existing Hub secret handling and YAML validation; it is not merged with arbitrary existing fields and never changes the Release template or archive. `app upload --config` without `--deploy` is rejected. Use `app deploy` to apply a different configuration to an already uploaded Release; configured upload retries reuse only the originally supplied configuration. Default deployment retry identity includes supplied configuration content. Configuration content is never printed in CLI results.
 
 Deployment commands (`app deploy` and `app upload --deploy`) wait for the final result by default. Use `--no-wait` to return after acceptance; acceptance does not mean deployment succeeded. Explicit `--wait` remains supported. Upload without `--deploy` only waits for the upload. `--timeout` defaults to 600 seconds; a timeout leaves the deployment outcome unconfirmed and does not cancel it.
+
+## Logging and hosted applications
+
+Use the application logging service for diagnostics so entries carry application identity and follow its level and output policy. Development pretty output uses local time and displays `[appId/logger]`; file and JSON console output retain UTC timestamps and structured context. Request starts and headers, configuration diagnostics and AI resource loading stages are DEBUG; request completions and AI resource totals are INFO. Default optional `ai/skills` directories may be absent; explicitly configured missing directories still warn.
+
+The Hub configures hosted application output under `hub.logging.apps`; its own output uses `logging`. Deployed releases carry their own runtime and logging packages: updating the Hub cannot repair an old application formatter that prints numeric levels or omits context, or make an old runtime understand the structured console policy. Upgrade the application dependencies, rebuild and deploy a new release; never edit a deployed artifact or intercept process-wide stdout to rewrite other applications’ logs. Verify console enablement and pretty mode after upgrading.
+
+Authentication diagnostics use the application `auth` logger unless an explicit authentication logger is configured. A missing Better Auth base URL is a configuration warning, not a logging error: configure `app.publicOrigin` with the externally reachable origin in the application deployment configuration. Do not substitute the internal Host bind address or suppress the warning to make startup appear clean.
+
+## Hub storage maintenance
+
+Hub storage separates Hub-owned state, Host runtime files, release archives, expanded revisions and persistent application volumes. Standalone source and compiled entries share the deployment directory's storage; explicit storage paths take precedence over `HUB_STORAGE_DIR`. Embedded applications use Host-provided paths. Expanded releases live at `appRevisionsDir/<appId>/<sha256>` and restart recovery requires their installed metadata. Build archives use `storage/exports/dist.tar.gz`.

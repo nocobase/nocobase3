@@ -6,13 +6,13 @@ import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
  * than settings, so they are declared here and cannot be overridden from
  * config.yml; a connection may only use a dialect listed here.
  */
-export default defineAppDatabaseConfig((runtime) => ({
+export default defineAppDatabaseConfig(({ paths }) => ({
   drivers: { sqlite },
   default: 'main',
   connections: {
     main: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('database.sqlite'),
+      filename: paths.storage('database.sqlite'),
       schemaManagement: 'managed',
       debug: false,
     },

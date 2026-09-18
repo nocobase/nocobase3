@@ -1,6 +1,12 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  notifications: { unreadLabel: 'Notifications, {{count}} unread' },
+  overrides: {
+    '@nocobase/app-plugin-notification-in-app': {
+      inbox: { title: 'Notifications' },
+    },
+  },
   noticeLoading: 'Loading notice…',
   noticeLoadError: 'Unable to load the plugin notice.',
   'auth.welcome': 'Welcome back',
@@ -209,6 +215,11 @@ const enUS = {
     },
   },
   examples: {
+    notifications: {
+      title: 'Notifications',
+      description:
+        'View your in-app notifications, filter unread messages, and manage their read state.',
+    },
     routeOverlays: {
       title: 'Route dialogs and drawers',
       description:
@@ -309,7 +320,7 @@ const enUS = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    themes: { default: 'Default', compact: 'Compact' },
+    themes: { default: 'Spacious', compact: 'Compact' },
   },
   app: {
     title: 'NocoBase',
@@ -366,6 +377,7 @@ const enUS = {
     signingOut: 'Signing out…',
   },
   navigation: {
+    notifications: 'Notifications',
     numbers: 'Numeric types',
     externalCrm: 'External CRM',
     routeOverlays: 'Route dialogs and drawers',

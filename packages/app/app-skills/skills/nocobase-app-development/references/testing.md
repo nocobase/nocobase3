@@ -38,7 +38,7 @@ const router = await apiRoutes.createRouter({
   appName: 'main',
   publicBasePath: '/main',
   config: { app: { name: 'main', publicBasePath: '/main' } },
-  paths: createConfigPaths({ rootDir: '/missing' }),
+  paths: createAppPaths({ rootDir: '/missing' }),
   router: new Hono(),
   container,
 });

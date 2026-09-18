@@ -15,7 +15,7 @@ import { Hono } from 'hono';
 import { objectProvider } from '@nocobase/config/providers/object';
 import { Application } from '../src/application/index.js';
 import { defineServerPlugins } from '../src/plugins/index.js';
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import { AppConfig, createAppPaths } from '../src/config/index.js';
 import {
   defineAppRuntime,
   startApplicationInScope,
@@ -293,7 +293,7 @@ async function startProxy(target: () => URL | null) {
       await config.loadAll();
       const app = new Application({
         config,
-        paths: createConfigPaths({ rootDir: directory }),
+        paths: createAppPaths({ rootDir: directory }),
         websocket: () => () => ({
           onMessage: (event, socket) =>
             socket.send(`hub:${String(event.data)}`),

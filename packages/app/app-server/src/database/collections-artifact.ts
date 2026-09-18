@@ -21,7 +21,7 @@ import {
   type DatabaseManager,
 } from '@nocobase/db';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { AppPaths } from '../config/index.js';
 import {
   isCollectionMetadataStoreInstance,
   resolveAppCollectionsDirectory,
@@ -38,7 +38,7 @@ import type { AppDatabaseConfig } from './types.js';
  * back at runtime, and migrations remain the only authority on schema.
  */
 export interface AppCollectionsArtifactOptions {
-  readonly paths?: ConfigPaths;
+  readonly paths?: AppPaths;
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
   /** One connection; defaults to the default connection. Exclusive with `all`. */
   readonly connection?: string;
@@ -242,7 +242,7 @@ function metadataReadFromDirectory(
   config: AppDatabaseConfig,
   name: string,
   directory: string,
-  paths: ConfigPaths | undefined,
+  paths: AppPaths | undefined,
 ): boolean {
   const connection = config.connections[name];
   const store = resolveAppMetadataStore(connection.metadataStore, {

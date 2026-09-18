@@ -1,3 +1,4 @@
+import type { AppRuntimeLogging } from '@nocobase/app-server/logging';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -16,6 +17,7 @@ import type { AppWebSocketAcceptResult } from '@nocobase/app-websocket';
 export type AppDisposer = () => void | Promise<void>;
 
 export interface AppScope {
+  readonly logging?: AppRuntimeLogging;
   readonly id: string;
   readonly appName?: string;
   readonly version: number;
@@ -94,6 +96,8 @@ export interface AppRuntimeEndpoint {
 }
 
 export interface AppDefinition {
+  deploymentId?: string;
+  logging?: AppRuntimeLogging;
   id: string;
   appName?: string;
   basePath: string;
@@ -119,6 +123,8 @@ export interface AppDefinition {
 }
 
 export interface CreateAppDefinitionOptions {
+  deploymentId?: string;
+  logging?: AppRuntimeLogging;
   appName?: string;
   basePath?: string;
   enabled?: boolean;

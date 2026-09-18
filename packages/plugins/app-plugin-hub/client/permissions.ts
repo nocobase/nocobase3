@@ -11,6 +11,7 @@ export const HUB_APP_ACTIONS: readonly [
   typeof HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
+  'read-log',
   typeof HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',
@@ -28,6 +29,7 @@ export const HUB_APP_ACTIONS: readonly [
   HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
+  'read-log',
   HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',
@@ -57,6 +59,7 @@ export function visibleHubDetailTabs(
       : []),
     ...(capabilities['read-release'] ? (['releases'] as const) : []),
     ...(capabilities['read-deployment'] ? (['deployments'] as const) : []),
+    ...(capabilities['read-log'] ? (['logs'] as const) : []),
     ...(capabilities['read-config'] ? (['resources'] as const) : []),
     ...(state.deployed && capabilities['read-config']
       ? (['configuration'] as const)

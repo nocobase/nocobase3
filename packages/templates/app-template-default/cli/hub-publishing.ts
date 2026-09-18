@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat, readFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
+import { finished } from 'node:stream/promises';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parseEnv } from 'node:util';
@@ -193,7 +194,10 @@ export async function publishToHub(
   };
   let result: Record<string, unknown>;
   if (operation === 'upload') {
-    const file = path.resolve(root, options.file ?? 'storage/dist.tar.gz');
+    const file = path.resolve(
+      root,
+      options.file ?? 'storage/exports/dist.tar.gz',
+    );
     let size: number;
     let checksum: string;
     try {
@@ -225,6 +229,12 @@ export async function publishToHub(
           })(),
         )
       : stream;
+    // Observe errors before fetch starts, including on an unconsumed config body.
+    const streamsFinished = Promise.allSettled(
+      [...new Set([stream, body])].map((uploadStream) =>
+        finished(uploadStream, { cleanup: true }),
+      ),
+    );
     let data: Record<string, unknown>;
     try {
       const init: RequestInit & { duplex: 'half' } = {
@@ -249,6 +259,9 @@ export async function publishToHub(
     } finally {
       body.destroy();
       stream.destroy();
+      // destroy() can return before the pending file open and close complete.
+      // Cleanup errors must not replace the classified Hub request result.
+      await streamsFinished;
     }
     if (!isIdentifier(data.releaseId))
       throw new PublishingError(
@@ -319,6 +332,10 @@ export async function publishToHub(
       operationId: data.operationId,
       operationStatus: data.status,
       idempotencyKey: requestKey,
+      ...(data.reused === true ? { reused: true } : {}),
+      ...(typeof data.createdAt === 'string' && data.createdAt
+        ? { deploymentCreatedAt: data.createdAt }
+        : {}),
     };
   }
   // Reusing an operation confirms its identity, not that it can still succeed.
@@ -357,6 +374,16 @@ export async function publishToHub(
       }
     }
   }
+  // A reused operation is history: this command did not deploy anything now, and the App may be
+  // running another Release. Reusing a retry identity is deliberate, so this warns rather than fails.
+  if (
+    result.reused === true &&
+    (operation === 'deploy' || options.deploy === true)
+  )
+    result.warning =
+      operation === 'deploy'
+        ? 'Hub reused an earlier deployment for this Release and configuration; nothing was deployed now. Pass a new --idempotency-key to deploy again.'
+        : 'Hub reused an existing Release and its deployment; nothing was deployed now. Pass a new --idempotency-key to publish again.';
   return result;
 }
 

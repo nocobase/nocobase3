@@ -146,12 +146,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script             | What it does                                                                 |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `pnpm dev`         | Start the API server and client with hot reload                              |
-| `pnpm build`       | Build the client and server into `dist/`                                     |
-| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
-| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
+| Script             | What it does                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `pnpm dev`         | Start the API server and client with hot reload                                      |
+| `pnpm build`       | Build the client and server into `dist/`                                             |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                                    |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/exports/dist.tar.gz` |
 
 ### Database
 
@@ -422,7 +422,7 @@ If your application has no native modules — `pg`, `mysql2`, and `tedious` are 
 
 #### Packing the build
 
-`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+`pnpm build --tar` writes `storage/exports/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
 
 The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
 
@@ -504,13 +504,9 @@ Tests live in `tests/`, never beside the source they cover. Put logic and integr
 
 ### Notification testing
 
-After signing in with the `notification:test` `send` permission, use the
-notification logs settings page to send a real message through the durable
-Notification Manager. The form is generated from safe Channel test metadata;
-Email tests require an address and IM tests use the configured logical target.
-The button remains visible so configuration problems are discoverable. The
-server enforces the `notification:test` `send` permission only when the message
-is submitted.
+After signing in with the `notification:test` `send` permission, use the notification logs settings page to send a real message through the durable Notification Manager. Examples enables the built-in database-backed In-app channel by default. Choose In-app in **Send test notification**, enter a title and message, and leave the recipient user ID blank to send to yourself, or specify another user's ID. Read the message in **Notifications** (`/notifications`). An explicit `notification.channels` setting in `config.yml` overrides the defaults; include the In-app channel there if you configure other channels.
+
+The form is generated from safe Channel test metadata; Email tests require an address and IM tests use the configured logical target. The button remains visible so configuration problems are discoverable. The server enforces the `notification:test` `send` permission only when the message is submitted.
 
 ## Working with an AI agent
 
@@ -637,3 +633,9 @@ writes or arbitrary collection/query parameters. Row previews are capped at 100;
 aggregates cover the entire selected sample set.
 
 This is Examples-only teaching content, so it does not change Default or Hub.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

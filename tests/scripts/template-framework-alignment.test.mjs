@@ -30,6 +30,26 @@ function filesIn(directory, prefix = '') {
 
 function sharedFrameworkSource(template, file) {
   const source = readFileSync(path.join(template.directory, file), 'utf8');
+  if (
+    template.kind === 'examples' &&
+    file === 'client/shell/header-actions.tsx'
+  ) {
+    // Examples owns the notification-center demonstration. Exclude only its
+    // explicit entry; all shared header behavior must still match Default.
+    const additions = [
+      "import { NotificationButton } from '@/components/notification-button';\n",
+      '      {/* Examples owns its notification center; keep its unread shortcut on every authenticated surface. */}\n      <NotificationButton />\n',
+    ];
+    return additions.reduce((shared, addition) => {
+      assert.equal(
+        shared.split(addition).length - 1,
+        1,
+        'Examples header must contain exactly one notification entry',
+      );
+      return shared.replace(addition, '');
+    }, source);
+  }
+
   if (template.kind !== 'hub' || file !== 'server/standalone.ts') {
     return source;
   }
