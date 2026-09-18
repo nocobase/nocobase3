@@ -23,6 +23,8 @@ Use this reference to select checks for the changed behavior and its target App 
 
 Test actual behavior rather than only module existence or generated strings. Do not add tests for prose wording or low-impact formatting changes. Use existing focused tests and package scripts appropriate to the change.
 
+Concrete starting points are the [production router tests](server-route-examples.md), [ServiceToken and lifecycle tests](service-examples.md), [Client behavior examples](client-examples.md), [Repository HTTP test](repository-examples.md), and [migration test](database.md#test-a-migration-against-a-real-database). Read each example's fixture and file prerequisites rather than assuming a helper is part of a public runtime API.
+
 ## Server and database verification
 
 Use an isolated `ServiceContainer` to verify the owner-created Token and lifecycle. Test simple HTTP endpoints by calling the production contribution's `createRouter()` with test services and sending actual requests. Do not introduce `registerXxxRoutes(router, ...)` only to make tests possible. For a coherent complex child router, test both its `createXxxRoutes(options): Hono` behavior and the production contribution's Token resolution, middleware, and mounting.

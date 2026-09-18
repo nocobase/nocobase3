@@ -62,6 +62,8 @@ Declaration modules must remain import-safe. Top-level code may create frozen de
 
 NocoBase Server routes are Hono routers contributed directly by a plugin:
 
+Read [Server Route examples](./server-route-examples.md) for complete authenticated API, independently protected Root Route, public callback, authentication-and-authorization, isolated child-router, composition, and production `createRouter()` test patterns.
+
 | Need                                             | API                  | Source path          | Mounted path         |
 | ------------------------------------------------ | -------------------- | -------------------- | -------------------- |
 | App business or administration API               | `defineApiRoutes()`  | `/orders`            | `/api/orders`        |
@@ -125,16 +127,7 @@ export default routes;
 
 Call the real contribution's `createRouter()` with an isolated `ServiceContainer`; this exercises the same dependency resolution, middleware installation, and handler factory used in production. Do not replace this with a test-only registration helper.
 
-```ts
-const anonymousApplication = await createAuthenticatedRouteFixture({
-  session: null,
-});
-const router = await apiRoutes.createRouter(anonymousApplication);
-const response = await router.request('/audit-log/status');
-expect(response.status).toBe(401);
-```
-
-`createAuthenticatedRouteFixture()` above stands for a plugin-local, fully typed fixture using the real authentication Provider or an existing repository auth helper. If a smaller unit test binds a fake `Auth`, keep the unsafe assertion inside that fixture and expose an `AppPluginApplication` to tests; do not scatter partial `Auth` casts through every Route test.
+The [complete production contribution test](server-route-examples.md#test-the-production-contributions) creates a real `Auth` against an in-memory SQLite connection, controls its session lookup, binds the original service Tokens, and constructs a fully typed `AppPluginApplication`. It calls `createRouter()` directly and tests the mounted endpoints without partial `Auth` casts or an undefined test helper.
 
 Also compose a later unrelated route and verify the plugin middleware does not leak into it. Contribution tests do not prove final mount prefixes, public base paths, interaction among multiple contributions, or real authentication; cover those in a target App integration test.
 

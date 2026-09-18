@@ -2,6 +2,8 @@
 
 Use this reference when multiple routes or Providers share domain behavior, another plugin consumes a capability, an implementation must be replaceable in tests, or a resource needs lifecycle management. Keep a private helper or pure function outside the container when none of those conditions applies.
 
+For typed examples of class, object, function, value, role-specific, dependency-aware, and test-replacement bindings, plus a complete timer-backed Provider and lifecycle test, read [ServiceToken and Provider examples](service-examples.md).
+
 ```text
 Service contract → owner-created Token → implementation → ServiceProvider → consumer
 ```

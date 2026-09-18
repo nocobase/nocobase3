@@ -2,6 +2,8 @@
 
 Use this reference when a plugin changes database structure, requires initial records, queries application data, or exposes a Collection through the Repository API.
 
+For a complete authenticated exposure, typed host-client access, Builder/AST queries, CRUD, relation writes, and an HTTP test, read [Repository examples](repository-examples.md).
+
 | Change                                                            | Mechanism                                    |
 | ----------------------------------------------------------------- | -------------------------------------------- |
 | Table, field, relation, index, constraint, or Collection metadata | Migration                                    |
@@ -65,6 +67,47 @@ The filename and exported `name` should match and remain globally stable. Task s
 ### Test a Migration against a real database
 
 Every Migration needs a migration-level test that runs `up()` through the real Migrator and, when reversible, `down()`. Verify both logical metadata and the physical schema: Collection and field definitions, table and column names, types, nullability, relations, foreign keys, indexes, and constraints relevant to the change. An import test or `validateMigrations()` proves only shape and discovery, not DDL correctness.
+
+For the `auditLogs` migration above, place this in the plugin's `tests/database.test.ts`. The plugin must provide its usual test dependencies, including the SQLite adapter. This fixture points at the plugin's own migration directory and assumes the example migration is part of the fresh batch:
+
+```ts
+// @vitest-environment node
+import path from 'node:path';
+import { createDatabaseManager } from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
+import { expect, it } from 'vitest';
+
+it('creates logical and physical audit schema and rolls it back', async () => {
+  const database = createDatabaseManager({
+    drivers: { sqlite },
+    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+  });
+  try {
+    const migrator = database.createMigrator({
+      directory: path.resolve(import.meta.dirname, '../database/migrations'),
+      packageName: '@nocobase/app-plugin-audit-log',
+    });
+    await migrator.latest();
+    const collections = database.connection().collections;
+    expect((await collections.get('auditLogs'))?.fields).toContainEqual(
+      expect.objectContaining({ name: 'action', type: 'string' }),
+    );
+    expect(
+      (await collections.getPhysical('auditLogs'))?.columns,
+    ).toContainEqual(
+      expect.objectContaining({ columnName: 'action', nullable: false }),
+    );
+
+    await migrator.rollback();
+    expect(await collections.get('auditLogs')).toBeUndefined();
+    expect(await collections.getPhysical('auditLogs')).toBeUndefined();
+  } finally {
+    await database.destroy();
+  }
+});
+```
+
+The maintained [Repository migration test](../../../../packages/examples/app-plugin-repository-example/tests/database.test.ts) additionally verifies relation metadata, physical foreign keys, indexes, optimistic-lock fields, and reverse deletion order.
 
 Run the dialect integration suites selected by the repository-local `nocobase-db-integration-testing` Skill when the change affects shared `packages/libs/db*` behavior. A normal plugin-specific Migration usually needs its real test database and target App upgrade path rather than every dialect locally.
 

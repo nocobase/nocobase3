@@ -1,6 +1,6 @@
 # Client Contributions
 
-Use this reference when a plugin needs browser services, application-wide React context, public browser configuration, or a combination of Client contributions. Read [client-components.md](./client-components.md) for UI implementation, [client-routing.md](./client-routing.md) for pages, navigation, and route overrides, and [i18n.md](./i18n.md) for translated resources.
+Use this reference when a plugin needs browser services, application-wide React context, public browser configuration, or a combination of Client contributions. Read [client-components.md](./client-components.md) for UI implementation, [client-routing.md](./client-routing.md) for pages, navigation, and route overrides, [client-examples.md](./client-examples.md) for complete ServiceProvider and React Context examples, and [i18n.md](./i18n.md) for translated resources.
 
 ## Choose the owning mechanism
 

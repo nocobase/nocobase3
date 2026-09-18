@@ -27,6 +27,8 @@ These English references adapt the plugin development guide into task-specific i
 | Add commands, CLI exports, or CLI registration                                                        | [CLI plugins](references/cli.md)                                     |
 | Select behavior tests and verify package/App integration                                              | [Testing and delivery](references/testing.md)                        |
 
+For worked implementations and tests, read the matching [Server Route examples](references/server-route-examples.md), [ServiceToken and Provider examples](references/service-examples.md), [Client examples](references/client-examples.md), or [Repository examples](references/repository-examples.md). These supplement the topic references with concrete code and point to maintained source fixtures; adapt their explicit example access policies to the requested product.
+
 ## Rules that apply before implementation
 
 - Use shadcn components for interactive UI primitives such as buttons, inputs, dialogs, selects, and Tabs. Read the component reference before UI work. Keep plugin-owned components in the plugin; do not assume the host App's `@/components/ui/*` alias works in a compiled plugin. Use the shared theme tokens for color, typography, spacing, size, radius, and shadow.
