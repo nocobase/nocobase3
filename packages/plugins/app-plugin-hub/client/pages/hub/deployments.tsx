@@ -457,11 +457,6 @@ export function DeploymentStatus({
     <div className='space-y-2'>
       <div className='flex flex-wrap items-center gap-2'>
         <StatusBadge state={deployment.status} />
-        {deployment.cacheHit ? (
-          <Badge className='bg-sky-500/10 text-sky-700 dark:text-sky-300'>
-            {t('deployments.cacheReused', { defaultValue: 'Cache reused' })}
-          </Badge>
-        ) : null}
       </div>
       {deployment.error ? <DeploymentError message={deployment.error} /> : null}
     </div>

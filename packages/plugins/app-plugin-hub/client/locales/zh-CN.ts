@@ -223,7 +223,6 @@ const zhCN: HubResource = {
     current: '当前',
     rolledBack: '已回滚',
     deployed: '已部署',
-    cacheReused: '复用缓存',
     pagination: '{{count}} 次部署 · 第 {{page}} / {{pages}} 页',
     previousPage: '上一页部署',
     nextPage: '下一页部署',

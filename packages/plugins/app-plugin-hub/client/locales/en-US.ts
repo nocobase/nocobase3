@@ -244,7 +244,6 @@ const enUS = {
     current: 'Current',
     rolledBack: 'Rolled back',
     deployed: 'Deployed',
-    cacheReused: 'Cache reused',
     pagination: '{{count}} deployments · Page {{page}} of {{pages}}',
     previousPage: 'Previous deployment page',
     nextPage: 'Next deployment page',
