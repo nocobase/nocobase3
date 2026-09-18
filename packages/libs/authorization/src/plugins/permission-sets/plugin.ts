@@ -40,6 +40,7 @@ export interface PermissionSetsApi<TTransaction = unknown> {
   get(key: string): Promise<PermissionSet | undefined>;
   list(): Promise<readonly PermissionSet[]>;
   assign(input: AssignPermissionSetInput): Promise<PermissionSetAssignment>;
+  /** Uses the store's transaction runner unless already bound with withTransaction. */
   revoke(id: string): Promise<void>;
   listAssignments(
     permissionSet?: string,
@@ -58,7 +59,8 @@ export interface PermissionSetsApi<TTransaction = unknown> {
   onChange(listener: AuthorizationGrantsChangedListener): () => void;
   /**
    * Throws when removing this subject would leave a Permission Set that
-   * requires an active assignment without one.
+   * requires an active assignment without one. Bind this check and the actual
+   * subject mutation to the same caller-owned transaction.
    */
   assertSubjectRemovable(subject: PermissionSetSubject): Promise<void>;
   /**
@@ -500,14 +502,22 @@ class PermissionSetService<TTransaction = unknown>
   }
 
   async revoke(id: string): Promise<void> {
+    const assignment = await this.mutateAssignments((service) =>
+      service.revokeAssignment(id),
+    );
+    if (assignment) await this.notifyAssignmentsChanged(assignment.subject);
+  }
+
+  private async revokeAssignment(
+    id: string,
+  ): Promise<PermissionSetAssignment | undefined> {
+    await this.lockProtectedSets();
     const assignment = (await this.store.listAssignments()).find(
       (item) => item.id === id,
     );
     if (assignment) await this.assertRetainsAssignment(assignment);
     await this.store.revokeAssignment(id);
-    if (assignment) {
-      await this.notifyAssignmentsChanged(assignment.subject);
-    }
+    return assignment;
   }
 
   listAssignments(
@@ -521,6 +531,22 @@ class PermissionSetService<TTransaction = unknown>
     managedPermissionSets: readonly string[];
     permissionSets: readonly string[];
   }): Promise<readonly PermissionSetAssignment[]> {
+    const result = await this.mutateAssignments((service) =>
+      service.replaceAssignments(input),
+    );
+    if (result.changed) await this.notifyAssignmentsChanged(input.subject);
+    return result.assignments;
+  }
+
+  private async replaceAssignments(input: {
+    subject: PermissionSetSubject;
+    managedPermissionSets: readonly string[];
+    permissionSets: readonly string[];
+  }): Promise<{
+    assignments: readonly PermissionSetAssignment[];
+    changed: boolean;
+  }> {
+    await this.lockProtectedSets();
     const managed = new Set(input.managedPermissionSets);
     const requested = [...new Set(input.permissionSets)];
     if (requested.some((key) => !managed.has(key))) {
@@ -567,13 +593,39 @@ class PermissionSetService<TTransaction = unknown>
       };
       created.push(await this.store.assignPermissionSet(assignment));
     }
-    if (created.length > 0 || removed.length > 0) {
-      await this.notifyAssignmentsChanged(input.subject);
-    }
     const kept = existing.filter((assignment) =>
       requestedSet.has(assignment.permissionSet),
     );
-    return [...kept, ...created];
+    return {
+      assignments: [...kept, ...created],
+      changed: created.length > 0 || removed.length > 0,
+    };
+  }
+
+  private mutateAssignments<T>(
+    run: (service: PermissionSetService<TTransaction>) => Promise<T>,
+  ): Promise<T> {
+    if (this.transaction !== undefined || !this.store.transaction)
+      return run(this);
+    return this.store.transaction((transaction) =>
+      run(
+        new PermissionSetService(
+          this.store.withTransaction(transaction),
+          this.shared,
+          transaction,
+        ),
+      ),
+    );
+  }
+
+  private async lockProtectedSets(): Promise<void> {
+    // Lock before the first assignment read, including under repeatable-read
+    // isolation. All removal paths acquire multiple guards in the same order.
+    const keys = [...this.protections]
+      .filter(([, protection]) => protection.requireActiveAssignment)
+      .map(([key]) => key)
+      .sort();
+    for (const key of keys) await this.store.lock?.(key);
   }
 
   onChange(listener: AuthorizationGrantsChangedListener): () => void {
@@ -598,6 +650,7 @@ class PermissionSetService<TTransaction = unknown>
   }
 
   async assertSubjectRemovable(subject: PermissionSetSubject): Promise<void> {
+    await this.lockProtectedSets();
     const assignments = await this.store.listAssignments();
     for (const assignment of assignments) {
       if (
@@ -629,9 +682,6 @@ class PermissionSetService<TTransaction = unknown>
   ): Promise<void> {
     const key = removing.permissionSet;
     if (!this.protections.get(key)?.requireActiveAssignment) return;
-    // Lock before reading, so two concurrent removals cannot both see the
-    // other assignment that each of them is about to take away.
-    await this.store.lock?.(key);
     const remaining = (await this.store.listAssignments(key)).filter(
       (assignment) => assignment.id !== removing.id,
     );

@@ -6,6 +6,89 @@ import { permissionSets } from '@nocobase/authorization';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
 describe('Permission Set handler', () => {
+  it('keeps protected keys fixed while allowing default permissions and titles to change', async () => {
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new MockPermissionSetStore(),
+          rootSet: 'root',
+          defaultSet: 'member',
+        }),
+      ],
+    });
+    const api = authorization.permissionSets;
+    for (const key of ['root', 'member', 'plain'])
+      await api.create({ key, grants: [] });
+    await api.assign({
+      subject: { type: 'user', id: 'admin' },
+      permissionSet: 'root',
+    });
+    const assignment = await api.assign({
+      subject: { type: 'authenticated', id: '*' },
+      permissionSet: 'member',
+    });
+    const handler = createPermissionSetHandler(api);
+    const update = (
+      key: string,
+      input: { key: string; title?: string; grants: readonly unknown[] },
+    ) =>
+      handler({
+        request: new Request(`http://localhost/permission-sets/${key}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        }),
+        authorization: authorization.for({
+          principal: { type: 'user', id: 'admin' },
+        }),
+        path: `/permission-sets/${key}`,
+      });
+    const grants = [
+      {
+        resource: { type: 'settings', id: 'authorization.permission-sets' },
+        actions: [{ action: 'read' }],
+      },
+    ];
+    const edited = await update('member', {
+      key: 'member',
+      title: 'Members',
+      grants,
+    });
+    expect(edited.status).toBe(200);
+    expect(await api.get('member')).toMatchObject({ title: 'Members', grants });
+
+    const renamed = await update('member', { key: 'escaped', grants: [] });
+    expect(renamed.status).toBe(403);
+    expect(await renamed.json()).toMatchObject({
+      code: 'PROTECTED_PERMISSION_SET',
+    });
+    expect(await api.get('escaped')).toBeUndefined();
+    expect(await api.get('member')).toMatchObject({ title: 'Members', grants });
+    expect(await api.listAssignments('member')).toEqual([assignment]);
+
+    // Reserved protected keys cannot be acquired by renaming an ordinary set,
+    // even if their protection permits content updates and no row exists yet.
+    api.protect({
+      owner: '@nocobase/test',
+      keys: ['reserved'],
+      allow: ['update'],
+    });
+    const ontoProtected = await update('plain', {
+      key: 'reserved',
+      grants: [],
+    });
+    expect(ontoProtected.status).toBe(403);
+    expect(await ontoProtected.json()).toMatchObject({
+      code: 'PROTECTED_PERMISSION_SET',
+    });
+    expect(await api.get('reserved')).toBeUndefined();
+    expect((await update('plain', { key: 'renamed', grants: [] })).status).toBe(
+      200,
+    );
+    expect(await api.get('plain')).toBeUndefined();
+    expect(await api.get('renamed')).toMatchObject({ key: 'renamed' });
+  });
+
   it('checks the scoped authorization and manages Permission Sets', async () => {
     const authorization = createAuthorization({
       plugins: [permissionSets({ store: new MockPermissionSetStore() })],

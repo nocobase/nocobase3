@@ -205,6 +205,7 @@ describe('Permission Sets that require an active assignment', () => {
     ).rejects.toBeInstanceOf(PermissionSetLastAssignmentError);
     const lockIndex = store.calls.indexOf('lock:administrator');
     expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(store.calls.indexOf('listAssignments:*')).toBeGreaterThan(lockIndex);
     expect(
       store.calls.indexOf('listAssignments:administrator'),
     ).toBeGreaterThan(lockIndex);

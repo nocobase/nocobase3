@@ -118,6 +118,7 @@ export class Authorization {
   readonly routes: AuthorizationRouteRegistry;
   readonly permissions: AuthorizationPermissionsApi;
   private readonly grants: AuthorizationGrantService;
+  private readonly grantProviderService: AuthorizationGrantService;
   private readonly grantProvider?: string;
   private readonly middlewares: AuthorizationMiddleware[] = [];
 
@@ -130,8 +131,10 @@ export class Authorization {
     this.permissions = createAuthorizationPermissionsApi();
     this.plugins = sortAuthorizationPlugins(options.plugins);
     const grantProvider = this.plugins.find((plugin) => plugin.grants);
+    this.grantProviderService =
+      grantProvider?.grants ?? this.createMissingGrantService();
     this.grants = composedGrants(
-      grantProvider?.grants ?? this.createMissingGrantService(),
+      this.grantProviderService,
       this.resources,
       this.constraints,
     );
@@ -371,8 +374,12 @@ export class Authorization {
   }
 
   for(identity: AuthorizationIdentity): AuthorizationScope {
-    const grants = this.grants.scope?.(identity) ?? this.grants;
     const constraints = this.constraints.scope(identity);
+    const grants = composedGrants(
+      this.grantProviderService.scope?.(identity) ?? this.grantProviderService,
+      this.resources,
+      constraints,
+    );
     const request = <TParams>(
       input: Omit<AuthorizationRequest<TParams>, 'principal' | 'subjects'>,
     ): AuthorizationRequest<TParams> =>

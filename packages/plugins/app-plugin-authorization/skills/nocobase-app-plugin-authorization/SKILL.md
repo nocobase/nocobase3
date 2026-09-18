@@ -23,6 +23,8 @@ For a complete end-to-end implementation, read [references/orders-module.md](ref
 
 Do not add a second permission system inside a module. The module should keep its normal service/repository API and add an authorization check immediately before the operation.
 
+Permission Set `revoke()` and `replaceSubjectAssignments()` use a database transaction automatically. When combining permission changes with user lifecycle writes, bind the API with `withTransaction(connection)`, keep `assertSubjectRemovable()` and the user mutation in that same transaction, and publish `notifyAssignmentsChanged()` only after commit. The bound API leaves commit and notification ownership with its caller.
+
 ## Client visibility checks
 
 Import `useCan`, `useAuthorizationClient`, and `authorizationClientToken` from `@nocobase/app-plugin-authorization/client`. In React, call `useCan({ resource: { type: 'page', id: 'orders' }, action: 'access' })`; it returns `{ can, isPending, error, retry }` and follows session and realtime permission invalidation. Pending or failed checks return `can: false`. Pass `{ enabled: false }` as the second argument to skip a check. Outside React, resolve the token from the application container and call `client.can({ resource, action })`. The former two-argument signature is not supported.

@@ -6,7 +6,10 @@ import permissionSetMigration from '../database/migrations/202608210001_create_p
 import defaultAccessMigration from '../../app-plugin-authz-default-access/database/migrations/202608210002_create_default_access_rules.js';
 import sharingRulesMigration from '../../app-plugin-authz-sharing-rules/database/migrations/202608210003_create_sharing_rules.js';
 import restrictionRulesMigration from '../../app-plugin-authz-restriction-rules/database/migrations/202608210004_create_restriction_rules.js';
-import { permissionSets } from '@nocobase/authorization/permissions';
+import {
+  permissionSets,
+  PermissionSetLastAssignmentError,
+} from '@nocobase/authorization/permissions';
 import { databaseAuthorization } from '../server/database/index.js';
 import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
@@ -37,6 +40,144 @@ describe('authorization plugin database stores', () => {
 
   afterAll(async () => {
     await database.destroy();
+  });
+
+  it.each(['revoke', 'replace', 'mixed'] as const)(
+    'retains the last administrator during concurrent %s operations',
+    async (operation) => {
+      const key = `concurrent-${operation}`;
+      const authorization = createAuthorization({
+        plugins: [
+          permissionSets({
+            store: new DatabasePermissionSetStore(() => database.connection()),
+            rootSet: key,
+          }),
+        ],
+      });
+      await authorization.permissionSets.create({ key, grants: [] });
+      for (const id of ['alice', 'bob']) {
+        await authorization.permissionSets.assign({
+          id: `${key}-${id}`,
+          subject: { type: 'user', id },
+          permissionSet: key,
+        });
+      }
+      const notifications: string[] = [];
+      authorization.permissionSets.onChange(async (subject) => {
+        // An independent connection read can complete only after the writer
+        // commits and releases SQLite's single pooled connection.
+        expect(
+          await authorization.permissionSets.listAssignments(key),
+        ).toHaveLength(1);
+        notifications.push(subject.id);
+      });
+      const results = await Promise.allSettled(
+        ['alice', 'bob'].map((id, index) =>
+          operation === 'revoke' || (operation === 'mixed' && index === 0)
+            ? authorization.permissionSets.revoke(`${key}-${id}`)
+            : authorization.permissionSets.replaceSubjectAssignments({
+                subject: { type: 'user', id },
+                managedPermissionSets: [key],
+                permissionSets: [],
+              }),
+        ),
+      );
+      expect(
+        results.filter((result) => result.status === 'fulfilled'),
+      ).toHaveLength(1);
+      expect(
+        results.find((result) => result.status === 'rejected'),
+      ).toMatchObject({
+        reason: expect.any(PermissionSetLastAssignmentError),
+      });
+      expect(
+        await authorization.permissionSets.listAssignments(key),
+      ).toHaveLength(1);
+      expect(notifications).toHaveLength(1);
+      await database.connection().transaction(async (connection) => {
+        await authorization.permissionSets
+          .withTransaction(connection)
+          .delete(key);
+      });
+    },
+  );
+
+  it('rolls back an assignment replacement and emits no change on failure', async () => {
+    const key = 'rollback-assignment';
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new DatabasePermissionSetStore(() => database.connection()),
+        }),
+      ],
+    });
+    await authorization.permissionSets.create({ key, grants: [] });
+    await authorization.permissionSets.create({
+      key: `${key}-other`,
+      grants: [],
+    });
+    await authorization.permissionSets.assign({
+      id: key,
+      subject: { type: 'user', id: 'alice' },
+      permissionSet: key,
+    });
+    // Collide with the generated assignment id after the old row was deleted.
+    await authorization.permissionSets.assign({
+      id: `user:alice:${key}-other`,
+      subject: { type: 'user', id: 'bob' },
+      permissionSet: `${key}-other`,
+    });
+    const notifications: string[] = [];
+    authorization.permissionSets.onChange((subject) => {
+      notifications.push(subject.id);
+    });
+    await expect(
+      authorization.permissionSets.replaceSubjectAssignments({
+        subject: { type: 'user', id: 'alice' },
+        managedPermissionSets: [key, `${key}-other`],
+        permissionSets: [`${key}-other`],
+      }),
+    ).rejects.toThrow();
+    expect(
+      await authorization.permissionSets.listAssignments(key),
+    ).toHaveLength(1);
+    expect(notifications).toEqual([]);
+    await authorization.permissionSets.delete(key);
+    await authorization.permissionSets.delete(`${key}-other`);
+  });
+
+  it('leaves commit and notification ownership with the caller of withTransaction', async () => {
+    const key = 'outer-transaction';
+    const authorization = createAuthorization({
+      plugins: [
+        permissionSets({
+          store: new DatabasePermissionSetStore(() => database.connection()),
+        }),
+      ],
+    });
+    await authorization.permissionSets.create({ key, grants: [] });
+    await authorization.permissionSets.assign({
+      id: key,
+      subject: { type: 'user', id: key },
+      permissionSet: key,
+    });
+    const notifications: string[] = [];
+    authorization.permissionSets.onChange((subject) => {
+      notifications.push(subject.id);
+    });
+    await expect(
+      database.connection().transaction(async (connection) => {
+        const api = authorization.permissionSets.withTransaction(connection);
+        await api.revoke(key);
+        expect(await api.listAssignments(key)).toEqual([]);
+        throw new Error('outer rollback');
+      }),
+    ).rejects.toThrow('outer rollback');
+    expect(
+      await authorization.permissionSets.listAssignments(key),
+    ).toHaveLength(1);
+    expect(notifications).toEqual([]);
+    await authorization.permissionSets.delete(key);
   });
 
   it('persists Permission Sets independently from database access rules', async () => {

@@ -275,9 +275,9 @@ authz.subjects.define('user', {
 });
 ```
 
-检查在读取分配之前调用 `PermissionSetStore.lock(key)`，让并发的两次撤销不会读到同一份
-“还剩一条”的快照。`@nocobase/app-plugin-authorization` 的数据库 Store 已实现：SQLite 以一次空更新占住写锁，其他方言用
-`SELECT ... FOR UPDATE`。没有事务的 Store 可以不实现该方法。
+检查在读取分配之前按 key 排序调用 `PermissionSetStore.lock(key)`，锁住要求保留有效分配的 Permission Set。`@nocobase/app-plugin-authorization` 的数据库 Store 已实现：SQLite 以一次更新占住写锁，其他方言用 `SELECT ... FOR UPDATE`。锁必须一直持有到检查和删除所在的事务提交；单独执行加锁 SQL 不提供并发保护。
+
+数据库 Store 实现 `transaction(run)` 后，`revoke()` 和 `replaceSubjectAssignments()` 自动将加锁、检查和写入放在同一个事务中，成功提交后才通知订阅者。没有事务的内存 Store 可以省略该方法。调用方通过 `withTransaction(connection)` 提供事务时，服务复用该事务，提交、回滚和提交后通知仍由调用方负责。`assertSubjectRemovable()` 只检查不写入，必须与随后的用户停用或删除共用调用方的事务。
 
 ### 限制可分配的 subject 类型
 

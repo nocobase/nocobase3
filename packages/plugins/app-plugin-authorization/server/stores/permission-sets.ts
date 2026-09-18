@@ -14,12 +14,23 @@ import type {
 import type { PermissionSetStore } from '@nocobase/authorization/permissions';
 
 export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseConnection> {
-  constructor(private readonly connection: DatabaseConnectionSource) {}
+  constructor(
+    private readonly connection: DatabaseConnectionSource,
+    private lockTableName?: string,
+  ) {}
+
+  transaction<T>(
+    run: (connection: DatabaseConnection) => Promise<T>,
+  ): Promise<T> {
+    return this.resolveLockTable().then(() =>
+      this.connection().transaction(run),
+    );
+  }
 
   withTransaction(
     connection: DatabaseConnection,
   ): PermissionSetStore<DatabaseConnection> {
-    return new DatabasePermissionSetStore(() => connection);
+    return new DatabasePermissionSetStore(() => connection, this.lockTableName);
   }
 
   async listPermissionSets(): Promise<readonly PermissionSet[]> {
@@ -164,14 +175,20 @@ export class DatabasePermissionSetStore implements PermissionSetStore<DatabaseCo
         .execute();
       return;
     }
+    const tableName = await this.resolveLockTable();
+    const knex = await this.connection().client<Knex>();
+    await knex(tableName).where({ key }).select('id').forUpdate();
+  }
+
+  private async resolveLockTable(): Promise<string> {
+    // Resolve metadata before opening an owned transaction: even a metadata
+    // SELECT can establish an old repeatable-read snapshot before the guard.
+    if (this.lockTableName) return this.lockTableName;
     const physical = await this.connection().collections.getPhysical(
       'authorizationPermissionSets',
     );
-    if (!physical) {
-      throw new Error('Permission Set schema is unavailable');
-    }
-    const knex = await this.connection().client<Knex>();
-    await knex(physical.tableName).where({ key }).select('id').forUpdate();
+    if (!physical) throw new Error('Permission Set schema is unavailable');
+    return (this.lockTableName = physical.tableName);
   }
 
   async listAssignments(

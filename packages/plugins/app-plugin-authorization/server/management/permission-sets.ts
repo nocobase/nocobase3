@@ -180,7 +180,17 @@ export function createPermissionSetHandler(
     const input = parsePermissionSetInput(await context.req.json());
     validate(input);
     api.assertWritable(key, 'update');
-    if (input.key !== key) api.assertWritable(input.key, 'update');
+    if (input.key !== key) {
+      for (const candidate of [key, input.key]) {
+        const protection = api.protection(candidate);
+        if (protection)
+          throw new PermissionSetProtectedError(
+            candidate,
+            protection.owner,
+            'update',
+          );
+      }
+    }
     return context.json({ data: summarize(api, await api.update(key, input)) });
   });
 
