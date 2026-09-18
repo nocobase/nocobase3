@@ -1,3 +1,6 @@
+import { producerDeadline } from './operation-deadline.js';
+import { createQueueDiagnostics } from './diagnostics.js';
+import { postgresDeadline } from './backends/postgres-pool.js';
 import { Queue, Worker, WaitingError } from 'bullmq';
 import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
@@ -106,6 +109,22 @@ export function createQueueService(
   options: QueueOptions,
   dependencies: QueueServiceDependencies = {},
 ): QueueService {
+  const originalDependencies = dependencies;
+  const diagnostics = createQueueDiagnostics(dependencies.logger);
+  dependencies = {
+    ...dependencies,
+    logger: diagnostics,
+    onInMemoryQueueInitialized: (identity): void => {
+      try {
+        originalDependencies.onInMemoryQueueInitialized?.(identity);
+      } catch (error) {
+        diagnostics.warn(
+          { ...identity, error },
+          'Queue memory diagnostic hook failed',
+        );
+      }
+    },
+  };
   const timeouts = resolveQueueTimeouts(options);
   const resources = new QueueResourceCache();
   let ready = false;
@@ -119,6 +138,111 @@ export function createQueueService(
   const publishing = new Set<Promise<void>>();
   const migrations = new Set<PostgresMigrationResource>();
   const migratedPostgresTargets = new Set<string>();
+  const closes = new WeakMap<object, Promise<void>>();
+  let serviceCleanupDeadline: number | undefined;
+
+  function cleanupDeadline(): number {
+    return (serviceCleanupDeadline ??= performance.now() + 5000);
+  }
+
+  function runWorker(name: string, current: QueueEntry): void {
+    if (!current.worker || current.worker.isRunning()) return;
+    const worker = current.worker;
+    void producerDeadline
+      .exit(() => postgresDeadline.exit(() => worker.run()))
+      .catch((error: unknown) => {
+        dependencies.logger?.error(
+          { error, queue: name },
+          'Queue worker run failed',
+        );
+      });
+  }
+
+  function closeOnce(
+    resource: object,
+    close: () => Promise<void>,
+  ): Promise<void> {
+    let pending = closes.get(resource);
+    if (!pending) {
+      pending = Promise.resolve().then(close);
+      closes.set(resource, pending);
+    }
+    return pending;
+  }
+
+  async function initializeWithin(
+    initialization: Promise<void>,
+    timeoutMessage: string,
+    cancel: () => void,
+    cleanup: () => Promise<void>,
+    reserve: () => number = () => performance.now() + 5000,
+  ): Promise<void> {
+    let failure: unknown;
+    try {
+      const remaining = Math.max(
+        0,
+        Math.min(
+          timeouts.setupTimeoutMs,
+          (producerDeadline.getStore() ?? Infinity) - performance.now(),
+        ),
+      );
+      if (await settlesWithin(initialization, remaining)) return;
+      failure = new Error(timeoutMessage);
+    } catch (error) {
+      failure = error;
+    }
+    cancel();
+    const deadline = reserve();
+    const errors: unknown[] = [failure];
+    const closing = cleanup();
+    try {
+      if (
+        !(await settlesWithin(
+          closing,
+          Math.max(0, deadline - performance.now()),
+        ))
+      ) {
+        errors.push(
+          new Error(
+            'Queue cleanup deadline exceeded; resources remain unresolved',
+          ),
+        );
+        void closing.then(
+          () =>
+            dependencies.logger?.warn(
+              {},
+              'Previously unresolved queue resources have closed',
+            ),
+          (error: unknown) =>
+            dependencies.logger?.error(
+              { error },
+              'Previously unresolved queue cleanup failed',
+            ),
+        );
+      }
+    } catch (error) {
+      errors.push(error);
+    }
+    if (
+      !(await settlesWithin(
+        initialization.then(
+          () => {},
+          () => {},
+        ),
+        Math.max(0, deadline - performance.now()),
+      ))
+    )
+      errors.push(
+        new Error('Queue initialization cancellation is unconfirmed'),
+      );
+    if (errors.length > 1)
+      throw new AggregateError(
+        errors,
+        'Queue initialization and cleanup failed',
+        { cause: failure },
+      );
+    throw failure;
+  }
 
   function entry(name: string): QueueEntry {
     validateQueueName(name, 'queue');
@@ -272,7 +396,7 @@ export function createQueueService(
     const migrationCleanup = Promise.all(
       [...migrations].map(async (resource) => {
         try {
-          await resource.close();
+          await closeOnce(resource, () => resource.close());
           migrations.delete(resource);
         } catch (error) {
           errors.push(error);
@@ -286,9 +410,10 @@ export function createQueueService(
             const resource = current[key];
             if (!resource) return;
             try {
-              if (key === 'worker' && current.worker)
-                await closeWorker(current.worker, force);
-              else await resource.close();
+              if (key === 'worker' && current.worker) {
+                const worker = current.worker;
+                await closeOnce(worker, () => closeWorker(worker, force));
+              } else await closeOnce(resource, () => resource.close());
               if (current[key] === resource) current[key] = undefined;
             } catch (error) {
               errors.push(error);
@@ -310,41 +435,14 @@ export function createQueueService(
     if (!setupPromise) throw new Error('Queue is not ready');
     await setupPromise;
     if (!ready || stopped) throw new Error('Queue is not ready');
-    current.runtimeInitialization ??= (async (): Promise<void> => {
-      const initialization = initializeEntry(name, current);
-      if (await settlesWithin(initialization, timeouts.setupTimeoutMs)) return;
-      current.initializationCancelled = true;
-      const timeout = new Error(
-        `Queue ${name} initialization deadline exceeded`,
-      );
-      const cleanupDeadline = performance.now() + 5000;
-      const cleanup = closeEntries([current]).catch((error: unknown) => {
-        throw new AggregateError(
-          [timeout, error],
-          'Queue initialization and cleanup failed',
-          { cause: timeout },
-        );
-      });
-      if (!(await settlesWithin(cleanup, 5000)))
-        throw new AggregateError(
-          [timeout, new Error('Queue cleanup remains unresolved')],
-          'Queue initialization failed',
-        );
-      if (
-        !(await settlesWithin(
-          initialization.then(
-            () => {},
-            () => {},
-          ),
-          Math.max(0, cleanupDeadline - performance.now()),
-        ))
-      )
-        throw new AggregateError(
-          [timeout, new Error('Queue cancellation is unconfirmed')],
-          'Queue initialization failed',
-        );
-      throw timeout;
-    })();
+    current.runtimeInitialization ??= initializeWithin(
+      initializeEntry(name, current),
+      `Queue ${name} initialization deadline exceeded`,
+      () => {
+        current.initializationCancelled = true;
+      },
+      () => closeEntries([current], true),
+    );
     await current.runtimeInitialization;
     if (stopped) throw new Error('Queue service is shutting down');
   }
@@ -391,37 +489,30 @@ export function createQueueService(
         migratedPostgresTargets,
       );
       migrations.add(resource);
-      try {
-        await resource.run();
-      } catch (error) {
-        try {
-          await resource.close();
-          migrations.delete(resource);
-        } catch (cleanup) {
-          throw new AggregateError(
-            [error, cleanup],
-            'PostgreSQL migration and cleanup failed',
-            { cause: cleanup },
-          );
-        }
-        throw error;
-      }
-      await resource.close();
+      await resource.run();
+      await closeOnce(resource, () => resource.close());
       migrations.delete(resource);
     }
-    for (const [name, current] of entries) await initializeEntry(name, current);
-    if (stopped) throw new Error('Queue initialization was cancelled');
-    ready = true;
-    for (const [name, current] of entries) {
-      if (current.worker) {
-        void current.worker.run().catch((error: unknown) => {
-          dependencies.logger?.error(
-            { error, queue: name },
-            'Queue worker run failed',
-          );
+    // Registrations may arrive while any initialization awaits readiness. Reconcile
+    // until a synchronous pass finds no missing queue or handler-bearing Worker.
+    for (;;) {
+      for (const [name, current] of entries) {
+        await postgresDeadline.run(deadline, async () => {
+          await initializeEntry(name, current);
+          if (current.handlers.size()) await current.initializeWorker?.();
         });
       }
+      if (stopped) throw new Error('Queue initialization was cancelled');
+      if (
+        [...entries.values()].every(
+          (current) =>
+            current.queue && (!current.handlers.size() || current.worker),
+        )
+      )
+        break;
     }
+    ready = true;
+    for (const [name, current] of entries) runWorker(name, current);
   }
 
   async function activateWorker(
@@ -431,204 +522,174 @@ export function createQueueService(
     await requireReady(name, current);
     if (!current.handlers.size()) return;
     const initialization = current.initializeWorker?.();
-    if (
-      initialization &&
-      !(await settlesWithin(initialization, timeouts.setupTimeoutMs))
-    ) {
-      current.workerInitializationCancelled = true;
-      const timeout = new Error(
+    if (initialization)
+      await initializeWithin(
+        initialization,
         `Queue ${name} Worker initialization deadline exceeded`,
+        () => {
+          current.workerInitializationCancelled = true;
+        },
+        async () => {
+          const worker = current.worker;
+          if (worker) await closeOnce(worker, () => closeWorker(worker, true));
+        },
       );
-      const deadline = performance.now() + 5000;
-      if (current.worker) {
-        const closing = closeWorker(current.worker, true).catch(
-          (error: unknown) => {
-            throw new AggregateError(
-              [timeout, error],
-              'Worker initialization and cleanup failed',
-              { cause: timeout },
-            );
-          },
-        );
-        if (!(await settlesWithin(closing, 5000)))
-          throw new AggregateError(
-            [timeout, new Error('Worker cleanup remains unresolved')],
-            'Worker initialization failed',
-          );
-      }
-      if (
-        !(await settlesWithin(
-          initialization.then(
-            () => {},
-            () => {},
-          ),
-          Math.max(0, deadline - performance.now()),
-        ))
-      )
-        throw new AggregateError(
-          [timeout, new Error('Worker cancellation is unconfirmed')],
-          'Worker initialization failed',
-        );
-      throw timeout;
-    }
     if (
       stopped ||
       current.workerInitializationCancelled ||
       !current.handlers.size()
     )
       return;
-    if (current.worker && !current.worker.isRunning()) {
-      void current.worker.run().catch((error: unknown) => {
-        dependencies.logger?.error(
-          { error, queue: name },
-          'Queue worker run failed',
-        );
-      });
-    }
+    runWorker(name, current);
   }
 
   function initializeEntry(name: string, current: QueueEntry): Promise<void> {
-    return resources.initialize(name, async () => {
-      if (stopped) throw new Error('Queue service is shutting down');
-      try {
-        const config = resolveQueueConfiguration(options, name, current.manual);
-        const factory = registry.resolve(config.queueBackend);
-        const identity = createQueueIdentity(config.namespace, name);
-        // Connection adapters are introduced by the resource/backend slices; never silently discard one.
-        if (
-          config.connection !== undefined &&
-          !['redis', 'postgres', 'inMemory'].includes(config.queueBackend)
-        )
-          throw new Error('Queue connection adaptation is not implemented');
-        const physicalName =
-          config.queueBackend === 'postgres'
-            ? identity.postgresQueueName
-            : identity.redisQueueName;
-        const base: QueueBaseOptions & { prefix: string } = {
-          connection:
-            config.queueBackend === 'redis'
-              ? resolveRedisConnection(config.connection)
-              : config.queueBackend === 'postgres'
-                ? {
-                    ...resolvePostgresConnection(config.connection),
-                    migrate: false,
-                  }
-                : {},
-          prefix: identity.redisPrefix,
-        };
-        current.queue = new Queue<
-          unknown,
-          unknown,
-          string,
-          unknown,
-          unknown,
-          string,
-          IQueueBackend
-        >(physicalName, base, factory);
-        current.queue.on('error', (error: Error) =>
-          dependencies.logger?.error(
-            { error, queue: name },
-            'Queue backend error',
-          ),
-        );
-        await current.queue.waitUntilReady();
-        if (stopped || current.initializationCancelled)
-          throw new Error('Queue initialization was cancelled');
-        if (config.queueBackend === 'inMemory')
-          dependencies.onInMemoryQueueInitialized?.({
-            namespace: config.namespace,
-            queue: name,
-          });
-        if (config.rateLimit === null)
-          await current.queue.removeGlobalRateLimit();
-        else if (config.rateLimit !== undefined)
-          await current.queue.setGlobalRateLimit(
-            config.rateLimit.max,
-            config.rateLimit.duration,
+    return postgresDeadline.run(
+      Math.min(
+        postgresDeadline.getStore() ?? Infinity,
+        producerDeadline.getStore() ?? Infinity,
+        performance.now() + timeouts.setupTimeoutMs,
+      ),
+      () =>
+        resources.initialize(name, async () => {
+          if (stopped) throw new Error('Queue service is shutting down');
+          // Failure cleanup belongs to the bounded admission owner, not this task.
+          const config = resolveQueueConfiguration(
+            options,
+            name,
+            current.manual,
           );
-        if (stopped || current.initializationCancelled)
-          throw new Error('Queue initialization was cancelled');
-        current.initializeWorker = (): Promise<void> => {
-          current.workerInitialization ??= (async (): Promise<void> => {
-            if (stopped) throw new Error('Queue service is shutting down');
-            current.worker = new Worker<
-              unknown,
-              unknown,
-              string,
-              IQueueBackend
-            >(
-              physicalName,
-              async (job, token, signal): Promise<void> => {
-                if (stopped || current.handlers.size() === 0) {
-                  await job.moveToWait(token);
-                  throw new WaitingError();
-                }
-                if (!signal)
-                  throw new Error(
-                    'Queue Worker did not provide an abort signal',
-                  );
-                if (job.id === undefined)
-                  throw new Error('Queue job has no ID');
-                await current.cancellation.run(
-                  job.id,
-                  signal,
-                  (dispatchSignal) =>
-                    current.handlers.dispatch(
-                      job.name,
-                      decodeQueueMessage(job.data),
-                      dispatchSignal,
-                    ),
+          const registeredFactory = registry.resolve(config.queueBackend);
+          const factory: BackendFactory = [
+            'redis',
+            'postgres',
+            'inMemory',
+          ].includes(config.queueBackend)
+            ? registeredFactory
+            : (physicalName, backendOptions, metadata) => {
+                // BullMQ types only its built-in connection union. Custom factories own
+                // the opaque connection contract; BullMQ itself receives no custom transport.
+                const customOptions = {
+                  ...backendOptions,
+                  connection: config.connection,
+                } as QueueBaseOptions;
+                return registeredFactory(physicalName, customOptions, metadata);
+              };
+          const identity = createQueueIdentity(config.namespace, name);
+          const physicalName =
+            config.queueBackend === 'postgres'
+              ? identity.postgresQueueName
+              : identity.redisQueueName;
+          const base: QueueBaseOptions & { prefix: string } = {
+            connection:
+              config.queueBackend === 'redis'
+                ? resolveRedisConnection(config.connection)
+                : config.queueBackend === 'postgres'
+                  ? {
+                      ...resolvePostgresConnection(config.connection),
+                      migrate: false,
+                    }
+                  : {},
+            prefix: identity.redisPrefix,
+          };
+          current.queue = new Queue<
+            unknown,
+            unknown,
+            string,
+            unknown,
+            unknown,
+            string,
+            IQueueBackend
+          >(physicalName, { ...base, skipMetasUpdate: true }, factory);
+          current.queue.on('error', (error: Error) =>
+            dependencies.logger?.error(
+              { error, queue: name },
+              'Queue backend error',
+            ),
+          );
+          await current.queue.waitUntilReady();
+          // Own metadata readiness explicitly: BullMQ's constructor suppresses failures.
+          await current.queue
+            .getBackend()
+            .setQueueMeta(current.queue.metaValues);
+          if (stopped || current.initializationCancelled)
+            throw new Error('Queue initialization was cancelled');
+          if (config.queueBackend === 'inMemory')
+            dependencies.onInMemoryQueueInitialized?.({
+              namespace: config.namespace,
+              queue: name,
+            });
+          if (config.rateLimit === null)
+            await current.queue.removeGlobalRateLimit();
+          else if (config.rateLimit !== undefined)
+            await current.queue.setGlobalRateLimit(
+              config.rateLimit.max,
+              config.rateLimit.duration,
+            );
+          if (stopped || current.initializationCancelled)
+            throw new Error('Queue initialization was cancelled');
+          current.initializeWorker = (): Promise<void> => {
+            current.workerInitialization ??= postgresDeadline.run(
+              postgresDeadline.getStore() ??
+                performance.now() + timeouts.setupTimeoutMs,
+              async (): Promise<void> => {
+                if (stopped) throw new Error('Queue service is shutting down');
+                current.worker = new Worker<
+                  unknown,
+                  unknown,
+                  string,
+                  IQueueBackend
+                >(
+                  physicalName,
+                  async (job, token, signal): Promise<void> => {
+                    if (stopped || current.handlers.size() === 0) {
+                      await job.moveToWait(token);
+                      throw new WaitingError();
+                    }
+                    if (!signal)
+                      throw new Error(
+                        'Queue Worker did not provide an abort signal',
+                      );
+                    if (job.id === undefined)
+                      throw new Error('Queue job has no ID');
+                    await current.cancellation.run(
+                      job.id,
+                      signal,
+                      (dispatchSignal) =>
+                        current.handlers.dispatch(
+                          job.name,
+                          decodeQueueMessage(job.data),
+                          dispatchSignal,
+                        ),
+                    );
+                  },
+                  {
+                    ...base,
+                    autorun: false,
+                    concurrency: resolveQueueConfiguration(
+                      options,
+                      name,
+                      current.manual,
+                    ).concurrency,
+                  },
+                  factory,
                 );
+                current.worker.on('error', (error: Error) =>
+                  dependencies.logger?.error(
+                    { error, queue: name },
+                    'Queue worker error',
+                  ),
+                );
+                await current.worker.waitUntilReady();
+                if (current.workerInitializationCancelled)
+                  throw new Error('Queue Worker initialization was cancelled');
               },
-              {
-                ...base,
-                autorun: false,
-                concurrency: resolveQueueConfiguration(
-                  options,
-                  name,
-                  current.manual,
-                ).concurrency,
-              },
-              factory,
             );
-            current.worker.on('error', (error: Error) =>
-              dependencies.logger?.error(
-                { error, queue: name },
-                'Queue worker error',
-              ),
-            );
-            await current.worker.waitUntilReady();
-            if (current.workerInitializationCancelled)
-              throw new Error('Queue Worker initialization was cancelled');
-          })().catch(async (error: unknown) => {
-            try {
-              if (current.worker) await closeWorker(current.worker);
-              current.worker = undefined;
-            } catch (cleanup) {
-              throw new AggregateError(
-                [error, cleanup],
-                'Queue Worker initialization and cleanup failed',
-                { cause: cleanup },
-              );
-            }
-            throw error;
-          });
-          return current.workerInitialization;
-        };
-        if (current.handlers.size()) await current.initializeWorker();
-      } catch (error) {
-        try {
-          await closeEntries([current]);
-        } catch (cleanup) {
-          throw new AggregateError(
-            [error, cleanup],
-            'Queue initialization and cleanup failed',
-            { cause: cleanup },
-          );
-        }
-        throw error;
-      }
-    });
+            return current.workerInitialization;
+          };
+          if (current.handlers.size()) await current.initializeWorker();
+        }),
+    );
   }
 
   return {
@@ -650,66 +711,16 @@ export function createQueueService(
       setupStarted = true;
       registry.freeze();
       const initialization = initialize();
-      setupPromise = (async (): Promise<void> => {
-        if (await settlesWithin(initialization, timeouts.setupTimeoutMs))
-          return;
-        stopped = true;
-        producersOpen = false;
-        const timeout = new Error('Queue setup deadline exceeded');
-        const cleanupDeadline = performance.now() + 5000;
-        const cleanup = closeEntries().catch((error: unknown) => {
-          throw new AggregateError(
-            [timeout, error],
-            'Queue setup and cleanup failed',
-            { cause: timeout },
-          );
-        });
-        if (!(await settlesWithin(cleanup, 5000))) {
-          dependencies.logger?.error(
-            { error: timeout },
-            'Queue setup cleanup remains unresolved',
-          );
-          throw new AggregateError(
-            [timeout, new Error('Queue setup cleanup deadline exceeded')],
-            'Queue setup failed',
-          );
-        }
-        const settlement = initialization.then(
-          () => {},
-          () => {},
-        );
-        if (
-          !(await settlesWithin(
-            settlement,
-            Math.max(0, cleanupDeadline - performance.now()),
-          ))
-        ) {
-          dependencies.logger?.error(
-            { error: timeout },
-            'Queue initialization remains unresolved after cleanup',
-          );
-          throw new AggregateError(
-            [
-              timeout,
-              new Error('Queue initialization cancellation is unconfirmed'),
-            ],
-            'Queue setup failed',
-          );
-        }
-        throw timeout;
-      })().catch(async (error: unknown) => {
-        if (stopped) throw error;
-        try {
-          await closeEntries();
-        } catch (cleanup) {
-          throw new AggregateError(
-            [error, cleanup],
-            'Queue setup and cleanup failed',
-            { cause: cleanup },
-          );
-        }
-        throw error;
-      });
+      setupPromise = initializeWithin(
+        initialization,
+        'Queue setup deadline exceeded',
+        () => {
+          stopped = true;
+          producersOpen = false;
+        },
+        () => closeEntries(entries.values(), true),
+        cleanupDeadline,
+      );
       return setupPromise;
     },
     shutdown(): Promise<void> {
@@ -761,22 +772,40 @@ export function createQueueService(
         );
         const waiting = Promise.allSettled(
           workers.map(async (current) => {
-            await current.worker!.pause(false);
+            await current.worker!.backend.disconnectBlocking(true);
             await current.handlers.settle();
           }),
         );
-        let settled = await settlesWithin(
-          waiting,
+        const waitForWorkers = async (
+          milliseconds: number,
+        ): Promise<boolean> => {
+          const deadline = performance.now() + milliseconds;
+          if (!(await settlesWithin(waiting, milliseconds))) return false;
+          // pause(false) is a no-op after pause(true). A handler can also have
+          // returned while its completion/failure/requeue is still pending. The
+          // public running state covers both initial and resume-created run loops.
+          // Observe it before close(false), whose memoized promise cannot later
+          // be upgraded to force. This bounded poll leaves no timer after expiry.
+          while (workers.some((current) => current.worker?.isRunning())) {
+            const remaining = deadline - performance.now();
+            if (remaining <= 0) return false;
+            await new Promise<void>((resolve) =>
+              setTimeout(resolve, Math.min(10, remaining)),
+            );
+          }
+          return true;
+        };
+        let settled = await waitForWorkers(
           Math.max(0, drainDeadline - performance.now()),
         );
         if (!settled) {
           for (const current of workers)
             current.worker?.cancelAllJobs('Queue service shutdown');
-          settled = await settlesWithin(waiting, timeouts.cancellationGraceMs);
+          settled = await waitForWorkers(timeouts.cancellationGraceMs);
         }
         if (!settled) {
           const error = new Error(
-            'Queue shutdown grace expired; handlers may still be running',
+            'Queue shutdown grace expired; handlers or job transitions may still be running',
           );
           errors.push(error);
           dependencies.logger?.error(
@@ -803,10 +832,15 @@ export function createQueueService(
           errors.push(
             new Error('Queue shutdown publication deadline exceeded'),
           );
-        const cleanupDeadline = performance.now() + 5000;
+        const deadline = cleanupDeadline();
         const cleanup = closeEntries(entries.values(), !settled);
         try {
-          if (!(await settlesWithin(cleanup, 5000))) {
+          if (
+            !(await settlesWithin(
+              cleanup,
+              Math.max(0, deadline - performance.now()),
+            ))
+          ) {
             const error = new Error(
               'Queue resource cleanup deadline exceeded; resources remain unresolved',
             );
@@ -835,7 +869,7 @@ export function createQueueService(
           !prepared &&
           !(await settlesWithin(
             preparation,
-            Math.max(0, cleanupDeadline - performance.now()),
+            Math.max(0, deadline - performance.now()),
           ))
         ) {
           const error = new Error(
@@ -863,7 +897,7 @@ export function createQueueService(
           !published &&
           !(await settlesWithin(
             publications,
-            Math.max(0, cleanupDeadline - performance.now()),
+            Math.max(0, deadline - performance.now()),
           ))
         ) {
           const error = new Error(
