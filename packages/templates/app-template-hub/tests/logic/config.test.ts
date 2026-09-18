@@ -44,10 +44,43 @@ describe('application config', () => {
   beforeAll(async () => {
     configRoot = await mkdtemp(path.join(os.tmpdir(), 'app-config-test-'));
     configPath = path.join(configRoot, 'config.yml');
-    await writeFile(configPath, '{}');
+    await writeFile(configPath, 'hub:\n  storageLayout: v2\n');
   });
   afterAll(async () => {
     await rm(configRoot, { recursive: true, force: true });
+  });
+
+  it('resolves fresh storage roots consistently for Hub, Host and application data', async () => {
+    const storage = path.join(configRoot, 'fresh-storage');
+    const runtime = await resolveStandaloneAppRuntime(appRuntime, {
+      rootDir: templateRootDir,
+      configPath,
+      env: { HUB_STORAGE_DIR: storage },
+    });
+    expect(runtime.configPaths.storage()).toBe(storage);
+    expect(runtime.paths.storageDir).toBe(storage);
+    expect(runtime.config.get('hub.host.appRevisionsDir')).toBe(
+      path.join(storage, 'apps/revisions'),
+    );
+    expect(runtime.config.get('hub.host.appDeploymentsDir')).toBeUndefined();
+    expect(runtime.config.get('hub.host.configPath')).toBe(
+      path.join(storage, 'host/runtime/config.yml'),
+    );
+    expect(runtime.config.get('hub.desiredConfigsDir')).toBe(
+      path.join(storage, 'hub/desired-configs'),
+    );
+    expect(runtime.config.get('hub.logging.deployments.directory')).toBe(
+      path.join(storage, 'hub/logs/deployments'),
+    );
+    expect(runtime.config.get('database.connections.main.filename')).toBe(
+      path.join(storage, 'hub/database/main.sqlite'),
+    );
+    expect(runtime.config.get('logging.file.directory')).toBe(
+      path.join(storage, 'hub/logs/app'),
+    );
+    expect(runtime.config.get('logging.loggers.request.file.directory')).toBe(
+      path.join(storage, 'hub/logs/request'),
+    );
   });
 
   it('assembles module defaults in the runtime', async () => {
@@ -68,7 +101,9 @@ describe('application config', () => {
     expect(drive.default).toBe('local');
     expect(drive.disks.local).toEqual({
       driver: 'fs',
-      location: fileURLToPath(new URL('../../storage', import.meta.url)),
+      location: fileURLToPath(
+        new URL('../../storage/hub/files', import.meta.url),
+      ),
       visibility: 'private',
     });
     expect(drive.disks.public).toBeUndefined();

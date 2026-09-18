@@ -21,7 +21,12 @@ it('honors the Host logging policy and writes identities to the persistent App v
       level: 'trace',
       pretty: true,
       file: { enabled: false },
-      loggers: { system: { level: 'trace' } },
+      loggers: {
+        system: {
+          level: 'trace',
+          file: { directory: path.join(root, 'escaped') },
+        },
+      },
     },
   });
   const app = new Application({

@@ -36,7 +36,7 @@ database:
   connections:
     main:
       dialect: sqlite
-      database: database.sqlite
+      database: hub/database/main.sqlite
       debug: false
       # For Oracle, use dialect: oracle and replace database with serviceName: FREEPDB1.
       # For SQL Server, use dialect: mssql and configure encrypt and trustServerCertificate.
@@ -82,7 +82,9 @@ logging:
     # Set true for human-readable terminal output.
     pretty: false
 
+# New installations use v2. Existing installations retain the legacy layout until storage:migrate.
 hub:
+  # storageLayout: v2
   logging:
     deployments:
       enabled: true

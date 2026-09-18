@@ -288,7 +288,7 @@ Declare such a package in `dependencies` when you write the code; nothing will r
 
 ### Packing the build for a deployment
 
-`pnpm build --tar` writes `storage/dist.tar.gz` after the build. The archive holds `dist/` as a directory next to `config.example.yml`, so extracting it produces exactly those two paths rather than scattering `server/` and `node_modules/` into whatever directory you unpacked in.
+`pnpm build --tar` writes `storage/exports/dist.tar.gz` after the build. The archive holds `dist/` as a directory next to `config.example.yml`, so extracting it produces exactly those two paths rather than scattering `server/` and `node_modules/` into whatever directory you unpacked in.
 
 `config.example.yml` travels with it because a deployment has to write a `config.yml` before it can start, and the example is the only statement of what may go in it. Directories of executable shims are left out: a `.bin` entry points at a path on the machine that installed it, and a dangling one makes `pnpm install` in the extracted tree report a corrupt store rather than repair it.
 
@@ -347,3 +347,7 @@ Navigation groups retain their expanded or collapsed state while the navigation 
 ## Development logging
 
 `pnpm dev` owns the ready banner and public URL; `APP_SERVER_START_LOG=false` suppresses the underlying listener announcement through `server/environment.ts`. Keep that mapping when editing deployment environment settings. Request starts, request headers and config diagnostics use DEBUG; the normal INFO output contains completion summaries. See the shared application development Skill for hosted logging and upgrade limits.
+
+## Storage paths
+
+New Hub installations use `hub/`, `host/`, and `apps/{artifacts,revisions,volumes}` under one persistent storage root outside `dist`; build exports use `storage/exports`. Define defaults through `server/storage.ts`. Keep desired configurations, deployment logs and child-output directories explicit, independent of Host config placement. Existing roots keep legacy defaults until the offline `app storage migrate` command is applied. Do not move live data or rewrite deployed artifacts. See README.MD for migration, retry and rollback rules. Never treat standalone Host deployments as managed revision caches.

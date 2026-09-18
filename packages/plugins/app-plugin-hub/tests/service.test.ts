@@ -138,6 +138,54 @@ describe('@nocobase/app-plugin-hub service', () => {
     await rm(rootDir, { recursive: true, force: true });
   });
 
+  it('keeps desired configurations and deployment logs independent of the Host config path', async () => {
+    await service.shutdown();
+    const options = createServiceOptions();
+    service = new DefaultHubService({
+      ...options,
+      config: {
+        ...options.config,
+        desiredConfigsDir: path.join(rootDir, 'hub/desired-configs'),
+        logging: {
+          deployments: {
+            directory: path.join(rootDir, 'hub/logs/deployments'),
+          },
+        },
+        host: {
+          ...options.config.host,
+          configPath: path.join(rootDir, 'host/runtime/config.yml'),
+        },
+      },
+    });
+    await service.prepare();
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0'),
+    });
+    const deployment = await service.deploy('customer', {
+      releaseId: release.id,
+    });
+    await waitForDeployment(service, 'customer', deployment.id);
+    expect(deployment.config.path).toBe(
+      path.join(
+        rootDir,
+        'hub/desired-configs/customer',
+        `${deployment.id}.yml`,
+      ),
+    );
+    expect(await readFile(deployment.config.path!, 'utf8')).toBeTruthy();
+    const logs = await service.readLogs(
+      'customer',
+      { fromStart: true },
+      deployment.id,
+    );
+    expect(logs.entries.length).toBeGreaterThan(0);
+    await service.remove('customer');
+    await expect(
+      readFile(deployment.config.path!, 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('allows the same name across owners while keeping IDs globally unique', async () => {
     await service.createApp({ id: 'tms-alice', name: 'TMS' }, 'alice');
     await service.createApp({ id: 'tms-bob', name: 'TMS' }, 'bob');

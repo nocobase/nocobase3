@@ -46,6 +46,8 @@ export interface ResolvedAppRuntimeConfigContext extends AppRuntimeConfigContext
 }
 
 export interface AppRuntimeDefinition {
+  /** Application-owned paths, applied consistently to server and CLI resolution. */
+  readonly resolvePaths?: (runtime: ResolvedAppScopeRuntime) => AppPathOptions;
   readonly defaultConfigs?: AppConfigFactory<ConfigMap>;
   readonly createAppConfig: (
     context: ResolvedAppRuntimeConfigContext,
@@ -83,7 +85,10 @@ export async function resolveAppRuntime(
   definition: AppRuntimeDefinition,
   scope: AppScope,
 ): Promise<ResolvedAppRuntime> {
-  const base = resolveAppScopeRuntime(scope);
+  const resolved = resolveAppScopeRuntime(scope);
+  const base = definition.resolvePaths
+    ? { ...resolved, paths: definition.resolvePaths(resolved) }
+    : resolved;
   const context = createAppRuntimeConfigContext(definition, scope, base);
   const appConfig = definition.createAppConfig(context);
   await appConfig.loadAll();

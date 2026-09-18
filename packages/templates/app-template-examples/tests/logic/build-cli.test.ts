@@ -65,7 +65,7 @@ describe('build command help', () => {
       }
       expect(readFileSync(sentinel, 'utf8')).toBe('existing build');
       expect(() =>
-        readFileSync(path.join(root, 'storage', 'dist.tar.gz')),
+        readFileSync(path.join(root, 'storage', 'exports', 'dist.tar.gz')),
       ).toThrow();
     },
   );

@@ -4,6 +4,7 @@ import AppCollectionsGenerate from './collections-generate.js';
 import AppI18nCheck from './i18n-check.js';
 import AppInfo from './info.js';
 import AppMigrate from './migrate.js';
+import StorageMigrate from './storage-migrate.js';
 import AppSeed from './seed.js';
 
 // Commands this application owns. Each key is the name it answers to under the
@@ -14,6 +15,7 @@ const appCommands: AppCliCommands = {
   info: AppInfo,
   migrate: AppMigrate,
   seed: AppSeed,
+  'storage:migrate': StorageMigrate,
 };
 
 export default appCommands;

@@ -194,7 +194,10 @@ export async function publishToHub(
   };
   let result: Record<string, unknown>;
   if (operation === 'upload') {
-    const file = path.resolve(root, options.file ?? 'storage/dist.tar.gz');
+    const file = path.resolve(
+      root,
+      options.file ?? 'storage/exports/dist.tar.gz',
+    );
     let size: number;
     let checksum: string;
     try {

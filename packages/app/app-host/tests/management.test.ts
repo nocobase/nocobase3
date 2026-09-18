@@ -251,6 +251,38 @@ describe('managed host reconciliation', () => {
     );
   });
 
+  it('deploys, restores and removes a flat managed revision without changing the volume layout', async () => {
+    const fixture = await createFixture();
+    const options = {
+      mode: 'managed' as const,
+      appRevisionsDir: fixture.deploymentsDir,
+      appVolumesDir: fixture.volumesDir,
+      artifact: fsArtifact(fixture.artifactDir),
+      evictionIntervalMs: 0,
+    };
+    const host = createAppHost(options);
+    hosts.push(host);
+    const set = deploymentSet(1, fixture.artifact, { activation: 'eager' });
+    await host.management.applyDeploymentSet(set);
+    const revision = path.join(
+      fixture.deploymentsDir,
+      fixture.artifact.appId,
+      fixture.artifact.checksum,
+    );
+    expect(await readdir(revision)).toContain('dist');
+    await host.close();
+    hosts.pop();
+    await rm(path.join(fixture.artifactDir, fixture.artifact.key));
+    const restored = createAppHost(options);
+    hosts.push(restored);
+    expect(
+      (await restored.management.restoreDeploymentSet(set)).status
+        .deployments[0]?.observedState,
+    ).toBe('running');
+    await restored.management.removeDeployment(fixture.artifact.appId);
+    await expect(readdir(revision)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('restores local revisions without reading artifacts and fails when the revision is missing', async () => {
     const fixture = await createFixture();
     const options = {

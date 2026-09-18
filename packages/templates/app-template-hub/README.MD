@@ -117,12 +117,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script             | What it does                                                                 |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `pnpm dev`         | Start the API server and client with hot reload                              |
-| `pnpm build`       | Build the client and server into `dist/`                                     |
-| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
-| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
+| Script             | What it does                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `pnpm dev`         | Start the API server and client with hot reload                                      |
+| `pnpm build`       | Build the client and server into `dist/`                                             |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                                    |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/exports/dist.tar.gz` |
 
 ### Database
 
@@ -248,7 +248,7 @@ If your application has no native modules — `pg`, `mysql2`, and `tedious` are 
 
 #### Packing the build
 
-`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+`pnpm build --tar` writes `storage/exports/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
 
 The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
 
@@ -331,3 +331,17 @@ Tests live in `tests/`, never beside the source they cover. Put logic and integr
 ## License
 
 MIT
+
+## Hub storage layout
+
+New installations use `storage/hub` for the Hub database (`database/main.sqlite`), local files (`files`), desired application configurations (`desired-configs/<appId>/<deploymentId>.yml`), and logs (`logs/app`, `logs/request`, `logs/deployments/<appId>`). Host configuration is generated at `storage/host/runtime/config.yml`; Host logs and captured child output use `storage/host/logs/host` and `storage/host/logs/child-output`. Capturing child output does not change terminal forwarding. Each log directory has its own retention and size limit; deployment log limits apply per application.
+
+`storage/apps/artifacts/<appId>/<releaseId>.tar.gz` contains release archives, `storage/apps/revisions/<appId>/<sha256>` contains expanded archives, and `storage/apps/volumes/<appId>` contains runtime configurations and application-owned `storage/`. The checksum identifies the archive bytes. Hub desired configurations and Host runtime configurations have different owners; neither is a historical configuration archive. Restart recovery requires the installed revision and does not automatically re-extract a missing one.
+
+Standalone Hub source and compiled entries share storage outside `dist`. Set `HUB_STORAGE_DIR` to override it (relative values resolve from the deployment directory); embedded Hub instances retain the Host-provided volume. An existing `dist/storage` requires explicit offline migration. Existing legacy roots are detected without moving files, and `hub.storageLayout: legacy` keeps old defaults. Set `hub.storageLayout: v2` only for a new installation or after migration. Explicit storage configuration continues to override defaults. `appRevisionsDir` uses `<appId>/<sha256>`; the legacy `appDeploymentsDir` uses `<appId>/revisions/<sha256>` in managed mode. Do not configure both. Standalone Host deployment discovery retains its existing layout.
+
+Preview an existing installation with `pnpm nocobase app storage migrate --json`. Use `--config-file /absolute/config.yml` for a specific configuration file and `--source /absolute/old/storage` for an old root, including `dist/storage`. The preview lists source and target paths without copying data or connecting to the database. Stop Hub, Host, and every writer before applying the same command with `--apply --stopped`. This acknowledgement does not stop processes for you.
+
+The migration copies and verifies files, preserves source data, snapshots local SQLite through its backup API, updates managed configuration bindings, and replaces the Hub configuration last. It records the plan, original configuration and deployment bindings privately under `hub/storage-migration`. Conflicting destination files stop the operation. An exclusive `migration.lock` prevents concurrent migrations; after an abrupt process exit, verify no migration is running before removing that stale lock. A completed database-copy marker permits retry after a later interruption; a database without that marker requires inspection and is never overwritten. External databases remain configured in place and their affected bindings are updated transactionally. External artifact stores and local disks keep their configuration. The old local disk shares the platform storage root, so the tool copies only its `app/` subtree; the preview lists unclassified root entries and apply refuses them. Move custom files to an explicitly configured disk before switching.
+
+Before removing old data, verify restart recovery, deployment, configuration updates, rollback, application data and both log viewers. To roll back before resuming writes, stop all processes, restore `config.before`, and restore external database bindings from `deployment-configs.before.json` if applicable; the original local SQLite and source files remain available. Keep the same storage-root environment setting for rollback. After moving `dist/storage` outside `dist`, update any explicit `HUB_STORAGE_DIR` to the new root before starting. Once new writes have occurred, restoring the old copy would lose those writes and requires a separate data reconciliation.

@@ -80,6 +80,9 @@ export class Logging {
     if (!config.transport && (this.outputs.file || this.outputs.console)) {
       const file = {
         ...this.outputs.file,
+        ...(fileOverride?.directory === undefined
+          ? {}
+          : { directory: fileOverride.directory }),
         ...(fileOverride?.name === undefined
           ? {}
           : { name: fileOverride.name }),

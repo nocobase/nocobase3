@@ -51,7 +51,9 @@ export interface ArtifactResolver {
 }
 
 export interface DriveArtifactResolverOptions {
-  appDeploymentsDir: string;
+  appDeploymentsDir?: string;
+  /** Managed content-addressed layout: <app>/<checksum>. */
+  appRevisionsDir?: string;
   localArtifactDir?: string;
   logger?: Logger;
   expandedRevisionLimit?: number;
@@ -75,7 +77,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
     const targetDir = path.join(
       this.appDeploymentsDir,
       reference.appId,
-      REVISION_DIRECTORY,
+      ...(this.flatRevisions ? [] : [REVISION_DIRECTORY]),
       reference.checksum.toLowerCase(),
     );
     const artifact = await this.resolveInstalledArtifact(
@@ -93,6 +95,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
     return artifact;
   }
   readonly appDeploymentsDir: string;
+  private readonly flatRevisions: boolean;
   readonly localArtifactDir?: string;
   readonly logger?: Logger;
   readonly expandedRevisionLimit?: number;
@@ -104,7 +107,14 @@ export class DriveArtifactResolver implements ArtifactResolver {
     readonly catalog: DeploymentCatalog,
     options: DriveArtifactResolverOptions,
   ) {
-    this.appDeploymentsDir = path.resolve(options.appDeploymentsDir);
+    if (options.appRevisionsDir && options.appDeploymentsDir)
+      throw new Error('Configure only appRevisionsDir or appDeploymentsDir');
+    this.flatRevisions = options.appRevisionsDir !== undefined;
+    this.appDeploymentsDir = path.resolve(
+      options.appRevisionsDir ??
+        options.appDeploymentsDir ??
+        catalog.deploymentsDir,
+    );
     this.localArtifactDir = options.localArtifactDir
       ? path.resolve(options.localArtifactDir)
       : undefined;
@@ -126,7 +136,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
     await this.revisionPrunes.get(reference.appId);
     await mkdir(this.appDeploymentsDir, { recursive: true, mode: 0o700 });
 
-    if (this.expandedRevisionLimit !== undefined) {
+    if (this.flatRevisions || this.expandedRevisionLimit !== undefined) {
       return this.resolveRevision(reference);
     }
 
@@ -139,7 +149,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
     const revisionRoot = path.join(
       this.appDeploymentsDir,
       reference.appId,
-      REVISION_DIRECTORY,
+      ...(this.flatRevisions ? [] : [REVISION_DIRECTORY]),
     );
     await mkdir(revisionRoot, { recursive: true, mode: 0o700 });
 

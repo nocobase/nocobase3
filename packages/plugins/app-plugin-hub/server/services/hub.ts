@@ -183,15 +183,41 @@ export class DefaultHubService implements HubService {
     await this.writeHostConfig();
   }
 
+  private deploymentLogsDir(): string {
+    return (
+      this.options.config.logging?.deployments?.directory ??
+      path.join(
+        path.dirname(this.options.config.host.configPath),
+        'deployment-logs',
+      )
+    );
+  }
+
+  private desiredConfigsDir(): string {
+    return (
+      this.options.config.desiredConfigsDir ??
+      path.join(
+        path.dirname(this.options.config.host.configPath),
+        'app-configs',
+      )
+    );
+  }
+
+  private desiredConfigPath(appId: string, deploymentId: string): string {
+    return this.options.config.desiredConfigsDir
+      ? path.join(this.desiredConfigsDir(), appId, `${deploymentId}.yml`)
+      : path.join(
+          this.desiredConfigsDir(),
+          appId,
+          'configs',
+          `config.${deploymentId}.yml`,
+        );
+  }
+
   private deploymentLogPath(appId: string, deploymentId: string): string {
     if (!APP_ID_PATTERN.test(appId) || !APP_ID_PATTERN.test(deploymentId))
       throw new HubError('Invalid log identity.', 'INVALID_LOG_ID', 400);
-    return path.join(
-      path.dirname(this.options.config.host.configPath),
-      'deployment-logs',
-      appId,
-      `${deploymentId}.log`,
-    );
+    return path.join(this.deploymentLogsDir(), appId, `${deploymentId}.log`);
   }
 
   private logDeployment(
@@ -256,10 +282,7 @@ export class DefaultHubService implements HubService {
         );
     try {
       const base = deployment
-        ? path.join(
-            path.dirname(this.options.config.host.configPath),
-            'deployment-logs',
-          )
+        ? path.join(this.deploymentLogsDir())
         : this.options.config.host.appVolumesDir;
       try {
         const canonicalBase = await realpath(base);
@@ -1220,17 +1243,10 @@ export class DefaultHubService implements HubService {
             recursive: true,
             force: true,
           }),
-          rm(
-            path.join(
-              path.dirname(this.options.config.host.configPath),
-              'app-configs',
-              appId,
-            ),
-            {
-              recursive: true,
-              force: true,
-            },
-          ),
+          rm(path.join(this.desiredConfigsDir(), appId), {
+            recursive: true,
+            force: true,
+          }),
         ]);
       }),
     );
@@ -1725,13 +1741,7 @@ export class DefaultHubService implements HubService {
     content ??= '';
     content = ensureConfigSecrets(content, currentContent);
     validateYamlConfig(content);
-    const configPath = path.join(
-      path.dirname(this.options.config.host.configPath),
-      'app-configs',
-      app.id,
-      'configs',
-      `config.${deploymentId}.yml`,
-    );
+    const configPath = path.join(this.desiredConfigPath(app.id, deploymentId));
     await writeTextAtomic(configPath, content);
     return { mode: 'file', path: configPath };
   }
@@ -1878,11 +1888,7 @@ export class DefaultHubService implements HubService {
   ): Promise<void> {
     if (deployment.config.mode !== 'file') return;
     const ownedPath = path.join(
-      path.dirname(this.options.config.host.configPath),
-      'app-configs',
-      deployment.appId,
-      'configs',
-      `config.${deployment.id}.yml`,
+      this.desiredConfigPath(deployment.appId, deployment.id),
     );
     if (deployment.config.path !== ownedPath) return;
     // Cleanup must not turn a successful deployment into a failed one.
@@ -1899,6 +1905,7 @@ export class DefaultHubService implements HubService {
         server: { host: '127.0.0.1', port: 3000 },
         artifact: normalizeArtifactConfig(this.options.config.artifact),
         appDeploymentsDir: this.options.config.host.appDeploymentsDir,
+        appRevisionsDir: this.options.config.host.appRevisionsDir,
         appVolumesDir: this.options.config.host.appVolumesDir,
       },
     };

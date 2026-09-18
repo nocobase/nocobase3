@@ -58,6 +58,7 @@ export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
           ...(policy ? { enabled: true, transport: undefined } : {}),
           file: {
             ...entry.file,
+            ...(policy ? { directory: this.app.paths.storage('logs') } : {}),
             ...(policyFile.enabled === undefined
               ? {}
               : { enabled: policyFile.enabled }),
@@ -78,7 +79,9 @@ export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
           Object.entries(policyFile).filter(([, value]) => value !== undefined),
         ),
         maxSizeMB: undefined,
-        directory: this.app.paths.storage('logs'),
+        directory: policy
+          ? this.app.paths.storage('logs')
+          : (config.file?.directory ?? this.app.paths.storage('logs')),
         enabled: policyFile.enabled ?? config.file?.enabled ?? true,
         retentionDays:
           policyFile.retentionDays ?? config.file?.retentionDays ?? 7,

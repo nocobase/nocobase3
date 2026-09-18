@@ -38,7 +38,8 @@ export interface AppHostConfig {
   };
   artifact: AppDriveDiskConfig;
   logging: LoggingConfig;
-  appDeploymentsDir: string;
+  appDeploymentsDir?: string;
+  appRevisionsDir?: string;
   appVolumesDir: string;
   maxActiveApps?: number;
   idleTtlMs?: number;
@@ -77,7 +78,6 @@ export async function loadAppHostConfig(
           visibility: 'private',
         },
         logging: createDefaultHostLoggingConfig(rootDir, environment.NODE_ENV),
-        appDeploymentsDir: path.join(rootDir, 'storage', 'app-deployments'),
         appVolumesDir: path.join(rootDir, 'storage', 'app-volumes'),
       },
     }),
@@ -93,6 +93,7 @@ export async function loadAppHostConfig(
         APP_HOST_PORT: envInteger('host.server.port'),
         PORT: envInteger('host.server.port'),
         APP_DEPLOYMENTS_DIR: envString('host.appDeploymentsDir'),
+        APP_REVISIONS_DIR: envString('host.appRevisionsDir'),
         APP_VOLUMES_DIR: envString('host.appVolumesDir'),
         MAX_ACTIVE_APPS: envInteger('host.maxActiveApps'),
         APP_IDLE_TTL_MS: envInteger('host.idleTtlMs'),
@@ -159,10 +160,21 @@ function decodeAppHostConfig(config: Config, rootDir: string): AppHostConfig {
   }
   const host = required(hostConfig.string('server.host'), 'host.server.host');
   const port = positiveInteger(hostConfig, 'server.port');
-  const appDeploymentsDir = resolveConfigDirectory(
-    required(hostConfig.string('appDeploymentsDir'), 'host.appDeploymentsDir'),
-    rootDir,
-  );
+  const revisions = hostConfig.string('appRevisionsDir');
+  const deployments = hostConfig.string('appDeploymentsDir');
+  if (revisions && (mode !== 'managed' || deployments))
+    throw new Error(
+      'appRevisionsDir requires managed mode and cannot be combined with appDeploymentsDir',
+    );
+  const appRevisionsDir = revisions
+    ? resolveConfigDirectory(revisions, rootDir)
+    : undefined;
+  const appDeploymentsDir = revisions
+    ? undefined
+    : resolveConfigDirectory(
+        deployments ?? path.join(rootDir, 'storage', 'app-deployments'),
+        rootDir,
+      );
   const appVolumesDir = resolveConfigDirectory(
     required(hostConfig.string('appVolumesDir'), 'host.appVolumesDir'),
     rootDir,
@@ -188,6 +200,7 @@ function decodeAppHostConfig(config: Config, rootDir: string): AppHostConfig {
     artifact,
     logging: { ...hostConfig.cut('logging').raw() },
     appDeploymentsDir,
+    appRevisionsDir,
     appVolumesDir,
     maxActiveApps: optionalPositiveInteger(hostConfig, 'maxActiveApps'),
     idleTtlMs: optionalNonNegativeInteger(hostConfig, 'idleTtlMs'),

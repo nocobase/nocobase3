@@ -1,3 +1,4 @@
+import { hubStoragePath } from '../storage.js';
 import sqlite from '@nocobase/db-sqlite';
 import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
 
@@ -12,7 +13,11 @@ export default defineAppDatabaseConfig((runtime) => ({
   connections: {
     main: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('database.sqlite'),
+      filename: hubStoragePath(
+        runtime,
+        'hub/database/main.sqlite',
+        'database.sqlite',
+      ),
       schemaManagement: 'managed',
       debug: false,
     },

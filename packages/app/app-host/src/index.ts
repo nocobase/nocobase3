@@ -73,6 +73,7 @@ export interface AppHostOptions {
   port?: number;
   host?: string;
   appDeploymentsDir?: string;
+  appRevisionsDir?: string;
   appVolumesDir?: string;
   artifact?: AppDriveDiskConfig;
   artifactResolver?: ArtifactResolver;
@@ -98,6 +99,13 @@ export interface AppHost {
 
 export function createAppHost(options: AppHostOptions = {}): AppHost {
   const mode = resolveAppHostMode(options.mode);
+  if (
+    options.appRevisionsDir &&
+    (mode !== 'managed' || options.appDeploymentsDir)
+  )
+    throw new Error(
+      'appRevisionsDir requires managed mode and cannot be combined with appDeploymentsDir',
+    );
   const logging = createLogging(
     options.logging ?? {
       level: 'info',
@@ -106,7 +114,7 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   );
   const logger = logging.getLogger('host');
   const deploymentCatalog = new DeploymentCatalog({
-    deploymentsDir: options.appDeploymentsDir,
+    deploymentsDir: options.appRevisionsDir ?? options.appDeploymentsDir,
     volumesDir: options.appVolumesDir,
   });
   const moduleLoader = new AppModuleLoader();
@@ -122,7 +130,9 @@ export function createAppHost(options: AppHostOptions = {}): AppHost {
   const artifactResolver =
     options.artifactResolver ??
     new DriveArtifactResolver(drive.use('artifact'), deploymentCatalog, {
-      appDeploymentsDir: deploymentCatalog.deploymentsDir,
+      ...(options.appRevisionsDir
+        ? { appRevisionsDir: options.appRevisionsDir }
+        : { appDeploymentsDir: deploymentCatalog.deploymentsDir }),
       localArtifactDir:
         artifact.driver === 'fs' ? artifact.location : undefined,
       logger: logger.child({ component: 'artifact-resolver' }),
@@ -381,6 +391,7 @@ export async function startAppHostFromEnv(): Promise<AppHost> {
     port: config.server.port,
     host: config.server.host,
     appDeploymentsDir: config.appDeploymentsDir,
+    appRevisionsDir: config.appRevisionsDir,
     appVolumesDir: config.appVolumesDir,
     artifact: config.artifact,
     maxActiveApps: config.maxActiveApps,

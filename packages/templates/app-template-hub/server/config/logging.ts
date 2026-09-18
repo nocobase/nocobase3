@@ -1,3 +1,4 @@
+import { hubStoragePath } from '../storage.js';
 import {
   defineAppConfig,
   type AppConfigFactory,
@@ -8,6 +9,7 @@ const logging: AppConfigFactory<AppLoggingConfig> = defineAppConfig(
   (runtime) => ({
     level: 'info',
     file: {
+      directory: hubStoragePath(runtime, 'hub/logs/app', 'logs'),
       enabled: true,
       name: 'app',
       retentionDays: 7,
@@ -15,7 +17,12 @@ const logging: AppConfigFactory<AppLoggingConfig> = defineAppConfig(
       maxTotalSizeMB: 500,
     },
     loggers: {
-      request: { file: { name: 'request' } },
+      request: {
+        file: {
+          name: 'request',
+          directory: hubStoragePath(runtime, 'hub/logs/request', 'logs'),
+        },
+      },
     },
     console: { enabled: true, pretty: runtime.env.NODE_ENV !== 'production' },
     base: { service: 'hub' },

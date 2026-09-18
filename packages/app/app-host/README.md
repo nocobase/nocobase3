@@ -211,3 +211,9 @@ The `koa` fixture adapts a real `koa.callback()` to the host's Fetch contract
 through an ephemeral loopback HTTP server. It demonstrates Koa middleware,
 request bodies, redirects, cookies, streaming responses, and lifecycle cleanup.
 See `fixtures/app-dist/README.md` for the adapter's HTTP-only boundary.
+
+### Managed revision directory
+
+Managed callers may set `appRevisionsDir` (configuration `host.appRevisionsDir`, environment `APP_REVISIONS_DIR`) to store expanded archives at `<root>/<appId>/<sha256>` without the legacy `revisions` layer. This option is mutually exclusive with `appDeploymentsDir` / `APP_DEPLOYMENTS_DIR` and is rejected in standalone mode. Legacy managed roots retain `<root>/<appId>/revisions/<sha256>`; standalone deployment discovery is unchanged. Preserve installed metadata when migrating and keep volumes separate. Restore requires an installed revision; a missing one requires deployment again.
+
+Supervisor callers may set `childOutputDir` to capture stdout/stderr as bounded JSON Lines with retention, independently of terminal forwarding. Host logging uses `logging.file.directory`; neither directory is inferred from the generated Host configuration path.

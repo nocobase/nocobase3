@@ -17,6 +17,7 @@ export interface FileLogOptions extends JournalPolicy {
   maxTotalSizeMB?: number;
 }
 export interface LoggerFileOptions {
+  directory?: string;
   enabled?: boolean;
   name?: string;
 }

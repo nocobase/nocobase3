@@ -1,3 +1,4 @@
+import { captureChildOutput } from './child-output.js';
 import { createDiagnosticLogger, type Logger } from '@nocobase/logging';
 import type { DeploymentLogListener } from './deployment-log.js';
 /**
@@ -43,8 +44,10 @@ export interface AppHostSupervisorOptions {
   enabled?: boolean;
   targetUrl?: string;
   appDeploymentsDir?: string;
+  appRevisionsDir?: string;
   appVolumesDir?: string;
   configPath?: string;
+  childOutputDir?: string;
   host?: string;
   port?: number;
   /** Match the loaded package's source or compiled entrypoint with `auto`. */
@@ -71,8 +74,10 @@ export interface AppHostSupervisorInfo {
   pid?: number;
   activeLeases: number;
   appDeploymentsDir?: string;
+  appRevisionsDir?: string;
   appVolumesDir?: string;
   configPath?: string;
+  childOutputDir?: string;
   entrypoint?: string;
 }
 
@@ -119,8 +124,10 @@ export class AppHostSupervisor {
   private readonly driver: AppHostDriver;
   private readonly externalUrl?: URL;
   private readonly appDeploymentsDir?: string;
+  private readonly appRevisionsDir?: string;
   private readonly appVolumesDir?: string;
   private readonly configPath?: string;
+  private readonly childOutputDir?: string;
   private readonly host: string;
   private readonly configuredPort?: number;
   private readonly startTimeoutMs: number;
@@ -157,9 +164,13 @@ export class AppHostSupervisor {
     this.enabled = options.enabled ?? true;
     this.externalUrl = normalizeUrl(options.targetUrl);
     this.driver = this.resolveDriver(options);
+    if (options.appDeploymentsDir && options.appRevisionsDir)
+      throw new Error('Configure only appRevisionsDir or appDeploymentsDir');
     this.appDeploymentsDir = options.appDeploymentsDir;
+    this.appRevisionsDir = options.appRevisionsDir;
     this.appVolumesDir = options.appVolumesDir;
     this.configPath = options.configPath;
+    this.childOutputDir = options.childOutputDir;
     this.host = options.host ?? '127.0.0.1';
     this.configuredPort = options.port;
     this.entrypoint = options.entrypoint;
@@ -227,6 +238,7 @@ export class AppHostSupervisor {
       pid: this.managedChild?.child.pid,
       activeLeases: this.activeLeases,
       appDeploymentsDir: this.appDeploymentsDir,
+      appRevisionsDir: this.appRevisionsDir,
       appVolumesDir: this.appVolumesDir,
       configPath: this.configPath,
       entrypoint: this.managedChild?.entrypoint,
@@ -564,6 +576,7 @@ export class AppHostSupervisor {
       APP_HOST_MODE: this.mode,
       APP_HOST_SESSION: this.session ?? undefined,
       APP_DEPLOYMENTS_DIR: this.appDeploymentsDir,
+      APP_REVISIONS_DIR: this.appRevisionsDir,
       APP_VOLUMES_DIR: this.appVolumesDir,
       APP_HOST_CONFIG_PATH: this.configPath,
     };
@@ -639,6 +652,7 @@ export class AppHostSupervisor {
   }
 
   private pipeChildLogs(child: ChildProcess): void {
+    if (this.childOutputDir) captureChildOutput(child, this.childOutputDir);
     child.stdout?.on('data', (chunk: unknown) => {
       if (Buffer.isBuffer(chunk)) process.stdout.write(chunk);
     });

@@ -26,6 +26,37 @@ afterEach(async () => {
 });
 
 describe('loadAppHostConfig', () => {
+  it('keeps managed revision roots distinct from legacy deployments', async () => {
+    const rootDir = await createTempDirectory();
+    const config = await loadAppHostConfig({
+      rootDir,
+      environment: {
+        APP_HOST_MODE: 'managed',
+        APP_REVISIONS_DIR: './storage/apps/revisions',
+      },
+    });
+    expect(config.appRevisionsDir).toBe(
+      path.join(rootDir, 'storage/apps/revisions'),
+    );
+    expect(config.appDeploymentsDir).toBeUndefined();
+    await expect(
+      loadAppHostConfig({
+        rootDir,
+        environment: {
+          APP_HOST_MODE: 'managed',
+          APP_REVISIONS_DIR: './revisions',
+          APP_DEPLOYMENTS_DIR: './deployments',
+        },
+      }),
+    ).rejects.toThrow('cannot be combined');
+    await expect(
+      loadAppHostConfig({
+        rootDir,
+        environment: { APP_REVISIONS_DIR: './revisions' },
+      }),
+    ).rejects.toThrow('managed mode');
+  });
+
   it('uses pretty logging outside production', async () => {
     const rootDir = await createTempDirectory();
     const config = await loadAppHostConfig({

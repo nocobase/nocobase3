@@ -3,10 +3,13 @@ import type { JournalPolicy, LoggingConfig } from '@nocobase/logging';
 import type { AppDriveDiskConfig } from '@nocobase/drive';
 
 export interface HubPluginConfig {
+  readonly storageLayout?: 'legacy' | 'v2';
   /** Public App Host origin, or `/` when the Hub listener proxies the same origin. */
   readonly publicHostUrl?: string;
+  readonly desiredConfigsDir?: string;
   readonly logging?: {
     readonly deployments?: JournalPolicy & {
+      directory?: string;
       maxFileSizeMB?: number;
       maxTotalSizeMB?: number;
     };
@@ -17,9 +20,11 @@ export interface HubPluginConfig {
     readonly logging?: LoggingConfig;
     readonly enabled: boolean;
     readonly driver: 'auto' | 'node' | 'tsx';
-    readonly appDeploymentsDir: string;
+    readonly appDeploymentsDir?: string;
+    readonly appRevisionsDir?: string;
     readonly appVolumesDir: string;
     readonly configPath: string;
+    readonly childOutputDir?: string;
     readonly host?: string;
     readonly port?: number;
     readonly startTimeoutMs?: number;

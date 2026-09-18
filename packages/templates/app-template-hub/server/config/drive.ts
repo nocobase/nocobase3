@@ -1,3 +1,4 @@
+import { hubStoragePath } from '../storage.js';
 import {
   defineAppConfig,
   type AppConfigFactory,
@@ -8,7 +9,7 @@ const drive: AppConfigFactory<AppDriveConfig> = defineAppConfig((runtime) => {
   const disks: AppDriveConfig['disks'] = {
     local: {
       driver: 'fs',
-      location: runtime.configPaths.storage(),
+      location: hubStoragePath(runtime, 'hub/files', ''),
       visibility: 'private',
     },
     s3: {
