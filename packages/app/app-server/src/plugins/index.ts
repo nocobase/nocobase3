@@ -4,14 +4,12 @@ export {
   type AppServerDatabaseSnapshot,
   type AppServerInspectionIssue,
   type AppServerInspectionSnapshot,
-  type AppServerJobsSnapshot,
   type AppServerPluginSnapshot,
   type AppServerProviderSnapshot,
   type AppServerRouteSnapshot,
 } from './inspect.js';
 export {
   createAppDatabaseTaskContributions,
-  createPluginJobLocations,
   createPluginMigrationSources,
   createPluginSeedSources,
   resolveAppServerPlugins,

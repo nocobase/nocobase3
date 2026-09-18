@@ -190,7 +190,6 @@ async function startApplication(
             packageName: '@nocobase/app-plugin-test',
             version: 'test',
             rootDir: '/test/plugins/test',
-            jobLocations: [],
           },
         },
       ],

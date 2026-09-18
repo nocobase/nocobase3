@@ -8,7 +8,6 @@ import {
   type ResolvedAppServerPlugins,
 } from '../src/plugins/index.js';
 import { defineApiRoutes, defineRootRoutes } from '../src/router/index.js';
-import type { ApplicationConfig } from '../src/application/index.js';
 import { Hono } from 'hono';
 
 let providerConstructorCalls = 0;
@@ -52,7 +51,7 @@ describe('Server plugin inspection', () => {
         return { default: {} };
       },
     });
-    const resolved: ResolvedAppServerPlugins<ApplicationConfig> = {
+    const resolved: ResolvedAppServerPlugins = {
       appPackageName: '@nocobase/app-example',
       plugins: [
         {
@@ -63,7 +62,6 @@ describe('Server plugin inspection', () => {
             rootDir: '/plugins/example',
             migrationsDirectory: '/plugins/example/database/migrations',
             seedsDirectory: '/plugins/example/database/seeds',
-            jobLocations: [],
           },
         },
       ],
@@ -84,7 +82,6 @@ describe('Server plugin inspection', () => {
           locales: true,
           migrations: true,
           seeds: true,
-          jobLocations: 0,
         },
       }),
     ]);
@@ -105,6 +102,7 @@ describe('Server plugin inspection', () => {
         packageName: '@nocobase/app-plugin-example',
       },
     ]);
+    expect(inspection).not.toHaveProperty('jobs');
     expect(inspection.issues).toEqual([]);
     expect(inspection.consistent).toBe(true);
     expect(inspection.suggestions).toEqual([]);
@@ -130,7 +128,6 @@ describe('Server plugin inspection', () => {
             packageName: plugin.packageName,
             version: '1.0.0',
             rootDir: '/plugins/locales-only',
-            jobLocations: [],
           },
         },
       ],
@@ -143,7 +140,6 @@ describe('Server plugin inspection', () => {
       locales: true,
       migrations: false,
       seeds: false,
-      jobLocations: 0,
     });
     expect(inspection.locales).toHaveLength(1);
   });
@@ -164,7 +160,6 @@ describe('Server plugin inspection', () => {
               packageName: '@nocobase/legacy',
               version: '1.0.0',
               rootDir: '/unused',
-              jobLocations: [],
             },
           },
         ],
@@ -190,7 +185,6 @@ describe('Server plugin inspection', () => {
             packageName: plugin.packageName,
             version: '1.0.0',
             rootDir: '/plugins/missing',
-            jobLocations: [],
           },
         },
       ],

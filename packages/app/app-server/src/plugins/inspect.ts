@@ -3,9 +3,7 @@ import type { ResolvedAppServerPlugins } from './types.js';
 
 export interface AppServerInspectionIssue {
   readonly code:
-    | 'SERVER_MIGRATIONS_DIRECTORY_MISSING'
-    | 'SERVER_SEEDS_DIRECTORY_MISSING'
-    | 'SERVER_JOB_LOCATION_MISSING';
+    'SERVER_MIGRATIONS_DIRECTORY_MISSING' | 'SERVER_SEEDS_DIRECTORY_MISSING';
   readonly message: string;
   readonly packageName: string;
   readonly severity: 'error';
@@ -44,12 +42,6 @@ export interface AppServerDatabaseSnapshot {
   };
 }
 
-export interface AppServerJobsSnapshot {
-  readonly packageName: string;
-  readonly configuredLocations: readonly string[];
-  readonly resolvedLocations: readonly string[];
-}
-
 export interface AppServerPluginSnapshot {
   readonly order: number;
   readonly packageName: string;
@@ -60,7 +52,6 @@ export interface AppServerPluginSnapshot {
     readonly locales: boolean;
     readonly migrations: boolean;
     readonly seeds: boolean;
-    readonly jobLocations: number;
   };
 }
 
@@ -71,7 +62,6 @@ export interface AppServerInspectionSnapshot {
   readonly routes: readonly AppServerRouteSnapshot[];
   readonly locales: readonly AppServerLocalesSnapshot[];
   readonly database: readonly AppServerDatabaseSnapshot[];
-  readonly jobs: readonly AppServerJobsSnapshot[];
   readonly consistent: boolean;
   readonly issues: readonly AppServerInspectionIssue[];
   readonly suggestions: readonly string[];
@@ -79,7 +69,7 @@ export interface AppServerInspectionSnapshot {
 
 /**
  * Describes imported Server plugin declarations and resolved contribution locations without constructing Providers,
- * running lifecycle code, executing Route factories, loading locale resources, or loading Queue Job modules.
+ * running lifecycle code, executing Route factories, or loading locale resources.
  * Importing the declarations remains the caller's responsibility and may execute module initialization code.
  */
 export function inspectResolvedAppServerPlugins(
@@ -89,7 +79,6 @@ export function inspectResolvedAppServerPlugins(
   const routes: AppServerRouteSnapshot[] = [];
   const locales: AppServerLocalesSnapshot[] = [];
   const database: AppServerDatabaseSnapshot[] = [];
-  const jobs: AppServerJobsSnapshot[] = [];
   const issues: AppServerInspectionIssue[] = [];
 
   let providerOrder = 0;
@@ -168,23 +157,6 @@ export function inspectResolvedAppServerPlugins(
       });
     }
 
-    const configuredJobs = plugin.definition.queue?.jobs ?? [];
-    if (configuredJobs.length > 0) {
-      jobs.push({
-        packageName: plugin.metadata.packageName,
-        configuredLocations: configuredJobs,
-        resolvedLocations: plugin.metadata.jobLocations,
-      });
-      if (plugin.metadata.jobLocations.length < configuredJobs.length) {
-        issues.push({
-          code: 'SERVER_JOB_LOCATION_MISSING',
-          severity: 'error',
-          packageName: plugin.metadata.packageName,
-          message: `${plugin.metadata.packageName} declares ${configuredJobs.length} Job location(s), but only ${plugin.metadata.jobLocations.length} could be resolved.`,
-        });
-      }
-    }
-
     return {
       order: pluginOrder,
       packageName: plugin.metadata.packageName,
@@ -195,7 +167,6 @@ export function inspectResolvedAppServerPlugins(
         locales: plugin.definition.locales !== undefined,
         migrations: configuredMigrations !== undefined,
         seeds: configuredSeeds !== undefined,
-        jobLocations: configuredJobs.length,
       },
     };
   });
@@ -207,7 +178,6 @@ export function inspectResolvedAppServerPlugins(
     routes,
     locales,
     database,
-    jobs,
     consistent: issues.length === 0,
     issues,
     suggestions: suggestionsForIssues(issues),
@@ -225,10 +195,6 @@ function suggestionsForIssues(
     ) {
       suggestions.add(
         'Check the plugin database declaration, package files, and resolved installation contents.',
-      );
-    } else if (issue.code === 'SERVER_JOB_LOCATION_MISSING') {
-      suggestions.add(
-        'Check the plugin Queue Job declaration, package files, and resolved installation contents.',
       );
     }
   }

@@ -120,13 +120,20 @@ describe('connection-bound application database tasks', () => {
       appPackageName: 'test-app',
       plugins: [
         {
+          definition: {
+            packageName: 'test-plugin',
+            serviceProviders: [],
+            routes: [],
+          },
           metadata: {
             packageName: 'test-plugin',
+            version: 'test',
+            rootDir: path.join(root, 'plugin'),
             migrationsDirectory: pluginDirectory,
           },
         },
       ],
-    } as Parameters<typeof createAppDatabaseTaskContributions>[0]);
+    });
     const result = await runAppDatabaseTasks(config, {
       paths,
       contributions: withPlugin,
@@ -177,13 +184,20 @@ describe('connection-bound application database tasks', () => {
       appPackageName: 'test-app',
       plugins: [
         {
+          definition: {
+            packageName: 'test-plugin',
+            serviceProviders: [],
+            routes: [],
+          },
           metadata: {
             packageName: 'test-plugin',
+            version: 'test',
+            rootDir: path.join(root, 'plugin'),
             migrationsDirectory: pluginDirectory,
           },
         },
       ],
-    } as Parameters<typeof createAppDatabaseTaskContributions>[0]);
+    });
     // config.yml deep-merges into the database namespace, so a key shaped like
     // the former taskSources field can appear there. Planning must not read it.
     const configured = {
