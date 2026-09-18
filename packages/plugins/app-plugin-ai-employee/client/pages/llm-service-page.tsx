@@ -25,6 +25,15 @@ import {
 } from '../llm-service-service.js';
 import { useT } from '../locales/index.js';
 
+import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
+import { Combobox } from '@base-ui/react/combobox';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../registry/nocobase-ai/shared/ui/dialog.js';
 import {
   Card,
   CardContent,
@@ -36,15 +45,19 @@ export default function LLMServicePage(): ReactElement {
   const t = useT();
   const [services, setServices] = useState<LLMService[]>([]);
   const [providers, setProviders] = useState<LLMProvider[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState<LLMService>();
   useEffect(() => {
+    setLoading(true);
+    setError(undefined);
     void Promise.all([listLLMServices(api), listLLMProviders(api)])
       .then(([nextServices, nextProviders]) => {
         setServices(nextServices);
         setProviders(nextProviders);
       })
-      .catch((e: unknown) => setError(String(e)));
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, [api]);
   const toggle = async (service: LLMService, enabled: boolean) => {
     setServices((items) =>
@@ -96,6 +109,18 @@ export default function LLMServicePage(): ReactElement {
                 </tr>
               </thead>
               <tbody className='divide-y'>
+                {loading || (!error && !services.length) ? (
+                  <tr>
+                    <td
+                      className='px-3 py-10 text-center text-muted-foreground'
+                      colSpan={6}
+                    >
+                      {loading
+                        ? t('Loading…')
+                        : t('No LLM services configured.')}
+                    </td>
+                  </tr>
+                ) : null}
                 {services.map((service, index) => (
                   <tr key={service.name} className='hover:bg-muted/30'>
                     <td className='px-5 py-4 text-center text-muted-foreground'>
@@ -189,12 +214,12 @@ function ModelsCell({
   const config = normalizeEnabledModels(service.enabledModels);
   const models = config.models;
   return (
-    <div className='flex max-w-xl items-start gap-2'>
+    <div className='flex max-w-xl items-center gap-2'>
       <button
         type='button'
         aria-label={t('Edit models for {{name}}', { name: service.name })}
         title={t('Edit models')}
-        className='mt-0.5 shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+        className='shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground'
         onClick={onEdit}
       >
         <Pencil className='h-4 w-4' />
@@ -264,104 +289,100 @@ function ModelMultiSelect({
   removeLabel: string;
 }): ReactElement {
   const t = useT();
-  const searchInputRef = useRef<HTMLInputElement>(null);
   return (
-    <details
-      className='group relative'
-      data-disabled={disabled || undefined}
-      onToggle={(event) => {
-        if (event.currentTarget.open) searchInputRef.current?.focus();
-      }}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          event.currentTarget.open = false;
-        }
+    <Combobox.Root
+      multiple
+      disabled={disabled}
+      items={models}
+      value={value}
+      onValueChange={onChange}
+      onInputValueChange={onSearch}
+      isItemEqualToValue={(item, selected) => item.value === selected.value}
+      filter={(item, query) => {
+        const search = query.trim().toLocaleLowerCase();
+        return `${item.label} ${item.value}`
+          .toLocaleLowerCase()
+          .includes(search);
       }}
     >
-      <summary
-        className={`flex min-h-10 list-none items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm marker:content-none ${disabled ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
-      >
-        <span className='flex min-w-0 flex-1 flex-wrap gap-1'>
-          {value.length ? (
-            value.map((model) => (
-              <span
-                key={model.value}
-                className='inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5'
-              >
-                {model.label}
-                <button
-                  type='button'
-                  aria-label={`${removeLabel} ${model.label}`}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onChange(
-                      value.filter((item) => item.value !== model.value),
-                    );
-                  }}
-                  className='rounded-sm text-muted-foreground hover:text-foreground'
-                >
-                  <X className='h-3 w-3' />
-                </button>
-              </span>
-            ))
-          ) : (
-            <span className='text-muted-foreground'>{placeholder}</span>
-          )}
-        </span>
-        <ChevronDown className='h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180' />
-      </summary>
-      <div className='absolute z-20 mt-1 w-full min-w-56 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10'>
-        <div className='border-b p-2'>
-          <input
-            ref={searchInputRef}
-            type='search'
-            className='w-full rounded border bg-background px-3 py-2 text-sm'
-            aria-label={t('Search provider models')}
-            placeholder={t('Search models')}
-            onChange={(event) => onSearch(event.target.value)}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          />
-        </div>
-        <div className='max-h-[340px] overflow-y-auto py-1'>
-          {loading ? (
-            <p className='px-3 py-2 text-sm text-muted-foreground'>
-              {t('Loading…')}
-            </p>
-          ) : models.length ? (
-            models.map((model) => {
-              const checked = value.some((item) => item.value === model.value);
-              return (
-                <button
-                  type='button'
+      <Combobox.InputGroup className='flex min-h-10 w-full items-center gap-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring'>
+        <Combobox.Value>
+          {(selected: EnabledModel[]) => (
+            <Combobox.Chips className='flex min-w-0 flex-1 flex-wrap items-center gap-1'>
+              {selected.map((model) => (
+                <Combobox.Chip
                   key={model.value}
-                  onClick={() =>
-                    onChange(
-                      checked
-                        ? value.filter((item) => item.value !== model.value)
-                        : [...value, model],
-                    )
-                  }
-                  className={`flex w-full items-center gap-2 rounded-md py-1.5 pr-3 pl-2 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground ${checked ? 'bg-accent text-accent-foreground' : ''}`}
+                  aria-label={model.label}
+                  className='flex max-w-full items-center gap-1 rounded bg-muted px-2 py-0.5 outline-none focus-within:ring-2 focus-within:ring-ring'
                 >
-                  <span className='flex h-4 w-4 shrink-0 items-center justify-center'>
-                    {checked ? <Check className='h-4 w-4' /> : null}
-                  </span>
-                  <span className='block min-w-0 truncate' title={model.label}>
+                  <span className='truncate' title={model.value}>
                     {model.label}
                   </span>
-                </button>
-              );
-            })
-          ) : (
-            <p className='px-3 py-2 text-sm text-muted-foreground'>
-              {t('No models')}
-            </p>
+                  <Combobox.ChipRemove
+                    aria-label={`${removeLabel} ${model.label}`}
+                    className='shrink-0 rounded-sm text-muted-foreground hover:text-foreground'
+                  >
+                    <X className='size-3' />
+                  </Combobox.ChipRemove>
+                </Combobox.Chip>
+              ))}
+              <Combobox.Input
+                aria-label={t('Search provider models')}
+                placeholder={selected.length ? t('Search models') : placeholder}
+                className='min-w-16 flex-1 bg-transparent outline-none placeholder:text-muted-foreground'
+              />
+            </Combobox.Chips>
           )}
-        </div>
-      </div>
-    </details>
+        </Combobox.Value>
+        <Combobox.Trigger
+          aria-label={t('Select models')}
+          className='shrink-0 rounded-sm text-muted-foreground hover:text-foreground'
+        >
+          <ChevronDown className='size-4' />
+        </Combobox.Trigger>
+      </Combobox.InputGroup>
+      <Combobox.Portal>
+        <Combobox.Positioner
+          align='start'
+          sideOffset={4}
+          className='isolate z-50'
+        >
+          <Combobox.Popup className='max-h-[min(var(--available-height),340px)] w-(--anchor-width) max-w-(--available-width) overflow-y-auto overscroll-contain rounded-lg bg-popover py-1 text-popover-foreground shadow-md ring-1 ring-foreground/10'>
+            {loading && (
+              <p
+                role='status'
+                className='px-3 py-2 text-sm text-muted-foreground'
+              >
+                {t('Loading…')}
+              </p>
+            )}
+            {!loading && (
+              <Combobox.Empty className='px-3 py-2 text-sm text-muted-foreground'>
+                {t('No models')}
+              </Combobox.Empty>
+            )}
+            <Combobox.List aria-label={t('Select models')}>
+              {(model: EnabledModel) => (
+                <Combobox.Item
+                  key={model.value}
+                  value={model}
+                  className='flex w-full cursor-default items-center gap-2 py-1.5 pr-3 pl-2 text-left text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground'
+                >
+                  <span className='flex size-4 shrink-0 items-center justify-center'>
+                    <Combobox.ItemIndicator>
+                      <Check className='size-4' />
+                    </Combobox.ItemIndicator>
+                  </span>
+                  <span className='block min-w-0 truncate' title={model.value}>
+                    {model.label}
+                  </span>
+                </Combobox.Item>
+              )}
+            </Combobox.List>
+          </Combobox.Popup>
+        </Combobox.Positioner>
+      </Combobox.Portal>
+    </Combobox.Root>
   );
 }
 
@@ -422,15 +443,19 @@ function ModelEditor({
   };
 
   return (
-    <div
-      role='dialog'
-      aria-label={t('Edit models')}
-      className='fixed inset-0 z-50 grid place-items-center bg-black/30 p-4'
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      <div className='w-full max-w-xl space-y-5 rounded-lg bg-background p-6 shadow-lg'>
-        <div>
-          <h3 className='text-lg font-semibold'>{t('Edit models')}</h3>
-        </div>
+      <DialogContent
+        aria-modal='true'
+        className='max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl'
+      >
+        <DialogHeader>
+          <DialogTitle>{t('Edit models')}</DialogTitle>
+        </DialogHeader>
         <div className='flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800'>
           <CircleAlert className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
           <span>
@@ -560,23 +585,13 @@ function ModelEditor({
             {error}
           </div>
         )}
-        <div className='flex justify-end gap-2'>
-          <button
-            type='button'
-            className='rounded border px-3 py-1.5 text-sm'
-            onClick={onClose}
-          >
+        <DialogFooter>
+          <Button variant='outline' onClick={onClose}>
             {t('Cancel')}
-          </button>
-          <button
-            type='button'
-            className='rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground'
-            onClick={() => void save()}
-          >
-            {t('Submit')}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button onClick={() => void save()}>{t('Submit')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
