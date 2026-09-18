@@ -29,7 +29,7 @@ export function ThemeSettings(): ReactElement {
     <Popover>
       <PopoverTrigger
         openOnHover
-        delay={200}
+        delay={0}
         closeDelay={200}
         render={
           <Button

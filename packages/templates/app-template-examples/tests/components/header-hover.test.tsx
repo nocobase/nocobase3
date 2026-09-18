@@ -35,13 +35,13 @@ describe('header hover panels', () => {
     ['Appearance', ThemeSettings, 'dialog'],
     ['Open account menu', UserMenu, 'menu'],
   ] as const)(
-    'opens %s on hover and keeps its panel interactive',
+    'opens %s immediately on hover and keeps its panel interactive',
     async (label, Component, role) => {
       const user = userEvent.setup();
       render(<Component />);
       const trigger = screen.getByRole('button', { name: label });
       await user.hover(trigger);
-      const panel = await screen.findByRole(role);
+      const panel = screen.getByRole(role);
       expect(trigger).not.toHaveAttribute('title');
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
       await user.hover(panel);
