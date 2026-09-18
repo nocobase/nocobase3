@@ -1,6 +1,14 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import type { Translator } from '@nocobase/i18n';
 import { useTranslation } from '@nocobase/i18n/client';
+import { XIcon } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  dialogCloseButtonClassName,
+} from './ui/dialog.js';
 import { WORKFLOW_NS } from '../namespace.js';
 import { workflowApi } from './data.js';
 import type { WorkflowNodeRunPayload, WorkflowNodeRunRecord } from './types.js';
@@ -124,7 +132,7 @@ function useAnimatedDialogClose(onClose: () => void): {
 }
 export interface WorkflowRunResultDialogProps {
   runId: string;
-  nodeRun: WorkflowNodeRunRecord;
+  nodeRun: WorkflowNodeRunRecord | null;
   nodeTitle?: string;
   nodeDescription?: string | null;
   onClose: () => void;
@@ -138,7 +146,7 @@ export function WorkflowRunResultDialog({
 }: WorkflowRunResultDialogProps): ReactElement {
   return (
     <WorkflowRunResultDialogContent
-      key={`${runId}:${nodeRun.id}`}
+      key={`${runId}:${nodeRun?.id ?? nodeTitle}`}
       runId={runId}
       nodeRun={nodeRun}
       nodeTitle={nodeTitle}
@@ -155,20 +163,20 @@ function WorkflowRunResultDialogContent({
   onClose,
 }: WorkflowRunResultDialogProps): ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
-  const [attemptId, setAttemptId] = useState(nodeRun.id);
-  const attemptsKey = `${runId}:${nodeRun.nodeKey}`;
+  const [attemptId, setAttemptId] = useState(nodeRun?.id ?? '');
+  const attemptsKey = `${runId}:${nodeRun?.nodeKey}`;
   const [attemptsResult, setAttemptsResult] = useState<{
     key: string;
     value: WorkflowNodeRunRecord[];
-  }>(() => ({ key: attemptsKey, value: [nodeRun] }));
+  }>(() => ({ key: attemptsKey, value: nodeRun ? [nodeRun] : [] }));
   const payloadKey = `${runId}:${attemptId}`;
   const [payloadResult, setPayloadResult] = useState<{
     key: string;
     value: WorkflowNodeRunPayload | null;
     error: string | null;
   }>(() => ({ key: payloadKey, value: null, error: null }));
-  const animatedClose = useAnimatedDialogClose(onClose);
   useEffect(() => {
+    if (!nodeRun) return;
     let active = true;
     void workflowApi.nodeRuns(runId, nodeRun.nodeKey).then(
       (next) => {
@@ -181,8 +189,9 @@ function WorkflowRunResultDialogContent({
     return () => {
       active = false;
     };
-  }, [attemptsKey, nodeRun.nodeKey, runId]);
+  }, [attemptsKey, nodeRun, runId]);
   useEffect(() => {
+    if (!attemptId) return;
     let active = true;
     void workflowApi.payload(runId, attemptId).then(
       (next) => {
@@ -203,50 +212,38 @@ function WorkflowRunResultDialogContent({
     };
   }, [attemptId, payloadKey, runId]);
   const attempts =
-    attemptsResult.key === attemptsKey ? attemptsResult.value : [nodeRun];
+    attemptsResult.key === attemptsKey
+      ? attemptsResult.value
+      : nodeRun
+        ? [nodeRun]
+        : [];
   const payload = payloadResult.key === payloadKey ? payloadResult.value : null;
   const error = payloadResult.key === payloadKey ? payloadResult.error : null;
   const current =
     attempts.find((attempt) => attempt.id === attemptId) ?? nodeRun;
   return (
-    <div
-      className={
-        animatedClose.closing
-          ? 'workflow-result-backdrop closing'
-          : 'workflow-result-backdrop'
-      }
-      role='presentation'
-      onMouseDown={animatedClose.close}
-    >
-      <section
-        className='workflow-result-dialog workflow-node-result-dialog'
-        role='dialog'
-        aria-modal='true'
-        aria-labelledby='workflow-result-title'
-        onMouseDown={(event) => event.stopPropagation()}
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        size='lg'
+        className='workflow-node-result-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto'
       >
-        <header>
-          <div>
-            <h2 id='workflow-result-title'>{nodeTitle ?? current.nodeKey}</h2>
-            <div className='workflow-node-result-meta'>
-              <Badge
-                className={`workflow-run-status-tag ${runStatusTone(current.status)}`}
-              >
-                {runStatusLabel(current.status, t)}
-              </Badge>
+        <DialogHeader>
+          <DialogTitle>{nodeTitle ?? current?.nodeKey}</DialogTitle>
+          <div className='workflow-node-result-meta'>
+            <Badge
+              className={`workflow-run-status-tag ${current ? runStatusTone(current.status) : 'not-executed'}`}
+            >
+              {current
+                ? runStatusLabel(current.status, t)
+                : t('status.notExecuted')}
+            </Badge>
+            {current ? (
               <span>
                 {t('common.duration', { duration: formatRunDuration(current) })}
               </span>
-            </div>
+            ) : null}
           </div>
-          <button
-            type='button'
-            aria-label={t('inspector.closeResult')}
-            onClick={animatedClose.close}
-          >
-            ×
-          </button>
-        </header>
+        </DialogHeader>
         {attempts.length > 1 ? (
           <label>
             {t('inspector.attempt')}{' '}
@@ -263,13 +260,15 @@ function WorkflowRunResultDialogContent({
             </select>
           </label>
         ) : null}
-        {nodeDescription?.trim() ? (
-          <details className='workflow-node-description-disclosure'>
-            <summary>{t('common.description')}</summary>
-            <p>{nodeDescription}</p>
-          </details>
-        ) : null}
-        {error ? (
+        <details className='workflow-node-description-disclosure'>
+          <summary>{t('common.description')}</summary>
+          <p>{nodeDescription?.trim() || t('workflows.noNodeDescription')}</p>
+        </details>
+        {!current ? (
+          <p role='status' className='text-sm text-muted-foreground'>
+            {t('inspector.notExecuted')}
+          </p>
+        ) : error ? (
           <p role='alert'>{error}</p>
         ) : payload ? (
           <div className='workflow-result-content'>
@@ -297,8 +296,8 @@ function WorkflowRunResultDialogContent({
         ) : (
           <p>{t('inspector.loadingResult')}</p>
         )}
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -335,11 +334,12 @@ export function WorkflowInputDialog({
             <p>{t('inspector.inputDescription')}</p>
           </div>
           <button
+            className={dialogCloseButtonClassName}
             type='button'
             aria-label={t('inspector.closeInput')}
             onClick={animatedClose.close}
           >
-            ×
+            <XIcon className='size-4' />
           </button>
         </header>
         <div className='workflow-result-content'>

@@ -1,8 +1,6 @@
-import {
-  apiClientToken,
-  useService,
-  type ApiClient,
-} from '@nocobase/app-client';
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
+import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { ArrowLeft, CalendarClock, CircleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
@@ -217,14 +215,49 @@ export default function ScheduleDetailPage(): ReactElement {
     loadedOccurrencesId === scheduleId ? occurrencesError : undefined;
 
   return (
-    <main className='mx-auto w-full max-w-7xl space-y-6 p-5 md:p-8'>
-      <Link
-        className='inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground'
-        to='/settings/automation/schedules'
-      >
-        <ArrowLeft className='size-4' />
-        {t('page.details.back')}
-      </Link>
+    <PageContainer
+      header={
+        <PageHeader
+          eyebrow={t('nav.automation')}
+          title={item?.title ?? t('page.title')}
+          description={item?.description}
+          back={
+            <Link
+              className='inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground'
+              to='/settings/schedules'
+            >
+              <ArrowLeft className='size-4' />
+              {t('page.details.back')}
+            </Link>
+          }
+          actions={
+            item && !scheduleLoading ? (
+              <ScheduleSwitch
+                checked={item.enabled}
+                disabled={updating || item.lifecycleState === 'inactive'}
+                label={
+                  item.enabled
+                    ? t('page.actions.disable')
+                    : t('page.actions.enable')
+                }
+                onChange={(enabled) => {
+                  setItem({ ...item, enabled });
+                  setUpdating(true);
+                  void api
+                    .request<{ data: ScheduleItem }>({
+                      method: 'POST',
+                      path: `schedules/${encodeURIComponent(item.id)}/${enabled ? 'enable' : 'disable'}`,
+                    })
+                    .then((response) => setItem(response.data))
+                    .catch(() => setItem(item))
+                    .finally(() => setUpdating(false));
+                }}
+              />
+            ) : null
+          }
+        />
+      }
+    >
       {currentError ? (
         <div className='flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive'>
           <CircleAlert className='size-5 shrink-0' />
@@ -240,83 +273,36 @@ export default function ScheduleDetailPage(): ReactElement {
         </Card>
       ) : (
         <Details
-          api={api}
           item={item}
           occurrences={occurrences}
           occurrencesError={currentOccurrencesError}
           occurrencesLoading={triggersLoading}
           language={i18n.resolvedLanguage ?? i18n.language}
           t={t}
-          onUpdated={setItem}
-          updating={updating}
-          setUpdating={setUpdating}
         />
       )}
-    </main>
+    </PageContainer>
   );
 }
 
 function Details({
-  api,
   item,
   occurrences,
   occurrencesError,
   occurrencesLoading,
   language,
   t,
-  onUpdated,
-  updating,
-  setUpdating,
 }: {
-  readonly api: ApiClient;
   readonly item: ScheduleItem;
   readonly occurrences: readonly OccurrenceItem[];
   readonly occurrencesError?: string;
   readonly occurrencesLoading: boolean;
   readonly language: string;
   readonly t: Translate;
-  readonly onUpdated: (item: ScheduleItem) => void;
-  readonly updating: boolean;
-  readonly setUpdating: (value: boolean) => void;
 }): ReactElement {
   const status = viewStatus(item);
   return (
     <>
-      <header className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
-        <div>
-          <h1 className='text-2xl font-semibold tracking-tight'>
-            {item.title}
-          </h1>
-          {item.description ? (
-            <p className='mt-1 text-sm text-muted-foreground'>
-              {item.description}
-            </p>
-          ) : null}
-        </div>
-        <div className='flex items-center gap-2'>
-          <ScheduleSwitch
-            checked={item.enabled}
-            disabled={updating || item.lifecycleState === 'inactive'}
-            label={
-              item.enabled
-                ? t('page.actions.disable')
-                : t('page.actions.enable')
-            }
-            onChange={(enabled) => {
-              onUpdated({ ...item, enabled });
-              setUpdating(true);
-              void api
-                .request<{ data: ScheduleItem }>({
-                  method: 'POST',
-                  path: `schedules/${encodeURIComponent(item.id)}/${enabled ? 'enable' : 'disable'}`,
-                })
-                .then((response) => onUpdated(response.data))
-                .catch(() => onUpdated(item))
-                .finally(() => setUpdating(false));
-            }}
-          />
-        </div>
-      </header>
       {status === 'targetIssue' ? (
         <div className='flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm'>
           <CircleAlert className='mt-0.5 size-5 shrink-0 text-amber-600' />

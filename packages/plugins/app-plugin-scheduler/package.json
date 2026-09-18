@@ -86,7 +86,9 @@
     "cronstrue": "^3.24.0",
     "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "react-router": "^7.0.0"
+    "react-router": "^7.0.0",
+    "@base-ui/react": "catalog:",
+    "tailwind-merge": "catalog:"
   },
   "devDependencies": {
     "@nocobase/app-client": "workspace:*",
