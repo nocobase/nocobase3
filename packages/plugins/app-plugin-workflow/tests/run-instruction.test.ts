@@ -494,7 +494,7 @@ describe('run instruction', () => {
     const execution = await findRun(database, 'queued-branch');
     expect(execution.status).toBe(EXECUTION_STATUS.STARTED);
     expect(await listNodeRuns(database, execution.id)).toEqual([
-      { nodeKey: 'condition', status: NODE_RUN_STATUS.PENDING, result: true },
+      { nodeKey: 'condition', status: NODE_RUN_STATUS.RESOLVED, result: true },
       { nodeKey: 'run', status: NODE_RUN_STATUS.RESOLVED, result: 42 },
     ]);
     expect(tasks).toHaveLength(1);
