@@ -319,8 +319,10 @@ const enUS = {
     uploadTitle: 'Upload release',
     uploadDescription:
       'Upload a built application artifact. Version and config.example.yml or config.example.yaml are detected automatically.',
-    chooseArtifact: 'Choose a .tar.gz release artifact',
-    dropArtifact: 'Drop to upload',
+    chooseArtifact: 'Click or drag a .tar.gz / .tgz artifact here',
+    dropArtifact: 'Drop to select this artifact',
+    selectionHint: 'Select one file, then click Upload release to submit.',
+    invalidSelection: 'Select exactly one .tar.gz or .tgz file.',
     uploading: 'Uploading…',
     cancel: 'Cancel',
   },

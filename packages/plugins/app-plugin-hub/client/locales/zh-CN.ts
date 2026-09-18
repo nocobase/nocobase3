@@ -293,8 +293,10 @@ const zhCN: HubResource = {
     uploadTitle: '上传版本',
     uploadDescription:
       '上传构建好的应用制品，版本号和 config.example.yml 或 config.example.yaml 会自动识别。',
-    chooseArtifact: '选择 .tar.gz 版本制品',
-    dropArtifact: '松开即可上传',
+    chooseArtifact: '点击选择或拖拽 .tar.gz / .tgz 版本制品到这里',
+    dropArtifact: '松开以选择此制品',
+    selectionHint: '一次选择一个文件，确认后点击“上传版本”提交。',
+    invalidSelection: '请选择一个 .tar.gz 或 .tgz 文件。',
     uploading: '正在上传…',
     cancel: '取消',
   },

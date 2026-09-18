@@ -645,9 +645,9 @@ export function DeploymentDialog({
                         </div>
                       </div>
                     </div>
-                    <div>
+                    <div className='[--config-merge-gutter:24px]'>
                       <div
-                        className={`grid ${visibleConfig === 'both' ? 'grid-cols-2 divide-x' : 'grid-cols-1'} border-b bg-muted/20`}
+                        className={`grid ${visibleConfig === 'both' ? 'grid-cols-[minmax(0,1fr)_var(--config-merge-gutter)_minmax(0,1fr)]' : 'grid-cols-1'} border-b bg-muted/20`}
                       >
                         <div
                           hidden={visibleConfig === 'new'}
@@ -669,6 +669,9 @@ export function DeploymentDialog({
                                 })}
                           </p>
                         </div>
+                        {visibleConfig === 'both' && (
+                          <div aria-hidden='true' className='border-x' />
+                        )}
                         <div
                           hidden={visibleConfig === 'current'}
                           className='px-4 py-2.5'

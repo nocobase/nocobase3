@@ -109,7 +109,7 @@ export function ConfigMergeEditor({
 
   return (
     <div
-      className={`overflow-hidden rounded-b-xl [&_.cm-mergeView]:h-[min(360px,42svh)] [&_.cm-mergeView]:overflow-auto [&_.cm-mergeViewEditor]:min-w-0 ${visiblePane === 'both' ? '[&_.cm-mergeViewEditor]:basis-1/2' : '[&_.cm-mergeViewEditor]:basis-full [&_.cm-merge-revert]:hidden'} ${visiblePane === 'new' ? '[&_.cm-mergeViewEditor:first-child]:hidden' : visiblePane === 'current' ? '[&_.cm-mergeViewEditor:last-child]:hidden' : ''}`}
+      className={`overflow-hidden rounded-b-xl [&_.cm-mergeView]:h-[min(360px,42svh)] [&_.cm-mergeView]:overflow-auto [&_.cm-mergeViewEditors]:grid [&_.cm-mergeViewEditor]:min-w-0 [&_.cm-merge-revert]:box-border [&_.cm-merge-revert]:w-full [&_.cm-merge-revert]:border-x [&_.cm-merge-revert]:border-border [&_.cm-merge-revert]:bg-muted/20 ${visiblePane === 'both' ? (readOnly ? '[&_.cm-mergeViewEditors]:grid-cols-2' : '[&_.cm-mergeViewEditors]:grid-cols-[minmax(0,1fr)_var(--config-merge-gutter,24px)_minmax(0,1fr)]') : '[&_.cm-mergeViewEditors]:grid-cols-1 [&_.cm-merge-revert]:hidden'} ${visiblePane === 'new' ? '[&_.cm-mergeViewEditor:first-child]:hidden' : visiblePane === 'current' ? '[&_.cm-mergeViewEditor:last-child]:hidden' : ''}`}
       ref={parentRef}
     />
   );

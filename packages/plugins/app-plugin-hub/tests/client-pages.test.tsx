@@ -762,15 +762,21 @@ describe('Hub client pages', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Upload release' }),
     );
-    const zone = await screen.findByText('Choose a .tar.gz release artifact');
+    const zone = await screen.findByLabelText(
+      'Click or drag a .tar.gz / .tgz artifact here',
+    );
 
     // A drag carrying no file has nothing to upload, so it neither highlights the zone nor clears the selection.
     fireEvent.dragOver(zone, {
       dataTransfer: { files: [], types: ['text/plain'] },
     });
-    expect(screen.queryByText('Drop to upload')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Drop to select this artifact'),
+    ).not.toBeInTheDocument();
     fireEvent.dragOver(zone, { dataTransfer: { files: [], types: ['Files'] } });
-    expect(screen.getByText('Drop to upload')).toBeInTheDocument();
+    expect(
+      screen.getByText('Drop to select this artifact'),
+    ).toBeInTheDocument();
 
     const file = new File(['artifact'], 'dist.tar.gz', {
       type: 'application/gzip',
@@ -778,7 +784,9 @@ describe('Hub client pages', () => {
     fireEvent.drop(zone, { dataTransfer: { files: [file], types: ['Files'] } });
 
     expect(await screen.findByText('dist.tar.gz')).toBeInTheDocument();
-    expect(screen.queryByText('Drop to upload')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Drop to select this artifact'),
+    ).not.toBeInTheDocument();
     expect(
       within(screen.getByRole('dialog')).getByRole('button', {
         name: 'Upload release',
@@ -789,6 +797,25 @@ describe('Hub client pages', () => {
       dataTransfer: { files: [file], types: ['text/plain'] },
     });
     expect(screen.getByText('dist.tar.gz')).toBeInTheDocument();
+    fireEvent.drop(zone, {
+      dataTransfer: {
+        files: [new File(['text'], 'notes.txt')],
+        types: ['Files'],
+      },
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Select exactly one .tar.gz or .tgz file.',
+    );
+    expect(screen.getByText('dist.tar.gz')).toBeInTheDocument();
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [file, file], types: ['Files'] },
+    });
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    fireEvent.change(zone, {
+      target: { files: [new File(['artifact'], 'updated.tgz')] },
+    });
+    expect(screen.getByText('updated.tgz')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
   it('defaults the deploy dialog to the newest release rather than the running one', async () => {
     // Two uploads of the same version: "release-2" is newer, "release-1" is what the App is running (see detail()).
