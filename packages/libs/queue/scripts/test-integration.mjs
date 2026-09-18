@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const [backend, ...filters] = process.argv.slice(2);
-const targets = ['inMemory', 'redis', 'postgres', 'postgres13', 'cluster'];
+const targets = ['inMemory', 'redis', 'cluster'];
 if (
   !targets.includes(backend) ||
   filters.some((filter) => filter.startsWith('-'))
@@ -120,7 +120,7 @@ try {
       for (const internal of [7000, 7001, 7002])
         ports.push(await port(internal));
       env.QUEUE_TEST_CLUSTER_PORTS = ports.join(',');
-    } else env.QUEUE_TEST_PG_PORT = await port(5432);
+    }
   }
   if (interrupted) throw new Error('Integration run interrupted');
   const report = path.join(temporary, 'results.json');

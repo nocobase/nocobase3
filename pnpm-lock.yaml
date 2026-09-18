@@ -1908,12 +1908,9 @@ importers:
 
   packages/libs/queue:
     dependencies:
-      '@types/pg':
-        specifier: 8.23.1
-        version: 8.23.1
       bullmq:
         specifier: 'catalog:'
-        version: 6.3.6(ioredis@5.11.1)(pg@8.16.3)(redis@5.12.1(@opentelemetry/api@1.9.0))
+        version: 6.3.6(ioredis@5.11.1)(pg@8.23.0)(redis@5.12.1(@opentelemetry/api@1.9.0))
       ioredis:
         specifier: 'catalog:'
         version: 5.11.1
@@ -1927,9 +1924,6 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
-      pg:
-        specifier: 8.16.3
-        version: 8.16.3
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -8039,9 +8033,6 @@ packages:
   '@types/nodemailer@8.0.1':
     resolution: {integrity: sha512-PxpaInm8V1JQDd4j0ds5HfvWQk8JupS1C0Picb96QJsrrRDjBH+DlK7L4ZdNSqNULhiZRQHc40nLVShaGxXAMw==}
 
-  '@types/pg@8.23.1':
-    resolution: {integrity: sha512-fKVHpikPdg4GKks3JuLEhvwSyvwzF23hnabPy6DD8ljVbC7+6J5dQzdv4arV6jqq57djnMgs1HKBxX4P8aBI3A==}
-
   '@types/pluralize@0.0.33':
     resolution: {integrity: sha512-JOqsl+ZoCpP4e8TDke9W79FDcSgPAR0l6pixx2JHkhnRjvShyYiAYw2LVsnA7K08Y6DeOnaU6ujmENO4os/cYg==}
 
@@ -12539,15 +12530,6 @@ packages:
   pg-types@2.2.0:
     resolution: {integrity: sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==}
     engines: {node: '>=4'}
-
-  pg@8.16.3:
-    resolution: {integrity: sha512-enxc1h0jA/aq5oSDMvqyW3q89ra6XIIDZgCX9vkMrnz5DFTw/Ny3Li2lFQ+pt3L6MCgm/5o2o8HW9hiJji+xvw==}
-    engines: {node: '>= 16.0.0'}
-    peerDependencies:
-      pg-native: '>=3.0.1'
-    peerDependenciesMeta:
-      pg-native:
-        optional: true
 
   pg@8.23.0:
     resolution: {integrity: sha512-Ip2EQCngowJLGOfCwkFhPXU7/ljlhn6Rxlmy4XYfL2Y+vyRM59+8uR2xqRWKdYmbXmxCFOAmKxBuSUCdF34qLg==}
@@ -18552,12 +18534,6 @@ snapshots:
     dependencies:
       '@types/node': 22.20.1
 
-  '@types/pg@8.23.1':
-    dependencies:
-      '@types/node': 22.20.1
-      pg-protocol: 1.16.0
-      pg-types: 2.2.0
-
   '@types/pluralize@0.0.33': {}
 
   '@types/q@1.5.8': {}
@@ -19457,7 +19433,7 @@ snapshots:
 
   builtin-status-codes@3.0.0: {}
 
-  bullmq@6.3.6(ioredis@5.11.1)(pg@8.16.3)(redis@5.12.1(@opentelemetry/api@1.9.0)):
+  bullmq@6.3.6(ioredis@5.11.1)(pg@8.23.0)(redis@5.12.1(@opentelemetry/api@1.9.0)):
     dependencies:
       cron-parser: 5.10.1
       msgpackr: 2.1.0
@@ -19466,7 +19442,7 @@ snapshots:
       tslib: 2.8.1
     optionalDependencies:
       ioredis: 5.11.1
-      pg: 8.16.3
+      pg: 8.23.0
       redis: 5.12.1(@opentelemetry/api@1.9.0)
 
   bundle-name@4.1.0:
@@ -24037,10 +24013,6 @@ snapshots:
 
   pg-int8@1.0.1: {}
 
-  pg-pool@3.14.0(pg@8.16.3):
-    dependencies:
-      pg: 8.16.3
-
   pg-pool@3.14.0(pg@8.23.0):
     dependencies:
       pg: 8.23.0
@@ -24059,16 +24031,6 @@ snapshots:
       postgres-bytea: 1.0.1
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
-
-  pg@8.16.3:
-    dependencies:
-      pg-connection-string: 2.14.0
-      pg-pool: 3.14.0(pg@8.16.3)
-      pg-protocol: 1.16.0
-      pg-types: 2.2.0
-      pgpass: 1.0.5
-    optionalDependencies:
-      pg-cloudflare: 1.4.0
 
   pg@8.23.0:
     dependencies:

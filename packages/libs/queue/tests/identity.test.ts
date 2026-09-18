@@ -57,7 +57,6 @@ describe('queue physical identity', () => {
     const identity = createQueueIdentity(namespace, queue);
     expect(identity.digest).toBe(digest);
     expect(identity.redisPrefix).toBe(`nbq:{${digest}}`);
-    expect(identity.postgresQueueName).toBe(`q-${digest}`);
     expect(createQueueIdentity(namespace, queue)).toEqual(identity);
   });
 

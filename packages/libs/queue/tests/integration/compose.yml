@@ -18,28 +18,6 @@ services:
       interval: 1s
       timeout: 2s
       retries: 30
-  postgres:
-    image: registry.cn-shanghai.aliyuncs.com/nocobase/postgres:16@sha256:dc0dc485abfdd0901b10af592ccc3c25ed821936a962969b99d3b488e24edd39
-    profiles: [postgres]
-    environment:
-      POSTGRES_PASSWORD: queue-test-only
-    ports: ['127.0.0.1::5432']
-    healthcheck:
-      test: ['CMD', 'pg_isready', '-U', 'postgres']
-      interval: 1s
-      timeout: 2s
-      retries: 30
-  postgres13:
-    image: postgres:13@sha256:4689940c683801b4ab839ab3b0a0a3555a5fe425371422310944e89eca7d8068
-    profiles: [postgres13]
-    environment:
-      POSTGRES_PASSWORD: queue-test-only
-    ports: ['127.0.0.1::5432']
-    healthcheck:
-      test: ['CMD', 'pg_isready', '-U', 'postgres']
-      interval: 1s
-      timeout: 2s
-      retries: 30
   cluster:
     image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
     profiles: [cluster]

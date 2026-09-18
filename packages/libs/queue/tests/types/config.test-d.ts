@@ -1,6 +1,7 @@
 import { expectTypeOf, test } from 'vitest';
 import type {
   QueueOptions,
+  QueueBackendConnections,
   QueueOverrides,
   QueueConnectionOptions,
   QueueRuntimeOptions,
@@ -12,16 +13,13 @@ test('built-in connection generics preserve valid inputs and reject invalid ones
     queueBackend: 'redis';
     connection: { host: string; port: number };
   }>().toExtend<QueueOptions<'redis'>>();
-  expectTypeOf<{ queueBackend: 'postgres'; connection: string }>().toExtend<
-    QueueOptions<'postgres'>
+  expectTypeOf<keyof QueueBackendConnections>().toEqualTypeOf<
+    'inMemory' | 'redis'
   >();
   expectTypeOf<{ connection: Record<string, never> }>().toExtend<
     QueueOverrides<'inMemory'>
   >();
   expectTypeOf<{ connection: number }>().not.toExtend<QueueOptions<'redis'>>();
-  expectTypeOf<{ connection: number }>().not.toExtend<
-    QueueOptions<'postgres'>
-  >();
   expectTypeOf<{ connection: { host: string } }>().not.toExtend<
     QueueOptions<'inMemory'>
   >();

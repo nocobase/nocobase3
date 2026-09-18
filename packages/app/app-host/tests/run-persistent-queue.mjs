@@ -5,14 +5,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const [backend, ...extra] = process.argv.slice(2);
-if (!['redis', 'postgres'].includes(backend) || extra.length) {
+if (backend !== 'redis' || extra.length) {
   console.error(
-    'Usage: node tests/run-persistent-queue.mjs <redis|postgres> (external QUEUE_TEST_REDIS_PORT or QUEUE_TEST_PG_PORT required; no Docker)',
+    'Usage: node tests/run-persistent-queue.mjs redis (external QUEUE_TEST_REDIS_PORT required; no Docker)',
   );
   process.exit(1);
 }
-const portVariable =
-  backend === 'redis' ? 'QUEUE_TEST_REDIS_PORT' : 'QUEUE_TEST_PG_PORT';
+const portVariable = 'QUEUE_TEST_REDIS_PORT';
 const port = Number(process.env[portVariable]);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   console.error(

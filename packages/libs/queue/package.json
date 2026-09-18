@@ -42,7 +42,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@types/pg": "8.23.1",
     "bullmq": "catalog:",
     "ioredis": "catalog:"
   },
@@ -50,18 +49,9 @@
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
-    "pg": "8.16.3",
     "prettier": "catalog:",
     "redis": "5.12.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "peerDependencies": {
-    "pg": ">=8.16.3 <9"
-  },
-  "peerDependenciesMeta": {
-    "pg": {
-      "optional": true
-    }
   }
 }

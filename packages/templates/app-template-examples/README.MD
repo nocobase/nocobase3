@@ -459,7 +459,7 @@ Configuration is resolved from the file, environment variables, and defaults in 
 
 ### Background queues
 
-`QueueServiceProvider` owns an independent QueueService for this application. It binds the service without connecting, starts it with the App, and shuts it down after consumer providers have awaited their handler unregistration. The default backend is private, asynchronous `inMemory`: no Redis connection is implicit, and jobs are lost on restart. Configure `queue` explicitly for Redis or PostgreSQL persistence; the default namespace is the App name, and unrelated applications sharing a backend need distinct namespaces.
+`QueueServiceProvider` owns an independent QueueService for this application. It binds the service without connecting, starts it with the App, and shuts it down after consumer providers have awaited their handler unregistration. The default backend is private, asynchronous `inMemory`: no Redis connection is implicit, and jobs are lost on restart. Configure `queue` explicitly for Redis persistence; the default namespace is the App name, and unrelated applications sharing a backend need distinct namespaces.
 
 `server/app.ts` supplies `{ nodeEnv: runtime.env.NODE_ENV }` as the `QueueServiceProvider` constructor option, separately from queue configuration. Both `develop` and `development` suppress the memory warning; other values, including an omitted environment, warn only when a memory queue is first successfully initialized. The provider does not read the process environment.
 

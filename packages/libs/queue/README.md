@@ -1,6 +1,6 @@
 # @nocobase/queue
 
-Application-scoped asynchronous queues built on BullMQ. A `QueueService` owns its queue resources and handlers; it is not a process-global dispatcher. Available backends are `inMemory`, `redis`, and `postgres`.
+Application-scoped asynchronous queues built on BullMQ. A `QueueService` owns its queue resources and handlers; it is not a process-global dispatcher. Available built-in backends are `inMemory` and `redis` (including Redis Cluster).
 
 ## Standalone service
 
@@ -46,7 +46,6 @@ Legacy plugin `queue.jobs` declarations are rejected. Register explicit provider
 
 - **inMemory** is the default. Each service owns independent state, even when two services use the same namespace. It needs no connection and loses all jobs when the service is destroyed or the process exits.
 - **redis** uses Redis persistence and competing workers. Configure a connection explicitly, for example `{ queueBackend: 'redis', connection: { host: '127.0.0.1', port: 6379 } }`. Borrowed ioredis clients/clusters, native node-redis clients, and official BullMQ Redis adapters use owned duplicates; the original remains caller-owned. Ordinary driver settings are preserved, while producer request bounds and Worker retry policy are service-owned. Redis Cluster keys use a queue-specific hash tag. Do not configure ioredis `keyPrefix`.
-- **postgres** uses the optional `pg` peer dependency. Install `pg` when selecting this backend. A connection string or supported connection configuration creates owned resources. A standard caller-owned `pg.Pool` is borrowed through scoped leases and is never ended by the service. PostgreSQL 13 and newer are integration targets.
 
 Namespace and queue name jointly determine storage identity. Services sharing a persistent backend and the same identity compete for jobs; they do not broadcast each job to every service. Inside one service, every handler registered for a queue receives a snapshot of that dispatch and executes concurrently. Registering the same function twice creates two registrations. Use the channel argument to select the business operation.
 
@@ -58,7 +57,7 @@ Defaults include concurrency `1`, attempts `0`, publication delay `0`, and prior
 
 Scheduling timestamps must not exceed `2199023255551` (`2**41 - 1`); publication validation checks delay and the maximum configured retry horizon. Time spent inside a handler can still make a later retry exceed that boundary. The memory backend rejects that transition before mutating the active job or its lock and reports a Worker error; this is not a terminal failed-job acknowledgement.
 
-Retention cleanup is lazy and partitioned by terminal state: completing a job does not prune failed jobs, and failing a job does not prune completed jobs. `KeepJobs.age` is measured in seconds. `KeepJobs.limit` caps age-based cleanup work on Redis and memory; PostgreSQL does not apply this cap. Count limits and age limits are not a background expiration service.
+Retention cleanup is lazy and partitioned by terminal state: completing a job does not prune failed jobs, and failing a job does not prune completed jobs. `KeepJobs.age` is measured in seconds. `KeepJobs.limit` caps age-based cleanup work. Count limits and age limits are not a background expiration service.
 
 `queue.manager(name).configure()` changes supported local worker/publication settings and shared rate metadata. It cannot replace a backend, connection, or namespace. Removing a rate limit uses `rateLimit: null`. A failed remote metadata update can occur after local changes; do not assume transactional configuration rollback.
 
@@ -68,7 +67,7 @@ Retention cleanup is lazy and partitioned by terminal state: completing a job do
 
 A synchronous `jobIdProducer(queue, channel, message)` can supply an ID. Duplicate IDs may suppress insertion only while the existing job remains retained. IDs are not permanent business idempotency keys. Persist business idempotency separately, especially when a handler can complete an external side effect and then fail before its queue acknowledgement is recorded.
 
-`publishMany([{ channel, message }], options)` prepares the whole batch before writing. Redis pipelines can partially commit, and an error does not mean that no jobs were inserted. PostgreSQL uses backend transaction semantics, but losing the COMMIT response still leaves the caller uncertain whether the transaction committed. Retrying either case can duplicate effects. Inspect business state and use durable idempotency rather than assuming rejected publication promises imply rollback.
+`publishMany([{ channel, message }], options)` prepares the whole batch before writing. Redis pipelines can partially commit, and an error does not mean that no jobs were inserted. Retrying can duplicate effects. Inspect business state and use durable idempotency rather than assuming rejected publication promises imply rollback.
 
 ## Cancellation, drain, and shutdown
 
@@ -82,12 +81,10 @@ Shutdown is memoized. It stops new consumer work while existing producers remain
 
 Use Redis `maxmemory-policy noeviction` for durable queues, provision persistence appropriate to the required durability, and budget connections for queue and worker roles, blocking connections, and cluster nodes. A Redis command timeout alone does not cancel a command already accepted by the server.
 
-PostgreSQL setup runs official queue-schema migrations before business queues start. Use credentials with the required schema, table, sequence, function, and migration privileges. An owned configuration can select a dedicated schema. A borrowed Pool must have a dedicated `search_path=bullmq`, a positive bounded `connectionTimeoutMillis`, and standard client/checkout behavior. Custom client classes, overridden checkout/query methods, and unsafe connection hooks are rejected. Do not share a borrowed pool's session settings with unrelated application work.
-
-Queue publication does not automatically participate in the application's business database transaction. Use an outbox or a reconciler when committing a business record and scheduling its work must survive publication failure. Socket closure and cancellation of server-side SQL are separate facts.
+Queue publication does not automatically participate in the application's business database transaction. Use an outbox or a reconciler when committing a business record and scheduling its work must survive publication failure.
 
 ## Verification and current migration scope
 
-Run `pnpm --filter @nocobase/queue check` for unit tests, typechecks, lint, formatting, and build. Backend suites use `pnpm --filter @nocobase/queue test:integration <inMemory|redis|cluster|postgres|postgres13>` with isolated infrastructure. Run one integration suite at a time.
+Run `pnpm --filter @nocobase/queue check` for unit tests, typechecks, lint, formatting, and build. Backend suites use `pnpm --filter @nocobase/queue test:integration <inMemory|redis|cluster>` with isolated infrastructure. Run one integration suite at a time.
 
 Legacy Job, Locator, manager, and driver exports have been removed. Connection option support is deliberately validated rather than accepting arbitrary driver fields. TLS verification is deferred and must not be represented as verified deployment support. The API examples above illustrate the production service contract exercised by service and plugin tests, not a guarantee that every transport failure scenario has completed acceptance.

@@ -17,9 +17,9 @@ export interface QueueObserver {
 
 export function persistentOptions(namespace: string): QueueOptions {
   const backend = process.env.QUEUE_TEST_BACKEND;
-  if (backend !== 'redis' && backend !== 'postgres') {
+  if (backend !== 'redis') {
     throw new Error(
-      'Select redis or postgres through the isolated queue integration runner',
+      'Select redis through the isolated queue integration runner',
     );
   }
   if (!process.env.QUEUE_TEST_RUN?.startsWith('nbq-')) {
@@ -27,11 +27,7 @@ export function persistentOptions(namespace: string): QueueOptions {
       'QUEUE_TEST_RUN must identify an isolated queue integration runner',
     );
   }
-  const port = Number(
-    process.env[
-      backend === 'redis' ? 'QUEUE_TEST_REDIS_PORT' : 'QUEUE_TEST_PG_PORT'
-    ],
-  );
+  const port = Number(process.env.QUEUE_TEST_REDIS_PORT);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(
       'Missing isolated queue runner port; no default server is allowed',
@@ -43,13 +39,6 @@ export function persistentOptions(namespace: string): QueueOptions {
     connection: {
       host: '127.0.0.1',
       port,
-      ...(backend === 'postgres'
-        ? {
-            user: 'postgres',
-            password: 'queue-test-only',
-            database: 'postgres',
-          }
-        : {}),
     },
     attempts: 2,
     removeOnComplete: false,
@@ -66,25 +55,12 @@ export function observeQueue(
     new URL('../../node_modules/@nocobase/queue/package.json', import.meta.url),
   );
   const native = requireQueue('bullmq') as {
-    Queue: new (
-      name: string,
-      options: unknown,
-      factory?: unknown,
-    ) => QueueObserver;
-    createPostgresBackend: unknown;
+    Queue: new (name: string, options: unknown) => QueueObserver;
   };
   const identity = createQueueIdentity(options.namespace, logicalName);
-  const postgres = options.queueBackend === 'postgres';
-  return new native.Queue(
-    postgres ? identity.postgresQueueName : identity.redisQueueName,
-    {
-      connection: {
-        ...(options.connection as object),
-        ...(postgres ? { migrate: false } : {}),
-      },
-      prefix: identity.redisPrefix,
-      skipMetasUpdate: true,
-    },
-    postgres ? native.createPostgresBackend : undefined,
-  );
+  return new native.Queue(identity.redisQueueName, {
+    connection: { ...(options.connection as object) },
+    prefix: identity.redisPrefix,
+    skipMetasUpdate: true,
+  });
 }

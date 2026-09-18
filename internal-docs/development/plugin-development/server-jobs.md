@@ -91,23 +91,21 @@ Payload 必须 JSON 可序列化并在消费时校验。优先传业务 ID，不
 
 ## 默认后端与物理 identity
 
-默认 `inMemory` 是每个 QueueService 私有的异步后端，不隐式连接 Redis，不提供重启持久性。App 默认 namespace 是 `appName`。生产持久化要显式选择 `redis` 或 `postgres` 并配置连接；显式配置失败时应报错，不能降级到内存并假装投递成功。
+默认 `inMemory` 是每个 QueueService 私有的异步后端，不隐式连接 Redis，不提供重启持久性。App 默认 namespace 是 `appName`。生产持久化要显式选择 `redis` 并配置连接；显式配置失败时应报错，不能降级到内存并假装投递成功。
 
 逻辑 queue 和 namespace 必须稳定；它们不是 JavaScript 类名。连接到同一持久化目标、相同 namespace 和 queue 的实例竞争消费，不是广播。不同 App 需要隔离时使用不同 namespace；内存服务即使同名仍隔离。一个本地队列使用一个 Worker，领取一次任务后并行运行该次快照中的 handlers 并等待全部 settled。channel 不是自动订阅过滤器，handler 必须主动判断；全部跳过也算完成，需要互相独立的交付保证时使用不同 queue。
 
-Redis 部署使用 `maxmemory-policy=noeviction`，持久化和 HA 由部署负责，不承诺任意故障都不丢任务。不要设置 Redis `keyPrefix`，物理 key identity 由 QueueService 生成。PostgreSQL 使用官方队列迁移，需要 DDL 权限；队列存储不是 NocoBase 业务 collection，也不把投递自动加入业务数据库事务。连接、启动和清理预算必须按真实部署验证。
-
-PostgreSQL 的 `pg` 按需安装。外部 Pool 的所有权仍属于调用者，QueueService 不关闭它或改写 options；借用池必须预配置专用 `search_path=bullmq` 和正的有限 `connectionTimeoutMillis`，且不超出剩余 setup 预算。外部 Pool 不支持自定义 schema；需要自定义 schema 时使用自有 PoolConfig。仅支持标准 `pg.Pool/Client`，不要用自定义 Client 或连接/借用 hooks 绕过约束。连接清理无法确认时必须暴露失败，不宣称已安全关闭。
+Redis 部署使用 `maxmemory-policy=noeviction`，持久化和 HA 由部署负责，不承诺任意故障都不丢任务。不要设置 Redis `keyPrefix`，物理 key identity 由 QueueService 生成。队列存储不是 NocoBase 业务 collection，也不把投递自动加入业务数据库事务。连接、启动和清理预算必须按真实部署验证。
 
 ## 重试、批量和业务幂等
 
 - `attempts` 包括首次执行；fixed/exponential backoff 和 `delay` 使用毫秒，retention 的 `age` 使用秒。未知自定义 retry strategy 不应假定可用。
 - 任一 handler 失败会使本次任务失败；重试重新选择并执行整组 handler，不只重跑失败的那个。每个有副作用的 handler 都要可重复执行。
 - 对邮件、外部 API、扣费、文件写入等使用稳定业务 key 或持久化执行状态。`jobIdProducer` 产生的 ID 只在任务仍保留时去重，删除或 retention 清理后可复用，不是永久 exactly-once 保证。
-- 单条或批量投递超时、响应丢失，不证明没有写入；重试必须考虑任务已存在。`publishMany()` 先准备整批，不等同于循环 `publish()`；内存和 PostgreSQL 的批量提交具有原子性，Redis pipeline 服务端失败可能部分写入，不能跨后端承诺全有或全无。
+- 单条或批量投递超时、响应丢失，不证明没有写入；重试必须考虑任务已存在。`publishMany()` 先准备整批，不等同于循环 `publish()`；内存的批量提交具有原子性，Redis pipeline 服务端失败可能部分写入，不能跨后端承诺全有或全无。
 - `manager(queue).configure()` 的本地配置更新与共享限流写入不是事务。后端失败时本地更新可能已生效，不要报告自动回滚。
 - `manager(queue).drain()` 默认清除 waiting，`{ delayed: true }` 也清除 delayed，不取消 active。持久化共享队列上的清理影响全部实例，不能作为插件卸载的局部清理。
-- 业务写入与投递需要一致性时，显式设计 outbox 或 reconciler，而不是假设 PostgreSQL 队列会自动参与业务事务。
+- 业务写入与投递需要一致性时，显式设计 outbox 或 reconciler，而不是假设队列会自动参与业务事务。
 
 ## 注销、取消与关闭
 
@@ -131,7 +129,7 @@ PostgreSQL 的 `pg` 按需安装。外部 Pool 的所有权仍属于调用者，
 - 用可控 barrier 验证注销等已有 invocation 后才释放依赖，不以固定 sleep 猜时序；
 - 覆盖两个 App 的相同 queue/channel，不共享 handler、dispatcher 或内存状态；
 - 验证重试重复执行的业务幂等、关闭失败和发布失败后的恢复策略；
-- 用实际选择的 Redis/PostgreSQL 后端验证持久化、跨实例竞争和资源清理，不能用内存通过代替；
+- 用实际选择的 Redis 后端验证持久化、跨实例竞争和资源清理，不能用内存通过代替；
 - 需要 HTTP producer 时，覆盖匿名、无权限和允许访问；
 - 构建后验证 Provider 和显式 handler imports 进入产物，退役 `queue.jobs` 不再出现在声明中。
 

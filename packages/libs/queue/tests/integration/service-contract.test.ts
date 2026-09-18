@@ -11,12 +11,7 @@ it('dispatches versioned payloads through the selected real backend and awaits h
   const selected = selectedBackend();
   const service = createQueueService({
     namespace: harness.namespace,
-    queueBackend:
-      selected === 'postgres13'
-        ? 'postgres'
-        : selected === 'cluster'
-          ? 'redis'
-          : selected,
+    queueBackend: selected === 'cluster' ? 'redis' : selected,
     connection: harness.connection,
   });
   const received: unknown[] = [];
@@ -76,12 +71,7 @@ it('preserves string channels independently from logical queue-name restrictions
   const selected = selectedBackend();
   const service = createQueueService({
     namespace: harness.namespace,
-    queueBackend:
-      selected === 'postgres13'
-        ? 'postgres'
-        : selected === 'cluster'
-          ? 'redis'
-          : selected,
+    queueBackend: selected === 'cluster' ? 'redis' : selected,
     connection: harness.connection,
   });
   const channels = ['', ' ', 'x'.repeat(257), 'line\nbreak'];
@@ -106,12 +96,7 @@ it('awaits every snapshot handler before retry and excludes later registrations'
   const selected = selectedBackend();
   const service = createQueueService({
     namespace: harness.namespace,
-    queueBackend:
-      selected === 'postgres13'
-        ? 'postgres'
-        : selected === 'cluster'
-          ? 'redis'
-          : selected,
+    queueBackend: selected === 'cluster' ? 'redis' : selected,
     connection: harness.connection,
   });
   let release = (): void => {};
@@ -157,12 +142,7 @@ it('prepares an entire batch before writing and normalizes root JSON values once
   const selected = selectedBackend();
   const service = createQueueService({
     namespace: harness.namespace,
-    queueBackend:
-      selected === 'postgres13'
-        ? 'postgres'
-        : selected === 'cluster'
-          ? 'redis'
-          : selected,
+    queueBackend: selected === 'cluster' ? 'redis' : selected,
     connection: harness.connection,
   });
   const received: unknown[] = [];
@@ -223,12 +203,7 @@ it('keeps duplicate registrations independent and applies one permanent cancella
   const selected = selectedBackend();
   const service = createQueueService({
     namespace: harness.namespace,
-    queueBackend:
-      selected === 'postgres13'
-        ? 'postgres'
-        : selected === 'cluster'
-          ? 'redis'
-          : selected,
+    queueBackend: selected === 'cluster' ? 'redis' : selected,
     connection: harness.connection,
     attempts: 3,
   });
@@ -286,12 +261,7 @@ it('decreases concurrency without cancelling active work and rejects invalid con
   const selected = selectedBackend();
   const service = createQueueService({
     namespace: harness.namespace,
-    queueBackend:
-      selected === 'postgres13'
-        ? 'postgres'
-        : selected === 'cluster'
-          ? 'redis'
-          : selected,
+    queueBackend: selected === 'cluster' ? 'redis' : selected,
     connection: harness.connection,
     concurrency: 2,
   });
@@ -344,12 +314,7 @@ it('applies retry defaults only to future publications', async () => {
   const selected = selectedBackend();
   const service = createQueueService({
     namespace: harness.namespace,
-    queueBackend:
-      selected === 'postgres13'
-        ? 'postgres'
-        : selected === 'cluster'
-          ? 'redis'
-          : selected,
+    queueBackend: selected === 'cluster' ? 'redis' : selected,
     connection: harness.connection,
     attempts: 1,
   });
@@ -382,12 +347,7 @@ it('keeps rate windows independent by queue and removes a configured limit', asy
   const selected = selectedBackend();
   const service = createQueueService({
     namespace: harness.namespace,
-    queueBackend:
-      selected === 'postgres13'
-        ? 'postgres'
-        : selected === 'cluster'
-          ? 'redis'
-          : selected,
+    queueBackend: selected === 'cluster' ? 'redis' : selected,
     connection: harness.connection,
   });
   const starts = new Map<string, number[]>();
@@ -446,9 +406,7 @@ it('lazily prunes retained completions and permits reuse of a deleted job ID', a
         ? 'observed-memory'
         : selected === 'cluster'
           ? 'redis'
-          : selected === 'postgres13'
-            ? 'postgres'
-            : selected,
+          : selected,
     connection: harness.connection,
     removeOnComplete: { age: 1 },
   });
@@ -456,9 +414,7 @@ it('lazily prunes retained completions and permits reuse of a deleted job ID', a
     service.registerBackend('observed-memory', factory);
   const identity = createQueueIdentity(harness.namespace, 'retention');
   const observer = new Queue(
-    selected.startsWith('postgres')
-      ? identity.postgresQueueName
-      : identity.redisQueueName,
+    identity.redisQueueName,
     { connection: harness.connection, prefix: identity.redisPrefix },
     harness.factory,
   );

@@ -6,7 +6,6 @@ export interface QueueIdentity {
   digest: string;
   redisPrefix: string;
   redisQueueName: string;
-  postgresQueueName: string;
 }
 
 export function validateQueueName(value: unknown, field: string): string {
@@ -42,6 +41,5 @@ export function createQueueIdentity(
     digest,
     redisPrefix: `nbq:{${digest}}`,
     redisQueueName: `q-${Buffer.from(validQueue, 'utf8').toString('base64url')}`,
-    postgresQueueName: `q-${digest}`,
   };
 }

@@ -1,13 +1,9 @@
 import { producerDeadline } from './operation-deadline.js';
 import { createQueueDiagnostics } from './diagnostics.js';
-import { postgresDeadline } from './backends/postgres-pool.js';
 import { Queue, Worker, WaitingError } from 'bullmq';
 import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
 import { resolveRedisConnection } from './backends/redis.js';
-import { resolvePostgresConnection } from './backends/postgres.js';
-import { createPostgresMigrationResource } from './backends/postgres-migrations.js';
-import type { PostgresMigrationResource } from './backends/postgres-migrations.js';
 import { resolveQueueConfiguration, resolveQueueTimeouts } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
 import { createQueueProducer } from './producer.js';
@@ -136,8 +132,6 @@ export function createQueueService(
   let shutdownPromise: Promise<void> | undefined;
   let producersOpen = true;
   const publishing = new Set<Promise<void>>();
-  const migrations = new Set<PostgresMigrationResource>();
-  const migratedPostgresTargets = new Set<string>();
   const closes = new WeakMap<object, Promise<void>>();
   let serviceCleanupDeadline: number | undefined;
 
@@ -149,7 +143,7 @@ export function createQueueService(
     if (!current.worker || current.worker.isRunning()) return;
     const worker = current.worker;
     void producerDeadline
-      .exit(() => postgresDeadline.exit(() => worker.run()))
+      .exit(() => worker.run())
       .catch((error: unknown) => {
         dependencies.logger?.error(
           { error, queue: name },
@@ -393,16 +387,6 @@ export function createQueueService(
     force: boolean = false,
   ): Promise<void> {
     const errors: unknown[] = [];
-    const migrationCleanup = Promise.all(
-      [...migrations].map(async (resource) => {
-        try {
-          await closeOnce(resource, () => resource.close());
-          migrations.delete(resource);
-        } catch (error) {
-          errors.push(error);
-        }
-      }),
-    );
     await Promise.all(
       Array.from(targets, async (current) => {
         await Promise.all(
@@ -422,7 +406,6 @@ export function createQueueService(
         );
       }),
     );
-    await migrationCleanup;
     if (errors.length)
       throw new AggregateError(errors, 'Queue resource cleanup failed');
   }
@@ -448,14 +431,11 @@ export function createQueueService(
   }
 
   async function initialize(): Promise<void> {
-    const deadline = performance.now() + timeouts.setupTimeoutMs;
     const defaults = resolveQueueConfiguration(options, undefined);
     validateQueueName(defaults.namespace, 'namespace');
     registry.resolve(defaults.queueBackend);
     if (defaults.queueBackend === 'redis')
       resolveRedisConnection(defaults.connection);
-    if (defaults.queueBackend === 'postgres')
-      resolvePostgresConnection(defaults.connection);
     for (const name of new Set([
       ...Object.keys(options.queues ?? {}),
       ...entries.keys(),
@@ -469,38 +449,13 @@ export function createQueueService(
       registry.resolve(config.queueBackend);
       if (config.queueBackend === 'redis')
         resolveRedisConnection(config.connection);
-      if (config.queueBackend === 'postgres')
-        resolvePostgresConnection(config.connection);
-    }
-    const migrationTargets = [
-      defaults,
-      ...[
-        ...new Set([...Object.keys(options.queues ?? {}), ...entries.keys()]),
-      ].map((name) =>
-        resolveQueueConfiguration(options, name, entries.get(name)?.manual),
-      ),
-    ];
-    for (const target of migrationTargets) {
-      if (stopped) throw new Error('Queue initialization was cancelled');
-      if (target.queueBackend !== 'postgres') continue;
-      const resource = createPostgresMigrationResource(
-        resolvePostgresConnection(target.connection),
-        deadline,
-        migratedPostgresTargets,
-      );
-      migrations.add(resource);
-      await resource.run();
-      await closeOnce(resource, () => resource.close());
-      migrations.delete(resource);
     }
     // Registrations may arrive while any initialization awaits readiness. Reconcile
     // until a synchronous pass finds no missing queue or handler-bearing Worker.
     for (;;) {
       for (const [name, current] of entries) {
-        await postgresDeadline.run(deadline, async () => {
-          await initializeEntry(name, current);
-          if (current.handlers.size()) await current.initializeWorker?.();
-        });
+        await initializeEntry(name, current);
+        if (current.handlers.size()) await current.initializeWorker?.();
       }
       if (stopped) throw new Error('Queue initialization was cancelled');
       if (
@@ -544,152 +499,113 @@ export function createQueueService(
   }
 
   function initializeEntry(name: string, current: QueueEntry): Promise<void> {
-    return postgresDeadline.run(
-      Math.min(
-        postgresDeadline.getStore() ?? Infinity,
-        producerDeadline.getStore() ?? Infinity,
-        performance.now() + timeouts.setupTimeoutMs,
-      ),
-      () =>
-        resources.initialize(name, async () => {
-          if (stopped) throw new Error('Queue service is shutting down');
-          // Failure cleanup belongs to the bounded admission owner, not this task.
-          const config = resolveQueueConfiguration(
-            options,
-            name,
-            current.manual,
-          );
-          const registeredFactory = registry.resolve(config.queueBackend);
-          const factory: BackendFactory = [
-            'redis',
-            'postgres',
-            'inMemory',
-          ].includes(config.queueBackend)
-            ? registeredFactory
-            : (physicalName, backendOptions, metadata) => {
-                // BullMQ types only its built-in connection union. Custom factories own
-                // the opaque connection contract; BullMQ itself receives no custom transport.
-                const customOptions = {
-                  ...backendOptions,
-                  connection: config.connection,
-                } as QueueBaseOptions;
-                return registeredFactory(physicalName, customOptions, metadata);
-              };
-          const identity = createQueueIdentity(config.namespace, name);
-          const physicalName =
-            config.queueBackend === 'postgres'
-              ? identity.postgresQueueName
-              : identity.redisQueueName;
-          const base: QueueBaseOptions & { prefix: string } = {
-            connection:
-              config.queueBackend === 'redis'
-                ? resolveRedisConnection(config.connection)
-                : config.queueBackend === 'postgres'
-                  ? {
-                      ...resolvePostgresConnection(config.connection),
-                      migrate: false,
-                    }
-                  : {},
-            prefix: identity.redisPrefix,
+    return resources.initialize(name, async () => {
+      if (stopped) throw new Error('Queue service is shutting down');
+      // Failure cleanup belongs to the bounded admission owner, not this task.
+      const config = resolveQueueConfiguration(options, name, current.manual);
+      const registeredFactory = registry.resolve(config.queueBackend);
+      const factory: BackendFactory = ['redis', 'inMemory'].includes(
+        config.queueBackend,
+      )
+        ? registeredFactory
+        : (physicalName, backendOptions, metadata) => {
+            // BullMQ types only its built-in connection union. Custom factories own
+            // the opaque connection contract; BullMQ itself receives no custom transport.
+            const customOptions = {
+              ...backendOptions,
+              connection: config.connection,
+            } as QueueBaseOptions;
+            return registeredFactory(physicalName, customOptions, metadata);
           };
-          current.queue = new Queue<
-            unknown,
-            unknown,
-            string,
-            unknown,
-            unknown,
-            string,
-            IQueueBackend
-          >(physicalName, { ...base, skipMetasUpdate: true }, factory);
-          current.queue.on('error', (error: Error) =>
+      const identity = createQueueIdentity(config.namespace, name);
+      const physicalName = identity.redisQueueName;
+      const base: QueueBaseOptions & { prefix: string } = {
+        connection:
+          config.queueBackend === 'redis'
+            ? resolveRedisConnection(config.connection)
+            : {},
+        prefix: identity.redisPrefix,
+      };
+      current.queue = new Queue<
+        unknown,
+        unknown,
+        string,
+        unknown,
+        unknown,
+        string,
+        IQueueBackend
+      >(physicalName, { ...base, skipMetasUpdate: true }, factory);
+      current.queue.on('error', (error: Error) =>
+        dependencies.logger?.error(
+          { error, queue: name },
+          'Queue backend error',
+        ),
+      );
+      await current.queue.waitUntilReady();
+      // Own metadata readiness explicitly: BullMQ's constructor suppresses failures.
+      await current.queue.getBackend().setQueueMeta(current.queue.metaValues);
+      if (stopped || current.initializationCancelled)
+        throw new Error('Queue initialization was cancelled');
+      if (config.queueBackend === 'inMemory')
+        dependencies.onInMemoryQueueInitialized?.({
+          namespace: config.namespace,
+          queue: name,
+        });
+      if (config.rateLimit === null)
+        await current.queue.removeGlobalRateLimit();
+      else if (config.rateLimit !== undefined)
+        await current.queue.setGlobalRateLimit(
+          config.rateLimit.max,
+          config.rateLimit.duration,
+        );
+      if (stopped || current.initializationCancelled)
+        throw new Error('Queue initialization was cancelled');
+      current.initializeWorker = (): Promise<void> => {
+        current.workerInitialization ??= (async (): Promise<void> => {
+          if (stopped) throw new Error('Queue service is shutting down');
+          current.worker = new Worker<unknown, unknown, string, IQueueBackend>(
+            physicalName,
+            async (job, token, signal): Promise<void> => {
+              if (stopped || current.handlers.size() === 0) {
+                await job.moveToWait(token);
+                throw new WaitingError();
+              }
+              if (!signal)
+                throw new Error('Queue Worker did not provide an abort signal');
+              if (job.id === undefined) throw new Error('Queue job has no ID');
+              await current.cancellation.run(job.id, signal, (dispatchSignal) =>
+                current.handlers.dispatch(
+                  job.name,
+                  decodeQueueMessage(job.data),
+                  dispatchSignal,
+                ),
+              );
+            },
+            {
+              ...base,
+              autorun: false,
+              concurrency: resolveQueueConfiguration(
+                options,
+                name,
+                current.manual,
+              ).concurrency,
+            },
+            factory,
+          );
+          current.worker.on('error', (error: Error) =>
             dependencies.logger?.error(
               { error, queue: name },
-              'Queue backend error',
+              'Queue worker error',
             ),
           );
-          await current.queue.waitUntilReady();
-          // Own metadata readiness explicitly: BullMQ's constructor suppresses failures.
-          await current.queue
-            .getBackend()
-            .setQueueMeta(current.queue.metaValues);
-          if (stopped || current.initializationCancelled)
-            throw new Error('Queue initialization was cancelled');
-          if (config.queueBackend === 'inMemory')
-            dependencies.onInMemoryQueueInitialized?.({
-              namespace: config.namespace,
-              queue: name,
-            });
-          if (config.rateLimit === null)
-            await current.queue.removeGlobalRateLimit();
-          else if (config.rateLimit !== undefined)
-            await current.queue.setGlobalRateLimit(
-              config.rateLimit.max,
-              config.rateLimit.duration,
-            );
-          if (stopped || current.initializationCancelled)
-            throw new Error('Queue initialization was cancelled');
-          current.initializeWorker = (): Promise<void> => {
-            current.workerInitialization ??= postgresDeadline.run(
-              postgresDeadline.getStore() ??
-                performance.now() + timeouts.setupTimeoutMs,
-              async (): Promise<void> => {
-                if (stopped) throw new Error('Queue service is shutting down');
-                current.worker = new Worker<
-                  unknown,
-                  unknown,
-                  string,
-                  IQueueBackend
-                >(
-                  physicalName,
-                  async (job, token, signal): Promise<void> => {
-                    if (stopped || current.handlers.size() === 0) {
-                      await job.moveToWait(token);
-                      throw new WaitingError();
-                    }
-                    if (!signal)
-                      throw new Error(
-                        'Queue Worker did not provide an abort signal',
-                      );
-                    if (job.id === undefined)
-                      throw new Error('Queue job has no ID');
-                    await current.cancellation.run(
-                      job.id,
-                      signal,
-                      (dispatchSignal) =>
-                        current.handlers.dispatch(
-                          job.name,
-                          decodeQueueMessage(job.data),
-                          dispatchSignal,
-                        ),
-                    );
-                  },
-                  {
-                    ...base,
-                    autorun: false,
-                    concurrency: resolveQueueConfiguration(
-                      options,
-                      name,
-                      current.manual,
-                    ).concurrency,
-                  },
-                  factory,
-                );
-                current.worker.on('error', (error: Error) =>
-                  dependencies.logger?.error(
-                    { error, queue: name },
-                    'Queue worker error',
-                  ),
-                );
-                await current.worker.waitUntilReady();
-                if (current.workerInitializationCancelled)
-                  throw new Error('Queue Worker initialization was cancelled');
-              },
-            );
-            return current.workerInitialization;
-          };
-          if (current.handlers.size()) await current.initializeWorker();
-        }),
-    );
+          await current.worker.waitUntilReady();
+          if (current.workerInitializationCancelled)
+            throw new Error('Queue Worker initialization was cancelled');
+        })();
+        return current.workerInitialization;
+      };
+      if (current.handlers.size()) await current.initializeWorker();
+    });
   }
 
   return {

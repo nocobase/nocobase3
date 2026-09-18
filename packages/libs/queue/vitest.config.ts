@@ -10,8 +10,6 @@ const integrationFiles: Record<string, string[]> = {
     'redis-active-recovery',
   ],
   cluster: ['redis-cluster', 'redis-cluster-shutdown', 'rate-limit-contract'],
-  postgres: ['postgres-*'],
-  postgres13: ['postgres-*'],
 };
 const backend = process.env.QUEUE_TEST_BACKEND;
 if (backend && !(backend in integrationFiles))

@@ -275,28 +275,10 @@ describe('queue configuration contract', () => {
     ).toBe(5);
   });
 
-  it('matches the official PostgreSQL schema identifier boundary', () => {
-    expect(
-      resolve({
-        queueBackend: 'postgres',
-        connection: { schema: 'queue$jobs' },
-      }).connection,
-    ).toEqual({ schema: 'queue$jobs' });
-    expect(() =>
-      resolve({
-        queueBackend: 'postgres',
-        connection: { schema: 'a'.repeat(64) },
-      }),
-    ).toThrow(/connection.schema/u);
-  });
-
   it.each([
     ['redis', { redisOptions: { port: 0 } }],
     ['redis', { lazyConnect: 'yes' }],
     ['redis', { maxRetriesPerRequest: -1 }],
-    ['postgres', { port: 0 }],
-    ['postgres', { max: 0 }],
-    ['postgres', { connectionString: 5 }],
   ])('validates known %s driver settings %j', (queueBackend, connection) => {
     expect(() => resolve({ queueBackend, connection })).toThrow(/connection/u);
   });
@@ -306,11 +288,6 @@ describe('queue configuration contract', () => {
     ['redis', 'redis://localhost'],
     ['redis', { keyPrefix: 'bad' }],
     ['redis', { port: -1 }],
-    ['postgres', undefined],
-    ['postgres', 42],
-    ['postgres', { onConnect: () => {} }],
-    ['postgres', { verify: () => {} }],
-    ['postgres', { Client: class {} }],
     ['inMemory', { host: 'not-memory' }],
   ])('rejects invalid %s connection %j', (queueBackend, connection) => {
     expect(() => resolve({ queueBackend, connection })).toThrow(/connection/u);

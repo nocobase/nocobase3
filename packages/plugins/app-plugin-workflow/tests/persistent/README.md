@@ -4,17 +4,14 @@ This suite is opt-in, not a skipped test in the ordinary suite. The normal suite
 
 ## Run serially with isolated queue infrastructure
 
-The orchestrating queue runner must create its own Redis or PostgreSQL container, keep it alive for this command, and tear it down afterwards. Do not point this test at a developer's existing service. This script starts no Docker containers and supplies no default ports. It requires the queue runner's `QUEUE_TEST_RUN` (`nbq-…`), `QUEUE_TEST_BACKEND`, and selected loopback port. Use one target at a time, after any other database integration runner has finished.
+The orchestrating queue runner must create its own Redis container, keep it alive for this command, and tear it down afterwards. Do not point this test at a developer's existing service. This script starts no Docker containers and supplies no default ports. It requires the queue runner's `QUEUE_TEST_RUN` (`nbq-…`), `QUEUE_TEST_BACKEND`, and `QUEUE_TEST_REDIS_PORT` loopback port. Use one target at a time, after any other database integration runner has finished.
 
 ```bash
 # Inherit QUEUE_TEST_RUN and QUEUE_TEST_REDIS_PORT from the isolated Redis runner.
 QUEUE_TEST_BACKEND=redis pnpm --filter @nocobase/app-plugin-workflow exec node scripts/test-persistent.mjs redis
-
-# Or inherit QUEUE_TEST_RUN and QUEUE_TEST_PG_PORT from the isolated PostgreSQL runner.
-QUEUE_TEST_BACKEND=postgres pnpm --filter @nocobase/app-plugin-workflow exec node scripts/test-persistent.mjs postgres
 ```
 
-PostgreSQL uses the queue runner's test-only `postgres` database/user and `queue-test-only` password. Each invocation generates a unique namespace and temporary application directory. Only its own two logical queues are obliterated. The application business database is a real SQLite file reused by every fresh child process; Workflow resources are immutable, digest-addressed artifacts on disk. No install or rebuild is required.
+Each invocation generates a unique namespace and temporary application directory. Only its own two logical queues are obliterated. The application business database is a real SQLite file reused by every fresh child process; Workflow resources are immutable, digest-addressed artifacts on disk. No install or rebuild is required.
 
 ## What the test proves
 
@@ -29,9 +26,9 @@ The independent consumer test proves application-owned business-key deduplicatio
 
 ## Remaining limits
 
-This does not certify retrying an instruction that committed its effect but did not persist its terminal node/run state, recovering a killed STARTED instruction, vanished queue locks, or concurrent consumers. In particular, `Dispatcher.resolveAndProcessTask()` ignores an ordinary task for an already STARTED run; a process crash in that window must not be described as covered by terminal-run redelivery. Redis persists the queued job across application-process restarts in this suite; the Redis server itself is not restarted. The queue runner's Redis configuration intentionally disables disk persistence. PostgreSQL support in the fixture is not evidence of PostgreSQL verification: run and report that target separately only when requested.
+This does not certify retrying an instruction that committed its effect but did not persist its terminal node/run state, recovering a killed STARTED instruction, vanished queue locks, or concurrent consumers. In particular, `Dispatcher.resolveAndProcessTask()` ignores an ordinary task for an already STARTED run; a process crash in that window must not be described as covered by terminal-run redelivery. Redis persists the queued job across application-process restarts in this suite; the Redis server itself is not restarted. The queue runner's Redis configuration intentionally disables disk persistence.
 
-## Local checks without Redis, PostgreSQL, or Docker
+## Local checks without Redis or Docker
 
 ```bash
 pnpm --filter @nocobase/app-plugin-workflow exec vitest run tests/persistent-fixture.test.ts

@@ -104,12 +104,14 @@ describe('final queue package exports', () => {
       '@nocobase/db',
       '@nocobase/logging',
       'knex',
+      'pg',
+      'pg-pool',
     ])
       expect(manifest.dependencies).not.toHaveProperty(dependency);
   });
 
-  it('imports Redis and runs memory queues without the optional pg driver or legacy engine', async () => {
-    const script = join(fixture, 'without-pg.mjs');
+  it('imports Redis and runs memory queues without database drivers or the legacy engine', async () => {
+    const script = join(fixture, 'runtime-dependencies.mjs');
     await writeFile(
       script,
       `
@@ -132,10 +134,10 @@ describe('final queue package exports', () => {
       await memory.setup();
       assert.equal(typeof (await memory.producer('messages').publish('send', { ok: true })).jobId, 'string');
       await memory.shutdown();
-      const postgres = createQueueService({ namespace: 'missing-driver', queueBackend: 'postgres', connection: {} });
-      postgres.producer('messages');
-      await assert.rejects(postgres.setup(), /pg.*(install|required)|install.*pg/i);
-      await postgres.shutdown();
+      const unsupported = createQueueService({ namespace: 'unsupported', queueBackend: 'postgres', connection: {} });
+      unsupported.producer('messages');
+      await assert.rejects(unsupported.setup(), /Unknown queue backend: postgres/);
+      await unsupported.shutdown();
     `,
     );
     expect(
@@ -155,7 +157,7 @@ describe('final queue package exports', () => {
         createQueueService, withChannel,
         type QueueService, type QueueManager, type QueueProducer, type QueueConsumer,
         type Channel, type JobIdProducer, type RateLimitOptions,
-        type QueueBackendConnections, type QueueConnectionOptions, type PostgresConnectionOptions,
+        type QueueBackendConnections, type QueueConnectionOptions,
         type QueueOptions, type QueueDefaults, type QueueOverrides,
         type QueueLocalRuntimeOptions, type QueueRuntimeOptions,
         type PublishOptions, type PublishReceipt, type ConsumeHandler, type UnregisterHandler,

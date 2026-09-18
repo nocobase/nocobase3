@@ -5,9 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const [backend, ...extra] = process.argv.slice(2);
-if (!['redis', 'postgres'].includes(backend) || extra.length) {
+if (backend !== 'redis' || extra.length) {
   throw new Error(
-    'Usage: node scripts/test-persistent.mjs <redis|postgres> (requires isolated queue runner ports)',
+    'Usage: node scripts/test-persistent.mjs redis (requires isolated queue runner port)',
   );
 }
 if (
@@ -18,11 +18,7 @@ if (
     'Use the selected isolated queue runner environment; never supply a user server',
   );
 }
-const port = Number(
-  process.env[
-    backend === 'redis' ? 'QUEUE_TEST_REDIS_PORT' : 'QUEUE_TEST_PG_PORT'
-  ],
-);
+const port = Number(process.env.QUEUE_TEST_REDIS_PORT);
 if (!Number.isInteger(port) || port < 1 || port > 65535)
   throw new Error('Missing isolated queue runner port');
 const temporary = await mkdtemp(
