@@ -1,3 +1,7 @@
+import {
+  producerDeadline,
+  PRODUCER_REQUEST_TIMEOUT_MS,
+} from '../operation-deadline.js';
 import { Socket } from 'node:net';
 import { createPostgresBackend } from 'bullmq';
 import type { BackendFactory, PostgresPoolConfig } from 'bullmq';
@@ -6,40 +10,43 @@ import {
   isBorrowedPostgresPool,
   postgresDeadline,
 } from './postgres-pool.js';
-import {
-  integer,
-  keys,
-  record,
-  validateConnection,
-} from '../config-validation.js';
+import { integer, record, validateConnection } from '../config-validation.js';
 
-/** Resolves the owned PoolConfig subset without loading the optional pg driver. */
+/** Validates owned PoolConfig settings without loading pg or invoking callbacks. */
 export function resolvePostgresConnection(value: unknown): PostgresPoolConfig {
   validateConnection('postgres', value);
   if (isBorrowedPostgresPool(value)) return { borrowedPool: value };
-  const input =
+  const source =
     typeof value === 'string'
       ? { connectionString: value }
       : record(value, 'connection');
-  keys(
-    input,
-    [
-      'host',
-      'port',
-      'user',
-      'password',
-      'database',
-      'connectionString',
-      'schema',
-      'options',
-      'application_name',
-      'max',
-      'connectionTimeoutMillis',
-      'skipVersionCheck',
-    ],
-    'connection',
-  );
-  const result: PostgresPoolConfig = {
+  const prototype: unknown = Object.getPrototypeOf(source);
+  if (prototype !== Object.prototype && prototype !== null)
+    throw new TypeError(
+      'Unsupported PostgreSQL connection; provide PoolConfig or a standard Pool',
+    );
+  const input = Object.fromEntries(Object.entries(source));
+  // Revalidate the snapshot: changing getters must not bypass B6/schema checks.
+  validateConnection('postgres', input);
+  // B6 excludes post-connect hooks/custom clients. These additional keys belong
+  // to our migration/transport owner, not to the caller's PoolConfig. Reject
+  // conflicts rather than silently ignoring them in the backend spread.
+  for (const key of [
+    'stream',
+    'migrate',
+    'skipMigrations',
+    'borrowedPool',
+    'connect',
+    '__proto__',
+    'constructor',
+    'prototype',
+  ]) {
+    if (Object.hasOwn(input, key) && input[key] !== undefined)
+      throw new TypeError(`Unsupported connection field: ${key}`);
+  }
+  // BullMQ's open PgPoolConfig incorrectly narrows password to string. Keep
+  // validated driver values in its open record, including pg password providers.
+  const result: Record<string, unknown> = {
     migrate: true,
     connectionTimeoutMillis: 1000,
     statement_timeout: 10000,
@@ -47,12 +54,13 @@ export function resolvePostgresConnection(value: unknown): PostgresPoolConfig {
   for (const key of [
     'host',
     'user',
-    'password',
     'database',
     'connectionString',
     'schema',
     'options',
     'application_name',
+    'fallback_application_name',
+    'client_encoding',
   ] as const) {
     const setting = input[key];
     if (setting === undefined) continue;
@@ -65,12 +73,81 @@ export function resolvePostgresConnection(value: unknown): PostgresPoolConfig {
       result[key] = integer(
         input[key],
         `connection.${key}`,
-        1,
+        key === 'connectionTimeoutMillis' ? 0 : 1,
         key === 'port' ? 65535 : 2147483647,
       );
   }
-  if (typeof input.skipVersionCheck === 'boolean')
-    result.skipVersionCheck = input.skipVersionCheck;
+  for (const [key, setting] of Object.entries(input)) {
+    if (setting === undefined) continue;
+    if (key === 'password') {
+      if (typeof setting !== 'string' && typeof setting !== 'function')
+        throw new TypeError('Invalid connection.password');
+    } else if (
+      [
+        'keepAlive',
+        'allowExitOnIdle',
+        'enableChannelBinding',
+        'pipeline',
+        'skipVersionCheck',
+      ].includes(key)
+    ) {
+      if (typeof setting !== 'boolean')
+        throw new TypeError(`Invalid connection.${key}`);
+    } else if (key === 'ssl') {
+      if (typeof setting !== 'boolean') {
+        const ssl = record(setting, 'connection.ssl');
+        if (
+          ssl.rejectUnauthorized !== undefined &&
+          typeof ssl.rejectUnauthorized !== 'boolean'
+        )
+          throw new TypeError('Invalid connection.ssl.rejectUnauthorized');
+        if (ssl.servername !== undefined && typeof ssl.servername !== 'string')
+          throw new TypeError('Invalid connection.ssl.servername');
+      }
+    } else if (key === 'sslnegotiation') {
+      if (setting !== 'postgres' && setting !== 'direct')
+        throw new TypeError('Invalid connection.sslnegotiation');
+    } else if (key === 'idleTimeoutMillis') {
+      if (setting !== null)
+        integer(setting, `connection.${key}`, 0, 2147483647);
+    } else if (key === 'statement_timeout') {
+      // This is a driver/session setting, not the producer request budget.
+      // The owned backend still enforces that budget by retiring its sockets;
+      // migration queries install their own remaining server-side deadline.
+      if (setting !== false)
+        integer(setting, 'connection.statement_timeout', 0, 2147483647);
+    } else if (
+      [
+        'min',
+        'query_timeout',
+        'lock_timeout',
+        'keepAliveInitialDelayMillis',
+        'idle_in_transaction_session_timeout',
+        'maxLifetimeSeconds',
+      ].includes(key)
+    ) {
+      integer(setting, `connection.${key}`, 0, 2147483647);
+    } else if (key === 'maxUses') {
+      if (setting !== Infinity)
+        integer(setting, 'connection.maxUses', 1, Number.MAX_SAFE_INTEGER);
+    } else if (key === 'types') {
+      const types = record(setting, 'connection.types');
+      if (typeof types.getTypeParser !== 'function')
+        throw new TypeError('Invalid connection.types.getTypeParser');
+    } else if (key === 'log' || key === 'Promise') {
+      if (typeof setting !== 'function')
+        throw new TypeError(`Invalid connection.${key}`);
+    } else if (
+      typeof setting === 'symbol' ||
+      typeof setting === 'bigint' ||
+      (typeof setting === 'number' && !Number.isFinite(setting))
+    ) {
+      throw new TypeError(`Invalid connection.${key}`);
+    }
+    // Preserve driver-owned keys rather than a host/port whitelist. Driver
+    // callbacks are not executed by side-effect-free configuration validation.
+    result[key] = setting;
+  }
   return result;
 }
 
@@ -128,19 +205,26 @@ export const createServicePostgresBackend: BackendFactory = (
     const getFailure = (): Error | undefined => invalidated;
     const execute = async <T>(operation: () => Promise<T>): Promise<T> => {
       if (invalidated) throw invalidated;
-      const deadline = setTimeout(() => {
-        invalidated ??= new Error(
-          'PostgreSQL producer deadline exceeded; connection invalidated',
-        );
-        void backend
-          .close()
-          .catch((error: unknown) => backend.emit('error', error));
-      }, 10000);
+      const now = performance.now();
+      const end = Math.min(
+        postgresDeadline.getStore() ?? Infinity,
+        producerDeadline.getStore() ?? Infinity,
+        now + PRODUCER_REQUEST_TIMEOUT_MS,
+      );
+      if (end <= now) throw new Error('PostgreSQL operation deadline exceeded');
+      const deadline = setTimeout(
+        () => {
+          invalidated ??= new Error(
+            'PostgreSQL producer deadline exceeded; connection invalidated',
+          );
+          void backend
+            .close()
+            .catch((error: unknown) => backend.emit('error', error));
+        },
+        Math.max(1, Math.ceil(end - now)),
+      );
       try {
-        const result = await postgresDeadline.run(
-          performance.now() + 10000,
-          operation,
-        );
+        const result = await postgresDeadline.run(end, operation);
         const failure = getFailure();
         if (failure) throw failure;
         return result;
