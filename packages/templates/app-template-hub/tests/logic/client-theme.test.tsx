@@ -1,3 +1,6 @@
+import { I18nRuntime } from '@nocobase/i18n';
+import { I18nProvider } from '@nocobase/i18n/client';
+import locales from '../../client/locales/index.js';
 import { themePresets } from '../../client/theme/theme-presets';
 import { initializeTheme } from '../../client/theme/theme-preferences';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -12,6 +15,34 @@ import {
 } from '../../client/theme/index.ts';
 
 describe('app client theme', () => {
+  it.each([
+    ['en-US', 'Appearance', 'Comfortable'],
+    ['zh-CN', '外观', '舒适'],
+  ])(
+    'labels the default preset without implying default selection (%s)',
+    async (locale, appearance, label) => {
+      const runtime = new I18nRuntime({
+        defaultLocale: 'en-US',
+        locales: ['en-US', 'zh-CN'],
+        applicationNamespace: 'test-app',
+      });
+      runtime.registerApplicationNamespace('test-app', locales);
+      await runtime.init(locale);
+      render(
+        <I18nProvider runtime={runtime}>
+          <AppThemeProvider>
+            <ThemeSettings />
+          </AppThemeProvider>
+        </I18nProvider>,
+      );
+      await userEvent.click(screen.getByRole('button', { name: appearance }));
+      const option = screen.getByRole('radio', { name: label });
+      expect(option).toHaveAttribute('value', 'default');
+      await userEvent.click(option);
+      expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe('default');
+    },
+  );
+
   it('falls back from the removed Ant Design preset without changing mode', async () => {
     localStorage.setItem('nocobase:crm:theme:preset', 'ant-design');
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'light');

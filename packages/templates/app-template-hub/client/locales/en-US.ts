@@ -96,7 +96,7 @@ const enUS = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    themes: { default: 'Default', compact: 'Compact' },
+    themes: { default: 'Comfortable', compact: 'Compact' },
   },
   app: {
     title: 'NocoBase',
