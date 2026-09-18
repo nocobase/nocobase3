@@ -133,6 +133,12 @@ it('colors level labels only for a terminal, and lets the environment and the co
     expect(await emit({ enabled: true, pretty: true })).toContain(
       '\u001b[32mINFO\u001b[39m',
     );
+    // Node itself ignores NO_COLOR when FORCE_COLOR asks for color, and warns that it does.
+    process.env.NO_COLOR = '1';
+    expect(await emit({ enabled: true, pretty: true })).toContain(
+      '\u001b[32mINFO\u001b[39m',
+    );
+    delete process.env.NO_COLOR;
     expect(
       await emit({ enabled: true, pretty: true, color: false }),
     ).not.toContain('\u001b[');

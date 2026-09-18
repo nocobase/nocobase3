@@ -88,9 +88,10 @@ const levelColors: Readonly<Record<string, readonly [string, string]>> = {
 /** An escape only helps a terminal, and the environment can override that guess. */
 function resolveConsoleColor(configured: boolean | undefined): boolean {
   if (configured !== undefined) return configured;
-  if (process.env.NO_COLOR) return false;
   const forced = process.env.FORCE_COLOR;
+  // Node itself lets FORCE_COLOR override NO_COLOR, and warns that it does.
   if (forced !== undefined) return forced !== '0' && forced !== 'false';
+  if (process.env.NO_COLOR) return false;
   return process.stdout.isTTY === true;
 }
 function prettyEntry(entry: JournalEntry, color: boolean): string {
