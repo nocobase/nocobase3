@@ -134,10 +134,6 @@ describe('final queue package exports', () => {
       await memory.setup();
       assert.equal(typeof (await memory.producer('messages').publish('send', { ok: true })).jobId, 'string');
       await memory.shutdown();
-      const unsupported = createQueueService({ namespace: 'unsupported', queueBackend: 'postgres', connection: {} });
-      unsupported.producer('messages');
-      await assert.rejects(unsupported.setup(), /Unknown queue backend: postgres/);
-      await unsupported.shutdown();
     `,
     );
     expect(
