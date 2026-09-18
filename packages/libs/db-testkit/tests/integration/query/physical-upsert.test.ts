@@ -43,19 +43,25 @@ describeIntegrationDatabases('physical row upsert', (context) => {
 
   it('serializes concurrent writers for the same unique key', async () => {
     await prepare();
-    await Promise.all(
-      Array.from({ length: 6 }, () =>
-        upsertPhysicalRow(context.database.connection(), options()),
-      ),
-    );
-    expect(await rows()).toEqual([
-      {
-        id: 'one',
-        title: 'Updated',
-        history: 'Preserved',
-        externalKey: 'external',
-      },
-    ]);
+    // Repeat first-insert contention: a single round can miss deadlocks due
+    // to pool startup timing. Each round races on a previously absent key.
+    for (let round = 0; round < 12; round++) {
+      const id = `concurrent-${round}`;
+      await Promise.all(
+        Array.from({ length: 8 }, () =>
+          upsertPhysicalRow(context.database.connection(), {
+            ...options(),
+            key: { id },
+            create: { ...options().create, external_key: id },
+          }),
+        ),
+      );
+    }
+    const records = await rows();
+    expect(records).toHaveLength(12);
+    for (const record of records) {
+      expect(record).toMatchObject({ title: 'Updated', history: 'Preserved' });
+    }
   });
 
   it('rolls back with the owning transaction', async () => {

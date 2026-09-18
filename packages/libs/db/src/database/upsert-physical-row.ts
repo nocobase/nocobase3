@@ -1,3 +1,5 @@
+import { setTimeout as delay } from 'node:timers/promises';
+
 import type { Knex } from 'knex';
 
 import type { Row } from '../query/types.js';
@@ -18,7 +20,9 @@ export interface UpsertPhysicalRowOptions {
 /**
  * Upsert internal physical storage without registering a Collection. Values are
  * already encoded for storage; use Repository for Collection-level conversion.
- * The row lock lasts until the owning transaction completes.
+ * The row lock lasts until the owning transaction completes. Deadlocks are
+ * retried up to five times only when this operation owns the transaction;
+ * callers supplying a transaction must retry their entire unit of work.
  */
 export async function upsertPhysicalRow(
   connection: DatabaseConnection,
@@ -66,6 +70,34 @@ export async function upsertPhysicalRow(
   if (client.isTransaction) {
     await execute(client as Knex.Transaction);
   } else {
-    await client.transaction(execute);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await client.transaction(execute);
+        return;
+      } catch (error) {
+        // A deadlock can roll back the entire transaction, not just its
+        // savepoint. Restart only a transaction owned by this operation.
+        if (attempt >= 5 || !isDeadlock(error)) throw error;
+        await delay(5 * 2 ** attempt + Math.floor(Math.random() * 5));
+      }
+    }
   }
+}
+
+function isDeadlock(error: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current = error;
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    if (
+      record.code === 'ER_LOCK_DEADLOCK' ||
+      record.code === '40P01' ||
+      record.number === 1205
+    ) {
+      return true;
+    }
+    current = record.cause ?? record.originalError;
+  }
+  return false;
 }
