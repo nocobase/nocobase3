@@ -1,5 +1,4 @@
 import { resolvePublishOptions } from './config.js';
-import { validateQueueName } from './identity.js';
 import { encodeQueueMessage } from './serialization.js';
 import type { QueueEnvelope } from './serialization.js';
 import type { PublishOptions } from './types.js';
@@ -36,7 +35,8 @@ export function createQueueProducer(context: ProducerContext): QueueProducer {
     message: unknown,
     options: PublishOptions,
   ): PreparedJob {
-    validateQueueName(channel, 'channel');
+    if (typeof channel !== 'string')
+      throw new TypeError('channel must be a string');
     const data = encodeQueueMessage(message);
     const { jobIdProducer, ...opts } = options;
     const id = jobIdProducer?.(context.name, channel, message);

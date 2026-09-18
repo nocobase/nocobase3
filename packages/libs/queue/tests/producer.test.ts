@@ -35,6 +35,17 @@ function fixture() {
 }
 
 describe('queue producer', () => {
+  it.each(['', ' ', 'x'.repeat(257), '\u0000', 'line\nbreak'])(
+    'preserves unrestricted string channel %j',
+    async (channel) => {
+      const { queue, producer } = fixture();
+      const receipt = await producer.publish(channel, { value: 1 });
+      expect((await queue.getJob(receipt.jobId))?.name).toBe(channel);
+      const receipts = await producer.publishMany([{ channel, message: 2 }]);
+      expect((await queue.getJob(receipts[0]!.jobId))?.name).toBe(channel);
+    },
+  );
+
   it('maps channel to name and returns only a jobId receipt', async () => {
     const { queue, producer } = fixture();
     const receipt = await producer.publish('orders.created', { value: 1 });
@@ -57,12 +68,14 @@ describe('queue producer', () => {
       message,
     );
   });
-  it.each(['', ' ', '\u0000', 'a'.repeat(257)])(
+  it.each([null, undefined, 42, {}, []])(
     'rejects invalid channel %j before writing',
     async (channel) => {
       const { queue, producer } = fixture();
       const add = vi.spyOn(queue, 'add');
-      await expect(producer.publish(channel, {})).rejects.toThrow(/channel/u);
+      await expect(
+        Reflect.apply(producer.publish, producer, [channel, {}]),
+      ).rejects.toThrow(/channel/u);
       expect(add).not.toHaveBeenCalled();
     },
   );
