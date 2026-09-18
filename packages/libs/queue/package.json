@@ -53,6 +53,7 @@
     "eslint": "catalog:",
     "pg": "8.16.3",
     "prettier": "catalog:",
+    "redis": "5.12.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
