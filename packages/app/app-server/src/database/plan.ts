@@ -7,7 +7,7 @@ import path from 'node:path';
 
 import { validateDatabaseOwnership } from './ownership.js';
 
-import type { AppConfigAccessor, ConfigPaths } from '../config/index.js';
+import type { AppConfigAccessor, AppPaths } from '../config/index.js';
 import type { DatabaseDriverRegistration, MigrationSource } from '@nocobase/db';
 import type {
   AppDatabaseConfig,
@@ -33,7 +33,7 @@ export interface AppDatabaseTaskSelection {
 export interface AppDatabaseTaskPlanOptions extends AppDatabaseTaskSelection {
   readonly migrationSources?: readonly AppDatabaseMigrationSource[];
   readonly contributions: AppDatabaseTaskContributions;
-  readonly paths?: ConfigPaths;
+  readonly paths?: AppPaths;
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
 }
 

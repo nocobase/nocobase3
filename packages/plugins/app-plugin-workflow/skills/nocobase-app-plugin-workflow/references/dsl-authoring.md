@@ -445,3 +445,5 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 - Every run script is static, named-exported, abort-aware, and idempotent.
 - Every referenced run result has an accurate, lexically visible schema.
 - The real five-phase checker passes, then the Artifact build preserves the workflow package's runtime resources at their package-relative paths.
+
+Workflow diagnostics use the application logging service with source `workflow` and workflow, execution, and node identities where available. They share `storage/logs/app.<UTC-date>.<part>.log` by default. Set `logging.loggers.workflow.file.name: workflow` to separate them. The message-first logger passed to run modules adapts to this service; diagnostic output is not copied into the database node execution `log` field. Execution status, result, and error records remain business data.

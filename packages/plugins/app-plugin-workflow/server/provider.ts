@@ -1,3 +1,5 @@
+import { loggingToken } from '@nocobase/app-server/logging';
+import { createWorkflowLogger } from './engine/logger.js';
 import { queueManagerToken } from '@nocobase/app-server/queue';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { databaseManagerToken } from '@nocobase/db';
@@ -51,6 +53,9 @@ export class WorkflowProvider<
       internalWorkflowServiceToken,
       (container) =>
         new WorkflowService({
+          logger: createWorkflowLogger(
+            container.resolve(loggingToken).getLogger('workflow'),
+          ),
           database: container.resolve(databaseManagerToken),
           queue: container.resolve(queueManagerToken),
           queueName: `workflow:${this.app.appName}`,

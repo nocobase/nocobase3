@@ -81,6 +81,7 @@ export function createTimeoutReaper(
       reason: EXECUTION_REASON.TIMEOUT,
       output: null,
       observer: options.terminalObserver,
+      logger,
     });
     if (!terminal) return false;
     await store().nodeRuns.updateMany({

@@ -4,3 +4,4 @@ export * from './lifecycle.js';
 export * from './mount.js';
 export * from './scope.js';
 export type * from './types.js';
+export { createAppPaths } from '../config/paths.js';

@@ -152,6 +152,16 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-deployment-logs',
+        path: '/apps/:appId/deployments/:deploymentId/logs',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-logs',
+        path: '/apps/:appId/logs',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-hub:hub-app-releases',
         path: '/apps/:appId/releases',
       },

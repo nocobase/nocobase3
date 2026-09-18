@@ -176,6 +176,7 @@ const enUS = {
     onFirstVisit: 'On first visit',
     updated: 'Updated {{date}}',
     tabs: {
+      logs: 'Logs',
       deployments: 'Deployments',
       releases: 'Releases',
       development: 'Development',
@@ -226,6 +227,41 @@ const enUS = {
     unavailable: 'This action is unavailable.',
     currentDeployment: 'This is the current deployment.',
     deploymentNotSucceeded: 'Only a succeeded deployment can be rolled back.',
+  },
+  dateTime: {
+    time: 'Time',
+    clear: 'Clear',
+    done: 'Done',
+  },
+  logs: {
+    downloadChanged:
+      'Log history changed while downloading. Please retry the download.',
+    next: 'Load next entries',
+    title: 'Logs',
+    deployment: 'Deployment logs',
+    view: 'View logs',
+    search: 'Search logs',
+    level: 'Level',
+    allLevels: 'All levels',
+    source: 'Logger source',
+    since: 'From time',
+    until: 'Until time',
+    pause: 'Pause',
+    follow: 'Follow latest',
+    history: 'Load retained history',
+    copy: 'Copy visible logs',
+    download: 'Download logs',
+    downloadLimit: 'Download exceeds 50 MB. Narrow the time range.',
+    rotated:
+      'Some log files have rotated or expired. Available records are shown.',
+    loading: 'Loading logs…',
+    disabled: 'Log collection is disabled.',
+    unavailable:
+      'No retained log file is available. Collection may not have been enabled, or the logs have expired.',
+    empty: 'No matching log entries.',
+    stopped: 'Application stopped. Retained logs remain available.',
+    window:
+      'The viewer keeps the latest 2,000 matching entries. Download to read the full retained selection.',
   },
   deployments: {
     title: 'Deployments',
@@ -498,6 +534,8 @@ const enUS = {
     },
     capabilities: {
       'manage-api-keys': 'Manage publishing API Keys',
+
+      'view-logs': 'View application runtime logs',
       'view-status': 'View application, release, deployment, and host status',
       'view-resources': 'View Resources and raw configuration',
       'create-release': 'Create applications and upload releases',

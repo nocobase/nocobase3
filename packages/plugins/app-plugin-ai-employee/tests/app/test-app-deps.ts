@@ -7,10 +7,7 @@ import {
   type AIManager,
   type FileStorageFactory,
 } from '@nocobase/ai-employee';
-import {
-  createConfigPaths,
-  type ConfigPaths,
-} from '@nocobase/app-server/config';
+import { createAppPaths, type AppPaths } from '@nocobase/app-server/config';
 import {
   createAuthentication,
   type Auth,
@@ -25,7 +22,7 @@ import {
 
 export interface TestAppDeps {
   readonly ai: AIManager;
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly database: DatabaseManager;
   readonly auth: Auth;
   readonly caching: Caching;
@@ -45,7 +42,7 @@ export function createTestAppDeps(): TestAppDeps {
   });
   return {
     ai: createAIManager(),
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    paths: createAppPaths({ rootDir: process.cwd() }),
     database,
     auth: createAuthentication({
       connection: database.connection(),

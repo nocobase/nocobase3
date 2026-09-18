@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Deployments } from '../../../../plugins/app-plugin-hub/client/pages/hub/deployments.js';
@@ -28,11 +29,13 @@ describe('Hub deployment pagination', () => {
       onPage,
     };
     const { rerender } = render(
-      <Deployments
-        {...props}
-        pagination={{ page: 1, pageSize: 20, total: 21 }}
-        loading={false}
-      />,
+      <MemoryRouter>
+        <Deployments
+          {...props}
+          pagination={{ page: 1, pageSize: 20, total: 21 }}
+          loading={false}
+        />
+      </MemoryRouter>,
     );
     const previousPage = (): HTMLElement =>
       screen.getByLabelText('Previous deployment page');
@@ -44,22 +47,26 @@ describe('Hub deployment pagination', () => {
     fireEvent.click(nextPage());
     expect(onPage).toHaveBeenCalledWith(2);
     rerender(
-      <Deployments
-        {...props}
-        pagination={{ page: 1, pageSize: 20, total: 21 }}
-        loading
-      />,
+      <MemoryRouter>
+        <Deployments
+          {...props}
+          pagination={{ page: 1, pageSize: 20, total: 21 }}
+          loading
+        />
+      </MemoryRouter>,
     );
     expect(screen.getByText('vfixture')).toBeInTheDocument();
     expect(nextPage()).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(nextPage());
     expect(onPage).toHaveBeenCalledTimes(1);
     rerender(
-      <Deployments
-        {...props}
-        pagination={{ page: 2, pageSize: 20, total: 21 }}
-        loading={false}
-      />,
+      <MemoryRouter>
+        <Deployments
+          {...props}
+          pagination={{ page: 2, pageSize: 20, total: 21 }}
+          loading={false}
+        />
+      </MemoryRouter>,
     );
     expect(
       screen.getByText('21 deployments · Page 2 of 2'),

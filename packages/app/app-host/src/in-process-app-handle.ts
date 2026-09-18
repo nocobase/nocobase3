@@ -1,3 +1,8 @@
+import { randomUUID } from 'node:crypto';
+import path from 'node:path';
+import { createLogging, type Logging } from '@nocobase/logging';
+import { normalizeRuntimeLogging } from '@nocobase/app-server/logging';
+import type { AppRuntimeLogging } from '@nocobase/app-server/logging';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -44,6 +49,7 @@ interface RegisteredDisposer {
 
 export class InProcessAppHandle implements AppScope, ActiveAppHandle {
   readonly id: string;
+  readonly logging: AppRuntimeLogging;
   readonly appName?: string;
   readonly version: number;
   readonly basePath: string;
@@ -66,6 +72,7 @@ export class InProcessAppHandle implements AppScope, ActiveAppHandle {
     return this.app.config.reload();
   }
 
+  private lifecycleLogging?: Logging;
   private readonly globalEvents: AppEventBus;
   private readonly abortController = new AbortController();
   private readonly disposers: RegisteredDisposer[] = [];
@@ -82,6 +89,16 @@ export class InProcessAppHandle implements AppScope, ActiveAppHandle {
 
   private constructor(options: Omit<InProcessAppHandleOptions, 'createApp'>) {
     this.id = options.definition.id;
+    this.logging = {
+      ...options.definition.logging,
+      bindings: {
+        appId: this.id,
+        runtimeId: randomUUID(),
+        ...(options.definition.deploymentId
+          ? { deploymentId: options.definition.deploymentId }
+          : {}),
+      },
+    };
     this.appName = options.definition.appName;
     this.version = options.version;
     this.basePath = options.definition.basePath;
@@ -107,15 +124,40 @@ export class InProcessAppHandle implements AppScope, ActiveAppHandle {
     const runtime = new InProcessAppHandle(options);
 
     try {
+      runtime.lifecycleLog('info', 'Application initializing');
       runtime.app = await options.createApp(runtime);
+      runtime.lifecycleLog('info', 'Application initialized');
       return runtime;
     } catch (error) {
+      runtime.lifecycleLog('error', 'Application initialization failed', error);
       runtime.transitionTo('failed');
       runtime.lastError =
         error instanceof Error ? error.message : String(error);
       await runtime.disposeRegisteredResources('app create failed');
+      await runtime.lifecycleLogging?.close();
       throw error;
     }
+  }
+
+  private lifecycleLog(
+    level: 'info' | 'error',
+    msg: string,
+    err?: unknown,
+  ): void {
+    if (!this.dataDir) return;
+    const policy = normalizeRuntimeLogging(this.logging);
+    this.lifecycleLogging ??= createLogging({
+      level: policy.level ?? 'info',
+      base: { service: 'app', ...policy.bindings },
+      file: { ...policy.file, directory: path.join(this.dataDir, 'logs') },
+      console:
+        typeof policy.console === 'object'
+          ? policy.console
+          : { enabled: false },
+    });
+    this.lifecycleLogging
+      .getLogger('lifecycle')
+      [level]({ ...(err ? { err } : {}) }, msg);
   }
 
   get signal(): AbortSignal {
@@ -380,6 +422,8 @@ export class InProcessAppHandle implements AppScope, ActiveAppHandle {
     await this.disposeRegisteredResources(reason);
 
     this.events.removeAllListeners();
+    this.lifecycleLog('info', 'Application stopped');
+    await this.lifecycleLogging?.close();
     this.transitionTo('destroyed');
     this.globalEvents.emit('app:destroyed', this.payload({ reason }));
   }

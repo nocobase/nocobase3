@@ -1,3 +1,6 @@
+import { captureChildOutput } from './child-output.js';
+import { createDiagnosticLogger, type Logger } from '@nocobase/logging';
+import type { DeploymentLogListener } from './deployment-log.js';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -36,12 +39,14 @@ export type AppHostSupervisorStatus =
 export type AppHostDriver = 'disabled' | 'external' | 'node' | 'tsx';
 
 export interface AppHostSupervisorOptions {
+  logger?: Logger;
   mode?: AppHostMode;
   enabled?: boolean;
   targetUrl?: string;
-  appDeploymentsDir?: string;
+  appRevisionsDir?: string;
   appVolumesDir?: string;
   configPath?: string;
+  childOutputDir?: string;
   host?: string;
   port?: number;
   /** Match the loaded package's source or compiled entrypoint with `auto`. */
@@ -67,9 +72,10 @@ export interface AppHostSupervisorInfo {
   targetUrl?: string;
   pid?: number;
   activeLeases: number;
-  appDeploymentsDir?: string;
+  appRevisionsDir?: string;
   appVolumesDir?: string;
   configPath?: string;
+  childOutputDir?: string;
   entrypoint?: string;
 }
 
@@ -109,14 +115,16 @@ const APP_HOST_CHILD_DENIED_NODE_OPTIONS = [
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 export class AppHostSupervisor {
+  private diagnostic = createDiagnosticLogger();
   private static instance: AppHostSupervisor | null = null;
   private readonly enabled: boolean;
   private readonly mode: AppHostMode;
   private readonly driver: AppHostDriver;
   private readonly externalUrl?: URL;
-  private readonly appDeploymentsDir?: string;
+  private readonly appRevisionsDir?: string;
   private readonly appVolumesDir?: string;
   private readonly configPath?: string;
+  private readonly childOutputDir?: string;
   private readonly host: string;
   private readonly configuredPort?: number;
   private readonly startTimeoutMs: number;
@@ -143,18 +151,20 @@ export class AppHostSupervisor {
   private automaticRestartAttempts: number[] = [];
   private readonly handleShutdownSignal: () => void = () => {
     this.shutdown().catch((error: unknown) => {
-      console.error('Failed to shutdown app-host child process', error);
+      this.diagnostic.error('Failed to shutdown app-host child process', error);
     });
   };
 
   private constructor(options: AppHostSupervisorOptions = {}) {
+    this.diagnostic = createDiagnosticLogger(options.logger);
     this.mode = resolveAppHostMode(options.mode);
     this.enabled = options.enabled ?? true;
     this.externalUrl = normalizeUrl(options.targetUrl);
     this.driver = this.resolveDriver(options);
-    this.appDeploymentsDir = options.appDeploymentsDir;
+    this.appRevisionsDir = options.appRevisionsDir;
     this.appVolumesDir = options.appVolumesDir;
     this.configPath = options.configPath;
+    this.childOutputDir = options.childOutputDir;
     this.host = options.host ?? '127.0.0.1';
     this.configuredPort = options.port;
     this.entrypoint = options.entrypoint;
@@ -185,7 +195,10 @@ export class AppHostSupervisor {
 
     if (options.prestart) {
       this.ensureStarted().catch((error) => {
-        console.error('Failed to prestart app-host child process', error);
+        this.diagnostic.error(
+          'Failed to prestart app-host child process',
+          error,
+        );
       });
     }
   }
@@ -218,7 +231,7 @@ export class AppHostSupervisor {
         this.externalUrl?.toString() ?? this.managedChild?.targetUrl.toString(),
       pid: this.managedChild?.child.pid,
       activeLeases: this.activeLeases,
-      appDeploymentsDir: this.appDeploymentsDir,
+      appRevisionsDir: this.appRevisionsDir,
       appVolumesDir: this.appVolumesDir,
       configPath: this.configPath,
       entrypoint: this.managedChild?.entrypoint,
@@ -320,8 +333,14 @@ export class AppHostSupervisor {
     );
   }
 
-  async applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
-    return (await this.getManagementClient()).applyDeployment(deployment);
+  async applyDeployment(
+    deployment: HostDeploymentSpec,
+    listener?: DeploymentLogListener,
+  ): Promise<HostStatus> {
+    return (await this.getManagementClient()).applyDeployment(
+      deployment,
+      listener,
+    );
   }
 
   async startDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
@@ -411,7 +430,7 @@ export class AppHostSupervisor {
       this.managedChild = null;
       this.status = wasStopping ? 'stopped' : 'failed';
       if (!wasStopping) {
-        console.error(
+        this.diagnostic.error(
           `app-host exited unexpectedly; code=${code ?? 'null'} signal=${signal ?? 'null'}`,
         );
         if (wasReady) {
@@ -427,7 +446,7 @@ export class AppHostSupervisor {
         try {
           listener();
         } catch (error) {
-          console.error('App host ready listener failed', error);
+          this.diagnostic.error('App host ready listener failed', error);
         }
       }
       return targetUrl;
@@ -446,12 +465,14 @@ export class AppHostSupervisor {
     }
 
     this.status = 'stopping';
-    console.log(`Stopping app-host child process: ${reason}`);
+    this.diagnostic.info(`Stopping app-host child process: ${reason}`);
     const exitPromise = waitForChildExit(managed.child, this.shutdownTimeoutMs);
     managed.child.kill('SIGTERM');
 
     await exitPromise.catch((error: unknown) => {
-      console.warn(error instanceof Error ? error.message : String(error));
+      this.diagnostic.warn(
+        error instanceof Error ? error.message : String(error),
+      );
       managed.child.kill('SIGKILL');
     });
 
@@ -475,7 +496,7 @@ export class AppHostSupervisor {
       (attemptedAt) => now - attemptedAt < this.automaticRestartWindowMs,
     );
     if (this.automaticRestartAttempts.length >= this.maxAutomaticRestarts) {
-      console.error(
+      this.diagnostic.error(
         `app-host automatic restart limit reached (${this.maxAutomaticRestarts} attempts in ${this.automaticRestartWindowMs}ms)`,
       );
       return;
@@ -486,13 +507,16 @@ export class AppHostSupervisor {
       this.automaticRestartBaseDelayMs * 2 ** (attempt - 1),
       10_000,
     );
-    console.warn(
+    this.diagnostic.warn(
       `Restarting app-host automatically in ${delay}ms (attempt ${attempt}/${this.maxAutomaticRestarts})`,
     );
     this.automaticRestartTimer = setTimeout(() => {
       this.automaticRestartTimer = null;
       this.ensureStarted().catch((error: unknown) => {
-        console.error('Failed to restart app-host automatically', error);
+        this.diagnostic.error(
+          'Failed to restart app-host automatically',
+          error,
+        );
         this.scheduleAutomaticRestart();
       });
     }, delay);
@@ -544,7 +568,7 @@ export class AppHostSupervisor {
       APP_HOST_BIND: this.host,
       APP_HOST_MODE: this.mode,
       APP_HOST_SESSION: this.session ?? undefined,
-      APP_DEPLOYMENTS_DIR: this.appDeploymentsDir,
+      APP_REVISIONS_DIR: this.appRevisionsDir,
       APP_VOLUMES_DIR: this.appVolumesDir,
       APP_HOST_CONFIG_PATH: this.configPath,
     };
@@ -620,6 +644,7 @@ export class AppHostSupervisor {
   }
 
   private pipeChildLogs(child: ChildProcess): void {
+    if (this.childOutputDir) captureChildOutput(child, this.childOutputDir);
     child.stdout?.on('data', (chunk: unknown) => {
       if (Buffer.isBuffer(chunk)) process.stdout.write(chunk);
     });

@@ -6,6 +6,7 @@ import {
 } from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/db';
 import { cachingToken } from '@nocobase/app-server/caching';
+import { loggingToken } from '@nocobase/app-server/logging';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { type AppIdentityConfig } from '@nocobase/app-server/config';
 import type { NodeServerConfig } from '@nocobase/app-server/node';
@@ -106,11 +107,27 @@ export class AuthenticationProvider<
     const database = container.has(databaseManagerToken)
       ? container.resolve(databaseManagerToken)
       : undefined;
+    const logger = container.has(loggingToken)
+      ? container.resolve(loggingToken).getLogger('auth')
+      : undefined;
     const auth = createAuthentication({
       connection: database?.connection(),
       secondaryStorage: createAuthStorage(caching),
       appName: app.name,
       ...authConfig,
+      logger:
+        authConfig.logger ??
+        (logger
+          ? {
+              level: 'debug',
+              log: (level, message, ...details: unknown[]) => {
+                logger[level](
+                  { ...(details.length ? { details } : {}) },
+                  message,
+                );
+              },
+            }
+          : undefined),
       baseURL: app.publicOrigin,
       basePath: resolvePublicPath('/api/auth', app.publicBasePath),
       advanced: {

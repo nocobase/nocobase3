@@ -59,6 +59,16 @@ const HUB_API_CASES: readonly ApiCase[] = [
     allowed: ADMINISTRATOR_AND_OPERATOR,
   },
   {
+    name: 'read runtime logs',
+    path: '/hub/apps/customer/logs',
+    allowed: ADMINISTRATOR_AND_OPERATOR,
+  },
+  {
+    name: 'read deployment logs',
+    path: '/hub/apps/customer/deployments/deployment-1/logs',
+    allowed: ALL_HUB_ROLES,
+  },
+  {
     name: 'list applications',
     path: '/hub/apps',
     allowed: ALL_HUB_ROLES,
@@ -645,6 +655,14 @@ function createHubService(): HubService {
       Promise.resolve({ mode: 'file', content: 'feature: true\n' }),
     ),
     updateSettings: vi.fn(() => Promise.resolve(detail)),
+    readLogs: vi.fn(async () => ({
+      entries: [],
+      cursor: '',
+      hasMore: false,
+      available: false,
+      reset: false,
+      enabled: true,
+    })),
     listDeployments: vi.fn(() =>
       Promise.resolve({
         items: [{ ...deployment, release }],

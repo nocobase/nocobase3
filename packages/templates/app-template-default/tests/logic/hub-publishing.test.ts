@@ -14,8 +14,8 @@ const env = {
 };
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'hub-cli-test-'));
-  await mkdir(path.join(root, 'storage'));
-  await writeFile(path.join(root, 'storage/dist.tar.gz'), 'artifact');
+  await mkdir(path.join(root, 'storage/exports'), { recursive: true });
+  await writeFile(path.join(root, 'storage/exports/dist.tar.gz'), 'artifact');
 });
 afterEach(async () => {
   vi.unstubAllGlobals();
@@ -434,7 +434,7 @@ describe('CLI command output', () => {
           env.HUB_API_KEY,
           ...(operation === 'deploy'
             ? ['--release-id', 'r1']
-            : ['--file', path.join(root, 'storage/dist.tar.gz')]),
+            : ['--file', path.join(root, 'storage/exports/dist.tar.gz')]),
           ...flags,
         ],
         config,
@@ -522,7 +522,7 @@ describe('CLI command output', () => {
         '--api-key',
         env.HUB_API_KEY,
         '--file',
-        path.join(root, 'storage/dist.tar.gz'),
+        path.join(root, 'storage/exports/dist.tar.gz'),
       ],
       config,
     );

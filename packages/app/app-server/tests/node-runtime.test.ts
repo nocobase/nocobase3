@@ -11,7 +11,7 @@ import { Application } from '../src/application/index.js';
 import {
   AppConfig,
   type AppConfigAccessor,
-  type ConfigPaths,
+  type AppPaths,
 } from '../src/config/index.js';
 import {
   createStandaloneServer,
@@ -180,7 +180,7 @@ function createStandaloneDefinition(
     createServer: async (scope) => {
       onCreate(scope);
       const runtime = await resolveAppRuntime(appRuntime, scope);
-      const app = createApplication(runtime.config, runtime.configPaths);
+      const app = createApplication(runtime.config, runtime.paths);
       return startApplicationInScope(scope, app);
     },
   };
@@ -211,7 +211,7 @@ function createDefinition(_publicBasePath: string): AppRuntimeDefinition {
 
 function createApplication(
   config: AppConfigAccessor,
-  paths: ConfigPaths,
+  paths: AppPaths,
 ): Application {
   const app = new Application({
     config,

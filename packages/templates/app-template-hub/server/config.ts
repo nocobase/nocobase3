@@ -12,8 +12,7 @@ export function createAppConfig(
   const config = new AppConfig();
   const configuredPath =
     context.configPath ?? context.environment.APP_CONFIG_FILE;
-  // Without an explicit path, look next to `dist/` as well: a built application runs with its root at `dist/`, but a
-  // deployment writes `config.yml` beside `dist/` where `pnpm build --tar` placed `config.example.yml`.
+  // Deployment configuration stays beside the compiled code directory.
   const configPath =
     configuredPath === undefined
       ? resolveDefaultAppConfigFile(context.paths)

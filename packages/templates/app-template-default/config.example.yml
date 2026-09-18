@@ -118,3 +118,21 @@ snowflake:
   # Assign a unique worker ID to each concurrently running instance.
   workerId: 0
   epoch: 1605024000
+
+# File logging is independent of terminal formatting.
+logging:
+  level: info
+  file:
+    enabled: true
+    retentionDays: 7
+    name: app
+    maxFileSizeMB: 10
+    maxTotalSizeMB: 500
+  loggers:
+    request:
+      file:
+        name: request
+  console:
+    enabled: true
+    # Set true for human-readable terminal output.
+    pretty: false

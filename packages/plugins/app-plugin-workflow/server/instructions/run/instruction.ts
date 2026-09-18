@@ -1,3 +1,4 @@
+import { bindWorkflowLogger } from '../../engine/logger.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -261,7 +262,10 @@ export class RunInstruction extends WorkflowInstruction<RunConfig> {
       const options: WorkflowRunOptions = Object.freeze({
         services: this.processor.services,
         signal,
-        logger: this.processor.logger,
+        logger: bindWorkflowLogger(this.processor.logger, {
+          nodeId: this.node.id,
+          nodeKey: this.node.key,
+        }),
       });
       result = await module.run(args, options);
       logRunExecution(this.processor.logger, {

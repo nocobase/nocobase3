@@ -202,7 +202,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   }, [appId, authorization, loadDetail, reportError]);
 
   const tabMatch = matchPath(
-    { path: `${appPath.pathname}/:tab`, end: true },
+    { path: `${appPath.pathname}/:tab/*`, end: true },
     location.pathname,
   );
   const tabParam = tabMatch?.params.tab;
@@ -658,7 +658,9 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
             void perform(async () => {
               if (!deploymentReleaseId || deploymentMode === 'managed') return;
               const endpoint = rollbackDeploymentId ? 'rollback' : 'deploy';
-              await client.request({
+              const accepted = await client.request<
+                ApiResponse<{ id: string }>
+              >({
                 path: `hub/apps/${appId}/${endpoint}`,
                 method: 'POST',
                 json: {
@@ -676,7 +678,9 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
               setSelectedReleaseId(deploymentReleaseId);
               setDeployOpen(false);
               setRollbackDeploymentId(undefined);
-              navigateToTab('deployments');
+              await navigate(
+                `${appPath.pathname}/deployments/${accepted.data.id}/logs`,
+              );
               setDeploymentPage(1);
             })
           }

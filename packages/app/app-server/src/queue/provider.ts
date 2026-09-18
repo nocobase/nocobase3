@@ -24,7 +24,7 @@ export class QueueProvider extends ServiceProvider<AppPluginApplication> {
         : undefined;
       const logger = container
         .resolve(loggingToken)
-        .getLogger()
+        .getLogger('queue')
         .child({ module: 'queue' });
       return createQueueJobFactoryRegistry(
         (JobClass) => new JobClass({ database, logger }),
@@ -45,7 +45,7 @@ export class QueueProvider extends ServiceProvider<AppPluginApplication> {
       : undefined;
     const logger = container
       .resolve(loggingToken)
-      .getLogger()
+      .getLogger('queue')
       .child({ module: 'queue' });
     return createQueueManager(this.app.config.get<AppQueueConfig>('queue')!, {
       database,

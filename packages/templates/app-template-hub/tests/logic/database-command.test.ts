@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { runDatabaseCommand } from '../../cli/database-command.js';
 import {
-  createConfigPaths,
+  createAppPaths,
   type AppConfigAccessor,
 } from '@nocobase/app-server/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
@@ -22,7 +22,7 @@ function fixture() {
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'cli-database-'));
   roots.push(root);
-  const paths = createConfigPaths({ rootDir: root });
+  const paths = createAppPaths({ rootDir: root });
   const database: AppDatabaseConfig<SqliteConnectionConfig> = {
     drivers: { sqlite },
     default: 'main',
@@ -42,7 +42,7 @@ function fixture() {
   };
   const runtime = async () => ({
     config: { get: () => database } as unknown as AppConfigAccessor,
-    configPaths: paths,
+    paths: paths,
     plugins: { appPackageName: 'test-app', plugins: [] },
   });
   const command = {

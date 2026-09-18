@@ -34,7 +34,7 @@ export default class AppUpload extends Command {
     }),
     file: Flags.string({
       description: 'Artifact path.',
-      default: 'storage/dist.tar.gz',
+      default: 'storage/exports/dist.tar.gz',
     }),
     'idempotency-key': Flags.string({
       description: 'Retry identity. Defaults to artifact SHA-256.',

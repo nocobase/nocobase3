@@ -7,7 +7,7 @@ import { createAppDatabaseManager } from './manager.js';
 import { executeAppDatabasePlan } from './tasks.js';
 import { planAppRuntimeDatabaseTasks } from './plan.js';
 import { prepareAppDatabaseStorage } from './storage.js';
-import type { AppConfigAccessor, ConfigPaths } from '../config/index.js';
+import type { AppConfigAccessor, AppPaths } from '../config/index.js';
 import type {
   AppDatabaseConfig,
   AppDatabaseTaskContributions,
@@ -16,7 +16,7 @@ import type {
 export interface DatabaseProviderApplication {
   readonly config: AppConfigAccessor;
   readonly container: ServiceContainer;
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly databaseTaskContributions: AppDatabaseTaskContributions;
 }
 
