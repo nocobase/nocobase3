@@ -74,6 +74,12 @@ export interface HubDeploymentRecord {
   readonly createdAt: Date;
   readonly startedAt: Date | null;
   readonly finishedAt: Date | null;
+  /**
+   * Set when a deployment request was answered from an earlier idempotent request instead of
+   * creating a deployment now, so callers can tell "accepted" from "already done". Records read
+   * back from storage never carry it.
+   */
+  readonly reused?: boolean;
 }
 
 export interface HubRuntimeStatus {

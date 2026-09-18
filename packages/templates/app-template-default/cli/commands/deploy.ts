@@ -78,6 +78,8 @@ export default class AppDeploy extends Command {
         this.log(
           `Deployment ${String(result.operationId)}: ${String(result.operationStatus)}. Retry key: ${String(result.idempotencyKey)}.`,
         );
+      if (!json && typeof result.warning === 'string')
+        this.warn(result.warning);
     } catch (error) {
       const failure = !parsed
         ? new PublishingError(
