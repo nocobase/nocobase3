@@ -139,7 +139,6 @@ export class NotificationManager<
       !this.options.config.channels.some((config) => config.enabled)
     )
       return;
-    this.registry.validate(this.options.config);
     this.unregisterDelivery = this.options.queue
       .consumer(NOTIFICATION_QUEUE_NAME)
       .consume(createDeliveryHandler(this.channelManager));
@@ -151,6 +150,8 @@ export class NotificationManager<
       !this.options.config.channels.some((config) => config.enabled)
     )
       return;
+    // Channel plugins contribute definitions during boot, after core registration.
+    this.registry.validate(this.options.config);
     this.registerDeliveryHandler();
     this.activated = true;
     this.reconcileJob.start();

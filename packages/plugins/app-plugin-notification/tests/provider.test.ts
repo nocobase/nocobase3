@@ -117,6 +117,36 @@ describe('@nocobase/app-plugin-notification provider', () => {
     ).resolves.toMatchObject({ effect: 'permit' });
   });
 
+  it('defers definition validation until start and still rejects missing channels', async () => {
+    const container = createContainer(true);
+    const provider = new NotificationProvider({
+      config: {
+        get: () => ({
+          channels: [
+            {
+              type: 'email',
+              enabled: true,
+              providers: [{ type: 'missing', name: 'primary' }],
+            },
+          ],
+        }),
+      },
+      container,
+    });
+    provider.register();
+    const queue = container.resolve(queueServiceToken);
+    try {
+      await expect(provider.boot()).resolves.toBeUndefined();
+      await queue.setup();
+      await expect(provider.start()).rejects.toThrow(
+        'Notification Channel definition "email" is not registered.',
+      );
+    } finally {
+      await provider.shutdown();
+      await queue.shutdown();
+    }
+  });
+
   it('fails fast when the required database dependency is missing', () => {
     const container = createContainer(false);
     const provider = new NotificationProvider({
