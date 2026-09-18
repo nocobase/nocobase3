@@ -85,6 +85,11 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-template-examples:notifications',
+        path: '/notifications',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-template-examples:routeOverlays',
         path: '/route-overlays',
       },

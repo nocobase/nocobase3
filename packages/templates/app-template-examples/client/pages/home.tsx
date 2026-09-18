@@ -3,6 +3,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import {
   ArrowUpRight,
   BookOpen,
+  Bell,
   Database,
   Hash,
   FileText,
@@ -18,6 +19,7 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 
 const examples = [
+  { key: 'notifications', path: '/notifications', icon: Bell },
   { key: 'routeOverlays', path: '/route-overlays', icon: PanelsTopLeft },
   { key: 'articles', path: '/articles', icon: FileText },
   { key: 'numbers', path: '/numeric-examples', icon: Hash },
