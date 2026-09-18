@@ -1,3 +1,7 @@
+import { accessScopeLabel } from '@nocobase/app-plugin-authorization/client/management';
+import { humanize } from '@nocobase/app-plugin-authorization/client/management';
+import { resourceLabel } from '@nocobase/app-plugin-authorization/client/management';
+import { collectionFields } from '@nocobase/app-plugin-authorization/client/management';
 import { titleText } from '@nocobase/app-plugin-authorization/client/management';
 import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
 import { BusinessRuleScopes } from '@nocobase/app-plugin-authorization/client/management';
@@ -55,7 +59,7 @@ import {
   ManagementToolbar,
 } from '@nocobase/app-plugin-authorization/client/management';
 import { TablePager } from '@nocobase/app-plugin-authorization/client/management';
-import { useAuthorizationTranslation, type Translate } from '../i18n.js';
+import { useAuthorizationTranslation } from '../i18n.js';
 import { pageSlice } from '@nocobase/app-plugin-authorization/client/management';
 import {
   defaultScope,
@@ -245,7 +249,7 @@ export function SharingRulesPanel({
                   </p>
                 </TableCell>
                 <TableCell className='px-5 py-4 align-top'>
-                  {resourceLabel(options, rule)}
+                  {resourceLabel(options, rule.resource)}
                 </TableCell>
                 <TableCell className='px-5 py-4 align-top'>
                   <div className='flex flex-wrap gap-x-3 gap-y-1'>
@@ -337,7 +341,7 @@ export function SharingRulesPanel({
                                         ? t('labels.selectedRecords', {
                                             count: item.selection.ids.length,
                                           })
-                                        : policyLabel(
+                                        : accessScopeLabel(
                                             t,
                                             item.selection.policy,
                                             options,
@@ -818,44 +822,4 @@ function PolicyEditor({
 function defaultPolicy(options: AuthorizationOptions): AccessScope {
   const scope = defaultScope(options);
   return scope.type === 'ids' ? { type: 'all' } : scope;
-}
-function collectionFields(
-  options: AuthorizationOptions,
-  name: string,
-): readonly string[] {
-  return options.collections.find((item) => item.name === name)?.fields ?? [];
-}
-function resourceLabel(
-  options: AuthorizationOptions,
-  rule: SharingRule,
-): string {
-  return (
-    options.resourceTypes
-      .find((item) => item.value === rule.resource.type)
-      ?.resources.find((item) => item.value === rule.resource.id)?.label ??
-    rule.resource.id
-  );
-}
-function humanize(value: string): string {
-  return value
-    .replace(/[._-]+/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function policyLabel(
-  t: Translate,
-  scope: AccessScope,
-  options: AuthorizationOptions,
-): string {
-  if (scope.type === 'all') return t('labels.allRecords');
-  if (scope.type === 'ids')
-    return t('labels.selectedRecords', { count: scope.ids.length });
-  const key =
-    typeof scope.recordAccess === 'string'
-      ? scope.recordAccess
-      : scope.recordAccess.key;
-  return (
-    options.recordAccessPolicies.find((item) => item.value === key)?.label ??
-    key
-  );
 }

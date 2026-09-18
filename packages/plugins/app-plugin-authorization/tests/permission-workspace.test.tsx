@@ -82,6 +82,31 @@ beforeEach(() => {
   api.listAssignments.mockResolvedValue([]);
 });
 describe('permission set workspace', () => {
+  it('confirms cancellation and restores the saved draft without navigating', async () => {
+    mount('/sets/edit/staff');
+    const permission = await screen.findByRole('button', {
+      name: 'Permission sets: Read',
+    });
+    fireEvent.click(permission);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Cancel', exact: true }),
+    );
+    await screen.findByRole('dialog');
+    expect(permission).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Discard changes', exact: true }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Permission sets: Read' }),
+      ).toHaveAttribute('aria-pressed', 'false'),
+    );
+    expect(screen.getByTestId('url')).toHaveTextContent('/sets/edit/staff');
+    expect(
+      screen.getByRole('button', { name: 'Save permission set' }),
+    ).toBeDisabled();
+    expect(api.updatePermissionSet).not.toHaveBeenCalled();
+  });
   it('selects the first set, retains sidebar collapse across routes and supports browser back', async () => {
     mount();
     await waitFor(() =>

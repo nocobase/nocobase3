@@ -52,8 +52,8 @@ it('finds resources by translated label, original label and identifier', async (
       root.render(
         <I18nProvider runtime={runtime}>
           <PermissionSetEditor
+            dirty={true}
             options={options}
-            embedded
             draft={{
               originalKey: 'test',
               key: 'test',

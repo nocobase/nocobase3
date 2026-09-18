@@ -129,12 +129,6 @@ export interface AuthorizationOptions<Text = string> {
   collections: readonly DatabaseCollectionOption[];
   recordAccessPolicies: readonly SelectOption<Text>[];
 }
-export interface AuthorizationUser {
-  id: string;
-  name: string;
-  username?: string;
-  email: string;
-}
 export interface AuthorizationRecordOption {
   id: string;
   label: string;
@@ -187,9 +181,6 @@ export interface AuthorizationInspection {
 interface DataResponse<T> {
   data: T;
 }
-
-/** One page is the whole picker; the Users page is where a large directory is searched. */
-const USER_PAGE_SIZE = 200;
 
 export class AuthorizationClient {
   private snapshot?: Promise<AuthorizationPermissionsSnapshot>;
@@ -275,14 +266,6 @@ export class AuthorizationClient {
       'POST',
       { ids },
     );
-  }
-  listUsers(): Promise<readonly AuthorizationUser[]> {
-    return this.api
-      .request<DataResponse<{ items: readonly AuthorizationUser[] }>>({
-        path: 'users',
-        query: { pageSize: USER_PAGE_SIZE },
-      })
-      .then((response) => response.data.items);
   }
   /** What one person may do on one resource, and why the application says so. */
   inspect(input: AuthorizationInspectInput): Promise<AuthorizationDecision> {

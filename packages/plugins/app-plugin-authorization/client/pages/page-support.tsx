@@ -19,12 +19,6 @@ import {
   PageForbidden,
   PageLoading,
 } from '../components/page-shell.js';
-import {
-  unavailableUserDirectory,
-  userDirectory,
-  type UserDirectory,
-} from '../components/user-directory.js';
-
 /** What a settings page knows before its options have arrived. */
 export interface AuthorizationPageData {
   readonly options?: AuthorizationOptions;
@@ -80,36 +74,6 @@ export function useAuthorizationPageData(
     error: state.error === undefined ? undefined : message(t, state.error),
     reload,
   };
-}
-
-/**
- * Users are read from the Users API, which authorizes separately from these
- * pages, so a refusal degrades the page instead of failing it.
- */
-// eslint-disable-next-line react-refresh/only-export-components
-export function useUserDirectory(): UserDirectory {
-  const authz = useAuthorizationClient();
-  const t = useAuthorizationTranslation();
-  const [state, setState] = useState<{ users: UserDirectory; error?: unknown }>(
-    () => ({ users: userDirectory([]) }),
-  );
-  useEffect(() => {
-    let active = true;
-    void authz.listUsers().then(
-      (users) => {
-        if (active) setState({ users: userDirectory(users) });
-      },
-      (error) => {
-        if (active) setState({ users: userDirectory([]), error });
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [authz]);
-  return state.error === undefined
-    ? state.users
-    : unavailableUserDirectory(t, state.error);
 }
 
 /** What a page shows while its options are loading, refused, or failed. */

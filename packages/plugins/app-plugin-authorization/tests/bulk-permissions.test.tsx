@@ -45,7 +45,6 @@ function Harness() {
         id: 1,
         resource: { type: 'settings', id: 'existing' },
         actions: ['read'],
-        database: {},
       },
     ],
   });
@@ -53,6 +52,7 @@ function Harness() {
     <>
       <output data-testid='draft'>{JSON.stringify(draft.grants)}</output>
       <PermissionSetEditor
+        dirty={true}
         options={options}
         draft={draft}
         busy={false}

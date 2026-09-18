@@ -33,6 +33,8 @@ Client checks use the current identity's permission snapshot for visibility; ser
 
 For new code, use [plugin-owned fluent builders](references/fluent-registration.md) to compose business actions with typed database field permissions and named record scopes, plus independent page-access grants. The sales authorization example demonstrates independent scopes on a multi-table operation.
 
+The permission workspace edits business operations, their declared record scopes, and page access. Declare database fields and relation capabilities in code; the workspace has no raw collection field editor and preserves underlying grants when saving a set. Subject selection uses the registered subject directory rather than loading the Users API directly.
+
 ## Register the collections the module governs
 
 Database authorization is built in — an application no longer lists it among its plugins — and it is reached as `authz.db`.

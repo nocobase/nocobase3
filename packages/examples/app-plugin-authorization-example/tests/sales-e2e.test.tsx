@@ -269,6 +269,7 @@ it('saves one operation scope from the real editor without changing view or quot
     const [draft, setDraft] = useState(() => fromSet(set as PermissionSet));
     return (
       <PermissionSetEditor
+        dirty={true}
         options={options}
         draft={draft}
         busy={false}

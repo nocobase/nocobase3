@@ -80,45 +80,6 @@ export function SearchField({
   );
 }
 
-/** A pressed-state chip that selects which rows a table shows. */
-export function FilterChip({
-  pressed,
-  count,
-  children,
-  onClick,
-}: {
-  pressed: boolean;
-  count?: number;
-  children: ReactNode;
-  onClick: () => void;
-}): ReactElement {
-  return (
-    <button
-      aria-pressed={pressed}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium',
-        pressed
-          ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-border bg-background text-muted-foreground hover:text-foreground',
-      )}
-      type='button'
-      onClick={onClick}
-    >
-      {children}
-      {count === undefined ? null : (
-        <span
-          className={cn(
-            'rounded-full px-1.5 py-0.5 text-[0.625rem] tabular-nums',
-            pressed ? 'bg-primary-foreground/20' : 'bg-muted',
-          )}
-        >
-          {count}
-        </span>
-      )}
-    </button>
-  );
-}
-
 /** Returns every filter in its bar to the default. Shown only while one is away from it. */
 export function ClearFilterButton({
   onClear,

@@ -48,21 +48,3 @@ export function ScopeMark({
     </span>
   );
 }
-
-export function ScopeLegend({
-  values,
-}: {
-  values: readonly GrantMark[];
-}): ReactElement {
-  const t = useAuthorizationTranslation();
-  return (
-    <div className='flex flex-wrap gap-4 text-xs text-muted-foreground'>
-      {values.map((value) => (
-        <span key={value} className='flex items-center gap-2'>
-          <ScopeMark value={value} legend />
-          {markDescription(t, value)}
-        </span>
-      ))}
-    </div>
-  );
-}

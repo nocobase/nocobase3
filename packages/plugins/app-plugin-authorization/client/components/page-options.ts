@@ -86,24 +86,6 @@ export function withPageResources(
   };
 }
 
-/**
- * True for a stored page grant no route declares any more. A renamed or removed route leaves such a grant behind, and
- * it silently denies access, so the panel shows it rather than rendering it as an ordinary permission.
- */
-export function isUnknownPage(
-  options: AuthorizationOptions,
-  resource: { readonly type: string; readonly id: string },
-): boolean {
-  if (resource.type !== PAGE_RESOURCE_TYPE) return false;
-  const pages = options.resourceTypes.find(
-    (resourceType) => resourceType.value === PAGE_RESOURCE_TYPE,
-  );
-  return (
-    pages !== undefined &&
-    !pages.resources.some((page) => page.value === resource.id)
-  );
-}
-
 /** Navigation-only route nodes form the display tree; pages remain flat items. */
 export function pageGroups(
   routes: readonly AppClientRegisteredRoute[],

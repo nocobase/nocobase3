@@ -273,7 +273,7 @@ export function PermissionSetsPanel({
   ) : (
     <PermissionSetEditor
       key={`${permissionSetKey ?? 'new'}:${revision}`}
-      embedded
+      dirty={dirty}
       showDetails={editingDetails}
       readOnly={isNew ? !allowed.create : !capabilities.canUpdate}
       options={options}
@@ -284,7 +284,7 @@ export function PermissionSetsPanel({
         event.preventDefault();
         return save();
       }}
-      onClose={discard}
+      onClose={() => setPending(location.pathname)}
     />
   );
   return (

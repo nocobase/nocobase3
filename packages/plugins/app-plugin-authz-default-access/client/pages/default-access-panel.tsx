@@ -1,3 +1,4 @@
+import { accessScopeLabel } from '@nocobase/app-plugin-authorization/client/management';
 import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
 import { BusinessRuleScopes } from '@nocobase/app-plugin-authorization/client/management';
 import { useCan } from '@nocobase/app-plugin-authorization/client';
@@ -24,7 +25,7 @@ import type {
   ResourceGroupOption,
 } from '@nocobase/app-plugin-authorization/client/management';
 import { useDefaultAccessClient } from '../api.js';
-import { useAuthorizationTranslation, type Translate } from '../i18n.js';
+import { useAuthorizationTranslation } from '../i18n.js';
 import { Button } from '../components/ui/button.js';
 import {
   Table,
@@ -758,26 +759,6 @@ export function DefaultAccessPanel({
     </>
   );
 }
-function scopeLabel(
-  t: Translate,
-  scope: AccessScope,
-  options: AuthorizationOptions,
-): string {
-  if (scope.type === 'all') return t('labels.allRecords');
-  if (scope.type === 'ids')
-    return t('labels.selectedRecords', { count: scope.ids.length });
-  if (scope.type === 'database') {
-    const key =
-      typeof scope.recordAccess === 'string'
-        ? scope.recordAccess
-        : scope.recordAccess.key;
-    return (
-      options.recordAccessPolicies.find((item) => item.value === key)?.label ??
-      key
-    );
-  }
-  return t('labels.unknownScope');
-}
 
 function resourcePath(options: AuthorizationOptions, row: Row): string {
   const type = options.resourceTypes.find(
@@ -840,7 +821,7 @@ function DefaultScopeControl({
       <Menu.Trigger
         disabled={disabled}
         aria-label={label}
-        title={scope ? scopeLabel(t, scope, options) : selected.label}
+        title={scope ? accessScopeLabel(t, scope, options) : selected.label}
         className='inline-flex cursor-pointer items-center gap-1 rounded-md border bg-muted/30 p-1 hover:bg-muted disabled:opacity-50'
       >
         <ScopeMark value={selected.mark} label={selected.label} />

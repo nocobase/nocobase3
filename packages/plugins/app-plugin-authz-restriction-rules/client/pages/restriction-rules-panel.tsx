@@ -1,3 +1,7 @@
+import { accessScopeLabel } from '@nocobase/app-plugin-authorization/client/management';
+import { humanize } from '@nocobase/app-plugin-authorization/client/management';
+import { resourceLabel } from '@nocobase/app-plugin-authorization/client/management';
+import { collectionFields } from '@nocobase/app-plugin-authorization/client/management';
 import { titleText } from '@nocobase/app-plugin-authorization/client/management';
 import { SelectField } from '@nocobase/app-plugin-authorization/client/management';
 import { resourceSections } from '@nocobase/app-plugin-authorization/client/management';
@@ -49,7 +53,7 @@ import {
   ManagementToolbar,
 } from '@nocobase/app-plugin-authorization/client/management';
 import { TablePager } from '@nocobase/app-plugin-authorization/client/management';
-import { useAuthorizationTranslation, type Translate } from '../i18n.js';
+import { useAuthorizationTranslation } from '../i18n.js';
 import { pageSlice } from '@nocobase/app-plugin-authorization/client/management';
 import {
   defaultScope,
@@ -253,7 +257,7 @@ export function RestrictionRulesPanel({
                   )}
                 </TableCell>
                 <TableCell className='px-5 py-4 align-top whitespace-normal break-words'>
-                  {resourceLabel(options, rule)}
+                  {resourceLabel(options, rule.resource)}
                 </TableCell>
                 <TableCell className='px-5 py-4 align-top whitespace-normal break-words'>
                   <div className='flex flex-wrap gap-x-3 gap-y-1'>
@@ -542,13 +546,6 @@ export function RestrictionRulesPanel({
   );
 }
 
-function collectionFields(
-  options: AuthorizationOptions,
-  name: string,
-): readonly string[] {
-  return options.collections.find((item) => item.name === name)?.fields ?? [];
-}
-
 function fresh(options: AuthorizationOptions): RestrictionRule {
   const type =
     options.resourceTypes.find((item) => item.value === 'resource') ??
@@ -571,39 +568,4 @@ function fresh(options: AuthorizationOptions): RestrictionRule {
     subjects: [],
     reason: '',
   };
-}
-
-function resourceLabel(
-  options: AuthorizationOptions,
-  rule: RestrictionRule,
-): string {
-  return (
-    options.resourceTypes
-      .find((item) => item.value === rule.resource.type)
-      ?.resources.find((item) => item.value === rule.resource.id)?.label ??
-    rule.resource.id
-  );
-}
-
-function accessScopeLabel(
-  t: Translate,
-  scope: import('@nocobase/app-plugin-authorization/client/management').AccessScope,
-  options: AuthorizationOptions,
-): string {
-  if (scope.type === 'all') return t('labels.allRecords');
-  if (scope.type === 'ids')
-    return t('labels.selectedRecords', { count: scope.ids.length });
-  const key =
-    typeof scope.recordAccess === 'string'
-      ? scope.recordAccess
-      : scope.recordAccess.key;
-  return (
-    options.recordAccessPolicies.find((item) => item.value === key)?.label ??
-    key
-  );
-}
-function humanize(value: string): string {
-  return value
-    .replace(/[._-]+/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

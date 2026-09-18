@@ -211,15 +211,7 @@ export function ModulePermissions({
                     aria-pressed={granted}
                     className={`inline-flex items-center gap-1 rounded-md text-left hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${type === 'page' ? 'p-1' : 'py-1 pl-1 pr-2'}`}
                     onClick={() =>
-                      onToggle(
-                        grant,
-                        action.value,
-                        type === 'database.collection'
-                          ? 'custom'
-                          : granted
-                            ? 'none'
-                            : 'all',
-                      )
+                      onToggle(grant, action.value, granted ? 'none' : 'all')
                     }
                   >
                     <ScopeMark

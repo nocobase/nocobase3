@@ -15,18 +15,4 @@ export interface GrantDraft {
   policies?: Readonly<
     Record<string, { type: string; [key: string]: unknown } | undefined>
   >;
-  database: Readonly<Record<string, DatabaseActionDraft>>;
 }
-
-export interface DatabaseActionDraft {
-  input: '*' | readonly string[];
-  output: '*' | readonly string[];
-  recordAccess: RecordAccessDraft;
-}
-
-export type RecordAccessDraft =
-  | string
-  | {
-      key: string;
-      params?: unknown;
-    };

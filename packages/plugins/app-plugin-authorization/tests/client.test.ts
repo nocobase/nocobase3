@@ -23,16 +23,10 @@ import {
   permissionSetCapabilities,
   permissionSetErrorMessage,
 } from '../client/components/permission-set-access.js';
-import {
-  canAddAssignment,
-  unavailableUserDirectory,
-  userDirectory,
-  userLabel,
-} from '../client/components/user-directory.js';
+
 import {
   grantablePages,
   pageGroups,
-  isUnknownPage,
   withPageResources,
 } from '../client/components/page-options.js';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
@@ -299,37 +293,6 @@ describe('@nocobase/app-plugin-authorization client', () => {
     ).toBe('Network down');
   });
 
-  it('names an assignment from the users API and keeps the id when it is refused', () => {
-    const loaded = userDirectory([
-      { id: 'u1', name: 'Alice', email: 'alice@example.com' },
-    ]);
-    const refused = unavailableUserDirectory(
-      translate,
-      Object.assign(new Error('Forbidden'), { status: 403 }),
-    );
-
-    expect(userLabel(translate, loaded, 'u1')).toBe(
-      'Alice · alice@example.com',
-    );
-    expect(canAddAssignment(loaded)).toBe(true);
-    // The assignment list comes from Authorization, so the row stays readable.
-    expect(userLabel(translate, refused, 'u1')).toBe(
-      translate('common.userFallback', { id: 'u1' }),
-    );
-    expect(canAddAssignment(refused)).toBe(false);
-    expect(refused.unavailable).toBe(translate('errors.usersForbidden'));
-  });
-
-  it('says a failed user request is not a permission problem', () => {
-    const offline = unavailableUserDirectory(
-      translate,
-      new Error('Network down'),
-    );
-
-    expect(canAddAssignment(offline)).toBe(false);
-    expect(offline.unavailable).toBe(translate('errors.usersUnavailable'));
-  });
-
   it('uses route groups for server-declared pages while retaining server metadata', () => {
     const groups = [
       {
@@ -456,20 +419,6 @@ describe('@nocobase/app-plugin-authorization client', () => {
       'Allow access to every page, including pages added later.',
     );
     expect(merged.collections).toEqual(options().collections);
-  });
-
-  it('marks a stored page grant no route declares any more', () => {
-    const merged = withPageResources(options(), [
-      { value: 'orders', label: 'Orders' },
-    ]);
-
-    expect(isUnknownPage(merged, { type: 'page', id: 'renamed' })).toBe(true);
-    expect(isUnknownPage(merged, { type: 'page', id: 'orders' })).toBe(false);
-    expect(isUnknownPage(merged, { type: 'page', id: '*' })).toBe(false);
-    // Only pages are decided from the route registry; every other resource type comes from the server.
-    expect(
-      isUnknownPage(merged, { type: 'database.collection', id: 'gone' }),
-    ).toBe(false);
   });
 });
 

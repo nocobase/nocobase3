@@ -1,8 +1,7 @@
 import type {
+  AccessScope,
   AuthorizationOptions,
-  AuthorizationSubject,
 } from '../authorization-client.js';
-import type { UserDirectory } from '../components/user-directory.js';
 import type { Translate } from '../i18n.js';
 
 /**
@@ -25,16 +24,6 @@ export function humanize(value: string): string {
   return value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-export function resourceTypeLabel(
-  options: AuthorizationOptions,
-  type: string,
-): string {
-  return (
-    options.resourceTypes.find((item) => item.value === type)?.label ??
-    humanize(type)
-  );
 }
 
 /** How one action is named: as its resource type declares it, else humanised. */
@@ -68,18 +57,6 @@ export function resourceLabel(
   );
 }
 
-export function subjectLabel(
-  t: Translate,
-  subject: AuthorizationSubject,
-  directory: UserDirectory,
-): string {
-  if (subject.type === 'authenticated') return t('common.signedInUsers');
-  const user = directory.users.find((item) => item.id === subject.id);
-  return user
-    ? `${user.name} · ${user.username ?? user.email}`
-    : t('common.userFallback', { id: subject.id });
-}
-
 export function collectionFields(
   options: AuthorizationOptions,
   name: string,
@@ -87,5 +64,23 @@ export function collectionFields(
   return (
     options.collections.find((collection) => collection.name === name)
       ?.fields ?? []
+  );
+}
+
+export function accessScopeLabel(
+  t: Translate,
+  scope: AccessScope,
+  options: AuthorizationOptions,
+): string {
+  if (scope.type === 'all') return t('labels.allRecords');
+  if (scope.type === 'ids')
+    return t('labels.selectedRecords', { count: scope.ids.length });
+  const key =
+    typeof scope.recordAccess === 'string'
+      ? scope.recordAccess
+      : scope.recordAccess.key;
+  return (
+    options.recordAccessPolicies.find((item) => item.value === key)?.label ??
+    key
   );
 }

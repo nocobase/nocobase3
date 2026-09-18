@@ -1,17 +1,10 @@
+import type { Draft, GrantDraft } from './types.js';
 import { titleText, type Translate } from '../../i18n.js';
 import { incompleteFilter, policyFilter } from '../../components/filter-ast.js';
 import type {
-  AuthorizationOptions,
   PermissionGrant,
   PermissionSet,
 } from '../../authorization-client.js';
-import type {
-  DatabaseActionDraft,
-  Draft,
-  GrantDraft,
-  RecordAccessDraft,
-} from './types.js';
-
 let nextId = 0;
 
 /** Draft rows are keyed by an id the server never sees. */
@@ -36,24 +29,10 @@ export function toInput(draft: Draft): {
       : {}),
     grants: draft.grants.map((grant) => ({
       resource: grant.resource,
-      actions: grant.actions.map((action) =>
-        grant.resource.type === 'database.collection' &&
-        (!grant.policies?.[action] ||
-          grant.policies[action]?.type === 'database')
-          ? {
-              action,
-              policy: databasePolicyForAction(
-                action,
-                grant.database[action] ?? defaultDatabaseActionDraft(),
-              ),
-            }
-          : {
-              action,
-              ...(grant.policies?.[action]
-                ? { policy: grant.policies[action] }
-                : {}),
-            },
-      ),
+      actions: grant.actions.map((action) => ({
+        action,
+        ...(grant.policies?.[action] ? { policy: grant.policies[action] } : {}),
+      })),
     })),
   };
 }
@@ -66,7 +45,6 @@ export function newGrantForResource(type: string, id: string): GrantDraft {
       id,
     },
     actions: [],
-    database: {},
   };
 }
 
@@ -75,29 +53,23 @@ export function empty(): Draft {
 }
 
 export function hasEmptyCustomFilter(draft: Draft): boolean {
-  return draft.grants.some(
-    (grant) =>
-      Object.values(grant.policies ?? {}).some(
-        (policy) =>
-          policy?.type === 'resource' &&
-          Object.values(policy).some((value) => {
-            if (
-              !value ||
-              typeof value !== 'object' ||
-              !('key' in value) ||
-              value.key !== 'customFilter'
-            )
-              return false;
-            return incompleteFilter(
-              policyFilter(value as { key: string; params?: unknown }),
-            );
-          }),
-      ) ||
-      Object.values(grant.database).some((value) => {
-        if (recordAccessKey(value.recordAccess) !== 'customFilter')
-          return false;
-        return incompleteFilter(policyFilter(value.recordAccess));
-      }),
+  return draft.grants.some((grant) =>
+    Object.values(grant.policies ?? {}).some(
+      (policy) =>
+        policy?.type === 'resource' &&
+        Object.values(policy).some((value) => {
+          if (
+            !value ||
+            typeof value !== 'object' ||
+            !('key' in value) ||
+            value.key !== 'customFilter'
+          )
+            return false;
+          return incompleteFilter(
+            policyFilter(value as { key: string; params?: unknown }),
+          );
+        }),
+    ),
   );
 }
 
@@ -119,93 +91,11 @@ export function fromSet(
         policies: Object.fromEntries(
           grant.actions.map((action) => [action.action, action.policy]),
         ),
-        database: Object.fromEntries(
-          grant.actions.map((action) => [
-            action.action,
-            databaseActionFromPolicy(action.policy),
-          ]),
-        ),
       };
     }),
   };
 }
 
-export function defaultDatabaseActionDraft(
-  options?: AuthorizationOptions,
-): DatabaseActionDraft {
-  return {
-    input: '*',
-    output: '*',
-    recordAccess: options?.recordAccessPolicies[0]?.value ?? 'allRecords',
-  };
-}
-
-export function databasePolicyForAction(
-  action: string,
-  value: DatabaseActionDraft,
-): Readonly<Record<string, unknown>> & { type: string } {
-  const fields = {
-    ...(action === 'create' || action === 'update'
-      ? { input: value.input }
-      : {}),
-    ...(action === 'create' || action === 'read' || action === 'update'
-      ? { output: value.output }
-      : {}),
-  };
-  return {
-    type: 'database',
-    ...(Object.keys(fields).length === 0 ? {} : { fields }),
-    ...(action === 'create' ? {} : { recordAccess: [value.recordAccess] }),
-  };
-}
-
-export function databaseActionFromPolicy(
-  policy: (Readonly<Record<string, unknown>> & { type: string }) | undefined,
-): DatabaseActionDraft {
-  const fields = readRecord(policy?.fields);
-  const recordAccess = readArray(policy?.recordAccess)?.[0];
-  return {
-    input: readFields(fields?.input),
-    output: readFields(fields?.output),
-    recordAccess:
-      typeof recordAccess === 'string' || isRecordAccessValue(recordAccess)
-        ? recordAccess
-        : 'allRecords',
-  };
-}
-
-export function recordAccessKey(value: RecordAccessDraft): string {
-  return typeof value === 'string' ? value : value.key;
-}
-
 export function resourceKey(type: string, id: string): string {
   return `${type}\u0000${id}`;
-}
-
-function isRecordAccessValue(value: unknown): value is RecordAccessDraft {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    typeof Reflect.get(value, 'key') === 'string'
-  );
-}
-
-function readRecord(
-  value: unknown,
-): Readonly<Record<string, unknown>> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
-}
-
-function readFields(value: unknown): '*' | readonly string[] {
-  return value === '*' ||
-    (Array.isArray(value) && value.every((item) => typeof item === 'string'))
-    ? value
-    : '*';
-}
-
-function readArray(value: unknown): readonly unknown[] | undefined {
-  return Array.isArray(value) ? value : undefined;
 }
