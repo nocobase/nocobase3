@@ -14,7 +14,6 @@ export interface DatabaseCollectionRegistration {
   readonly name: string;
   readonly title?: OptionText;
   readonly description?: OptionText;
-  readonly group?: string;
   readonly actions?: readonly ResourceActionDeclaration[];
 }
 
@@ -46,7 +45,6 @@ export class DatabaseCollectionRegistry {
       if (
         sameOptionText(existing.title, registration.title) &&
         sameOptionText(existing.description, registration.description) &&
-        existing.group === registration.group &&
         (existing.actions ?? []).length ===
           (registration.actions ?? []).length &&
         (existing.actions ?? []).every(

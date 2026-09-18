@@ -45,7 +45,7 @@ export async function databaseScopeRuleOptions(
   return {
     ...options,
     plugins: ['database'],
-    resourceTypes: options.resourceTypes
+    resourceTypes: businessResourceOptions(authz, options.collections)
       .map((type) => {
         const resources = type.resources.filter(
           (resource) => resource.ruleScopes.length > 0,
@@ -212,7 +212,6 @@ function pageResourceOptions(authz: AppAuthorizationService) {
       resources: items.map((item) => ({
         value: item.id,
         label: optionText(item.title, item.id),
-        group: item.group ?? '',
         actions: item.actions.map((action) => ({
           value: action,
           label: item.actionTitles?.[action]

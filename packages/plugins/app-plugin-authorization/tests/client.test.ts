@@ -326,36 +326,30 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(offline.unavailable).toBe(translate('errors.usersUnavailable'));
   });
 
-  it('merges route children into an existing server group', () => {
-    const original = options();
-    const source = {
-      ...original,
-      resourceTypes: original.resourceTypes.map((type) =>
-        type.value === 'page'
-          ? { ...type, groups: [{ value: 'business', label: 'Server title' }] }
-          : type,
-      ),
-    };
-    const merged = withPageResources(
-      source,
-      [],
-      [
-        {
-          value: 'business',
-          label: 'Client title',
-          children: [{ value: 'sales', label: 'Sales' }],
-        },
-      ],
-    );
-    expect(
-      merged.resourceTypes.find((type) => type.value === 'page')?.groups,
-    ).toEqual([
+  it('uses route groups for server-declared pages while retaining server metadata', () => {
+    const groups = [
       {
         value: 'business',
-        label: 'Server title',
+        label: 'Business',
         children: [{ value: 'sales', label: 'Sales' }],
       },
+    ];
+    const merged = withPageResources(
+      options(),
+      [{ value: '*', label: 'Route title', group: 'sales' }],
+      groups,
+    );
+    const pages = merged.resourceTypes.find((type) => type.value === 'page')!;
+    expect(pages.groups).toEqual(groups);
+    expect(pages.resources[0]).toMatchObject({
+      ...options().resourceTypes[0].resources[0],
+      group: 'sales',
+    });
+    const refreshed = withPageResources(merged, [
+      { value: '*', label: 'Route title' },
     ]);
+    expect(refreshed.resourceTypes[0].groups).toEqual([]);
+    expect(refreshed.resourceTypes[0].resources[0].group).toBeUndefined();
   });
 
   it('preserves recursive route groups without turning them into grantable pages', () => {

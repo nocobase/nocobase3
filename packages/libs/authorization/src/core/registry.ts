@@ -10,12 +10,6 @@ import type { AccessConstraintService } from './constraints.js';
 export type ResourceTitle =
   string | { readonly key: string; readonly ns?: string };
 
-export interface ResourceGroup {
-  readonly id: string;
-  readonly title: ResourceTitle;
-  readonly children?: readonly ResourceGroup[];
-}
-
 export interface ResourceActionScopes {
   readonly policyType: string;
   readonly fields: readonly {
@@ -33,36 +27,9 @@ export interface ResourceItem {
   readonly id: string;
   readonly title?: ResourceTitle;
   readonly description?: ResourceTitle;
-  readonly group?: string;
   readonly actions: readonly string[];
   readonly actionTitles?: Readonly<Record<string, ResourceTitle>>;
   readonly actionScopes?: Readonly<Record<string, ResourceActionScopes>>;
-}
-
-export class ResourceGroups {
-  private readonly entries = new Map<string, ResourceGroup>();
-  private readonly ids = new Set<string>();
-
-  add(group: ResourceGroup): void {
-    const ids = new Set<string>();
-    const visit = (node: ResourceGroup): void => {
-      if (!node.id || ids.has(node.id) || this.ids.has(node.id)) {
-        throw new Error(`Invalid or duplicate resource group: ${node.id}`);
-      }
-      ids.add(node.id);
-      node.children?.forEach(visit);
-    };
-    visit(group);
-    this.entries.set(group.id, structuredClone(group));
-    ids.forEach((id) => this.ids.add(id));
-  }
-
-  has(id: string): boolean {
-    return this.ids.has(id);
-  }
-  list(): readonly ResourceGroup[] {
-    return structuredClone([...this.entries.values()]);
-  }
 }
 
 export interface ResourceItemDefinition extends Omit<ResourceItem, 'actions'> {
@@ -151,7 +118,6 @@ export interface RegisteredResource<TItems = ResourceItems> {
   readonly resourceType: string;
   readonly title?: ResourceTitle;
   readonly actionTitles?: Readonly<Record<string, ResourceTitle>>;
-  readonly groups: ResourceGroups;
   readonly items: TItems;
 }
 
@@ -269,7 +235,6 @@ export class ResourceHandlerRegistry {
           ),
         ),
       },
-      groups: new ResourceGroups(),
       items,
     });
     const authorizeUnrestricted = handler.authorizeUnrestricted?.bind(handler);

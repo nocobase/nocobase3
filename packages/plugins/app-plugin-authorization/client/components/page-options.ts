@@ -59,13 +59,14 @@ export function grantablePages(
 /**
  * Adds the pages the browser discovered to the page resource type the server reported, leaving every other resource
  * type — database collections, settings resources — exactly as it came back. A page the server already listed keeps
- * its own entry, preserving explicit server declarations.
+ * its own title and metadata; display groups always come from the route tree.
  */
 export function withPageResources(
   options: AuthorizationOptions,
   pages: readonly ResourceOption[],
   groups: readonly ResourceGroupOption[] = [],
 ): AuthorizationOptions {
+  const routePages = new Map(pages.map((page) => [page.value, page]));
   return {
     ...options,
     resourceTypes: options.resourceTypes.map((resourceType) => {
@@ -75,9 +76,12 @@ export function withPageResources(
       );
       return {
         ...resourceType,
-        groups: mergeGroups(resourceType.groups ?? [], groups),
+        groups,
         resources: [
-          ...resourceType.resources,
+          ...resourceType.resources.map((resource) => {
+            const page = routePages.get(resource.value);
+            return { ...resource, group: page?.group };
+          }),
           ...pages.filter((page) => !declared.has(page.value)),
         ],
       };
@@ -121,24 +125,4 @@ export function pageGroups(
       },
     ];
   });
-}
-
-function mergeGroups(
-  existing: readonly ResourceGroupOption[],
-  incoming: readonly ResourceGroupOption[],
-): readonly ResourceGroupOption[] {
-  const groups = new Map(existing.map((group) => [group.value, group]));
-  for (const group of incoming) {
-    const current = groups.get(group.value);
-    groups.set(
-      group.value,
-      current
-        ? {
-            ...current,
-            children: mergeGroups(current.children ?? [], group.children ?? []),
-          }
-        : group,
-    );
-  }
-  return [...groups.values()];
 }
