@@ -132,6 +132,10 @@ describe('final queue package exports', () => {
       await memory.setup();
       assert.equal(typeof (await memory.producer('messages').publish('send', { ok: true })).jobId, 'string');
       await memory.shutdown();
+      const postgres = createQueueService({ namespace: 'missing-driver', queueBackend: 'postgres', connection: {} });
+      postgres.producer('messages');
+      await assert.rejects(postgres.setup(), /pg.*(install|required)|install.*pg/i);
+      await postgres.shutdown();
     `,
     );
     expect(
