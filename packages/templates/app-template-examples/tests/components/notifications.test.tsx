@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -107,7 +108,12 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  // Unmount while browser API stubs are still installed: pending React effects
+  // can run during cleanup, before the shared preset's cleanup hook is reached.
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 it('automatically loads the last page once when the bottom becomes visible', async () => {
   let intersect: IntersectionObserverCallback | undefined;
