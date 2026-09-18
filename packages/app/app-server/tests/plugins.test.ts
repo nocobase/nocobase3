@@ -36,8 +36,8 @@ describe('server plugin definitions', () => {
       serviceProviders: [],
       routes: [],
       database: undefined,
-      queue: undefined,
     });
+    expect(plugin).not.toHaveProperty('queue');
     expect(Object.isFrozen(plugin)).toBe(true);
     expect(Object.isFrozen(plugin.serviceProviders)).toBe(true);
   });
@@ -138,7 +138,8 @@ describe('server plugin definitions', () => {
 
     expect(resolved?.migrationsDirectory).toBeUndefined();
     expect(resolved?.seedsDirectory).toBeUndefined();
-    expect(resolved?.jobLocations).toEqual([]);
+    expect(resolved).toBeDefined();
+    expect(resolved).not.toHaveProperty('jobLocations');
   });
 
   it.each(['../outside', './a/../outside', './/outside', './a\\outside'])(

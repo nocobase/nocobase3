@@ -39,10 +39,6 @@ export interface AppServerPluginDatabaseContribution {
   readonly seeds?: string;
 }
 
-export interface AppServerPluginQueueContribution {
-  readonly jobs?: readonly string[];
-}
-
 /** The module a plugin's `locales/index.ts` exports, or a function importing it. */
 export type AppServerPluginLocales = LocalesContribution;
 
@@ -56,7 +52,6 @@ export interface AppServerPluginDefinition<TConfig = object> {
   readonly serviceProviders?: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes?: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
-  readonly queue?: AppServerPluginQueueContribution;
   readonly locales?: AppServerPluginLocales;
 }
 
@@ -67,7 +62,6 @@ export interface AppServerPlugin<TConfig = object> {
   readonly serviceProviders: readonly AppPluginProviderConstructor<TConfig>[];
   readonly routes: readonly AppRouteContribution<AppPluginApplication>[];
   readonly database?: AppServerPluginDatabaseContribution;
-  readonly queue?: AppServerPluginQueueContribution;
   readonly locales?: AppServerPluginLocales;
   readonly __config?: TConfig;
 }
@@ -84,7 +78,6 @@ export interface ResolvedAppPlugin {
   readonly rootDir: string;
   readonly migrationsDirectory?: string;
   readonly seedsDirectory?: string;
-  readonly jobLocations: readonly string[];
 }
 
 export interface ResolvedAppServerPlugin {

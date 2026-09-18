@@ -244,7 +244,6 @@ async function startApplication(
             version: 'test',
             rootDir: '/test/plugins/test',
             baseDir: '/test/plugins/test',
-            jobLocations: [],
           },
         },
       ],

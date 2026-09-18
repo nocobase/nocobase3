@@ -40,7 +40,11 @@ export function resolveAppServerPlugins(
 export function createAppDatabaseTaskContributions(
   resolved: ResolvedAppServerPlugins,
 ): AppDatabaseTaskContributions {
-  const plugins = resolved.plugins.map((plugin) => plugin.metadata);
+  const plugins = resolved.plugins.map((plugin) => {
+    // Direct Application.addServerPlugins callers may supply legacy JavaScript descriptors.
+    assertNoQueueContribution(plugin.definition);
+    return plugin.metadata;
+  });
   return {
     appPackageName: resolved.appPackageName,
     migrations: createPluginMigrationSources(plugins),
@@ -78,12 +82,6 @@ export function createPluginSeedSources(
   );
 }
 
-export function createPluginJobLocations(
-  plugins: readonly ResolvedAppPlugin[],
-): string[] {
-  return plugins.flatMap((plugin) => plugin.jobLocations);
-}
-
 function resolvePlugin(definition: AppServerPlugin): ResolvedAppPlugin {
   assertNoQueueContribution(definition);
   if (
@@ -115,7 +113,6 @@ function resolvePlugin(definition: AppServerPlugin): ResolvedAppPlugin {
       definition.baseDir,
       definition.database?.seeds,
     ),
-    jobLocations: Object.freeze([]),
   };
 }
 

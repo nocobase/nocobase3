@@ -32,7 +32,6 @@ export function defineServerPlugin<TConfig = object>(
     database: definition.database
       ? Object.freeze({ ...definition.database })
       : undefined,
-    queue: undefined,
     locales: definition.locales,
   });
 }
