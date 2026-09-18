@@ -1,3 +1,8 @@
+import {
+  assertProducerDeadline,
+  producerDeadline,
+  PRODUCER_REQUEST_TIMEOUT_MS,
+} from './operation-deadline.js';
 import { resolvePublishOptions } from './config.js';
 import { encodeQueueMessage } from './serialization.js';
 import type { QueueEnvelope } from './serialization.js';
@@ -48,18 +53,21 @@ export function createQueueProducer(context: ProducerContext): QueueProducer {
   }
   return {
     async publish(channel, message, options) {
+      const deadline = performance.now() + PRODUCER_REQUEST_TIMEOUT_MS;
       const finish = context.beginOperation?.();
       try {
-        const queue = await context.queue();
+        const queue = await producerDeadline.run(deadline, () =>
+          context.queue(),
+        );
+        assertProducerDeadline(deadline);
         const prepared = prepare(
           channel,
           message,
           resolvePublishOptions(context.configuration(), options),
         );
-        const job = await queue.add(
-          prepared.name,
-          prepared.data,
-          prepared.opts,
+        assertProducerDeadline(deadline);
+        const job = await producerDeadline.run(deadline, () =>
+          queue.add(prepared.name, prepared.data, prepared.opts),
         );
         if (job.id === undefined)
           throw new Error('Queue backend returned no job ID');
@@ -69,9 +77,13 @@ export function createQueueProducer(context: ProducerContext): QueueProducer {
       }
     },
     async publishMany(batches, options) {
+      const deadline = performance.now() + PRODUCER_REQUEST_TIMEOUT_MS;
       const finish = context.beginOperation?.();
       try {
-        const queue = await context.queue();
+        const queue = await producerDeadline.run(deadline, () =>
+          context.queue(),
+        );
+        assertProducerDeadline(deadline);
         const resolved = resolvePublishOptions(
           context.configuration(),
           options,
@@ -79,7 +91,10 @@ export function createQueueProducer(context: ProducerContext): QueueProducer {
         const prepared = batches.map(({ channel, message }) =>
           prepare(channel, message, resolved),
         );
-        const jobs = await queue.addBulk(prepared);
+        assertProducerDeadline(deadline);
+        const jobs = await producerDeadline.run(deadline, () =>
+          queue.addBulk(prepared),
+        );
         return jobs.map((job) => {
           if (job.id === undefined)
             throw new Error('Queue backend returned no job ID');
