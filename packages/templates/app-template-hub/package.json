@@ -188,9 +188,6 @@
     "@nocobase/app-plugin-hub": "workspace:^",
     "@nocobase/app-plugin-i18n": "workspace:^",
     "@nocobase/app-plugin-install": "workspace:^",
-    "@nocobase/app-plugin-mail": "workspace:^",
-    "@nocobase/app-plugin-notification": "workspace:^",
-    "@nocobase/app-plugin-service-provider-example": "workspace:^",
     "@nocobase/app-plugin-workflow": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/app-plugin-users": "workspace:^",
@@ -201,6 +198,8 @@
     "@nocobase/snowflake": "workspace:^",
     "@oclif/core": "catalog:",
     "better-auth": "catalog:",
-    "hono": "catalog:"
+    "hono": "catalog:",
+    "@nocobase/app-plugin-service-provider-example": "workspace:^",
+    "@nocobase/app-plugin-notification": "workspace:^"
   }
 }

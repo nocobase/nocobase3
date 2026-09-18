@@ -18,7 +18,6 @@ import database from './database.js';
 import snowflake from './snowflake.js';
 import ai from './ai.js';
 import workflow from './workflow.js';
-import mail from './mail.js';
 
 const defaultConfigs: AppConfigFactory<{
   auth: ReturnType<typeof auth>;
@@ -37,7 +36,6 @@ const defaultConfigs: AppConfigFactory<{
   snowflake: ReturnType<typeof snowflake>;
   ai: ReturnType<typeof ai>;
   workflow: ReturnType<typeof workflow>;
-  mail: ReturnType<typeof mail>;
 }> = defaultAppConfigs({
   auth,
   notification,
@@ -55,7 +53,6 @@ const defaultConfigs: AppConfigFactory<{
   snowflake,
   ai,
   workflow,
-  mail,
 });
 
 export default defaultConfigs;

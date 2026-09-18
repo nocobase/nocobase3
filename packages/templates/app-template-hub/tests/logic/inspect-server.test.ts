@@ -26,7 +26,6 @@ describe('Server inspection', () => {
       '@nocobase/app-plugin-api-keys',
       '@nocobase/app-plugin-i18n',
       '@nocobase/app-plugin-install',
-      '@nocobase/app-plugin-mail',
       '@nocobase/app-plugin-hub',
     ]);
     expect(inspection.routes.map(({ order }) => order)).toEqual(

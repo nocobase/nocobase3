@@ -18,7 +18,6 @@ import database from './database.js';
 import snowflake from './snowflake.js';
 import hub from './hub.js';
 import workflow from './workflow.js';
-import mail from './mail.js';
 
 const defaultConfigs: AppConfigFactory<{
   heartbeat: ReturnType<typeof heartbeat>;
@@ -37,7 +36,6 @@ const defaultConfigs: AppConfigFactory<{
   snowflake: ReturnType<typeof snowflake>;
   hub: ReturnType<typeof hub>;
   workflow: ReturnType<typeof workflow>;
-  mail: ReturnType<typeof mail>;
 }> = defaultAppConfigs({
   heartbeat,
   auth,
@@ -55,7 +53,6 @@ const defaultConfigs: AppConfigFactory<{
   snowflake,
   hub,
   workflow,
-  mail,
 });
 
 export default defaultConfigs;
