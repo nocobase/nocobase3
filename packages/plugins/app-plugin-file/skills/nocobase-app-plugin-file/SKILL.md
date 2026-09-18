@@ -9,6 +9,13 @@ Use `@nocobase/app-plugin-file/server` and `@nocobase/app-plugin-file/client`. T
 
 Inspect the App's existing registrations, migrations, disks, and resources first. Register the Server default export and the Client default factory before consumers, using the App's plugin lifecycle commands. The core does not create collections or routes.
 
+## Work incrementally
+
+- Use standard File Repository routes, the Client File Repository and Registry components for new attachment features. Save associations through the existing business API, whether standard CRUD or custom routes; do not migrate working business routes just to add files.
+- Extend existing services, middleware, response adapters or installed UI components where needed. A necessary compatibility handler should delegate to File Repository; do not rebuild upload, storage and metadata handling with Drive or replace the whole CRUD stack.
+- Inspect the App's registration, collection, disk and business save path together. Reuse what works; do not ask the user to choose an implementation or repeatedly explore source when the documented contract suffices.
+- Verify one small upload → metadata query → content download before building UI. Then wire the returned IDs into the existing save/detail flow. Retain uploaded IDs if the business save fails, and run the affected checks after edits stabilize.
+
 The following business example uses collection `invoice_files`, resource `invoiceAttachments`, connection `main`, and disk `local`. Adapt these to the App.
 
 ## Collection
@@ -90,7 +97,7 @@ An upload supplies no caller fields, so it binds a Policy derived from this one:
 
 Content is GET `<accessPath>/<uuid>.<ext>` outside `/api`, omitting the dot when extensionless. Stream returns full bytes as an attachment; redirect returns a public storage URL or a five-minute signed URL. A disk without URL support requires stream mode; there is no automatic fallback.
 
-These are public routes. For restricted files, register App-owned authentication and authorization on the paths each contribution owns before mounting it — `/<name>:<action>` per exposed API action, `<accessPath>/*` for content. Never `router.use('*', ...)` in a contribution router: contributions share the mounted router, so it also guards the SPA and every contribution mounted after yours. Check the operation and record/parent-record access; a login page, private disk, Client filter or Policy field allowlist is not authentication. If the generic routes cannot express the policy, write business routes using the public Server manager. Never trust browser-supplied ownership.
+These are public routes. For restricted files, register App-owned authentication and authorization on the paths each contribution owns before mounting it — `/<name>:<action>` per exposed API action, `<accessPath>/*` for content. Never `router.use('*', ...)` in a contribution router: contributions share the mounted router, so it also guards the SPA and every contribution mounted after yours. Check the operation and record/parent-record access; a login page, private disk, Client filter or Policy field allowlist is not authentication. Add scoped middleware and principal-based Policy to the generated routes first. If an existing contract needs an adapter, extend that module using the public Server manager and retain its authorization checks; missing built-in authentication alone is not a reason to replace the routes. Never trust browser-supplied ownership.
 
 ## Server and Client services
 
@@ -112,7 +119,7 @@ const { record } = await files.uploadOne({ file });
 const url = files.getUrl(record);
 ```
 
-Server repository() takes the collection name and requires disk/accessPath matching its routes. getUrl is synchronous and App-local; getStorageUrl asynchronously uses the record's disk/key to obtain a public or signed storage URL. Neither queries the database. Direct Server CRUD does not decorate URLs; uploads do.
+Server repository() takes the exact logical name from createCollection, not its physical table name (for example, crmAccountFiles is not crm_account_files), and requires disk/accessPath matching its routes. getUrl is synchronous and App-local; getStorageUrl asynchronously uses the record's disk/key to obtain a public or signed storage URL. Neither queries the database. Direct Server CRUD does not decorate URLs; uploads do.
 
 Client code resolves `clientFileRepositoryManagerToken` and calls `manager.repository('invoiceAttachments')` with the resource name. It reuses apiClientToken, session and base URL; do not pass disk/connection/accessPath.
 
@@ -185,7 +192,8 @@ Verify upload → query → contentUrl → identical downloaded bytes, including
 
 - Upload defaults are 5 MiB single / 20 MiB batch for the whole multipart body, including overhead. Direct Server uploads have no HTTP limit; UI maxSize checks an individual file. The Client supplies the multipart boundary.
 - BODY_TOO_LARGE (413): reduce request size or adjust route limits. INVALID_FILE/INVALID_FILES (400): send native File values and a nonempty batch.
-- INVALID_FILE_COLLECTION: fix the migration before storage writes. STORAGE_URL_UNAVAILABLE: configure a capable disk or stream mode.
+- INVALID_FILE_COLLECTION: first compare the migration name, route collection and Server repository argument; then await collections.get(logicalName) and check the active connection and generated metadata. SQLite physical text does not imply a broken datetime definition. Fix the specific lookup, metadata or schema problem and retry the same upload; do not bypass File Repository. Use a new migration for corrections to already-merged history.
+- STORAGE_URL_UNAVAILABLE: configure a capable disk or stream mode.
 - FILE_COMMIT_UNCERTAIN / FILE_CLEANUP_FAILED: reconcile database records and stored objects before retrying; uploads have no idempotency key.
 
 There is no built-in route authentication, row ACL, Range/206, ETag, conditional download, resumable upload, physical cleanup, content sniffing or malware scan. Metadata deletion retains objects; cancelled forms may leave unlinked files. Implement the policies required by the business, including referenced-file deletion and orphan cleanup.
