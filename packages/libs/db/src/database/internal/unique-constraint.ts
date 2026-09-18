@@ -7,6 +7,7 @@ export function isUniqueConstraintViolation(error: unknown): boolean {
     const code = record.code;
     const number = record.errno ?? record.number ?? record.errorNum;
     if (
+      record.errCode === -6602 ||
       code === '23505' ||
       code === 'ER_DUP_ENTRY' ||
       code === 'SQLITE_CONSTRAINT' ||
