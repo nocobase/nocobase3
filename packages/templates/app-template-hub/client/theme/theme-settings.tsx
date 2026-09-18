@@ -1,7 +1,7 @@
 import { Check, Monitor, Moon, Palette, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useTranslation } from '@nocobase/i18n/client';
-import { useId, type ReactElement } from 'react';
+import { useId, useRef, useState, type ReactElement } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Popover,
@@ -24,10 +24,13 @@ export function ThemeSettings(): ReactElement {
   const { preset, setPreset } = useThemePreset();
   const { t } = useTranslation();
   const id = useId();
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const title = t('appearance.title', { defaultValue: 'Appearance' });
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        ref={triggerRef}
         openOnHover
         delay={0}
         closeDelay={0}
@@ -44,6 +47,15 @@ export function ThemeSettings(): ReactElement {
       </PopoverTrigger>
       {/* Keep the panel width independent of density; its content still uses theme tokens. */}
       <PopoverContent
+        onMouseLeave={(event) => {
+          // Preference clicks must not pin this hover panel open.
+          if (
+            event.relatedTarget instanceof Node &&
+            triggerRef.current?.contains(event.relatedTarget)
+          )
+            return;
+          setOpen(false);
+        }}
         align='end'
         className='w-xs max-w-[calc(100vw-2rem)] gap-4 p-4'
       >

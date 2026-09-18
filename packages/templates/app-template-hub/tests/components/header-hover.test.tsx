@@ -6,6 +6,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { ThemeSettings } from '../../client/theme/theme-settings';
 import { UserMenu } from '../../client/shell/user-menu';
@@ -17,10 +18,16 @@ vi.mock('@nocobase/i18n/client', () => ({
   }),
 }));
 vi.mock('next-themes', () => ({
-  useTheme: () => ({ theme: 'light', setTheme: vi.fn() }),
+  useTheme: () => {
+    const [theme, setTheme] = useState('light');
+    return { theme, setTheme };
+  },
 }));
 vi.mock('../../client/theme/theme-context', () => ({
-  useThemePreset: () => ({ preset: 'default', setPreset: vi.fn() }),
+  useThemePreset: () => {
+    const [preset, setPreset] = useState('default');
+    return { preset, setPreset };
+  },
 }));
 vi.mock('@nocobase/app-plugin-authentication/client', () => ({
   useAuthentication: () => ({
@@ -32,8 +39,22 @@ vi.mock('@nocobase/app-plugin-authentication/client', () => ({
     refresh: vi.fn(),
   }),
 }));
-vi.mock('../../client/shell/language-switcher.js', () => ({
-  LanguageSwitcher: () => null,
+vi.mock('@nocobase/app-plugin-i18n/client', () => ({
+  useAppLocale: () => {
+    const [locale, setLocale] = useState('en-US');
+    return {
+      locale,
+      switching: false,
+      locales: [
+        { locale: 'en-US', label: 'English' },
+        { locale: 'zh-CN', label: '中文' },
+      ],
+      setLocale: async (value: string) => {
+        setLocale(value);
+        return { fallback: false };
+      },
+    };
+  },
 }));
 
 describe('header hover panels', () => {
@@ -78,4 +99,93 @@ describe('header hover panels', () => {
       expect(await screen.findByRole(role)).toBeVisible();
     },
   );
+});
+
+describe('closing after changing preferences', () => {
+  it.each(['hover', 'click'] as const)(
+    'closes appearance after changing color mode (%s)',
+    async (method) => {
+      const user = userEvent.setup();
+      render(<ThemeSettings />);
+      const trigger = screen.getByRole('button', { name: 'Appearance' });
+      if (method === 'click') await user.click(trigger);
+      else await user.hover(trigger);
+      const panel = screen.getByRole('dialog');
+      fireEvent.mouseLeave(trigger, { relatedTarget: panel });
+      fireEvent.mouseEnter(panel, { relatedTarget: trigger });
+      fireEvent.mouseMove(panel);
+      const dark = screen.getByRole('radio', { name: 'Dark' });
+      // Click from within the popup; user-event does not preserve relatedTarget between its synthetic hover targets.
+      fireEvent.pointerDown(dark, { pointerType: 'mouse' });
+      act(() => dark.focus());
+      fireEvent.click(dark);
+      expect(dark).toBeChecked();
+      const compact = screen.getByRole('radio', { name: 'Compact' });
+      fireEvent.pointerDown(compact, { pointerType: 'mouse' });
+      fireEvent.click(compact);
+      expect(compact).toBeChecked();
+      fireEvent.mouseLeave(panel, { relatedTarget: document.body });
+      fireEvent.mouseMove(document.body, { clientX: 1000, clientY: 1000 });
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    },
+  );
+  it.each(['hover', 'click'] as const)(
+    'closes account after changing language (%s)',
+    async (method) => {
+      const user = userEvent.setup();
+      render(<UserMenu />);
+      const trigger = screen.getByRole('button', { name: 'Open account menu' });
+      if (method === 'click') await user.click(trigger);
+      else await user.hover(trigger);
+      const panel = screen.getByRole('menu');
+      fireEvent.mouseLeave(trigger, { relatedTarget: panel });
+      fireEvent.mouseEnter(panel, { relatedTarget: trigger });
+      fireEvent.mouseMove(panel);
+      const language = screen.getByRole('menuitem', { name: /Language/ });
+      fireEvent.mouseEnter(language);
+      fireEvent.mouseMove(language);
+      fireEvent.pointerDown(language, { pointerType: 'mouse' });
+      fireEvent.mouseDown(language, { button: 0 });
+      fireEvent.click(language);
+      const chinese = await screen.findByRole('menuitemradio', {
+        name: '中文',
+      });
+      const submenu = chinese.closest('[role=menu]')!;
+      fireEvent.mouseLeave(panel, { relatedTarget: submenu });
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.mouseEnter(submenu, { relatedTarget: panel });
+      fireEvent.mouseMove(submenu);
+      fireEvent.pointerDown(chinese, { pointerType: 'mouse' });
+      fireEvent.click(chinese);
+      await waitFor(() => expect(language).toHaveTextContent('中文'));
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      // Portalled submenu and parent form one region, in both directions.
+      fireEvent.mouseLeave(submenu, { relatedTarget: panel });
+      fireEvent.mouseEnter(panel, { relatedTarget: submenu });
+      fireEvent.mouseMove(panel);
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.mouseLeave(panel, { relatedTarget: submenu });
+      fireEvent.mouseEnter(submenu, { relatedTarget: panel });
+      fireEvent.mouseMove(submenu);
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.mouseLeave(submenu, { relatedTarget: document.body });
+      fireEvent.mouseMove(document.body, { clientX: 1000, clientY: 1000 });
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    },
+  );
+});
+
+it('keeps keyboard theme selection available until Escape', async () => {
+  const user = userEvent.setup();
+  render(<ThemeSettings />);
+  const trigger = screen.getByRole('button', { name: 'Appearance' });
+  act(() => trigger.focus());
+  await user.keyboard('{Enter}');
+  const dark = screen.getByRole('radio', { name: 'Dark' });
+  act(() => dark.focus());
+  await user.keyboard(' ');
+  expect(dark).toBeChecked();
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await user.keyboard('{Escape}');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
 });

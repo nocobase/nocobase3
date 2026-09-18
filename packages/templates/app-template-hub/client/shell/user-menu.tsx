@@ -2,7 +2,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
 import { toast } from 'sonner';
 import { LogOut, UserRound } from 'lucide-react';
-import { useState, type ReactElement } from 'react';
+import { useRef, useState, type ReactElement } from 'react';
 
 import {
   DropdownMenu,
@@ -30,6 +30,8 @@ export function UserMenu(): ReactElement {
       }
     : null;
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const { t } = useTranslation();
 
   const name =
@@ -39,8 +41,9 @@ export function UserMenu(): ReactElement {
   const initials = getInitials(name);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
+        ref={triggerRef}
         openOnHover
         delay={0}
         closeDelay={0}
@@ -61,7 +64,20 @@ export function UserMenu(): ReactElement {
           </span>
         )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align='end' className='w-64'>
+      <DropdownMenuContent
+        align='end'
+        className='w-64'
+        onMouseLeave={(event) => {
+          // React keeps portalled language submenus in this hover boundary.
+          // Leaving the entire menu must also close it after selecting a language.
+          if (
+            event.relatedTarget instanceof Node &&
+            triggerRef.current?.contains(event.relatedTarget)
+          )
+            return;
+          setOpen(false);
+        }}
+      >
         <div className='px-2 py-1.5'>
           <p className='truncate text-sm font-medium'>{name}</p>
           {identity?.email ? (
