@@ -60,6 +60,9 @@ describe('application config', () => {
     ).toBeUndefined();
     expect(runtime.config.get('logging.file.name')).toBe('app');
     expect(runtime.config.get<AppQueueConfig>('queue')!.default).toBe('sync');
+    expect(runtime.config.get<AppQueueConfig>('queue')!.queues).toEqual({
+      schedule: { connection: 'database' },
+    });
     expect(
       runtime.config.get<AppQueueConfig>('queue')!.jobs?.locations,
     ).toEqual(

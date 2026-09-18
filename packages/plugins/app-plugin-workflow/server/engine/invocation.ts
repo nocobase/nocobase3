@@ -36,7 +36,7 @@ export interface InputValidationResult {
 export type WorkflowTriggerSkipReason = 'not-found' | 'disabled';
 
 export type WorkflowTriggerReceipt =
-  | { status: 'accepted'; eventKey: string }
+  | { status: 'accepted'; eventKey: string; runId: string }
   | { status: 'skipped'; reason: WorkflowTriggerSkipReason; eventKey?: never };
 
 export const WORKFLOW_INPUT_SCHEMA_DIALECT: 'https://json-schema.org/draft/2020-12/schema' =

@@ -27,6 +27,7 @@ import {
   serializeJson,
 } from './utils.js';
 import { resolveWorkflowValue } from './value-resolver.js';
+import { finalizeWorkflowRun } from './finalize-run.js';
 
 export type ProcessorRunOptions = {
   rerun?: true;
@@ -50,6 +51,7 @@ export interface ProcessorOptions {
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
+  terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
 type RerunContext = {
@@ -113,6 +115,7 @@ export default class Processor {
   private rerunContext: RerunContext | null = null;
   private timeoutGuard: ReturnType<typeof setTimeout> | null = null;
   private abortReason: string | null = null;
+  private readonly terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 
   constructor(options: ProcessorOptions) {
     this.database = options.database;
@@ -128,6 +131,7 @@ export default class Processor {
     });
     this.environment = options.environment;
     this.functions = options.functions ?? {};
+    this.terminalObserver = options.terminalObserver;
   }
 
   get abortSignal(): AbortSignal {
@@ -374,26 +378,21 @@ export default class Processor {
     const executionStatus = Processor.StatusMap[status] ?? Math.sign(status);
     const reason =
       executionStatus === EXECUTION_STATUS.ABORTED ? this.abortReason : null;
-    const finishedAt = nowInstant();
-    // Filtered on STARTED so a run the reaper already reclaimed is not
-    // resurrected by a processor that finishes afterwards.
-    const result = await this.store.runs.updateMany({
-      filter: {
-        id: asIdFilter(this.execution.id),
-        status: EXECUTION_STATUS.STARTED,
-      },
-      values: {
-        status: executionStatus,
-        output: serializeJson(output),
-        reason,
-        finishedAt,
-      },
+    const terminal = await finalizeWorkflowRun({
+      store: this.store,
+      runId: this.execution.id,
+      expectedStatus: EXECUTION_STATUS.STARTED,
+      status: executionStatus,
+      reason,
+      output,
+      observer: this.terminalObserver,
+      logger: this.logger,
     });
-    if (result.updatedCount > 0) {
+    if (terminal) {
       this.execution.status = executionStatus;
       this.execution.output = output;
       this.execution.reason = reason;
-      this.execution.finishedAt = finishedAt;
+      this.execution.finishedAt = terminal.finishedAt;
     }
     return null;
   }

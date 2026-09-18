@@ -28,7 +28,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && nocobase-db-manifests src/database dist/database",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
@@ -41,10 +41,13 @@
   "dependencies": {
     "@boringnode/queue": "catalog:",
     "@nocobase/logging": "workspace:^",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/instrumentation": "^0.200.0",
     "ioredis": "catalog:",
     "knex": "catalog:"
   },
   "devDependencies": {
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",

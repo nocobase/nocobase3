@@ -29,6 +29,12 @@ const queue: AppConfigFactory<AppQueueConfig> = defineAppConfig((runtime) => ({
     concurrency: 1,
     idleDelay: '2s',
   },
+  ...(runtime.plugins.plugins.some(
+    (plugin) =>
+      plugin.definition.packageName === '@nocobase/app-plugin-scheduler',
+  )
+    ? { queues: { schedule: { connection: 'database' } } }
+    : {}),
   jobs: {
     locations: [
       path.join(runtime.configPaths.server(), 'jobs/**/*.{ts,js}'),

@@ -38,8 +38,11 @@ export function defineWorkflowRuns(
   collection.datetimeTz('createdAt').notNull();
   collection.boolean('manually').notNull().defaultTo(false);
   collection.string('reason');
+  collection.string('sourceType');
+  collection.string('sourceId');
 
   collection.index(['dispatched', 'id']);
   collection.index(['status', 'expiresAt']);
   collection.index(['parentRunId', 'status']);
+  collection.index(['sourceType', 'sourceId']);
 }

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Job, Locator, QueueManager, Worker } from '@boringnode/queue';
 import type {
+  Adapter,
   DispatchManyResult,
   DispatchResult,
 } from '@boringnode/queue/types';
@@ -15,6 +16,7 @@ import type {
   NocoBaseQueueDispatchableJobClass,
   NocoBaseQueueJobClass,
   NocoBaseQueueManager,
+  NocoBaseQueueScheduleStore,
   NocoBaseQueueWorker,
   QueueDispatchOptions,
 } from './types.js';
@@ -104,8 +106,35 @@ export function createQueueManager(
       ).run();
     },
 
+    schedules(queue = 'default'): NocoBaseQueueScheduleStore {
+      const connection = resolveQueueConnection(config, queue);
+      const configured = config.connections[connection];
+      if (configured?.driver === 'sync') {
+        throw new Error(
+          `Queue "${queue}" uses the "${connection}" sync connection, which does not support scheduled jobs.`,
+        );
+      }
+      const adapter = (): Adapter => {
+        if (activeManagerId !== managerId || !QueueManager.isInitialized()) {
+          throw new Error('Queue manager is not initialized.');
+        }
+        return QueueManager.use(connection);
+      };
+      return {
+        upsert: (schedule) => adapter().upsertSchedule(schedule),
+        get: (id) => adapter().getSchedule(id),
+        list: (options) => adapter().listSchedules(options),
+        update: (id, updates) => adapter().updateSchedule(id, updates),
+        delete: (id) => adapter().deleteSchedule(id),
+      };
+    },
+
     createWorker(options?: AppQueueWorkerConfig): NocoBaseQueueWorker {
       const workerId = randomUUID();
+      const queues = options?.queues ?? config.worker?.queues ?? ['default'];
+      const explicitConnection =
+        options?.connection ?? config.worker?.connection;
+      let connection: string | undefined;
       const workerConfig: AppQueueConfig = {
         ...config,
         worker: {
@@ -120,10 +149,16 @@ export function createQueueManager(
       let worker: Worker | undefined;
       let workerConfigPromise:
         ReturnType<typeof createBoringQueueConfig> | undefined;
-      const getWorker = async (): Promise<Worker> => {
+      const getWorker = async (selectedConnection: string): Promise<Worker> => {
         if (!workerConfigPromise) {
           workerConfigPromise = createBoringQueueConfig(
-            workerConfig,
+            {
+              ...workerConfig,
+              worker: {
+                ...workerConfig.worker,
+                connection: selectedConnection,
+              },
+            },
             managerOptions,
           );
         }
@@ -135,11 +170,20 @@ export function createQueueManager(
         get id() {
           return worker?.id ?? workerId;
         },
-        start: async (
-          queues = options?.queues ?? config.worker?.queues ?? ['default'],
-        ) => {
+        start: async (selectedQueues = queues) => {
+          const selectedConnection = resolveWorkerConnection(
+            config,
+            selectedQueues,
+            explicitConnection,
+          );
+          if (connection !== undefined && selectedConnection !== connection) {
+            throw new Error(
+              `Worker connection "${connection}" cannot consume queues [${selectedQueues.join(', ')}] from connection "${selectedConnection}".`,
+            );
+          }
+          connection = selectedConnection;
           activeManagerId = managerId;
-          return (await getWorker()).start(queues);
+          return (await getWorker(selectedConnection)).start(selectedQueues);
         },
         stop: async () => {
           if (!worker) {
@@ -170,6 +214,40 @@ export function createQueueManager(
       return closePromise;
     },
   };
+}
+
+function resolveQueueConnection(config: AppQueueConfig, queue: string): string {
+  const connection = config.queues?.[queue]?.connection ?? config.default;
+  if (!config.connections[connection]) {
+    throw new Error(
+      `Queue "${queue}" references unconfigured connection "${connection}".`,
+    );
+  }
+  return connection;
+}
+
+function resolveWorkerConnection(
+  config: AppQueueConfig,
+  queues: readonly string[],
+  explicitConnection?: string,
+): string {
+  const connections = new Set(
+    explicitConnection !== undefined
+      ? [explicitConnection]
+      : queues.map((queue) => resolveQueueConnection(config, queue)),
+  );
+  if (connections.size !== 1) {
+    throw new Error(
+      `A worker can only consume queues from one connection; queues [${queues.join(', ')}] resolve to [${[...connections].join(', ')}].`,
+    );
+  }
+  const connection = [...connections][0];
+  if (!config.connections[connection]) {
+    throw new Error(
+      `Worker references unconfigured connection "${connection}".`,
+    );
+  }
+  return connection;
 }
 
 function registerJob<T extends Job>(JobClass: NocoBaseQueueJobClass<T>): void {

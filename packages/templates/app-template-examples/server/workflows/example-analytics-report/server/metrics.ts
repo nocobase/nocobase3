@@ -16,6 +16,22 @@ export interface DailyReport {
   revenueCents: number;
   profitCents: number;
 }
+export function resolveReportDate(
+  value: unknown,
+  now: Date = new Date(),
+): string {
+  if (value !== 'previous-day') return requireDate(value);
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Singapore',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+  const previous = new Date(`${today}T00:00:00.000Z`);
+  previous.setUTCDate(previous.getUTCDate() - 1);
+  return previous.toISOString().slice(0, 10);
+}
+
 export function requireDate(value: unknown): string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value))
     throw new Error('Report date must use YYYY-MM-DD.');

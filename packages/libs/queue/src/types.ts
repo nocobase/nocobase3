@@ -7,6 +7,9 @@ import type {
   JobOptions,
   QueueConfig,
   RetryConfig,
+  ScheduleConfig,
+  ScheduleData,
+  ScheduleListOptions,
   WorkerConfig,
 } from '@boringnode/queue/types';
 
@@ -82,6 +85,36 @@ export type NocoBaseQueueJobClass<T extends Job = Job> = (new (
 export type NocoBaseQueueJobFactory = (
   JobClass: NocoBaseQueueJobClass,
 ) => Job | Promise<Job>;
+export type NocoBaseQueueNamedJobFactory = (
+  JobClass: NocoBaseQueueJobClass,
+) => Job | Promise<Job>;
+
+export interface NocoBaseQueueJobFactoryRegistry {
+  register(name: string, factory: NocoBaseQueueNamedJobFactory): void;
+  unregister(name: string): void;
+  create(JobClass: NocoBaseQueueJobClass): Job | Promise<Job>;
+}
+
+export function createQueueJobFactoryRegistry(
+  fallback: NocoBaseQueueNamedJobFactory,
+): NocoBaseQueueJobFactoryRegistry {
+  const factories = new Map<string, NocoBaseQueueNamedJobFactory>();
+  return {
+    register(name, factory): void {
+      if (factories.has(name)) {
+        throw new Error(`Queue Job factory is already registered: ${name}`);
+      }
+      factories.set(name, factory);
+    },
+    unregister(name): void {
+      factories.delete(name);
+    },
+    create(JobClass): Job | Promise<Job> {
+      const name = JobClass.options?.name ?? JobClass.name;
+      return (factories.get(name) ?? fallback)(JobClass);
+    },
+  };
+}
 export type NocoBaseQueueDispatchableJobClass<T extends Job = Job> =
   NocoBaseQueueJobClass<T> & {
     dispatch(payload: T extends Job<infer P> ? P : never): unknown;
@@ -108,6 +141,19 @@ export interface NocoBaseQueueWorker {
   stop(): Promise<void>;
 }
 
+export interface NocoBaseQueueScheduleStore {
+  upsert(config: ScheduleConfig): Promise<string>;
+  get(id: string): Promise<ScheduleData | null>;
+  list(options?: ScheduleListOptions): Promise<ScheduleData[]>;
+  update(
+    id: string,
+    updates: Partial<
+      Pick<ScheduleData, 'status' | 'nextRunAt' | 'lastRunAt' | 'runCount'>
+    >,
+  ): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 export interface NocoBaseQueueManager {
   init(): Promise<void>;
   use(name?: string): unknown;
@@ -122,6 +168,7 @@ export interface NocoBaseQueueManager {
     payloads: Array<T extends Job<infer P> ? P : never>,
     options?: Omit<QueueDispatchOptions, 'delay' | 'dedup'>,
   ): Promise<DispatchManyResult>;
+  schedules(queue?: string): NocoBaseQueueScheduleStore;
   createWorker(options?: AppQueueWorkerConfig): NocoBaseQueueWorker;
   close(): Promise<void>;
 }

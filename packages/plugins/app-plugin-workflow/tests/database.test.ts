@@ -17,8 +17,13 @@ const seedsDirectory = fileURLToPath(
   new URL('../database/seeds', import.meta.url),
 );
 const createMigrationName = '202608200001_create_workflow_collections';
+const sourceMigrationName = '202609090001_add_workflow_run_source';
 const instantMigrationName = '202609110001_workflow_instant_columns';
-const migrationNames = [createMigrationName, instantMigrationName];
+const migrationNames = [
+  createMigrationName,
+  sourceMigrationName,
+  instantMigrationName,
+];
 /** Columns that hold an instant and therefore must resolve as `datetimeTz`. */
 const instantFields = {
   workflowRuns: ['startedAt', 'finishedAt', 'expiresAt', 'createdAt'],
@@ -55,8 +60,8 @@ describe('@nocobase/app-plugin-workflow database', () => {
         packageName: '@nocobase/app-plugin-workflow',
       });
 
-      // Applied as two batches so the rollback below reaches exactly the
-      // instant migration, which is the reversible half being verified.
+      // Applied in separate batches so each reversible migration can be
+      // verified independently below.
       await expect(migrator.upTo(createMigrationName)).resolves.toMatchObject({
         executed: [createMigrationName],
         skipped: [],
@@ -86,9 +91,13 @@ describe('@nocobase/app-plugin-workflow database', () => {
         })
         .execute();
 
+      await expect(migrator.upTo(sourceMigrationName)).resolves.toMatchObject({
+        executed: [sourceMigrationName],
+        skipped: [createMigrationName],
+      });
       await expect(migrator.latest()).resolves.toMatchObject({
         executed: [instantMigrationName],
-        skipped: [createMigrationName],
+        skipped: [createMigrationName, sourceMigrationName],
       });
       const connection = database.connection();
       const migrated = await workflowStore(database).runs.findOne({
@@ -156,6 +165,9 @@ describe('@nocobase/app-plugin-workflow database', () => {
           ),
         ).toEqual(fields.map(() => 'datetime'));
       }
+      await expect(migrator.rollback()).resolves.toMatchObject({
+        rolledBack: [sourceMigrationName],
+      });
       await expect(migrator.rollback()).resolves.toMatchObject({
         rolledBack: [createMigrationName],
       });
