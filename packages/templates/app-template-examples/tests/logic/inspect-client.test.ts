@@ -342,12 +342,11 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-template-examples', order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
-      { packageName: '@nocobase/app-plugin-i18n', order: 4 },
-      { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
-      { packageName: '@nocobase/app-plugin-workflow', order: 6 },
-      { packageName: '@nocobase/app-plugin-notification', order: 7 },
-      { packageName: '@nocobase/app-plugin-repository-example', order: 8 },
-      { packageName: '@nocobase/app-plugin-file', order: 9 },
+      { packageName: '@nocobase/app-plugin-notification-provider', order: 4 },
+      { packageName: '@nocobase/app-plugin-workflow', order: 5 },
+      { packageName: '@nocobase/app-plugin-notification', order: 6 },
+      { packageName: '@nocobase/app-plugin-repository-example', order: 7 },
+      { packageName: '@nocobase/app-plugin-file', order: 8 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
