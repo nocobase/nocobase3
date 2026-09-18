@@ -94,6 +94,26 @@ it.skipIf(selectedBackend() !== 'cluster')(
   'executes delay, retry, rate limits and drain without CROSSSLOT',
   async () => {
     const harness = await createBackendHarness();
+    const { Cluster } = await import('ioredis');
+    if (!(harness.connection instanceof Cluster))
+      throw new Error('Expected Cluster fixture');
+    const owner = harness.connection;
+    const clientIds = async (): Promise<string[]> => {
+      const rows = await Promise.all(
+        owner.nodes('master').map(async (node, index) => {
+          const list = await node.client('LIST');
+          if (typeof list !== 'string')
+            throw new Error('Expected CLIENT LIST text');
+          return list
+            .trim()
+            .split('\n')
+            .map((line) => `${index}:${line.split(' ')[0]}`);
+        }),
+      );
+      return rows.flat().sort();
+    };
+    await Promise.all(owner.nodes('master').map((node) => node.ping()));
+    const before = await clientIds();
     const { Queue } = await import('bullmq');
     const { createQueueIdentity } = await import('../../src/identity.js');
     const service = createQueueService({
@@ -135,6 +155,10 @@ it.skipIf(selectedBackend() !== 'cluster')(
       const pending = await producer.publish('drained', {}, { delay: 60000 });
       await service.manager('scheduled').drain({ delayed: true });
       expect(await observer.getJobState(pending.jobId)).toBe('unknown');
+      await service.shutdown();
+      await observer.close();
+      await expect.poll(clientIds, { timeout: 5000 }).toEqual(before);
+      expect(await owner.ping()).toBe('PONG');
     } finally {
       await observer.close();
       await service.shutdown().catch(() => {});

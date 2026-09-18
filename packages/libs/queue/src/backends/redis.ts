@@ -304,6 +304,7 @@ class RedisClientOwner {
   private readonly stalled = new Map<IRedisClient, number>();
   private readonly resets = new Map<IRedisClient, Promise<void>>();
   private readonly endings = new Map<IRedisClient, Promise<void>>();
+  private readonly ended = new Set<IRedisClient>();
   private readonly connecting = new Set<Promise<void>>();
   private readonly stopRecovery = new AbortController();
   private readonly timer: ReturnType<typeof setInterval> | undefined;
@@ -324,8 +325,12 @@ class RedisClientOwner {
     this.clients.add(client);
     // Keep client errors observed while disconnect settles after backend listeners leave.
     client.on('error', this.observeError);
+    client.on('end', () => this.ended.add(client));
     return new Proxy(client, {
       get: (target, key) => {
+        // A Cluster's later node drain can overwrite end with close. Preserve the
+        // observed terminal generation until an explicit connect admits a new one.
+        if (key === 'status' && this.ended.has(target)) return 'end';
         if (key === 'duplicate')
           return (...args: unknown[]): IRedisClient => {
             if (this.stopping)
@@ -338,8 +343,10 @@ class RedisClientOwner {
             return this.track(duplicate);
           };
         if (key === 'disconnect')
-          return (reconnect: boolean = false): void =>
-            target.disconnect(reconnect && !this.stopping);
+          return (reconnect: boolean = false): void => {
+            if (reconnect && !this.stopping) target.disconnect(true);
+            else void this.end(target).catch(this.observeError);
+          };
         if (key === 'connect')
           return (): Promise<void> => {
             if (this.stopping)
@@ -462,10 +469,15 @@ class RedisClientOwner {
     });
   }
 
-  private connect(client: IRedisClient): Promise<void> {
-    if (this.stopping)
-      return Promise.reject(new Error('Redis resource owner is closing'));
-    if (client.status === 'ready') return Promise.resolve();
+  private async connect(client: IRedisClient): Promise<void> {
+    // Upstream blocking reconnects also pass here. Do not open a new generation
+    // while nodes from its interrupted predecessor still have live sockets.
+    await this.endings.get(client);
+    if (this.stopping) throw new Error('Redis resource owner is closing');
+    this.endings.delete(client);
+    this.ended.delete(client);
+    // Native adapters can reconnect synchronously from disconnect(true).
+    if (client.status === 'ready') return;
     const operation = client.connect();
     this.connecting.add(operation);
     void operation.then(
@@ -482,6 +494,7 @@ class RedisClientOwner {
     const nodes = client.isCluster ? (client.nodes?.() ?? []) : [];
     const ends = [...nodes, client].map((item) =>
       item.status === 'end' ||
+      (item === client && this.ended.has(client)) ||
       (item instanceof Redis && item.status === 'reconnecting')
         ? // ioredis enters reconnecting only after its socket close event. The
           // disconnect below cancels the retry timer; no new end event is emitted.
@@ -548,6 +561,7 @@ class RedisClientOwner {
     this.clients.clear();
     this.stalled.clear();
     this.endings.clear();
+    this.ended.clear();
   }
 }
 
