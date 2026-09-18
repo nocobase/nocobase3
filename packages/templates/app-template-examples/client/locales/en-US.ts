@@ -320,7 +320,7 @@ const enUS = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    themes: { default: 'Comfortable', compact: 'Compact' },
+    themes: { default: 'Spacious', compact: 'Compact' },
   },
   app: {
     title: 'NocoBase',

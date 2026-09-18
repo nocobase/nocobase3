@@ -16,8 +16,8 @@ import {
 
 describe('app client theme', () => {
   it.each([
-    ['en-US', 'Appearance', 'Comfortable'],
-    ['zh-CN', '外观', '舒适'],
+    ['en-US', 'Appearance', 'Spacious'],
+    ['zh-CN', '外观', '宽松'],
   ])(
     'labels the default preset without implying default selection (%s)',
     async (locale, appearance, label) => {
