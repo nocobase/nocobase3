@@ -7,6 +7,7 @@ const integrationFiles: Record<string, string[]> = {
     'redis-contract',
     'redis-native',
     'rate-limit-contract',
+    'redis-active-recovery',
   ],
   cluster: ['redis-cluster', 'redis-cluster-shutdown', 'rate-limit-contract'],
   postgres: ['postgres-*'],
