@@ -69,6 +69,52 @@ function sharedFrameworkSource(template, file) {
   );
 }
 
+// Hub administration belongs to its main console, so only its general Settings
+// entry is omitted. Keep comparing the entire remaining header with Default.
+function hubHeaderSource(source) {
+  const settingsImports = `import {
+  navigationPages,
+  useRouteNavigation,
+} from '../routing/route-navigation.js';
+
+`;
+  const settingsState = `  const routes = useClientApplication().runtime.settingsRouteTree;
+  // Use the same access checks as Settings navigation so the entry never opens an empty surface.
+  const { items } = useRouteNavigation(routes, true);
+  const hasSettings = navigationPages(items).length > 0;
+`;
+  const settingsEntry = `      {hasSettings ? (
+        <Link
+          aria-label={t('settings.title', { defaultValue: 'Settings' })}
+          className={ACTION_LINK_CLASS}
+          title={t('settings.title', { defaultValue: 'Settings' })}
+          to='/settings'
+        >
+          <Settings className='size-5' />
+        </Link>
+      ) : null}
+`;
+  for (const fragment of [settingsImports, settingsState, settingsEntry]) {
+    assert.ok(
+      source.includes(fragment),
+      'Review the Hub header exception when Default changes',
+    );
+  }
+  return source
+    .replace(
+      "import { useClientApplication } from '@nocobase/app-client';\n",
+      '',
+    )
+    .replace('MonitorCog, Settings', 'MonitorCog')
+    .replace(settingsImports, '')
+    .replace(`${settingsState}\n`, '')
+    .replace(settingsEntry, '')
+    .replace(
+      'The dev entry sits left of settings and exists only while developing:',
+      'Hub omits the general Settings entry. The dev entry exists only while developing:',
+    );
+}
+
 // These are shared framework mechanisms, not product pages or plugin composition.
 // Compare both directions so adding a build helper in only one template also fails.
 for (const template of templates) {
@@ -107,7 +153,9 @@ for (const template of templates) {
     ]) {
       assert.equal(
         sharedFrameworkSource(template, file),
-        sharedFrameworkSource(baseline, file),
+        template.kind === 'hub' && file === 'client/shell/header-actions.tsx'
+          ? hubHeaderSource(sharedFrameworkSource(baseline, file))
+          : sharedFrameworkSource(baseline, file),
         `${template.kind}: ${file}`,
       );
     }
