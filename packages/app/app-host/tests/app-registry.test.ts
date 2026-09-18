@@ -57,15 +57,14 @@ describe('AppRuntimeRegistry runtime replacement', () => {
         await config.loadAll();
         config.mergeDefaults({
           app: { name: scope.id, publicBasePath: scope.basePath },
-          logging: { level: 'silent', pretty: false },
-          queue: { environment: 'develop' },
+          logging: { default: 'system', enabled: false, level: 'silent' },
         });
         const app = new Application({
           config,
           paths: createConfigPaths({ rootDir: '/tmp/queue-host-test' }),
         });
         app.addServiceProvider(LoggingProvider);
-        app.addServiceProvider(QueueServiceProvider);
+        app.addServiceProvider(QueueServiceProvider, { nodeEnv: 'develop' });
         await app.start();
         const queue = app.container.resolve(queueServiceToken);
         const messages: unknown[] = [];
