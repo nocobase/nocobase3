@@ -714,6 +714,18 @@ describe('Hub client pages', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('opens deployment history after the first failed attempt', async () => {
+    renderAppPage(
+      '/apps/customer?filter=recent',
+      detail({
+        hasDeployments: true,
+        hasReleases: true,
+        app: { ...detail().app, currentDeploymentId: null },
+      }),
+    );
+    expect(await screen.findByText('Deployments tab')).toBeInTheDocument();
+  });
+
   it('defaults the deploy dialog to the newest release rather than the running one', async () => {
     // Two uploads of the same version: "release-2" is newer, "release-1" is what the App is running (see detail()).
     const release = (id: string, createdAt: string): ReleaseRecord => ({

@@ -4,7 +4,8 @@ import type { ReactElement } from 'react';
 
 export default function DeploymentsPage(): ReactElement {
   const context = useHubAppPage();
-  if (context.panelLoading) return <AppTabLoading />;
+  if (context.panelLoading && context.app.deployments.length === 0)
+    return <AppTabLoading />;
   return (
     <Deployments
       app={context.app}

@@ -56,7 +56,7 @@ A feature with a page and an API touches five places: a migration for the table,
 
 Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](.agents/skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
 
-The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
+Hub intentionally omits the general Settings header entry; administration is presented in the main console. Keep this Hub-specific shell customization when reconciling template upgrades. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
 `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, and the tsconfigs are the scaffolding the template provides. It is still this application's own source — it shipped to the user and they may change it — but it is the part the template evolves, so an edit there is what a future upgrade has to reconcile.
 

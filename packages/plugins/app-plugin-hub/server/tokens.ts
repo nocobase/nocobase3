@@ -57,6 +57,26 @@ export interface HubConfigBinding {
   readonly path?: string;
 }
 
+export interface HubDeploymentEvent {
+  readonly sequence: number;
+  readonly at: string;
+  readonly phase: HubDeploymentPhase;
+  readonly status: HubDeploymentStatus;
+  readonly code?: string;
+  readonly failedPhase?: HubDeploymentPhase;
+  readonly message?: string;
+  readonly durationMs?: number;
+  readonly hostSequence?: number;
+}
+
+export interface HubDeploymentEventsPage {
+  readonly items: readonly HubDeploymentEvent[];
+  readonly status: HubDeploymentStatus;
+  readonly nextCursor: number;
+  readonly truncated: boolean;
+  readonly legacy: boolean;
+}
+
 export interface HubDeploymentRecord {
   readonly id: string;
   readonly appId: string;
@@ -97,6 +117,7 @@ export interface HubAppSummary {
 }
 
 export interface HubAppDetail {
+  readonly hasDeployments?: boolean;
   readonly hasReleases: boolean;
   readonly hasPendingDeployment: boolean;
   readonly currentVersion: string | null;
@@ -223,6 +244,11 @@ export interface HubService {
     appId: string,
     deploymentId: string,
   ): Promise<HubDeploymentRecord>;
+  getDeploymentEvents(
+    appId: string,
+    deploymentId: string,
+    after?: number,
+  ): Promise<HubDeploymentEventsPage>;
   deploy(appId: string, input: DeployHubAppInput): Promise<HubDeploymentRecord>;
   rollback(
     appId: string,

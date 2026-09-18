@@ -21,6 +21,7 @@ interface AppSummaryResponse {
   startupMode: 'lazy' | 'eager';
 }
 interface AppDetailResponse extends AppSummaryResponse {
+  hasDeployments: boolean;
   deployment: Pick<
     HubAppDetail['deployment'],
     | 'desiredReleaseId'
@@ -76,6 +77,7 @@ export function appDetailResponse(value: HubAppDetail): AppDetailResponse {
   const deployment = value.deployment;
   return {
     ...appSummaryResponse(value),
+    hasDeployments: value.hasDeployments ?? false,
     enabled: value.app.enabled,
     deployment: {
       desiredReleaseId: deployment.desiredReleaseId,

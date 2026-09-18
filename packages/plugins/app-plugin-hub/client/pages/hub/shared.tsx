@@ -357,6 +357,10 @@ export function StatusBadge({
     unknown: 'status.unknown',
     failed: 'status.failed',
     running: 'status.running',
+    succeeded: 'deploymentLogs.states.succeeded',
+    queued: 'deploymentLogs.states.queued',
+    deploying: 'deploymentLogs.states.deploying',
+    cancelled: 'deploymentLogs.states.cancelled',
   };
   const statusKey = statusKeys[state];
   const label =

@@ -7,6 +7,11 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import {
+  redactDeploymentDiagnostic,
+  type DeploymentEvent,
+  type DeploymentReporter,
+} from '../deployment-events.ts';
 import type { ArtifactResolver } from '../artifact-resolver.ts';
 import type { AppRuntimeRegistry } from '../app-registry.ts';
 import type { AppVolumeManager } from '../deployment/volume-manager.ts';
@@ -393,6 +398,27 @@ export class ManagedReconciler {
     }
 
     this.markPending(revision, spec);
+    const events: DeploymentEvent[] = [];
+    let activePhase = 'resolving';
+    let failedPhase: string | undefined;
+    const report: DeploymentReporter = (phase, message, durationMs) => {
+      activePhase = phase;
+      events.push({
+        sequence: (events.at(-1)?.sequence ?? 0) + 1,
+        at: new Date().toISOString(),
+        phase,
+        message: redactDeploymentDiagnostic(message),
+        ...(durationMs === undefined ? {} : { durationMs }),
+      });
+      if (events.length > 64) events.shift();
+      const status = this.statuses.get(spec.id);
+      if (status) status.events = [...events];
+    };
+    const startedAt = Date.now();
+    report(
+      'resolving',
+      `Release ${spec.artifact.version}; SHA-256 ${spec.artifact.checksum}.`,
+    );
     try {
       if (!this.registry.backendKinds().includes(spec.backend)) {
         throw new Error(
@@ -401,7 +427,13 @@ export class ManagedReconciler {
       }
       const artifact = restoring
         ? await this.artifactResolver.restore(spec.artifact)
-        : await this.artifactResolver.resolve(spec.artifact);
+        : await this.artifactResolver.resolve(spec.artifact, report);
+      report(
+        'preparing',
+        artifact.cacheHit
+          ? 'Artifact ready from verified cache.'
+          : 'Artifact ready from uploaded release.',
+      );
       let result;
       const previousConfigPath = this.registry.definition(
         spec.appId,
@@ -418,8 +450,19 @@ export class ManagedReconciler {
             : spec.config
               ? (spec.config.path ?? this.volumes.configPath(spec.appId))
               : undefined;
+        report(
+          'preparing',
+          `Configuration source: ${spec.config ? 'file' : 'external'}; preparing application storage.`,
+        );
         const dataDir = await this.volumes.prepareStorageDir(spec.appId);
         candidateConfigPath = configPath;
+        const activationStartedAt = Date.now();
+        report(
+          'starting',
+          (spec.activation ?? 'lazy') === 'eager'
+            ? 'Starting candidate application and waiting for activation.'
+            : 'Registering candidate for activation on first access.',
+        );
         result = await this.registry.replaceDefinition(
           {
             ...artifact.definition,
@@ -436,7 +479,15 @@ export class ManagedReconciler {
             reason: `deployment ${spec.id} revision ${revision}`,
           },
         );
+        report(
+          'switching',
+          result.app
+            ? 'Candidate activated; application routing updated.'
+            : 'Candidate registered; startup deferred until first access.',
+          Date.now() - activationStartedAt,
+        );
         await artifact.commit();
+        report('cleaning', 'Artifact revision committed.');
         if (previousConfigPath && previousConfigPath !== configPath) {
           await this.volumes
             .removeConfig(spec.appId, previousConfigPath)
@@ -448,7 +499,9 @@ export class ManagedReconciler {
             });
         }
       } catch (error) {
+        failedPhase = activePhase;
         await artifact.rollback();
+        report('cleaning', 'Candidate artifact rollback completed.');
         if (
           spec.config?.content !== undefined &&
           candidateConfigPath &&
@@ -465,7 +518,10 @@ export class ManagedReconciler {
         }
         throw error;
       }
+      report('completed', 'Deployment completed.', Date.now() - startedAt);
       this.statuses.set(spec.id, {
+        operationId: spec.operationId,
+        events: [...events],
         id: spec.id,
         appId: spec.appId,
         desiredState: spec.desiredState,
@@ -476,7 +532,22 @@ export class ManagedReconciler {
         error: null,
       });
     } catch (error) {
+      failedPhase ??= activePhase;
+      report(
+        failedPhase,
+        `Deployment failed: ${fullErrorMessage(error)}`,
+        Date.now() - startedAt,
+      );
+      events[events.length - 1] = { ...events[events.length - 1], failedPhase };
+      report(
+        'completed',
+        this.registry.snapshot(spec.appId)
+          ? 'An application instance remains available; inspect its running version before retrying.'
+          : 'No running application instance is available.',
+      );
       this.statuses.set(spec.id, {
+        operationId: spec.operationId,
+        events: [...events],
         id: spec.id,
         appId: spec.appId,
         desiredState: spec.desiredState,
@@ -491,6 +562,7 @@ export class ManagedReconciler {
 
   private markPending(revision: number, spec: HostDeploymentSpec): void {
     this.statuses.set(spec.id, {
+      operationId: spec.operationId,
       id: spec.id,
       appId: spec.appId,
       desiredState: spec.desiredState,

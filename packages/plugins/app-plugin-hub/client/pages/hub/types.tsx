@@ -48,6 +48,7 @@ export interface DeploymentRecord {
 }
 
 export interface AppDetail {
+  readonly hasDeployments?: boolean;
   readonly enabled: boolean;
   readonly hasReleases: boolean;
   readonly hasPendingDeployment: boolean;

@@ -64,6 +64,47 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     });
   });
 
+  it('serves deployment logs with the application, deployment and cursor', async () => {
+    const getDeploymentEvents = vi
+      .fn<HubService['getDeploymentEvents']>()
+      .mockResolvedValue({
+        items: [],
+        status: 'succeeded',
+        nextCursor: 4,
+        truncated: false,
+        legacy: false,
+      });
+    const router = await apiRoutes.createRouter(
+      createApplication('administrator', {
+        listApps: vi.fn(),
+        getDeploymentEvents,
+      }),
+    );
+    expect(
+      (
+        await router.request(
+          '/hub/apps/customer/deployments/deploy-1/logs?after=4',
+        )
+      ).status,
+    ).toBe(200);
+    expect(getDeploymentEvents).toHaveBeenCalledWith('customer', 'deploy-1', 4);
+  });
+
+  it.each(['anonymous', 'member'] as const)(
+    'rejects unauthorized deployment log reads: %s',
+    async (role) => {
+      const getDeploymentEvents = vi.fn<HubService['getDeploymentEvents']>();
+      const router = await apiRoutes.createRouter(
+        createApplication(role, { listApps: vi.fn(), getDeploymentEvents }),
+      );
+      expect(
+        (await router.request('/hub/apps/customer/deployments/deploy-1/logs'))
+          .status,
+      ).toBe(role === 'anonymous' ? 401 : 403);
+      expect(getDeploymentEvents).not.toHaveBeenCalled();
+    },
+  );
+
   it('rejects anonymous requests', async () => {
     const listAppsPage = vi.fn<HubService['listAppsPage']>();
     const router = await apiRoutes.createRouter(

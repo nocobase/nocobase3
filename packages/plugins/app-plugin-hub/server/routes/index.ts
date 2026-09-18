@@ -576,6 +576,20 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         return { ...result, items: result.items.map(deploymentListResponse) };
       });
     });
+    routes.get(
+      '/apps/:appId/deployments/:deploymentId/logs',
+      async (context) => {
+        const appId = context.req.param('appId');
+        await requireHubAction(context, appId, 'read-deployment');
+        return respond(context, () =>
+          hub.getDeploymentEvents(
+            appId,
+            context.req.param('deploymentId'),
+            Number(context.req.query('after') ?? 0),
+          ),
+        );
+      },
+    );
     routes.get('/apps/:appId/deployments/:deploymentId', async (context) => {
       await requireHubAction(
         context,

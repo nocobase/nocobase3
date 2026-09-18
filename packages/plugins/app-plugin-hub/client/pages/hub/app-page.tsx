@@ -218,15 +218,18 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         capabilities,
       )
     : [];
-  const defaultTab = detail
-    ? defaultHubDetailTab(
-        {
-          hasReleases: detail.hasReleases,
-          deployed: Boolean(detail.app.currentDeploymentId),
-        },
-        capabilities,
-      )
-    : undefined;
+  const defaultTab =
+    detail?.hasDeployments && availableTabs.includes('deployments')
+      ? 'deployments'
+      : detail
+        ? defaultHubDetailTab(
+            {
+              hasReleases: detail.hasReleases,
+              deployed: Boolean(detail.app.currentDeploymentId),
+            },
+            capabilities,
+          )
+        : undefined;
   const isParentEntry = Boolean(
     matchPath({ path: appPath.pathname, end: true }, location.pathname),
   );

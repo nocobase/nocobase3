@@ -1,3 +1,4 @@
+import type { DeploymentReporter } from './deployment-events.ts';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -46,7 +47,10 @@ export interface ResolvedArtifact {
 
 export interface ArtifactResolver {
   restore(reference: ArtifactReference): Promise<ResolvedArtifact>;
-  resolve(reference: ArtifactReference): Promise<ResolvedArtifact>;
+  resolve(
+    reference: ArtifactReference,
+    report?: DeploymentReporter,
+  ): Promise<ResolvedArtifact>;
 }
 
 export interface DriveArtifactResolverOptions {
@@ -118,7 +122,10 @@ export class DriveArtifactResolver implements ArtifactResolver {
     }
   }
 
-  async resolve(reference: ArtifactReference): Promise<ResolvedArtifact> {
+  async resolve(
+    reference: ArtifactReference,
+    report?: DeploymentReporter,
+  ): Promise<ResolvedArtifact> {
     validateArtifactReference(reference);
     // Host serializes deployments; finish the previous commit's cleanup before
     // any candidate revision is read or activated by the next operation.
@@ -126,14 +133,15 @@ export class DriveArtifactResolver implements ArtifactResolver {
     await mkdir(this.appDeploymentsDir, { recursive: true, mode: 0o700 });
 
     if (this.expandedRevisionLimit !== undefined) {
-      return this.resolveRevision(reference);
+      return this.resolveRevision(reference, report);
     }
 
-    return this.resolveReplaceable(reference);
+    return this.resolveReplaceable(reference, report);
   }
 
   private async resolveRevision(
     reference: ArtifactReference,
+    report?: DeploymentReporter,
   ): Promise<ResolvedArtifact> {
     const revisionRoot = path.join(
       this.appDeploymentsDir,
@@ -158,6 +166,11 @@ export class DriveArtifactResolver implements ArtifactResolver {
         true,
       );
       if (cachedArtifact) {
+        report?.(
+          'resolving',
+          'Verified expanded artifact cache; reuse selected.',
+          Date.now() - startedAt,
+        );
         this.logger?.info(
           {
             appId: reference.appId,
@@ -173,18 +186,25 @@ export class DriveArtifactResolver implements ArtifactResolver {
         return this.withRevisionCommit(cachedArtifact, revisionRoot, targetDir);
       }
 
+      report?.('resolving', 'Cache miss; reading release artifact.');
       const checksumStartedAt = Date.now();
       const localPath = this.localArtifactPath(reference.key);
       const actualChecksum = localPath
         ? await hashLocalArtifact(localPath)
         : await downloadArtifact(this.disk, reference.key, archivePath);
       const checksumDurationMs = Date.now() - checksumStartedAt;
+      report?.(
+        'verifying',
+        'Artifact read; checking SHA-256 checksum.',
+        checksumDurationMs,
+      );
       if (actualChecksum !== checksum) {
         throw new Error(
           `Artifact checksum mismatch for app "${reference.appId}": expected "${reference.checksum}", received "${actualChecksum}"`,
         );
       }
 
+      report?.('extracting', 'SHA-256 verified; extracting release archive.');
       await mkdir(stagingDir, { recursive: true, mode: 0o700 });
       const extractStartedAt = Date.now();
       await extractTar({
@@ -196,6 +216,15 @@ export class DriveArtifactResolver implements ArtifactResolver {
         filter: assertSafeArchiveEntry,
       });
       const extractDurationMs = Date.now() - extractStartedAt;
+      report?.(
+        'extracting',
+        'Archive extracted successfully.',
+        extractDurationMs,
+      );
+      report?.(
+        'preparing',
+        'Discovering application entry and validating release identity.',
+      );
       const discoveryStartedAt = Date.now();
       const stagedDefinition = await this.catalog.discoverAt(
         reference.appId,
@@ -204,6 +233,11 @@ export class DriveArtifactResolver implements ArtifactResolver {
       assertArtifactIdentity(stagedDefinition, reference);
       await writeInstalledArtifactMetadata(stagingDir, reference);
       const discoveryDurationMs = Date.now() - discoveryStartedAt;
+      report?.(
+        'preparing',
+        'Application entry and release identity verified.',
+        discoveryDurationMs,
+      );
 
       await rename(stagingDir, targetDir);
       installed = true;
@@ -259,6 +293,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
 
   private async resolveReplaceable(
     reference: ArtifactReference,
+    report?: DeploymentReporter,
   ): Promise<ResolvedArtifact> {
     const nonce = `${process.pid}.${randomUUID()}`;
     const archivePath = path.join(
@@ -289,6 +324,11 @@ export class DriveArtifactResolver implements ArtifactResolver {
         false,
       );
       if (installedArtifact) {
+        report?.(
+          'resolving',
+          'Verified installed artifact cache; reuse selected.',
+          Date.now() - startedAt,
+        );
         this.logger?.info(
           {
             appId: reference.appId,
@@ -303,12 +343,18 @@ export class DriveArtifactResolver implements ArtifactResolver {
         return installedArtifact;
       }
 
+      report?.('resolving', 'Cache miss; reading release artifact.');
       const checksumStartedAt = Date.now();
       const localPath = this.localArtifactPath(reference.key);
       const actualChecksum = localPath
         ? await hashLocalArtifact(localPath)
         : await downloadArtifact(this.disk, reference.key, archivePath);
       const checksumDurationMs = Date.now() - checksumStartedAt;
+      report?.(
+        'verifying',
+        'Artifact read; checking SHA-256 checksum.',
+        checksumDurationMs,
+      );
       phases.complete('artifact download', checksumDurationMs);
       currentPhase = 'checksum verification';
       if (actualChecksum !== reference.checksum) {
@@ -318,6 +364,7 @@ export class DriveArtifactResolver implements ArtifactResolver {
       }
 
       currentPhase = 'extract';
+      report?.('extracting', 'SHA-256 verified; extracting release archive.');
       await mkdir(stagingDir, { recursive: true, mode: 0o700 });
       const extractStartedAt = Date.now();
       await extractTar({
@@ -329,6 +376,15 @@ export class DriveArtifactResolver implements ArtifactResolver {
         filter: assertSafeArchiveEntry,
       });
       const extractDurationMs = Date.now() - extractStartedAt;
+      report?.(
+        'extracting',
+        'Archive extracted successfully.',
+        extractDurationMs,
+      );
+      report?.(
+        'preparing',
+        'Discovering application entry and validating release identity.',
+      );
       phases.complete('extract', extractDurationMs);
       currentPhase = 'discovery';
       const discoveryStartedAt = Date.now();
@@ -339,6 +395,11 @@ export class DriveArtifactResolver implements ArtifactResolver {
       assertArtifactIdentity(stagedDefinition, reference);
       await writeInstalledArtifactMetadata(stagingDir, reference);
       const discoveryDurationMs = Date.now() - discoveryStartedAt;
+      report?.(
+        'preparing',
+        'Application entry and release identity verified.',
+        discoveryDurationMs,
+      );
       phases.complete('discovery', discoveryDurationMs);
       currentPhase = 'revision swap';
 

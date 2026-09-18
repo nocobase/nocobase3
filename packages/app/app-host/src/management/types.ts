@@ -7,6 +7,7 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+import type { DeploymentEvent } from '../deployment-events.ts';
 import type { ArtifactReference } from '../artifact-resolver.ts';
 import type { AppSnapshot } from '../app-types.ts';
 import type { AppHostMode } from '../host-mode.ts';
@@ -22,6 +23,7 @@ export interface HostFileConfig {
 }
 
 export interface HostDeploymentSpec {
+  operationId?: string;
   id: string;
   appId: string;
   artifact: ArtifactReference;
@@ -41,6 +43,8 @@ export type DeploymentObservedState =
   'pending' | 'running' | 'stopped' | 'failed';
 
 export interface HostDeploymentStatus {
+  operationId?: string;
+  events?: readonly DeploymentEvent[];
   id: string;
   appId: string;
   desiredState: DeploymentDesiredState;

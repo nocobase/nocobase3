@@ -90,12 +90,12 @@ describe('settings centre', () => {
     },
   );
 
-  it('shows the Settings entry from the application runtime without AppRouter', async () => {
+  it('omits the Hub Settings header entry even with registered settings pages', () => {
     renderApp(<HeaderActions />, '/', toRouteTree(SETTINGS, GROUPS));
 
     expect(
-      await screen.findByRole('link', { name: 'Settings' }),
-    ).toHaveAttribute('href', '/settings');
+      screen.queryByRole('link', { name: 'Settings' }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders the requested setting with a grouped navigation of the rest', async () => {
@@ -118,7 +118,7 @@ describe('settings centre', () => {
     ).toHaveAttribute('href', '/');
   });
 
-  it('keeps both header entries visible inside settings', async () => {
+  it('keeps theme, account, and development controls without a Settings entry', async () => {
     renderSettings('/settings/authorization/permission-sets');
     await screen.findByText('Permission Sets page');
 
@@ -129,7 +129,9 @@ describe('settings centre', () => {
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
-    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
+    expect(
+      screen.queryByRole('link', { name: 'Settings' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Dev tools' })).toHaveAttribute(
       'href',
       '/dev',

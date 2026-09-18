@@ -33,6 +33,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
 import migration from '../database/migrations/202609010001_create_hub_app_tables.js';
+import eventsMigration from '../database/migrations/202609170001_add_deployment_events.js';
 import {
   DefaultHubService,
   HubError,
@@ -99,6 +100,11 @@ describe('@nocobase/app-plugin-hub service', () => {
       connection,
     });
     await configFingerprintMigration.up({
+      builder: connection.builder,
+      query: connection.query,
+      connection,
+    });
+    await eventsMigration.up({
       builder: connection.builder,
       query: connection.query,
       connection,
@@ -279,6 +285,17 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     await waitForDeployment(service, 'customer', uploaded.operationId!);
     expect((await service.listDeployments('customer')).total).toBe(1);
+    const events = await service.getDeploymentEvents(
+      'customer',
+      uploaded.operationId!,
+    );
+    expect(events.legacy).toBe(false);
+    expect(events.items.map((event) => event.phase)).toEqual([
+      'queued',
+      'resolving',
+      'starting',
+      'completed',
+    ]);
     const uploadOnly = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '2.0.0'),
     });
@@ -455,6 +472,137 @@ describe('@nocobase/app-plugin-hub service', () => {
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
     await waitForDeployment(service, 'customer', first.id);
     expect((await service.listDeployments('customer')).total).toBe(1);
+  });
+
+  it('persists ordered deployment events across service instances with cursors and app isolation', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const operation = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', operation.id);
+    const result = await service.getDeploymentEvents('customer', operation.id);
+    expect(result.items.map((event) => event.phase)).toEqual([
+      'queued',
+      'resolving',
+      'starting',
+      'completed',
+    ]);
+    expect(result.status).toBe('succeeded');
+    expect(result.legacy).toBe(false);
+    expect(result.items.map((event) => event.sequence)).toEqual([1, 2, 3, 4]);
+    const secondReader = new DefaultHubService(createServiceOptions());
+    expect(
+      (await secondReader.getDeploymentEvents('customer', operation.id, 2))
+        .items,
+    ).toEqual(result.items.slice(2));
+    expect(
+      (await secondReader.getDeploymentEvents('customer', operation.id, 4))
+        .items,
+    ).toEqual([]);
+    await expect(
+      service.getDeploymentEvents('other', operation.id),
+    ).rejects.toMatchObject({ code: 'DEPLOYMENT_NOT_FOUND' });
+    await expect(
+      service.getDeploymentEvents('customer', operation.id, -1),
+    ).rejects.toMatchObject({ code: 'INVALID_CURSOR' });
+    expect((await service.getApp('customer')).hasDeployments).toBe(true);
+    await secondReader.shutdown();
+  });
+
+  it('persists Host execution details only for the matching deployment operation', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const apply = host.applyDeployment.bind(host);
+    vi.spyOn(host, 'applyDeployment').mockImplementationOnce(async (spec) => {
+      const status = await apply(spec);
+      status.deployments[0]!.operationId = spec.operationId;
+      status.deployments[0]!.events = [
+        {
+          sequence: 1,
+          at: new Date().toISOString(),
+          phase: 'extracting',
+          message: 'Archive extracted successfully.',
+          durationMs: 42,
+        },
+      ];
+      return status;
+    });
+    const operation = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', operation.id);
+    expect(
+      (await service.getDeploymentEvents('customer', operation.id)).items,
+    ).toContainEqual(
+      expect.objectContaining({
+        message: 'Archive extracted successfully.',
+        durationMs: 42,
+        hostSequence: 1,
+      }),
+    );
+  });
+
+  it('records classified failures without persisting raw secrets in event payloads', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    vi.spyOn(host, 'applyDeployment').mockRejectedValueOnce(
+      new Error('ECONNREFUSED postgres://admin:secret@db password=secret'),
+    );
+    const operation = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', operation.id);
+    const result = await service.getDeploymentEvents('customer', operation.id);
+    expect(result.status).toBe('failed');
+    expect(result.items.at(-1)?.code).toBe('CONNECTION_REFUSED');
+    expect(JSON.stringify(result)).not.toContain('secret');
+    const detail = await service.getApp('customer');
+    expect(detail.hasDeployments).toBe(true);
+    expect(detail.app.currentDeploymentId).toBeNull();
+    await database
+      .connection()
+      .query.updateTable('hubAppDeployments')
+      .set({ events: null })
+      .where('id', '=', operation.id)
+      .execute();
+    expect(
+      await service.getDeploymentEvents('customer', operation.id),
+    ).toMatchObject({ legacy: true, items: [] });
+  });
+
+  it('records restart interruption once and preserves deployment history', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const operation = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', operation.id);
+    await database
+      .connection()
+      .query.updateTable('hubAppDeployments')
+      .set({ status: 'deploying', phase: 'starting' })
+      .where('id', '=', operation.id)
+      .execute();
+    await service.restoreDesiredState();
+    const first = await service.getDeploymentEvents('customer', operation.id);
+    expect(first.items.at(-1)?.code).toBe('HUB_RESTARTED');
+    await service.restoreDesiredState();
+    expect(await service.getDeploymentEvents('customer', operation.id)).toEqual(
+      first,
+    );
   });
 
   it('paginates deployments with stable ordering and app isolation', async () => {

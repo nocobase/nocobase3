@@ -40,6 +40,8 @@ import {
   stringify as stringifyYaml,
 } from 'yaml';
 
+import { appendDeploymentEvent } from './deployment-events.js';
+import type { HubDeploymentEvent, HubDeploymentEventsPage } from '../tokens.js';
 import type { HubPluginConfig } from '../config.js';
 import type {
   CreateHubAppInput,
@@ -1106,16 +1108,19 @@ export class DefaultHubService implements HubService {
   public async restoreDesiredState(): Promise<void> {
     await this.prepare();
     const recoveredAt = new Date();
-    await this.query()
-      .updateTable('hubAppDeployments')
-      .set({
+    const interrupted = await this.query()
+      .selectFrom('hubAppDeployments')
+      .select('id')
+      .where('status', 'in', ['queued', 'deploying'])
+      .execute<Row>();
+    for (const row of interrupted) {
+      await this.updateDeployment(String(row.id), {
         status: 'failed',
         phase: 'completed',
         error: 'Deployment was interrupted by a Hub restart.',
         finishedAt: recoveredAt,
-      })
-      .where('status', 'in', ['queued', 'deploying'])
-      .execute();
+      });
+    }
     this.currentHostUrl = (
       await this.hostController.ensureStarted()
     ).toString();
@@ -1168,6 +1173,7 @@ export class DefaultHubService implements HubService {
       // Host deployment identity is stable per App. Hub deployment IDs are
       // immutable operation-history identities and must not replace it.
       id: app.id,
+      operationId: deployment.id,
       appId: app.id,
       artifact: {
         key: release.artifactKey,
@@ -1216,7 +1222,7 @@ export class DefaultHubService implements HubService {
 
   private async detail(app: HubAppRecord): Promise<HubAppDetail> {
     const current = await this.currentDeployment(app);
-    const [release, pending, currentRelease] = await Promise.all([
+    const [release, pending, currentRelease, attempt] = await Promise.all([
       this.query()
         .selectFrom('hubAppReleases')
         .select('id')
@@ -1237,10 +1243,17 @@ export class DefaultHubService implements HubService {
             .where('id', '=', current.releaseId)
             .executeTakeFirst<Row>()
         : undefined,
+      this.query()
+        .selectFrom('hubAppDeployments')
+        .select('id')
+        .where('appId', '=', app.id)
+        .limit(1)
+        .executeTakeFirst<Row>(),
     ]);
     const runtime = await this.runtimeStatus(app.id);
     return {
       app,
+      hasDeployments: Boolean(attempt),
       hasReleases: Boolean(release),
       hasPendingDeployment: Boolean(pending),
       currentVersion:
@@ -1359,9 +1372,105 @@ export class DefaultHubService implements HubService {
     deploymentId: string,
     values: Partial<HubDeploymentRecord>,
   ): Promise<void> {
-    await this.query()
+    await this.options.database.transaction(async (connection) => {
+      await this.writeDeploymentUpdate(connection.query, deploymentId, values);
+    });
+  }
+
+  public async getDeploymentEvents(
+    appId: string,
+    deploymentId: string,
+    after: number = 0,
+  ): Promise<HubDeploymentEventsPage> {
+    if (!Number.isSafeInteger(after) || after < 0) {
+      throw new HubError(
+        'Invalid deployment log cursor.',
+        'INVALID_CURSOR',
+        400,
+      );
+    }
+    const row = await this.query()
+      .selectFrom('hubAppDeployments')
+      .selectAll()
+      .where('appId', '=', appId)
+      .where('id', '=', deploymentId)
+      .executeTakeFirst<Row>();
+    if (!row)
+      throw new HubError('Deployment not found.', 'DEPLOYMENT_NOT_FOUND', 404);
+    const events = (decodeJson(row.events) ??
+      []) as readonly HubDeploymentEvent[];
+    return {
+      items: events.filter((event) => event.sequence > after),
+      status: decodeDeployment(row).status,
+      nextCursor: Math.max(after, events.at(-1)?.sequence ?? 0),
+      truncated: events.length > 0 && events[0].sequence > after + 1,
+      legacy: row.events == null,
+    };
+  }
+
+  private async captureHostEvents(
+    deploymentId: string,
+    hostStatus: HostStatus,
+  ): Promise<void> {
+    const incoming = hostStatus.deployments.find(
+      (item) => item.operationId === deploymentId,
+    )?.events;
+    if (!incoming?.length) return;
+    await this.options.database.transaction(async (connection) => {
+      const row = await connection.query
+        .selectFrom('hubAppDeployments')
+        .selectAll()
+        .where('id', '=', deploymentId)
+        .executeTakeFirstOrThrow<Row>();
+      const events = (decodeJson(row.events) ?? []) as HubDeploymentEvent[];
+      const lastHost = Math.max(
+        0,
+        ...events.map((event) => event.hostSequence ?? 0),
+      );
+      for (const event of incoming) {
+        if (event.sequence <= lastHost) continue;
+        events.push({
+          sequence: (events.at(-1)?.sequence ?? 0) + 1,
+          hostSequence: event.sequence,
+          at: event.at,
+          phase: event.phase as HubDeploymentEvent['phase'],
+          status: event.failedPhase ? 'failed' : 'deploying',
+          ...(event.failedPhase
+            ? { failedPhase: event.failedPhase as HubDeploymentEvent['phase'] }
+            : {}),
+          message: event.message,
+          durationMs: event.durationMs,
+        });
+      }
+      await connection.query
+        .updateTable('hubAppDeployments')
+        .set({ events: JSON.stringify(events.slice(-64)) })
+        .where('id', '=', deploymentId)
+        .execute();
+    });
+  }
+
+  private async writeDeploymentUpdate(
+    query: DatabaseConnection['query'],
+    deploymentId: string,
+    values: Partial<HubDeploymentRecord>,
+  ): Promise<void> {
+    const row = await query
+      .selectFrom('hubAppDeployments')
+      .selectAll()
+      .where('id', '=', deploymentId)
+      .executeTakeFirstOrThrow<Row>();
+    const current = decodeDeployment(row);
+    const events = (decodeJson(row.events) ??
+      []) as readonly HubDeploymentEvent[];
+    const next = appendDeploymentEvent(
+      events,
+      { ...current, ...values },
+      values.error,
+    );
+    await query
       .updateTable('hubAppDeployments')
-      .set(encodePartialDeployment(values))
+      .set({ ...encodePartialDeployment(values), events: JSON.stringify(next) })
       .where('id', '=', deploymentId)
       .execute();
   }
@@ -1582,14 +1691,44 @@ export class DefaultHubService implements HubService {
       previousDeploymentId: app.currentDeploymentId,
     });
     try {
-      await this.updateDeployment(deploymentId, { phase: 'starting' });
-      const hostStatus = await this.hostController.applyDeployment(
-        await this.createDeploymentSpec(
-          { ...app, enabled: true },
-          deployment,
-          'running',
-        ),
+      const spec = await this.createDeploymentSpec(
+        { ...app, enabled: true },
+        deployment,
+        'running',
       );
+      await this.updateDeployment(deploymentId, { phase: 'starting' });
+      let polling = true;
+      let wake: (() => void) | undefined;
+      let pollTimer: ReturnType<typeof setTimeout> | undefined;
+      const poll = async (): Promise<void> => {
+        while (polling) {
+          await new Promise<void>((resolve) => {
+            wake = resolve;
+            pollTimer = setTimeout(resolve, 1000);
+          });
+          if (!polling) return;
+          try {
+            const client = await this.hostController.getManagementClient();
+            await this.captureHostEvents(
+              deploymentId,
+              await client.getStatus(),
+            );
+          } catch {
+            // A failed progress read must not interrupt activation. The final response is captured below.
+          }
+        }
+      };
+      const progress = poll();
+      let hostStatus: HostStatus;
+      try {
+        hostStatus = await this.hostController.applyDeployment(spec);
+      } finally {
+        polling = false;
+        clearTimeout(pollTimer);
+        wake?.();
+        await progress;
+      }
+      await this.captureHostEvents(deploymentId, hostStatus);
       const observed = hostStatus.deployments.find(
         (candidate) => candidate.appId === app.id,
       );
@@ -1601,17 +1740,13 @@ export class DefaultHubService implements HubService {
       }
       const finishedAt = new Date();
       await this.options.database.transaction(async (connection) => {
-        await connection.query
-          .updateTable('hubAppDeployments')
-          .set({
-            status: 'succeeded',
-            phase: 'completed',
-            cacheHit: observed.cacheHit,
-            hostRevision: observed.revision,
-            finishedAt,
-          })
-          .where('id', '=', deploymentId)
-          .execute();
+        await this.writeDeploymentUpdate(connection.query, deploymentId, {
+          status: 'succeeded',
+          phase: 'completed',
+          cacheHit: observed.cacheHit,
+          hostRevision: observed.revision,
+          finishedAt,
+        });
         await connection.query
           .updateTable('hubApps')
           .set({
@@ -2075,7 +2210,11 @@ function encodeApp(app: HubAppRecord): Row {
 }
 
 function encodeDeployment(deployment: HubDeploymentRecord): Row {
-  return { ...deployment, config: JSON.stringify(deployment.config) };
+  return {
+    ...deployment,
+    config: JSON.stringify(deployment.config),
+    events: JSON.stringify(appendDeploymentEvent([], deployment)),
+  };
 }
 
 function encodePartialDeployment(values: Partial<HubDeploymentRecord>): Row {

@@ -32,6 +32,7 @@ import {
 import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement } from 'react';
 import type { AppDetail, DeploymentRecord } from './types.js';
+import { DeploymentLogs } from './deployment-logs.js';
 import { Empty, StatusBadge, AppDialog } from './shared.js';
 import {
   appActionState,
@@ -63,6 +64,7 @@ export function Deployments({
   readonly onPage: (page: number) => void;
 }): ReactElement {
   const { t, i18n } = useTranslation('@nocobase/app-plugin-hub');
+  const [logs, setLogs] = useState<DeploymentRecord>();
   const deployState = appActionState(app, 'deploy', busy);
   const rollbackState = appActionState(app, 'rollback', busy);
   const previousDisabled = loading || pagination.page <= 1;
@@ -113,6 +115,14 @@ export function Deployments({
   }
   return (
     <div className='space-y-5'>
+      {logs ? (
+        <DeploymentLogs
+          key={logs.id}
+          appId={app.app.id}
+          deployment={logs}
+          onClose={() => setLogs(undefined)}
+        />
+      ) : null}
       <div className='flex flex-wrap items-start justify-between gap-3'>
         <div>
           <h2 className='font-semibold'>
@@ -174,7 +184,7 @@ export function Deployments({
               <TableHead className='w-[16%]'>
                 {t('deployments.created', { defaultValue: 'Created' })}
               </TableHead>
-              <TableHead className='w-20'>
+              <TableHead className='w-36'>
                 <span className='sr-only'>
                   {t('deployments.actions', { defaultValue: 'Actions' })}
                 </span>
@@ -240,77 +250,90 @@ export function Deployments({
                   <TableCell className='whitespace-nowrap py-4 text-sm text-muted-foreground tabular-nums'>
                     {formatDateTime(deployment.createdAt, i18n.language)}
                   </TableCell>
-                  <TableCell className='w-20 py-4 text-right align-top'>
-                    {canRollback ? (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button
-                              aria-label={`${t('deployments.actions', {
-                                defaultValue: 'Actions',
-                              })} for deployment ${shortId(deployment.id)}${
-                                rowRollbackReason
-                                  ? `: ${t(`actions.${rowRollbackReason}`, {
-                                      defaultValue: rowRollbackReason,
-                                    })}`
-                                  : ''
-                              }`}
-                              className='size-8 text-muted-foreground'
-                              size='icon'
+                  <TableCell className='w-36 py-4 text-right'>
+                    <div className='flex items-center justify-end gap-1'>
+                      <Button
+                        className='h-8 px-2 text-xs text-muted-foreground'
+                        size='sm'
+                        variant='ghost'
+                        onClick={() => setLogs(deployment)}
+                      >
+                        {t('deploymentLogs.view', {
+                          defaultValue: 'View logs',
+                        })}
+                      </Button>
+
+                      {canRollback ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                aria-label={`${t('deployments.actions', {
+                                  defaultValue: 'Actions',
+                                })} for deployment ${shortId(deployment.id)}${
+                                  rowRollbackReason
+                                    ? `: ${t(`actions.${rowRollbackReason}`, {
+                                        defaultValue: rowRollbackReason,
+                                      })}`
+                                    : ''
+                                }`}
+                                className='size-8 text-muted-foreground'
+                                size='icon'
+                                title={
+                                  rowRollbackReason
+                                    ? t(`actions.${rowRollbackReason}`, {
+                                        defaultValue: rowRollbackReason,
+                                      })
+                                    : t('deployments.actions', {
+                                        defaultValue: 'Actions',
+                                      })
+                                }
+                                variant='ghost'
+                              >
+                                <MoreHorizontal />
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align='end' className='w-40'>
+                            <DropdownMenuItem
+                              disabled={
+                                !rollbackState.enabled ||
+                                deployment.status !== 'succeeded' ||
+                                current
+                              }
                               title={
                                 rowRollbackReason
                                   ? t(`actions.${rowRollbackReason}`, {
                                       defaultValue: rowRollbackReason,
                                     })
-                                  : t('deployments.actions', {
-                                      defaultValue: 'Actions',
-                                    })
+                                  : undefined
                               }
-                              variant='ghost'
+                              aria-describedby={
+                                rowRollbackReason
+                                  ? `hub-rollback-${deployment.id}-reason`
+                                  : undefined
+                              }
+                              onClick={() => onRollback(deployment.id)}
                             >
-                              <MoreHorizontal />
-                            </Button>
-                          }
-                        />
-                        <DropdownMenuContent align='end' className='w-40'>
-                          <DropdownMenuItem
-                            disabled={
-                              !rollbackState.enabled ||
-                              deployment.status !== 'succeeded' ||
-                              current
-                            }
-                            title={
-                              rowRollbackReason
-                                ? t(`actions.${rowRollbackReason}`, {
+                              <RotateCcw />
+                              {t('deployments.rollback', {
+                                defaultValue: 'Roll back',
+                              })}
+                              {rowRollbackReason ? (
+                                <span
+                                  className='sr-only'
+                                  id={`hub-rollback-${deployment.id}-reason`}
+                                >
+                                  {t(`actions.${rowRollbackReason}`, {
                                     defaultValue: rowRollbackReason,
-                                  })
-                                : undefined
-                            }
-                            aria-describedby={
-                              rowRollbackReason
-                                ? `hub-rollback-${deployment.id}-reason`
-                                : undefined
-                            }
-                            onClick={() => onRollback(deployment.id)}
-                          >
-                            <RotateCcw />
-                            {t('deployments.rollback', {
-                              defaultValue: 'Roll back',
-                            })}
-                            {rowRollbackReason ? (
-                              <span
-                                className='sr-only'
-                                id={`hub-rollback-${deployment.id}-reason`}
-                              >
-                                {t(`actions.${rowRollbackReason}`, {
-                                  defaultValue: rowRollbackReason,
-                                })}
-                              </span>
-                            ) : null}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    ) : null}
+                                  })}
+                                </span>
+                              ) : null}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               );

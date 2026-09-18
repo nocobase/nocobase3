@@ -59,6 +59,11 @@ const HUB_API_CASES: readonly ApiCase[] = [
     allowed: ADMINISTRATOR_AND_OPERATOR,
   },
   {
+    name: 'read deployment logs',
+    path: '/hub/apps/customer/deployments/deployment-1/logs',
+    allowed: ALL_HUB_ROLES,
+  },
+  {
     name: 'list applications',
     path: '/hub/apps',
     allowed: ALL_HUB_ROLES,
@@ -651,6 +656,15 @@ function createHubService(): HubService {
         total: 1,
         page: 1,
         pageSize: 20,
+      }),
+    ),
+    getDeploymentEvents: vi.fn(() =>
+      Promise.resolve({
+        items: [],
+        status: 'succeeded' as const,
+        nextCursor: 0,
+        truncated: false,
+        legacy: true,
       }),
     ),
     getDeployment: vi.fn(() => Promise.resolve(deployment)),

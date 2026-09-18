@@ -306,6 +306,17 @@ describe('managed host reconciliation', () => {
     });
     const first = await host.management.applyDeploymentSet(firstDeploymentSet);
     expect(first.accepted).toBe(true);
+    const execution = first.status.deployments[0]?.events ?? [];
+    expect(
+      execution.some((event) => event.message.includes('SHA-256 verified')),
+    ).toBe(true);
+    expect(
+      execution.some((event) => event.message.includes('Archive extracted')),
+    ).toBe(true);
+    expect(
+      execution.some((event) => event.message.includes('Candidate activated')),
+    ).toBe(true);
+    expect(execution.at(-1)?.durationMs).toBeGreaterThanOrEqual(0);
     expect(first.status.deployments[0]).toMatchObject({
       appId: 'customer',
       observedState: 'running',
@@ -522,6 +533,16 @@ describe('managed host reconciliation', () => {
       revision: 2,
     });
     expect(failed.status.deployments[0]?.error).toContain('version mismatch');
+    expect(
+      failed.status.deployments[0]?.events?.some(
+        (event) =>
+          event.message.includes('version mismatch') &&
+          event.failedPhase === 'resolving',
+      ),
+    ).toBe(true);
+    expect(failed.status.deployments[0]?.events?.at(-1)?.message).toContain(
+      'remains available',
+    );
     expect(host.registry.snapshot('customer')?.version).toBe(activeVersion);
   });
 

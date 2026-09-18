@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
 import appTablesMigration from '../database/migrations/202609010001_create_hub_app_tables.js';
 import permissionSetsMigration from '../database/migrations/202609080001_create_hub_permission_sets.js';
+import eventsMigration from '../database/migrations/202609170001_add_deployment_events.js';
 import administratorSeed from '../database/seeds/202609080001_assign_hub_administrator.js';
 
 interface SqliteClient {
@@ -212,6 +213,40 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     expect(await query.selectFrom('hubApps').select('id').execute()).toEqual([
       { id: 'legacy' },
     ]);
+  });
+
+  it('adds and rolls back the nullable event journal without removing deployment history', async () => {
+    await migrate(appTablesMigration, 'up', database);
+    await database
+      .connection()
+      .query.insertInto('hubAppDeployments')
+      .values({
+        id: 'old',
+        appId: 'customer',
+        releaseId: 'release',
+        kind: 'deploy',
+        status: 'failed',
+        phase: 'completed',
+        config: JSON.stringify({ mode: 'external' }),
+        createdAt: new Date(),
+      })
+      .execute();
+    await migrate(eventsMigration, 'up', database);
+    const row = await database
+      .connection()
+      .query.selectFrom('hubAppDeployments')
+      .selectAll()
+      .where('id', '=', 'old')
+      .executeTakeFirstOrThrow();
+    expect(row.events).toBeNull();
+    await migrate(eventsMigration, 'down', database);
+    expect(
+      await database
+        .connection()
+        .query.selectFrom('hubAppDeployments')
+        .select('id')
+        .execute(),
+    ).toEqual([{ id: 'old' }]);
   });
 
   it('drops the schema and metadata', async () => {

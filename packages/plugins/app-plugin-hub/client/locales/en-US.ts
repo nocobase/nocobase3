@@ -262,6 +262,8 @@ const enUS = {
     copyError: 'Copy error',
     copyId: 'Copy deployment ID',
     phases: {
+      queued: 'Queued',
+      completed: 'Completed',
       resolving: 'Preparing release',
       verifying: 'Verifying release',
       extracting: 'Extracting files',
@@ -437,6 +439,43 @@ const enUS = {
     removeDescription:
       'Permanently remove the application, its releases, configuration, and application data from this Hub.',
     remove: 'Remove application',
+  },
+  deploymentLogs: {
+    details: 'Execution details',
+    duration: 'Recorded duration: {{seconds}} s',
+    states: {
+      queued: 'Queued',
+      deploying: 'Deploying',
+      succeeded: 'Succeeded',
+      failed: 'Failed',
+      cancelled: 'Cancelled',
+    },
+    title: 'Deployment logs',
+    view: 'View logs',
+    scope: 'Deployment process and results. Runtime logs are not included.',
+    loadFailed:
+      'Could not load logs. Check your access or connection and try again.',
+    retry: 'Retry',
+    loading: 'Loading logs…',
+    legacy:
+      'This deployment predates log collection. No historical events are available.',
+    empty: 'No deployment events recorded.',
+    truncated: 'Only the latest 64 events are retained for this deployment.',
+    copy: 'Copy diagnostics',
+    copied: 'Copied',
+    copyFailed: 'Could not copy. Select the text manually.',
+    codes: {
+      hubRestarted: 'Deployment interrupted by a Hub restart.',
+      artifactVersionMismatch: 'Artifact version does not match.',
+      incompatibleBuild: 'Build environment is incompatible with the host.',
+      connectionRefused: 'A required service refused the connection.',
+      timeout: 'The deployment operation timed out.',
+      moduleNotFound: 'A required module could not be loaded.',
+      permissionDenied: 'The host denied access to a required resource.',
+      fileNotFound: 'A required file could not be found.',
+      invalidConfig: 'Check the deployment configuration.',
+      deploymentFailed: 'Deployment failed. No further details were recorded.',
+    },
   },
   development: {
     buildTitle: 'Build the release',
