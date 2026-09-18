@@ -100,9 +100,9 @@ it('normalizes legacy runtime policy over merged defaults without losing console
 });
 
 it.each([
-  { enabled: true, pretty: true },
-  { enabled: true, pretty: false },
-  { enabled: false, pretty: true },
+  { enabled: true, pretty: true, color: false },
+  { enabled: true, pretty: false, color: false },
+  { enabled: false, pretty: true, color: false },
 ])(
   'applies the structured Host console policy %j over application defaults',
   async (consolePolicy) => {
@@ -159,6 +159,44 @@ it.each([
     }
   },
 );
+
+it('passes an explicit Host color policy through to the terminal', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'host-color-policy-'));
+  const config = new AppConfig();
+  await config.loadAll();
+  config.mergeDefaults({
+    app: { name: 'main' },
+    logging: { level: 'info', file: { enabled: false } },
+  });
+  const app = new Application({
+    config,
+    paths: createAppPaths({ rootDir: root }),
+    runtimeLogging: {
+      file: { enabled: false },
+      console: { enabled: true, pretty: true, color: true },
+      bindings: { appId: 'app3', runtimeId: 'runtime-1' },
+    },
+  });
+  app.addServiceProvider(LoggingProvider);
+  const output = vi
+    .spyOn(process.stdout, 'write')
+    .mockImplementation(() => true);
+  try {
+    await app.start();
+    app.container
+      .resolve(loggingToken)
+      .getLogger('ai-employee')
+      .info({ count: 4 }, 'Resources loaded');
+    await app.shutdown();
+    expect(String(output.mock.calls[0]?.[0])).toContain(
+      '\u001b[32mINFO\u001b[39m [app3/ai-employee] Resources loaded count=4',
+    );
+  } finally {
+    output.mockRestore();
+    await app.shutdown();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 it.each([true, false])(
   'enforces hosted file capture=%s despite App and source overrides',

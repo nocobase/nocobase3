@@ -17,7 +17,7 @@ it('keeps app identity and readable request summaries without losing journal con
       deploymentId: 'release-1',
     },
     file: { directory },
-    console: { enabled: true, pretty: true },
+    console: { enabled: true, pretty: true, color: false },
   });
   try {
     const logger = logging.getLogger('request');
@@ -76,6 +76,89 @@ it('leaves JSON console entries structured and supports disabling the console', 
       logger: 'lifecycle',
     });
   } finally {
+    stdout.mockRestore();
+  }
+});
+
+it('colors level labels only for a terminal, and lets the environment and the config decide', async () => {
+  const stdout = vi
+    .spyOn(process.stdout, 'write')
+    .mockImplementation(() => true);
+  const previous = {
+    noColor: process.env.NO_COLOR,
+    forceColor: process.env.FORCE_COLOR,
+    isTTY: Object.getOwnPropertyDescriptor(process.stdout, 'isTTY'),
+  };
+  const setTTY = (value: boolean): void => {
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value,
+      configurable: true,
+    });
+  };
+  const emit = async (options: {
+    enabled: boolean;
+    pretty: boolean;
+    color?: boolean;
+  }): Promise<string> => {
+    stdout.mockClear();
+    const logging = createLogging({
+      file: { enabled: false },
+      console: options,
+    });
+    const logger = logging.getLogger('system');
+    logger.info('Application initialized');
+    logger.warn('Cache backend is slow');
+    logger.error('Failed to open database');
+    await logging.close();
+    return stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+  };
+  try {
+    delete process.env.NO_COLOR;
+    delete process.env.FORCE_COLOR;
+
+    setTTY(true);
+    const terminal = await emit({ enabled: true, pretty: true });
+    expect(terminal).toContain(
+      '\u001b[32mINFO\u001b[39m [system] Application initialized',
+    );
+    expect(terminal).toContain('\u001b[33mWARN\u001b[39m [system]');
+    expect(terminal).toContain('\u001b[31mERROR\u001b[39m [system]');
+
+    setTTY(false);
+    expect(await emit({ enabled: true, pretty: true })).not.toContain(
+      '\u001b[',
+    );
+
+    process.env.FORCE_COLOR = '1';
+    expect(await emit({ enabled: true, pretty: true })).toContain(
+      '\u001b[32mINFO\u001b[39m',
+    );
+    expect(
+      await emit({ enabled: true, pretty: true, color: false }),
+    ).not.toContain('\u001b[');
+
+    delete process.env.FORCE_COLOR;
+    process.env.NO_COLOR = '1';
+    setTTY(true);
+    expect(await emit({ enabled: true, pretty: true })).not.toContain(
+      '\u001b[',
+    );
+    expect(await emit({ enabled: true, pretty: true, color: true })).toContain(
+      '\u001b[32mINFO\u001b[39m',
+    );
+
+    // Structured console output stays machine-readable whatever the color policy says.
+    expect(
+      await emit({ enabled: true, pretty: false, color: true }),
+    ).not.toContain('\u001b[');
+  } finally {
+    if (previous.noColor === undefined) delete process.env.NO_COLOR;
+    else process.env.NO_COLOR = previous.noColor;
+    if (previous.forceColor === undefined) delete process.env.FORCE_COLOR;
+    else process.env.FORCE_COLOR = previous.forceColor;
+    if (previous.isTTY)
+      Object.defineProperty(process.stdout, 'isTTY', previous.isTTY);
+    else delete (process.stdout as { isTTY?: boolean }).isTTY;
     stdout.mockRestore();
   }
 });
