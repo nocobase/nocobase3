@@ -8,6 +8,7 @@ Prefer the installed `nocobaseAIService` and chat transport. Use direct routes o
 - [AIService](#aiservice)
 - [Employees and models](#employees-and-models)
 - [Conversation lifecycle](#conversation-lifecycle)
+- [HTTP conversation walkthrough](#http-conversation-walkthrough)
 - [Message streaming](#message-streaming)
 - [Tool decisions and resume](#tool-decisions-and-resume)
 - [Files](#files)
@@ -184,10 +185,10 @@ type CreateConversationRequest = {
 Query:
 
 ```ts
-{ scope?: string; keyword?: string }
+{ keyword?: string }
 ```
 
-Returns the current user's main chat conversations. The Registry normalizes each item to:
+Returns a direct JSON array of the current user's main-agent chat conversation records, newest `updatedAt` first; there is no `{ data }` or `{ rows }` wrapper. The HTTP route reads `keyword`, not a `scope` query parameter. Records use `sessionId`, `aiEmployeeUsername`, `read`, and `options.modelSettings`; `title` can be `null` before the first text prompt. The Registry normalizes each item to:
 
 ```ts
 type AIConversation = {
@@ -207,11 +208,97 @@ Query:
 ```ts
 {
   sessionId: string;          // required
-  cursor?: string;
-  paginate?: boolean;         // false disables pagination; default true
-  updateRead?: boolean;       // true marks read; default false
+  cursor?: string;            // opaque message id from the previous page
+  paginate?: boolean;         // query literal false disables pagination; default true
+  updateRead?: boolean;       // query literal true marks read; default false
 }
 ```
+
+#### History response envelope and pagination
+
+The response is a direct JSON object, not an array and not `{ data: ... }`:
+
+```ts
+type GetMessagesResponse =
+  | { rows: HistoryMessage[]; hasMore: boolean; cursor: string | null }
+  | { rows: HistoryMessage[] }; // paginate=false only
+```
+
+With pagination enabled, the server returns at most 10 rows in descending message-id order (newest first). `cursor` is the oldest returned row's id, even when `hasMore` is false; an empty page returns `{ "rows": [], "hasMore": false, "cursor": null }`. Request older messages with the returned `cursor` only while `hasMore` is true. There is no total, page number, or configurable page size. `paginate=false` still returns `{ rows }`, omits `hasMore` and `cursor`, ignores an input cursor, and is capped at the latest 200 non-tool messages; it does not promise the entire conversation.
+
+`updateRead=true` marks the conversation read before loading messages. A missing or unowned conversation is an error, not an empty history. Standalone `role: 'tool'` rows are excluded; their results are joined into assistant tool calls. System rows are not filtered out by this endpoint. Nested sub-agent messages are ordered oldest first within their own session, unlike the top-level rows.
+
+#### History message schema
+
+These are parsed response rows, not raw database `AIMessage` records, incoming send-message objects, or Registry `AIChatMessage` objects. The built-in parsers expose the following JSON-facing shape; optional properties can be omitted and nullable persisted fields can be `null`. `unknown` below means provider/application-defined JSON, not an executable value.
+
+```ts
+type HistoryMessage = {
+  key: string; // stable persisted message id; keep it as a string
+  role?: string | null; // normally user, assistant, or system; not an employee username
+  createdAt?: string | null; // serialized timestamp, normally ISO 8601; not a JS Date
+  content: HistoryContent; // object even when stored content is null
+};
+
+type HistoryContent = {
+  messageId: string; // same persisted id as the outer key
+  from: 'main-agent' | 'sub-agent';
+  type?: string | null; // normally text; not guaranteed for every stored message
+  content?: unknown; // usually text, but may be null, absent, or structured JSON
+  metadata?: Record<string, unknown> | null;
+  attachments?: unknown[] | null;
+  workContext?: HistoryWorkContext[] | null;
+  tool_calls?: HistoryToolCall[] | null;
+  reasoning?: unknown;
+  reference?: { title?: string; url?: string }[] | null;
+  subAgentConversations?: {
+    sessionId: string;
+    toolCallId: string;
+    status: 'pending' | 'completed';
+    messages: HistoryMessage[];
+  }[];
+  [key: string]: unknown; // retained content and provider-specific extensions
+};
+
+type HistoryWorkContext = {
+  type: string;
+  uid: string;
+  title?: string;
+  content?: unknown;
+  [key: string]: unknown;
+};
+
+type HistoryToolCall = {
+  id: string; // tool-call id, NOT the containing message id
+  name: string;
+  type: string;
+  args: unknown;
+  invokeStatus?: string | null;
+  invokeStartTime?: number | string | null; // epoch milliseconds, possibly a decimal string
+  invokeEndTime?: number | string | null;
+  auto?: boolean | null;
+  status?: string | null;
+  content?: unknown; // joined tool result, possibly null or absent
+  execution?: 'frontend' | 'backend';
+  willInterrupt?: boolean;
+  defaultPermission?: 'ASK' | 'ALLOW';
+  [key: string]: unknown;
+};
+```
+
+| Field                                           | Meaning and absence handling                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`, `content.messageId`                      | Both identify the same persisted message. There is **no top-level `messageId`**, `id`, or `sessionId` in the built-in parsed row. Use `key` for stable rendering/deduplication and as the `messageId` for resend, tool decisions, or resume; send/edit uses `editingMessageId`. Keep the conversation's `sessionId` separately. Never convert a message id or cursor to `number`.                                                                                           |
+| `role`, `createdAt`                             | Passed through from persistence. Normal writes provide a role and creation time, but storage allows nulls; tolerate missing/null values from older or custom records. Do not infer chronological order from timestamps or use an array index as a persistent id.                                                                                                                                                                                                            |
+| `content.type`, `content.content`               | Structured content wrapper and its payload. Display text only after checking `typeof row.content.content === 'string'`. An assistant tool-only message can have empty text; provider parsers can retain structured content or omit a text payload.                                                                                                                                                                                                                          |
+| `content.metadata`                              | Optional/nullable persisted metadata, such as `model`, `provider`, `llmService`, usage, response metadata, and interrupt state. Provider-dependent; not a required display contract.                                                                                                                                                                                                                                                                                        |
+| `content.attachments`                           | Optional/nullable array of persisted attachment JSON. Normal uploaded references contain `filename` and may include `id`, `uid`, `size`, `mimetype`, `url`, `preview`, and `source`; see [Files](#files) and `IncomingAttachmentRef` below. No attachment is guaranteed on a row, and URLs are not necessarily absolute.                                                                                                                                                    |
+| `content.workContext`                           | Optional/nullable array of resolved context snapshots. `type` and `uid` identify normal context items; their content and additional fields depend on the App. This is not a live DOM/page handle.                                                                                                                                                                                                                                                                           |
+| `content.tool_calls`                            | Response spelling is snake case, unlike incoming/persisted `toolCalls`. Normally absent when persisted `toolCalls` is null, or `[]` when an empty array was stored; raw/provider content can also carry null. Join fields can be absent/null when no tool result exists, and execution/permission can be absent if the tool is no longer registered. `willInterrupt` reflects frontend execution or `auto === false`, not proof that a call is currently awaiting approval. |
+| `content.from`, `content.subAgentConversations` | Top-level rows are marked `main-agent`. When sub-agent metadata exists, nested sessions carry `sessionId`, the dispatch `toolCallId`, status, and parsed messages marked `sub-agent`; a session can have an empty `messages` array.                                                                                                                                                                                                                                         |
+| `content.reasoning`, `content.reference`        | Optional provider additions. Reasoning can include `{ status: 'stop', content: string }`; references can include titles/URLs. Do not require them or assume every provider returns the same structure.                                                                                                                                                                                                                                                                      |
+
+Normalize optional arrays with an array check rather than assuming every response contains `[]`. The Registry service requests `paginate=false`, reverses the rows, removes tool/system roles, and maps them to UI messages; its `AIChatMessage[]` return value is not the HTTP response schema. See the [HTTP walkthrough](#http-conversation-walkthrough), [message boundary pitfalls](contracts.md#message-input-and-history-boundaries), and [server manager history boundary](agent-service.md#conversation-manager-methods).
 
 ### `GET aiConversations:get`
 
@@ -250,6 +337,201 @@ Query `{ sessionId: string }`. Returns `null`.
 
 - `GET aiConversations:unreadCounts` → `{ conversationUnreadCount: number }`.
 - `GET aiConversations:unreadCount` → `number`.
+
+## HTTP conversation walkthrough
+
+This sequence uses a cookie-authenticated App mounted at its origin root. For a path-mounted App, include its public base path in `BASE_URL`. Prerequisites: an existing enabled user, an enabled/access-authorized employee, and a configured LLM service/model with valid credentials. Replace `atlas`, `openai`, and `gpt-4.1` with values available from `aiEmployees:listByUser` and `ai:listAllEnabledModels`; they are example identifiers, not automatic configuration. Responses below are illustrative snapshots, not fixed ids, timestamps, or guaranteed model text. JSON actions return HTTP 200 with `Content-Type: application/json`; they do not use a generic `data` envelope.
+
+### 1. Authenticate and retain the session cookie
+
+Authentication is under `/api/auth`, not `/api/ai`. Use the App's configured login mechanism; the standard username/password endpoint is:
+
+```bash
+BASE_URL='http://localhost:3000'
+# Use an existing local account. Keep the password and cookie jar out of source control.
+curl -i -c /tmp/nocobase-ai.cookies \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"alice","password":"REPLACE_WITH_YOUR_PASSWORD"}' \
+  "$BASE_URL/api/auth/sign-in/username"
+```
+
+Example JSON response (the user object can include additional configured fields):
+
+```json
+{
+  "redirect": false,
+  "token": "REDACTED_SESSION_TOKEN",
+  "user": {
+    "id": "user-alice",
+    "name": "Alice",
+    "username": "alice",
+    "email": "alice@example.com",
+    "emailVerified": false,
+    "image": null,
+    "createdAt": "2026-04-09T09:00:00.000Z",
+    "updatedAt": "2026-04-09T09:00:00.000Z"
+  }
+}
+```
+
+The response also sets the session cookie; `curl -c` saves it and subsequent `-b` options send it. Cookie names, secure prefixes, and paths depend on deployment configuration. Do not assume the JSON `token` enables Bearer authentication: that requires an explicitly configured authentication integration. Do not use legacy `/api/auth:signIn` or manually invent cookie values.
+
+### 2. Create a conversation
+
+```bash
+curl -sS -b /tmp/nocobase-ai.cookies \
+  -H 'Content-Type: application/json' \
+  -d '{"aiEmployee":{"username":"atlas"},"modelSettings":{"llmService":"openai","model":"gpt-4.1"}}' \
+  "$BASE_URL/api/ai/aiConversations:create"
+```
+
+Example response:
+
+```json
+{
+  "userId": "user-alice",
+  "aiEmployeeUsername": "atlas",
+  "options": {
+    "modelSettings": { "llmService": "openai", "model": "gpt-4.1" }
+  },
+  "thread": 1,
+  "from": "main-agent",
+  "category": "chat",
+  "sessionId": "11111111-1111-4111-8111-111111111111",
+  "createdAt": "2026-04-09T10:00:00.000Z",
+  "updatedAt": "2026-04-09T10:00:00.000Z"
+}
+```
+
+Keep the returned `sessionId` verbatim. Creation returns the inserted record, not just `{ sessionId }`; database defaults such as `read` and `llmActiveState` need not appear until a later read. The HTTP create endpoint requires an employee even though the trusted server manager also supports model-only sessions.
+
+### 3. List conversations
+
+```bash
+curl -sS -b /tmp/nocobase-ai.cookies \
+  "$BASE_URL/api/ai/aiConversations:list"
+```
+
+Example response when this is the user's only conversation:
+
+```json
+[
+  {
+    "sessionId": "11111111-1111-4111-8111-111111111111",
+    "thread": 1,
+    "topicId": null,
+    "from": "main-agent",
+    "scope": null,
+    "userId": "user-alice",
+    "aiEmployeeUsername": "atlas",
+    "title": null,
+    "options": {
+      "modelSettings": { "llmService": "openai", "model": "gpt-4.1" }
+    },
+    "llmActiveState": "idle",
+    "category": "chat",
+    "read": true,
+    "createdAt": "2026-04-09T10:00:00.000Z",
+    "updatedAt": "2026-04-09T10:00:00.000Z"
+  }
+]
+```
+
+### 4. Read the new conversation's history
+
+Set `SESSION_ID` to the value returned in step 2, not to the example value when calling a real App:
+
+```bash
+SESSION_ID='11111111-1111-4111-8111-111111111111'
+curl -sS -b /tmp/nocobase-ai.cookies --get \
+  --data-urlencode "sessionId=$SESSION_ID" \
+  "$BASE_URL/api/ai/aiConversations:getMessages"
+```
+
+Response before sending any messages:
+
+```json
+{ "rows": [], "hasMore": false, "cursor": null }
+```
+
+Add `--data-urlencode 'paginate=false'` to receive `{ "rows": [] }` instead. Add `--data-urlencode 'updateRead=true'` only when the caller intends to mark the conversation read.
+
+### 5. Send a message with `stream: false`
+
+```bash
+curl -i -N -b /tmp/nocobase-ai.cookies \
+  -H 'Content-Type: application/json' \
+  -d "{\"sessionId\":\"$SESSION_ID\",\"aiEmployee\":\"atlas\",\"model\":{\"llmService\":\"openai\",\"model\":\"gpt-4.1\"},\"messages\":[{\"role\":\"user\",\"content\":{\"type\":\"text\",\"content\":\"Say hello in one short sentence.\"}}],\"stream\":false}" \
+  "$BASE_URL/api/ai/aiConversations:sendMessages"
+```
+
+**Current HTTP limitation:** `stream: false` selects `agent.invoke()` internally, but the route still opens an SSE response and does not serialize the returned invocation value. A successful invocation closes with an empty response body, not a JSON assistant message:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: text/event-stream; charset=utf-8
+Cache-Control: no-cache
+Connection: keep-alive
+X-Accel-Buffering: no
+
+```
+
+Do not call `response.json()` on this response. If invocation throws after the SSE response opens, the body instead contains an error frame such as `data: {"type":"error","body":"conversation not found"}` followed by two newlines; HTTP 200 alone does not prove execution succeeded. Prefer the normal streaming transport for chat. For this non-streaming execution example, wait for the response to close, inspect any SSE error frames, and read persisted history. Do not resend automatically if the request disconnects or the result is uncertain.
+
+### 6. Read persisted user and assistant messages
+
+```bash
+curl -sS -b /tmp/nocobase-ai.cookies --get \
+  --data-urlencode "sessionId=$SESSION_ID" \
+  --data-urlencode 'updateRead=true' \
+  "$BASE_URL/api/ai/aiConversations:getMessages"
+```
+
+Illustrative text-only result after successful completion (metadata varies by provider, and tool use can produce additional rows):
+
+```json
+{
+  "rows": [
+    {
+      "key": "2030000000000000002",
+      "createdAt": "2026-04-09T10:00:02.000Z",
+      "role": "assistant",
+      "content": {
+        "type": "text",
+        "content": "Hello! How can I help you today?",
+        "messageId": "2030000000000000002",
+        "metadata": {
+          "provider": "openai",
+          "model": "gpt-4.1",
+          "llmService": "openai"
+        },
+        "attachments": null,
+        "workContext": null,
+        "tool_calls": [],
+        "from": "main-agent"
+      }
+    },
+    {
+      "key": "2030000000000000001",
+      "createdAt": "2026-04-09T10:00:01.000Z",
+      "role": "user",
+      "content": {
+        "type": "text",
+        "content": "Say hello in one short sentence.",
+        "messageId": "2030000000000000001",
+        "metadata": null,
+        "attachments": null,
+        "workContext": null,
+        "from": "main-agent"
+      }
+    }
+  ],
+  "hasMore": false,
+  "cursor": "2030000000000000001"
+}
+```
+
+`paginate=false` returns the same rows for this two-message conversation, but without `hasMore` or `cursor`. Render oldest first by reversing a copy of the rows; retain `key` as the stable id. Remove the local cookie jar when finished.
 
 ## Message streaming
 
@@ -292,11 +574,11 @@ type SendMessagesRequest = {
   skillSettings?: { skills?: string[]; tools?: string[] };
   editingMessageId?: string;
   webSearch?: boolean;
-  stream?: boolean; // Registry omits; route defaults to streaming
+  stream?: boolean; // Registry omits; false invokes internally but HTTP still returns SSE
 };
 ```
 
-Registry normal flow sends exactly one latest user message with content `{ type: 'text', content: string }`, completed attachments only, and resolved work context. Response is SSE unless `stream: false` is deliberately used by a custom caller.
+Registry normal flow sends exactly one latest user message with content `{ type: 'text', content: string }`, completed attachments only, and resolved work context. The HTTP response is SSE, including when a custom caller sends `stream: false`; see the [non-streaming execution example and limitation](#5-send-a-message-with-stream-false). For the JSON history response after execution, use [getMessages](#get-aiconversationsgetmessages).
 
 ### `POST aiConversations:resendMessages`
 

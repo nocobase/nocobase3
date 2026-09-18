@@ -10,6 +10,7 @@ This reference records the parameter shapes an App code agent normally needs whe
 - [MCP](#mcp)
 - [LLM models](#llm-models)
 - [Tool context](#tool-context)
+- [Message input and history boundaries](#message-input-and-history-boundaries)
 - [Frontend root/provider](#frontend-rootprovider)
 - [Chat provider and tasks](#chat-provider-and-tasks)
 - [Page context](#page-context)
@@ -226,6 +227,21 @@ type WorkContext = {
 ```
 
 For normal Registry usage, do not construct these manually; let the chat transport do it. If constructing one for an API adapter, use a supported role and structured content and omit server-assigned ids.
+
+## Message input and history boundaries
+
+Do not reuse one message type across these boundaries:
+
+| Boundary                                    | Shape and id contract                                                                                                                                                                                                                                                                                |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Direct server `AgentService` input          | `AIMessageInput` above; omit server-assigned `messageId` and `sessionId`.                                                                                                                                                                                                                            |
+| HTTP `sendMessages` input                   | `{ sessionId, aiEmployee, model, messages }`; the session id belongs to the request, and a normal user message has `{ role: 'user', content: { type: 'text', content: string } }`. See [send-message contracts](api-reference.md#post-aiconversationssendmessages).                                  |
+| HTTP `getMessages` response                 | `{ rows, hasMore, cursor }` by default, or `{ rows }` for `paginate=false`. Each parsed row has `key`, `role`, `createdAt`, and a structured `content` object containing `messageId`. There is no top-level `messageId`. See the [complete history schema](api-reference.md#history-message-schema). |
+| Registry `getConversationMessages()` result | `AIChatMessage[]` after unwrapping, reversing, filtering system/tool roles, and converting content to UI parts. This is not the raw HTTP response.                                                                                                                                                   |
+
+History pitfalls: preserve `key`/`content.messageId` and cursors as opaque strings; distinguish the containing message id from `content.tool_calls[].id`; tolerate missing/null timestamps, metadata, attachments, and work context; and check the payload type before rendering `content.content` as text. History's nested `content.tool_calls` is not input's top-level `toolCalls`. Do not echo a whole history row back as a new user message. `paginate=false` is capped at 200 rows, not an unlimited export, and top-level history arrives newest first.
+
+For a complete authenticated create → list → history → send → history exchange, see the [HTTP walkthrough](api-reference.md#http-conversation-walkthrough). In particular, `stream: false` currently changes internal execution but **does not produce a JSON HTTP response**: the route remains SSE and discards the invoke result. Read persisted history after completion or use the installed streaming transport; never retry the mutation blindly.
 
 ## Frontend root/provider
 

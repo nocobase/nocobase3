@@ -170,13 +170,17 @@ getMessages(options: {
   paginate?: boolean;
   updateRead?: boolean;
 }): Promise<{
-  rows: AIMessage[];
+  rows: HistoryMessage[]; // parsed history rows, not raw persisted AIMessage records
   hasMore?: boolean;
   cursor?: string | null;
 }>;
 ```
 
 Use `userId` when reading or mutating user-owned conversations. A missing or mismatched owner must not be treated as a successful lookup.
+
+`HistoryMessage` above is the documentation shape in the [history response schema](api-reference.md#history-message-schema), not an exported package type. The manager parses stored messages through the configured provider before returning them: a row exposes `key` and nested `content.messageId`, not a top-level `messageId` or `sessionId`. Its in-process `createdAt` may still be a `Date`; HTTP serializes it as a string, and nullable/absent persisted fields remain nullable/absent. Keep ids as strings and obtain the session id from the authorized conversation, not from a history row.
+
+The manager uses the same [pagination rules](api-reference.md#history-response-envelope-and-pagination) as HTTP: newest-first top-level rows, 10 per page by default, `{ rows }` with a 200-row cap for `paginate=false`, tool rows joined into `content.tool_calls`, and `updateRead=true` marking the conversation read. Do not treat its result as raw persistence records or as the Registry's already-normalized `AIChatMessage[]`. See [message boundary pitfalls](contracts.md#message-input-and-history-boundaries) before adapting history into a new request.
 
 ## `AgentServiceFactory.createAIEmployee()`
 
@@ -287,6 +291,8 @@ interface AIMessageInput {
 ```
 
 Use `userMessages` for the current user turn. Use `messageId` when the plugin must load a persisted history/thread. Use `userDecisions` only to resume an interrupt. Use `signal` for request cancellation and consume `stream()` with `for await`. Do not parse or persist stream events manually when the surrounding App service already owns that transport.
+
+Direct `agent.invoke()`/`forkInvoke()` returns an in-process execution result, not the HTTP history envelope. Do not infer HTTP behavior from that return value: [`sendMessages` with `stream: false`](api-reference.md#5-send-a-message-with-stream-false) currently invokes internally but still returns an SSE response without serializing the result. Use the [authenticated HTTP walkthrough](api-reference.md#http-conversation-walkthrough) for external callers, or this trusted server API when an App-owned integration genuinely needs the direct result.
 
 ## Implementing `AgentContextProvider`
 
