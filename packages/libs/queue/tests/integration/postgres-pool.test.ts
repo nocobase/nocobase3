@@ -10,7 +10,7 @@ it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
   async () => {
     const { Pool } = await import('pg');
     const owner = new Pool({ connectionTimeoutMillis: 1000 });
-    const connect = vi.spyOn(owner, 'connect');
+    const connect = vi.spyOn(Pool.prototype, 'connect');
     const adapter = createBorrowedPostgresPool(owner);
     try {
       await expect(
@@ -20,6 +20,7 @@ it.skipIf(!['postgres', 'postgres13'].includes(selectedBackend()))(
       ).rejects.toThrow('borrow timeout');
       expect(connect).not.toHaveBeenCalled();
     } finally {
+      connect.mockRestore();
       await adapter.close();
       await owner.end();
     }
