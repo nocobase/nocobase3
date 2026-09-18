@@ -1,6 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { I18nRuntime } from '@nocobase/i18n';
+import { I18nProvider } from '@nocobase/i18n/client';
+import locales from '../../client/locales/index.js';
 import { MemoryRouter } from 'react-router';
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   count: 120,
@@ -29,19 +38,29 @@ vi.mock('@nocobase/app-client', async (importOriginal) => {
       token === actual.realtimeClientToken ? realtime : client,
   };
 });
-vi.mock('@nocobase/i18n/client', () => ({
-  useTranslation: () => ({
-    t: (_key: string, values?: { count: number }) =>
-      values ? `Notifications, ${values.count} unread` : 'Notifications',
-  }),
-}));
 import { NotificationButton } from '../../client/components/notification-button.tsx';
+
+let runtime: I18nRuntime;
+beforeEach(async () => {
+  mocks.count = 120;
+  mocks.session = { user: { id: 'user-1' } };
+  mocks.allowed = true;
+  runtime = new I18nRuntime({
+    defaultLocale: 'en-US',
+    locales: ['en-US', 'zh-CN'],
+    applicationNamespace: 'test-app',
+  });
+  runtime.registerApplicationNamespace('test-app', locales);
+  await runtime.init('en-US');
+});
 
 it('caps the badge, follows the app base, refreshes unread state, and resets on account changes', async () => {
   mocks.request.mockImplementation(async () => ({ count: mocks.count }));
   const renderButton = () => (
     <MemoryRouter basename='/demo' initialEntries={['/demo/']}>
-      <NotificationButton />
+      <I18nProvider runtime={runtime}>
+        <NotificationButton />
+      </I18nProvider>
     </MemoryRouter>
   );
   const view = render(renderButton());
@@ -66,4 +85,28 @@ it('caps the badge, follows the app base, refreshes unread state, and resets on 
   mocks.session = null;
   view.rerender(renderButton());
   expect(screen.queryByRole('link')).not.toBeInTheDocument();
+});
+
+it('updates the notification label and tooltip when the language changes', async () => {
+  mocks.request.mockResolvedValue({ count: 2 });
+  render(
+    <I18nProvider runtime={runtime}>
+      <MemoryRouter>
+        <NotificationButton />
+      </MemoryRouter>
+    </I18nProvider>,
+  );
+  expect(
+    await screen.findByRole('link', { name: 'Notifications, 2 unread' }),
+  ).toHaveAttribute('title', 'Notifications, 2 unread');
+  await act(() => runtime.changeLanguage('zh-CN'));
+  expect(
+    screen.getByRole('link', { name: '通知中心，2 条未读' }),
+  ).toHaveAttribute('title', '通知中心，2 条未读');
+  mocks.request.mockResolvedValue({ count: 0 });
+  fireEvent(window, new Event('focus'));
+  expect(await screen.findByRole('link', { name: '通知中心' })).toHaveAttribute(
+    'title',
+    '通知中心',
+  );
 });
