@@ -5,8 +5,7 @@ import {
   type LocaleDefinition,
 } from '@nocobase/i18n/client';
 import {
-  createApiClient,
-  resolveAppUrl,
+  useApiClient,
   writeStoredLocale,
   type ApiClient,
 } from '@nocobase/app-client';
@@ -16,29 +15,6 @@ import type { ServerLocaleResult } from '../locale-result.js';
 
 /** Path under the application's API root, which is where the server is told which language to answer in. */
 const LOCALE_PATH = 'i18n/locale';
-
-let client: ApiClient | undefined;
-
-/**
- * Hands the plugin the Application's own API client. The client ServiceProvider calls this during boot, which is what
- * makes a configured `api.baseURL` apply here too instead of being silently ignored.
- */
-export function configureLocaleClient(api: ApiClient): ApiClient {
-  client = api;
-  return api;
-}
-
-/**
- * The API client. The Application's own once it has booted, and otherwise one created here.
- *
- * The fallback covers a component rendered outside an Application, which is what a focused test does. It resolves
- * paths against the application's own base — an app served from `/main/` answers at `/main/api`, so a hard-coded
- * `/api/...` would miss it entirely.
- */
-function getClient(): ApiClient {
-  client ??= createApiClient({ baseURL: resolveAppUrl('/api') });
-  return client;
-}
 
 export interface UseAppLocaleResult {
   readonly locale: Locale;
@@ -51,12 +27,13 @@ export interface UseAppLocaleResult {
 /**
  * Tells the server which language to answer in.
  *
- * Exported so the path resolution can be tested: it has to land under the application's base, not the origin root.
+ * Uses the caller's application client so its API configuration and request hooks apply.
  */
 export async function notifyServerLocale(
+  api: ApiClient,
   locale: Locale,
 ): Promise<ServerLocaleResult> {
-  return getClient().request<ServerLocaleResult>({
+  return api.request<ServerLocaleResult>({
     path: LOCALE_PATH,
     method: 'POST',
     json: { locale },
@@ -70,6 +47,7 @@ export async function notifyServerLocale(
  * successful result the control can explain; transport failures reject without undoing the browser's language.
  */
 export function useAppLocale(): UseAppLocaleResult {
+  const api = useApiClient();
   const runtime = useOptionalI18nRuntime();
   const { locale, locales, setLocale, switching, error } = useRuntimeLocale();
   const [syncing, setSyncing] = useState(false);
@@ -83,7 +61,7 @@ export function useAppLocale(): UseAppLocaleResult {
         await setLocale(next);
         const selected = runtime?.getLocale() ?? next;
         writeStoredLocale(selected);
-        return await notifyServerLocale(selected);
+        return await notifyServerLocale(api, selected);
       } catch (cause) {
         setSyncError(cause instanceof Error ? cause : new Error(String(cause)));
         throw cause;
@@ -91,7 +69,7 @@ export function useAppLocale(): UseAppLocaleResult {
         setSyncing(false);
       }
     },
-    [runtime, setLocale],
+    [api, runtime, setLocale],
   );
 
   return {
@@ -110,15 +88,16 @@ export function useAppLocale(): UseAppLocaleResult {
  * another tab — and this is what brings them back together.
  */
 export function useSyncServerLocale(): void {
+  const api = useApiClient();
   // Optional, so the shell can call this unconditionally: an application composed without i18n, which is what a
   // focused test renders, has no language to report and simply does nothing.
   const runtime = useOptionalI18nRuntime();
 
   useEffect(() => {
     if (!runtime) return;
-    const synchronization = notifyServerLocale(runtime.getLocale());
+    const synchronization = notifyServerLocale(api, runtime.getLocale());
     synchronization.catch(() => {
       // Nothing to do: the interface is already correct, and the next startup tries again.
     });
-  }, [runtime]);
+  }, [api, runtime]);
 }

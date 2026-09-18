@@ -107,6 +107,7 @@
     "database",
     "public",
     "scripts",
+    "tests",
     "index.html",
     "components.json",
     "tailwind.config.mjs",
