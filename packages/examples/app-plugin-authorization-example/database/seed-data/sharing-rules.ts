@@ -33,6 +33,7 @@ export const sharingRules = [
     .build(),
   sharingRule('example-proposal-handover', quoteResource.reference())
     .title(label('teams.handover'))
+    .scope('edit', 'quotes', { type: 'records', ids: ['quote-7'] })
     .scope('submit', 'quotes', { type: 'records', ids: ['quote-7'] })
     .scope('submit', 'projects', { type: 'records', ids: ['project-3'] })
     .build(),

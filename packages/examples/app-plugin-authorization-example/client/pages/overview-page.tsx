@@ -112,17 +112,19 @@ export default function OverviewPage(): ReactElement {
         <h2 className='font-semibold'>{t('tryTitle')}</h2>
         <p className='text-sm leading-7'>{t('practice.intro')}</p>
         <ol className='space-y-4'>
-          {['read', 'scopes', 'teams'].map((step, index) => (
-            <li key={step} className='space-y-1'>
-              <h3 className='font-medium'>
-                {index + 1}. {t(`practice.${step}.title`)}
-              </h3>
-              <p className='text-sm'>{t(`practice.${step}.steps`)}</p>
-              <p className='text-sm text-muted-foreground'>
-                {t(`practice.${step}.reason`)}
-              </p>
-            </li>
-          ))}
+          {['read', 'scopes', 'teams', 'combined', 'delivery'].map(
+            (step, index) => (
+              <li key={step} className='space-y-1'>
+                <h3 className='font-medium'>
+                  {index + 1}. {t(`practice.${step}.title`)}
+                </h3>
+                <p className='text-sm'>{t(`practice.${step}.steps`)}</p>
+                <p className='text-sm text-muted-foreground'>
+                  {t(`practice.${step}.reason`)}
+                </p>
+              </li>
+            ),
+          )}
         </ol>
         <p className='text-sm text-muted-foreground'>
           {t('reset.description')}

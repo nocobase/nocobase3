@@ -21,11 +21,13 @@ export function quoteRows(
       projectId: row.id,
       preparedById: row.ownerId,
       preparedByName:
-        row.id === 'project-1'
-          ? 'Alex Chen'
-          : row.id === 'project-3'
-            ? 'Robin Lin'
-            : 'Morgan Lee',
+        row.id === 'project-8'
+          ? 'Jordan Kim'
+          : row.id === 'project-1'
+            ? 'Alex Chen'
+            : row.id === 'project-3'
+              ? 'Robin Lin'
+              : 'Morgan Lee',
       title: `${row.title} quote`,
       notes: 'Draft',
       amount: 12000,

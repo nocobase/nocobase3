@@ -1,27 +1,41 @@
 export default {
   practice: {
     intro:
-      'Use the accounts below instead of an administrator. Administrators bypass the restrictions. Each exercise starts from the seeded record state.',
+      'Use the accounts below instead of an administrator. Administrators bypass the restrictions. These are independent sales collaboration exercises, not a complete quote-to-order approval workflow. Each exercise starts from the seeded record state.',
     read: {
-      title: 'Read-only access and selected sharing',
+      title: 'An assistant consults project information',
       steps:
         'Sign in as sales_assistant: Projects shows project-1, project-2 and project-3, but no edit actions. Quotes and orders remain limited to the owned project.',
       reason:
         'Project sharing grants records for viewing only; it grants neither editing nor related records. Confidential project-4 stays excluded.',
     },
     scopes: {
-      title: 'Two independent submission scopes',
+      title: 'An engineer prepares and submits a quote',
       steps:
-        'Sign in as sales_engineer: submit quote-2 successfully; quote-5 is disabled because a colleague prepared it; quote-6 is disabled because its project is in another region.',
+        'Sign in as sales_engineer: edit and submit your quote-2. You may consult quote-5, but cannot change or submit a colleague’s quote. You may continue preparing quote-6, but cannot submit it for a project outside your region.',
       reason:
-        'Quote preparer and project region are checked independently. Existing orders reference separate accepted quotes; submitting a practice quote does not create an order.',
+        'Non-confidential quotes are internal reference material across regions. The preparer owns the content; regional responsibility governs submission. Viewing does not grant editing. Existing orders reference separate accepted quotes; submitting a practice quote does not create an order.',
     },
     teams: {
-      title: 'Team handover and revocation',
+      title: 'Temporary collaboration with the proposal team',
       steps:
-        'Sign in as sales_proposal and submit quote-7. After resetting records, remove only the project scope from the Proposal team handover rule as an administrator and retry: submission is denied. Restore the project scope for project-3 to permit it again.',
+        'A South-region project owner asks the proposal team to complete quote-7. Sign in as sales_proposal, edit the quote and submit it. As an administrator, reset the records and remove the Proposal team assignment from the Proposal team quote collaboration sharing rule. Sign in again: the team can no longer edit or submit this quote.',
       reason:
-        'quote-7 belongs to a colleague and project-3 is outside the team region, so both shared scopes are necessary. Removing team membership or its engineer role also denies submission. sales_coordinator keeps its direct manager role after membership removal. sales_dispatch demonstrates delivery inherited from its team.',
+        'The handover permits editing and submitting this quote plus the project access needed for submission; it does not delegate the entire South region. The engineer role grants operations, while sharing identifies the records. As an advanced exercise, withdraw either the project or quote scope: submission requires both.',
+    },
+    combined: {
+      title: 'A project manager also helps the proposal team',
+      steps:
+        'Sign in as sales_coordinator: maintain your project-8 and help with quote-7. As an administrator, revoke the engineer permission set from the proposal team. The account can still edit project-8 but can no longer edit or submit quote-7. Restore the team role afterwards.',
+      reason:
+        'Personal project management and team engineering are separate responsibilities. Revoking a team role affects every member, while directly assigned project management remains intact.',
+    },
+    delivery: {
+      title: 'The delivery team fulfils an order',
+      steps:
+        'Sign in as sales_delivery or sales_dispatch. Open order-2, assign a delivery team, maintain checks and enter a delivery reference. After confirming delivery, neither its relations nor its delivery state can be changed again. Reset the records before repeating with another account.',
+      reason:
+        'Delivery staff enter Orders only; links to quotes and projects do not grant access to those pages. The accounts demonstrate direct and inherited authorization for the same duties.',
     },
   },
   reset: {
@@ -36,7 +50,7 @@ export default {
 
   teams: {
     subject: 'Teams',
-    handover: 'Proposal team quote handover',
+    handover: 'Proposal team quote collaboration',
     title: 'Roles and team authorization',
     direct: 'Direct assignment',
     inherited: 'Inherited from team',
@@ -44,7 +58,7 @@ export default {
     delivery: 'Delivery team',
     combined: 'Direct project manager + sales engineer from proposal team',
     coverage:
-      'Verify menus, operations, fields, independent scopes, defaults, user and team sharing, restrictions and revocation.',
+      'Each account has its own job responsibilities. Joining a collaboration team adds duties; leaving it does not remove directly assigned responsibilities.',
   },
   rules: {
     public: 'Exclude confidential projects',
@@ -54,7 +68,7 @@ export default {
   accountMenus: {
     assistant: 'Projects, quotes and orders (read only)',
     engineer:
-      'Projects, quotes and orders; submit own quotes for regional projects',
+      'Consult non-confidential quotes; edit own quotes and submit within the assigned region',
     manager: 'Manage owned projects; quotes and orders are read only',
     delivery: 'Orders only; confirm regional deliveries',
   },
@@ -154,7 +168,7 @@ export default {
     view: 'View',
     edit: 'Edit notes',
     intro:
-      'Fictional records demonstrate feature permissions, operation scopes, default access, sharing and restrictions.',
+      'Explore the access boundaries of assistants consulting records, engineers preparing quotes, temporary proposal teams and delivery staff fulfilling orders.',
     record: 'Record',
     notes: 'Notes',
     save: 'Save',

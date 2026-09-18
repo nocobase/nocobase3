@@ -41,7 +41,7 @@ export default function SalesPage({
         path={path}
         onSaved={() => setRevision((value) => value + 1)}
       />
-      {path === 'orders' && <OrderRelations key={revision} />}
+      {path === 'orders' && <OrderRelations revision={revision} />}
     </main>
   );
 }
@@ -114,6 +114,7 @@ function SalesTable({
       });
       clearDraft(row);
       state.reload();
+      onSaved();
       setMessage('sales.saved');
     } catch (error) {
       setMessage(operationError(error));

@@ -17,7 +17,11 @@ interface OrderRelationsData {
   checks: { id: string; title: string; done: boolean }[];
   collaborators: { id: string; title: string }[];
 }
-export function OrderRelations(): ReactElement {
+export function OrderRelations({
+  revision = 0,
+}: {
+  revision?: number;
+}): ReactElement {
   const { t } = useTranslation(NS);
   const orders = useExample<{ items: { id: string; title: string }[] }>(
     'sales/orders',
@@ -44,7 +48,7 @@ export function OrderRelations(): ReactElement {
           ))}
         </select>
       </label>
-      {id && <RelationEditor key={id} id={id} />}
+      {id && <RelationEditor key={`${id}:${revision}`} id={id} />}
     </section>
   );
 }

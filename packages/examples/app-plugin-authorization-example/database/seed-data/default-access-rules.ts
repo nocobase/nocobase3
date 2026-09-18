@@ -13,7 +13,7 @@ export const defaultAccessRules = [
     .build(),
   defaultAccessRule(quoteResource.reference())
     .scope('view', 'quotes', databaseScope('example.sales.own'))
-    .scope('edit', 'quotes', databaseScope('example.sales.own'))
+    .scope('edit', 'quotes', databaseScope('example.sales.prepared'))
     .scope('submit', 'quotes', databaseScope('example.sales.prepared'))
     .scope('submit', 'projects', databaseScope('example.sales.region'))
     .build(),

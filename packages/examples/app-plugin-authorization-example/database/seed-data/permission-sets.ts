@@ -56,7 +56,7 @@ export const permissionSets = [
       }),
       quotes.grant({
         view: { quotes: 'allRecords' },
-        edit: { quotes: 'example.sales.region' },
+        edit: { quotes: 'example.sales.prepared' },
         submit: {
           quotes: 'example.sales.prepared',
           projects: 'example.sales.region',

@@ -63,7 +63,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         return c.json({ code: 'FORBIDDEN' }, 403);
       await database.transaction(async (connection) => {
         const users: Record<string, string> = {};
-        for (const key of ['assistant', 'engineer', 'manager']) {
+        for (const key of ['assistant', 'engineer', 'manager', 'coordinator']) {
           const user = await connection.query
             .selectFrom('user')
             .select('id')
@@ -75,20 +75,21 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
             );
           users[key] = user.id;
         }
+        const records = salesRecords(users);
+        const orderIds = records.orders.map((row) => row.id);
         await connection.query
           .deleteFrom('authorizationExampleOrderTeams')
-          .allowAllRows()
+          .where('orderId', 'in', orderIds)
           .execute();
         await connection.query
           .deleteFrom('authorizationExampleOrderChecks')
-          .allowAllRows()
+          .where('orderId', 'in', orderIds)
           .execute();
         await connection.query
           .updateTable(ORDERS)
           .set({ deliveryTeamId: null })
-          .allowAllRows()
+          .where('id', 'in', orderIds)
           .execute();
-        const records = salesRecords(users);
         for (const [collection, rows] of [
           [PROJECTS, records.projects],
           [QUOTES, records.quotes],

@@ -37,5 +37,12 @@ export function projectRows(users: Record<string, string>): Project[] {
       ownerId: users.engineer,
       confidential: true,
     },
+    {
+      id: 'project-8',
+      title: 'Lakeside renewal project',
+      region: 'West',
+      ownerId: users.coordinator,
+      confidential: false,
+    },
   ].map((row) => ({ ...row, notes: 'Fictional demonstration record' }));
 }

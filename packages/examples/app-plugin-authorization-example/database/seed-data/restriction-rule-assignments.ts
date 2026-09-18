@@ -6,9 +6,13 @@ export function restrictionRuleAssignmentRows({
   now,
 }: SalesSeedContext) {
   const subjects = [
-    ...[users.assistant, users.engineer, users.manager, users.delivery].map(
-      (id) => ({ type: 'user', id }),
-    ),
+    ...[
+      users.assistant,
+      users.engineer,
+      users.manager,
+      users.delivery,
+      users.coordinator,
+    ].map((id) => ({ type: 'user', id })),
     ...['proposal', 'delivery'].map((id) => ({
       type: 'example.sales.team',
       id,

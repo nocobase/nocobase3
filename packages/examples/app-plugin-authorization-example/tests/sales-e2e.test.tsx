@@ -157,6 +157,7 @@ it('saves all three rule types through their production HTTP routes and validate
     'project-1',
     'project-2',
     'project-3',
+    'project-8',
   ]);
   expect(
     (
@@ -171,6 +172,7 @@ it('saves all three rule types through their production HTTP routes and validate
     'project-2',
     'project-3',
     'project-4',
+    'project-8',
   ]);
   expect(
     (await admin('default-access', 'PUT', { resource, actions: [] })).status,
@@ -352,9 +354,11 @@ it('saves one operation scope from the real editor without changing view or quot
     'quote-5',
     'quote-6',
     'quote-7',
+    'quote-8',
     'quote-history-1',
     'quote-history-2',
     'quote-history-3',
+    'quote-history-8',
   ]);
 });
 it('keeps all-region read separate from engineer edit, including direct repository policies', async () => {
@@ -374,6 +378,7 @@ it('keeps all-region read separate from engineer edit, including direct reposito
     'project-1',
     'project-2',
     'project-3',
+    'project-8',
   ]);
   expect(
     (
@@ -477,7 +482,7 @@ it('seeds once without overwriting edited example records', async () => {
   await seed.run({ query: connection.query, connection });
   expect(
     await connection.query.selectFrom(PROJECTS).select('id').execute(),
-  ).toHaveLength(4);
+  ).toHaveLength(5);
   expect(
     (
       await connection.query
@@ -724,6 +729,7 @@ it('narrows business endpoints to their operation while generic data policies ag
     'project-1',
     'project-2',
     'project-3',
+    'project-8',
   ]);
   expect(
     (await fixture.request('assistant', 'sales/quotes/quote-2/submit', {}))
@@ -1138,9 +1144,21 @@ it('combines direct and inherited roles without removing direct access when a te
   expect(after.roles.map((role: { key: string }) => role.key)).not.toContain(
     'example-sales-engineer',
   );
-  expect((await fixture.request('coordinator', 'sales/projects')).status).toBe(
-    200,
-  );
+  expect(await ids('coordinator')).toEqual(['project-8']);
+  expect(
+    (
+      await fixture.request('coordinator', 'sales/projects/project-8', {
+        notes: 'Continue my own project',
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await fixture.request('coordinator', 'sales/projects/project-2', {
+        notes: 'Former team project',
+      })
+    ).status,
+  ).toBe(403);
   expect((await fixture.request('proposal', 'sales/projects')).status).toBe(
     403,
   );
@@ -1215,9 +1233,21 @@ it('keeps four distinct job roles and restores direct-only duties after team rem
     (await fixture.request('coordinator', 'sales/quotes/quote-7/submit', {}))
       .status,
   ).toBe(403);
-  expect((await fixture.request('coordinator', 'sales/projects')).status).toBe(
-    200,
-  );
+  expect(await ids('coordinator')).toEqual(['project-8']);
+  expect(
+    (
+      await fixture.request('coordinator', 'sales/projects/project-8', {
+        notes: 'Continue my own project',
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await fixture.request('coordinator', 'sales/projects/project-2', {
+        notes: 'Former team project',
+      })
+    ).status,
+  ).toBe(403);
 });
 
 it('requires both scopes of the cross-region team handover', async () => {
@@ -1389,4 +1419,147 @@ it('keeps page grants and business data grants independent in both directions', 
       (check) => check.resource.type === 'database.collection',
     ),
   ).toBe(true);
+});
+
+it('lets engineers prepare their own quotes and requires an explicit handover to edit a colleague quote', async () => {
+  expect(
+    (
+      await fixture.request('engineer', 'sales/quotes/quote-5', {
+        amount: 16000,
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await fixture.request('engineer', 'sales/quotes/quote-6', {
+        amount: 19000,
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (await fixture.request('engineer', 'sales/quotes/quote-6/submit', {}))
+      .status,
+  ).toBe(403);
+  expect(
+    (
+      await fixture.request('proposal', 'sales/quotes/quote-7', {
+        amount: 22000,
+      })
+    ).status,
+  ).toBe(200);
+  const rule = (await authz.sharingRules.get('example-proposal-handover'))!;
+  expect(
+    (
+      await admin('sharing-rules/example-proposal-handover', 'PUT', {
+        ...rule,
+        subjects: [],
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await fixture.request('proposal', 'sales/quotes/quote-7', {
+        amount: 23000,
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (await fixture.request('proposal', 'sales/quotes/quote-7/submit', {}))
+      .status,
+  ).toBe(403);
+  expect(
+    (
+      await fixture.request('engineer', 'sales/quotes/quote-2', {
+        amount: 13000,
+      })
+    ).status,
+  ).toBe(200);
+});
+
+it('retains the coordinator personal project when the shared team role is revoked', async () => {
+  expect(
+    (
+      await fixture.request('coordinator', 'sales/quotes/quote-7', {
+        amount: 23000,
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (await admin('permission-sets/assignments/example-team:proposal', 'DELETE'))
+      .status,
+  ).toBe(204);
+  expect(await ids('coordinator')).toEqual(['project-8']);
+  expect(
+    (
+      await fixture.request('coordinator', 'sales/projects/project-8', {
+        notes: 'Renewal plan',
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await fixture.request('coordinator', 'sales/quotes/quote-7', {
+        amount: 24000,
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (await fixture.request('coordinator', 'sales/quotes/quote-7/submit', {}))
+      .status,
+  ).toBe(403);
+  expect((await fixture.request('proposal', 'sales/quotes')).status).toBe(403);
+});
+
+it('resets only practice orders and preserves additional orders and their relationships', async () => {
+  const query = fixture.database.connection().query;
+  const orders = 'authorizationExampleOrders';
+  const original = (await query
+    .selectFrom(orders)
+    .selectAll()
+    .where('id', '=', 'order-2')
+    .executeTakeFirst())!;
+  await query
+    .insertInto(orders)
+    .values({ ...original, id: 'custom-order', deliveryTeamId: 'delivery' })
+    .execute();
+  await query
+    .insertInto('authorizationExampleOrderChecks')
+    .values([
+      {
+        id: 'custom-check',
+        orderId: 'custom-order',
+        title: 'Keep',
+        done: true,
+      },
+      { id: 'practice-check', orderId: 'order-2', title: 'Reset', done: false },
+    ])
+    .execute();
+  await query
+    .insertInto('authorizationExampleOrderTeams')
+    .values([
+      { orderId: 'custom-order', teamId: 'proposal', note: 'Keep' },
+      { orderId: 'order-2', teamId: 'proposal', note: 'Reset' },
+    ])
+    .execute();
+  expect((await fixture.request('admin', 'reset', {})).status).toBe(200);
+  expect(
+    await query
+      .selectFrom(orders)
+      .selectAll()
+      .where('id', '=', 'custom-order')
+      .executeTakeFirst(),
+  ).toMatchObject({ deliveryTeamId: 'delivery' });
+  expect(
+    await query
+      .selectFrom('authorizationExampleOrderChecks')
+      .selectAll()
+      .execute(),
+  ).toMatchObject([{ id: 'custom-check', done: true }]);
+  expect(
+    await query
+      .selectFrom('authorizationExampleOrderTeams')
+      .selectAll()
+      .execute(),
+  ).toMatchObject([{ orderId: 'custom-order', note: 'Keep' }]);
+  expect(await ids('coordinator')).toContain('project-8');
 });

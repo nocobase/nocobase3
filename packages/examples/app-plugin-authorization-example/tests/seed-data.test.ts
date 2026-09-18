@@ -23,10 +23,10 @@ it('persists the fluent declarations and all per-table fixtures with their relat
       authorizationSharingRules: 3,
       authorizationSharingRuleAssignments: 5,
       authorizationRestrictionRules: 3,
-      authorizationRestrictionRuleAssignments: 18,
-      [PROJECTS]: 4,
-      [QUOTES]: 11,
-      [ORDERS]: 4,
+      authorizationRestrictionRuleAssignments: 21,
+      [PROJECTS]: 5,
+      [QUOTES]: 13,
+      [ORDERS]: 5,
     };
     for (const [table, count] of Object.entries(expectedCounts)) {
       const rows = await query.selectFrom(table).select('id').execute();
