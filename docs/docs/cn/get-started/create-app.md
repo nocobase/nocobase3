@@ -23,14 +23,12 @@ pnpm --version
 进入准备存放应用的目录，运行：
 
 ```bash
-npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app docs-demo
+pnpm create @nocobase/app docs-demo
 ```
 
 `docs-demo` 是新目录名，可以换成自己的名字。每个应用使用独立目录，不要覆盖已有项目。
 
 命令会下载应用模板、生成项目和配置文件、安装依赖，并同步插件的开发指引。等待终端显示完成，再进入下一步。
-
-当前包从 NocoBase 的包源下载，所以命令中保留 `npm_config_registry`。如果使用其他包源后出现找不到 `@nocobase/create-app`，先确认这一项。
 
 生成的 `config.yml` 包含当前应用配置和密钥，保留在本地，不提交到代码仓库。使用生成的 SQLite 配置即可启动，数据保存在应用自己的存储目录中。
 
@@ -82,3 +80,11 @@ pnpm dev
 ## 下一步
 
 用已配置好的AI Agent打开这个项目目录，让它先读取项目的 `AGENTS.md` 和相关开发指引，再继续[让 AI Agent 做第一个功能](./first-feature)。AI Agent 本身的安装、账号登录和模型访问需要事先准备好。
+
+接着你就可以让你的 AI Agent 开始开发你的应用了。比如你想做一个 CRM 应用，就可以跟它说：
+
+```text
+帮我基于这个 NocoBase 3 项目模板，创建一个 CRM 应用。
+```
+
+把业务目标、使用角色和已有的表格、流程说清楚，AI Agent 会把需求落到页面、数据模型和流程里。换成你自己的业务目标也一样。

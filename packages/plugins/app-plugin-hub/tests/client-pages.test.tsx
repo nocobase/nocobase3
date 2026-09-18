@@ -660,6 +660,22 @@ describe('Hub client pages', () => {
     expect(
       screen.getByRole('button', { name: 'Copy create-app command' }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText('pnpm create @nocobase/app customer'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Build a CRM application based on this NocoBase 3 project template.',
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Copy example prompt' }),
+    );
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        'Build a CRM application based on this NocoBase 3 project template.',
+      ),
+    );
     expect(screen.getByText('pnpm build --tar')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Copy build command' }));
     await waitFor(() =>
@@ -703,7 +719,7 @@ describe('Hub client pages', () => {
     );
     expect(
       await screen.findByText(
-        'Could not copy. Select and copy the command manually.',
+        'Could not copy. Select and copy the text manually.',
       ),
     ).toBeInTheDocument();
     expect(

@@ -410,6 +410,10 @@ const zhCN: HubResource = {
     createTitle: '新建项目',
     createDescription: '在存放源代码项目的目录中运行：',
     copyCommand: '复制 create-app 命令',
+    agentDescription:
+      '接着你就可以让你的 AI Agent 开始开发你的应用了。比如你想做一个 CRM 应用，就可以跟它说：',
+    agentPrompt: '帮我基于这个 NocoBase 3 项目模板，创建一个 CRM 应用。',
+    copyPrompt: '复制示例提示词',
     footer: '进入生成的目录，完成本地初始化和开发后再构建。',
     existingTitle: '已有项目',
     existingDescription:
@@ -424,8 +428,8 @@ const zhCN: HubResource = {
     openReleases: '前往版本',
     deployDescription: '上传不会启动应用，请在部署成功后再访问。',
     openDeployments: '前往部署',
-    copyFailed: '复制失败，请手动选择并复制命令。',
-    copied: '命令已复制',
+    copyFailed: '复制失败，请手动选择并复制。',
+    copied: '已复制',
   },
   roles: {
     title: '角色权限',

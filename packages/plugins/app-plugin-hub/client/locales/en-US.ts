@@ -442,14 +442,19 @@ const enUS = {
     buildTitle: 'Build the release',
     projectSource: 'Project source',
     prepareTitle: 'Prepare your project',
-    copyFailed: 'Could not copy. Select and copy the command manually.',
-    copied: 'Command copied',
+    copyFailed: 'Could not copy. Select and copy the text manually.',
+    copied: 'Copied',
     title: 'Deploy your first release',
     description:
       'Prepare your project locally, then upload and deploy it here.',
     createTitle: 'New project',
     createDescription: 'Run this command where you keep your source projects.',
     copyCommand: 'Copy create-app command',
+    agentDescription:
+      'Next, hand the project to your AI Agent and let it start building. To build a CRM application, for example, send it this:',
+    agentPrompt:
+      'Build a CRM application based on this NocoBase 3 project template.',
+    copyPrompt: 'Copy example prompt',
     footer:
       'Open the generated directory and finish local setup and development before building.',
     existingTitle: 'Existing project',

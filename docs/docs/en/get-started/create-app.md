@@ -23,14 +23,12 @@ After generation, use the pnpm version specified by the project's `package.json`
 From the directory where you keep your applications, run:
 
 ```bash
-npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app docs-demo
+pnpm create @nocobase/app docs-demo
 ```
 
 `docs-demo` is the new directory name. Replace it if needed, and give each application its own directory. Do not overwrite an existing project.
 
 The command downloads the template, generates the project and configuration, installs dependencies, and synchronizes plugin development guidance. Wait for completion before continuing.
-
-The package currently comes from the NocoBase registry, so keep the `npm_config_registry` prefix. If another registry cannot find `@nocobase/create-app`, check this setting first.
 
 The generated `config.yml` includes configuration and secrets for this application. Keep it local and out of version control. The generated SQLite configuration starts without further changes; data stays in the application's own storage directory.
 
@@ -82,3 +80,11 @@ Use `pnpm dev` during development. `pnpm build` followed by `pnpm start` runs a 
 ## Next step
 
 Open this project directory with an AI Agent you have already configured. Ask it to read `AGENTS.md` and the relevant project guidance, then [build your first feature](./first-feature). The AI Agent's installation, account, and model access must be prepared separately.
+
+Next, hand the project to your AI Agent and let it start building. To build a CRM application, for example, tell it:
+
+```text
+Build a CRM application based on this NocoBase 3 project template.
+```
+
+Describe the business goal, the roles involved, and any existing tables or processes; the AI Agent turns that into pages, data models, and flows.
