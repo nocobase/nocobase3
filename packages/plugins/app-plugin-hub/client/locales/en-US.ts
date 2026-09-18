@@ -264,6 +264,9 @@ const enUS = {
       'The viewer keeps the latest 2,000 matching entries. Download to read the full retained selection.',
   },
   deployments: {
+    statusRetrying: 'Status updates interrupted. Retrying automatically…',
+    statusFinished:
+      'Deployment or startup has finished. Check the latest status and deployment record for the result.',
     title: 'Deployments',
     description:
       'Each row is a deployment operation. Rolling back creates a new deployment using the selected release and configuration.',
@@ -429,7 +432,7 @@ const enUS = {
     secretWarning:
       'config.yml may contain secrets. Hub stores the complete file for this application, and authorized administrators can view its contents.',
     secretAutoGeneration:
-      'When auth.secret is missing, Hub generates a unique secret for the first Config file deployment and reuses it for later deployments.',
+      'For Config file deployments, Hub fills missing, blank or example auth.secret and configured session.secret values with secure random secrets, reusing existing secrets and preserving custom values. An omitted session section keeps the runtime secret fallback. External configuration is not modified.',
     noSourceChanges: 'No configuration source changes',
     continue: 'Continue',
     review: 'Review',

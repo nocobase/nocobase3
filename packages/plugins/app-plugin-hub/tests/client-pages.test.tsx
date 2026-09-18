@@ -1,5 +1,7 @@
 import { Toaster, toast } from 'sonner';
 import {
+  act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -13,7 +15,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router';
-import type { ReactElement } from 'react';
+import { useEffect, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -24,6 +26,7 @@ import type {
 } from '../client/pages/hub/types.js';
 
 const mocks = vi.hoisted(() => ({
+  logMounted: vi.fn(),
   authorizationClientToken: Symbol('authorization-client'),
   client: {
     request: vi.fn(),
@@ -210,6 +213,21 @@ const getPaginationControl = (label: string): HTMLElement => {
   return control;
 };
 
+function Logs(): ReactElement {
+  useEffect(() => {
+    mocks.logMounted();
+  }, []);
+  const navigate = useNavigate();
+  return (
+    <div>
+      <input aria-label='Log search' />
+      <button onClick={() => void navigate('/apps/customer/deployments')}>
+        Close logs
+      </button>
+    </div>
+  );
+}
+
 describe('Hub client pages', () => {
   beforeEach(() => {
     render(<Toaster position='top-right' />);
@@ -222,9 +240,101 @@ describe('Hub client pages', () => {
   });
 
   afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
     toast.dismiss();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it.each(['running', 'failed'] as const)(
+    'polls unchanged pending states until %s and stops',
+    async (state) => {
+      vi.useFakeTimers();
+      renderAppPage(
+        '/apps/customer/deployments',
+        detail({ hasPendingDeployment: true }),
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      let calls = 0;
+      mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+        if (path === 'hub/apps/customer') {
+          calls += 1;
+          return Promise.resolve({
+            data: detail({
+              hasPendingDeployment: calls < 3,
+              runtime: {
+                hostAvailable: true,
+                state: calls < 3 ? 'running' : state,
+              },
+            }),
+          });
+        }
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
+      });
+      for (let i = 1; i <= 3; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1_500);
+        });
+        expect(calls).toBe(i);
+      }
+      expect(
+        screen.getByText(/Deployment or startup has finished/),
+      ).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(calls).toBe(3);
+      expect(
+        mocks.client.request.mock.calls.filter(
+          ([request]) => request.path === 'hub/apps/customer/deployments',
+        ).length,
+      ).toBeGreaterThanOrEqual(3);
+    },
+  );
+
+  it('retries transient polling failures and cancels polling on unmount', async () => {
+    vi.useFakeTimers();
+    renderAppPage(
+      '/apps/customer/deployments',
+      detail({ hasPendingDeployment: true }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    let calls = 0;
+    mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+      if (path === 'hub/apps/customer') {
+        calls += 1;
+        if (calls === 1) return Promise.reject(new Error('offline'));
+        return Promise.resolve({
+          data: detail({ hasPendingDeployment: true }),
+        });
+      }
+      return Promise.resolve({
+        data: { items: [], page: 1, pageSize: 20, total: 0 },
+      });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(screen.getByText(/Status updates interrupted/)).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(calls).toBe(2);
+    expect(
+      screen.queryByText(/Status updates interrupted/),
+    ).not.toBeInTheDocument();
+    cleanup();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(calls).toBe(2);
   });
 
   it('requires confirmation before deleting an owned App and returns to the catalog', async () => {
@@ -765,6 +875,26 @@ describe('Hub client pages', () => {
     const zone = await screen.findByLabelText(
       'Click or drag a .tar.gz / .tgz artifact here',
     );
+    expect(zone).not.toHaveAttribute('accept');
+    expect(zone).toHaveAttribute('type', 'file');
+    fireEvent.change(zone, {
+      target: {
+        files: [new File(['artifact'], 'picked.tar.gz', { type: '' })],
+      },
+    });
+    expect(screen.getByText('picked.tar.gz')).toBeInTheDocument();
+    fireEvent.change(zone, {
+      target: { files: [new File(['text'], 'notes.txt')] },
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Select exactly one .tar.gz or .tgz file.',
+    );
+    expect(screen.getByText('picked.tar.gz')).toBeInTheDocument();
+    expect(
+      mocks.client.request.mock.calls.some(
+        ([request]) => request.method === 'POST',
+      ),
+    ).toBe(false);
 
     // A drag carrying no file has nothing to upload, so it neither highlights the zone nor clears the selection.
     fireEvent.dragOver(zone, {
@@ -873,6 +1003,135 @@ describe('Hub client pages', () => {
     expect(rows[0]).toHaveClass('bg-primary/5');
     expect(rows[1]).toHaveTextContent('Current');
     expect(rows[1]).not.toHaveClass('bg-primary/5');
+  });
+
+  it('keeps the deployment list after first deployment without automatically opening logs', async () => {
+    let accepted = false;
+    mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+      if (path === 'hub/apps/customer')
+        return Promise.resolve({
+          data: detail({
+            app: { ...detail().app, currentDeploymentId: null },
+            hasPendingDeployment: accepted,
+          }),
+        });
+      if (path.endsWith('/deployments'))
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
+      if (path.endsWith('/releases'))
+        return Promise.resolve({
+          data: [
+            {
+              id: 'release-1',
+              version: '1.0.0',
+              size: 1,
+              checksum: 'checksum',
+              hasConfigTemplate: false,
+              createdAt: '2026-09-18T00:00:00Z',
+            },
+          ],
+        });
+      if (path.endsWith('/config'))
+        return Promise.resolve({ data: { mode: 'external', content: null } });
+      if (path.endsWith('/config-template'))
+        return Promise.resolve({ data: { content: null } });
+      if (path.endsWith('/deploy')) {
+        accepted = true;
+        return Promise.resolve({ data: { id: 'deployment-new' } });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    function Location() {
+      return (
+        <output data-testid='deploy-location'>{useLocation().pathname}</output>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={['/apps/customer/deployments']}>
+        <Location />
+        <Routes>
+          <Route path='/apps/:appId' element={<AppPage />}>
+            <Route path='deployments' element={<DeploymentsPage />}>
+              <Route
+                path=':deploymentId/logs'
+                element={<div>Unexpected automatic logs</div>}
+              />
+            </Route>
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Deploy release' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Deploy release',
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(accepted).toBe(true);
+    expect(screen.getByTestId('deploy-location')).toHaveTextContent(
+      '/apps/customer/deployments',
+    );
+    expect(
+      screen.queryByText('Unexpected automatic logs'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps manually opened logs mounted during pending deployment refreshes', async () => {
+    vi.useFakeTimers();
+    const mounted = mocks.logMounted.mockClear();
+    mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+      if (path === 'hub/apps/customer')
+        return Promise.resolve({
+          data: detail({ hasPendingDeployment: true }),
+        });
+      return Promise.resolve({
+        data: { items: [], page: 1, pageSize: 20, total: 0 },
+      });
+    });
+    render(
+      <MemoryRouter
+        initialEntries={['/apps/customer/deployments/deployment-1/logs']}
+      >
+        <Routes>
+          <Route path='/apps/:appId' element={<AppPage />}>
+            <Route path='deployments' element={<DeploymentsPage />}>
+              <Route path=':deploymentId/logs' element={<Logs />} />
+            </Route>
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.change(screen.getByLabelText('Log search'), {
+      target: { value: 'keep filter' },
+    });
+    const input = screen.getByLabelText('Log search');
+    for (let i = 0; i < 3; i += 1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(screen.getByLabelText('Log search')).toBe(input);
+    expect(input).toHaveValue('keep filter');
+    fireEvent.click(screen.getByRole('button', { name: 'Close logs' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(screen.queryByLabelText('Log search')).not.toBeInTheDocument();
+    expect(mounted).toHaveBeenCalledOnce();
   });
 
   it('renders an unavailable state for an explicit Tab without access', async () => {

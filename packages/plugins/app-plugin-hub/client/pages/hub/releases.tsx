@@ -206,8 +206,9 @@ export function UploadReleaseDialog({
               'Select one file, then click Upload release to submit.',
           })}
         </span>
+        {/* Native pickers may reject compound .tar.gz filters. Validate names in
+            selectFiles for both picker and drop input instead. */}
         <Input
-          accept='.tar.gz,.tgz'
           aria-label={t('releases.chooseArtifact', {
             defaultValue: 'Click or drag a .tar.gz / .tgz artifact here',
           })}

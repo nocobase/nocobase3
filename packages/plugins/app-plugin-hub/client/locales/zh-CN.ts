@@ -240,6 +240,8 @@ const zhCN: HubResource = {
     window: '页面保留最近 2,000 条匹配记录，下载可查看保留范围内的完整结果。',
   },
   deployments: {
+    statusRetrying: '状态更新暂时中断，正在自动重试…',
+    statusFinished: '部署或启动流程已结束，请查看最新状态和部署记录确认结果。',
     title: '部署',
     description:
       '每一行代表一次部署操作。回滚会使用选定的版本和配置创建新的部署。',
@@ -395,7 +397,7 @@ const zhCN: HubResource = {
     secretWarning:
       'config.yml 可能包含密钥。Hub 会为此应用保存完整文件，获得授权的管理员可以查看其内容。',
     secretAutoGeneration:
-      '如果未填写 auth.secret，首次使用配置文件部署时 Hub 会自动生成唯一密钥，后续部署会继续复用该密钥。',
+      '使用配置文件部署时，Hub 会为缺失、空白或示例占位的 auth.secret 和已配置的 session.secret 自动生成安全随机密钥，并优先复用已有密钥；保留自定义值。未单独配置 session 时沿用运行时的密钥回退机制。外部配置不由 Hub 补全。',
     noSourceChanges: '配置来源未变更',
     continue: '继续',
     review: '检查',
