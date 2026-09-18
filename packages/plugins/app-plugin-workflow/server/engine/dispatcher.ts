@@ -133,6 +133,23 @@ export default class Dispatcher {
         ...options,
         eventKey,
       });
+      if (options.manually && options.waitForCompletion === false) {
+        // Keep execution owned by the runtime (including shutdown draining),
+        // without making the HTTP request wait for node completion.
+        const operation = this.dispatch({ executionId: execution.id }).catch(
+          (error: unknown) => {
+            logger.error(
+              `Execution "${execution.id}" could not be dispatched`,
+              {
+                error,
+              },
+            );
+          },
+        );
+        this.inFlight.add(operation);
+        void operation.finally(() => this.inFlight.delete(operation));
+        return null;
+      }
       if (options.deferred || options.manually) {
         const entered = await this.acquireExecution(execution, workflow);
         return entered ? this.process({ execution: entered, workflow }) : null;
@@ -175,7 +192,7 @@ export default class Dispatcher {
     for (const row of rows) {
       const execution = hydrateRun(row);
       const workflow = await loadWorkflow(store, execution.workflowId);
-      if (!workflow?.enabled) {
+      if (!workflow || (!workflow.enabled && !execution.manually)) {
         continue;
       }
       await this.enqueue({ executionId: execution.id });

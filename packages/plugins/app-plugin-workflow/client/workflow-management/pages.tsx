@@ -401,7 +401,7 @@ export function InputDialog({
     </Dialog>
   );
 }
-function ManualRunDialog({
+export function ManualRunDialog({
   workflow,
   onClose,
   onExecuted,
@@ -412,6 +412,7 @@ function ManualRunDialog({
 }): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
   const { open } = useNotification();
+  const [running, setRunning] = useState(false);
   const workflowId = workflow.id ?? workflow.hash;
   if (!workflowId) throw new Error(t('workflows.runMissingIdentifier'));
   const properties = contextProperties(workflow.inputSchema);
@@ -425,6 +426,8 @@ function ManualRunDialog({
     ),
   );
   const run = (): void => {
+    if (running) return;
+    setRunning(true);
     const input = Object.fromEntries(
       Object.entries(values).filter(
         ([, value]) => value !== undefined && value !== '',
@@ -442,10 +445,11 @@ function ManualRunDialog({
           message: t('workflows.runFailed'),
           description: cause instanceof Error ? cause.message : String(cause),
         }),
-      );
+      )
+      .finally(() => setRunning(false));
   };
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && !running && onClose()}>
       <DialogContent size='md'>
         <DialogHeader>
           <DialogTitle>{t('manualRun.title')}</DialogTitle>
@@ -515,12 +519,18 @@ function ManualRunDialog({
             <button
               className='workflow-button workflow-button-outline'
               type='button'
+              disabled={running}
               onClick={onClose}
             >
               {t('common.cancel')}
             </button>
-            <button className='workflow-button' type='submit'>
-              {t('common.run')}
+            <button
+              className='workflow-button'
+              type='submit'
+              disabled={running}
+              aria-busy={running}
+            >
+              {running ? t('common.running') : t('common.run')}
             </button>
           </DialogFooter>
         </form>
@@ -712,6 +722,7 @@ function WorkflowRow({
         </TableCell>
         <TableCell className='workflow-table-actions-cell'>
           <div className='workflow-row-actions'>
+            {running ? <span role='status'>{t('common.running')}</span> : null}
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -877,6 +888,8 @@ export function WorkflowDetailPage(): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
   const { workflowId = '' } = useParams();
   const navigate = useNavigate();
+  const { open } = useNotification();
+  const [running, setRunning] = useState(false);
   const loadWorkflow = useCallback(
     () => workflowApi.workflow(workflowId),
     [workflowId],
@@ -945,6 +958,7 @@ export function WorkflowDetailPage(): React.ReactElement {
       <section className='workflow-canvas-card'>
         <header className='workflow-canvas-header'>
           <div className='workflow-canvas-header-leading'>
+            {running ? <span role='status'>{t('common.running')}</span> : null}
             <label>
               {t('workflows.version')}{' '}
               <Select
@@ -1061,16 +1075,31 @@ export function WorkflowDetailPage(): React.ReactElement {
                   {t('actions.parameterSettings')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={!workflow.id && !workflow.hash}
-                  onClick={() =>
-                    hasInput
-                      ? setDialog('manual')
-                      : void workflowApi
-                          .execute(identifier, {}, createWorkflowEventKey())
-                          .then((run) => navigate(workflowRunPath(run.id)))
-                  }
+                  disabled={running || (!workflow.id && !workflow.hash)}
+                  onClick={() => {
+                    if (hasInput) {
+                      setDialog('manual');
+                      return;
+                    }
+                    if (running) return;
+                    setRunning(true);
+                    void workflowApi
+                      .execute(identifier, {}, createWorkflowEventKey())
+                      .then((run) => navigate(workflowRunPath(run.id)))
+                      .catch((cause: unknown) =>
+                        open?.({
+                          type: 'error',
+                          message: t('workflows.runFailed'),
+                          description:
+                            cause instanceof Error
+                              ? cause.message
+                              : String(cause),
+                        }),
+                      )
+                      .finally(() => setRunning(false));
+                  }}
                 >
-                  {t('actions.runManually')}
+                  {running ? t('common.running') : t('actions.runManually')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
