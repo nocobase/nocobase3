@@ -15,6 +15,10 @@ export function isBorrowedPostgresPool(value: unknown): value is Pool {
     value.query !== pg.Pool.prototype.query
   )
     throw new TypeError('Only an unmodified standard pg.Pool is supported');
+  // pg-pool constructs this effective constructor, not options.Client. Check
+  // both surfaces: callers can replace Client after creating a standard Pool.
+  if (!('Client' in value) || value.Client !== pg.Client)
+    throw new TypeError('Only the standard pg.Client is supported');
   for (const key of ['onConnect', 'verify', 'Client'] as const) {
     if (key in value.options && value.options[key] !== undefined)
       throw new TypeError(`Unsupported Pool option: ${key}`);
@@ -147,6 +151,8 @@ export function createBorrowedPostgresPool(
           timeout > remaining(end)
         )
           throw new Error('PostgreSQL borrow timeout exceeds remaining budget');
+        // Admission is not permanent: the caller still owns this mutable Pool.
+        isBorrowedPostgresPool(owner);
         const raw = await owner.connect();
         const lease = new Lease(raw);
         leases.add(lease);
