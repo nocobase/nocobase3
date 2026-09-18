@@ -1,6 +1,7 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  'common.close': 'Close',
   nav: { users: 'User management' },
   page: {
     title: 'Users',
@@ -29,6 +30,7 @@ const enUS = {
       resetPassword: 'Reset password',
       revokeSessions: 'Revoke sessions',
       enable: 'Enable account',
+      delete: 'Delete user',
       disable: 'Disable account',
     },
   },
@@ -61,7 +63,21 @@ const enUS = {
     enable: 'Enable',
     disable: 'Disable',
   },
-  errors: { operationFailed: 'The user operation failed.' },
+  deletion: {
+    title: 'Delete user?',
+    description:
+      'Delete {{name}}? All sessions and API Keys will be revoked. Historical activity will be retained. This action cannot be undone.',
+    success: 'User deleted.',
+  },
+  errors: {
+    SELF_DELETE_NOT_ALLOWED: 'You cannot delete your own account.',
+    LAST_HUB_ADMIN:
+      'The last active platform administrator cannot be deleted, disabled, or assigned another role.',
+    USER_HAS_APPS:
+      'Transfer or delete this user’s applications before deleting the user.',
+    HUB_ADMIN_REQUIRED: 'Only a platform administrator can delete users.',
+    operationFailed: 'The user operation failed.',
+  },
 };
 
 /**

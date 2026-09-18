@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import {
   GuestAuthentication,
   RequiredAuthentication,
@@ -12,6 +13,12 @@ import { EMPTY_ARRAY } from '@/lib/constants';
 import { AppShell } from '../shell/index.js';
 import { renderRouteTree } from './route-tree.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
+
+// The settings centre brings its own chrome and navigation, none of which the application needs until someone opens
+// it. Loading it lazily keeps it out of the entry chunk, the same way every page it hosts stays out.
+const SettingsLayout = lazy(async () => ({
+  default: (await import('../layouts/settings-layout.js')).SettingsLayout,
+}));
 
 // The dev tools exist only while developing the application. Resolving the import inside an `import.meta.env.DEV`
 // branch lets a production build prove the module is unreachable and drop it, along with every dev page and any
@@ -28,10 +35,19 @@ export interface AppRouterProps {
   readonly clientRoutes: readonly AppClientRegisteredRoute[];
 }
 
-export function AppRouter({
-  devRouteTree,
-  clientRoutes,
-}: AppRouterProps): ReactElement {
+export function AppRouter(inputProps: AppRouterProps): ReactElement {
+  const { t } = useTranslation();
+  const { settingsRouteTree, devRouteTree, clientRoutes } = inputProps;
+
+  const settingsRoutes = useMemo(
+    () =>
+      filterRouteTree(
+        clientRoutes,
+        (route) =>
+          route.auth === 'required' && route.path.startsWith('/settings/'),
+      ),
+    [clientRoutes],
+  );
   const devRoutes = useMemo(
     () =>
       filterRouteTree(
@@ -67,16 +83,38 @@ export function AppRouter({
         <Route element={<AppShell routes={routeGroups.required} />}>
           {renderRouteTree(routeGroups.required)}
         </Route>
-        {/* Hub is a control-plane App. Its administration pages live in the
-            primary console, so the ordinary App settings centre is disabled. */}
-        <Route path='/settings/*' element={<Navigate to='/apps' replace />} />
+        <Route
+          path='/settings/*'
+          element={
+            <Suspense
+              fallback={
+                <Loading
+                  className='min-h-svh'
+                  label={t('status.loadingSettings', {
+                    defaultValue: 'Loading settings',
+                  })}
+                />
+              }
+            >
+              <SettingsLayout
+                routeTree={settingsRouteTree}
+                routes={settingsRoutes}
+              />
+            </Suspense>
+          }
+        />
         {import.meta.env.DEV && DevLayout ? (
           <Route
             path='/dev/*'
             element={
               <Suspense
                 fallback={
-                  <Loading className='min-h-svh' label='Loading dev tools' />
+                  <Loading
+                    className='min-h-svh'
+                    label={t('status.loadingDev', {
+                      defaultValue: 'Loading dev tools',
+                    })}
+                  />
                 }
               >
                 <DevLayout routeTree={devRouteTree} routes={devRoutes} />

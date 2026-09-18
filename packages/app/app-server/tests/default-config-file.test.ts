@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  createConfigPaths,
+  createAppPaths,
   resolveDefaultAppConfigFile,
 } from '../src/config/index.js';
 
@@ -30,41 +30,50 @@ describe('default application config file', () => {
     writeFileSync(path.join(appDir, 'config.yml'), 'name: main\n');
 
     expect(
-      resolveDefaultAppConfigFile(createConfigPaths({ rootDir: appDir })),
+      resolveDefaultAppConfigFile(createAppPaths({ rootDir: appDir })),
     ).toBe(path.join(appDir, 'config.yml'));
   });
 
-  it('falls back to the file next to dist/ when a built application has none inside it', () => {
+  it('reads configuration from the explicit deployment root', () => {
     const appDir = createApplicationDir();
     writeFileSync(path.join(appDir, 'config.yaml'), 'name: main\n');
 
     expect(
       resolveDefaultAppConfigFile(
-        createConfigPaths({ rootDir: path.join(appDir, 'dist') }),
+        createAppPaths({
+          rootDir: path.join(appDir, 'dist'),
+          deploymentRootDir: '..',
+        }),
       ),
     ).toBe(path.join(appDir, 'config.yaml'));
   });
 
-  it('prefers a config file inside dist/ over the one next to it', () => {
+  it('ignores a code-directory config when the deployment root is explicit', () => {
     const appDir = createApplicationDir();
     writeFileSync(path.join(appDir, 'config.yml'), 'name: outer\n');
     writeFileSync(path.join(appDir, 'dist', 'config.yml'), 'name: inner\n');
 
     expect(
       resolveDefaultAppConfigFile(
-        createConfigPaths({ rootDir: path.join(appDir, 'dist') }),
+        createAppPaths({
+          rootDir: path.join(appDir, 'dist'),
+          deploymentRootDir: '..',
+        }),
       ),
-    ).toBe(path.join(appDir, 'dist', 'config.yml'));
+    ).toBe(path.join(appDir, 'config.yml'));
   });
 
-  it('keeps the in-root candidate when no config file exists anywhere', () => {
+  it('uses the deployment root when the configuration does not exist', () => {
     const appDir = createApplicationDir();
 
     expect(
       resolveDefaultAppConfigFile(
-        createConfigPaths({ rootDir: path.join(appDir, 'dist') }),
+        createAppPaths({
+          rootDir: path.join(appDir, 'dist'),
+          deploymentRootDir: '..',
+        }),
       ),
-    ).toBe(path.join(appDir, 'dist', 'config'));
+    ).toBe(path.join(appDir, 'config'));
   });
 
   it('does not look outside a root that is not a dist/ directory', () => {
@@ -74,7 +83,7 @@ describe('default application config file', () => {
     writeFileSync(path.join(appDir, 'apps', 'config.yml'), 'name: parent\n');
 
     expect(
-      resolveDefaultAppConfigFile(createConfigPaths({ rootDir: nested })),
+      resolveDefaultAppConfigFile(createAppPaths({ rootDir: nested })),
     ).toBe(path.join(nested, 'config'));
   });
 });

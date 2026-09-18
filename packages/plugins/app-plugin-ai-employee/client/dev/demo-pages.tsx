@@ -1,5 +1,6 @@
 /// <reference path="../../types/client-dev-node-resolution.d.ts" />
 
+import { PageContainer } from '../components/page-container.js';
 import type { ComponentType, ReactElement } from 'react';
 
 import { AIChatPage } from './demo/index.js';
@@ -13,12 +14,9 @@ function withDemoRoot(Page: ComponentType): () => ReactElement {
   return function AIEmployeeDemoPage(): ReactElement {
     return (
       <NocoBaseAIRootProvider>
-        <main
-          className='@container/main mx-auto flex min-h-full w-full flex-col px-4 py-5 md:p-6 lg:px-8 lg:py-7'
-          style={{ maxWidth: '1600px' }}
-        >
+        <PageContainer className='@container/main'>
           <Page />
-        </main>
+        </PageContainer>
       </NocoBaseAIRootProvider>
     );
   };

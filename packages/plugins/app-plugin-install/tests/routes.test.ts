@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
+import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -24,7 +24,7 @@ describe('@nocobase/app-plugin-install routes', () => {
       appName: 'main',
       publicBasePath: '/main',
       config: createPluginConfig('configured-secret'),
-      paths: createConfigPaths({ rootDir: '/missing' }),
+      paths: createAppPaths({ rootDir: '/missing' }),
       router: new Hono(),
       container: new ServiceContainer(),
     });
@@ -54,7 +54,7 @@ describe('@nocobase/app-plugin-install routes', () => {
       config: createPluginConfig(
         `${INSTALL_MODE_AUTH_SECRET_PREFIX}temporary-secret`,
       ),
-      paths: createConfigPaths({ rootDir: '/missing' }),
+      paths: createAppPaths({ rootDir: '/missing' }),
       router: new Hono(),
       container: new ServiceContainer(),
     });
@@ -85,7 +85,7 @@ describe('@nocobase/app-plugin-install routes', () => {
       appName: 'main',
       publicBasePath: '/main',
       config: createPluginConfig(undefined),
-      paths: createConfigPaths({ rootDir }),
+      paths: createAppPaths({ rootDir }),
       router: new Hono(),
       container: new ServiceContainer(),
     });
@@ -105,7 +105,7 @@ describe('@nocobase/app-plugin-install routes', () => {
     router.route(
       '/install',
       createInstallRoutes({
-        paths: createConfigPaths({ rootDir }),
+        paths: createAppPaths({ rootDir }),
         generateSecret: () => 'private-secret',
       }),
     );
@@ -139,7 +139,7 @@ describe('@nocobase/app-plugin-install routes', () => {
     router.route(
       '/install',
       createInstallRoutes({
-        paths: createConfigPaths({ rootDir }),
+        paths: createAppPaths({ rootDir }),
       }),
     );
 

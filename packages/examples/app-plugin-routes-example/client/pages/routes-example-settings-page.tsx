@@ -1,32 +1,52 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import type { ReactElement } from 'react';
 
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { useRoutesExample } from '../contexts/routes-example-context.js';
 
 export default function RoutesExampleSettingsPage(): ReactElement {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-routes-example',
+  );
+
   const { description } = useRoutesExample();
 
   return (
-    <section className='mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-10'>
-      <header className='space-y-2 border-b pb-6'>
-        <p className='text-sm text-muted-foreground'>Settings route example</p>
-        <h1 className='text-2xl font-semibold'>Routes example</h1>
-        <p className='text-sm text-muted-foreground'>{description}</p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        title={translateDemo('title', {
+          defaultValue: 'Routes example',
+        })}
+        description={translateDemo(
+          description ===
+            'This page uses a provider contributed by the same client plugin.'
+            ? 'providerDescription'
+            : description,
+          { defaultValue: description },
+        )}
+      />
 
       <dl className='space-y-4 rounded-xl border p-6'>
         <div>
-          <dt className='text-sm text-muted-foreground'>App route</dt>
+          <dt className='text-sm text-muted-foreground'>
+            {translateDemo('appRoute', { defaultValue: 'App route' })}
+          </dt>
           <dd className='font-mono text-sm'>/routes-example</dd>
         </div>
         <div>
-          <dt className='text-sm text-muted-foreground'>API route</dt>
+          <dt className='text-sm text-muted-foreground'>
+            {translateDemo('apiRoute', { defaultValue: 'API route' })}
+          </dt>
           <dd className='font-mono text-sm'>/api/routes-example</dd>
         </div>
         <div>
-          <dt className='text-sm text-muted-foreground'>Root route</dt>
+          <dt className='text-sm text-muted-foreground'>
+            {translateDemo('rootRoute', { defaultValue: 'Root route' })}
+          </dt>
           <dd className='font-mono text-sm'>/routes-example/root</dd>
         </div>
       </dl>
-    </section>
+    </PageContainer>
   );
 }

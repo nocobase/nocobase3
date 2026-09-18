@@ -152,6 +152,16 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-deployment-logs',
+        path: '/apps/:appId/deployments/:deploymentId/logs',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-app-logs',
+        path: '/apps/:appId/logs',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-hub:hub-app-releases',
         path: '/apps/:appId/releases',
       },
@@ -182,6 +192,11 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
+        id: '@nocobase/app-plugin-hub:hub-api-keys',
+        path: '/api-keys',
+      },
+      {
+        auth: 'required',
         id: '@nocobase/app-plugin-users:users',
         path: '/users',
       },
@@ -199,9 +214,10 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
       },
+      { id: '@nocobase/app-plugin-authorization:authorization', order: 3 },
       {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
-        order: 3,
+        order: 4,
       },
     ]);
     expect(
@@ -213,8 +229,7 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-template-hub', order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
-      { packageName: '@nocobase/app-plugin-i18n', order: 4 },
-      { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
+      { packageName: '@nocobase/app-plugin-notification-provider', order: 4 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',

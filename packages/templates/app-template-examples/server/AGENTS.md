@@ -1,6 +1,6 @@
 # Server Instructions
 
-This directory is the application's API server. Read the application's root `AGENTS.md` first; `skills/nocobase-app-development/references/` holds the detail behind it.
+This directory is the application's API server. Read the application's root `AGENTS.md` first; `.agents/skills/nocobase-app-development/references/` holds the detail behind it.
 
 Add domain APIs here, in this application. Do not create a plugin package for a feature this application owns — plugins are for capabilities shared across several applications, and only when the user explicitly asks for one.
 
@@ -8,7 +8,7 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 
 - `routes/` holds your HTTP endpoints and the array `routes/index.ts` exports.
 - `providers/` holds your services, their tokens, and their lifecycle.
-- Database defaults use `export default defineAppDatabaseConfig((runtime) => ({ drivers, connections }))`; the helper infers connection fields from the returned drivers. Application server declarations use full TypeScript inference (`isolatedDeclarations: false`); see `skills/nocobase-app-development/references/database-connections.md` from the application root.
+- Database defaults use `export default defineAppDatabaseConfig((runtime) => ({ drivers, connections }))`; the helper infers connection fields from the returned drivers. Application server declarations use full TypeScript inference (`isolatedDeclarations: false`); see `.agents/skills/nocobase-app-development/references/database-connections.md` from the application root.
 - `config/` defines editable module defaults with `defineAppConfig`; `config/index.ts` collects them with `defaultAppConfigs`. `config.ts` loads deployment settings and `environment.ts` maps environment variables.
 - `runtime.ts` is the composition root, declaring config, plugins, service providers, and routes.
 - `app.ts` assembles the application and its core providers and middleware.
@@ -29,3 +29,9 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 - Schema changes are migrations in `../database/main/migrations/`, spelled out explicitly and never importing an evolving definition.
 
 Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. `pnpm server:inspect --json` prints the composition snapshot. It reports wiring, not correctness — cover behavior with tests.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

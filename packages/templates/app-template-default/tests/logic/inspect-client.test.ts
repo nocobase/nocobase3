@@ -145,6 +145,11 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
         path: '/settings/automation/workflow-runs/:runId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-scheduler:schedule-detail',
+        path: '/settings/automation/schedules/:scheduleId',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
@@ -154,9 +159,10 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
       },
+      { id: '@nocobase/app-plugin-authorization:authorization', order: 3 },
       {
         id: '@nocobase/app-plugin-notification-provider:notification-host',
-        order: 3,
+        order: 4,
       },
     ]);
     expect(
@@ -168,11 +174,10 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-template-default', order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
-      { packageName: '@nocobase/app-plugin-i18n', order: 4 },
-      { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
-      { packageName: '@nocobase/app-plugin-workflow', order: 6 },
-      { packageName: '@nocobase/app-plugin-notification', order: 7 },
-      { packageName: '@nocobase/app-plugin-file', order: 8 },
+      { packageName: '@nocobase/app-plugin-notification-provider', order: 4 },
+      { packageName: '@nocobase/app-plugin-workflow', order: 5 },
+      { packageName: '@nocobase/app-plugin-notification', order: 6 },
+      { packageName: '@nocobase/app-plugin-file', order: 7 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',

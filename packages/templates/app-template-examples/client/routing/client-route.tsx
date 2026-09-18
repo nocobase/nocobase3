@@ -1,7 +1,9 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import type {
   AppClientRegisteredRoute,
   AppClientRouteComponentModule,
 } from '@nocobase/app-client/plugins';
+import { useAuthorizationRevision } from '@nocobase/app-plugin-authorization/client';
 import { NamespaceScope } from '@nocobase/i18n/client';
 import { useCan } from '@refinedev/core';
 import { type ReactElement, useEffect, useState } from 'react';
@@ -30,11 +32,15 @@ export interface ClientPageProps {
 
 export function ClientPage({ page }: ClientPageProps): ReactElement {
   const { access, checkAccess, componentLoader } = page;
+  const authorizationRevision = useAuthorizationRevision();
   const { data: accessResult, isLoading: accessLoading } = useCan({
     resource: access.resource,
     action: access.action,
+    // Keep cached page decisions tied to the current permission snapshot.
+    params: { authorizationRevision },
     queryOptions: {
       enabled: checkAccess,
+      placeholderData: undefined,
       staleTime: 0,
       refetchOnMount: 'always',
     },
@@ -70,7 +76,7 @@ export function ClientPage({ page }: ClientPageProps): ReactElement {
   }
 
   if (checkAccess && accessLoading) return <ClientPageLoading />;
-  if (checkAccess && accessResult?.can === false)
+  if (checkAccess && accessResult?.can !== true)
     return <ClientPageDenied page={page} />;
 
   if (!componentModule) {
@@ -89,13 +95,21 @@ export function ClientPage({ page }: ClientPageProps): ReactElement {
   );
 }
 
-function ClientPageDenied({ page }: ClientPageProps): ReactElement {
+function ClientPageDenied(inputProps: ClientPageProps): ReactElement {
+  const { t } = useTranslation();
+  const { page } = inputProps;
+
   return (
     <section className='grid min-h-[calc(100svh-4rem)] place-items-center px-6'>
       <section className='w-full max-w-lg space-y-3 text-center'>
-        <h1 className='text-xl font-semibold'>Access denied</h1>
+        <h1 className='text-xl font-semibold'>
+          {t('status.denied', { defaultValue: 'Access denied' })}
+        </h1>
         <p className='text-sm text-muted-foreground'>
-          You do not have permission to access {page.label}.
+          {t('status.deniedDescription', {
+            label: page.label,
+            defaultValue: `You do not have permission to access ${page.label}.`,
+          })}
         </p>
       </section>
     </section>
@@ -103,19 +117,41 @@ function ClientPageDenied({ page }: ClientPageProps): ReactElement {
 }
 
 function ClientPageLoading(): ReactElement {
-  return <Loading className='min-h-[calc(100svh-4rem)]' label='Loading page' />;
+  const { t } = useTranslation();
+
+  return (
+    <Loading
+      className='min-h-[calc(100svh-4rem)]'
+      label={t('status.loadingPage', { defaultValue: 'Loading page' })}
+    />
+  );
 }
 
-function ClientPageError({ page }: ClientPageProps): ReactElement {
+function ClientPageError(inputProps: ClientPageProps): ReactElement {
+  const { t } = useTranslation();
+  const { page } = inputProps;
+
   return (
     <section className='grid min-h-[calc(100svh-4rem)] place-items-center px-6'>
       <section className='w-full max-w-lg space-y-4 text-center'>
-        <h1 className='text-xl font-semibold'>Unable to load page</h1>
+        <h1 className='text-xl font-semibold'>
+          {t('status.pageFailed', { defaultValue: 'Unable to load page' })}
+        </h1>
         <p className='text-sm text-muted-foreground'>
-          {page.kind === 'setting' ? 'Setting' : 'Route'} {page.label} from{' '}
-          {page.packageName} could not be loaded.
+          {t(
+            page.kind === 'setting'
+              ? 'status.settingFailedDescription'
+              : 'status.routeFailedDescription',
+            {
+              label: page.label,
+              packageName: page.packageName,
+              defaultValue: `${page.kind === 'setting' ? 'Setting' : 'Route'} ${page.label} from ${page.packageName} could not be loaded.`,
+            },
+          )}
         </p>
-        <Button onClick={() => window.location.reload()}>Retry</Button>
+        <Button onClick={() => window.location.reload()}>
+          {t('status.retry', { defaultValue: 'Retry' })}
+        </Button>
       </section>
     </section>
   );

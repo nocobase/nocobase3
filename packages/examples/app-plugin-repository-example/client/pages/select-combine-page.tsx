@@ -1,6 +1,6 @@
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
-import { apiClientToken, useService } from '@nocobase/app-client';
+import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useState, type ReactElement } from 'react';
 import { CombineResultTable } from '../components/combine-result-table.js';
@@ -25,7 +25,7 @@ function ExampleCard({
 }: {
   readonly definition: CombineExample;
 }): ReactElement {
-  const api = useService(apiClientToken);
+  const api = useApiClient();
   const { t } = useTranslation(NS);
   const [result, setResult] = useState<Record<string, unknown>[]>();
   const [running, setRunning] = useState(false);

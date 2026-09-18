@@ -1,5 +1,45 @@
 # @nocobase/app-plugin-notification
 
+## 0.1.0-beta.11
+
+### Patch Changes
+
+- 365a9fe: Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations. Resolve AI Registry copy from the active language and localize development navigation and section headings. Translate MCP configuration guidance, tool drawer labels, and transport descriptions.
+- d4ca00e: Use the application's API client for Hub artifact uploads and the notification logs Registry page so requests honor the configured API base URL. Pass the client explicitly to uploadArtifact and fetchNotificationLogs while retaining upload bodies, log responses and cancellation.
+- d4ca00e: Use useApiClient() for React API client access across application pages, plugins and shared examples, preserving application-scoped client resolution.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [365a9fe]
+- Updated dependencies [365a9fe]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/queue@0.1.0-beta.5
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- 6acf3bc: Use plugin-owned PageContainer components to unify settings page width, spacing, and responsive padding across database exploration, user management, API keys, workflows, and notification logs.
+
+  Use plugin-owned PageHeader components for consistent titles, descriptions, and page actions while preserving permission checks and workflow detail navigation.
+
+  Preserve spacing below workflow tabs and wrap workflow list filters and actions on narrow screens.
+
+  Restore spacing between workflow detail back links and headings, and keep execution duration cells aligned when table rows grow.
+
+- Updated dependencies [89955c5]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+
 ## 0.1.0-beta.9
 
 ### Patch Changes

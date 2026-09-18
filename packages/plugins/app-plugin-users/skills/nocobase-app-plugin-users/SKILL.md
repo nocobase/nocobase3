@@ -111,3 +111,5 @@ uses it for list pages and falls back to `get()` for existing scopes.
   assignments outside the registered scope.
 - The target App passes its relevant tests, typecheck, and build. Skill
   synchronization alone proves only that the copy matches this source.
+
+Deletion uses `DELETE /api/users/:userId` with `{ "confirm": true }` and `user/delete` authorization. Obtain an explicit user deletion request before calling it. Application role scopes can guard deletion and clean dependent credentials transactionally. Hub blocks self-deletion, deleting its last active administrator, and deleting owners of Apps. Historical user identities are retained but cannot sign in or appear in management lists.

@@ -108,3 +108,30 @@ describe('isLoggerLevel', () => {
     expect(isLoggerLevel('verbose')).toBe(false);
   });
 });
+
+it('routes named loggers to separate directories', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'logging-directories-'));
+  const logging = createLogging({
+    file: { directory: path.join(root, 'app'), name: 'app' },
+    console: { enabled: false },
+    loggers: {
+      request: {
+        file: { directory: path.join(root, 'request'), name: 'request' },
+      },
+    },
+  });
+  try {
+    logging.getLogger('system').info('application');
+    logging.getLogger('request').info('request');
+    await logging.close();
+    expect(readdirSync(path.join(root, 'app'))).toEqual([
+      expect.stringMatching(/^app\./),
+    ]);
+    expect(readdirSync(path.join(root, 'request'))).toEqual([
+      expect.stringMatching(/^request\./),
+    ]);
+  } finally {
+    await logging.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

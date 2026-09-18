@@ -18,6 +18,7 @@ const USER_ACTIONS = new Set([
   'create',
   'update',
   'disable',
+  'delete',
   'enable',
   'assign-role',
   'reset-password',
@@ -48,10 +49,23 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
 
   public override boot(): Promise<void> {
     const authorization = this.app.container.resolve(authorizationToken);
+    const scopes = this.app.container.has(userRoleScopeRegistryToken)
+      ? this.app.container.resolve(userRoleScopeRegistryToken)
+      : undefined;
     authorization.resources.add({
       resourceType: 'user',
       async authorize(request, context) {
-        if (!USER_ACTIONS.has(request.action)) {
+        if (
+          !USER_ACTIONS.has(request.action) ||
+          (request.action === 'delete' &&
+            !scopes
+              ?.list()
+              .some(
+                (scope) =>
+                  typeof scope.assertCanDelete === 'function' &&
+                  typeof scope.onDelete === 'function',
+              ))
+        ) {
           return {
             effect: 'deny',
             reasons: [

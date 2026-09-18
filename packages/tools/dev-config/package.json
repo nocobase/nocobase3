@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/dev-config",
-  "version": "0.1.0-beta.7",
+  "version": "0.1.0-beta.8",
   "description": "Shared TypeScript, ESLint, Prettier, Vitest, and Vite configuration for NocoBase packages.",
   "type": "module",
   "sideEffects": [
@@ -16,6 +16,7 @@
   },
   "files": [
     "README.md",
+    "bin",
     "docs",
     "dist",
     "eslint/README.md",
@@ -148,6 +149,6 @@
     }
   },
   "bin": {
-    "nocobase-db-manifests": "./dist/database/database-manifests-cli.js"
+    "nocobase-db-manifests": "./bin/database-manifests.js"
   }
 }

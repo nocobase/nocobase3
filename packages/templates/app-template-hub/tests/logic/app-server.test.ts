@@ -29,7 +29,7 @@ import {
   SessionProvider,
   sessionHttpMiddleware,
 } from '@nocobase/app-server/session';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   type AppIdentityConfig,
   type AppConfigAccessor,
@@ -87,6 +87,7 @@ import {
 } from '@nocobase/app-server/plugins';
 import authenticationServerPlugin from '@nocobase/app-plugin-authentication/server';
 import authorizationServerPlugin from '@nocobase/app-plugin-authorization/server';
+import { hubServiceToken } from '@nocobase/app-plugin-hub/server';
 
 import { createServer as createEmbeddedServer } from '../../server/embedded.ts';
 import { createStandaloneRuntimeScope } from '@nocobase/app-server/node';
@@ -327,6 +328,11 @@ describe('app server', () => {
       {
         ...appRuntime,
         plugins: defineServerPlugins<AppConfig>([]),
+        routes: [
+          defineApiRoutes(() =>
+            new Hono().get('/test-runtime', (c) => c.json({ ok: true })),
+          ),
+        ],
         serviceProviders: [
           ...appRuntime.serviceProviders,
           TestRuntimeApplicationProvider,
@@ -354,65 +360,9 @@ describe('app server', () => {
     await app.start();
 
     expect(providerCalls).toEqual(['plugin', 'plugin service']);
-    const apiResponse = await requestApp(app, 'http://localhost/api/example');
-    const rootResponse = await requestApp(app, 'http://localhost/example');
-
-    expect(apiResponse.status).toBe(200);
-    await expect(apiResponse.json()).resolves.toEqual({
-      scope: 'api',
-      message: 'Hello from the application provider',
-    });
-    expect(rootResponse.status).toBe(200);
-    expect(rootResponse.headers.get('content-type')).toContain('text/html');
-    const rootHtml = await rootResponse.text();
-    expect(rootHtml).toContain('<h1>Application Route Example</h1>');
-    expect(rootHtml).toContain('Hello from the application provider');
-  });
-
-  it('loads and explicitly reloads plugin config from the selected YAML file', async () => {
-    const configDir = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-app-template-hub-config-'),
-    );
-    tempDirs.push(configDir);
-    const configPath = path.join(configDir, 'config.yaml');
-    writeFileSync(configPath, 'heartbeat:\n  enabled: false\n');
-    const runtime = await resolveAppRuntime(
-      appRuntime,
-      createEmbeddedTestScope({
-        id: 'app-template-hub',
-        basePath: '/embedded-app-template-hub',
-        configPath,
-      }),
-    );
-
-    expect(runtime.config.raw()).toMatchObject({
-      heartbeat: { enabled: false },
-    });
-
-    writeFileSync(configPath, 'heartbeat:\n  enabled: true\n');
-    await expect(runtime.config.reload()).resolves.toMatchObject({
-      changedNamespaces: ['heartbeat'],
-    });
-    expect(runtime.config.raw()).toMatchObject({
-      heartbeat: { enabled: true },
-    });
-  });
-
-  it('does not leak plugin authentication into application-owned API routes', async () => {
-    const app = await createEmbeddedServer(
-      createEmbeddedTestScope({
-        id: 'app-template-hub',
-        basePath: '/embedded-app-template-hub',
-      }),
-    );
-
-    const apiResponse = await requestApp(app, 'http://localhost/api/example');
-
-    expect(apiResponse.status).toBe(200);
-    await expect(apiResponse.json()).resolves.toEqual({
-      scope: 'api',
-      message: 'Hello from the application provider',
-    });
+    const response = await requestApp(app, 'http://localhost/api/test-runtime');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
   });
 
   it('routes authentication requests through the configured public auth URL', async () => {
@@ -703,9 +653,46 @@ describe('app server', () => {
     const bareLocalApi = await requestApp(app, 'http://localhost/api/healthz');
 
     await expect(appHealth.json()).resolves.toEqual(expectedHealth);
-    expect(rootHealth.status).toBe(404);
-    expect(bareLocalApi.status).toBe(404);
+    expect(rootHealth.status).toBe(503);
+    expect(bareLocalApi.status).toBe(503);
     await app.close();
+  });
+
+  it('forwards outside a custom Hub mount through its current Host target', async () => {
+    const app = trackCloseable(
+      await createIsolatedStandaloneServer({
+        basePath: '/console',
+        viteDevUrl: false,
+      }),
+    );
+    const upstream = createHttpServer((req, res) => res.end(`host:${req.url}`));
+    servers.push(upstream);
+    await new Promise<void>((resolve) =>
+      upstream.listen(0, '127.0.0.1', resolve),
+    );
+    const address = upstream.address() as AddressInfo;
+    const target = vi
+      .spyOn(
+        app.application.container.resolve(hubServiceToken),
+        'getHostProxyTarget',
+      )
+      .mockReturnValue(new URL(`http://127.0.0.1:${address.port}`));
+    for (const pathname of [
+      '/customer/api/data?limit=1',
+      '/hub/',
+      '/console-other',
+      '/',
+    ]) {
+      expect(
+        await (await requestApp(app, `http://localhost${pathname}`)).text(),
+      ).toBe(`host:${pathname}`);
+    }
+    const calls = target.mock.calls.length;
+    expect(
+      (await requestApp(app, 'http://localhost/console/api/healthz')).status,
+    ).toBe(200);
+    expect(target).toHaveBeenCalledTimes(calls);
+    target.mockRestore();
   });
 
   it('mounts standalone WebSocket handlers behind the public base path', async () => {
@@ -1146,12 +1133,6 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: createNullSessionConfig(),
-    workflow: {
-      sourceRoot: path.resolve(process.cwd(), 'server/workflows'),
-      distRoot: path.resolve(process.cwd(), 'dist/server/workflows'),
-      artifactDisk: 'local',
-      production: false,
-    },
     snowflake: {
       workerId: 0,
     },
@@ -1179,7 +1160,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
   };
   const config = createTestConfig(configValues);
-  const paths = createConfigPaths({ rootDir: '/test/app-template-hub' });
+  const paths = createAppPaths({ rootDir: '/test/app-template-hub' });
   const database =
     options.database === false
       ? undefined

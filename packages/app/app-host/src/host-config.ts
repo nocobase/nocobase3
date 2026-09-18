@@ -38,7 +38,7 @@ export interface AppHostConfig {
   };
   artifact: AppDriveDiskConfig;
   logging: LoggingConfig;
-  appDeploymentsDir: string;
+  appRevisionsDir?: string;
   appVolumesDir: string;
   maxActiveApps?: number;
   idleTtlMs?: number;
@@ -73,12 +73,11 @@ export async function loadAppHostConfig(
         server: { host: '127.0.0.1', port: 3000 },
         artifact: {
           driver: 'fs',
-          location: path.join(rootDir, 'storage', 'app-artifacts'),
+          location: path.join(rootDir, 'storage', 'apps', 'artifacts'),
           visibility: 'private',
         },
         logging: createDefaultHostLoggingConfig(rootDir, environment.NODE_ENV),
-        appDeploymentsDir: path.join(rootDir, 'storage', 'app-deployments'),
-        appVolumesDir: path.join(rootDir, 'storage', 'app-volumes'),
+        appVolumesDir: path.join(rootDir, 'storage', 'apps', 'volumes'),
       },
     }),
   );
@@ -92,7 +91,7 @@ export async function loadAppHostConfig(
         APP_HOST_BIND: envString('host.server.host'),
         APP_HOST_PORT: envInteger('host.server.port'),
         PORT: envInteger('host.server.port'),
-        APP_DEPLOYMENTS_DIR: envString('host.appDeploymentsDir'),
+        APP_REVISIONS_DIR: envString('host.appRevisionsDir'),
         APP_VOLUMES_DIR: envString('host.appVolumesDir'),
         MAX_ACTIVE_APPS: envInteger('host.maxActiveApps'),
         APP_IDLE_TTL_MS: envInteger('host.idleTtlMs'),
@@ -159,8 +158,9 @@ function decodeAppHostConfig(config: Config, rootDir: string): AppHostConfig {
   }
   const host = required(hostConfig.string('server.host'), 'host.server.host');
   const port = positiveInteger(hostConfig, 'server.port');
-  const appDeploymentsDir = resolveConfigDirectory(
-    required(hostConfig.string('appDeploymentsDir'), 'host.appDeploymentsDir'),
+  const revisions = hostConfig.string('appRevisionsDir');
+  const appRevisionsDir = resolveConfigDirectory(
+    revisions ?? 'storage/apps/revisions',
     rootDir,
   );
   const appVolumesDir = resolveConfigDirectory(
@@ -187,7 +187,7 @@ function decodeAppHostConfig(config: Config, rootDir: string): AppHostConfig {
     server: { host, port },
     artifact,
     logging: { ...hostConfig.cut('logging').raw() },
-    appDeploymentsDir,
+    appRevisionsDir,
     appVolumesDir,
     maxActiveApps: optionalPositiveInteger(hostConfig, 'maxActiveApps'),
     idleTtlMs: optionalNonNegativeInteger(hostConfig, 'idleTtlMs'),
@@ -202,38 +202,18 @@ function createDefaultHostLoggingConfig(
   rootDir: string,
   nodeEnv: string | undefined,
 ): ConfigMap {
-  const config: ConfigMap = {
-    default: 'host',
-    name: 'app-host',
+  return {
     level: 'info',
     base: { service: 'app-host' },
-  };
-  if (nodeEnv === 'production') {
-    return {
-      ...config,
-      transport: {
-        target: 'pino-roll',
-        options: {
-          file: path.join(rootDir, 'storage', 'host', 'logs', '{logger}.log'),
-          frequency: 'daily',
-          dateFormat: 'yyyy_MM_dd',
-          mkdir: true,
-          limit: { count: 6, removeOtherLogFiles: true },
-        },
-      },
-    };
-  }
-  return {
-    ...config,
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-        singleLine: true,
-      },
+    file: {
+      enabled: true,
+      directory: path.join(rootDir, 'storage', 'host', 'logs'),
+      retentionDays: 7,
+      name: 'host',
+      maxFileSizeMB: 10,
+      maxTotalSizeMB: 500,
     },
+    console: { enabled: true, pretty: nodeEnv !== 'production' },
   };
 }
 

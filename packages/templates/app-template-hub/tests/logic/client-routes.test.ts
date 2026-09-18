@@ -64,6 +64,7 @@ describe('app client routes', () => {
           path: ':appId',
           children: [
             { path: 'deployments' },
+            { path: 'logs' },
             { path: 'releases' },
             { path: 'development' },
             { path: 'resources' },

@@ -1,10 +1,11 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
+import { PageHeader } from '../../components/page-header.js';
 import {
   AIChatFloatingTrigger,
   AIChatWindow,
   ChatSurface,
   ChatSurfaceActions,
 } from '../../../registry/nocobase-ai/components/index.js';
-import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
 import { Card } from '../../../registry/nocobase-ai/shared/ui/card.js';
 import {
   AIChatProvider,
@@ -41,6 +42,10 @@ export function FloatingChatPage() {
 }
 
 function FloatingChatPageContent() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const t = useAITranslate();
   const controller = useAIChatController();
   const { open } = useAIChatControllerState(controller);
@@ -63,28 +68,14 @@ function FloatingChatPageContent() {
           } as CSSProperties
         }
       >
-        <div className='space-y-12 pb-12'>
-          <section className='flex flex-wrap items-start justify-between gap-5 border-b pb-8'>
-            <div>
-              <div className='flex items-center gap-2'>
-                <Badge variant='secondary'>
-                  {t('demo.badge.components', 'AI Components')}
-                </Badge>
-                <Badge variant='outline'>
-                  {t('demo.badge.globalEntry', 'Global entry')}
-                </Badge>
-              </div>
-              <h1 className='mt-4 text-3xl font-semibold tracking-[-0.035em]'>
-                {t('demo.floating.title', 'Floating AI Chat')}
-              </h1>
-              <p className='mt-3 max-w-3xl text-sm leading-6 text-muted-foreground'>
-                {t(
-                  'demo.floating.description',
-                  'A global lower-right entry for the shared AI conversation. It opens as a push side panel and can expand into a focused dialog without remounting the chat window.',
-                )}
-              </p>
-            </div>
-          </section>
+        <div className='space-y-6'>
+          <PageHeader
+            title={t('demo.floating.title', 'Floating AI Chat')}
+            description={t(
+              'demo.floating.description',
+              'A global lower-right entry for the shared AI conversation. It opens as a push side panel and can expand into a focused dialog without remounting the chat window.',
+            )}
+          />
 
           <section className='space-y-5'>
             <div>
@@ -142,15 +133,24 @@ function FloatingChatPageContent() {
           <section className='space-y-5'>
             <div>
               <p className='text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground'>
-                Floating chat prompt
+                {translateDemo('demo.floatingChatPrompt', {
+                  defaultValue: 'Floating chat prompt',
+                })}
               </p>
               <h2 className='mt-2 text-xl font-semibold tracking-tight'>
-                Generate the global launcher separately
+                {translateDemo('demo.launcherTitle', {
+                  defaultValue: 'Generate the global launcher separately',
+                })}
               </h2>
             </div>
             <PromptCard
-              title='Add a lower-right AI floating entry'
-              description='This prompt configures the global trigger and its switchable side-panel/dialog surface.'
+              title={translateDemo('demo.launcherAction', {
+                defaultValue: 'Add a lower-right AI floating entry',
+              })}
+              description={translateDemo('demo.launcherDescription', {
+                defaultValue:
+                  'This prompt configures the global trigger and its switchable side-panel/dialog surface.',
+              })}
               prompt={floatingPrompt}
             />
           </section>

@@ -12,7 +12,7 @@ const explorer = vi.hoisted(() => ({
   physicalCollection: vi.fn(),
 }));
 
-// The real `useService` resolves a container singleton, so the page memoizes
+// The real `useApiClient` resolves a container singleton, so the page memoizes
 // its client on a stable value. A mock returning a fresh object per render
 // would re-create the client every render and refetch forever.
 const api = vi.hoisted(() => ({ request: vi.fn() }));
@@ -21,8 +21,7 @@ const api = vi.hoisted(() => ({ request: vi.fn() }));
 const translation = vi.hoisted(() => ({ t: (key: string) => key }));
 
 vi.mock('@nocobase/app-client', () => ({
-  apiClientToken: Symbol('apiClient'),
-  useService: () => api,
+  useApiClient: () => api,
 }));
 
 vi.mock('@nocobase/i18n/client', () => ({

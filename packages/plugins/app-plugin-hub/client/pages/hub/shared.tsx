@@ -1,12 +1,8 @@
-import { AlertCircle, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '../../components/ui/badge.js';
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from '../../components/ui/alert.js';
 import { Avatar, AvatarFallback } from '../../components/ui/avatar.js';
 import { Button } from '../../components/ui/button.js';
+import { cn } from '../../lib/utils.js';
 import {
   Dialog as UiDialog,
   DialogBody,
@@ -25,7 +21,7 @@ import {
   EmptyTitle,
 } from '../../components/ui/empty.js';
 import { useTranslation } from '@nocobase/i18n/client';
-import { type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import {
   appStatusLabel,
   initials,
@@ -42,6 +38,7 @@ export function AppDialog({
   children,
   footer,
   footerClassName,
+  contentClassName,
   wide = false,
 }: {
   readonly title: string;
@@ -59,29 +56,46 @@ export function AppDialog({
   /** Actions for this dialog. Passing them here pins them below the scrolling body rather than at the end of it. */
   readonly footer?: ReactNode;
   readonly footerClassName?: string;
+  readonly contentClassName?: string;
   readonly wide?: boolean;
 }): ReactElement {
+  const compact = !wide && !children && !subheader;
+
   return (
     <UiDialog open onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent
-        className={wide ? 'max-w-none p-8' : 'max-w-xl p-8'}
+        className={cn(
+          wide ? 'max-w-none p-8' : compact ? 'max-w-md p-6' : 'max-w-xl p-8',
+          contentClassName,
+        )}
         style={wide ? { width: 'min(72rem, calc(100vw - 2rem))' } : undefined}
       >
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+        <DialogHeader className={cn('pr-6', compact && 'mb-0 space-y-2')}>
+          <DialogTitle
+            className={cn(
+              'font-semibold break-words',
+              compact ? 'text-lg' : 'text-xl',
+            )}
+          >
+            {title}
+          </DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {subheader ? <div className='mb-5 shrink-0'>{subheader}</div> : null}
         {children ? <DialogBody>{children}</DialogBody> : null}
         {footer ? (
-          <DialogFooter className={footerClassName}>{footer}</DialogFooter>
+          <DialogFooter
+            className={cn(compact && 'border-t-0 pt-0', footerClassName)}
+          >
+            {footer}
+          </DialogFooter>
         ) : null}
       </DialogContent>
     </UiDialog>
   );
 }
 
-export function ErrorBanner({
+export function ErrorNotification({
   error,
   message,
   onClose,
@@ -89,76 +103,38 @@ export function ErrorBanner({
   readonly error?: ReadableError;
   readonly message?: string;
   readonly onClose?: () => void;
-}): ReactElement {
+}): null {
   const { title, description, technicalMessage } = useErrorCopy(error, message);
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
-  return (
-    <Alert className='mb-5 border-destructive/30 bg-destructive/5 text-destructive'>
-      <AlertCircle className='size-4 shrink-0' />
-      <AlertDescription className='min-w-0 text-destructive'>
-        {title ? (
-          <AlertTitle className='text-destructive'>{title}</AlertTitle>
-        ) : null}
-        <p className={title ? 'mt-1' : undefined}>{message ?? description}</p>
-        {technicalMessage ? (
-          <TechnicalErrorDetails
-            error={error}
-            technicalMessage={technicalMessage}
-          />
-        ) : null}
-      </AlertDescription>
-      {onClose ? (
-        <Button
-          aria-label={t('common.dismissError', {
-            defaultValue: 'Dismiss error',
-          })}
-          className='absolute top-1 right-1'
-          onClick={onClose}
-          size='icon'
-          variant='ghost'
-        >
-          <X className='size-4' />
-        </Button>
-      ) : null}
-    </Alert>
-  );
-}
-
-export function ErrorDialog({
-  error,
-  onClose,
-}: {
-  readonly error: ReadableError;
-  readonly onClose: () => void;
-}): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-hub');
-  const { title, description, technicalMessage } = useErrorCopy(error);
-  return (
-    <AppDialog
-      title={
-        title ??
-        t('errors.unexpectedTitle', {
-          defaultValue: 'Something went wrong',
-        })
-      }
-      description={description}
-      onClose={onClose}
-    >
-      <div className='mt-6 space-y-5'>
-        {technicalMessage ? (
-          <TechnicalErrorDetails
-            error={error}
-            technicalMessage={technicalMessage}
-          />
-        ) : null}
-        <div className='flex justify-end'>
-          <Button onClick={onClose}>
-            {t('common.close', { defaultValue: 'Close' })}
-          </Button>
-        </div>
-      </div>
-    </AppDialog>
-  );
+  const code = error?.code;
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    const text = message ?? description;
+    const toastId = toast.error(title ?? text, {
+      id: `hub-error:${code ?? ''}:${text}`,
+      position: 'top-right',
+      closeButton: true,
+      duration: 8000,
+      description: (
+        <>
+          {title ? <p>{text}</p> : null}
+          {technicalMessage ? (
+            <TechnicalErrorDetails
+              code={code}
+              technicalMessage={technicalMessage}
+            />
+          ) : null}
+        </>
+      ),
+      onDismiss: () => onCloseRef.current?.(),
+    });
+    return () => {
+      toast.dismiss(toastId);
+    };
+  }, [title, description, message, technicalMessage, code]);
+  return null;
 }
 
 function useErrorCopy(
@@ -170,69 +146,81 @@ function useErrorCopy(
   readonly technicalMessage: string | undefined;
 } {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const isAppIdConflict = error?.code === 'APP_EXISTS';
   const isInvalidArtifact = error?.code === 'INVALID_ARTIFACT';
   const isArtifactVersionMismatch = error?.code === 'ARTIFACT_VERSION_MISMATCH';
   const isRestartFailed = error?.code === 'RESTART_FAILED';
   const isForbidden = error?.code === 'FORBIDDEN' || error?.status === 403;
   const isNotFound = error?.code === 'NOT_FOUND' || error?.status === 404;
-  const title = isInvalidArtifact
-    ? t('errors.invalidArtifactTitle', {
-        defaultValue: 'Release artifact could not be uploaded',
+  const title = isAppIdConflict
+    ? t('errors.appIdConflictTitle', {
+        defaultValue: 'Application ID is unavailable',
       })
-    : isArtifactVersionMismatch
-      ? t('errors.artifactVersionMismatchTitle', {
-          defaultValue: 'Release does not match this application',
+    : isInvalidArtifact
+      ? t('errors.invalidArtifactTitle', {
+          defaultValue: 'Release artifact could not be uploaded',
         })
-      : isRestartFailed
-        ? t('errors.restartFailedTitle', {
-            defaultValue: 'Restart failed',
+      : isArtifactVersionMismatch
+        ? t('errors.artifactVersionMismatchTitle', {
+            defaultValue: 'Release does not match this application',
           })
-        : isForbidden
-          ? t('errors.forbiddenTitle', {
-              defaultValue: 'You do not have permission to perform this action',
+        : isRestartFailed
+          ? t('errors.restartFailedTitle', {
+              defaultValue: 'Restart failed',
             })
-          : isNotFound
-            ? t('errors.notFoundTitle', {
-                defaultValue: 'The requested resource was not found',
-              })
-            : error
-              ? t('errors.unexpectedTitle', {
-                  defaultValue: 'Something went wrong',
-                })
-              : undefined;
-  const description = isInvalidArtifact
-    ? t('errors.invalidArtifactDescription', {
-        defaultValue:
-          'Please upload a .tar.gz file generated by pnpm build --tar. The artifact must include dist/package.json and dist/server/embedded.js.',
-      })
-    : isArtifactVersionMismatch
-      ? t('errors.artifactVersionMismatchDescription', {
-          defaultValue:
-            'Build the release from this application source, then upload the generated artifact again.',
-        })
-      : isRestartFailed
-        ? t('errors.restartFailedDescription', {
-            defaultValue:
-              'The application could not be restarted. Check its deployment status and try again.',
-          })
-        : isForbidden
-          ? t('errors.forbiddenDescription', {
-              defaultValue:
-                'Your account does not have permission to complete this action.',
-            })
-          : isNotFound
-            ? t('errors.notFoundDescription', {
+          : isForbidden
+            ? t('errors.forbiddenTitle', {
                 defaultValue:
-                  'The requested application or release is no longer available.',
+                  'You do not have permission to perform this action',
               })
-            : error && !error.isTechnical
-              ? error.message
-              : t('errors.unexpectedDescription', {
+            : isNotFound
+              ? t('errors.notFoundTitle', {
+                  defaultValue: 'The requested resource was not found',
+                })
+              : error
+                ? t('errors.unexpectedTitle', {
+                    defaultValue: 'Something went wrong',
+                  })
+                : undefined;
+  const description = isAppIdConflict
+    ? t('errors.appIdConflictDescription', {
+        defaultValue:
+          'Application names can be repeated, but IDs must be unique across the Hub. Choose a different application ID.',
+      })
+    : isInvalidArtifact
+      ? t('errors.invalidArtifactDescription', {
+          defaultValue:
+            'Please upload a .tar.gz file generated by pnpm build --tar. The artifact must include dist/package.json and dist/server/embedded.js.',
+        })
+      : isArtifactVersionMismatch
+        ? t('errors.artifactVersionMismatchDescription', {
+            defaultValue:
+              'Build the release from this application source, then upload the generated artifact again.',
+          })
+        : isRestartFailed
+          ? t('errors.restartFailedDescription', {
+              defaultValue:
+                'The application could not be restarted. Check its deployment status and try again.',
+            })
+          : isForbidden
+            ? t('errors.forbiddenDescription', {
+                defaultValue:
+                  'Your account does not have permission to complete this action.',
+              })
+            : isNotFound
+              ? t('errors.notFoundDescription', {
                   defaultValue:
-                    'The operation could not be completed. Try again. If the problem continues, share the technical details with an administrator.',
-                });
+                    'The requested application or release is no longer available.',
+                })
+              : error && !error.isTechnical
+                ? error.message
+                : t('errors.unexpectedDescription', {
+                    defaultValue:
+                      'The operation could not be completed. Try again. If the problem continues, share the technical details with an administrator.',
+                  });
   const technicalMessage =
     error &&
+    !isAppIdConflict &&
     (error.isTechnical || error.technicalMessage !== error.message) &&
     error.technicalMessage !== (message ?? description)
       ? error.technicalMessage
@@ -241,10 +229,10 @@ function useErrorCopy(
 }
 
 function TechnicalErrorDetails({
-  error,
+  code,
   technicalMessage,
 }: {
-  readonly error?: ReadableError;
+  readonly code?: string;
   readonly technicalMessage: string;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
@@ -256,10 +244,10 @@ function TechnicalErrorDetails({
         })}
       </summary>
       <pre className='mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-destructive/10 p-2 font-mono leading-5'>
-        {error?.code
+        {code
           ? `${t('errors.code', {
-              code: error.code,
-              defaultValue: `Error code: ${error.code}`,
+              code,
+              defaultValue: `Error code: ${code}`,
             })}\n${technicalMessage}`
           : technicalMessage}
       </pre>

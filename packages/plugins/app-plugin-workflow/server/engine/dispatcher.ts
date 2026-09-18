@@ -1,3 +1,4 @@
+import { bindWorkflowLogger } from './logger.js';
 import { randomUUID } from 'node:crypto';
 
 import type { DatabaseManager } from '@nocobase/db';
@@ -53,6 +54,7 @@ export interface DispatcherOptions {
     | ((workflowId: WorkflowId | 'dispatcher') => WorkflowLogger);
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
+  terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
 type ExecutionPlan = {
@@ -87,7 +89,7 @@ export default class Dispatcher {
     workflow: WorkflowDefinition,
     input: unknown,
     options: WorkflowEventOptions = {},
-  ): Promise<Processor | null | void> {
+  ): Promise<Processor | WorkflowRun | null | void> {
     const operation = this.triggerEvent(workflow, input, options);
     this.inFlight.add(operation);
     return operation.finally(() => {
@@ -99,8 +101,10 @@ export default class Dispatcher {
     workflow: WorkflowDefinition,
     input: unknown,
     options: WorkflowEventOptions,
-  ): Promise<Processor | null | void> {
-    const logger = this.getLogger(workflow.id);
+  ): Promise<Processor | WorkflowRun | null | void> {
+    const logger = bindWorkflowLogger(this.getLogger(workflow.id), {
+      workflowId: workflow.id,
+    });
     if (!options.force && !options.manually && !workflow.enabled) {
       logger.warn(`Workflow "${workflow.key}" is disabled; event ignored`);
       return;
@@ -134,7 +138,7 @@ export default class Dispatcher {
         return entered ? this.process({ execution: entered, workflow }) : null;
       }
       await this.enqueue({ executionId: execution.id });
-      return null;
+      return execution;
     } finally {
       this.pendingEventKeys.delete(eventKey);
     }
@@ -181,7 +185,9 @@ export default class Dispatcher {
   }
 
   async drain(): Promise<void> {
-    await Promise.allSettled([...this.inFlight]);
+    while (this.inFlight.size) {
+      await Promise.allSettled([...this.inFlight]);
+    }
   }
 
   async enqueue(task: WorkflowQueueTask): Promise<void> {
@@ -296,6 +302,8 @@ export default class Dispatcher {
             createdAt,
             manually: options.manually ?? false,
             reason: null,
+            sourceType: options.sourceType ?? null,
+            sourceId: options.sourceId ?? null,
           },
         });
         await this.incrementStats(store, workflow);
@@ -355,41 +363,61 @@ export default class Dispatcher {
   }
 
   private async process(plan: ExecutionPlan): Promise<Processor> {
-    const logger = this.getLogger(plan.workflow.id);
-    return this.withExecutionLock(plan.execution.id, async () => {
-      const workflowResourceRoot =
-        (await this.options.resolveWorkflowResourceRoot?.(
-          plan.workflow,
-          plan.execution,
-        )) ?? null;
-      const processor = new Processor({
-        database: this.options.database,
-        connectionName: this.options.connectionName,
-        workflow: plan.workflow,
-        execution: plan.execution,
-        instructions: this.options.instructions,
-        workflowResourceRoot,
-        services: this.options.services,
-        logger,
-        environment: this.options.environment,
-        functions: this.options.functions,
-      });
-      try {
-        if (plan.rerun) {
-          await processor.rerun(plan.rerun);
-        } else if (plan.nodeRun) {
-          await processor.resume(plan.nodeRun);
-        } else {
-          await processor.start();
-        }
-      } catch (error) {
-        logger.error(`Execution "${plan.execution.id}" failed`, { error });
-        await processor.exit(-2, {
-          message: error instanceof Error ? error.message : String(error),
-        });
-      }
-      return processor;
+    const logger = bindWorkflowLogger(this.getLogger(plan.workflow.id), {
+      workflowId: plan.workflow.id,
+      executionId: plan.execution.id,
     });
+    const processor = await this.withExecutionLock(
+      plan.execution.id,
+      async () => {
+        const workflowResourceRoot =
+          (await this.options.resolveWorkflowResourceRoot?.(
+            plan.workflow,
+            plan.execution,
+          )) ?? null;
+        const processor = new Processor({
+          database: this.options.database,
+          connectionName: this.options.connectionName,
+          workflow: plan.workflow,
+          execution: plan.execution,
+          instructions: this.options.instructions,
+          workflowResourceRoot,
+          services: this.options.services,
+          logger,
+          environment: this.options.environment,
+          functions: this.options.functions,
+          terminalObserver: this.options.terminalObserver,
+          resumeNode: async (nodeRunId) => {
+            await this.enqueue({ executionId: plan.execution.id, nodeRunId });
+          },
+        });
+        try {
+          if (plan.rerun) {
+            await processor.rerun(plan.rerun);
+          } else if (plan.nodeRun) {
+            await processor.resume(plan.nodeRun);
+          } else {
+            await processor.start();
+          }
+        } catch (error) {
+          logger.error(`Execution "${plan.execution.id}" failed`, { error });
+          await processor.exit(-2, {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return processor;
+      },
+    );
+    for (const task of processor.takeDeferredTasks()) {
+      const operation = new Promise<void>((resolve) => setImmediate(resolve))
+        .then(task)
+        .catch((error: unknown) => {
+          logger.error('Background workflow node failed', { error });
+        });
+      this.inFlight.add(operation);
+      void operation.finally(() => this.inFlight.delete(operation));
+    }
+    return processor;
   }
 
   private async validateEvent(

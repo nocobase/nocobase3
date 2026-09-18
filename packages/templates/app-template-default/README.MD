@@ -8,7 +8,7 @@ You own everything in this directory. Add pages, API routes, database tables, an
 
 Default provides the application shell and product capabilities without example plugins or business demo pages. Application-owned routes start empty, and new databases receive no article sample data. Its built-in Users integration lists direct Authorization Permission Sets as application roles, while access assigned to all authenticated users remains separate. Use `app-template-examples` for article management and runnable plugin demonstrations.
 
-Existing Default installations retain their data when example plugins are unregistered. If an installation already ran the article migration, retain its original migration sources as described in the [upgrade migration rules](skills/nocobase-app-upgrade/references/edge-cases.md#migrations) before upgrading. Do not erase migration history or delete existing data to make an upgrade start.
+Existing Default installations retain their data when example plugins are unregistered. If an installation already ran the article migration, retain its original migration sources as described in the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations) before upgrading. Do not erase migration history or delete existing data to make an upgrade start.
 
 ## Getting started
 
@@ -110,7 +110,6 @@ tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
 config.yml              Your configuration, generated at setup; gitignored
 config.example.yml       Documented configuration template
-skills/                  In-depth development guides for AI agents
 ```
 
 The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are composition roots: they list what the application is made of. Reading them tells you what is loaded and in what order.
@@ -119,12 +118,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script             | What it does                                                                 |
-| ------------------ | ---------------------------------------------------------------------------- |
-| `pnpm dev`         | Start the API server and client with hot reload                              |
-| `pnpm build`       | Build the client and server into `dist/`                                     |
-| `pnpm start`       | Run the built server; requires `pnpm build` first                            |
-| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/dist.tar.gz` |
+| Script             | What it does                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `pnpm dev`         | Start the API server and client with hot reload                                      |
+| `pnpm build`       | Build the client and server into `dist/`                                             |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                                    |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/exports/dist.tar.gz` |
 
 ### Database
 
@@ -136,7 +135,7 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
 
-Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](skills/nocobase-app-development/references/migrations.md).
+Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](.agents/skills/nocobase-app-development/references/migrations.md).
 
 ### Checks
 
@@ -156,13 +155,16 @@ Database tasks support `--connection <name>` and `--all`; no argument targets `d
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                             |
-| ------------------------------- | -------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server  |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                           |
-| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only          |
-| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`       |
+| Script                          | What it does                                                |
+| ------------------------------- | ----------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server     |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                              |
+| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills    |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only             |
+| `pnpm package:remove <name>`    | Remove a direct NocoBase package and its synchronized Skill |
+| `pnpm skills:sync`              | Sync direct NocoBase package Skills into `.agents/skills/`  |
+
+`pnpm plugin:skills:sync` remains an alias for older automation; use `pnpm skills:sync` in new scripts and documentation.
 
 Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
 
@@ -176,6 +178,20 @@ pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
 Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
 
 Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
+
+### Removing a NocoBase package
+
+Before removing a direct `@nocobase/*` dependency, search the application's imports, plugin registrations, routes, services, configuration keys, tests, and build scripts for references to it. Migrate or remove those references first. The removal command updates package metadata and synchronized Skills; it does not rewrite application source or configuration and cannot decide whether the capability is still required.
+
+```bash
+pnpm package:remove @nocobase/example
+pnpm package:remove @nocobase/example --dry-run
+pnpm package:remove @nocobase/example --json
+```
+
+For an ordinary package, the command uses the application's package manager to remove the dependency and update both `package.json` and the lockfile, then removes only the Skill directories recorded as owned by that package. For an `@nocobase/app-plugin-*` package, it reuses the `plugin:unregister` workflow so Client, Server, and CLI registrations are removed together with the dependency and its Skills. `pnpm plugin:unregister <name>` remains available when the task is specifically expressed as unregistering a plugin.
+
+An older application with the new CLI but without the script can run `pnpm nocobase package remove @nocobase/example`. If the installed CLI does not provide `package remove`, update `@nocobase/nb3-cli` first; as a compatibility fallback on a version that already provides `skills:sync`, remove the dependency with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, make sure the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing a package already absent from the manifest to `package:remove` can clean its recorded historical Skill ownership without uninstalling any other package.
 
 ### Diagnostics
 
@@ -197,24 +213,43 @@ Client packages are not among them. Plugins declare what their browser code need
 **The build targets the machine you run it on**, so `pnpm build && pnpm start` works. Deploying elsewhere means saying where:
 
 ```bash
+pnpm build --help                                 # all build options
 pnpm build                                        # this machine
 pnpm build --target linux-x64                     # most Linux servers
 pnpm build --target linux-arm64                   # ARM servers, Graviton
 pnpm build --target linux-x64-musl                # Alpine, and most slim container images
-pnpm build --target linux-x64 --node-version 22   # when the server runs Node 22
+pnpm build --target linux-x64 --node-version 24   # explicitly target Node 24
 ```
 
 A `.node` binary is compiled for one platform, architecture, C library, and Node version at once, so a build made on a Mac installs binaries a Linux server cannot load. `--target` sets platform, architecture, and C library together, because they are chosen together: `linux-x64` and `linux-x64-musl` are different binaries, and Alpine needs the musl one. If you are unsure, `ldd --version` on the server prints `musl` for musl and `GNU libc` otherwise.
 
-`--node-version` takes the major version your server runs, separately, because the same Linux host may run any of several. Supported: 20, 22, 24, 26.
+`--node-version` takes the major version your server runs, separately, because the same Linux host may run any of several. The binary retargeter knows ABI mappings for 20, 22, 24, and 26; the application itself requires Node >=24.
 
-Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`, so a `dist/` built for the wrong machine can be identified rather than guessed at.
+`pnpm build --help` (or `-h`) lists build options and exits without loading build dependencies, running hooks, or modifying `dist/`. Every successful build records `nocobase.buildTarget` in `dist/package.json`, including builds with no native modules: `platform`, `arch`, `libc`, `nodeMajor`, and `nodeAbi`. Use `libc` only for Linux; its value on other platforms is a compatibility placeholder. Deployment checks should compare these fields with the host runtime and also respect `engines.node`. With `--target current` (the default), the Node version and ABI come from the running process; an explicit platform target defaults to Node 24 unless `--node-version` is supplied.
 
-If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — none of this applies and `dist/` is portable as built.
+For example, `pnpm build --target linux-x64 --node-version 24` produces:
+
+```json
+{
+  "nocobase": {
+    "buildTarget": {
+      "platform": "linux",
+      "arch": "x64",
+      "libc": "glibc",
+      "nodeMajor": 24,
+      "nodeAbi": 137
+    }
+  }
+}
+```
+
+`nodeMajor` describes the target runtime, not the Node version used to run the build. No target patch version is implied. These fields provide platform and Node ABI checks for Hub deployment; they do not describe system libraries, CPU instruction requirements, or other runtime prerequisites.
+
+If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — no platform-specific binaries need retargeting. The build still records the selected target, and the deployment runtime must satisfy `engines.node`.
 
 #### Packing the build
 
-`pnpm build --tar` writes `storage/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+`pnpm build --tar` writes `storage/exports/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
 
 The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
 
@@ -290,6 +325,10 @@ Configuration is resolved from the file, environment variables, and defaults in 
 
 Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.
 
+### AI server end-to-end testing
+
+`pnpm test:e2e` discovers the source workspace’s optional AI server test and skips it unless `AI_LOCAL_E2E=1`. Build first and use a dedicated, installed test application database with a configured LLM service and an API key belonging to a test user. Set `AI_E2E_LLM_SERVICE`, `AI_E2E_MODEL`, and `AI_E2E_API_KEY`; `AI_E2E_EMPLOYEE` defaults to `viz`. The test starts the compiled local server, makes a real model request, and removes its conversation afterward. Never point it at production data. Generated applications ship the Playwright configuration but no template tests, so an empty run succeeds.
+
 ### Notification testing
 
 After signing in with the `notification:test` `send` permission, use the
@@ -302,8 +341,43 @@ is submitted.
 
 ## Working with an AI agent
 
-`AGENTS.md` describes how to build features here, and `skills/` holds the in-depth references it links to. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keeping these accurate as your application grows is what keeps agent-written code consistent with the rest of it.
+`AGENTS.md` describes how to build features here, and `.agents/skills/` contains package-owned guidance generated by `pnpm skills:sync`. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keep application-specific rules in committed `AGENTS.md` files because synchronization replaces package-owned Skill directories.
 
 ## License
 
 MIT
+
+## Publish to an application Hub
+
+The Default template includes `upload` and `deploy` scripts. Run `pnpm run upload` or `pnpm run deploy` from the App root; these forward all arguments to `pnpm nocobase app upload` and `pnpm nocobase app deploy`, respectively. Use `pnpm run deploy` explicitly because `pnpm deploy` is also a pnpm built-in command. Existing applications need to add these scripts if they already have the publishing CLI but predate the shortcuts.
+
+```bash
+pnpm run upload
+pnpm run upload --deploy --json
+pnpm run upload --deploy --no-wait --json
+pnpm run deploy --release-id <releaseId> --json
+```
+
+Build with `pnpm build --tar`, then run `pnpm nocobase app upload`. Set `HUB_URL` (including the Hub mount path, such as `https://hub.example/main`), `HUB_APP_ID`, and `HUB_API_KEY`, or supply the corresponding `--hub`, `--app-id`, and `--api-key` flags. Prefer environment variables for secrets.
+
+Both commands read `HUB_URL`, `HUB_APP_ID`, and `HUB_API_KEY` from the App root `.env` as defaults. Precedence is command flags > process environment (terminal or CI) > `.env`, resolved separately for each value. The file is optional, supports quoted values and comments, and does not modify the process environment. Only `.env` is loaded; `.env.local` and mode-specific files are not loaded. Keep `.env` out of version control because it contains credentials.
+
+```dotenv
+HUB_URL=http://127.0.0.1:13000/main
+HUB_APP_ID=crm
+HUB_API_KEY=your-publishing-key
+```
+
+Use `app upload --deploy --json` to upload and deploy, or omit `--deploy` to upload only. Hub has no automatic/manual deployment setting; scripts decide which commands to run. `--file` defaults to `storage/exports/dist.tar.gz`; `--timeout` defaults to 600 seconds. `app deploy --release-id <id> --json` deploys an existing Release. Uploads default to checksum-based retry identity; deploys default to an App/Release digest. Use the same `--idempotency-key` after a failed connection and a fresh key when intentionally redeploying the same Release. Exit codes are 0 for success/acceptance, 1 for a Hub rejection or failed deployment, 2 for invalid local input, and 3 for an unconfirmed outcome caused by a connection failure, timeout, malformed response, or unknown deployment status. Exit 3 does not mean the deployment failed or was cancelled: inspect the deployment in Hub and retry with the same idempotency key if necessary. `--no-wait` validates the deployment acceptance response too; it never treats an unknown status as successful acceptance.
+
+Publishing keys reuse Hub's `upload-release` and `deploy` actions and remain restricted to their selected Apps and their owner's current permissions. Uploading with deployment needs both permissions; waiting uses a minimal deployment status endpoint under `deploy`. These commands call Hub over HTTP and never load this application's server or connect directly to Host.
+
+Both `app deploy --release-id <id> --config ./runtime.yml` and `app upload --deploy --config ./runtime.yml` accept an optional runtime YAML file (non-empty UTF-8, at most 1 MiB). Paths resolve from the App root. Omitting `--config` reuses the current Hub configuration; on first deployment, the existing Release-template initialization still applies. Supplied configuration replaces the configuration document through the existing Hub secret handling and YAML validation; it is not merged with arbitrary existing fields and never changes the Release template or archive. `app upload --config` without `--deploy` is rejected. Use `app deploy` to apply a different configuration to an already uploaded Release; configured upload retries reuse only the originally supplied configuration. Default deployment retry identity includes supplied configuration content. Configuration content is never printed in CLI results.
+
+Deployment commands (`app deploy` and `app upload --deploy`) wait for the final result by default. Use `--no-wait` to return after acceptance; acceptance does not mean deployment succeeded. Explicit `--wait` remains supported. Upload without `--deploy` only waits for the upload. `--timeout` defaults to 600 seconds; a timeout leaves the deployment outcome unconfirmed and does not cancel it.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

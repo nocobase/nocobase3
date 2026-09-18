@@ -1,7 +1,101 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  apiKeys: {
+    optional: 'Optional',
+    appsRequired:
+      'Select at least one application, or choose all applications.',
+    scopesRequired: 'Select at least one permission.',
+    expiration: 'Expiration',
+    customExpiry: 'Set expiration date',
+    localTime: 'Uses your local time.',
+    futureAppsNote: '(including future apps)',
+    viewAndCopy: 'View and copy API Key',
+    copyNamed: 'Copy API Key {{name}}',
+    copyUnavailableLabel: 'Copy unavailable',
+    copyUnavailable:
+      'Only active keys created by you with encrypted storage can be copied. Older keys must be replaced.',
+    revealFailed:
+      'Could not retrieve this key. It may be unavailable or you may no longer have access.',
+    storageHint:
+      'Keep this key secure. You can copy it again from this list while it is active.',
+    activity: 'Created / Last used',
+    createdByName: 'By {{name}}',
+    createdOn: 'Created {{date}}',
+    lastUsedOn: 'Last used {{date}}',
+    expiresOn: 'Expires {{date}}',
+    neverUsed: 'Not used yet',
+    allAppsShort: 'All applications',
+    includesFutureApps: 'Includes future applications',
+    moreApps: '+{{count}} more',
+    keyActions: 'Actions for {{name}}',
+    createDescription:
+      'Set an application scope and release permissions for your key.',
+    searchApps: 'Search applications…',
+    selectedCount: '{{count}} selected',
+    noMatchingApps: 'No matching applications.',
+    uploadHint: 'Upload new release artifacts.',
+    deployHint: 'Deploy a release to an application.',
+    selectAppsFirst: 'Select applications to choose permissions.',
+    unavailablePermissions:
+      'Unavailable permissions are not allowed across the entire application scope.',
+    selectedApps: 'Selected applications',
+    allApps: 'All applications (including future apps)',
+    allAppsHint:
+      'New applications are included automatically. Access remains limited to the selected permissions and the creator’s current permissions.',
+    apps: 'Applications',
+    appsHint:
+      'Choose specific applications or all current and future applications.',
+    noApps: 'No applications are available to authorize.',
+    invalidExpiry: 'Choose a future expiration time.',
+    title: 'API Keys',
+    description:
+      'Choose which applications and release actions each API Key can access.',
+    create: 'Create API Key',
+    name: 'Name',
+    scopes: 'Permissions',
+    status: 'Status',
+    creator: 'Created by',
+    createdAt: 'Created',
+    expiresAt: 'Expires',
+    lastUsedAt: 'Last used',
+    actions: 'Actions',
+    disable: 'Disable',
+    delete: 'Delete',
+    cancel: 'Cancel',
+    done: 'Done',
+    never: 'No expiration',
+    expiryHint:
+      'Optional. Leave empty for no expiration. Uses your local time.',
+    loading: 'Loading API Keys…',
+    empty: 'No API Keys yet',
+    emptyDescription:
+      'Create a publishing key for a CI pipeline or local script. Choose only the permissions it needs.',
+    noAccess: 'You do not have permission to manage Hub API Keys.',
+    created: 'API Key created',
+    copy: 'Copy key',
+    copied: 'Copied',
+    copyFailed: 'Copy failed. Select the key and copy it manually.',
+    loadFailed: 'Could not load API Keys. Reload the page to try again.',
+    operationFailed:
+      'The action could not be completed. Check your permissions and try again.',
+    disableTitle: 'Disable {{name}}?',
+    disableDescription:
+      'Requests using this key will be rejected. This cannot be undone; create a new key to restore access.',
+    deleteTitle: 'Delete {{name}}?',
+    deleteDescription:
+      'This key will stop working and be permanently removed from the list. This cannot be undone.',
+    state: { active: 'Active', disabled: 'Disabled', expired: 'Expired' },
+  },
+  'common.close': 'Close',
+  'common.pagination': 'pagination',
+  'common.previous': 'Previous',
+  'common.next': 'Next',
+  'common.previousPage': 'Go to previous page',
+  'common.nextPage': 'Go to next page',
+  'common.morePages': 'More pages',
   navigation: {
+    apiKeys: 'API Keys',
     applications: 'Applications',
     userAccess: 'Users & permissions',
     roles: 'Roles & permissions',
@@ -11,6 +105,9 @@ const enUS = {
     close: 'Close',
   },
   errors: {
+    appIdConflictTitle: 'Application ID is unavailable',
+    appIdConflictDescription:
+      'Application names can be repeated, but IDs must be unique across the Hub. Choose a different application ID.',
     unexpectedTitle: 'Something went wrong',
     unexpectedDescription:
       'The operation could not be completed. Try again. If the problem continues, share the technical details with an administrator.',
@@ -63,7 +160,8 @@ const enUS = {
     applicationName: 'Application name',
     applicationNamePlaceholder: 'Customer portal',
     applicationId: 'Application ID',
-    applicationIdHint: 'Used in URLs and storage. It cannot be changed later.',
+    applicationIdHint:
+      'Auto-generated and editable; globally unique and fixed after creation.',
     applicationIdPlaceholder: 'customer-portal',
     create: 'Create application',
   },
@@ -78,6 +176,7 @@ const enUS = {
     onFirstVisit: 'On first visit',
     updated: 'Updated {{date}}',
     tabs: {
+      logs: 'Logs',
       deployments: 'Deployments',
       releases: 'Releases',
       development: 'Development',
@@ -129,11 +228,46 @@ const enUS = {
     currentDeployment: 'This is the current deployment.',
     deploymentNotSucceeded: 'Only a succeeded deployment can be rolled back.',
   },
+  dateTime: {
+    time: 'Time',
+    clear: 'Clear',
+    done: 'Done',
+  },
+  logs: {
+    downloadChanged:
+      'Log history changed while downloading. Please retry the download.',
+    next: 'Load next entries',
+    title: 'Logs',
+    deployment: 'Deployment logs',
+    view: 'View logs',
+    search: 'Search logs',
+    level: 'Level',
+    allLevels: 'All levels',
+    source: 'Logger source',
+    since: 'From time',
+    until: 'Until time',
+    pause: 'Pause',
+    follow: 'Follow latest',
+    history: 'Load retained history',
+    copy: 'Copy visible logs',
+    download: 'Download logs',
+    downloadLimit: 'Download exceeds 50 MB. Narrow the time range.',
+    rotated:
+      'Some log files have rotated or expired. Available records are shown.',
+    loading: 'Loading logs…',
+    disabled: 'Log collection is disabled.',
+    unavailable:
+      'No retained log file is available. Collection may not have been enabled, or the logs have expired.',
+    empty: 'No matching log entries.',
+    stopped: 'Application stopped. Retained logs remain available.',
+    window:
+      'The viewer keeps the latest 2,000 matching entries. Download to read the full retained selection.',
+  },
   deployments: {
     title: 'Deployments',
     description:
       'Each row is a deployment operation. Rolling back creates a new deployment using the selected release and configuration.',
-    deploy: 'Deploy',
+    deploy: 'Deploy release',
     noDeployments: 'No deployments yet',
     noDeploymentsDescription:
       'Deploy a release to create the first deployment.',
@@ -320,8 +454,10 @@ const enUS = {
   },
   settings: {
     title: 'Application settings',
+    nameHint:
+      'Names can be changed and repeated. The application ID and URL stay the same.',
     description:
-      'Choose how this application is activated after Hub starts. This is an application setting and is not changed by deployments.',
+      'Change the application name and startup behavior. These settings are preserved across deployments.',
     startup: 'Startup',
     startupDescription:
       'Controls whether the application starts with Hub or waits for its first visit.',
@@ -339,15 +475,34 @@ const enUS = {
     remove: 'Remove application',
   },
   development: {
-    title: 'Develop this application',
+    buildTitle: 'Build the release',
+    projectSource: 'Project source',
+    prepareTitle: 'Prepare your project',
+    copyFailed: 'Could not copy. Select and copy the command manually.',
+    copied: 'Command copied',
+    title: 'Deploy your first release',
     description:
-      'Create a local NocoBase project using this application ID, then build and upload its release from the Deploy flow.',
-    createTitle: 'Create a new application',
-    createDescription:
-      'Run this command in the directory where you keep source projects.',
+      'Prepare your project locally, then upload and deploy it here.',
+    createTitle: 'New project',
+    createDescription: 'Run this command where you keep your source projects.',
     copyCommand: 'Copy create-app command',
     footer:
-      'The command creates the source project locally. When it is ready, return here and choose Deploy to upload the first release.',
+      'Open the generated directory and finish local setup and development before building.',
+    existingTitle: 'Existing project',
+    existingDescription:
+      'Open your NocoBase 3 project directory and continue with the build step. No new project is needed.',
+    publishTitle: 'Upload, then deploy',
+    buildDescription:
+      'Run in your project directory. The archive is saved to storage/dist.tar.gz.',
+    copyBuild: 'Copy build command',
+    buildTarget:
+      'Building for another machine? Match the Hub host with --target and --node-version. See pnpm build --help for options.',
+    uploadDescription:
+      'Upload storage/dist.tar.gz in Releases. Then choose Deploy in Deployments to select the release and review its configuration.',
+    openReleases: 'Go to Releases',
+    deployDescription:
+      'Uploading does not start the application. Visit it after deployment succeeds.',
+    openDeployments: 'Go to Deployments',
   },
   roles: {
     title: 'Roles & permissions',
@@ -360,14 +515,17 @@ const enUS = {
     allowed: 'Allowed',
     notAllowed: 'Not allowed',
     names: {
-      'hub-administrator': 'Administrator',
-      'hub-operator': 'Operator',
-      'hub-viewer': 'Viewer',
+      'hub-administrator': 'Platform Administrator',
+      'hub-operator': 'Application Administrator',
+      'hub-viewer': 'Viewer (legacy)',
     },
     descriptions: {
-      'hub-administrator': 'Full access to applications and user management',
-      'hub-operator': 'Create, configure, deploy, and operate applications',
-      'hub-viewer': 'View application and runtime status only',
+      'hub-administrator':
+        'Manage all applications, publishing API Keys, and user permissions',
+      'hub-operator':
+        'Manage applications you create and your own publishing API Keys',
+      'hub-viewer':
+        'Read-only access to permitted applications and runtime status',
     },
     groups: {
       visibility: 'Applications and status',
@@ -375,6 +533,9 @@ const enUS = {
       'user-management': 'User management',
     },
     capabilities: {
+      'manage-api-keys': 'Manage publishing API Keys',
+
+      'view-logs': 'View application runtime logs',
       'view-status': 'View application, release, deployment, and host status',
       'view-resources': 'View Resources and raw configuration',
       'create-release': 'Create applications and upload releases',

@@ -6,7 +6,10 @@ import { expect, it, vi } from 'vitest';
 import { AppShell } from '../../client/shell/app-shell.js';
 import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
 
-vi.mock('@nocobase/app-plugin-i18n/client', () => ({
+vi.mock('@nocobase/app-plugin-i18n/client', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@nocobase/app-plugin-i18n/client')
+  >()),
   useSyncServerLocale: () => {},
 }));
 vi.mock('@nocobase/i18n/client', () => ({

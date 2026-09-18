@@ -34,7 +34,7 @@ import {
   SessionProvider,
   sessionHttpMiddleware,
 } from '@nocobase/app-server/session';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   type AppIdentityConfig,
   type AppConfigAccessor,
@@ -749,6 +749,63 @@ describe('app server', () => {
     });
   });
 
+  it('serves Users and API Keys with the application authentication and permissions', async () => {
+    const app = trackCloseable(
+      await createInstalledStandaloneServer({ viteDevUrl: false }),
+    );
+    const baseUrl = `http://localhost${app.application.publicBasePath}`;
+    const anonymous = await requestApp(app, `${baseUrl}/api/users`);
+    expect(anonymous.status).toBe(401);
+
+    const signIn = await requestApp(
+      app,
+      `${baseUrl}/api/auth/sign-in/username`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
+      },
+    );
+    expect(signIn.status).toBe(200);
+    const cookie = signIn.headers
+      .getSetCookie()
+      .map((header) => header.split(';')[0])
+      .join('; ');
+    const users = await requestApp(app, `${baseUrl}/api/users`, {
+      headers: { cookie },
+    });
+    expect(users.status).toBe(200);
+    const created = await requestApp(
+      app,
+      `${baseUrl}/api/auth/api-key/create`,
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'template-integration' }),
+      },
+    );
+    expect(created.status).toBe(200);
+    const key = (await created.json()) as { id: string; key: string };
+    const authenticated = await requestApp(app, `${baseUrl}/api/users`, {
+      headers: { 'x-api-key': key.key },
+    });
+    expect(authenticated.status).toBe(200);
+    const revoked = await requestApp(
+      app,
+      `${baseUrl}/api/auth/api-key/delete`,
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ keyId: key.id }),
+      },
+    );
+    expect(revoked.status).toBe(200);
+    const rejected = await requestApp(app, `${baseUrl}/api/users`, {
+      headers: { 'x-api-key': key.key },
+    });
+    expect(rejected.status).toBe(401);
+  });
+
   it('redirects HTML navigation to installation in install mode', async () => {
     vi.stubEnv('APP_BASE_PATH', '/main');
     vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
@@ -1328,7 +1385,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
   };
   const config = createTestConfig(configValues);
-  const paths = createConfigPaths({ rootDir: '/test/app-template-examples' });
+  const paths = createAppPaths({ rootDir: '/test/app-template-examples' });
   const database =
     options.database === false
       ? undefined

@@ -23,10 +23,6 @@ const appPackage = JSON.parse(
 
 const scripts = appPackage.scripts ?? {};
 
-function normalizeScript(command: string | undefined): string | undefined {
-  return command?.replace(/^NODE_OPTIONS=--openssl-legacy-provider\s+/, '');
-}
-
 /** The application's plugin command surface, mapped to what it must run. */
 const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:register': 'nocobase plugin register',
@@ -34,6 +30,8 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:unregister': 'nocobase plugin unregister',
   'plugin:update': 'nocobase plugin update',
   'plugin:skills:sync': 'nocobase plugin skills sync',
+  'skills:sync': 'nocobase skills sync',
+  'package:remove': 'nocobase package remove',
   nocobase: 'tsx ./cli/index.ts',
   'client:inspect': 'pnpm nocobase app inspect client',
   'server:inspect': 'pnpm nocobase app inspect server',
@@ -43,7 +41,7 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
 
 describe('documented plugin commands', () => {
   it.each(Object.entries(DOCUMENTED_SCRIPTS))('exposes %s', (name, command) => {
-    expect(normalizeScript(scripts[name])).toBe(command);
+    expect(scripts[name]).toBe(command);
   });
 
   it('declares the CLI that the plugin scripts invoke', () => {

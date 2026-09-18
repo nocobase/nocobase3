@@ -80,6 +80,7 @@ console.log(
 
 const natives = findNativeModules(nodeModulesDir);
 if (natives.length === 0) {
+  recordBuildTarget();
   console.log('No native modules found. This build is portable as it stands.');
   process.exit(0);
 }

@@ -1,6 +1,6 @@
 name: Verify create-app
 description: >-
-  Publishes packages to a throwaway registry, generates an application with create-app, and checks dev, build, and
+  Publishes packages to a throwaway registry, generates Default and Hub applications with create-app, and checks dev, build, and
   production start. Fails the run before anything reaches the real registry.
 
 inputs:
@@ -140,7 +140,7 @@ runs:
 
         pnpm changeset publish --no-git-tag
 
-    - name: Generate an application and verify dev, build, and start
+    - name: Generate Default and Hub applications and verify dev, build, and start
       shell: bash
       env:
         PORT: ${{ inputs.port }}
@@ -150,24 +150,27 @@ runs:
         export NPM_CONFIG_USERCONFIG="$smoke_npmrc"
 
         CREATE_APP_VERSION=$(node -p "require('./packages/tools/create-app/package.json').version")
-        TEMPLATE_VERSION=$(node -p "require('./packages/templates/app-template-default/package.json').version")
 
         # Outside the checkout on purpose. The generated application writes its own pnpm-workspace.yaml, which would
         # make pnpm treat it as a workspace root nested inside this one, and the release commit stages everything in
         # the working tree — a generated application there would be committed and published.
-        ./scripts/smoke-create-app.sh \
-          --registry "http://localhost:$PORT" \
-          --create-app-version "$CREATE_APP_VERSION" \
-          --template "@nocobase/app-template-default@$TEMPLATE_VERSION" \
-          --timeout "$TIMEOUT" \
-          --workdir "$RUNNER_TEMP/create-app-smoke"
+        # Hub has a separate dependency graph: workspace tests cannot prove that its published declarations resolve.
+        for TEMPLATE_KIND in default hub; do
+          TEMPLATE_VERSION=$(node -p "require('./packages/templates/app-template-$TEMPLATE_KIND/package.json').version")
+          ./scripts/smoke-create-app.sh \
+            --registry "http://localhost:$PORT" \
+            --create-app-version "$CREATE_APP_VERSION" \
+            --template "@nocobase/app-template-$TEMPLATE_KIND@$TEMPLATE_VERSION" \
+            --timeout "$TIMEOUT" \
+            --workdir "$RUNNER_TEMP/create-app-smoke/$TEMPLATE_KIND"
+        done
 
     - name: Upload smoke logs
       if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: create-app-smoke-logs
-        path: ${{ runner.temp }}/create-app-smoke/*.log
+        path: ${{ runner.temp }}/create-app-smoke/**/*.log
         if-no-files-found: ignore
 
     - name: Stop the throwaway registry

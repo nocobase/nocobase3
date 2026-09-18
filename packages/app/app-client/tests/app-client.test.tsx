@@ -1,7 +1,7 @@
 import { useGo } from '@refinedev/core';
 import { ServiceProvider } from '@nocobase/service-provider';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { type ReactElement } from 'react';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { type ReactElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -10,6 +10,8 @@ import {
   realtimeClientToken,
   type ClientApplicationRenderConfigFactory,
 } from '../src/application.js';
+import { useApiClient } from '../src/index.js';
+import { ClientApplicationContext } from '../src/application-context.js';
 import { AppClientRoot } from '../src/app-client.js';
 import {
   createAppClientConfig,
@@ -52,6 +54,43 @@ async function createTestApplication(
 
 describe('app client', () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it('resolves the current application API client and preserves its identity', async () => {
+    const first = await createTestApplication(() =>
+      defineAppClientRenderConfig({}),
+    );
+    const second = await createTestApplication(() =>
+      defineAppClientRenderConfig({}),
+    );
+    let current = first;
+    const wrapper = ({ children }: { children: ReactNode }): ReactElement => (
+      <ClientApplicationContext.Provider value={current}>
+        {children}
+      </ClientApplicationContext.Provider>
+    );
+    const { result, rerender, unmount } = renderHook(() => useApiClient(), {
+      wrapper,
+    });
+    try {
+      expect(result.current).toBe(first.services.resolve(apiClientToken));
+      rerender();
+      expect(result.current).toBe(first.services.resolve(apiClientToken));
+      current = second;
+      rerender();
+      expect(result.current).toBe(second.services.resolve(apiClientToken));
+      expect(result.current).not.toBe(first.services.resolve(apiClientToken));
+    } finally {
+      unmount();
+      await first.shutdown();
+      await second.shutdown();
+    }
+  });
+
+  it('requires application context for useApiClient', () => {
+    expect(() => renderHook(() => useApiClient())).toThrow(
+      'useClientApplication() must be used inside AppClientRoot.',
+    );
+  });
 
   it.each([
     [{}, 'wss://ui.example.com/main/ws'],

@@ -1,5 +1,11 @@
 # `@nocobase/app-server`
 
+## Standalone proxy
+
+`defineStandaloneServer()` accepts an optional `proxy: ({ application }) => ({ match, target })` factory, evaluated after application startup. `match(pathname)` chooses requests before the application's public base path adapter; `target()` returns the current upstream HTTP(S) origin or `null`. Both `create()` and `start()` configure this boundary. Applications without a proxy retain their normal routing.
+
+The listener applies the same rule to HTTP and WebSocket upgrades. It preserves request paths, query strings, public Host, Origin, cookies and authorization, forwards the protocol through `X-Forwarded-Proto`, streams HTTP bodies without decompressing them, and tunnels the upstream WebSocket handshake and connection. Configure the outer reverse proxy to preserve the public Host and set trustworthy protocol headers. Returning `null` yields 503; connection failures yield 502. Reading a target does not start an upstream, and changes apply to new requests and connections. Proxy connections are disposed with the standalone scope; upgraded connections are closed before HTTP shutdown drains.
+
 ## Repository API routes
 
 `defineRepositoryApiRoutes()` exposes explicitly configured Collection Repository
@@ -190,14 +196,14 @@ single call; it is no longer part of a route declaration. User authentication
 and database cascades remain separate concerns. See the
 [Policy quick start](../../libs/db/docs/zh-CN/repository/policy-quick-start.md).
 
-The application adds `/api`. Each action uses
-`POST /api/<encodeURIComponent(name)>:<action>` with a JSON object containing
-Repository options. For example:
+The application adds `/api` under its deployment mount path. Each action uses `POST /api/<encodeURIComponent(name)>:<action>` with a JSON object containing Repository options.
+
+The following is an independent HTTP client's call to those server routes, not code to put in a server route handler. A Node script must supply an absolute API URL; replace the example host and mount path with the target application's actual API base URL and provide whatever authentication that application requires.
 
 ```ts
 import { createApiClient } from '@nocobase/api-client';
 
-const api = createApiClient({ baseURL: '/api' });
+const api = createApiClient({ baseURL: 'https://example.com/main/api' });
 const orders = api.repository<{ id: string; status: string }>('orders');
 
 const records = await orders.findMany({
@@ -215,6 +221,8 @@ const result = await orders.createOne({
   values: { id: 'order-1', status: 'draft' },
 });
 ```
+
+Inside a NocoBase React component or custom Hook, obtain this client with `useApiClient()` from `@nocobase/app-client` instead of creating another instance. Non-React application client code can resolve `apiClientToken` through `app.services.resolve(apiClientToken)` or receive the client explicitly. These paths reuse the application's configured `api.baseURL`; the Repository calls are otherwise the same. See [frontend API usage](../app-skills/skills/nocobase-app-development/references/client-api.md) for examples. Server code accessing its own database uses `db.repository()` as described above.
 
 Supported actions are `findMany`, `findOne`, `count`, `exists`, `createOne`,
 `updateOne`, `deleteOne`, `aggregate`, and `groupBy`. Unconfigured names and actions have no route.

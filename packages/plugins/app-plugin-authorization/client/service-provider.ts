@@ -34,6 +34,16 @@ export class AuthorizationServiceProvider extends ServiceProvider<ClientApplicat
       async can({ resource, action }) {
         if (!resource) return { can: false };
         if (resource === 'authorization') return { can: true };
+        // Explicit type:id resources preserve the declared domain action.
+        const separator = resource.indexOf(':');
+        if (separator > 0) {
+          const type = resource.slice(0, separator);
+          const id = resource.slice(separator + 1);
+          return {
+            can: Boolean(id) && (await authz.can({ type, id }, action)),
+          };
+        }
+
         if (resource.startsWith('authorization.settings.')) {
           return {
             can: await authz.can(

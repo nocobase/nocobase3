@@ -1,3 +1,4 @@
+import { bindWorkflowLogger } from './logger.js';
 import type { DatabaseManager } from '@nocobase/db';
 
 import { workflowStore, type WorkflowStore } from '../collections/store.js';
@@ -26,6 +27,7 @@ import {
   serializeJson,
 } from './utils.js';
 import { resolveWorkflowValue } from './value-resolver.js';
+import { finalizeWorkflowRun } from './finalize-run.js';
 
 export type ProcessorRunOptions = {
   rerun?: true;
@@ -49,6 +51,8 @@ export interface ProcessorOptions {
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
+  resumeNode?: (nodeRunId: WorkflowId) => Promise<void>;
+  terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
 type RerunContext = {
@@ -96,9 +100,19 @@ export default class Processor {
     import('./run-services.js').WorkflowRunServices | undefined;
   readonly nodes: WorkflowNode[] = [];
   readonly nodesMap: Map<string, WorkflowNode> = new Map();
+  readonly resumeNode: ProcessorOptions['resumeNode'];
   readonly abortController: AbortController = new AbortController();
 
   lastSavedNodeRun: WorkflowNodeRun | null = null;
+  private readonly deferredTasks: Array<() => Promise<void>> = [];
+
+  defer(task: () => Promise<void>): void {
+    this.deferredTasks.push(task);
+  }
+
+  takeDeferredTasks(): Array<() => Promise<void>> {
+    return this.deferredTasks.splice(0);
+  }
 
   private readonly connectionName?: string;
   private readonly instructions: Map<string, WorkflowInstructionClass>;
@@ -112,8 +126,10 @@ export default class Processor {
   private rerunContext: RerunContext | null = null;
   private timeoutGuard: ReturnType<typeof setTimeout> | null = null;
   private abortReason: string | null = null;
+  private readonly terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 
   constructor(options: ProcessorOptions) {
+    this.resumeNode = options.resumeNode;
     this.database = options.database;
     this.connectionName = options.connectionName;
     this.workflow = options.workflow;
@@ -121,9 +137,13 @@ export default class Processor {
     this.workflowResourceRoot = options.workflowResourceRoot;
     this.services = options.services;
     this.instructions = options.instructions;
-    this.logger = options.logger ?? noopWorkflowLogger;
+    this.logger = bindWorkflowLogger(options.logger ?? noopWorkflowLogger, {
+      workflowId: options.workflow.id,
+      executionId: options.execution.id,
+    });
     this.environment = options.environment;
     this.functions = options.functions ?? {};
+    this.terminalObserver = options.terminalObserver;
   }
 
   get abortSignal(): AbortSignal {
@@ -328,6 +348,8 @@ export default class Processor {
       `Running instruction "${node.type}" for node "${node.key}"`,
       {
         executionId: this.execution.id,
+        nodeId: node.id,
+        nodeKey: node.key,
       },
     );
     const nodeRun = await this.createNodeRun(node);
@@ -368,26 +390,21 @@ export default class Processor {
     const executionStatus = Processor.StatusMap[status] ?? Math.sign(status);
     const reason =
       executionStatus === EXECUTION_STATUS.ABORTED ? this.abortReason : null;
-    const finishedAt = nowInstant();
-    // Filtered on STARTED so a run the reaper already reclaimed is not
-    // resurrected by a processor that finishes afterwards.
-    const result = await this.store.runs.updateMany({
-      filter: {
-        id: asIdFilter(this.execution.id),
-        status: EXECUTION_STATUS.STARTED,
-      },
-      values: {
-        status: executionStatus,
-        output: serializeJson(output),
-        reason,
-        finishedAt,
-      },
+    const terminal = await finalizeWorkflowRun({
+      store: this.store,
+      runId: this.execution.id,
+      expectedStatus: EXECUTION_STATUS.STARTED,
+      status: executionStatus,
+      reason,
+      output,
+      observer: this.terminalObserver,
+      logger: this.logger,
     });
-    if (result.updatedCount > 0) {
+    if (terminal) {
       this.execution.status = executionStatus;
       this.execution.output = output;
       this.execution.reason = reason;
-      this.execution.finishedAt = finishedAt;
+      this.execution.finishedAt = terminal.finishedAt;
     }
     return null;
   }
@@ -474,7 +491,11 @@ export default class Processor {
     this.nodeResultsByNodeKey[nodeRun.nodeKey] = nodeRun.result;
     this.logger.debug(
       `Saved node run "${nodeRun.id}" for node "${nodeRun.nodeKey}"`,
-      { status: nodeRun.status },
+      {
+        status: nodeRun.status,
+        nodeId: nodeRun.nodeId,
+        nodeKey: nodeRun.nodeKey,
+      },
     );
     return nodeRun;
   }
@@ -682,7 +703,9 @@ export default class Processor {
     options: ProcessorRunOptions = {},
   ): Promise<WorkflowNodeRun | null | undefined> {
     if (!(await this.shouldContinueExecution())) {
-      await this.exit();
+      await this.exit(
+        this.abortSignal.aborted ? NODE_RUN_STATUS.ABORTED : undefined,
+      );
       return null;
     }
 
@@ -710,7 +733,7 @@ export default class Processor {
     } catch (error) {
       this.logger.error(
         `Instruction "${node.type}" failed for node "${node.key}"`,
-        { error },
+        { error, nodeId: node.id, nodeKey: node.key },
       );
       result = {
         status: this.abortSignal.aborted

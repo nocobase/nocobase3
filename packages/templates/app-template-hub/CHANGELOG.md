@@ -1,5 +1,151 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.23
+
+### Patch Changes
+
+- 365a9fe: Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations. Resolve AI Registry copy from the active language and localize development navigation and section headings. Translate MCP configuration guidance, tool drawer labels, and transport descriptions.
+- 365a9fe: Translate application shell copy, settings and development empty states, return links, and header action labels using the application locale and its configured fallback chain.
+- f5b066d: Include the tests directory in the published application templates.
+- 60fa139: Reuse the API Keys plugin through configuration-bound server operations and a scoped Authentication plugin API that preserves hooks and caller-owned transactions. Add per-application publishing API key management in Hub with one-time secret display, scoped Release and Deployment access, expiration, revocation, and current-owner permission checks.
+- 26ac480: Add code-defined Cron scheduling with timezone support, transactional synchronization, and stable schedule identities. Applications and plugins register schedules with `SchedulerService.defineSchedule(definition)` and execution targets with `registerTarget()` during provider registration or boot.
+
+  Route scheduled jobs and workers through the application's configured logical queue, with an adapter-neutral schedule store. Keep the upstream queue dependency unmodified and store queue and scheduler timestamps compatibly with their adapters while preserving absolute instants.
+
+  Move queue storage migrations from Scheduler into the queue library, which resolves configured database connections and physical tables. Assemble these sources centrally in app-server for startup and CLI commands, rejecting overlapping active queue tables before execution. Support immutable target parameters, shared migration history and locks, upstream-compatible physical schemas, and read-only execution conditions that leave skipped migrations unapplied.
+
+  Track idempotent occurrences through the target's final outcome, including asynchronous Workflow completion and recovery with stable run references. Target registration returns a completion-reporting handle scoped to that target; long-running executions can report completion without a fixed scheduler observation timeout.
+
+  Provide an authorized, read-only schedule management page and API with paginated schedules, trigger counts, execution history, and separate schedule and execution statuses. Register `pnpm nocobase schedule sync` as a global CLI command and integrate it into all application templates.
+
+  Include application examples for custom task targets and scheduled Workflows, and agent guidance for schedule definition, target selection, asynchronous execution, diagnostics, and recovery.
+
+  Keep the database manifest CLI entry available before compilation so fresh workspace installs link the command required by package builds.
+
+  Declare the OpenTelemetry dependencies referenced by the upstream queue declarations so consumers can typecheck published Server APIs without enabling tracing or skipping library checks.
+
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [365a9fe]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [365a9fe]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [934d37e]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [21d3ed4]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+- Updated dependencies [365a9fe]
+- Updated dependencies [d4ca00e]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [8af03c3]
+- Updated dependencies [d4ca00e]
+- Updated dependencies [60fa139]
+  - @nocobase/app-plugin-hub@0.1.0-beta.10
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.3
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+  - @nocobase/app-plugin-users@0.0.2-beta.5
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/app-plugin-i18n@0.1.0-beta.8
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/queue@0.1.0-beta.5
+  - @nocobase/app-server@1.0.0-beta.18
+
+## 1.0.0-beta.22
+
+### Patch Changes
+
+- 4349a40: Preserve navigation group expansion when switching pages in the application, Settings, and Dev tools.
+- d86f6aa: Synchronize agent skills from direct NocoBase package dependencies with the new skills:sync command while preserving plugin:skills:sync compatibility, and share application development and upgrade skills through @nocobase/app-skills across all application templates.
+
+  Add package:remove to uninstall a NocoBase dependency and clean up its synchronized skills and ownership records, reusing plugin unregistration for plugin packages. Document the removal workflow in application templates and the shared development and upgrade skills.
+
+- 028dd7c: Use host-provided peers for shared database types, authorization errors, service tokens, cache registries, and repository filter metadata. Declare their production providers in all application templates so deployments with automatic peer installation disabled retain the required runtime packages. Document the provider contract for generated plugins.
+
+  Existing applications upgrading these packages must add compatible versions of their required shared peers to production dependencies: @nocobase/db, @nocobase/service-provider, @nocobase/repository-input, @nocobase/authorization, @nocobase/caching, @nocobase/i18n, and @nocobase/queue for the standard server stack, plus @nocobase/ai-employee when using its plugin. Update the lockfile and verify the production install; peer declarations do not remove incompatible historical versions automatically.
+
+- Updated dependencies [d86f6aa]
+- Updated dependencies [028dd7c]
+  - @nocobase/nb3-cli@1.0.0-beta.8
+  - @nocobase/app-plugin-authentication@0.1.0-beta.16
+  - @nocobase/app-plugin-authorization@0.2.0-beta.12
+  - @nocobase/app-plugin-hub@0.1.0-beta.9
+  - @nocobase/app-plugin-users@0.0.2-beta.4
+  - @nocobase/app-server@1.0.0-beta.17
+  - @nocobase/authorization@0.1.0-beta.7
+  - @nocobase/db@1.0.0-beta.8
+  - @nocobase/queue@0.1.0-beta.4
+
+## 1.0.0-beta.21
+
+### Patch Changes
+
+- 415d763: Add optional standalone HTTP and WebSocket proxy routing and configure Hub to forward paths outside its public mount to the current ready App Host port. Preserve public request identity and streaming, release proxy connections during shutdown, and use the shared public entry for hosted application links.
+
+  Return 502 and close the upstream connection when a regular HTTP request receives an unexpected protocol upgrade. Validate App IDs against the normalized Hub mount and the managed Host's reserved `__` namespace before creating an application.
+
+- 1fea79a: Refresh permission snapshots, navigation, and route guards when sessions or permissions change, and discard obsolete permission responses without requiring a browser reload. Support explicit type:id domain resources in client access checks without rewriting their actions.
+- 1fea79a: Show localized sign-out errors instead of silently refreshing an active session after an API or network failure.
+- Updated dependencies [415d763]
+- Updated dependencies [1fea79a]
+  - @nocobase/app-server@1.0.0-beta.16
+  - @nocobase/app-plugin-hub@0.1.0-beta.8
+  - @nocobase/app-plugin-authorization@0.2.0-beta.11
+
+## 1.0.0-beta.20
+
+### Patch Changes
+
+- 489d08a: Read settings navigation from the existing application runtime and remove the redundant settings route context from template headers.
+- 9b6c645: Add the PageContainer component from the Examples template to the Default and Hub templates.
+
+  Require PageContainer when writing page components in all three application development Skills, and align page and child-route examples with the shared container.
+
+## 1.0.0-beta.19
+
+### Patch Changes
+
+- d927494: Align shared application tooling and dependency declarations with Default while preserving Examples demonstrations and Hub management features. Remove duplicate and unused dependencies, correct repository metadata, and remove obsolete global OpenSSL options from Examples.
+
+  Add Default's Users role scope, permission seed, and complete API Keys authentication integration to Examples. Remove unused workflow, notification, and heartbeat configuration and demonstration routes from Hub. Provide an explicit Playwright entry for the optional AI server test in Default and Examples, using the current API and a real test user's API key.
+
+  Restore the shared Settings surface in Hub so its registered API Keys page is reachable for authorized users. Show the Settings entry only when an accessible navigation page exists across all three templates, correct stale template development and upgrade guidance, and resolve test dependencies through public package exports instead of monorepo-only source paths.
+
+- f5b066d: Increase the compact theme's base corner radius from 0.25rem to 0.375rem for softer corners on controls and containers.
+- d927494: Fix development startup of generated Hub applications by selecting the App Host launcher from the loaded package format, preserving source development in the workspace and using compiled JavaScript in installed packages. Keep the optional application configuration commented out so an empty YAML section cannot override application identity defaults during production startup. Correct the AI Employee plugin Skill namespace so generated applications can synchronize their registered plugins' Skills.
+- d927494: Declare @nocobase/db as a runtime dependency alongside the SQLite driver, matching the Default and Examples templates. This lets TypeScript resolve the database configuration's inferred declaration through the public package path and prevents TS2883 when building a generated Hub application.
+- 89955c5: Upgrade better-sqlite3 to ^13.0.3 and keep its dependency declaration in @nocobase/db-sqlite only. Remove redundant test dependencies from consumers so they use the same SQLite driver as applications.
+
+  Preserve the bundled musl binary when building applications for Alpine Linux.
+
+- 92c355f: Add build command help that exits before loading build dependencies or changing deployment artifacts. Record deployment target metadata even when no native modules are present, detect musl for current-machine Linux builds, and document the platform and Node fields available for deployment checks.
+- Updated dependencies [d927494]
+- Updated dependencies [6acf3bc]
+- Updated dependencies [89955c5]
+  - @nocobase/app-plugin-hub@0.1.0-beta.7
+  - @nocobase/app-plugin-users@0.0.2-beta.3
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.2
+  - @nocobase/db-sqlite@0.1.0-beta.2
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+
 ## 1.0.0-beta.18
 
 ### Patch Changes

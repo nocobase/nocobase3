@@ -36,6 +36,9 @@ catalogs:
     '@oclif/core':
       specifier: ^4.14.0
       version: 4.14.0
+    '@playwright/test':
+      specifier: ^1.62.1
+      version: 1.62.1
     '@refinedev/core':
       specifier: ^5.0.8
       version: 5.0.12
@@ -257,18 +260,48 @@ importers:
       '@changesets/cli':
         specifier: ^3.0.1
         version: 3.0.1
+      '@hono/node-server':
+        specifier: 'catalog:'
+        version: 2.1.1(hono@4.13.2)
+      '@nocobase/db':
+        specifier: workspace:*
+        version: link:packages/libs/db
+      '@nocobase/db-mssql':
+        specifier: workspace:*
+        version: link:packages/libs/db-mssql
+      '@nocobase/db-mysql':
+        specifier: workspace:*
+        version: link:packages/libs/db-mysql
+      '@nocobase/db-oracle':
+        specifier: workspace:*
+        version: link:packages/libs/db-oracle
+      '@nocobase/db-postgres':
+        specifier: workspace:*
+        version: link:packages/libs/db-postgres
+      '@nocobase/db-sqlite':
+        specifier: workspace:*
+        version: link:packages/libs/db-sqlite
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:packages/tools/dev-config
       '@nocobase/nb3-cli':
         specifier: workspace:*
         version: link:packages/tools/cli
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)(supports-color@8.1.1)
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
       husky:
         specifier: 'catalog:'
         version: 9.1.7
+      knex:
+        specifier: 'catalog:'
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       lint-staged:
         specifier: 'catalog:'
         version: 17.3.0
@@ -284,6 +317,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
   docs:
     dependencies:
@@ -408,9 +444,6 @@ importers:
       '@nocobase/realtime':
         specifier: workspace:^
         version: link:../../libs/realtime
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
@@ -418,6 +451,9 @@ importers:
       '@nocobase/i18n':
         specifier: workspace:*
         version: link:../../libs/i18n
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
       '@refinedev/core':
         specifier: 'catalog:'
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -466,6 +502,9 @@ importers:
 
   packages/app/app-host:
     dependencies:
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../app-server
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../app-websocket
@@ -482,9 +521,6 @@ importers:
         specifier: ^7.4.3
         version: 7.5.22
     devDependencies:
-      '@nocobase/app-server':
-        specifier: workspace:*
-        version: link:../app-server
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -624,6 +660,15 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+
+  packages/app/app-skills:
+    devDependencies:
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
 
   packages/app/app-websocket:
     dependencies:
@@ -1025,6 +1070,9 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -1423,32 +1471,8 @@ importers:
         version: link:../service-provider
       knex:
         specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(supports-color@8.1.1)
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
     devDependencies:
-      '@hono/node-server':
-        specifier: 'catalog:'
-        version: 2.1.1(hono@4.13.2)
-      '@nocobase/db-dameng':
-        specifier: workspace:*
-        version: link:../db-dameng
-      '@nocobase/db-mssql':
-        specifier: workspace:*
-        version: link:../db-mssql
-      '@nocobase/db-mysql':
-        specifier: workspace:*
-        version: link:../db-mysql
-      '@nocobase/db-oracle':
-        specifier: workspace:*
-        version: link:../db-oracle
-      '@nocobase/db-postgres':
-        specifier: workspace:*
-        version: link:../db-postgres
-      '@nocobase/db-sqlite':
-        specifier: workspace:*
-        version: link:../db-sqlite
-      '@nocobase/db-testkit':
-        specifier: workspace:*
-        version: link:../db-testkit
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -1461,15 +1485,9 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
-      tsx:
-        specifier: 'catalog:'
-        version: 4.23.12
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1482,9 +1500,12 @@ importers:
       dmdb:
         specifier: ^1.0.52452
         version: 1.0.52452
+      knex:
+        specifier: 'catalog:'
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       knex-dm:
         specifier: ^1.0.52452
-        version: 1.0.52452(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))
+        version: 1.0.52452(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))
     devDependencies:
       '@nocobase/db':
         specifier: workspace:*
@@ -1501,9 +1522,6 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
-      knex:
-        specifier: 'catalog:'
-        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
@@ -1767,21 +1785,6 @@ importers:
       '@nocobase/db':
         specifier: workspace:*
         version: link:../db
-      '@nocobase/db-mssql':
-        specifier: workspace:*
-        version: link:../db-mssql
-      '@nocobase/db-mysql':
-        specifier: workspace:*
-        version: link:../db-mysql
-      '@nocobase/db-oracle':
-        specifier: workspace:*
-        version: link:../db-oracle
-      '@nocobase/db-postgres':
-        specifier: workspace:*
-        version: link:../db-postgres
-      '@nocobase/db-sqlite':
-        specifier: workspace:*
-        version: link:../db-sqlite
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -1919,13 +1922,19 @@ importers:
     dependencies:
       '@boringnode/queue':
         specifier: 'catalog:'
-        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)
+        version: 0.7.1(@opentelemetry/api@1.9.0)(@opentelemetry/instrumentation@0.200.0(@opentelemetry/api@1.9.0))(ioredis@5.11.1)(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)
       '@nocobase/db':
         specifier: workspace:^
         version: link:../db
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../logging
+      '@opentelemetry/api':
+        specifier: ^1.9.0
+        version: 1.9.0
+      '@opentelemetry/instrumentation':
+        specifier: ^0.200.0
+        version: 0.200.0(@opentelemetry/api@1.9.0)
       ioredis:
         specifier: 'catalog:'
         version: 5.11.1
@@ -1933,6 +1942,9 @@ importers:
         specifier: 'catalog:'
         version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
     devDependencies:
+      '@nocobase/db-sqlite':
+        specifier: workspace:*
+        version: link:../db-sqlite
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
@@ -2087,6 +2099,9 @@ importers:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:^
         version: link:../app-plugin-authentication
+      '@nocobase/app-plugin-authorization':
+        specifier: workspace:^
+        version: link:../app-plugin-authorization
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
@@ -2229,6 +2244,15 @@ importers:
 
   packages/plugins/app-plugin-api-keys:
     dependencies:
+      '@better-auth/core':
+        specifier: ^1.7.1
+        version: 1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.0)(better-call@1.4.0(zod@4.6.5))(jose@6.2.9)(kysely@0.29.5)(nanostores@1.5.1)
+      '@better-auth/utils':
+        specifier: 0.4.2
+        version: 0.4.2
+      better-call:
+        specifier: 1.4.0
+        version: 1.4.0(zod@4.6.5)
       '@base-ui/react':
         specifier: 'catalog:'
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2278,6 +2302,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -2426,6 +2453,9 @@ importers:
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -2545,6 +2575,9 @@ importers:
 
   packages/plugins/app-plugin-file:
     dependencies:
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -2624,6 +2657,15 @@ importers:
 
   packages/plugins/app-plugin-hub:
     dependencies:
+      '@nocobase/app-plugin-api-keys':
+        specifier: workspace:^
+        version: link:../app-plugin-api-keys
+      better-auth:
+        specifier: 'catalog:'
+        version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
+      sonner:
+        specifier: ^2.0.3
+        version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@base-ui/react':
         specifier: 'catalog:'
         version: 1.7.0(@date-fns/tz@1.5.0)(@types/react@19.2.18)(date-fns@4.4.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2669,6 +2711,9 @@ importers:
       '@nocobase/i18n':
         specifier: workspace:^
         version: link:../../libs/i18n
+      '@nocobase/logging':
+        specifier: workspace:^
+        version: link:../../libs/logging
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -2693,6 +2738,9 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.8
+      react-day-picker:
+        specifier: 10.0.1
+        version: 10.0.1(@types/react@19.2.18)(react@19.2.8)
       react-router:
         specifier: 'catalog:'
         version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2712,9 +2760,6 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
-      '@nocobase/logging':
-        specifier: workspace:*
-        version: link:../../libs/logging
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
@@ -2766,9 +2811,6 @@ importers:
       '@nocobase/i18n':
         specifier: workspace:^
         version: link:../../libs/i18n
-      '@nocobase/service-provider':
-        specifier: workspace:^
-        version: link:../../libs/service-provider
       hono:
         specifier: 'catalog:'
         version: 4.13.2
@@ -2779,6 +2821,15 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@nocobase/service-provider':
+        specifier: workspace:^
+        version: link:../../libs/service-provider
+      '@testing-library/jest-dom':
+        specifier: 'catalog:'
+        version: 7.0.1(@testing-library/dom@10.4.1)(vitest@4.1.10)
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -2788,6 +2839,9 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.8.1(jiti@2.7.0)
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.0.1(@noble/hashes@2.3.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
@@ -3076,6 +3130,9 @@ importers:
       '@nocobase/app-client':
         specifier: workspace:^
         version: link:../../app/app-client
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -3184,6 +3241,91 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/plugins/app-plugin-scheduler:
+    dependencies:
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../../tools/cli
+      '@oclif/core':
+        specifier: 'catalog:'
+        version: 4.14.0
+      cron-parser:
+        specifier: ^5.10.0
+        version: 5.10.0
+      cronstrue:
+        specifier: ^3.24.0
+        version: 3.26.0
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.487.0(react@19.2.8)
+    devDependencies:
+      '@nocobase/app-client':
+        specifier: workspace:*
+        version: link:../../app/app-client
+      '@nocobase/app-plugin-authentication':
+        specifier: workspace:*
+        version: link:../app-plugin-authentication
+      '@nocobase/app-plugin-authorization':
+        specifier: workspace:*
+        version: link:../app-plugin-authorization
+      '@nocobase/app-server':
+        specifier: workspace:*
+        version: link:../../app/app-server
+      '@nocobase/db':
+        specifier: workspace:*
+        version: link:../../libs/db
+      '@nocobase/db-sqlite':
+        specifier: workspace:*
+        version: link:../../libs/db-sqlite
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      '@nocobase/i18n':
+        specifier: workspace:*
+        version: link:../../libs/i18n
+      '@nocobase/queue':
+        specifier: workspace:*
+        version: link:../../libs/queue
+      '@nocobase/service-provider':
+        specifier: workspace:*
+        version: link:../../libs/service-provider
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.18
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      jsdom:
+        specifier: 'catalog:'
+        version: 30.0.1(@noble/hashes@2.3.0)
+      knex:
+        specifier: 'catalog:'
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      react:
+        specifier: 'catalog:'
+        version: 19.2.8
+      react-router:
+        specifier: 'catalog:'
+        version: 7.18.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/plugins/app-plugin-users:
     dependencies:
       '@base-ui/react':
@@ -3228,6 +3370,9 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.8
+      sonner:
+        specifier: ^2.0.3
+        version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       tailwind-merge:
         specifier: 'catalog:'
         version: 3.6.0
@@ -3238,6 +3383,9 @@ importers:
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
@@ -3277,6 +3425,9 @@ importers:
       '@nocobase/app-plugin-authentication':
         specifier: workspace:^
         version: link:../app-plugin-authentication
+      '@nocobase/app-plugin-scheduler':
+        specifier: workspace:^
+        version: link:../app-plugin-scheduler
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
@@ -3337,7 +3488,7 @@ importers:
     devDependencies:
       '@boringnode/queue':
         specifier: 'catalog:'
-        version: 0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)
+        version: 0.7.1(@opentelemetry/api@1.9.0)(@opentelemetry/instrumentation@0.200.0(@opentelemetry/api@1.9.0))(ioredis@5.11.1)(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)
       '@nocobase/db-mysql':
         specifier: workspace:*
         version: link:../../libs/db-mysql
@@ -3386,6 +3537,9 @@ importers:
 
   packages/templates/app-template-default:
     dependencies:
+      '@nocobase/ai-employee':
+        specifier: workspace:^
+        version: link:../../libs/ai-employee
       '@nocobase/app-plugin-ai-employee':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-ai-employee
@@ -3419,6 +3573,9 @@ importers:
       '@nocobase/app-plugin-notification-providers':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-notification-providers
+      '@nocobase/app-plugin-scheduler':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-scheduler
       '@nocobase/app-plugin-users':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-users
@@ -3428,6 +3585,12 @@ importers:
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/authorization':
+        specifier: workspace:^
+        version: link:../../libs/authorization
+      '@nocobase/caching':
+        specifier: workspace:^
+        version: link:../../libs/caching
       '@nocobase/config':
         specifier: workspace:^
         version: link:../../libs/config
@@ -3437,9 +3600,18 @@ importers:
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
+      '@nocobase/queue':
+        specifier: workspace:^
+        version: link:../../libs/queue
+      '@nocobase/repository-input':
+        specifier: workspace:^
+        version: link:../../libs/repository-input
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -3468,9 +3640,6 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@4.6.5)
-      '@nocobase/ai-employee':
-        specifier: workspace:^
-        version: link:../../libs/ai-employee
       '@nocobase/ai-employee-avatars':
         specifier: ^1.0.2
         version: 1.0.2(@dicebear/core@9.4.3)
@@ -3483,12 +3652,12 @@ importers:
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../../app/app-portal-sdk
+      '@nocobase/app-skills':
+        specifier: workspace:*
+        version: link:../../app/app-skills
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
-      '@nocobase/caching':
-        specifier: workspace:^
-        version: link:../../libs/caching
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
@@ -3498,21 +3667,18 @@ importers:
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
-      '@nocobase/i18n':
-        specifier: workspace:^
-        version: link:../../libs/i18n
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../../libs/logging
-      '@nocobase/queue':
-        specifier: workspace:^
-        version: link:../../libs/queue
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.62.1
       '@refinedev/cli':
         specifier: ^2.16.48
-        version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)
       '@refinedev/core':
         specifier: 'catalog:'
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -3720,9 +3886,15 @@ importers:
 
   packages/templates/app-template-examples:
     dependencies:
+      '@nocobase/ai-employee':
+        specifier: workspace:^
+        version: link:../../libs/ai-employee
       '@nocobase/app-plugin-ai-employee':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-ai-employee
+      '@nocobase/app-plugin-api-keys':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-api-keys
       '@nocobase/app-plugin-authentication':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-authentication
@@ -3771,18 +3943,30 @@ importers:
       '@nocobase/app-plugin-routes-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-routes-example
+      '@nocobase/app-plugin-scheduler':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-scheduler
       '@nocobase/app-plugin-service-provider-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-service-provider-example
       '@nocobase/app-plugin-skills-example':
         specifier: workspace:^
         version: link:../../examples/app-plugin-skills-example
+      '@nocobase/app-plugin-users':
+        specifier: workspace:^
+        version: link:../../plugins/app-plugin-users
       '@nocobase/app-plugin-workflow':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-workflow
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/authorization':
+        specifier: workspace:^
+        version: link:../../libs/authorization
+      '@nocobase/caching':
+        specifier: workspace:^
+        version: link:../../libs/caching
       '@nocobase/config':
         specifier: workspace:^
         version: link:../../libs/config
@@ -3801,9 +3985,18 @@ importers:
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
+      '@nocobase/queue':
+        specifier: workspace:^
+        version: link:../../libs/queue
+      '@nocobase/repository-input':
+        specifier: workspace:^
+        version: link:../../libs/repository-input
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -3829,18 +4022,12 @@ importers:
       '@dicebear/core':
         specifier: ^9.4.3
         version: 9.4.3
-      '@fontsource-variable/geist':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@gchust/agent-annotations':
         specifier: 0.1.8
         version: 0.1.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.8.0(@sinclair/typebox@0.34.52)(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.85.0(react@19.2.8))(zod@4.6.5)
-      '@nocobase/ai-employee':
-        specifier: workspace:^
-        version: link:../../libs/ai-employee
       '@nocobase/ai-employee-avatars':
         specifier: ^1.0.2
         version: 1.0.2(@dicebear/core@9.4.3)
@@ -3853,12 +4040,12 @@ importers:
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../../app/app-portal-sdk
+      '@nocobase/app-skills':
+        specifier: workspace:*
+        version: link:../../app/app-skills
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
-      '@nocobase/caching':
-        specifier: workspace:^
-        version: link:../../libs/caching
       '@nocobase/cron':
         specifier: workspace:^
         version: link:../../libs/cron
@@ -3868,27 +4055,21 @@ importers:
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
-      '@nocobase/i18n':
-        specifier: workspace:^
-        version: link:../../libs/i18n
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../../libs/logging
-      '@nocobase/queue':
-        specifier: workspace:^
-        version: link:../../libs/queue
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.62.1
       '@refinedev/cli':
         specifier: ^2.16.48
-        version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@refinedev/core':
         specifier: 'catalog:'
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@refinedev/devtools':
-        specifier: ^2.0.1
-        version: 2.0.5(@refinedev/cli@2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@refinedev/devtools-server@2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@refinedev/react-hook-form':
         specifier: ^5.0.0
         version: 5.0.4(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react-hook-form@7.85.0(react@19.2.8))(react@19.2.8)
@@ -3898,15 +4079,6 @@ importers:
       '@refinedev/react-table':
         specifier: ^6.0.0
         version: 6.0.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@tanstack/react-table@8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@refinedev/rest':
-        specifier: ^2.1.0
-        version: 2.1.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
-      '@refinedev/simple-rest':
-        specifier: ^6.0.0
-        version: 6.0.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
-      '@shadcn/react':
-        specifier: ^0.2.1
-        version: 0.2.1(@types/react@19.2.18)(react@19.2.8)
       '@tailwindcss/postcss':
         specifier: 'catalog:'
         version: 4.3.3
@@ -4117,30 +4289,39 @@ importers:
       '@nocobase/app-plugin-install':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-install
-      '@nocobase/app-plugin-notification':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-notification
-      '@nocobase/app-plugin-service-provider-example':
-        specifier: workspace:^
-        version: link:../../examples/app-plugin-service-provider-example
       '@nocobase/app-plugin-users':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-users
-      '@nocobase/app-plugin-workflow':
-        specifier: workspace:^
-        version: link:../../plugins/app-plugin-workflow
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
+      '@nocobase/authorization':
+        specifier: workspace:^
+        version: link:../../libs/authorization
+      '@nocobase/caching':
+        specifier: workspace:^
+        version: link:../../libs/caching
       '@nocobase/config':
         specifier: workspace:^
         version: link:../../libs/config
+      '@nocobase/db':
+        specifier: workspace:^
+        version: link:../../libs/db
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
+      '@nocobase/i18n':
+        specifier: workspace:^
+        version: link:../../libs/i18n
       '@nocobase/nb3-cli':
         specifier: workspace:^
         version: link:../../tools/cli
+      '@nocobase/queue':
+        specifier: workspace:^
+        version: link:../../libs/queue
+      '@nocobase/repository-input':
+        specifier: workspace:^
+        version: link:../../libs/repository-input
       '@nocobase/service-provider':
         specifier: workspace:^
         version: link:../../libs/service-provider
@@ -4153,9 +4334,6 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
     devDependencies:
       '@ai-sdk/react':
         specifier: 2.0.0
@@ -4166,9 +4344,6 @@ importers:
       '@dicebear/core':
         specifier: ^9.4.3
         version: 9.4.3
-      '@fontsource-variable/geist':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@gchust/agent-annotations':
         specifier: 0.1.8
         version: 0.1.8(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
@@ -4187,42 +4362,30 @@ importers:
       '@nocobase/app-portal-sdk':
         specifier: workspace:^
         version: link:../../app/app-portal-sdk
+      '@nocobase/app-skills':
+        specifier: workspace:*
+        version: link:../../app/app-skills
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
-      '@nocobase/caching':
-        specifier: workspace:^
-        version: link:../../libs/caching
-      '@nocobase/db':
-        specifier: workspace:^
-        version: link:../../libs/db
       '@nocobase/dev-config':
         specifier: workspace:*
         version: link:../../tools/dev-config
       '@nocobase/drive':
         specifier: workspace:^
         version: link:../../libs/drive
-      '@nocobase/i18n':
-        specifier: workspace:^
-        version: link:../../libs/i18n
       '@nocobase/logging':
         specifier: workspace:^
         version: link:../../libs/logging
-      '@nocobase/queue':
-        specifier: workspace:^
-        version: link:../../libs/queue
       '@nocobase/session':
         specifier: workspace:^
         version: link:../../libs/session
       '@refinedev/cli':
         specifier: ^2.16.48
-        version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        version: 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@refinedev/core':
         specifier: 'catalog:'
         version: 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@refinedev/devtools':
-        specifier: ^2.0.1
-        version: 2.0.5(@refinedev/cli@2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@refinedev/devtools-server@2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@refinedev/react-hook-form':
         specifier: ^5.0.0
         version: 5.0.4(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react-hook-form@7.85.0(react@19.2.8))(react@19.2.8)
@@ -4232,15 +4395,6 @@ importers:
       '@refinedev/react-table':
         specifier: ^6.0.0
         version: 6.0.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@tanstack/react-table@8.21.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@refinedev/rest':
-        specifier: ^2.1.0
-        version: 2.1.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
-      '@refinedev/simple-rest':
-        specifier: ^6.0.0
-        version: 6.0.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))
-      '@shadcn/react':
-        specifier: ^0.2.1
-        version: 0.2.1(@types/react@19.2.18)(react@19.2.8)
       '@tailwindcss/postcss':
         specifier: 'catalog:'
         version: 4.3.3
@@ -4337,6 +4491,9 @@ importers:
       eventsource-parser:
         specifier: 3.1.0
         version: 3.1.0
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
       ignore:
         specifier: 'catalog:'
         version: 7.0.6
@@ -4770,9 +4927,6 @@ packages:
 
   '@alicloud/tea-xml@0.0.3':
     resolution: {integrity: sha512-+/9GliugjrLglsXVrd1D80EqqKgGpyA0eQ6+1ZdUOYCaRguaSwz44trX3PaxPu/HhIPJg9PsGQQ3cSLXWZjbAA==}
-
-  '@aliemir/dom-to-fiber-utils@0.4.1':
-    resolution: {integrity: sha512-mWjCp9Uu3B1Rbtdnk23Coak831zgy+/1oS+FCTVhCAozGPUURE8IfVFQsCblZMWuT5j+QSc6JNDQ+l2JcZclzA==}
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -6002,9 +6156,6 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@fontsource-variable/geist@5.3.0':
-    resolution: {integrity: sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA==}
-
   '@fontsource/nunito@5.3.0':
     resolution: {integrity: sha512-vw9TaTQJ/zpEpKrsODuPmOvaVjXgdda6B+xXA4YqjrdeJ62MLgVoDerdRXFQHyBnSCt2yQ2nHKCHPP/Pv7Xq4Q==}
 
@@ -6873,9 +7024,19 @@ packages:
     resolution: {integrity: sha512-QCJIZoVJxV7jywgVAUlsQwl3dr3Sa21kfi5z9KrYolbexWJUtFSEtMoNiBWojD05mYycLnB50gp/VxlGdaOCRA==}
     engines: {node: '>=18.0.0'}
 
+  '@opentelemetry/api-logs@0.200.0':
+    resolution: {integrity: sha512-IKJBQxh91qJ+3ssRly5hYEJ8NDHu9oY/B1PXVSCWf7zytmYO9RNLB0Ox9XQ/fJ8m6gY6Q6NtBWlmXfaXt5Uc4Q==}
+    engines: {node: '>=8.0.0'}
+
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
     engines: {node: '>=8.0.0'}
+
+  '@opentelemetry/instrumentation@0.200.0':
+    resolution: {integrity: sha512-pmPlzfJd+vvgaZd/reMsC8RWgTXn2WY1OWT5RT42m3aOn5532TozwXNDhg1vzqJ+jnvmkREcdLr27ebJEQt0Jg==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': ^1.3.0
 
   '@opentelemetry/semantic-conventions@1.43.0':
     resolution: {integrity: sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg==}
@@ -7219,18 +7380,6 @@ packages:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
-  '@refinedev/devtools@2.0.5':
-    resolution: {integrity: sha512-D3jQlB3VZ+evRI2wmy+0TMwY78mRR3EwECNzWpkETeg8rK/Ovjo4t6FMUKAke7qht3Zdlkc6zGv+V/vWK3IMfA==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      '@refinedev/cli': 2.16.52
-      '@refinedev/core': ^5.0.0
-      '@refinedev/devtools-server': 2.0.2
-      '@types/react': ^18.0.0 || ^19.0.0
-      '@types/react-dom': ^18.0.0 || ^19.0.0
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
-
   '@refinedev/react-hook-form@5.0.4':
     resolution: {integrity: sha512-JT4Wsr9ovVt0t06TYqUT/VeevfRRTLv6cr3zAsDE2e4IoDnZfG+Rz4YGzSIbn/WxBpveY6oSPd9UfXaOfffvXg==}
     engines: {node: '>=20'}
@@ -7261,22 +7410,6 @@ packages:
       '@tanstack/react-table': ^8.2.6
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
-
-  '@refinedev/rest@2.1.1':
-    resolution: {integrity: sha512-FvGanLHqzimqQ4Tmj++3qpipuhHnaOEjW2z2mOlzeBofjbjQhUSsKzy/SpxjNyIdP37PkA2q7zVid0wz3k42Bw==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      '@nestjsx/crud-request': ^5.0.0-alpha.3
-      '@refinedev/core': ^5.0.0
-    peerDependenciesMeta:
-      '@nestjsx/crud-request':
-        optional: true
-
-  '@refinedev/simple-rest@6.0.1':
-    resolution: {integrity: sha512-/xx/SiZ2aaA3KJO7PWFxWXvgG5n8roEay6BBdRHhwCMYFuHIOob82pl5KBGbRi+KLuFLUj+nSt9Q76D0uyIOlg==}
-    engines: {node: '>=20'}
-    peerDependencies:
-      '@refinedev/core': ^5.0.0
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -7652,17 +7785,6 @@ packages:
 
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
-
-  '@shadcn/react@0.2.1':
-    resolution: {integrity: sha512-5krgi3dRMKb5jH6a+qPzVJUy/54s0kKE4Rw4LjDfLqOdVQTWKUgxWf1kW8r912I0jX/Lzxqc+pgjkjWxUIK5BQ==}
-    peerDependencies:
-      '@types/react': '>=19'
-      react: '>=19'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-      react:
-        optional: true
 
   '@shikijs/core@4.4.3':
     resolution: {integrity: sha512-QCR4q2ZO/ILJEuwiBMel4wdcTDb1JGwfjKTxPDF6x8ixOaluPrVqIn06C99AcRPhmYlBR56d/Fb+GN58GzExpg==}
@@ -8223,6 +8345,9 @@ packages:
   '@types/seedrandom@3.0.8':
     resolution: {integrity: sha512-TY1eezMU2zH2ozQoAFAQFOPpvP15g+ZgSfTZt31AUUH/Rxtnz3H+A/Sv1Snw2/amp//omibc+AEkTaA8KUeOLQ==}
 
+  '@types/shimmer@1.2.0':
+    resolution: {integrity: sha512-UE7oxhQLLd9gub6JKIAhDq06T0F6FnztwMNRvYgjeQSBeMc1ZG/tA47EwfduvkuQS8apbkM/lpLpWsaCeYsXVg==}
+
   '@types/tough-cookie@4.0.0':
     resolution: {integrity: sha512-I99sngh224D0M7XgW1s120zxCt3VYQ3IQsuw3P3jbq5GG4yc79+ZjyKznyOGIQrflfylLgcfekeZW/vk0yng6A==}
 
@@ -8413,6 +8538,11 @@ packages:
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
+
+  acorn-import-attributes@1.9.5:
+    resolution: {integrity: sha512-n02Vykv5uA3eHGM/Z2dQrcD56kL8TyDb2p1+0P83PClMnC/nc+anbQRhIOWnSq4Ke/KvDPrY3C9hDtC/A3eHnQ==}
+    peerDependencies:
+      acorn: ^8
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -9313,6 +9443,10 @@ packages:
     resolution: {integrity: sha512-fkdfq+b+AHI4cKdhZlppHveI/mgz2qpiYxcm+t5E5TsxX7QrLS1VE0+7GENEk9z0EeGPcpSciGv6ez24duWhwQ==}
     engines: {node: '>=18.x'}
 
+  cronstrue@3.26.0:
+    resolution: {integrity: sha512-PEXTHEir/KllAWMsOQOsv3ZXjI6Y1PA1eVAEM/WhCaesAcCYHldra9pr2jkFH6r/ynbEOAPOGoWYz9NkjP0huA==}
+    hasBin: true
+
   cross-env@10.1.0:
     resolution: {integrity: sha512-GsYosgnACZTADcmEyJctkJIoqAhHjttw7RsFrVoJNXbsWWqaq6Ym+7kZjq6mS45O0jij6vtiReppKQEtqWy6Dw==}
     engines: {node: '>=20'}
@@ -9530,10 +9664,6 @@ packages:
 
   decode-named-character-reference@1.3.0:
     resolution: {integrity: sha512-GtpQYB283KrPp6nRw50q3U9/VfOutZOe103qlN7BPP6Ad27xYnOIWv4lPzo8HCAL+mMZofJ9KEy30fq6MfaK6Q==}
-
-  decode-uri-component@0.2.2:
-    resolution: {integrity: sha512-FqUYQ+8o158GyGTrMFJms9qh3CqTKvAqgqsTnkLI8sKu0028orqBhxNMFkFen0zGyg6epACD32pjVk58ngIErQ==}
-    engines: {node: '>=0.10'}
 
   decompress-response@6.0.0:
     resolution: {integrity: sha512-aW35yZM6Bb/4oJlZncMH2LCoZtJXTRxES17vE3hoRiowU2kWHaJKFkSBDnDR+cm9J+9QhXmREyIfv0pji9ejCQ==}
@@ -10271,10 +10401,6 @@ packages:
     resolution: {integrity: sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg==}
     engines: {node: '>=8'}
 
-  filter-obj@1.1.0:
-    resolution: {integrity: sha512-8rXg1ZnX7xzy2NGDVkBVaAy+lSlPNwad13BtgSlLuxfIslyt5Vg64U7tFcCt4WS1R0hvtnQybT/IyCkGZ3DpXQ==}
-    engines: {node: '>=0.10.0'}
-
   finalhandler@1.3.2:
     resolution: {integrity: sha512-aA4RyPcd3badbdABGDuTXCMTtOneUCAYH/gxoYRTZlIJdF0YPWuGqiAsIrhNnnqdXGswYk6dGujem4w80UJFhg==}
     engines: {node: '>= 0.8'}
@@ -10835,6 +10961,9 @@ packages:
   import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
     engines: {node: '>=6'}
+
+  import-in-the-middle@1.15.0:
+    resolution: {integrity: sha512-bpQy+CrsRmYmoPMAE/0G33iwRqwW4ouqdRg8jgbH3aKuCtOc8lxgmYXg2dMM92CRiGP660EtBcymH/eVUpCSaA==}
 
   import-meta-resolve@4.2.0:
     resolution: {integrity: sha512-Iqv2fzaTQN28s/FwZAoFq0ZSs/7hMAHJVX+w8PZl3cY19Pxk6jFFalxQoIfW2826i/fDLXv8IiEZRIT0lDuWcg==}
@@ -11411,10 +11540,6 @@ packages:
     resolution: {integrity: sha512-e7IpWJrnanNUroVK2taAgMxoEZvHLXdQiNjeExSu/DEIWm83jaKGBgb7tLmu2rMYpA027qFB3iLR/k3AVpFRnA==}
     engines: {node: '>= 18'}
 
-  ky@1.14.3:
-    resolution: {integrity: sha512-9zy9lkjac+TR1c2tG+mkNSVlyOpInnWdSMiue4F+kq8TwJSgv6o8jhLRg8Ho6SnZ9wOYUq/yozts9qQCfk7bIw==}
-    engines: {node: '>=18'}
-
   kysely@0.29.5:
     resolution: {integrity: sha512-ooa+eSbBNPTo3MycPEuW5jdrxQdQwdtB3LC3h43FiXQbIry5tR0C5lDG7eealK0E4D7XjrnOP5DIUg/LyjRMYQ==}
     engines: {node: '>=22.0.0'}
@@ -11625,10 +11750,6 @@ packages:
   longest@2.0.1:
     resolution: {integrity: sha512-Ajzxb8CM6WAnFjgiloPsI3bF+WCxcvhdIG3KNA2KN962+tdBsHcuQ4k4qX/EcS/2CRkcc0iAkR956Nib6aXU/Q==}
     engines: {node: '>=0.10.0'}
-
-  loose-envify@1.4.0:
-    resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
-    hasBin: true
 
   lop@0.4.2:
     resolution: {integrity: sha512-RefILVDQ4DKoRZsJ4Pj22TxE3omDO47yFpkIBoDKzkqPRISs5U1cnAdg/5583YPkWPaLIYHOKRMQSvjFsO26cw==}
@@ -12094,6 +12215,9 @@ packages:
     resolution: {integrity: sha512-vVqVZQyf3WLx2Shd0qJ9xuvqgAyKPLAiqITEtqW0oIUjzo3PePDd6fW9iFz30ef7Ysp/oiWqbhszeGWW2T6Gzw==}
     engines: {node: '>=10'}
     hasBin: true
+
+  module-details-from-path@1.0.4:
+    resolution: {integrity: sha512-EGWKgxALGMgzvxYF1UyGTy0HXX/2vHLkw6+NvDKW2jypWbHpjQuj4UMcqQWXHERJhVGKikolT06G3bcKe4fi7w==}
 
   moment-timezone@0.5.48:
     resolution: {integrity: sha512-f22b8LV1gbTO2ms2j2z13MuPogNoh5UzxL3nzNAYKGraILnbGc9NEE6dyiiiLv46DGRb8A4kg8UKWLjPthxBHw==}
@@ -12942,10 +13066,6 @@ packages:
     resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
     engines: {node: '>=0.6'}
 
-  query-string@7.1.3:
-    resolution: {integrity: sha512-hh2WYhq4fi8+b+/2Kg9CEge4fDPvHS534aOOvOZeQ3+Vf2mCFsaFBYj0i+iXcAq6I9Vzp5fjMFBlONvayDC1qg==}
-    engines: {node: '>=6'}
-
   querystring-es3@0.2.1:
     resolution: {integrity: sha512-773xhDQnZBMFobEiztv8LIl70ch5MSF/jUQVlhwFyBILqq96anmoctVIYz+ZRp0qbCKATTn6ev02M3r7Ga5vqA==}
     engines: {node: '>=0.4.x'}
@@ -13002,11 +13122,6 @@ packages:
       '@types/react':
         optional: true
 
-  react-dom@18.3.1:
-    resolution: {integrity: sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==}
-    peerDependencies:
-      react: ^18.3.1
-
   react-dom@19.2.8:
     resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
     peerDependencies:
@@ -13062,12 +13177,6 @@ packages:
     peerDependencies:
       '@types/react': '>=18'
       react: '>=18'
-
-  react-reconciler@0.29.2:
-    resolution: {integrity: sha512-zZQqIiYgDCTP/f1N/mAR10nJGrPD2ZR+jDSEsKWJHYC7Cm2wodlwbR3upZRdC3cjIjSlTLNVyO7Iu0Yy7t2AYg==}
-    engines: {node: '>=0.10.0'}
-    peerDependencies:
-      react: ^18.3.1
 
   react-reconciler@0.33.0:
     resolution: {integrity: sha512-KetWRytFv1epdpJc3J4G75I4WrplZE5jOL7Yq0p34+OVOKF4Se7WrdIdVC45XsSSmUTlht2FM/fM1FZb1mfQeA==}
@@ -13152,10 +13261,6 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
-
-  react@18.3.1:
-    resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
-    engines: {node: '>=0.10.0'}
 
   react@19.2.8:
     resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
@@ -13321,6 +13426,10 @@ packages:
   require-from-string@2.0.2:
     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
     engines: {node: '>=0.10.0'}
+
+  require-in-the-middle@7.5.2:
+    resolution: {integrity: sha512-gAZ+kLqBdHarXB64XpAe2VCjB7rIRv+mU8tfRWziHRJ5umKsIHN2tLLv6EtMw7WCdP19S0ERVMldNvxYCHnhSQ==}
+    engines: {node: '>=8.6.0'}
 
   requires-port@1.0.0:
     resolution: {integrity: sha512-KigOCHcocU3XODJxsu8i/j8T9tzT4adHiecwORRQ0ZZFcp7ahwXuRU1m+yuO90C5ZUyGeGfocHDI14M3L3yDAQ==}
@@ -13594,9 +13703,6 @@ packages:
   scale-svg-path@0.0.1:
     resolution: {integrity: sha512-BNGOBoSBUALnSMDbG8j+vGdQdCCR47Oc+/pWQTzLtotXOgITThiLU9EjFq6h9tpirf/dNc91xGLi0f9yPDs8nQ==}
 
-  scheduler@0.23.2:
-    resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
-
   scheduler@0.27.0:
     resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
 
@@ -13716,6 +13822,9 @@ packages:
   shiki@4.4.3:
     resolution: {integrity: sha512-Mb/GvXPHBAXdgGIcnfU5L3ldpn1XcxrGkPHwqgRx17/I2XRfqlFKk2vGkHWINn1kdXvzJZeuO3is6I9KLPFm0g==}
     engines: {node: '>=20'}
+
+  shimmer@1.2.1:
+    resolution: {integrity: sha512-sQTKC1Re/rM6XyFM6fIAGHRPVGvyXfgzIDvzoq608vM+jeyVD0Tu1E6Np0Kc2zAIFWIj963V2800iF/9LPieQw==}
 
   side-channel-list@1.0.1:
     resolution: {integrity: sha512-mjn/0bi/oUURjc5Xl7IaWi/OJJJumuoJFQJfDDyO46+hBWsfaVM65TBHq2eoZBhzl9EchxOijpkbRC8SVBQU0w==}
@@ -13837,10 +13946,6 @@ packages:
   spdx-license-ids@3.0.23:
     resolution: {integrity: sha512-CWLcCCH7VLu13TgOH+r8p1O/Znwhqv/dbb6lqWy67G+pT1kHmeD/+V36AVb/vq8QMIQwVShJ6Ssl5FPh0fuSdw==}
 
-  split-on-first@1.1.0:
-    resolution: {integrity: sha512-43ZssAJaMusuKWL8sKUBQXHWOpq8d6CfN/u1p4gUzfJkM05C8rxTmYrkIPTXapZpORA6LkkzcUulJ8FqA7Uudw==}
-    engines: {node: '>=6'}
-
   split2@4.2.0:
     resolution: {integrity: sha512-UcjcJOWknrNkF6PLX83qcHM6KHgVKNkV62Y8a5uYDVv9ydGQVwAHMKqHdJje1VTWpljG0WYpCDhrCdAOYH4TWg==}
     engines: {node: '>= 10.x'}
@@ -13914,10 +14019,6 @@ packages:
   stream-wormhole@1.1.0:
     resolution: {integrity: sha512-gHFfL3px0Kctd6Po0M8TzEvt3De/xu6cnRrjlfYNhwbhLPLwigI2t1nc6jrzNuaYg5C4YF78PPFuQPzRiqn9ew==}
     engines: {node: '>=4.0.0'}
-
-  strict-uri-encode@2.0.0:
-    resolution: {integrity: sha512-QwiXZgpRcKkhTj2Scnn++4PKtWsH0kpzZ62L2R6c/LUVYv7hVnZqcg2+sMuT6R7Jusu1vviK/MFsu6kNJfWlEQ==}
-    engines: {node: '>=4'}
 
   string-argv@0.3.2:
     resolution: {integrity: sha512-aqD2Q0144Z+/RqG52NeHEkZauTAUWJO8c6yTftGJKO3Tja5tUgIfmIl6kExvhtxSDP7fXB6DvzkfMpCd/F3G+Q==}
@@ -15222,12 +15323,6 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@aliemir/dom-to-fiber-utils@0.4.1':
-    dependencies:
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      react-reconciler: 0.29.2(react@18.3.1)
-
   '@alloc/quick-lru@5.2.0': {}
 
   '@andrewbranch/untar.js@1.0.4': {}
@@ -15962,13 +16057,14 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
-  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(ioredis@5.11.1)(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)':
+  '@boringnode/queue@0.7.1(@opentelemetry/api@1.9.0)(@opentelemetry/instrumentation@0.200.0(@opentelemetry/api@1.9.0))(ioredis@5.11.1)(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0))(kysely@0.29.5)':
     dependencies:
       '@lukeed/ms': 2.0.2
       '@poppinss/utils': 7.0.1
       cron-parser: 5.10.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
+      '@opentelemetry/instrumentation': 0.200.0(@opentelemetry/api@1.9.0)
       ioredis: 5.11.1
       knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       kysely: 0.29.5
@@ -16676,8 +16772,6 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@fontsource-variable/geist@5.3.0': {}
-
   '@fontsource/nunito@5.3.0': {}
 
   '@fortawesome/fontawesome-free@7.3.1': {}
@@ -16740,7 +16834,7 @@ snapshots:
       async: 2.6.4
       axios: 1.19.0
       cheerio: 1.2.0
-      fontello-cli: 0.6.2(supports-color@8.1.1)
+      fontello-cli: 0.6.2
       fs-plus: 3.1.1
       glob: 7.2.3
       insertion-query: 1.1.0
@@ -17332,7 +17426,22 @@ snapshots:
       wrap-ansi: 7.0.0
       wsl-utils: 0.4.0
 
+  '@opentelemetry/api-logs@0.200.0':
+    dependencies:
+      '@opentelemetry/api': 1.9.0
+
   '@opentelemetry/api@1.9.0': {}
+
+  '@opentelemetry/instrumentation@0.200.0(@opentelemetry/api@1.9.0)':
+    dependencies:
+      '@opentelemetry/api': 1.9.0
+      '@opentelemetry/api-logs': 0.200.0
+      '@types/shimmer': 1.2.0
+      import-in-the-middle: 1.15.0
+      require-in-the-middle: 7.5.2
+      shimmer: 1.2.1
+    transitivePeerDependencies:
+      - supports-color
 
   '@opentelemetry/semantic-conventions@1.43.0': {}
 
@@ -17589,7 +17698,58 @@ snapshots:
       react: 19.2.8
       react-redux: 9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1)
 
-  '@refinedev/cli@2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@refinedev/cli@2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)':
+    dependencies:
+      '@npmcli/package-json': 5.2.1(bluebird@3.4.7)
+      '@refinedev/devtools-server': 2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)
+      boxen: 5.1.2
+      camelcase: 6.3.0
+      cardinal: 2.1.1
+      center-align: 1.0.1
+      chalk: 4.1.2
+      cli-table3: 0.6.5
+      commander: 9.4.1
+      conf: 10.2.0
+      decamelize: 5.0.1
+      dedent: 0.7.0
+      dotenv: 16.6.1
+      envinfo: 7.21.0
+      execa: 5.1.1
+      figlet: 1.11.4
+      fs-extra: 10.1.0
+      globby: 11.1.0
+      gray-matter: 4.0.3
+      handlebars: 4.7.9
+      inquirer: 8.2.7(@types/node@24.13.3)
+      inquirer-autocomplete-prompt: 2.0.1(inquirer@8.2.7(@types/node@24.13.3))
+      jscodeshift: 17.4.0
+      marked: 4.3.0
+      marked-terminal: 6.2.0(marked@4.3.0)
+      node-emoji: 2.2.0
+      node-env-type: 0.0.8
+      node-fetch: 2.7.0(encoding@0.1.13)
+      ora: 5.4.1
+      pluralize: 8.0.0
+      preferred-pm: 3.1.4
+      prettier: 2.8.8
+      semver: 7.5.2
+      semver-diff: 3.1.1
+      temp: 0.9.4
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - '@babel/preset-env'
+      - '@types/node'
+      - '@types/react'
+      - '@types/react-dom'
+      - bluebird
+      - bufferutil
+      - encoding
+      - react
+      - react-dom
+      - supports-color
+      - utf-8-validate
+
+  '@refinedev/cli@2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@npmcli/package-json': 5.2.1(bluebird@3.4.7)
       '@refinedev/devtools-server': 2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -17700,27 +17860,46 @@ snapshots:
       - supports-color
       - utf-8-validate
 
+  '@refinedev/devtools-server@2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(supports-color@8.1.1)':
+    dependencies:
+      '@refinedev/devtools-shared': 2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/react': 19.2.18
+      '@types/react-dom': 19.2.4(@types/react@19.2.18)
+      body-parser: 1.20.6
+      boxen: 5.1.2
+      chalk: 4.1.2
+      dedent: 0.7.0
+      dotenv: 16.6.1
+      error-stack-parser: 2.1.4
+      execa: 5.1.1
+      express: 4.22.2
+      fs-extra: 10.1.0
+      globby: 11.1.0
+      gray-matter: 4.0.3
+      http-proxy-middleware: 3.0.7(supports-color@8.1.1)
+      jscodeshift: 17.4.0
+      lodash: 4.18.1
+      lodash-es: 4.18.1
+      marked: 4.3.0
+      node-fetch: 2.7.0(encoding@0.1.13)
+      package-manager-detector: 0.1.2
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+      sanitize-html: 2.17.7
+      ws: 8.21.3
+    transitivePeerDependencies:
+      - '@babel/preset-env'
+      - bufferutil
+      - encoding
+      - supports-color
+      - utf-8-validate
+
   '@refinedev/devtools-shared@2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       '@tanstack/react-query': 5.101.4(react@19.2.8)
       '@types/react': 19.2.18
       '@types/react-dom': 19.2.4(@types/react@19.2.18)
       error-stack-parser: 2.1.4
-      react: 19.2.8
-      react-dom: 19.2.8(react@19.2.8)
-
-  '@refinedev/devtools@2.0.5(@refinedev/cli@2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@refinedev/devtools-server@2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
-    dependencies:
-      '@aliemir/dom-to-fiber-utils': 0.4.1
-      '@refinedev/cli': 2.16.52(@types/node@24.13.3)(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(bluebird@3.4.7)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@refinedev/core': 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@refinedev/devtools-server': 2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(encoding@0.1.13)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@refinedev/devtools-shared': 2.0.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@types/react': 19.2.18
-      '@types/react-dom': 19.2.4(@types/react@19.2.18)
-      error-stack-parser: 2.1.4
-      lodash: 4.18.1
-      lodash-es: 4.18.1
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
@@ -17753,22 +17932,6 @@ snapshots:
       lodash-es: 4.18.1
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
-
-  '@refinedev/rest@2.1.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))':
-    dependencies:
-      '@refinedev/core': 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      deepmerge: 4.3.1
-      ky: 1.14.3
-      qs: 6.15.3
-
-  '@refinedev/simple-rest@6.0.1(@refinedev/core@5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))':
-    dependencies:
-      '@refinedev/core': 5.0.12(@tanstack/react-query@5.101.4(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      axios: 1.19.0
-      query-string: 7.1.3
-    transitivePeerDependencies:
-      - debug
-      - supports-color
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 
@@ -18143,11 +18306,6 @@ snapshots:
       - core-js
 
   '@sec-ant/readable-stream@0.4.1': {}
-
-  '@shadcn/react@0.2.1(@types/react@19.2.18)(react@19.2.8)':
-    optionalDependencies:
-      '@types/react': 19.2.18
-      react: 19.2.8
 
   '@shikijs/core@4.4.3':
     dependencies:
@@ -18738,6 +18896,8 @@ snapshots:
 
   '@types/seedrandom@3.0.8': {}
 
+  '@types/shimmer@1.2.0': {}
+
   '@types/tough-cookie@4.0.0': {}
 
   '@types/unist@2.0.11': {}
@@ -19064,6 +19224,10 @@ snapshots:
     dependencies:
       mime-types: 3.0.2
       negotiator: 1.0.0
+
+  acorn-import-attributes@1.9.5(acorn@8.18.0):
+    dependencies:
+      acorn: 8.18.0
 
   acorn-jsx@5.3.2(acorn@8.18.0):
     dependencies:
@@ -20052,6 +20216,8 @@ snapshots:
       '@types/luxon': 3.7.5
       luxon: 3.7.2
 
+  cronstrue@3.26.0: {}
+
   cross-env@10.1.0:
     dependencies:
       '@epic-web/invariant': 1.0.0
@@ -20251,17 +20417,13 @@ snapshots:
     dependencies:
       ms: 2.0.0
 
-  debug@3.2.7(supports-color@8.1.1):
+  debug@3.2.7:
     dependencies:
       ms: 2.1.3
-    optionalDependencies:
-      supports-color: 8.1.1
 
-  debug@4.3.4(supports-color@8.1.1):
+  debug@4.3.4:
     dependencies:
       ms: 2.1.2
-    optionalDependencies:
-      supports-color: 8.1.1
 
   debug@4.4.3(supports-color@8.1.1):
     dependencies:
@@ -20278,8 +20440,6 @@ snapshots:
   decode-named-character-reference@1.3.0:
     dependencies:
       character-entities: 2.0.2
-
-  decode-uri-component@0.2.2: {}
 
   decompress-response@6.0.0:
     dependencies:
@@ -21315,8 +21475,6 @@ snapshots:
     dependencies:
       to-regex-range: 5.0.1
 
-  filter-obj@1.1.0: {}
-
   finalhandler@1.3.2:
     dependencies:
       debug: 2.6.9
@@ -21396,18 +21554,22 @@ snapshots:
 
   follow-redirects@1.16.0(debug@4.3.4):
     optionalDependencies:
-      debug: 4.3.4(supports-color@8.1.1)
+      debug: 4.3.4
+
+  follow-redirects@1.16.0(debug@4.4.3(supports-color@8.1.1)):
+    optionalDependencies:
+      debug: 4.4.3(supports-color@8.1.1)
 
   follow-redirects@1.16.0(debug@4.4.3):
     optionalDependencies:
       debug: 4.4.3(supports-color@8.1.1)
 
-  fontello-cli@0.6.2(supports-color@8.1.1):
+  fontello-cli@0.6.2:
     dependencies:
       colors: 1.4.0
       commander: 3.0.2
       mkdirp: 1.0.4
-      needle: 2.9.1(supports-color@8.1.1)
+      needle: 2.9.1
       open: 7.4.2
       unzipper: 0.10.14
     transitivePeerDependencies:
@@ -21947,6 +22109,25 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  http-proxy-middleware@3.0.7(supports-color@8.1.1):
+    dependencies:
+      '@types/http-proxy': 1.17.17
+      debug: 4.4.3(supports-color@8.1.1)
+      http-proxy: 1.18.1(debug@4.4.3(supports-color@8.1.1))
+      is-glob: 4.0.3
+      is-plain-object: 5.0.0
+      micromatch: 4.0.8
+    transitivePeerDependencies:
+      - supports-color
+
+  http-proxy@1.18.1(debug@4.4.3(supports-color@8.1.1)):
+    dependencies:
+      eventemitter3: 4.0.7
+      follow-redirects: 1.16.0(debug@4.4.3(supports-color@8.1.1))
+      requires-port: 1.0.0
+    transitivePeerDependencies:
+      - debug
+
   http-proxy@1.18.1(debug@4.4.3):
     dependencies:
       eventemitter3: 4.0.7
@@ -22001,7 +22182,7 @@ snapshots:
       '@types/tough-cookie': 4.0.0
       axios: 1.18.0(debug@4.3.4)
       camelcase: 6.3.0
-      debug: 4.3.4(supports-color@8.1.1)
+      debug: 4.3.4
       dotenv: 16.4.5
       extend: 3.0.2
       file-type: 21.3.2
@@ -22049,6 +22230,13 @@ snapshots:
     dependencies:
       parent-module: 1.0.1
       resolve-from: 4.0.0
+
+  import-in-the-middle@1.15.0:
+    dependencies:
+      acorn: 8.18.0
+      acorn-import-attributes: 1.9.5(acorn@8.18.0)
+      cjs-module-lexer: 1.4.3
+      module-details-from-path: 1.0.4
 
   import-meta-resolve@4.2.0: {}
 
@@ -22559,7 +22747,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-dm@1.0.52452(knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)):
+  knex-dm@1.0.52452(knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)):
     dependencies:
       dmdb: 1.0.52452
       knex: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
@@ -22572,7 +22760,7 @@ snapshots:
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
-      debug: 4.3.4(supports-color@8.1.1)
+      debug: 4.3.4
       escalade: 3.2.0
       esm: 3.2.25
       get-package-type: 0.1.0
@@ -22592,34 +22780,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  knex@3.3.0(better-sqlite3@12.11.1)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(supports-color@8.1.1):
-    dependencies:
-      colorette: 2.0.19
-      commander: 10.0.1
-      debug: 4.3.4(supports-color@8.1.1)
-      escalade: 3.2.0
-      esm: 3.2.25
-      get-package-type: 0.1.0
-      getopts: 2.3.0
-      interpret: 2.2.0
-      lodash: 4.18.1
-      pg-connection-string: 2.6.2
-      rechoir: 0.8.0
-      resolve-from: 5.0.0
-      tarn: 3.1.2
-      tildify: 2.0.0
-    optionalDependencies:
-      better-sqlite3: 12.11.1
-      pg: 8.23.0
-      pg-query-stream: 4.17.0(pg@8.23.0)
-    transitivePeerDependencies:
-      - supports-color
-
   knex@3.3.0(better-sqlite3@13.0.3)(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
-      debug: 4.3.4(supports-color@8.1.1)
+      debug: 4.3.4
       escalade: 3.2.0
       esm: 3.2.25
       get-package-type: 0.1.0
@@ -22638,11 +22803,33 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0):
+  knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(supports-color@8.1.1):
     dependencies:
       colorette: 2.0.19
       commander: 10.0.1
       debug: 4.3.4(supports-color@8.1.1)
+      escalade: 3.2.0
+      esm: 3.2.25
+      get-package-type: 0.1.0
+      getopts: 2.3.0
+      interpret: 2.2.0
+      lodash: 4.18.1
+      pg-connection-string: 2.6.2
+      rechoir: 0.8.0
+      resolve-from: 5.0.0
+      tarn: 3.1.2
+      tildify: 2.0.0
+    optionalDependencies:
+      pg: 8.23.0
+      pg-query-stream: 4.17.0(pg@8.23.0)
+    transitivePeerDependencies:
+      - supports-color
+
+  knex@3.3.0(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)(tedious@20.0.0):
+    dependencies:
+      colorette: 2.0.19
+      commander: 10.0.1
+      debug: 4.3.4
       escalade: 3.2.0
       esm: 3.2.25
       get-package-type: 0.1.0
@@ -22683,8 +22870,6 @@ snapshots:
       statuses: 2.0.2
       type-is: 2.1.0
       vary: 1.1.2
-
-  ky@1.14.3: {}
 
   kysely@0.29.5: {}
 
@@ -22895,10 +23080,6 @@ snapshots:
   longest-streak@3.1.0: {}
 
   longest@2.0.1: {}
-
-  loose-envify@1.4.0:
-    dependencies:
-      js-tokens: 4.0.0
 
   lop@0.4.2:
     dependencies:
@@ -23633,6 +23814,8 @@ snapshots:
 
   mkdirp@1.0.4: {}
 
+  module-details-from-path@1.0.4: {}
+
   moment-timezone@0.5.48:
     dependencies:
       moment: 2.30.1
@@ -23687,9 +23870,9 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
-  needle@2.9.1(supports-color@8.1.1):
+  needle@2.9.1:
     dependencies:
-      debug: 3.2.7(supports-color@8.1.1)
+      debug: 3.2.7
       iconv-lite: 0.4.24
       sax: 1.6.1
     transitivePeerDependencies:
@@ -24538,13 +24721,6 @@ snapshots:
       es-define-property: 1.0.1
       side-channel: 1.1.1
 
-  query-string@7.1.3:
-    dependencies:
-      decode-uri-component: 0.2.2
-      filter-obj: 1.1.0
-      split-on-first: 1.1.0
-      strict-uri-encode: 2.0.0
-
   querystring-es3@0.2.1: {}
 
   querystringify@2.2.0: {}
@@ -24600,12 +24776,6 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.18
 
-  react-dom@18.3.1(react@18.3.1):
-    dependencies:
-      loose-envify: 1.4.0
-      react: 18.3.1
-      scheduler: 0.23.2
-
   react-dom@19.2.8(react@19.2.8):
     dependencies:
       react: 19.2.8
@@ -24660,12 +24830,6 @@ snapshots:
       vfile: 6.0.3
     transitivePeerDependencies:
       - supports-color
-
-  react-reconciler@0.29.2(react@18.3.1):
-    dependencies:
-      loose-envify: 1.4.0
-      react: 18.3.1
-      scheduler: 0.23.2
 
   react-reconciler@0.33.0(react@19.2.8):
     dependencies:
@@ -24735,10 +24899,6 @@ snapshots:
       tslib: 2.8.1
     optionalDependencies:
       '@types/react': 19.2.18
-
-  react@18.3.1:
-    dependencies:
-      loose-envify: 1.4.0
 
   react@19.2.8: {}
 
@@ -24986,6 +25146,14 @@ snapshots:
   require-directory@2.1.1: {}
 
   require-from-string@2.0.2: {}
+
+  require-in-the-middle@7.5.2:
+    dependencies:
+      debug: 4.4.3(supports-color@8.1.1)
+      module-details-from-path: 1.0.4
+      resolve: 1.22.12
+    transitivePeerDependencies:
+      - supports-color
 
   requires-port@1.0.0: {}
 
@@ -25251,10 +25419,6 @@ snapshots:
 
   scale-svg-path@0.0.1: {}
 
-  scheduler@0.23.2:
-    dependencies:
-      loose-envify: 1.4.0
-
   scheduler@0.27.0: {}
 
   scroll-into-view-if-needed@3.1.0:
@@ -25446,6 +25610,8 @@ snapshots:
       '@shikijs/vscode-textmate': 10.0.2
       '@types/hast': 3.0.5
 
+  shimmer@1.2.1: {}
+
   side-channel-list@1.0.1:
     dependencies:
       es-errors: 1.3.0
@@ -25569,8 +25735,6 @@ snapshots:
 
   spdx-license-ids@3.0.23: {}
 
-  split-on-first@1.1.0: {}
-
   split2@4.2.0: {}
 
   sprintf-js@1.0.3: {}
@@ -25636,8 +25800,6 @@ snapshots:
       xtend: 4.0.2
 
   stream-wormhole@1.1.0: {}
-
-  strict-uri-encode@2.0.0: {}
 
   string-argv@0.3.2: {}
 

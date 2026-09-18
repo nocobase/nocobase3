@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import {
   Boxes,
   Clipboard,
@@ -96,7 +97,7 @@ export function Deployments({
                 onClick={onDeploy}
               >
                 <Play className='size-4' />{' '}
-                {t('deployments.deploy', { defaultValue: 'Deploy' })}
+                {t('deployments.deploy', { defaultValue: 'Deploy release' })}
               </Button>
               {deployState.reason ? (
                 <span className='sr-only' id='hub-deploy-action-reason'>
@@ -141,7 +142,7 @@ export function Deployments({
             onClick={onDeploy}
           >
             <Play className='size-4' />{' '}
-            {t('deployments.deploy', { defaultValue: 'Deploy' })}
+            {t('deployments.deploy', { defaultValue: 'Deploy release' })}
           </Button>
         ) : null}
       </div>
@@ -224,6 +225,12 @@ export function Deployments({
                   </TableCell>
                   <TableCell className='py-4'>
                     <DeploymentId value={deployment.id} />
+                    <Link
+                      className='ml-2 text-xs text-primary underline'
+                      to={`${deployment.id}/logs`}
+                    >
+                      {t('logs.view')}
+                    </Link>
                     <div className='mt-0.5 text-xs text-muted-foreground'>
                       {deployment.kind === 'rollback'
                         ? t('deployments.rolledBack', {

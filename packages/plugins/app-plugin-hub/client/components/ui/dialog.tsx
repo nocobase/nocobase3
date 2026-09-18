@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 // shadcn base-nova source adapted for declaration-emitting ESM builds.
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
@@ -10,14 +11,18 @@ export function Dialog(props: DialogPrimitive.Root.Props): ReactElement {
   return <DialogPrimitive.Root data-slot='dialog' {...props} />;
 }
 
-export function DialogContent({
-  className,
-  children,
-  ...props
-}: DialogPrimitive.Popup.Props): ReactElement {
+export function DialogContent(
+  inputProps: DialogPrimitive.Popup.Props,
+): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const { className, children, ...props } = inputProps;
+
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Backdrop className='fixed inset-0 z-50 bg-black/45' />
+      <DialogPrimitive.Backdrop
+        data-slot='dialog-overlay'
+        className='fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0'
+      />
       <DialogPrimitive.Popup
         data-slot='dialog-content'
         className={cn(
@@ -30,7 +35,7 @@ export function DialogContent({
         <DialogPrimitive.Close
           render={
             <Button
-              aria-label='Close'
+              aria-label={t('common.close', { defaultValue: 'Close' })}
               className='absolute top-4 right-4'
               size='icon'
               variant='ghost'
@@ -64,6 +69,8 @@ export function DialogHeader({
  * so the primary action could only be reached by scrolling the whole dialog. Header and footer stay put and this
  * is what moves, which is also why it needs `min-h-0` — a flex child refuses to shrink below its content without
  * it, and the overflow would move back out to the popup.
+ *
+ * Padding and matching negative margins leave room for focus rings without shifting the content.
  */
 export function DialogBody({
   className,
@@ -72,7 +79,7 @@ export function DialogBody({
   return (
     <div
       data-slot='dialog-body'
-      className={cn('min-h-0 flex-1 overflow-y-auto', className)}
+      className={cn('-m-1 min-h-0 flex-1 overflow-y-auto p-1', className)}
       {...props}
     />
   );

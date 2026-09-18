@@ -1,202 +1,54 @@
 ---
 name: nocobase-plugin-development
-description: 'Develop and maintain NocoBase v3 application plugins in a source workspace using packages/plugins/app-plugin-*, plugin:create, explicit Client and Server contributions, Plugin Skills, and target App registration. Use when creating or changing a plugin in a workspace containing packages/tools/create-plugin, packages/app/app-client, and packages/app/app-server. Do not use for legacy NocoBase v2 plugin workspaces.'
+description: Develop and maintain NocoBase v3 plugins in this source workspace, including scaffolding, shadcn UI, Client/Server/CLI contributions, database resources, Registry items, Plugin Skills, and target App registration. Use when creating or changing packages/plugins/app-plugin-* or example plugins. Not for legacy NocoBase v2 plugins or application-only development.
 ---
 
 # NocoBase Plugin Development
 
-Use this Skill only for the v3 plugin architecture in the current source workspace. It provides routing and safety rules for plugin development.
+Use this Skill for plugin source development in the NocoBase 3 repository. Read the applicable `AGENTS.md` and inspect the target plugin and App before editing. Confirm the workspace contains `packages/tools/create-plugin/`, `packages/app/app-client/`, `packages/app/app-server/`, and `pnpm-workspace.yaml`. A `packages/plugins/` directory alone does not identify v3; do not apply the legacy `Plugin` class, `src/client-v2/`, or `nb scaffold plugin` protocol here.
 
-## Verify the workspace
+## Choose the relevant references
 
-Before changing files, confirm the workspace contains:
+These English references adapt the plugin development guide into task-specific instructions. Read the rows relevant to the task; do not load the entire reference set by default.
 
-```text
-packages/tools/create-plugin/
-packages/app/app-client/
-packages/app/app-server/
-pnpm-workspace.yaml
-```
+| Task                                                                                                  | Read                                                                 |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Create a plugin, choose capabilities, change declarations, exports, dependencies, or public contracts | [Scaffolding and package contracts](references/plugin-foundation.md) |
+| Register, configure, upgrade, disable, unregister, or diagnose plugin integration                     | [Registration and lifecycle](references/registration.md)             |
+| Choose Client components, ServiceProviders, React Providers, configuration, or API access             | [Client architecture](references/client.md)                          |
+| Build or change any plugin UI                                                                         | [shadcn components and styling](references/client-components.md)     |
+| Add pages, Settings, Dev routes, menus, Tabs, route dialogs/drawers, child routes, or page overrides  | [Client routing](references/client-routing.md)                       |
+| Define service contracts, Tokens, dependency injection, or lifecycle                                  | [Services and Providers](references/services.md)                     |
+| Add HTTP endpoints, authorization, Repository operations, or Queue Jobs                               | [Server development](references/server.md)                           |
+| Add migrations, seeds, or package resource/checksum handling                                          | [Database resources](references/database.md)                         |
+| Add or change text, locale resources, translated errors, or recipient-language messages               | [Internationalization](references/i18n.md)                           |
+| Author, publish, install, upgrade, or remove App-owned editable Client source                         | [Registry](references/registry.md)                                   |
+| Expose a plugin's capabilities to the App Agent                                                       | [Plugin Skills](references/plugin-skills.md)                         |
+| Add commands, CLI exports, or CLI registration                                                        | [CLI plugins](references/cli.md)                                     |
+| Select behavior tests and verify package/App integration                                              | [Testing and delivery](references/testing.md)                        |
 
-`packages/plugins/` by itself does not identify the workspace: v3 keeps its own
-plugins there as `app-plugin-*`. If the project instead has `packages/core/`,
-`packages/plugins/@nocobase/plugin-*`, `src/client-v2/`, `nb scaffold plugin`, or
-the legacy `Plugin` class, do not apply this Skill. That is a different plugin
-protocol.
+For worked implementations and tests, read the matching [Server Route examples](references/server-route-examples.md), [ServiceToken and Provider examples](references/service-examples.md), [Client examples](references/client-examples.md), or [Repository examples](references/repository-examples.md). These supplement the topic references with concrete code and point to maintained source fixtures; adapt their explicit example access policies to the requested product.
 
-Always read the repository `AGENTS.md` first, then inspect the relevant source, tests, and examples for the current task.
+## Rules that apply before implementation
 
-When building a plugin page with Tabs, use child routes by default, even if the
-user does not mention routing. Declare Tab content under the plugin's parent
-route, place `Outlet` in its page, and derive the selected Tab from the URL.
-Opening the parent URL redirects to the default accessible Tab with replace and
-preserves query parameters; explicit Tab URLs retain their selection.
-Follow an explicit user request for a different interaction.
+When creating a page or writing a page component, refer to [Pages, routes, and menus](../../../packages/app/app-skills/skills/nocobase-app-development/references/client-pages-and-routes.md) for page component structure and route declarations. For nested pages, page-level navigation Tabs, route dialogs/drawers, or navigation groups, also read [Child routes, Tabs, overlays, navigation groups, and Outlet](../../../packages/app/app-skills/skills/nocobase-app-development/references/client-child-routes.md). Adapt application-local imports in these examples, such as `@/components/page-container`, to the plugin's own components and declared dependencies. For route overlay component availability and hook context boundaries, read [route dialogs and drawers](references/client-routing.md#route-dialogs-and-drawers).
 
-For pages with Tabs or other frontend React Router tasks (`defineAppRoutes()`,
-`defineSettingsRoutes()`, or `defineDevRoutes()`), read the routing references
-in the existing `nocobase-app-development` Skill:
+- Use shadcn components for interactive UI primitives such as buttons, inputs, dialogs, selects, and Tabs. Read the component reference before UI work. Keep plugin-owned components in the plugin; do not assume the host App's `@/components/ui/*` alias works in a compiled plugin. Use the shared theme tokens for color, typography, spacing, size, radius, and shadow.
+- Use child routes for page-level navigation Tabs by default, even when the user does not mention routing. Declare each Tab's content as a child route, render `Outlet` in the parent page component, and derive the active Tab from the URL. When the parent URL is opened without a child route, redirect to the default accessible Tab by replacing the current history entry and preserving query parameters. Opening an explicit Tab URL must retain that Tab's selection. Follow an explicit user request for a different interaction.
+- Create plugins with `pnpm plugin:create` and explicit capabilities, including `cli` when needed. Preview with `--dry-run --json`. Keep the generated runtime-aware shared development configuration.
+- Keep declarations static and free of startup side effects. Lazy-load page components, locale messages, heavy SDKs, and genuinely optional features at their leaf boundaries. Settings are Routes, components are public/source exports, and neither is a separate runtime loader.
+- Reuse the host's API client through `useApiClient()` or `apiClientToken`; do not construct another application API client. Define shared service contracts and owner-created Tokens before implementations; consumers import the original Token.
+- Each Server Route owns and tests its authentication and authorization, or its explicit public protocol boundary. Another contribution's middleware or registration order is not protection. Test the production contribution through `createRouter()`.
+- Every Server plugin declares an absolute `baseDir`. Migrations, seeds, and Jobs resolve relative to it so compiled plugins use compiled resources. Migrations are explicit, self-contained, immutable after merge, and tested against a real database.
+- Register Client, Server, and CLI exports explicitly in the corresponding target App composition roots. Installation, registration, Skills synchronization, and runtime behavior are separate facts; legacy manifest metadata is not runtime discovery.
+- Plugin integration knowledge is authored in `<plugin>/skills/`; the target App's `.agents/skills/` is generated output. Registry source copied into an App belongs to that App. This repository's development Skill is maintained source, distinct from either kind of output.
+- Follow the repository's dependency rules: shared runtimes and client value imports are peers, ordinary server runtime imports are dependencies, and development-only imports are devDependencies. A type reference retained in published declarations needs a consumer-resolvable contract.
 
-- [Pages, routes, and menus](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-pages-and-routes.md)
-- [Child routes, Tabs, navigation groups, and Outlet](../../../packages/templates/app-template-default/skills/nocobase-app-development/references/client-child-routes.md)
+## Implementation workflow
 
-These links use Default as the shared routing reference. When integrating with Examples or Hub, use the same reference files under that target template's `skills/nocobase-app-development/` directory. Reuse the React Router, navigation, and verification guidance; plugin source ownership and registration remain governed by this Skill. In particular, declare plugin routes in the plugin's `client/routes.ts`, not the application's route file. App menus are declared on routes; Refine resources serve CRUD.
-
-For Client or Server Route tasks, inspect only the matching files in `packages/examples/app-plugin-routes-example` when a runnable reference is needed.
-
-## Stable v3 protocol
-
-- Create new plugins under `packages/plugins/app-plugin-<name>/` with
-  `pnpm plugin:create`; do not use `nb scaffold plugin`.
-- `plugin:create` has no implicit plugin shape. Select one or more explicit
-  capabilities with repeatable `--with`, or use `--empty` for only the package
-  foundation. Prefer `--dry-run --json` before creation. In JSON mode, branch
-  on `ok`; recover from failures by using `error.code` and
-  `error.suggestions`, while still treating the non-zero exit code as failure.
-- The public creation capabilities are `database`, `server.service-providers`,
-  `server.routes`, `server.jobs`, `server.locales`, `client.routes`,
-  `client.components`, `client.service-providers`, `client.react-providers`,
-  `client.locales`, `registry`, and `skills`.
-- The first Create Plugin workflow creates plugins only in a NocoBase source
-  workspace. It does not create a standalone plugin project inside an App.
-- Keep the runtime-aware shared development configuration emitted by
-  `plugin:create`: Browser-only plugins use the client library preset without
-  a Node runtime declaration, Server-only plugins use the server library and
-  Node ESLint presets, and full-stack plugins add DOM/JSX locally to the server
-  library preset. Do not copy a complete config from another package.
-- Client Runtime and plugin declarations use the optional static fields
-  `config`, `serviceProviders`, `reactProviders`, `routes`, and `locales`.
-  ServiceProvider aggregation modules default-export a constructor array named
-  `serviceProviders`; declaration modules default-import that same name and use
-  the `serviceProviders,` property shorthand instead of declaring constructor
-  arrays inline.
-  Static imports make the composition inspectable but do not execute a
-  ServiceProvider lifecycle, render a React Provider, or load route pages and
-  locale messages. The locale namespace is always the plugin `packageName`.
-- Locale scaffolding is explicit. Select `client.locales` for Client resources
-  and `server.locales` for Server resources; select both when both runtimes own
-  translated messages. Routes, ServiceProviders, and React Providers do not implicitly add
-  locale files.
-- Public Client components rendered outside their owning plugin tree must bind
-  their namespace explicitly. Binding does not register resources: a
-  component-only package either leaves copy to the App or exposes and registers
-  a locales-only `./client` plugin factory. Request-external messages must
-  choose the recipient locale, load it, and then use a fixed translator; do not
-  inherit a triggering user's request locale.
-- Client Components are source or public exports, not a Runtime contribution.
-  Use Routes for pages, React Providers for shared React Context, and Client
-  ServiceProviders for application-owned Services, Refine configuration, and
-  imperative initialization.
-- Settings pages are routes declared with `defineSettingsRoutes()`; there is no
-  fourth `settings` loader or `client/settings.ts` runtime contract.
-- Keep Client page components behind lazy `componentLoader()` functions. Use a
-  Route component override to replace a plugin page; do not redeclare its Route.
-- Keep contribution declarations static and side-effect-free. Put dynamic
-  imports at leaf boundaries such as route page components, locale messages,
-  heavy SDKs, or truly optional features.
-- Client ServiceProvider lifecycle runs inside `ClientApplication.start()`.
-  The Browser host owns the React DOM root and renders React Providers through
-  `AppClientRoot` only after application startup succeeds.
-- Server Routes are direct contributions passed to `defineServerPlugin()`; do
-  not write a Server route loader.
-- Define a Service contract and owner-created Token before a public or shared
-  implementation. Consumers import the original Token; Providers register and
-  manage lifecycle, Routes own HTTP, and Jobs own asynchronous orchestration.
-- Write a small Server Route directly in its contribution factory. Extract a
-  `createXxxRoutes(options): Hono` only for a coherent, complex child router;
-  do not export a `registerXxxRoutes(router, ...)` helper merely for testing.
-- Test the production Server contribution through `createRouter()`. Every
-  Server Route owns and tests an explicit security policy. Authenticated Routes
-  install their own authentication and authorization; intentionally public
-  callbacks document and test their protocol-specific boundary. Never rely on
-  another contribution or on current composition order for protection.
-- Register Client and Server definitions explicitly in the target App's
-  `client/plugins.ts` and `server/plugins.ts`.
-- Prefer lifecycle commands with `--json`. Branch on `ok` and `status`; treat
-  `success-noop`, `partial-success`, and `requires-installation` as distinct
-  outcomes, and use `error.code` plus the non-zero exit code for failures.
-- Inspectors are optional, read-only composition diagnostics. Use
-  `plugin:inspect <name> --json` after registration changes, and use the
-  matching Client or Server Inspector only when composition changed or when
-  diagnosing why a declaration is unavailable. Do not run every Inspector by
-  default. A clean result means only that the structural facts observed by that
-  command were readable and consistent; it does not verify implementation,
-  runtime behavior, Route security, locale content, tests, or builds.
-- When an Inspector is useful, read `ok` and `status`, then `consistent`,
-  `issues`, and `suggestions`. `server:inspect --json` reports declaration and
-  resolved-location facts without executing ServiceProvider, Route, locale, database,
-  or Job behavior. `client:inspect --type locales --json` imports Client plugin
-  declarations without executing ServiceProvider lifecycle, rendering React Providers, or loading locale messages and does
-  not inspect locale names, keys, translations, fallback, or language switching.
-- Keep `server/plugin.ts` and the declaration modules it imports free of runtime
-  startup side effects. Inspection imports these modules even though it does
-  not instantiate ServiceProviders, execute Route factories, or load Job modules.
-- `package.json#nocobase.plugins` is management metadata for install, CLI,
-  build/watch, and Skills synchronization. It is not runtime discovery.
-- `exports["./client"]` and `exports["./server"]` are the Client and
-  Server registration criteria respectively; keep source and publish exports
-  aligned.
-- Plugin-owned App integration knowledge belongs in the plugin's top-level
-  `skills/` and is synchronized to the App's `.agents/skills/` for the App
-  Agent. The App's entire `.agents/` directory is ignored local output: never
-  commit it or use it as a source of truth. It is not runtime code and is not
-  plugin-source development guidance.
-- Use `packages/examples/app-plugin-skills-example` as the minimal normative Plugin
-  Skill reference. A public Client component subpath export does not require a
-  `./client` runtime entry or Client plugin registration. Verify Skill claims
-  through observable target-App behavior, not only synchronized file equality.
-- Tests belong under the plugin-root `tests/` directory.
-- Migrations are immutable historical records: make them explicit,
-  deterministic, self-contained, and never import live runtime schemas.
-- Seeds insert required initial records into schema established by Migrations;
-  they are not schema operations, user data, demo records, or test fixtures.
-- Registry items materialize Client source into an App. The plugin owns the
-  canonical recipe; the App owns the installed copy and merges upgrades. A
-  Registry item is not a runtime contribution and does not enable the plugin.
-- Follow repository and package `AGENTS.md` rules, including shared dev config,
-  dependency protocols, and validation requirements.
-
-## Resource and checksum contract
-
-Every Server plugin requires `baseDir`, an absolute resource base. In a declaration under `server/`, import `path` from `node:path` and set `baseDir: path.resolve(import.meta.dirname, '..')`. Database and Queue paths are relative to this base, not automatically to the package root. Compiled declarations resolve compiled resources without a source/dist fallback. Keep source and publish exports aligned, and never calculate this directory from the application's working directory.
-
-After compiling migrations and seeds and rewriting JavaScript imports, run `nocobase-db-manifests` from `@nocobase/dev-config`. Include each generated `.manifest.json` and its marked JavaScript in published output. Do not modify task source to embed checksums. Source checksum is the stable history identity; artifact checksum validates the emitted file. For legacy JS history, an exact verified pre-marker artifact hash can be upgraded under the task lock; unverified history remains an error. See [database checksum upgrades](../../../packages/libs/db/CHECKSUMS.md).
-
-## Safe implementation loop
-
-1. Inspect workspace status, target plugin, target App, package metadata,
-   exports, current declarations, composition roots, tests, and existing
-   examples. Preserve unrelated user changes.
-2. Translate the requirement into ownership and capabilities: Client, Server,
-   Database, Queue, Plugin Skills, and optional Registry.
-3. Define the smallest public contract before implementing: typed Client
-   options or exports, Server ServiceTokens/APIs, permissions, errors, and
-   observable verification results.
-4. Implement in the owning plugin. Keep domain logic in Services, HTTP logic
-   in Routes, asynchronous orchestration in Jobs, and App prerequisites in
-   Plugin Skills.
-5. Keep declarations, source/publish exports, dependencies, `files`, tests,
-   README, and Skills consistent when a contribution changes.
-6. Preview registration with `--dry-run --json` and apply it. When registration
-   state is unclear, use `plugin:inspect <name> --json` as a read-only snapshot
-   of the static registration and composition facts. The plugin's
-   `<plugin>/skills/` is the source of truth; do not edit the App's synchronized
-   `.agents/skills/` copy.
-7. Run the plugin's lint, typecheck, test, and build, then the relevant App
-   typecheck, test, build, and runtime checks. After a composition change, the
-   matching Client or Server Inspector may provide a read-only composition
-   snapshot; it is not a completion gate and does not explain or test behavior.
-
-Do not run scaffold, registration, enablement, migration, or other stateful
-commands merely because this Skill applies. Perform those actions only when
-the user's requested implementation requires them and the relevant plan and
-scope are clear.
-
-## Completion gate
-
-Consider the task complete only when the requested behavior is owned by the
-correct plugin, unused scaffold examples are removed, declarations and
-exports match the implementation, behavior tests cover the change, the target
-App registration is correct, and App-facing capability changes are reflected
-in Plugin Skills and synchronized when in scope. Report commands run, results,
-assumptions, skipped checks, and remaining limitations.
+1. Inspect working-tree changes, plugin manifests, declarations, exports, tests, and the target App. Identify the requested behavior and who owns its data, UI, services, and integration code.
+2. Select capabilities and define the smallest public contracts: Client options/exports, Server Tokens/APIs, CLI commands, permission/error boundaries, and observable results. Use only the relevant references above.
+3. Implement in the owning plugin. Put domain behavior in Services, HTTP boundaries in Routes, asynchronous orchestration in Jobs, React context in React Providers, and application integration instructions in Plugin Skills.
+4. Keep declarations, source/publish exports, dependencies, published files, tests, README, and Plugin Skills consistent. Remove unused scaffold examples and drafts. Write each Markdown prose paragraph on one physical line, without manual line wrapping.
+5. When integration is part of the request, preview and apply registration to the chosen App, synchronize applicable Skills, and validate the resulting behavior. Do not run creation, registration, migration, or other stateful commands merely because this Skill applies.
+6. Follow [testing and delivery](references/testing.md): run the modified plugin's checks and relevant consumer checks, then verify the requested runtime workflow. Inspectors are optional read-only composition diagnostics, not tests or completion gates. Report results, skipped checks, and remaining limitations accurately.

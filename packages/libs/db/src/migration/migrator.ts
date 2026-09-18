@@ -112,11 +112,27 @@ class DefaultMigrator implements Migrator {
         const skipped = selectedMigrations
           .filter((migration) => appliedNames.has(migration.name))
           .map((migration) => migration.name);
-        const batch =
-          pending.length > 0 ? nextBatch(history) : currentBatch(history);
+        let batch = currentBatch(history);
         const executed: string[] = [];
 
         for (const migration of pending) {
+          if (migration.migration.shouldRun) {
+            const shouldRun = await migration.migration.shouldRun({
+              ...createMigrationContext(connection),
+              parameters: migration.parameters,
+              configuration: migration.configuration,
+            });
+            if (typeof shouldRun !== 'boolean') {
+              throw new Error(
+                `Migration "${migration.name}" shouldRun must return a boolean.`,
+              );
+            }
+            if (!shouldRun) {
+              skipped.push(migration.name);
+              continue;
+            }
+          }
+          batch = nextBatch(history);
           await this.runUpMigration(connection, migration, batch);
           executed.push(migration.name);
         }
@@ -222,7 +238,11 @@ class DefaultMigrator implements Migrator {
   ): Promise<void> {
     const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
-      const context = createMigrationContext(connection);
+      const context = {
+        ...createMigrationContext(connection),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       const startedAt = Date.now();
       await loaded.migration.up(context);
       await recordMigrationCompleted(context.connection, {
@@ -237,7 +257,11 @@ class DefaultMigrator implements Migrator {
     }
 
     await connection.transaction(async (trxConnection) => {
-      const context = createMigrationContext(trxConnection);
+      const context = {
+        ...createMigrationContext(trxConnection),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       const startedAt = Date.now();
       await loaded.migration.up(context);
       await recordMigrationCompleted(context.connection, {
@@ -257,7 +281,11 @@ class DefaultMigrator implements Migrator {
   ): Promise<void> {
     const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
-      const context = createMigrationContext(connection);
+      const context = {
+        ...createMigrationContext(connection),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       await loaded.migration.down?.(context);
       await deleteMigrationHistoryRecord(context.connection, {
         tableName: this.options.tableName,
@@ -267,7 +295,11 @@ class DefaultMigrator implements Migrator {
     }
 
     await connection.transaction(async (trxConnection) => {
-      const context = createMigrationContext(trxConnection);
+      const context = {
+        ...createMigrationContext(trxConnection),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       await loaded.migration.down?.(context);
       await deleteMigrationHistoryRecord(context.connection, {
         tableName: this.options.tableName,

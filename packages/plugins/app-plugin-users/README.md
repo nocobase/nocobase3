@@ -69,3 +69,9 @@ pnpm --filter @nocobase/app-plugin-users typecheck
 pnpm --filter @nocobase/app-plugin-users test
 pnpm --filter @nocobase/app-plugin-users build
 ```
+
+## User deletion
+
+`DELETE /api/users/:userId` requires the `user/delete` action and `{ "confirm": true }`. The service also rejects deleting the acting user. Application role scopes can implement `assertCanDelete(userId, actorId, connection)` and `onDelete(userId, connection)` to protect owned resources and remove credentials in the same transaction. Hub grants deletion only to its Platform Administrator and registers those lifecycle rules; Users does not grant access by default. Failed cleanup rolls back the deletion. Repeating deletion is safe.
+
+Deletion removes the user from management lists, revokes sessions and removes sign-in accounts. Authentication retains a disabled identity with `deletedAt` and `deletedBy` for historical attribution; it cannot be re-enabled through user management. Email and username remain reserved. The authenticated deletion route emits a structured `user.delete` security event without credentials. The UI requires confirmation and reports failures through the application's notification host.

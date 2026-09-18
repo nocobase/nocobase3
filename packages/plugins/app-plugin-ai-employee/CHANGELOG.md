@@ -1,5 +1,68 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.15
+
+### Minor Changes
+
+- ec93611: Add discoverable data metadata, permission-scoped queries, and business analysis report skills for AI employees. Validate report charts on the server and render only confirmed report results. Reapply session restrictions to activated tools and include runtime skill assets in compiled deployment output.
+
+### Patch Changes
+
+- 365a9fe: Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations. Resolve AI Registry copy from the active language and localize development navigation and section headings. Translate MCP configuration guidance, tool drawer labels, and transport descriptions.
+- d4ca00e: Use useApiClient() for React API client access across application pages, plugins and shared examples, preserving application-scoped client resolution.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [365a9fe]
+- Updated dependencies [365a9fe]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.14
+
+### Patch Changes
+
+- 028dd7c: Use host-provided peers for shared database types, authorization errors, service tokens, cache registries, and repository filter metadata. Declare their production providers in all application templates so deployments with automatic peer installation disabled retain the required runtime packages. Document the provider contract for generated plugins.
+
+  Existing applications upgrading these packages must add compatible versions of their required shared peers to production dependencies: @nocobase/db, @nocobase/service-provider, @nocobase/repository-input, @nocobase/authorization, @nocobase/caching, @nocobase/i18n, and @nocobase/queue for the standard server stack, plus @nocobase/ai-employee when using its plugin. Update the lockfile and verify the production install; peer declarations do not remove incompatible historical versions automatically.
+
+- Updated dependencies [028dd7c]
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/app-client@1.0.0-beta.17
+  - @nocobase/app-plugin-authentication@0.1.0-beta.16
+  - @nocobase/app-server@1.0.0-beta.17
+  - @nocobase/db@1.0.0-beta.8
+
+## 0.1.0-beta.13
+
+### Patch Changes
+
+- 9131230: Use plugin-owned PageContainer and PageHeader components to unify AI component demo and in-app inbox page layouts.
+
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- 6acf3bc: Use plugin-owned PageContainer and PageHeader components to standardize AI settings page spacing and headings.
+- d927494: Fix development startup of generated Hub applications by selecting the App Host launcher from the loaded package format, preserving source development in the workspace and using compiled JavaScript in installed packages. Keep the optional application configuration commented out so an empty YAML section cannot override application identity defaults during production startup. Correct the AI Employee plugin Skill namespace so generated applications can synchronize their registered plugins' Skills.
+- 89955c5: Upgrade better-sqlite3 to ^13.0.3 and keep its dependency declaration in @nocobase/db-sqlite only. Remove redundant test dependencies from consumers so they use the same SQLite driver as applications.
+
+  Preserve the bundled musl binary when building applications for Alpine Linux.
+
+- Updated dependencies [89955c5]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+
 ## 0.1.0-beta.11
 
 ### Patch Changes

@@ -3,7 +3,7 @@ import {
   type AppClientAppRoutesContribution,
   type AppClientRouteDefinition,
 } from '@nocobase/app-client/plugins';
-import { Boxes, ShieldCheck } from 'lucide-react';
+import { Boxes, ShieldCheck, KeyRound } from 'lucide-react';
 
 import type { HubClientOptions } from './plugin.js';
 
@@ -36,35 +36,50 @@ export function createHubRoutes(
             {
               name: 'hub-app-deployments',
               path: 'deployments',
-              access: { resource: 'hub.app', action: 'read-deployment' },
+              access: { resource: 'hub.app:*', action: 'read-deployment' },
               componentLoader: () =>
                 import('./pages/hub/tabs/deployments-page.js'),
+              children: [
+                {
+                  name: 'hub-deployment-logs',
+                  path: ':deploymentId/logs',
+                  access: { resource: 'hub.app:*', action: 'read-deployment' },
+                  componentLoader: () =>
+                    import('./pages/hub/tabs/deployment-logs-page.js'),
+                },
+              ],
+            },
+            {
+              name: 'hub-app-logs',
+              path: 'logs',
+              access: { resource: 'hub.app:*', action: 'read-log' },
+              componentLoader: () => import('./pages/hub/tabs/logs-page.js'),
             },
             {
               name: 'hub-app-releases',
               path: 'releases',
-              access: { resource: 'hub.app', action: 'read-release' },
+              access: { resource: 'hub.app:*', action: 'read-release' },
               componentLoader: () =>
                 import('./pages/hub/tabs/releases-page.js'),
             },
             {
               name: 'hub-app-development',
               path: 'development',
-              access: { resource: 'hub.app', action: 'upload-release' },
+              access: { resource: 'hub.app:*', action: 'upload-release' },
               componentLoader: () =>
                 import('./pages/hub/tabs/development-page.js'),
             },
             {
               name: 'hub-app-resources',
               path: 'resources',
-              access: { resource: 'hub.app', action: 'read-config' },
+              access: { resource: 'hub.app:*', action: 'read-config' },
               componentLoader: () =>
                 import('./pages/hub/tabs/resources-page.js'),
             },
             {
               name: 'hub-app-configuration',
               path: 'configuration',
-              access: { resource: 'hub.app', action: 'read-config' },
+              access: { resource: 'hub.app:*', action: 'read-config' },
               componentLoader: () =>
                 import('./pages/hub/tabs/configuration-page.js'),
             },
@@ -89,6 +104,14 @@ export function createHubRoutes(
       componentLoader: () => import('./pages/roles-page.js'),
     });
   }
+  routes.push({
+    name: 'hub-api-keys',
+    path: normalizeHubRoutePath(options.apiKeysPath ?? '/api-keys'),
+    auth: 'required',
+    access: { resource: 'hub.app:*', action: 'manage-api-keys' },
+    navigation: { title: 'navigation.apiKeys', icon: KeyRound },
+    componentLoader: () => import('./pages/api-keys-page.js'),
+  });
   return defineAppRoutes(routes);
 }
 

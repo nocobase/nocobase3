@@ -1,5 +1,5 @@
+import { PageHeader } from '../../components/page-header.js';
 import {
-  Boxes,
   ChevronRight,
   Grid2X2,
   List,
@@ -86,35 +86,28 @@ export function Catalog({
   const showLoading = loading || (fetching && apps.length === 0);
   return (
     <>
-      <header className='mb-7 flex flex-wrap items-end justify-between gap-4'>
-        <div>
-          <div className='mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground'>
-            <Boxes className='size-4' />{' '}
-            {t('page.brand', { defaultValue: 'Application Hub' })}
-          </div>
-          <h1 className='text-3xl font-semibold tracking-tight'>
-            {t('page.title', { defaultValue: 'Applications' })}
-          </h1>
-          <p className='mt-2 text-sm text-muted-foreground'>
-            {t('page.description', {
-              defaultValue:
-                'Create, deploy, and operate applications from a single workspace.',
-            })}
-          </p>
-        </div>
-      </header>
-      <div className='mb-5 flex flex-wrap items-center gap-3'>
-        <label className='flex h-10 min-w-0 max-w-md flex-1 items-center gap-2 rounded-lg border bg-background px-3'>
-          <Search className='size-4 text-muted-foreground' />
+      <PageHeader
+        title={t('page.title', { defaultValue: 'Applications' })}
+        description={t('page.description', {
+          defaultValue:
+            'Create, deploy, and operate applications from a single workspace.',
+        })}
+      />
+      <div className='flex flex-wrap items-center gap-3'>
+        <div className='relative w-full min-w-0 sm:max-w-md sm:flex-1'>
+          <Search className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
           <Input
-            className='h-auto border-0 p-0 focus-visible:ring-0'
+            aria-label={t('page.search', {
+              defaultValue: 'Search applications…',
+            })}
+            className='h-10 pl-9'
             onChange={(event) => onQuery(event.target.value)}
             placeholder={t('page.search', {
               defaultValue: 'Search applications…',
             })}
             value={query}
           />
-        </label>
+        </div>
         <div className='ml-auto flex items-center gap-3'>
           <div className='flex h-10 items-center rounded-lg border bg-background p-1'>
             <ViewButton
@@ -220,14 +213,6 @@ export function Catalog({
                   defaultValue:
                     'Create an application and upload its first release.',
                 })
-          }
-          action={
-            query.trim() || !canCreate ? undefined : (
-              <Button className='mt-5' onClick={onCreate}>
-                <Plus className='size-4' />{' '}
-                {t('page.newApplication', { defaultValue: 'New application' })}
-              </Button>
-            )
           }
         />
       )}
@@ -474,7 +459,7 @@ export function CreateDialog({
           label={t('page.applicationId', { defaultValue: 'Application ID' })}
           hint={t('page.applicationIdHint', {
             defaultValue:
-              'Used in URLs and storage. It cannot be changed later.',
+              'Auto-generated and editable; globally unique and fixed after creation.',
           })}
         >
           <Input

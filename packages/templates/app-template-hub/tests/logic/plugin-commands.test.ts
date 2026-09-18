@@ -30,6 +30,8 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:unregister': 'nocobase plugin unregister',
   'plugin:update': 'nocobase plugin update',
   'plugin:skills:sync': 'nocobase plugin skills sync',
+  'skills:sync': 'nocobase skills sync',
+  'package:remove': 'nocobase package remove',
   nocobase: 'tsx ./cli/index.ts',
   'client:inspect': 'pnpm nocobase app inspect client',
   'server:inspect': 'pnpm nocobase app inspect server',

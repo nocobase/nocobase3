@@ -5,7 +5,7 @@ import { ServiceContainer } from '@nocobase/service-provider';
 
 import {
   AppConfig,
-  createConfigPaths,
+  createAppPaths,
   PLACEHOLDER_SECRET,
 } from '../src/config/index.js';
 
@@ -118,7 +118,7 @@ function createProviderApplication(
     appName: 'test',
     publicBasePath: '',
     config,
-    paths: createConfigPaths({ rootDir: process.cwd() }),
+    paths: createAppPaths({ rootDir: process.cwd() }),
     router: new Hono(),
     container,
   };

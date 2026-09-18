@@ -1,3 +1,4 @@
+import type { JournalPage, JournalQuery } from '@nocobase/logging';
 import type {
   HostDeploymentSet,
   HostStatus,
@@ -37,6 +38,8 @@ export interface HubAppRecord {
 }
 
 export interface HubReleaseRecord {
+  readonly reused?: boolean;
+  readonly operationId?: string | null;
   readonly id: string;
   readonly appId: string;
   readonly version: string;
@@ -71,6 +74,12 @@ export interface HubDeploymentRecord {
   readonly createdAt: Date;
   readonly startedAt: Date | null;
   readonly finishedAt: Date | null;
+  /**
+   * Set when a deployment request was answered from an earlier idempotent request instead of
+   * creating a deployment now, so callers can tell "accepted" from "already done". Records read
+   * back from storage never carry it.
+   */
+  readonly reused?: boolean;
 }
 
 export interface HubRuntimeStatus {
@@ -128,7 +137,15 @@ export interface CreateHubAppInput {
 }
 
 export interface CreateHubReleaseInput {
-  readonly bytes: Uint8Array;
+  readonly bytes?: Uint8Array;
+  readonly stream?: AsyncIterable<Uint8Array>;
+  readonly checksum?: string;
+  readonly idempotencyKey?: string;
+  readonly deploymentIntent?: 'explicit';
+  readonly config?: SaveHubConfigInput;
+  readonly waitForDeployment?: boolean;
+  /** Authorization supplied by the HTTP boundary when publishing also deploys. */
+  readonly authorizeDeployment?: () => Promise<void>;
 }
 
 export interface HubConfigDocument {
@@ -146,6 +163,7 @@ export interface UpdateHubConfigInput {
 }
 
 export interface DeployHubAppInput {
+  readonly idempotencyKey?: string;
   readonly releaseId: string;
   readonly config?: SaveHubConfigInput;
 }
@@ -156,7 +174,8 @@ export interface RollbackHubAppInput {
 }
 
 export interface UpdateHubSettingsInput {
-  readonly activation: 'lazy' | 'eager';
+  readonly name?: string;
+  readonly activation?: 'lazy' | 'eager';
 }
 
 export interface HubDeploymentPage {
@@ -167,6 +186,7 @@ export interface HubDeploymentPage {
 }
 
 export interface ListHubAppsOptions {
+  readonly createdBy?: string;
   readonly search?: string;
   readonly page?: number;
   readonly pageSize?: number;
@@ -183,7 +203,10 @@ export interface HubService {
   listApps(): Promise<readonly HubAppSummary[]>;
   listAppsPage(options?: ListHubAppsOptions): Promise<HubAppPage>;
   getApp(appId: string): Promise<HubAppDetail>;
-  createApp(input: CreateHubAppInput): Promise<HubAppDetail>;
+  createApp(
+    input: CreateHubAppInput,
+    createdBy?: string,
+  ): Promise<HubAppDetail>;
   listReleases(appId: string): Promise<readonly HubReleaseRecord[]>;
   getRelease(appId: string, releaseId: string): Promise<HubReleaseRecord>;
   createRelease(
@@ -199,6 +222,13 @@ export interface HubService {
     appId: string,
     input: UpdateHubSettingsInput,
   ): Promise<HubAppDetail>;
+  readLogs(
+    appId: string,
+    query?: JournalQuery,
+    deploymentId?: string,
+  ): Promise<
+    JournalPage & { enabled: boolean; status?: string; phase?: string }
+  >;
   listDeployments(
     appId: string,
     options?: { page?: number; pageSize?: number },
@@ -221,6 +251,7 @@ export interface HubService {
   restoreDesiredState(): Promise<void>;
   createDeploymentSet(): Promise<HostDeploymentSet>;
   hostUrl(): string | null;
+  getHostProxyTarget(): URL | null;
   shutdown(): Promise<void>;
 }
 

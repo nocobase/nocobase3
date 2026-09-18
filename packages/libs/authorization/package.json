@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/authorization",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.7",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -126,7 +126,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/db": "workspace:^",
     "hono": "catalog:"
   },
   "devDependencies": {
@@ -137,5 +136,8 @@
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/db": "workspace:^"
   }
 }

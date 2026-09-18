@@ -16,14 +16,14 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
   {
     name: 'authorization',
     path: '/authorization',
-    navigation: { title: 'Authorization', icon: ShieldCheck },
-    breadcrumb: { title: 'Authorization' },
+    navigation: { title: 'authorization', icon: ShieldCheck },
+    breadcrumb: { title: 'authorization' },
     children: [
       {
         name: 'permission-sets',
         path: '/permission-sets',
-        navigation: { title: 'Permission Sets', icon: KeyRound },
-        breadcrumb: { title: 'Permission Sets' },
+        navigation: { title: 'permissionSets', icon: KeyRound },
+        breadcrumb: { title: 'permissionSets' },
         access: {
           resource: 'authorization.settings.permission-sets',
           action: 'read',
@@ -33,8 +33,8 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
       {
         name: 'default-access',
         path: '/default-access',
-        navigation: { title: 'Default Access', icon: LockKeyhole },
-        breadcrumb: { title: 'Default Access' },
+        navigation: { title: 'defaultAccess', icon: LockKeyhole },
+        breadcrumb: { title: 'defaultAccess' },
         access: {
           resource: 'authorization.settings.default-access',
           action: 'read',
@@ -44,8 +44,8 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
       {
         name: 'sharing-rules',
         path: '/sharing-rules',
-        navigation: { title: 'Sharing Rules', icon: Share2 },
-        breadcrumb: { title: 'Sharing Rules' },
+        navigation: { title: 'sharingRules', icon: Share2 },
+        breadcrumb: { title: 'sharingRules' },
         access: {
           resource: 'authorization.settings.sharing-rules',
           action: 'read',
@@ -55,8 +55,8 @@ const settings: AppClientRouteContribution = defineSettingsRoutes([
       {
         name: 'restriction-rules',
         path: '/restriction-rules',
-        navigation: { title: 'Restriction Rules', icon: ShieldBan },
-        breadcrumb: { title: 'Restriction Rules' },
+        navigation: { title: 'restrictionRules', icon: ShieldBan },
+        breadcrumb: { title: 'restrictionRules' },
         access: {
           resource: 'authorization.settings.restriction-rules',
           action: 'read',

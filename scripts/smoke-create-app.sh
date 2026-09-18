@@ -102,8 +102,14 @@ if [ ! -d "$APP_DIR/node_modules" ]; then
   exit 1
 fi
 
-echo "::group::Boot the application with pnpm dev"
 cd "$APP_DIR"
+echo "::group::Synchronize NocoBase package Skills"
+# create-app reports a synchronization failure as a warning. Exercise the command
+# explicitly so an invalid published Skill cannot pass this smoke test.
+pnpm skills:sync
+echo "::endgroup::"
+
+echo "::group::Boot the application with pnpm dev"
 
 # `pnpm dev` does not exit on success — it holds the client and server processes open — so it runs in the background
 # and is judged by what it prints. The template's dev entry only prints this line after both the Vite dev server and

@@ -73,7 +73,15 @@ export function SurfaceLayout({
   );
   const matches = matchRouteTree(allRoutes, location.pathname);
   if (loading)
-    return <Loading className='min-h-svh' label={`Loading ${copy.title}`} />;
+    return (
+      <Loading
+        className='min-h-svh'
+        label={t('surface.loading', {
+          title: copy.title,
+          defaultValue: `Loading ${copy.title}`,
+        })}
+      />
+    );
   if (
     matches
       ?.filter(({ route }) => route.componentLoader)
@@ -92,14 +100,19 @@ export function SurfaceLayout({
     <div className='flex h-svh bg-background'>
       {mobileSidebarOpen ? (
         <button
-          aria-label='Close navigation'
+          aria-label={t('navigation.close', {
+            defaultValue: 'Close navigation',
+          })}
           className='fixed inset-0 z-40 bg-black/30 md:hidden'
           onClick={() => setMobileSidebarOpen(false)}
           type='button'
         />
       ) : null}
       <aside
-        aria-label={`${copy.title} navigation`}
+        aria-label={t('surface.navigation', {
+          title: copy.title,
+          defaultValue: `${copy.title} navigation`,
+        })}
         className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width,transform] duration-200 md:sticky md:top-0 md:bottom-auto md:h-svh md:z-auto md:flex md:translate-x-0 ${desktopSidebarCollapsed ? 'md:w-16' : 'md:w-64'} ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
         <div
@@ -112,7 +125,9 @@ export function SurfaceLayout({
             <AppBrand compact={desktopSidebarCollapsed} />
           </div>
           <Button
-            aria-label='Close navigation'
+            aria-label={t('navigation.close', {
+              defaultValue: 'Close navigation',
+            })}
             className='md:hidden hover:bg-sidebar-accent dark:hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring'
             onClick={() => setMobileSidebarOpen(false)}
             size='icon'
@@ -140,7 +155,9 @@ export function SurfaceLayout({
         <header className='sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between border-b border-border/70 bg-background/85 px-3 backdrop-blur-xl md:px-4'>
           <div className='flex min-w-0 items-center gap-3'>
             <Button
-              aria-label='Open navigation'
+              aria-label={t('navigation.open', {
+                defaultValue: 'Open navigation',
+              })}
               className='size-9 rounded-xl text-muted-foreground md:hidden'
               onClick={() => setMobileSidebarOpen(true)}
               size='icon'
@@ -151,8 +168,12 @@ export function SurfaceLayout({
             <Button
               aria-label={
                 desktopSidebarCollapsed
-                  ? 'Expand navigation'
-                  : 'Collapse navigation'
+                  ? t('navigation.expand', {
+                      defaultValue: 'Expand navigation',
+                    })
+                  : t('navigation.collapse', {
+                      defaultValue: 'Collapse navigation',
+                    })
               }
               aria-pressed={desktopSidebarCollapsed}
               className='hidden size-9 rounded-xl text-muted-foreground hover:text-foreground md:inline-flex'
@@ -170,7 +191,9 @@ export function SurfaceLayout({
               to='/'
             >
               <ArrowLeft className='size-4 shrink-0' />
-              <span className='truncate'>Back to app</span>
+              <span className='truncate'>
+                {t('surface.backToApp', { defaultValue: 'Back to app' })}
+              </span>
             </Link>
           </div>
           <HeaderActions />
@@ -180,7 +203,10 @@ export function SurfaceLayout({
             moved by the page's scrolling nor stretched by its height. */}
           <div className='h-full overflow-y-auto'>
             <label className='sr-only' htmlFor='surface-page'>
-              {copy.title} page
+              {t('surface.page', {
+                title: copy.title,
+                defaultValue: `${copy.title} page`,
+              })}
             </label>
             <select
               id='surface-page'
@@ -216,6 +242,7 @@ export function SurfaceLayout({
 }
 
 function SurfaceEmpty({ copy }: { readonly copy: SurfaceCopy }): ReactElement {
+  const { t } = useTranslation();
   return (
     <main className='grid min-h-svh place-items-center px-6'>
       <section className='w-full max-w-lg space-y-3 text-center'>
@@ -226,7 +253,7 @@ function SurfaceEmpty({ copy }: { readonly copy: SurfaceCopy }): ReactElement {
           to='/'
         >
           <ArrowLeft className='size-4' />
-          Back to app
+          {t('surface.backToApp', { defaultValue: 'Back to app' })}
         </Link>
       </section>
     </main>

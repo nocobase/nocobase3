@@ -134,6 +134,8 @@ Inputs are a native File or a nonempty File array. Results are `{ record, create
 
 ## Registry components
 
+The registered Client plugin supplies English and Chinese UI resources. Registry components bind the `@nocobase/app-plugin-file` namespace explicitly; retain the Client registration and `@nocobase/i18n` dependency when installing them. Existing label overrides still take precedence.
+
 Install component-ui for editable upload, list, thumbnail and preview source. From a NocoBase source workspace:
 
 ```bash

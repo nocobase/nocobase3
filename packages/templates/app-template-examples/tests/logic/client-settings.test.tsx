@@ -6,12 +6,18 @@ import type {
 } from '@nocobase/app-client/plugins';
 import {
   ClientApplicationContext,
+  apiClientToken,
+  realtimeClientToken,
   type ClientApplication,
 } from '@nocobase/app-client';
 import {
   AuthenticationProvider,
   authenticationClientToken,
 } from '@nocobase/app-plugin-authentication/client';
+import {
+  AuthorizationClient,
+  authorizationClientToken,
+} from '@nocobase/app-plugin-authorization/client';
 import {
   Refine,
   type AccessControlProvider,
@@ -23,6 +29,7 @@ import { MemoryRouter, Outlet, useParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRouter } from '../../client/routing/app-router.tsx';
+import { HeaderActions } from '../../client/shell/header-actions.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
 function WorkflowDetailTestPage(): ReactElement {
@@ -76,6 +83,7 @@ describe('settings centre', () => {
           devRouteTree={surface === 'dev' ? tree : []}
         />,
         broken.path,
+        surface === 'settings' ? tree : [],
       );
       expect(await screen.findByText('Unable to load page')).toBeVisible();
       fireEvent.click(screen.getByRole('link', { name: 'Healthy page' }));
@@ -83,6 +91,14 @@ describe('settings centre', () => {
       expect(screen.queryByText('Unable to load page')).not.toBeInTheDocument();
     },
   );
+
+  it('shows the Settings entry from the application runtime without AppRouter', async () => {
+    renderApp(<HeaderActions />, '/', toRouteTree(SETTINGS, GROUPS));
+
+    expect(
+      await screen.findByRole('link', { name: 'Settings' }),
+    ).toHaveAttribute('href', '/settings');
+  });
 
   it('renders the requested setting with a grouped navigation of the rest', async () => {
     renderSettings('/settings/authorization/default-access');
@@ -125,7 +141,7 @@ describe('settings centre', () => {
     ).toHaveAttribute('href', '/');
   });
 
-  it('keeps both header entries visible inside dev tools', async () => {
+  it('hides the Settings entry in dev tools when no settings are registered', async () => {
     const devRoute: AppClientRegisteredSetting = {
       id: 'playground',
       navigation: true,
@@ -150,10 +166,9 @@ describe('settings centre', () => {
 
     expect(await screen.findByText('Playground page')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Dev tools' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
-      'href',
-      '/settings',
-    );
+    expect(
+      screen.queryByRole('link', { name: 'Settings' }),
+    ).not.toBeInTheDocument();
   });
 
   it('renders the icon a setting declares, and copes with one that declares none', async () => {
@@ -496,6 +511,7 @@ function renderSettings(
   routes: readonly AppClientRegisteredRoute[] = [],
   tree?: readonly AppClientRegisteredRoute[],
 ): void {
+  const settingsRouteTree = tree ?? toRouteTree(settings, groups);
   renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
@@ -520,16 +536,21 @@ function renderSettings(
           <AppRouter
             devRouteTree={[]}
             clientRoutes={routes}
-            settingsRouteTree={tree ?? toRouteTree(settings, groups)}
+            settingsRouteTree={settingsRouteTree}
           />
         </Refine>
       </AppThemeProvider>
     </MemoryRouter>,
+    settingsRouteTree,
   );
 }
 
 /** Renders a router subtree the way renderSettings does, for a surface other than the settings centre. */
-function renderApp(element: ReactElement, initialEntry: string): void {
+function renderApp(
+  element: ReactElement,
+  initialEntry: string,
+  settingsRouteTree: readonly AppClientRegisteredRoute[] = [],
+): void {
   renderWithAuthentication(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AppThemeProvider>
@@ -554,6 +575,7 @@ function renderApp(element: ReactElement, initialEntry: string): void {
         </Refine>
       </AppThemeProvider>
     </MemoryRouter>,
+    settingsRouteTree,
   );
 }
 
@@ -567,7 +589,10 @@ function createAuthProvider(): AuthProvider {
   };
 }
 
-function renderWithAuthentication(element: ReactElement): void {
+function renderWithAuthentication(
+  element: ReactElement,
+  settingsRouteTree: readonly AppClientRegisteredRoute[],
+): void {
   const authClient = {
     getSession: vi.fn().mockResolvedValue({
       data: {
@@ -582,10 +607,22 @@ function renderWithAuthentication(element: ReactElement): void {
     }),
     signOut: vi.fn().mockResolvedValue({ data: null }),
   };
+  const authorizationClient = new AuthorizationClient({
+    request: vi.fn(),
+  } as never);
+  const apiClient = { request: vi.fn().mockResolvedValue({ count: 0 }) };
+  const realtimeClient = {
+    subscribe: vi.fn(() => vi.fn()),
+    onOpen: vi.fn(() => vi.fn()),
+  };
   const app = {
+    runtime: { settingsRouteTree },
     services: {
       resolve: (token: unknown) => {
+        if (token === apiClientToken) return apiClient;
+        if (token === realtimeClientToken) return realtimeClient;
         if (token === authenticationClientToken) return authClient;
+        if (token === authorizationClientToken) return authorizationClient;
         throw new Error(`Unexpected service token: ${String(token)}`);
       },
     },
