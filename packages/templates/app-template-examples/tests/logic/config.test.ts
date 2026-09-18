@@ -2,8 +2,6 @@
 
 import { fileURLToPath } from 'node:url';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -25,6 +23,16 @@ import {
 } from '@nocobase/app-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import {
+  createNotificationRegistry,
+  type NotificationConfig,
+} from '@nocobase/app-plugin-notification/server';
+import {
+  createInAppChannelDefinition,
+  createDatabaseProviderDefinition,
+  MemoryInAppStore,
+} from '@nocobase/app-plugin-notification-in-app/server';
+
 import appRuntime from '../../server/runtime.ts';
 
 const templateRootDir = fileURLToPath(new URL('../..', import.meta.url));
@@ -33,12 +41,71 @@ describe('application config', () => {
   let configRoot: string;
   let configPath: string;
   beforeAll(async () => {
-    configRoot = await mkdtemp(path.join(os.tmpdir(), 'app-config-test-'));
+    configRoot = await mkdtemp(path.join(tmpdir(), 'app-config-test-'));
     configPath = path.join(configRoot, 'config.yml');
     await writeFile(configPath, '{}');
   });
   afterAll(async () => {
     await rm(configRoot, { recursive: true, force: true });
+  });
+
+  it('offers in-app test sending by default and honors an explicit disabled configuration', async () => {
+    const directory = mkdtempSync(
+      path.join(tmpdir(), 'examples-notification-config-'),
+    );
+    const configPath = path.join(directory, 'config.yml');
+    try {
+      writeFileSync(configPath, '{}');
+      const resolve = () =>
+        resolveStandaloneAppRuntime(appRuntime, {
+          rootDir: templateRootDir,
+          configPath,
+          env: { AUTH_SECRET: 'test-auth-secret-at-least-32-characters' },
+        });
+      const runtime = await resolve();
+      const definition = createInAppChannelDefinition();
+      const registry = createNotificationRegistry()
+        .registerChannel(definition)
+        .registerProvider(
+          'in-app',
+          createDatabaseProviderDefinition({
+            store: new MemoryInAppStore(),
+            recipientExists: async () => true,
+          }),
+        );
+      const config = runtime.config.get<NotificationConfig>('notification')!;
+      expect(registry.testTargets(config)).toEqual([
+        expect.objectContaining({
+          channel: expect.objectContaining({ type: 'in-app' }),
+          provider: expect.objectContaining({
+            name: 'default',
+            type: 'database',
+          }),
+        }),
+      ]);
+      const channelConfig = config.channels[0]!;
+      for (const recipient of ['', 'another-user']) {
+        expect(
+          definition.test?.toSendInput({
+            actor: { userId: 'current-user' },
+            values: { recipient, title: 'Test', body: 'Hello' },
+            channelConfig,
+            providerConfig: channelConfig.providers[0]!,
+          }),
+        ).toMatchObject({
+          to: { type: 'user', id: recipient || 'current-user' },
+        });
+      }
+      writeFileSync(configPath, 'notification:\n  channels: []\n');
+      const disabled = await resolve();
+      expect(
+        registry.testTargets(
+          disabled.config.get<NotificationConfig>('notification')!,
+        ),
+      ).toEqual([]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('supplies analytics for main-only configs and honors file overrides', async () => {

@@ -1,4 +1,5 @@
 import {
+  apiClientToken,
   ClientApplicationContext,
   type ClientApplication,
 } from '@nocobase/app-client';
@@ -248,10 +249,18 @@ function renderApplication(
   const authorizationClient = new AuthorizationClient({
     request: vi.fn(),
   } as never);
+  const apiClient = {
+    request: vi.fn().mockResolvedValue({
+      fallback: false,
+      locale: 'en-US',
+      requestedLocale: 'en-US',
+    }),
+  };
   const app = {
     runtime: { settingsRouteTree: options.settingsRouteTree ?? [] },
     services: {
       resolve: (token: unknown) => {
+        if (token === apiClientToken) return apiClient;
         if (token === authenticationClientToken) return authClient;
         if (token === authorizationClientToken) return authorizationClient;
         throw new Error(`Unexpected service token: ${String(token)}`);

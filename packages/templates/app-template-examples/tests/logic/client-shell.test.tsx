@@ -1,5 +1,7 @@
 import {
+  apiClientToken,
   ClientApplicationContext,
+  realtimeClientToken,
   type ClientApplication,
 } from '@nocobase/app-client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
@@ -248,10 +250,20 @@ function renderApplication(
   const authorizationClient = new AuthorizationClient({
     request: vi.fn(),
   } as never);
+  const apiClient = {
+    request: vi.fn(async ({ path }: { path: string }) =>
+      path === 'notifications/in-app/unread-count'
+        ? { count: 0 }
+        : { fallback: false, locale: 'en-US', requestedLocale: 'en-US' },
+    ),
+  };
   const app = {
     runtime: { settingsRouteTree: options.settingsRouteTree ?? [] },
     services: {
       resolve: (token: unknown) => {
+        if (token === apiClientToken) return apiClient;
+        if (token === realtimeClientToken)
+          return { subscribe: () => () => {}, onOpen: () => () => {} };
         if (token === authenticationClientToken) return authClient;
         if (token === authorizationClientToken) return authorizationClient;
         throw new Error(`Unexpected service token: ${String(token)}`);

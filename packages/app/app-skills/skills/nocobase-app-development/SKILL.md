@@ -17,8 +17,6 @@ Do not use it to develop a published plugin package. Plugin development has its 
 
 Do not use it to upgrade the template this application was generated from. That is `.agents/skills/nocobase-app-upgrade/`, which reconciles a newer template release against the application without reverting the user's work.
 
-For pages with Tabs, nested pages, or navigation groups, read [child routes](references/client-child-routes.md). Page-level Tabs use child routes by default, even when the user does not mention routing. Declare their content under the parent route and derive the selected Tab from the URL. Opening the parent URL redirects to the default accessible Tab with replace and preserves query parameters; explicit Tab URLs retain their selection. Follow an explicit user request for a different interaction.
-
 ## Before you start
 
 Read the application's `AGENTS.md` first for the rules that apply everywhere. This Skill's references are the detail behind it.
@@ -73,20 +71,20 @@ If an older application has the command but not the script, use `pnpm nocobase p
 
 Read the page for the task in front of you. Do not read all of them.
 
-| Task                                                                             | Read                                                             |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Add a page, choose an auth mode, add navigation, customize a plugin page         | [client pages and routes](references/client-pages-and-routes.md) |
-| Build a page with Tabs, add child pages or menu groups                           | [child routes and Tabs](references/client-child-routes.md)       |
-| Add or compose UI, add a shadcn primitive, style consistently, support dark mode | [components and styling](references/components-and-styling.md)   |
-| Add an API endpoint, a webhook, or a callback; authenticate and authorize it     | [server routes](references/server-routes.md)                     |
-| Call an API from the frontend using the application's HTTP client                | [client API requests](references/client-api.md)                  |
-| Query or write data, resolve the database, work with transactions                | [database and data access](references/database-and-data.md)      |
-| Create a table, alter a column, add an index, write required initial data        | [migrations and seeds](references/migrations.md)                 |
-| Switch the database, register a dialect, add a second connection                 | [database connections](references/database-connections.md)       |
-| Name translation keys, add a locale, reword a plugin's string                    | [internationalization](references/i18n.md)                       |
-| Add a reusable service, share it across routes, run background or scheduled work | [services and jobs](references/services-and-jobs.md)             |
-| Write tests, choose a test layer, verify before finishing                        | [testing and verification](references/testing.md)                |
-| Understand behavior inherited from an official application template              | [template variants](references/template-variants.md)             |
+| Task                                                                                | Read                                                             |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Create a page, write a page component, configure routes or navigation               | [client pages and routes](references/client-pages-and-routes.md) |
+| Add child pages, page Tabs, Dialogs, or Drawers using child routes; add menu groups | [child routes and overlays](references/client-child-routes.md)   |
+| Add or compose UI, add a shadcn primitive, style consistently, support dark mode    | [components and styling](references/components-and-styling.md)   |
+| Add an API endpoint, a webhook, or a callback; authenticate and authorize it        | [server routes](references/server-routes.md)                     |
+| Call an API from the frontend using the application's HTTP client                   | [client API requests](references/client-api.md)                  |
+| Query or write data, resolve the database, work with transactions                   | [database and data access](references/database-and-data.md)      |
+| Create a table, alter a column, add an index, write required initial data           | [migrations and seeds](references/migrations.md)                 |
+| Switch the database, register a dialect, add a second connection                    | [database connections](references/database-connections.md)       |
+| Name translation keys, add a locale, reword a plugin's string                       | [internationalization](references/i18n.md)                       |
+| Add a reusable service, share it across routes, run background or scheduled work    | [services and jobs](references/services-and-jobs.md)             |
+| Write tests, choose a test layer, verify before finishing                           | [testing and verification](references/testing.md)                |
+| Understand behavior inherited from an official application template                 | [template variants](references/template-variants.md)             |
 
 A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.
 
@@ -141,7 +139,7 @@ These cause real damage and appear in every reference:
 - **Every server route owns its own authentication and authorization.** Mounting under `/api` authenticates nothing.
 - **A migration is immutable history and self-contained.** Never import an evolving definition into one. Never edit one whose branch is merged.
 - **Every user-visible string goes through a translation key.**
-- **Wrap page content in `PageContainer`.** When creating a page or writing a page component, use `PageContainer` from `@/components/page-container` as its outer content container so page padding and spacing stay consistent. See [components and styling](references/components-and-styling.md#page-container).
+- **Let the owning page supply `PageContainer`.** Use `PageContainer` from `@/components/page-container` for shared page padding and spacing. Inline child pages, including Tab content, render inside the parent page's container and must not add another. A covering child page uses its own `PageContainer` inside `RouteChildPage`; dialog and drawer content uses the corresponding overlay container. See [components and styling](references/components-and-styling.md#page-container).
 - **Visual consistency is application-wide.** Restyling only your part is a defect. Change the design tokens if a change is needed.
 - **Route paths never include the deployment base path.** The runtime restores it.
 - **Route navigation creates sidebar entries.** Declare `navigation` in `client/routes.ts`; Refine resources are for CRUD, not menus.

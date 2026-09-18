@@ -372,3 +372,7 @@ Navigation groups retain their expanded or collapsed state while the navigation 
 `runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
 
 `server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.
+
+## Examples notification header
+
+Examples adds an application-owned notification bell in `client/shell/header-actions.tsx`, linking to `/notifications` from App, Settings, and Dev headers. `client/components/notification-button.tsx` mounts the public in-app notification Provider for the authenticated user, resets it when the user changes, and displays the unread count. The route menu cannot provide a persistent header badge, so this product-specific shell addition stays in Examples. Keep the inbox page’s local Provider; both refresh from server realtime invalidations and window focus.

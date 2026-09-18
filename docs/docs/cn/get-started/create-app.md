@@ -1,6 +1,6 @@
 ---
 title: '创建应用'
-description: '使用 pnpm 创建 NocoBase 3 应用，选择 SQLite 并启动本地开发服务。'
+description: '使用 pnpm 创建 NocoBase 3 应用，默认使用 SQLite 并启动本地开发服务。'
 ---
 
 # 创建应用
@@ -23,7 +23,7 @@ pnpm --version
 进入准备存放应用的目录，运行：
 
 ```bash
-npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app docs-demo --db-dialect=sqlite
+npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app docs-demo
 ```
 
 `docs-demo` 是新目录名，可以换成自己的名字。每个应用使用独立目录，不要覆盖已有项目。
@@ -33,6 +33,8 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app docs-demo 
 当前包从 NocoBase 的包源下载，所以命令中保留 `npm_config_registry`。如果使用其他包源后出现找不到 `@nocobase/create-app`，先确认这一项。
 
 生成的 `config.yml` 包含当前应用配置和密钥，保留在本地，不提交到代码仓库。使用生成的 SQLite 配置即可启动，数据保存在应用自己的存储目录中。
+
+默认使用 SQLite，不需要额外安装数据库服务。要改用其他数据库，安装对应的 `@nocobase/db-*` 包（如 `@nocobase/db-postgres`），并在 `server/config/database.ts` 的 `drivers` 中注册；数据库方言由应用源码声明，`config.yml` 负责连接信息。
 
 ## 启动应用
 

@@ -21,6 +21,9 @@ vi.mock('../../client/routing/client-route.js', () => ({
 }));
 vi.mock('../../client/theme/index.js', () => ({ ThemeSettings: () => null }));
 vi.mock('../../client/shell/user-menu.js', () => ({ UserMenu: () => null }));
+vi.mock('../../client/components/notification-button', () => ({
+  NotificationButton: () => null,
+}));
 vi.mock('../../client/routing/route-navigation.js', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('../../client/routing/route-navigation.js')

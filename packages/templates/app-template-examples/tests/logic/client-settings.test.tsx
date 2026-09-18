@@ -6,6 +6,8 @@ import type {
 } from '@nocobase/app-client/plugins';
 import {
   ClientApplicationContext,
+  apiClientToken,
+  realtimeClientToken,
   type ClientApplication,
 } from '@nocobase/app-client';
 import {
@@ -608,10 +610,17 @@ function renderWithAuthentication(
   const authorizationClient = new AuthorizationClient({
     request: vi.fn(),
   } as never);
+  const apiClient = { request: vi.fn().mockResolvedValue({ count: 0 }) };
+  const realtimeClient = {
+    subscribe: vi.fn(() => vi.fn()),
+    onOpen: vi.fn(() => vi.fn()),
+  };
   const app = {
     runtime: { settingsRouteTree },
     services: {
       resolve: (token: unknown) => {
+        if (token === apiClientToken) return apiClient;
+        if (token === realtimeClientToken) return realtimeClient;
         if (token === authenticationClientToken) return authClient;
         if (token === authorizationClientToken) return authorizationClient;
         throw new Error(`Unexpected service token: ${String(token)}`);
