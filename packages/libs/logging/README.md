@@ -14,6 +14,8 @@ logging:
   console:
     enabled: true
     pretty: false
+    # Colored level labels are for a terminal; NO_COLOR disables and FORCE_COLOR requests them.
+    color: false
   loggers:
     request:
       file:
@@ -34,7 +36,7 @@ File capture is independent of `console.enabled` and `console.pretty`. Templates
 
 Application templates configure the `request` source with `file.name: request` by default, separating HTTP request logs from the shared app file.
 
-Pretty console output uses local time, readable levels and `[appId/logger]` identity, with duration and additional fields rendered inline. Successful request completions omit repeated request fields and correlation identifiers from the terminal; JSON output and files retain them. Request starts and their input headers use DEBUG, while failed completion records include the selected request headers and query even at INFO. Configuration loading and AI registration stages also use DEBUG. Set `logging.level: debug` (or `hub.logging.apps.level` for hosted applications) when investigating those details.
+Pretty console output uses local time, readable levels and `[appId/logger]` identity, with duration and additional fields rendered inline. Level labels are green for INFO, yellow for WARN and red for ERROR when the console is a terminal: `console.color` wins when set, otherwise `FORCE_COLOR` requests the escapes, `NO_COLOR` disables them with the precedence Node itself uses, and piped or captured output stays plain. A managed App Host child inherits a pipe, so the supervisor asks for `FORCE_COLOR` on its behalf when the environment states no preference. Structured console output, journals and files never contain escapes. Successful request completions omit repeated request fields and correlation identifiers from the terminal; JSON output and files retain them. Request starts and their input headers use DEBUG, while failed completion records include the selected request headers and query even at INFO. Configuration loading and AI registration stages also use DEBUG. Set `logging.level: debug` (or `hub.logging.apps.level` for hosted applications) when investigating those details.
 
 ## Compatibility
 

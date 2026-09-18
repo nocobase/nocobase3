@@ -38,7 +38,8 @@
   },
   "dependencies": {
     "dmdb": "^1.0.52452",
-    "knex-dm": "^1.0.52452"
+    "knex-dm": "^1.0.52452",
+    "knex": "catalog:"
   },
   "devDependencies": {
     "@nocobase/db": "workspace:*",
@@ -47,7 +48,6 @@
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "tsx": "catalog:",
-    "knex": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

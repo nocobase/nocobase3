@@ -1,3 +1,4 @@
+import { isUniqueConstraintViolation } from '../../database/internal/unique-constraint.js';
 import { decimalString } from '../../numeric/decimal.js';
 import {
   decodeJsonValue,
@@ -4239,32 +4240,6 @@ function versionOf(
 
 function firstReturnedRow(value: unknown): RepositoryRecord | undefined {
   return Array.isArray(value) && isRecord(value[0]) ? value[0] : undefined;
-}
-
-function isUniqueConstraintViolation(error: unknown): boolean {
-  const visited = new Set<unknown>();
-  let current: unknown = error;
-  while (current && typeof current === 'object' && !visited.has(current)) {
-    visited.add(current);
-    const record = current as Record<string, unknown>;
-    const code = record.code;
-    const number = record.errno ?? record.number ?? record.errorNum;
-    if (
-      code === '23505' ||
-      code === 'ER_DUP_ENTRY' ||
-      code === 'SQLITE_CONSTRAINT' ||
-      code === 'SQLITE_CONSTRAINT_UNIQUE' ||
-      code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
-      number === 1 ||
-      number === 1062 ||
-      number === 2601 ||
-      number === 2627
-    ) {
-      return true;
-    }
-    current = record.cause ?? record.originalError;
-  }
-  return false;
 }
 
 function selectorFromFields(

@@ -32,7 +32,10 @@ import {
   sanitizeAppHostChildNodeOptions,
 } from '../dist/supervisor.js';
 import { AppHostSupervisor } from '../dist/supervisor.js';
-import { AppHostSupervisor as SourceAppHostSupervisor } from '../src/supervisor.ts';
+import {
+  AppHostSupervisor as SourceAppHostSupervisor,
+  appHostChildForcesColor,
+} from '../src/supervisor.ts';
 
 describe('AppHostSupervisor', () => {
   it('uses explicit options instead of ambient supervisor configuration', async () => {
@@ -73,6 +76,15 @@ describe('AppHostSupervisor', () => {
         '--preserve-symlinks --preserve-symlinks-main',
       ),
     ).toBe('');
+  });
+
+  it('tells a managed child about terminal color only when nothing else states an intent', () => {
+    expect(appHostChildForcesColor({}, true)).toBe(true);
+    expect(appHostChildForcesColor({}, false)).toBe(false);
+    expect(appHostChildForcesColor({}, undefined)).toBe(false);
+    expect(appHostChildForcesColor({ FORCE_COLOR: '1' }, false)).toBe(false);
+    expect(appHostChildForcesColor({ FORCE_COLOR: '0' }, true)).toBe(false);
+    expect(appHostChildForcesColor({ NO_COLOR: '1' }, true)).toBe(false);
   });
 
   it('stops port probing at the requested upper bound', async () => {
