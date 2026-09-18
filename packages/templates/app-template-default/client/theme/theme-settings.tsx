@@ -28,10 +28,12 @@ export function ThemeSettings(): ReactElement {
   return (
     <Popover>
       <PopoverTrigger
+        openOnHover
+        delay={200}
+        closeDelay={200}
         render={
           <Button
             aria-label={title}
-            title={title}
             size='icon'
             variant='outline'
             className='size-10 rounded-xl border-border/70 bg-background/60 hover:bg-accent/50'

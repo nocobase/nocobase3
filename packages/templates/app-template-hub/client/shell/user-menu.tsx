@@ -41,11 +41,13 @@ export function UserMenu(): ReactElement {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        openOnHover
+        delay={200}
+        closeDelay={200}
         aria-label={t('account.openMenu', {
           defaultValue: 'Open account menu',
         })}
         className='flex size-10 cursor-pointer items-center justify-center rounded-full border border-border/70 bg-background/60 text-left text-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50'
-        title={name}
       >
         {identity?.avatar ? (
           <img
