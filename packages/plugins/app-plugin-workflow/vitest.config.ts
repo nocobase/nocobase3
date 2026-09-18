@@ -14,7 +14,15 @@ export default createNodeVitestConfig({
     },
   },
   test: {
-    include: ['tests/**/*.test.{ts,tsx}'],
+    include:
+      process.env.WORKFLOW_PERSISTENT_ACCEPTANCE === '1'
+        ? ['tests/persistent/**/*.test.ts']
+        : [
+            'tests/*.test.{ts,tsx}',
+            'tests/client/**/*.test.{ts,tsx}',
+            'tests/integration/**/*.test.ts',
+          ],
+    passWithNoTests: false,
     testTimeout: 30_000,
   },
 });

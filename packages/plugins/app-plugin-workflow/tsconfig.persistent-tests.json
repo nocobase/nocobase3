@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "rootDir": "../../.." },
+  "include": ["tests/persistent/**/*.ts", "tests/persistent-fixture.test.ts"],
+  "exclude": []
+}

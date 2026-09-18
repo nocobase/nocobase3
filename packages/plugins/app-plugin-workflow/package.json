@@ -77,8 +77,9 @@
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "pnpm clean && tsc -p tsconfig.json && node ./scripts/copy-client-assets.mjs && tsc -p tsconfig.migrations.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit && tsc -p tsconfig.workflow-fixtures.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit && tsc -p tsconfig.skill-evals.json --noEmit && tsc -p tsconfig.workflow-fixtures.json --noEmit && tsc -p tsconfig.persistent-tests.json",
     "test": "vitest run --passWithNoTests",
+    "test:persistent": "node scripts/test-persistent.mjs",
     "test:integration": "pnpm test:integration:sqlite",
     "test:integration:sqlite": "INTEGRATION_DB_CONNECTIONS=sqlite vitest run tests/integration",
     "test:integration:postgres": "INTEGRATION_DB_CONNECTIONS=postgres vitest run tests/integration",
