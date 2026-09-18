@@ -31,7 +31,9 @@ export function createApp(runtime: AppRuntimeContext): Application {
   app.addServiceProvider(IdGeneratorProvider);
   app.addServiceProvider(SessionProvider);
   app.addServiceProvider(DriveProvider);
-  app.addServiceProvider(QueueServiceProvider);
+  app.addServiceProvider(QueueServiceProvider, {
+    nodeEnv: runtime.env.NODE_ENV,
+  });
   app.addServiceProvider(JobExecutorServiceProvider, {
     nodeEnv: runtime.env.NODE_ENV,
   });
