@@ -233,7 +233,7 @@ Add the route in the application's `client/routes.ts`, inside the `defineAppRout
 }
 ```
 
-The child URL opens the overlay; the parent URL closes it. Direct links and refresh must render the same overlay. Use a child route when the state needs a URL or browser back/forward. Use local state only for a transient interaction that does not need a URL.
+Use child routes for dialogs and drawers within a page by default, even when the user does not mention routing. The child URL opens the overlay; the parent URL closes it. Direct links, refresh, and browser back/forward must restore the matching overlay. Derive visibility from the route rather than independent local state. Follow an explicit user request for a different interaction.
 
 ### 2. Place the outlet
 
