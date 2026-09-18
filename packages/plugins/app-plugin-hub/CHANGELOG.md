@@ -1,5 +1,70 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.10
+
+### Minor Changes
+
+- 60fa139: Add streamed, checksum-verified Hub release uploads, persistent upload and deployment retry identities, explicit upload-and-deploy requests, and App CLI upload/deploy commands. Reuse existing upload-release and deploy authorization actions and expose minimal deployment status for CI. Preserve historical releases during canonical checksum migration. Normalize permissions returned by the generic API key service.
+
+  Support optional runtime configuration files for deploy and upload-with-deploy, with bounded streaming transport, existing configuration reuse, and configuration-aware retry checks.
+
+  Reject upload-and-deploy requests that cannot return a publishing deployment, including CLI calls without waiting. Correct the unmerged publishing migration rollback.
+
+### Patch Changes
+
+- 60fa139: Clarify the Viewer role description in Chinese and English as read-only access to permitted applications and runtime status.
+- 60fa139: Use a compact layout for simple Hub confirmation dialogs, with balanced spacing and no unnecessary footer divider.
+- 365a9fe: Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations. Resolve AI Registry copy from the active language and localize development navigation and section headings. Translate MCP configuration guidance, tool drawer labels, and transport descriptions.
+- 60fa139: Allow application names to be edited in Hub Settings with owner-scoped authorization, server validation, and unchanged App IDs and URLs.
+- 60fa139: Copy recoverable API keys directly from the list, report unavailable legacy keys explicitly, and show a manual-copy dialog when clipboard access is unavailable or denied.
+- 60fa139: Use explicit domain resource checks for Hub tabs and publishing keys so granted Operators can access their application pages.
+- 60fa139: Fix the publishing skill namespace so plugin skill synchronization succeeds when creating a Hub application.
+- 365a9fe: Match translated resource names when searching permissions, preserve the pagination slot across locales, and retranslate stored upload errors when the language changes.
+- 60fa139: Move publishing API key management to the Hub navigation and allow each key to bind multiple existing Apps or all current and future Apps. Reuse the existing upload-release and deploy actions, enforce owner permissions for every selected App, and migrate legacy bindings without promoting read permissions to writes.
+
+  Allow creators to retrieve active Hub publishing keys through an authenticated, audited copy action backed by encrypted storage. Preserve hash-only authentication in the generic plugin and mark legacy keys as unrecoverable.
+
+- 60fa139: Reject unsafe, linked, or oversized release metadata through the upload error boundary instead of throwing from tar stream callbacks and terminating Hub. Clean temporary files before returning the validation error.
+- 60fa139: Show Hub operation errors as top-right notifications, generate editable application IDs with short random suffixes, and distinguish ID conflicts from reusable application names.
+- 60fa139: Filter publishing API Key application metadata through the current user's read permissions after role changes, while preserving key revocation and stored bindings.
+- 934d37e: Guide new and existing applications through build, release upload, and deployment. Show Releases before Deployments while selecting the default tab by application state and preserving explicit links and permission boundaries.
+- 60fa139: Rename Hub roles to Platform Administrator and Application Administrator in English and Chinese, and clarify application and publishing API Key scope without changing role identifiers or permissions.
+- 60fa139: Add confirmed user deletion for Hub platform administrators. Protect the current user, the last active platform administrator, and users who own applications. Revoke sessions and API Keys transactionally while retaining an inactive identity record for historical attribution. Prevent new applications and publishing keys from being created for deleted owners.
+- 60fa139: Scope Hub application management to the authenticated creator for non-administrators, including catalog pagination, direct APIs, publishing credentials, and Host status. Preserve administrator access to all applications and keep legacy applications without ownership administrator-only.
+- 60fa139: Mark required API key fields and minimum application and permission selections using standard Hub form labels, below-control help text, and shared dialog spacing and radio controls. Label expiration as optional and show a required date field when custom expiration is selected.
+- 60fa139: Allow Hub Operators to remove their own applications through the existing confirmation flow. Upgrade the Operator permission set without changing other grants; server-side ownership checks continue to reject access to other users' Apps and Apps without an owner.
+- 60fa139: Allow Hub Operators to create and manage their own publishing API keys. Enforce creator ownership on key lists and revocation, retain administrator oversight, and keep each key limited by its creator’s current App and operation permissions. Upgrade the Operator role through an idempotent additive migration.
+- 60fa139: Reuse the API Keys plugin through configuration-bound server operations and a scoped Authentication plugin API that preserves hooks and caller-owned transactions. Add per-application publishing API key management in Hub with one-time secret display, scoped Release and Deployment access, expiration, revocation, and current-owner permission checks.
+- 60fa139: Reject configured upload retries that omit the original deployment configuration and report known failed or cancelled deployment retries as CLI failures even without --wait.
+- 60fa139: Remove the ambiguous app publish alias. Use app upload to upload releases and app deploy to deploy existing releases; update CLI guidance accordingly.
+- 60fa139: Remove the duplicate create application button from the empty catalog while retaining the toolbar action.
+- 60fa139: Offer Administrator and Operator as the active Hub roles. Prevent new Viewer assignments and hide Viewer from the role matrix while preserving existing Viewer accounts and their read-only permissions without automatic promotion.
+- d4ca00e: Use the application's API client for Hub artifact uploads and the notification logs Registry page so requests honor the configured API base URL. Pass the client explicitly to uploadArtifact and fetchNotificationLogs while retaining upload bodies, log responses and cancellation.
+- 60fa139: Initialize authentication and session secrets left at example placeholders when preparing or publishing a managed configuration. Preserve existing valid secrets across deployments and configuration updates.
+- 8af03c3: Use PageContainer and PageHeader for consistent application catalog, role permissions, and API key page layouts.
+- d4ca00e: Use useApiClient() for React API client access across application pages, plugins and shared examples, preserving application-scoped client resolution.
+- 60fa139: Wait for the final deployment result by default in app deploy and app upload --deploy. Support --no-wait for asynchronous acceptance, preserve explicit --wait compatibility, and keep upload-only commands independent of deployment polling.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [365a9fe]
+- Updated dependencies [365a9fe]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+- Updated dependencies [60fa139]
+- Updated dependencies [60fa139]
+- Updated dependencies [d4ca00e]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.3
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+  - @nocobase/app-plugin-users@0.0.2-beta.5
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/authorization@0.1.0-beta.7
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.9
 
 ### Patch Changes
