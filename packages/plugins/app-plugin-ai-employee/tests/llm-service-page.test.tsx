@@ -13,6 +13,7 @@ vi.mock('@nocobase/app-client', () => ({
   createApiClient: () => ({}),
   resolveAppUrl: (path: string) => path,
   useService: () => api,
+  useApiClient: () => api,
 }));
 vi.mock('../client/llm-service-service.js', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
