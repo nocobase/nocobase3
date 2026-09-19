@@ -29,6 +29,39 @@ function createTestDatabase(config: DatabaseConfig<SqliteConnectionConfig>) {
 }
 
 describe('DatabaseManager', () => {
+  it('rejects physical aliases instead of dropping logical field metadata', async () => {
+    const db = createTestDatabase({
+      metadataStore: new InMemoryCollectionMetadataStore(),
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    try {
+      await db.builder().createCollection('customerOrders', (collection) => {
+        collection.increments('id');
+        collection.datetime('orderedAt');
+        collection.uuid('externalId');
+      });
+      for (const method of ['get', 'getResolution', 'getPhysical'] as const) {
+        await expect(
+          db.collections()[method]('customer_orders'),
+        ).rejects.toThrow('logical Collection "customerOrders"');
+      }
+      const collection = await db.collections().get('customerOrders');
+      expect(collection?.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'orderedAt', type: 'datetime' }),
+          expect.objectContaining({ name: 'externalId', type: 'uuid' }),
+        ]),
+      );
+      await expect(
+        db.connection().schemaInspector.getPhysicalCollection({
+          tableName: 'customer_orders',
+        }),
+      ).resolves.toMatchObject({ tableName: 'customer_orders' });
+    } finally {
+      await db.destroy();
+    }
+  });
+
   it('mirrors connection collections through db.collections()', async () => {
     const db = createTestDatabase({
       default: 'main',
