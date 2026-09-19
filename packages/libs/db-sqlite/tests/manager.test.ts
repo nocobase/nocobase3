@@ -988,7 +988,7 @@ describe('DatabaseManager', () => {
       },
     });
     expect(() => invalidDialect.connection()).toThrow(
-      'Database dialect "custom" is not registered. Register a custom driver in database.drivers.',
+      'Database dialect "custom" is not registered. Install and explicitly register the corresponding driver in database.drivers.',
     );
 
     const unsupportedUrl = createTestDatabase({

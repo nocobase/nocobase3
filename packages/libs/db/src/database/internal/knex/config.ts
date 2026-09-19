@@ -30,7 +30,7 @@ export function resolveKnexConnectionConfig<TConfig extends ConnectionConfig>(
 
   if (!dialectDriver) {
     throw new Error(
-      `Database dialect "${config.dialect}" is not registered. Register a custom driver in database.drivers.`,
+      `Database dialect "${config.dialect}" is not registered. Install and explicitly register the corresponding driver in database.drivers.`,
     );
   }
   if (dialectDriver.dialect !== config.dialect) {
@@ -68,7 +68,7 @@ export function resolveKnexConnectionConfig<TConfig extends ConnectionConfig>(
   };
 }
 
-export function assertNoUnsupportedConnectionConfigFields(
+function assertNoUnsupportedConnectionConfigFields(
   config: ConnectionConfig,
 ): void {
   const unsupportedFields = [

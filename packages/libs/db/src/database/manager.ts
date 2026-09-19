@@ -1,4 +1,3 @@
-import { assertNoUnsupportedConnectionConfigFields } from './internal/knex/config.js';
 import { resolveDatabaseDriver } from './resolve-driver.js';
 import type { CollectionBuilder } from '../collection/builder/builder.js';
 import type { ConnectionCollections } from '../collection/registry/types.js';
@@ -110,7 +109,6 @@ export class DefaultDatabaseManager implements DatabaseManager {
       throw new Error(`Database connection "${name}" is not configured.`);
     }
 
-    assertNoUnsupportedConnectionConfigFields(connectionConfig);
     const resolvedConnectionConfig = {
       ...connectionConfig,
       databaseDriver: resolveDatabaseDriver(

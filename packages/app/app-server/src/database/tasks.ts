@@ -6,15 +6,13 @@ import {
   type AppDatabaseTaskKind,
 } from './plan.js';
 import {
+  resolveDatabaseDriver,
   type DatabaseDriverRegistration,
   type DatabaseManager,
 } from '@nocobase/db';
 
 import type { AppPaths } from '../config/index.js';
-import {
-  createAppDatabaseManager,
-  resolveAppDatabaseDriver,
-} from './manager.js';
+import { createAppDatabaseManager } from './manager.js';
 import { createAppMigrator, type AppMigrationRunResult } from './migrator.js';
 import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
@@ -151,12 +149,14 @@ export async function runAppDatabaseTasks(
     for (const task of plan) {
       if (task.skipReason) continue;
       const connection = config.connections[task.connection];
-      const driver =
-        connection?.databaseDriver ??
-        resolveAppDatabaseDriver(connection?.dialect ?? '', {
-          ...config.drivers,
-          ...drivers,
-        });
+      const driver = resolveDatabaseDriver(
+        {
+          dialect: connection.dialect,
+          databaseDriver: connection.databaseDriver,
+        },
+        { ...config.drivers, ...drivers },
+        task.connection,
+      );
       if (!driver?.resetManagedSchema) {
         throw new Error(
           `Database driver for connection "${task.connection}" does not support managed schema reset.`,
