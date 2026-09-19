@@ -19,6 +19,7 @@ const coreTabs: readonly AISettingsTabDefinition[] = [
 ];
 const contributedTabs = new Map<string, AISettingsTabDefinition>();
 let cachedTabs: readonly AISettingsTabDefinition[] = coreTabs;
+/** @deprecated Contribute Settings routes with parent: 'aiGroup' instead. No longer rendered by the employee page. */
 export function registerAISettingsTabs(
   tabs: readonly AISettingsTabDefinition[],
 ): void {
@@ -28,6 +29,7 @@ export function registerAISettingsTabs(
   cachedTabs = [...coreTabs, ...contributedTabs.values()];
 }
 
+/** @deprecated Legacy registry only; the employee shell no longer renders these tabs. */
 export function getAISettingsTabs(): readonly AISettingsTabDefinition[] {
   return cachedTabs;
 }
@@ -41,28 +43,40 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
         name: 'ai',
         path: '/ai',
         navigation: { title: 'AI Employees' },
-        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
         componentLoader: () => import('./pages/settings-page.js'),
       },
       {
         name: 'aiSkills',
         path: '/ai/skills',
         navigation: { title: 'Skills' },
-        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
         componentLoader: () => import('./pages/skills-settings-page.js'),
       },
       {
         name: 'aiTools',
         path: '/ai/tools',
         navigation: { title: 'tools.title' },
-        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
         componentLoader: () => import('./pages/tools-settings-page.js'),
       },
       {
         name: 'aiConversations',
         path: '/ai/conversations',
         navigation: { title: 'Conversations' },
-        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
         componentLoader: () =>
           import('./pages/conversation-center-settings-page.js'),
       },
@@ -70,20 +84,29 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
         name: 'aiLLMServices',
         path: '/ai/llm-services',
         navigation: { title: 'LLM services' },
-        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
         componentLoader: () => import('./pages/llm-service-settings-page.js'),
       },
       {
         name: 'aiMCPServices',
         path: '/ai/mcp-services',
         navigation: { title: 'MCP services' },
-        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
         componentLoader: () => import('./pages/mcp-service-settings-page.js'),
       },
       {
         name: 'aiSettings',
         path: '/ai/settings',
-        authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
         componentLoader: () => import('./pages/service-settings-page.js'),
       },
     ],

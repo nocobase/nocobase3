@@ -515,4 +515,4 @@ registerAISettingsTabs(
 ): void;
 ```
 
-Register during client module evaluation. Import the registration module for side effects from the App plugin client entry. The lazy module must default-export a React component. The shared route is `/settings/ai`; do not create a replacement settings page for one tab. Core tabs are `ai-employee` and `llm-service`; use a unique application key.
+This registry and `getAISettingsTabs()` are deprecated compatibility APIs only. They retain definitions for existing callers, but AI Employees and the public shell wrappers no longer render cross-feature tabs or contributed tab content. Contribute `defineSettingsRoutes()` entries with `parent: 'aiGroup'` instead; see [Settings pages](frontend-registry.md#settings-pages). `AISettingsShellProps.activeTabKey` and `onTabChange` remain accepted but have no effect. `getActiveAISettingsTabKey()` remains available for interpreting legacy URLs/state. Knowledge-base list/vector path constants now point to `/settings/ai/knowledge-base` and `/settings/ai/vector-database`; detail path prefixes are unchanged.

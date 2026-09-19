@@ -4,7 +4,6 @@ import {
   Navigate,
   Outlet,
   useLocation,
-  useNavigate,
   useResolvedPath,
 } from 'react-router';
 import {
@@ -13,41 +12,43 @@ import {
 } from '../ai-settings-shell.js';
 import {
   conversationCenterPath,
+  knowledgeBaseListPath,
   llmServicePath,
   mcpServicePath,
+  vectorDatabasesPath,
 } from '../route-paths.js';
-import { getAISettingsTabs } from '../ai-settings.js';
-import { SettingsTabPage } from '../settings-tab-page.js';
+import AIEmployeePage from './ai-employee-page.js';
+
+const legacyDestinations: Readonly<Record<string, string>> = {
+  conversations: conversationCenterPath,
+  'llm-service': llmServicePath,
+  mcp: mcpServicePath,
+  'knowledge-base': knowledgeBaseListPath,
+  'vector-database': vectorDatabasesPath,
+};
 
 export default function AISettingsPage(): ReactElement {
-  const tabs = getAISettingsTabs();
   const location = useLocation();
-  const navigate = useNavigate();
   const parentPath = useResolvedPath('.');
   const isParentEntry = matchPath(
     { path: parentPath.pathname, end: true },
     location.pathname,
   );
-  const activeTabKey = getActiveAISettingsTabKey(
+  const legacyKey = getActiveAISettingsTabKey(
     location.pathname,
     location.search,
     location.state,
   );
-  if (
-    isParentEntry &&
-    ['conversations', 'llm-service', 'mcp'].includes(activeTabKey)
-  ) {
+  const destination = Object.hasOwn(legacyDestinations, legacyKey)
+    ? legacyDestinations[legacyKey]
+    : undefined;
+  if (isParentEntry && destination) {
     const search = new URLSearchParams(location.search);
-    const isConversation = activeTabKey === 'conversations';
     search.delete('tab');
     return (
       <Navigate
         to={{
-          pathname: isConversation
-            ? conversationCenterPath
-            : activeTabKey === 'mcp'
-              ? mcpServicePath
-              : llmServicePath,
+          pathname: destination,
           search: search.toString(),
           hash: location.hash,
         }}
@@ -56,26 +57,9 @@ export default function AISettingsPage(): ReactElement {
     );
   }
 
-  const activeTab = tabs.find((tab) => tab.key === activeTabKey) ?? tabs[0];
-
   return (
-    <AISettingsShell
-      activeTabKey={activeTab.key}
-      onTabChange={(tabKey) => {
-        const search = new URLSearchParams(location.search);
-        search.set('tab', tabKey);
-        void navigate({
-          pathname: parentPath.pathname,
-          search: search.toString(),
-          hash: location.hash,
-        });
-      }}
-    >
-      {isParentEntry ? (
-        <SettingsTabPage key={activeTab.key} tab={activeTab} />
-      ) : (
-        <Outlet />
-      )}
+    <AISettingsShell>
+      {isParentEntry ? <AIEmployeePage /> : <Outlet />}
     </AISettingsShell>
   );
 }

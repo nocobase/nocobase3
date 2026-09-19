@@ -40,7 +40,7 @@ Use these layers in order:
 - Use built-in employees and tools without copying their definitions into the App.
 - Build chat, page context, form filling, tasks, shortcuts, frontend tools, and result renderers in the App's AI frontend extension.
 - Consume `/api/ai` through the existing `NocoBaseAIService` and chat transport.
-- Add a page to the shared `/settings/ai` tabs from an App plugin.
+- Add an independent Settings page to the `aiGroup` sidebar group from an App plugin.
 - Use `createAIManager()` only for isolated server code that deliberately does not need the plugin's App runtime.
 - For trusted App server integrations, resolve `aiConversationsManagerToken` and `agentServiceFactoryToken` from the public plugin server entry; create a conversation first, then call `createAIEmployee()` or `createAgent`.
 
@@ -311,23 +311,26 @@ Prefer `nocobaseAIService` and the installed chat transport. They already provid
 
 Only call `/api/ai` directly from a centralized App service adapter when an operation is not exposed by the existing service. Preserve current-user scope, abort signals, SSE framing, approval/resume, and error handling. Never duplicate the stream parser inside a page component.
 
-# Adding `/settings/ai` Tabs
+# Adding AI Settings Pages
 
-An App plugin can contribute a tab without replacing the settings page:
+An App plugin contributes independent sidebar pages through its client `routes`, without replacing AI Employees:
 
 ```ts
-import { registerAISettingsTabs } from '@nocobase/app-plugin-ai-employee/client/ai-settings';
+import { defineSettingsRoutes } from '@nocobase/app-client/plugins';
 
-registerAISettingsTabs([
+export default defineSettingsRoutes([
   {
-    key: 'sales-ai',
-    labelKey: 'Sales AI',
-    pageLoader: () => import('./pages/sales-ai-settings.js'),
+    parent: 'aiGroup',
+    name: 'sales-ai',
+    path: '/ai/sales',
+    navigation: { title: 'Sales AI' },
+    authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
+    componentLoader: () => import('./pages/sales-ai-settings.js'),
   },
 ]);
 ```
 
-Import the registration module for its side effect from the App plugin's client entry. The lazy module must default-export a React component. Add locale resources, keep `/settings/ai`, and use a unique key.
+Register this contribution in the plugin's `routes` and add its locale resources. The example preserves the existing AI settings access policy; server operations still enforce their own permissions. Keep detail routes beneath their owning page, with an `Outlet` and appropriate guards. AI Employees at `/settings/ai` never renders cross-feature tabs; employee detail/editor tabs are unaffected. `registerAISettingsTabs` and `getAISettingsTabs` remain deprecated compatibility APIs, but registered tabs no longer render. Migrate old custom tab contributions to sidebar routes.
 
 # Direct Core Runtime Use
 
@@ -381,7 +384,7 @@ The direct `AgentService` API is server-only. It is intentionally not a client/b
 3. Send page context and verify the latest serializable values.
 4. Fill a registered form and verify no automatic submit/save.
 5. Execute an `ASK` frontend tool through approval and resume.
-6. Add a `/settings/ai` tab from an App plugin.
+6. Add an independent Settings page under `aiGroup` from an App plugin.
 7. Verify App code has no private dependency/plugin imports.
 8. Create a persisted conversation, create an AI Employee agent with its session id, and verify invoke/stream uses the same session (success path).
 9. Create a conversation without `aiEmployee`, create a fixed `AgentService` with `createAgent`, and verify direct model execution (success path).
@@ -405,5 +408,5 @@ Final response must include:
 - [Frontend guide](references/frontend-registry.md): use for chat, context, forms, tools, tasks, and settings.
 - [API guide](references/api-reference.md): use for `/api/ai` behavior and service mapping.
 - [Runtime boundaries](references/agent-service.md): use before direct manager or custom agent work.
-- [Exact contracts](references/contracts.md): use before writing resource definitions, React props, settings tabs, tool schemas, or request bodies.
+- [Exact contracts](references/contracts.md): use before writing resource definitions, React props, settings routes, tool schemas, or request bodies.
 - [NocoBase App quickstart](../../../../../docs/docs/en/plugin-development/quick-start.md): use when App creation or local development workflow is unclear.

@@ -10,13 +10,18 @@ import {
   vectorDatabasesPath,
 } from '../client/route-paths.ts';
 
-test('legacy AI tabs keep the shared settings route', () => {
+test('AI features link to independent settings pages', () => {
   expect([
     aiSettingsPath,
     aiEmployeePath,
     knowledgeBasePath,
     vectorDatabasesPath,
-  ]).toEqual(['/settings/ai', '/settings/ai', '/settings/ai', '/settings/ai']);
+  ]).toEqual([
+    '/settings/ai',
+    '/settings/ai',
+    '/settings/ai/knowledge-base',
+    '/settings/ai/vector-database',
+  ]);
 });
 
 test('services link to independent pages while the old URL remains compatible', () => {

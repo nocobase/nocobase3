@@ -455,59 +455,89 @@ describe('AI settings page navigation', () => {
     );
   });
 
-  it('preserves contributed tabs and restores selection with back and forward', async () => {
-    const router = createRouter([
-      '/settings/ai?tab=knowledge-base&filter=recent',
-    ]);
-    render(<RouterProvider router={router} />);
-    expect(await screen.findByText('Knowledge content')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /Conversation/ }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Vector Database' }));
-    expect(await screen.findByText('Vector content')).toBeInTheDocument();
-    expect(router.state.location.search).toBe(
-      '?tab=vector-database&filter=recent',
-    );
-    openMenuPage('Conversations');
-    expect(await screen.findByText('Conversation content')).toBeInTheDocument();
-    expectCenterWithoutEmployeeShell();
-    await travel(router, -1);
-    expect(await screen.findByText('Vector content')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Vector Database' }),
-    ).toHaveAttribute('aria-current', 'page');
-    await travel(router, -1);
-    expect(await screen.findByText('Knowledge content')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Knowledge Base' }),
-    ).toHaveAttribute('aria-current', 'page');
-    await travel(router, 1);
-    expect(await screen.findByText('Vector content')).toBeInTheDocument();
-    await travel(router, 1);
-    expect(await screen.findByText('Conversation content')).toBeInTheDocument();
-    expectCenterWithoutEmployeeShell();
-  });
-
-  it.each(['llm-service', 'knowledge-base', 'vector-database'])(
-    'supports legacy state navigation to %s',
-    async (tab) => {
-      render(
-        <RouterProvider
-          router={createRouter([
-            { pathname: '/settings/ai/', state: { aiSettingsTab: tab } },
-          ])}
-        />,
-      );
+  it.each(['/settings/ai', '/settings/ai/', '/settings/ai?tab=ai-employee'])(
+    'renders only employee content at %s even when legacy tabs are registered',
+    async (path) => {
+      const router = createRouter([path]);
+      render(<RouterProvider router={router} />);
+      expect(await screen.findByText('Employee content')).toBeInTheDocument();
       expect(
-        await screen.findByText(
-          tab === 'llm-service'
-            ? 'LLM content'
-            : tab === 'knowledge-base'
-              ? 'Knowledge content'
-              : 'Vector content',
-        ),
+        screen.getByRole('heading', { name: 'AI Employees' }),
       ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('navigation', { name: 'AI settings' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', {
+          name: /Knowledge Base|Vector Database|AI Employee/,
+        }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+      openMenuPage('Conversations');
+      expect(
+        await screen.findByText('Conversation content'),
+      ).toBeInTheDocument();
+      await travel(router, -1);
+      expect(await screen.findByText('Employee content')).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe(
+        '/settings/ai' + (path.endsWith('/') ? '/' : ''),
+      );
+    },
+  );
+
+  it.each(['knowledge-base', 'vector-database'])(
+    'redirects legacy query and state links to standalone %s with replace',
+    async (tab) => {
+      const { settingsRouteTree: tree } = resolveAppClientContributions([
+        {
+          packageName: '@nocobase/app-plugin-ai-employee',
+          routes: defineSettingsRoutes([
+            createAISettings(),
+            {
+              parent: 'aiGroup',
+              name: tab,
+              path: `/ai/${tab}`,
+              componentLoader: async () => ({
+                default: () => <div>Standalone content</div>,
+              }),
+            },
+          ]),
+        },
+      ]);
+      for (const entry of [
+        `/main/settings/ai/?tab=${tab}&tag=a&tag=b#section`,
+        {
+          pathname: '/main/settings/ai/',
+          search: '?tag=a&tag=b',
+          hash: '#section',
+          state: { aiSettingsTab: tab },
+        },
+      ]) {
+        const router = createRouter(
+          ['/main/settings/ai/conversations', entry],
+          '/main',
+          tree,
+        );
+        const view = render(<RouterProvider router={router} />);
+        expect(
+          await screen.findByText('Standalone content'),
+        ).toBeInTheDocument();
+        expect(router.state.location.pathname).toBe(`/main/settings/ai/${tab}`);
+        expect(router.state.location.search).toBe('?tag=a&tag=b');
+        expect(router.state.location.hash).toBe('#section');
+        expect(router.state.historyAction).toBe('REPLACE');
+        expect(screen.queryByText('Employee content')).not.toBeInTheDocument();
+        await travel(router, -1);
+        expect(
+          await screen.findByText('Conversation content'),
+        ).toBeInTheDocument();
+        await travel(router, 1);
+        expect(
+          await screen.findByText('Standalone content'),
+        ).toBeInTheDocument();
+        view.unmount();
+        router.dispose();
+      }
     },
   );
 
@@ -558,7 +588,7 @@ describe('AI settings page navigation', () => {
   });
 
   it.each(['knowledge-base', 'vector-database'])(
-    'preserves contributed %s nested detail shells and state navigation',
+    'keeps the public shell wrapper tab-free on a %s detail URL',
     async (tab) => {
       const { settingsRouteTree: tree } = resolveAppClientContributions([
         {
@@ -583,17 +613,13 @@ describe('AI settings page navigation', () => {
       render(<RouterProvider router={router} />);
       expect(await screen.findByText('Detail content')).toBeInTheDocument();
       expect(
-        screen.getAllByRole('navigation', { name: 'AI settings' }),
-      ).toHaveLength(1);
-      expect(
-        screen.getByRole('button', {
-          name: tab === 'knowledge-base' ? 'Knowledge Base' : 'Vector Database',
-        }),
-      ).toHaveAttribute('aria-current', 'page');
-      fireEvent.click(screen.getByRole('button', { name: 'AI Employee' }));
+        screen.queryByRole('navigation', { name: 'AI settings' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+      openMenuPage('AI Employees');
       expect(await screen.findByText('Employee content')).toBeInTheDocument();
       expect(router.state.location.pathname).toBe('/settings/ai');
-      expect(router.state.location.search).toBe('?tab=ai-employee');
+      expect(router.state.location.search).toBe('');
       await travel(router, -1);
       expect(await screen.findByText('Detail content')).toBeInTheDocument();
     },
@@ -604,9 +630,11 @@ describe('AI settings page navigation', () => {
       <RouterProvider router={createRouter(['/settings/ai?tab=missing'])} />,
     );
     expect(await screen.findByText('Employee content')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'AI Employee' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    expect(
+      screen.getByRole('heading', { name: 'AI Employees' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('navigation', { name: 'AI settings' }),
+    ).not.toBeInTheDocument();
   });
 });
