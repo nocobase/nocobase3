@@ -13,21 +13,15 @@ it.each([true, false])(
   (strictStartup) => {
     const spawnDevProcess = vi.fn(() => ({ stdin: {} }));
     const watchConfigFiles = vi.fn();
+    // Test process supervision independently of application environment assembly.
     runInNewContext(
       source.slice(
-        source.indexOf('if (!proxyTarget) {'),
-        source.indexOf('\ntry {\n  await Promise.all'),
+        source.indexOf('  const serverChild = spawnDevProcess('),
+        source.indexOf('\n}\n\ntry {\n  await Promise.all'),
       ),
       {
         strictStartup,
-        toUrlHost: (host: string) => host,
-        proxyTarget: undefined,
-        nextEnv: {},
-        viteDevHost: 'localhost',
-        vitePort: 5173,
-        appServerHost: 'localhost',
-        appServerPort: 13000,
-        appOrigin: 'http://localhost:13000',
+        serverEnv: {},
         spawnDevProcess,
         pluginWatchIncludes: ['plugin/server/**'],
         rootDir: '/app',
