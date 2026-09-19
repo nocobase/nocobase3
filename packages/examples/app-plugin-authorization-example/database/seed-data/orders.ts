@@ -5,7 +5,7 @@ export type Order = {
   projectId: string;
   quoteId: string;
   status: string;
-  deliveryReference: string;
+  deliveryReference: string | null;
 };
 
 export function orderRows(projects: readonly Project[]): Order[] {
@@ -15,6 +15,6 @@ export function orderRows(projects: readonly Project[]): Order[] {
     quoteId: row.id.replace('project', 'quote-history'),
     title: `${row.title} order`,
     status: 'ready',
-    deliveryReference: '',
+    deliveryReference: null,
   }));
 }

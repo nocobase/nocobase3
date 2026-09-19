@@ -1,3 +1,4 @@
+import path from 'node:path';
 import sqlite from '@nocobase/db-sqlite';
 import {
   createDatabaseManager,
@@ -49,6 +50,86 @@ it('creates the final sales schema and metadata in one reversible migration', as
       expect(await connection.collections.get(name)).toBeUndefined();
       expect(await connection.collections.getPhysical(name)).toBeUndefined();
     }
+  } finally {
+    await database.destroy();
+  }
+});
+
+it('upgrades delivery references without losing orders and safely restores the constraint', async () => {
+  const database = createDatabaseManager({
+    drivers: { sqlite },
+    metadataStore: new InMemoryCollectionMetadataStore(),
+    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+  });
+  const connection = database.connection();
+  const orders = 'authorizationExampleOrders';
+  const migrator = database.createMigrator({
+    directory: path.resolve(import.meta.dirname, '../database/migrations'),
+    packageName: '@nocobase/app-plugin-authorization-example',
+  });
+  const assertNullable = async (nullable: boolean) => {
+    expect((await connection.collections.get(orders))?.fields).toContainEqual(
+      expect.objectContaining({ name: 'deliveryReference', nullable }),
+    );
+    expect(
+      (await connection.collections.getPhysical(orders))?.columns,
+    ).toContainEqual(
+      expect.objectContaining({ columnName: 'delivery_reference', nullable }),
+    );
+  };
+  try {
+    await migrator.upTo(migration.name);
+    await assertNullable(false);
+    await connection.query
+      .insertInto(orders)
+      .values({
+        id: 'existing-order',
+        projectId: 'project',
+        quoteId: 'quote',
+        title: 'Existing order',
+        status: 'ready',
+        deliveryReference: 'SHIP-1',
+      })
+      .execute();
+    await migrator.latest();
+    await assertNullable(true);
+    expect(
+      await connection.query.selectFrom(orders).selectAll().executeTakeFirst(),
+    ).toMatchObject({
+      id: 'existing-order',
+      deliveryReference: 'SHIP-1',
+    });
+    await connection.query
+      .updateTable(orders)
+      .where('id', '=', 'existing-order')
+      .set({ deliveryReference: null })
+      .execute();
+    await expect(migrator.rollback()).rejects.toThrow(
+      'Fill missing order delivery references',
+    );
+    await assertNullable(true);
+    expect(
+      await connection.query.selectFrom(orders).selectAll().executeTakeFirst(),
+    ).toMatchObject({
+      id: 'existing-order',
+      deliveryReference: null,
+    });
+    await connection.query
+      .updateTable(orders)
+      .where('id', '=', 'existing-order')
+      .set({ deliveryReference: 'SHIP-2' })
+      .execute();
+    await migrator.rollback();
+    await assertNullable(false);
+    await expect(
+      connection.query
+        .updateTable(orders)
+        .where('id', '=', 'existing-order')
+        .set({ deliveryReference: null })
+        .execute(),
+    ).rejects.toThrow();
+    await migrator.rollback();
+    expect(await connection.collections.getPhysical(orders)).toBeUndefined();
   } finally {
     await database.destroy();
   }

@@ -22,7 +22,7 @@ interface SalesRecord {
   region?: string;
   amount?: number;
   status?: string;
-  deliveryReference?: string;
+  deliveryReference?: string | null;
 }
 export default function SalesPage({
   path,
