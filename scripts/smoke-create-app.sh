@@ -145,7 +145,7 @@ READY_MARKER='App dev server ready'
 # Killing the pnpm process alone would leave vite and tsx running, and the job would hang waiting on them. `setsid`
 # would do the same thing but does not exist on macOS, where this script is also run by hand.
 set -m
-pnpm dev > "$DEV_LOG" 2>&1 &
+NOCOBASE_STRICT_STARTUP=true pnpm dev > "$DEV_LOG" 2>&1 &
 APP_PID=$!
 set +m
 
@@ -249,7 +249,7 @@ echo "Waiting up to ${TIMEOUT}s for $START_URL/api/healthz"
 # Create the log before forking so the progress loop cannot race the child's output redirection.
 : > "$START_LOG"
 set -m
-APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$START_PORT" pnpm start > "$START_LOG" 2>&1 &
+NOCOBASE_STRICT_STARTUP=true APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$START_PORT" pnpm start > "$START_LOG" 2>&1 &
 APP_PID=$!
 set +m
 trap stop_app EXIT

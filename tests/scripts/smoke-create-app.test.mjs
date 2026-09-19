@@ -35,6 +35,7 @@ if (command === 'config') {
     if (scenario === 'build-fails') process.exit(9);
     fs.writeFileSync('built', 'yes');
   } else {
+    if (process.env.NOCOBASE_STRICT_STARTUP !== 'true') throw new Error('Strict startup must be enabled');
     if (command === 'start' && !fs.existsSync('built')) throw new Error('Start ran before build');
     if (scenario === command + '-exits') process.exit(7);
     const server = http.createServer((req, res) => {

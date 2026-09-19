@@ -12,6 +12,7 @@ import type { AppRouteContribution } from '../router/index.js';
 
 export interface AppPluginApplication<TConfig = object> {
   readonly runtimeLogging?: AppRuntimeLogging;
+  readonly strictStartup?: boolean;
   readonly appName: string;
   /**
    * Whether this app owns the process it runs in, or is one of several an

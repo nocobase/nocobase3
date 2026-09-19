@@ -50,6 +50,7 @@ export class QueueProvider extends ServiceProvider<AppPluginApplication> {
     return createQueueManager(this.app.config.get<AppQueueConfig>('queue')!, {
       database,
       logger,
+      strictJobLoading: this.app.strictStartup,
       jobFactory: (JobClass) =>
         container.resolve(queueJobFactoryRegistryToken).create(JobClass),
     });
