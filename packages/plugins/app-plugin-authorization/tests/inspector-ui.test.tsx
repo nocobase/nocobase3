@@ -359,12 +359,18 @@ it('marks configured resource types without showing counts or relying on the cur
     ...options,
     resourceTypes: [
       ...options.resourceTypes,
-      { value: 'settings', label: 'Settings', resources: [], actions: [] },
+      {
+        value: 'settings',
+        label: 'Settings',
+        resources: [{ value: 'configuration', label: 'Configuration' }],
+        actions: [],
+      },
     ],
   });
   mocks.inspectConfigured.mockResolvedValue({
     unrestricted: false,
     types: ['settings'],
+    resources: [{ type: 'settings', id: 'configuration' }],
   });
   mount();
   const settings = await screen.findByRole('button', { name: 'Settings' });
@@ -379,6 +385,55 @@ it('marks configured resource types without showing counts or relying on the cur
   expect(within(tables).queryByRole('img')).not.toBeInTheDocument();
   expect(tables).not.toHaveTextContent('25');
 });
+
+it.each([
+  { unrestricted: false, ids: ['sales.quotes'], marked: ['Sales'] },
+  { unrestricted: false, ids: ['removed.resource'], marked: [] },
+  { unrestricted: false, ids: ['*'], marked: ['Sales', 'Delivery'] },
+  { unrestricted: true, ids: [], marked: ['Sales', 'Delivery'] },
+])(
+  'marks only configured resource groups: %j',
+  async ({ unrestricted, ids, marked }) => {
+    mocks.loadOptions.mockResolvedValue({
+      ...options,
+      resourceTypes: [
+        {
+          value: 'resource',
+          label: 'Business resources',
+          actions: [{ value: 'view', label: 'View' }],
+          groups: [
+            { value: 'sales', label: 'Sales', category: 'business' },
+            { value: 'delivery', label: 'Delivery', category: 'business' },
+          ],
+          resources: [
+            { value: 'sales.quotes', label: 'Quotes', group: 'sales' },
+            { value: 'delivery.orders', label: 'Orders', group: 'delivery' },
+          ],
+        },
+      ],
+    });
+    mocks.inspectConfigured.mockResolvedValue({
+      unrestricted,
+      types: ['resource', 'page'],
+      resources: [
+        ...ids.map((id) => ({ type: 'resource', id })),
+        // The same ID under another resource type must not mark the group.
+        { type: 'page', id: 'delivery.orders' },
+      ],
+    });
+    mount();
+    await screen.findByRole('button', { name: 'Quotes: View' });
+    for (const label of ['Sales', 'Delivery']) {
+      expect(
+        Boolean(
+          within(screen.getByRole('button', { name: label })).queryByRole(
+            'img',
+          ),
+        ),
+      ).toBe(marked.includes(label));
+    }
+  },
+);
 
 it('filters configured resources before pagination and preserves action columns', async () => {
   mount('/?user=alice&page=2');

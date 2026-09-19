@@ -315,7 +315,14 @@ function Inspector({
                   <span className='flex-1 text-left'>{item.label}</span>
                   {configured?.key === configurationKey &&
                   (configured.unrestricted ||
-                    configured.types.includes(item.value)) ? (
+                    configured.resources.some(
+                      (resource) =>
+                        resource.type === item.value &&
+                        (resource.id === '*' ||
+                          item.resources.some(
+                            (member) => member.value === resource.id,
+                          )),
+                    )) ? (
                     <span
                       role='img'
                       title={t('permissionWorkspace.configured')}
