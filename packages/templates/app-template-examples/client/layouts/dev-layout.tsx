@@ -17,11 +17,12 @@ import {
   selectedNavigationId,
   useRouteNavigation,
 } from '../routing/route-navigation.js';
-import { NavigationTree } from '../components/navigation-tree.js';
-import { LayoutHeader } from '../components/layout-header.js';
-import { LayoutSidebar } from '../components/layout-sidebar.js';
-import { SurfaceEmpty, type SurfaceCopy } from './surface-empty.js';
-import { AppBrand, HeaderActions } from '../shell/index.js';
+import { NavigationTree } from './components/navigation-tree.js';
+import { LayoutHeader } from './components/layout-header.js';
+import { LayoutSidebar } from './components/layout-sidebar.js';
+import { SurfaceEmpty, type SurfaceCopy } from './components/surface-empty.js';
+import { AppBrand } from './components/app-brand.js';
+import { HeaderActions } from './components/header-actions.js';
 
 import { useClientApplication } from '@nocobase/app-client';
 export interface DevLayoutProps {

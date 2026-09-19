@@ -8,8 +8,8 @@ import {
   waitFor,
 } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { LayoutHeader } from '../../client/components/layout-header.js';
-import { LayoutSidebar } from '../../client/components/layout-sidebar.js';
+import { LayoutHeader } from '../../client/layouts/components/layout-header.js';
+import { LayoutSidebar } from '../../client/layouts/components/layout-sidebar.js';
 
 function viewport(desktop: boolean) {
   const listeners = new Set<() => void>();

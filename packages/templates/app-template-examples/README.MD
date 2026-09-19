@@ -103,8 +103,8 @@ client/                  Browser application
 ├── pages/               Your page components
 ├── components/          Your components
 │   └── ui/              shadcn/ui primitives
-├── layouts/             Settings and dev tool shells
-├── shell/               Authenticated app shell: header, sidebar, user menu
+├── layouts/             App, Settings and Dev layouts
+│   └── components/      Layout containers, navigation, branding and account controls
 ├── routing/             Route rendering, access checks, loading and error UI
 ├── locales/             Your translated strings
 ├── theme/               App-wide theme and light/dark selector

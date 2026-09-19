@@ -24,7 +24,7 @@ import { MemoryRouter, Outlet, useParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRouter } from '../../client/routing/app-router.tsx';
-import { HeaderActions } from '../../client/shell/header-actions.tsx';
+import { HeaderActions } from '../../client/layouts/components/header-actions.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
 function WorkflowDetailTestPage(): ReactElement {

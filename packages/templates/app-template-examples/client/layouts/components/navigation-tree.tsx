@@ -2,7 +2,7 @@ import { useTranslation } from '@nocobase/i18n/client';
 import {
   routeKey,
   type RouteNavigationItem,
-} from '../routing/route-navigation.js';
+} from '../../routing/route-navigation.js';
 import { ChevronRight } from 'lucide-react';
 import { useState, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router';

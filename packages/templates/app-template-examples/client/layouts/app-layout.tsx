@@ -9,12 +9,12 @@ import { useClientApplication } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
 import { PanelLeft, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { LayoutHeader } from '../components/layout-header.js';
-import { LayoutSidebar } from '../components/layout-sidebar.js';
-import { NavigationTree } from '../components/navigation-tree.js';
-import { AppBrand } from './app-brand.js';
-import { HeaderActions } from './header-actions.js';
-import { SidebarFooter } from './sidebar-footer.js';
+import { LayoutHeader } from './components/layout-header.js';
+import { LayoutSidebar } from './components/layout-sidebar.js';
+import { NavigationTree } from './components/navigation-tree.js';
+import { AppBrand } from './components/app-brand.js';
+import { HeaderActions } from './components/header-actions.js';
+import { SidebarFooter } from './components/sidebar-footer.js';
 import {
   useRouteNavigation,
   selectedNavigationId,
@@ -22,7 +22,7 @@ import {
   navigationPages,
 } from '../routing/route-navigation.js';
 
-export function AppShell({
+export function AppLayout({
   routes,
 }: {
   readonly routes: readonly AppClientRegisteredRoute[];

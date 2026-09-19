@@ -12,7 +12,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import locales from '../../client/locales/index.js';
-import { AppShell } from '../../client/shell/app-shell.js';
+import { AppLayout } from '../../client/layouts/app-layout.js';
 vi.mock('@nocobase/app-plugin-i18n/client', () => ({
   useSyncServerLocale: () => {},
 }));
@@ -23,7 +23,9 @@ vi.mock('../../client/routing/client-route.js', () => ({
   ClientRoute: () => <p>Preferences content</p>,
 }));
 vi.mock('../../client/theme/index.js', () => ({ ThemeSettings: () => null }));
-vi.mock('../../client/shell/user-menu.js', () => ({ UserMenu: () => null }));
+vi.mock('../../client/layouts/components/user-menu.js', () => ({
+  UserMenu: () => null,
+}));
 vi.mock('../../client/components/notification-button', () => ({
   NotificationButton: () => null,
 }));
@@ -77,7 +79,7 @@ async function setup(children: ReactNode, path = '/') {
 
 describe('shell translations', () => {
   it('updates header, footer, tooltips and accessible labels without remounting', async () => {
-    const runtime = await setup(<AppShell routes={[]} />);
+    const runtime = await setup(<AppLayout routes={[]} />);
     expect(screen.getByText('AI application workspace')).toBeVisible();
     expect(screen.getByText('AI builds freely.')).toBeVisible();
     await act(() => runtime.changeLanguage('zh-CN'));

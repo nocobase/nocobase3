@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { expect, it, vi } from 'vitest';
 
-import { AppShell } from '../../client/shell/app-shell.js';
+import { AppLayout } from '../../client/layouts/app-layout.js';
 import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
 
 vi.mock('@nocobase/app-plugin-i18n/client', async (importOriginal) => ({
@@ -28,10 +28,10 @@ vi.mock('../../client/routing/route-navigation.js', async (original) => ({
   >()),
   useRouteNavigation: () => ({ items: [], denied: new Set(), loading: false }),
 }));
-vi.mock('../../client/components/layout-sidebar.js', () => ({
+vi.mock('../../client/layouts/components/layout-sidebar.js', () => ({
   LayoutSidebar: () => null,
 }));
-vi.mock('../../client/shell/header-actions.js', () => ({
+vi.mock('../../client/layouts/components/header-actions.js', () => ({
   HeaderActions: () => null,
 }));
 
@@ -59,7 +59,7 @@ it('provides business route breadcrumbs to its outlet without an outer provider'
   render(
     <MemoryRouter initialEntries={['/orders/42']}>
       <Routes>
-        <Route element={<AppShell routes={routes} />}>
+        <Route element={<AppLayout routes={routes} />}>
           <Route path='/orders/:id' element={<Breadcrumbs />} />
         </Route>
       </Routes>

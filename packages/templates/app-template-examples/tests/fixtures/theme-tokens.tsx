@@ -10,7 +10,7 @@ import {
   PopoverContent,
   PopoverTitle,
 } from '../../client/components/ui/popover';
-import { LayoutSidebar } from '../../client/components/layout-sidebar';
+import { LayoutSidebar } from '../../client/layouts/components/layout-sidebar';
 import { AppThemeProvider, ThemeSettings } from '../../client/theme';
 import '../../client/styles.css';
 
