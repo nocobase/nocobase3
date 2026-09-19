@@ -445,7 +445,7 @@
   color: var(--muted-foreground);
   font-size: var(--text-xs);
 }
-.workflow-canvas-header span {
+.workflow-canvas-header span:not([data-slot='badge']) {
   color: var(--muted-foreground);
   font-size: var(--text-xs);
 }
@@ -595,6 +595,9 @@
   color: var(--workflow-pending);
 }
 .workflow-pending-version-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-decoration: none;
 }
 .workflow-version-current-marker {

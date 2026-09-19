@@ -61,10 +61,12 @@ describe('version comparison interaction', () => {
         .getAllByText('Canvas node')
         .map((item) => item.getAttribute('data-selected')),
     ).toEqual(['task', 'task']);
-    expect(screen.getByText('/config/limit')).toBeDefined();
+    expect(screen.getAllByText('/config/limit')).toHaveLength(2);
     const details = screen.getByRole('region', { name: 'Change details' });
     expect(within(details).getByText('3')).toBeDefined();
     fireEvent.click(screen.getByRole('button', { name: /Added extra/ }));
+    expect(within(details).getAllByRole('table')).toHaveLength(1);
+    expect(within(details).getAllByRole('columnheader')).toHaveLength(2);
     expect(
       screen.getByText('This node does not exist in this version'),
     ).toBeDefined();
