@@ -1,6 +1,6 @@
 import type { ApiClient } from '@nocobase/app-client';
 
-import { requestAIAction, requestAppAction } from './api-client.js';
+import { requestAIAction } from './api-client.js';
 
 export interface AIEmployeeModelRef {
   llmService: string;
@@ -250,7 +250,7 @@ export async function listEnabledKnowledgeBases(
   signal?: AbortSignal,
   client?: ApiClient,
 ): Promise<KnowledgeBaseOption[]> {
-  const response = await requestAppAction<unknown>(
+  const response = await requestAIAction<unknown>(
     'aiKnowledgeBase',
     'list',
     {
@@ -261,7 +261,7 @@ export async function listEnabledKnowledgeBases(
     client,
   );
   return normalizeArrayResponse<UnknownRecord>(response).flatMap((item) =>
-    typeof item.key === 'string'
+    typeof item.key === 'string' && item.enabled !== false
       ? [
           {
             key: item.key,

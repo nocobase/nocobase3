@@ -352,6 +352,7 @@ export default {
   'Add MCP server': '添加 MCP 服务',
   'Edit MCP server': '编辑 MCP 服务',
   'No MCP servers configured.': '暂无 MCP 服务配置。',
+  'No LLM services configured.': '暂无 LLM 服务配置。',
   Transport: '传输方式',
   Stdio: 'Stdio',
   HTTP: 'HTTP',

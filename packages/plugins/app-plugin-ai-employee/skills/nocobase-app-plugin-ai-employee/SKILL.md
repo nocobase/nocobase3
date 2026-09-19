@@ -185,17 +185,82 @@ Do not import their implementation modules. Activate them through employee/skill
 
 # Frontend App Integration
 
-Use the installed `client/extensions/nocobase-ai` source. React UI does not come from `@nocobase/ai-employee`.
+Use the installed `client/extensions/nocobase-ai` source. React UI does not come from `@nocobase/ai-employee`. Employee and model discovery is asynchronous: mount `AIChatProvider` only after `useAI()` reports `configurationStatus === 'ready'`, at least one employee, and `hasEnabledModels`. Keep the readiness check inside `NocoBaseAIRootProvider` and outside `AIChatProvider`; a loading overlay over an already mounted chat does not defer its initialization.
+
+The following minimal page includes the required loading and unavailable states. Adapt the import alias to the App's installed extension path, and localize the messages using the App's existing i18n setup.
 
 ```tsx
-<NocoBaseAIRootProvider service={nocobaseAIService}>
-  <AIChatProvider id='sales-chat' controller={controller}>
-    <ChatInline>
-      <AIChatWindow />
-    </ChatInline>
-  </AIChatProvider>
-</NocoBaseAIRootProvider>
+import {
+  AIChatProvider,
+  AIChatWindow,
+  ChatInline,
+  NocoBaseAIRootProvider,
+  nocobaseAIService,
+  useAI,
+  useAIChatController,
+} from '@/extensions/nocobase-ai';
+
+function ConfiguredChat() {
+  const {
+    configurationStatus,
+    configurationError,
+    modelConfigurationError,
+    employees,
+    hasEnabledModels,
+  } = useAI();
+  const controller = useAIChatController();
+
+  if (configurationStatus === 'loading') {
+    return <p role='status'>Loading AI configuration...</p>;
+  }
+  if (configurationStatus === 'error') {
+    return (
+      <p role='alert'>
+        {configurationError?.message ?? 'Unable to load AI configuration.'}{' '}
+        Check your connection, employee access, and AI settings, then reload
+        this page.
+      </p>
+    );
+  }
+  if (!employees.length) {
+    return <p role='alert'>No AI employees are available for this user.</p>;
+  }
+  if (modelConfigurationError) {
+    return (
+      <p role='alert'>
+        {modelConfigurationError.message} Check and enable a model in AI
+        settings, then reload this page.
+      </p>
+    );
+  }
+  if (!hasEnabledModels) {
+    return (
+      <p role='alert'>
+        No enabled AI model is available. Configure and enable a model in AI
+        settings, then reload this page.
+      </p>
+    );
+  }
+
+  return (
+    <AIChatProvider id='sales-chat' controller={controller}>
+      <ChatInline>
+        <AIChatWindow />
+      </ChatInline>
+    </AIChatProvider>
+  );
+}
+
+export default function SalesChatPage() {
+  return (
+    <NocoBaseAIRootProvider service={nocobaseAIService}>
+      <ConfiguredChat />
+    </NocoBaseAIRootProvider>
+  );
+}
 ```
+
+If the App already has a root AI provider, render `ConfiguredChat` beneath that provider instead of adding another root. Call hooks unconditionally before the guard returns. Do not use `models.length` as the availability check: the provider may expose an unconfigured placeholder model. Model discovery can fail while `configurationStatus` is still `'ready'`, so check `modelConfigurationError` and `hasEnabledModels` separately. The example deliberately withholds the composer until configuration is usable; after correcting access or model configuration, reload the page to retry discovery. Do not require an employee/model switch as a recovery step.
 
 Patterns:
 
@@ -272,6 +337,8 @@ The direct `AgentService` API is server-only. It is intentionally not a client/b
 - `@nocobase/ai-employee` imports use its public root.
 - `ai/` resources default-export valid definitions and built-ins are not copied.
 - Frontend uses the installed AI extension and existing service/transport.
+- Chat mounts only after employee/model discovery is usable; loading, failed discovery, missing employees, and unavailable models show explicit states rather than an enabled composer.
+- On first entry and after a full page reload, the displayed default employee/model can send immediately without switching either selection; verify conversation creation, the stream request, and the cleared draft.
 - Context and tool data are serializable and permission guarded.
 - Settings registration is side-effect imported and its lazy page has a default export.
 - No private AI Employee plugin server path is imported.

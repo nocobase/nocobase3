@@ -393,6 +393,7 @@ export default {
   'Add MCP server': 'Add MCP server',
   'Edit MCP server': 'Edit MCP server',
   'No MCP servers configured.': 'No MCP servers configured.',
+  'No LLM services configured.': 'No LLM services configured.',
   Transport: 'Transport',
   Stdio: 'Stdio',
   HTTP: 'HTTP',
