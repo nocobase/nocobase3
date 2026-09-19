@@ -43,6 +43,11 @@
   },
   {
     "type": "file",
+    "name": "template-print",
+    "label": "模板打印"
+  },
+  {
+    "type": "file",
     "name": "i18n",
     "label": "多语言"
   },
