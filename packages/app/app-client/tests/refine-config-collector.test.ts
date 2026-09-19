@@ -25,7 +25,23 @@ const dataProvider: DataProvider = {
 };
 
 describe('client refine runtime', () => {
-  it('supports every configurable Refine prop through explicit setters', () => {
+  it('rejects removed access-control configuration instead of forwarding it to Refine', () => {
+    const defaults = {
+      options: {},
+      accessControlProvider: { can: vi.fn() },
+    };
+    expect(() => createRefineConfigCollector(defaults)).toThrow(
+      'Refine accessControlProvider is not supported',
+    );
+  });
+  it('does not expose a Refine authorization setter', () => {
+    const collector = createRefineConfigCollector({});
+    expect(collector.forContribution('test')).not.toHaveProperty(
+      'setAccessControlProvider',
+    );
+    expect(collector.finalize()).not.toHaveProperty('accessControlProvider');
+  });
+  it('supports the exposed Refine configuration through explicit setters', () => {
     const collector = createRefineConfigCollector({});
     const refine = collector.forContribution('@nocobase/app-plugin-refine');
     const routerProvider: NonNullable<AppClientRefineConfig['routerProvider']> =
@@ -41,11 +57,6 @@ describe('client refine runtime', () => {
     > = {
       close: vi.fn(),
       open: vi.fn(),
-    };
-    const accessControlProvider: NonNullable<
-      AppClientRefineConfig['accessControlProvider']
-    > = {
-      can: vi.fn(async () => ({ can: true })),
     };
     const auditLogProvider: NonNullable<
       AppClientRefineConfig['auditLogProvider']
@@ -69,7 +80,6 @@ describe('client refine runtime', () => {
     refine.setAuthProvider(authProvider);
     refine.setLiveProvider(liveProvider);
     refine.setNotificationProvider(notificationProvider);
-    refine.setAccessControlProvider(accessControlProvider);
     refine.setAuditLogProvider(auditLogProvider);
     refine.setI18nProvider(i18nProvider);
     refine.setOnLiveEvent(onLiveEvent);
@@ -78,7 +88,6 @@ describe('client refine runtime', () => {
     const config = collector.finalize();
 
     expect(config).toMatchObject({
-      accessControlProvider,
       auditLogProvider,
       authProvider,
       children: 'Configured Refine content',

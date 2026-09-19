@@ -7,11 +7,12 @@ import {
 } from '@nocobase/app-server/plugins';
 
 import routes from './routes/index.js';
+import { WorkflowAuthorizationProvider } from './authorization.js';
 
 import { WorkflowProvider, type WorkflowProviderConfig } from './provider.js';
 
 const serviceProviders: readonly AppPluginProviderConstructor<WorkflowProviderConfig>[] =
-  [WorkflowProvider];
+  [WorkflowAuthorizationProvider, WorkflowProvider];
 
 const workflowPlugin: AppServerPlugin<WorkflowProviderConfig> =
   defineServerPlugin<WorkflowProviderConfig>({

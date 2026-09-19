@@ -1,6 +1,7 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  authorization: { title: 'Workflow', read: 'Read' },
   nav: {
     automation: 'Automation',
     workflows: 'Workflows',

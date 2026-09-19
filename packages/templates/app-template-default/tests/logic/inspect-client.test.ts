@@ -211,12 +211,17 @@ describe('client inspection', () => {
         }),
       ]),
     );
-    expect(inspection.settings.slice(0, 5).map(({ id }) => id)).toEqual([
+    expect(inspection.settings.slice(0, 10).map(({ id }) => id)).toEqual([
       'ai',
       'permission-sets',
+      'new',
+      'edit',
+      'assignments',
+      'details',
       'default-access',
       'sharing-rules',
       'restriction-rules',
+      'inspector',
     ]);
 
     const output = formatAppClientInspection(inspection);
@@ -248,7 +253,7 @@ describe('client inspection', () => {
     });
   });
 
-  it('reports missing Settings access without running providers or leaf loaders', async () => {
+  it('reports normalized Settings authorization without running providers or leaf loaders', async () => {
     const appRoot = await createInspectionApp(`
       globalThis.__clientInspectCalls = { lifecycle: 0, locale: 0, page: 0 };
       class ExampleProvider {
@@ -289,14 +294,9 @@ describe('client inspection', () => {
       locale: 0,
       page: 0,
     });
-    expect(inspection.consistent).toBe(false);
-    expect(inspection.issues).toEqual([
-      expect.objectContaining({
-        code: 'CLIENT_SETTINGS_ACCESS_MISSING',
-        packageName: '@example/client-plugin',
-        routeId: 'example',
-      }),
-    ]);
+    expect(inspection.consistent).toBe(true);
+    expect(inspection.issues).toEqual([]);
+    expect(inspection.settings[0].authz).toBe('skip');
   });
 
   it('inspects a single declaration type without resolving unrelated contributions', async () => {

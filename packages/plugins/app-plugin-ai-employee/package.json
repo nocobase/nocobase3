@@ -179,7 +179,8 @@
     "react-markdown": "^10.1.0",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/app-plugin-authz-restriction-rules": "workspace:*"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",

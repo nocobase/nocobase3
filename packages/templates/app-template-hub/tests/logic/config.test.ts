@@ -5,6 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { AuthorizationConfig } from '@nocobase/app-plugin-authorization/server';
 import { type AppIdentityConfig } from '@nocobase/app-server/config';
 import { type AppDatabaseConfig } from '@nocobase/app-server/database';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
@@ -90,6 +91,17 @@ describe('application config', () => {
     });
 
     expect(runtime.config.get<AppIdentityConfig>('app')!.name).toBe('main');
+    const authorization =
+      runtime.config.get<AuthorizationConfig>('authorization')!;
+    expect(authorization.permissionSets).toEqual({
+      rootSet: 'root',
+      defaultSet: 'member',
+    });
+    expect(authorization.plugins?.map((plugin) => plugin.id)).toEqual([
+      'default-access',
+      'sharing-rules',
+      'restriction-rules',
+    ]);
     expect(runtime.config.get<CachingConfig>('caching')!.default).toBe(
       'memory',
     );

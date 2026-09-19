@@ -455,8 +455,7 @@ describe('Hub client pages', () => {
 
   it('hides deletion when the App removal permission is denied', async () => {
     mocks.authorization.can.mockImplementation(
-      (_resource: unknown, action: string) =>
-        Promise.resolve(action !== 'remove'),
+      ({ action }: { action: string }) => Promise.resolve(action !== 'remove'),
     );
     renderAppPage('/apps/customer/settings');
     await screen.findByText('Application settings');
@@ -949,7 +948,7 @@ describe('Hub client pages', () => {
       }),
     );
     mocks.authorization.can.mockImplementation(
-      (_resource: unknown, action: string) =>
+      ({ action }: { action: string }) =>
         Promise.resolve(
           action !== 'read-release' && action !== 'read-deployment',
         ),
@@ -1199,19 +1198,23 @@ describe('Hub client pages', () => {
         </Routes>
       </MemoryRouter>,
     );
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Deploy v1.0.0' }),
-    );
-    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled(),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', {
-        name: 'Deploy release',
-      }),
-    );
+    const deploy = await screen.findByRole('button', { name: 'Deploy v1.0.0' });
+    await waitFor(() => expect(deploy).toBeEnabled());
+    // Opening the wizard loads releases and configuration before mounting its portal.
+    // Flush those updates before querying the dialog, rather than racing the default query timeout.
+    await act(async () => fireEvent.click(deploy));
+    const dialog = within(await screen.findByRole('dialog'));
+    const selectRelease = dialog.getByRole('button', { name: 'Continue' });
+    await waitFor(() => expect(selectRelease).toBeEnabled());
+    await act(async () => fireEvent.click(selectRelease));
+    const confirmConfig = dialog.getByRole('button', { name: 'Continue' });
+    await waitFor(() => expect(confirmConfig).toBeEnabled());
+    await act(async () => fireEvent.click(confirmConfig));
+    const confirmDeploy = dialog.getByRole('button', {
+      name: 'Deploy release',
+    });
+    await waitFor(() => expect(confirmDeploy).toBeEnabled());
+    await act(async () => fireEvent.click(confirmDeploy));
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
@@ -1283,7 +1286,7 @@ describe('Hub client pages', () => {
 
   it('renders an unavailable state for an explicit Tab without access', async () => {
     mocks.authorization.can.mockImplementation(
-      (_resource: unknown, action: string) =>
+      ({ action }: { action: string }) =>
         Promise.resolve(action !== 'read-release'),
     );
     renderAppPage('/apps/customer/releases');
@@ -1355,8 +1358,7 @@ describe('Hub client pages', () => {
     'hides Deploy without %s',
     async (missing) => {
       mocks.authorization.can.mockImplementation(
-        (_resource: unknown, action: string) =>
-          Promise.resolve(action !== missing),
+        ({ action }: { action: string }) => Promise.resolve(action !== missing),
       );
       mocks.client.request.mockImplementation(({ path }: { path: string }) => {
         if (path === 'hub/apps/customer')
@@ -1399,8 +1401,7 @@ describe('Hub client pages', () => {
     'loads only authorized sections for %s',
     async (allowed) => {
       mocks.authorization.can.mockImplementation(
-        (_resource: unknown, action: string) =>
-          Promise.resolve(action === allowed),
+        ({ action }: { action: string }) => Promise.resolve(action === allowed),
       );
       mocks.client.request.mockImplementation(({ path }: { path: string }) => {
         if (path === 'hub/apps/customer')

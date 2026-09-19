@@ -1,3 +1,4 @@
+import type { AuthorizationGrantSource } from './grants.js';
 import type {
   AuthorizationIdentity,
   AuthorizationSubject,
@@ -16,12 +17,13 @@ export type AccessConstraintValue =
   | ResourceAccessScope;
 
 export interface AccessConstraint {
-  source: { plugin: string; id: string };
+  source: AuthorizationGrantSource;
   effect: 'expand' | 'restrict';
   value: AccessConstraintValue;
 }
 
 export interface ResolveAccessConstraintsInput {
+  scopeKey?: string;
   principal: Principal;
   subjects?: readonly AuthorizationSubject[];
   resource: ResourceRef;
@@ -30,6 +32,8 @@ export interface ResolveAccessConstraintsInput {
 
 export interface AccessConstraintResolver {
   id: string;
+  /** Optional request-scoped resolver, shared by all checks for one identity. */
+  scope?(identity: AuthorizationIdentity): AccessConstraintResolver;
   resolve(
     input: ResolveAccessConstraintsInput,
   ): Promise<readonly AccessConstraint[]>;
@@ -68,16 +72,23 @@ export class AccessConstraintRegistry {
 
   scope(identity: AuthorizationIdentity): AccessConstraintService {
     const cache = new Map<string, Promise<readonly AccessConstraint[]>>();
+    const resolvers = [...this.resolvers.values()].map(
+      (resolver) => resolver.scope?.(identity) ?? resolver,
+    );
     return {
       resolve: (input) => {
-        const key = `${input.resource.type}\u0000${input.resource.id}\u0000${input.action}`;
+        const key = `${input.resource.type}\u0000${input.resource.id}\u0000${input.action}\u0000${input.scopeKey ?? ''}`;
         let result = cache.get(key);
         if (!result) {
-          result = this.resolve({
-            ...input,
-            principal: identity.principal,
-            subjects: identity.subjects,
-          });
+          result = Promise.all(
+            resolvers.map((resolver) =>
+              resolver.resolve({
+                ...input,
+                principal: identity.principal,
+                subjects: identity.subjects,
+              }),
+            ),
+          ).then((results) => results.flat());
           cache.set(key, result);
         }
         return result;

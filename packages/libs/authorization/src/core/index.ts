@@ -4,10 +4,28 @@ export * from './grants.js';
 export * from './middleware.js';
 export * from './plugin.js';
 export * from './permissions.js';
+export * from './routes.js';
 export * from './subjects.js';
 export {
   ResourceHandlerRegistry,
   type AuthorizationRuntimeContext,
   type ResourceAuthorizationHandler,
+  ResourceItems,
+  type ResourceItem,
+  type ResourceItemDefinition,
+  type ResourceActionScopes,
+  type RegisteredResource,
+  type AuthorizationResourceItems,
+  type ResourceTitle,
 } from './registry.js';
 export * from './types.js';
+
+export * from './resource-actions.js';
+
+export * from './resources.js';
+
+export * from './titles.js';
+
+export * from './builders.js';
+
+export * from './record-access.js';

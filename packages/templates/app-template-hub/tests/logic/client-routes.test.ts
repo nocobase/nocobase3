@@ -1,3 +1,7 @@
+import {
+  resolveAppClientContributions,
+  type AppClientRegisteredRoute,
+} from '@nocobase/app-client/plugins';
 import { describe, expect, it } from 'vitest';
 
 import hub from '@nocobase/app-plugin-hub/client';
@@ -22,7 +26,7 @@ describe('app client routes', () => {
           path: '/',
         },
         {
-          access: { resource: 'hub', action: 'access' },
+          authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
           auth: 'required',
           name: 'applications-legacy',
           path: '/hub',
@@ -48,6 +52,24 @@ describe('app client routes', () => {
         default: expect.any(Function),
       });
     }
+  });
+
+  it('pins the route names page grants are stored against', () => {
+    // A route's `name` is the identifier a stored page grant records. Renaming one is a data change that has to
+    // migrate the grants that name it, not a refactor — so changing this list deliberately is the point.
+    const resolved = resolveAppClientContributions([
+      {
+        packageName: '@nocobase/app-template-hub',
+        routes: applicationRoutes,
+        source: 'application',
+      },
+    ]);
+
+    expect(pageAuthorizations(resolved.routes)).toEqual([
+      // The Hub entry is deliberately gated: reaching it is the `hub` access grant, not merely being signed in.
+      { name: 'applications-root', authorizedAs: 'hub' },
+      { name: 'applications-legacy', authorizedAs: 'hub' },
+    ]);
   });
 
   it('keeps configured Hub App details and Tabs addressable under Applications', () => {
@@ -76,3 +98,25 @@ describe('app client routes', () => {
     });
   });
 });
+
+/** Page authorization comes directly from the registered tree. */
+function pageAuthorizations(
+  routes: readonly AppClientRegisteredRoute[],
+): { name: string; authorizedAs: string | null }[] {
+  return routes.flatMap((route) => [
+    ...(route.componentLoader && route.auth === 'required'
+      ? [
+          {
+            name: route.name,
+            authorizedAs:
+              route.authz === 'skip'
+                ? null
+                : route.authz.resource.type === 'page'
+                  ? route.authz.resource.id
+                  : `${route.authz.resource.type}:${route.authz.resource.id}`,
+          },
+        ]
+      : []),
+    ...pageAuthorizations(route.children ?? []),
+  ]);
+}

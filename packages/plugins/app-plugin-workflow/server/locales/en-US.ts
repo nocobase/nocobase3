@@ -1,6 +1,8 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  nav: { automation: 'Automation' },
+  authorization: { title: 'Workflow', read: 'Read' },
   errors: {
     badRequest: 'The workflow request is invalid.',
     conflict: 'The workflow request conflicts with the current state.',

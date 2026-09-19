@@ -10,7 +10,7 @@ const appRoutes: AppClientAppRoutesContribution = defineAppRoutes([
   {
     name: 'workflow-detail',
     path: `${WORKFLOW_SETTING_PATHS.workflows}/:id`,
-    access: { resource: 'workflow', action: 'access' },
+    authz: { resource: { type: 'settings', id: 'workflow' }, action: 'read' },
     componentLoader: () =>
       import('./workflow-management/pages.js').then(
         ({ WorkflowDetailPage }) => ({ default: WorkflowDetailPage }),
@@ -19,7 +19,7 @@ const appRoutes: AppClientAppRoutesContribution = defineAppRoutes([
   {
     name: 'workflow-run-detail',
     path: `${WORKFLOW_SETTING_PATHS.workflowRuns}/:id`,
-    access: { resource: 'workflow', action: 'access' },
+    authz: { resource: { type: 'settings', id: 'workflow' }, action: 'read' },
     componentLoader: () =>
       import('./workflow-management/pages.js').then(
         ({ WorkflowRunDetailPage }) => ({ default: WorkflowRunDetailPage }),

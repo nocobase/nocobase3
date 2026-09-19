@@ -37,7 +37,10 @@ describe('@nocobase/app-plugin-notification client', () => {
     expect(resolved.settings).toMatchObject([
       {
         path: '/settings/notifications/logs',
-        access: { resource: 'notification.logs', action: 'access' },
+        authz: {
+          resource: { type: 'page', id: 'notification.logs' },
+          action: 'access',
+        },
       },
     ]);
   });

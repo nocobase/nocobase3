@@ -27,7 +27,7 @@ node packages/tools/create-app/bin/run.js my-examples --template ./packages/temp
 
 The scaffolder creates an independent configuration and database. Never copy another application's `config.yml`, `.env`, `storage/`, or generated `dist/` into this template.
 
-Article migration and seed sources create six articles on a fresh managed default connection. Existing system administrators receive an `articles-manager` permission set during the application's first eligible startup. Later edits and revoked assignments are preserved. Other examples retain their plugins' authorization policies.
+Article migration and seed sources create six articles on a fresh managed default connection. Every signed-in user can view, create, and edit all articles. Article pages and APIs do not participate in permission-set authorization. Other examples retain their plugins' authorization policies.
 
 ## Maintain this template
 

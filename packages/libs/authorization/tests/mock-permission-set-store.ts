@@ -110,4 +110,9 @@ export class MockPermissionSetStore implements PermissionSetStore {
           (assignment) => assignment.permissionSet === permissionSet,
         );
   }
+
+  /** In-memory stores have no transactions. */
+  withTransaction(): PermissionSetStore {
+    return this;
+  }
 }

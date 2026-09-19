@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   PanelsTopLeft,
   Plug,
+  ShieldCheck,
   Users,
   Workflow,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ const examples = [
   { key: 'repository', path: '/repository-example/find-many', icon: Database },
   { key: 'crm', path: '/repository-example/crm', icon: Users },
   { key: 'orders', path: '/repository-example/orders', icon: ShoppingCart },
+  { key: 'authorization', path: '/authorization-example', icon: ShieldCheck },
   { key: 'files', path: '/file-repository', icon: FolderOpen },
   { key: 'routes', path: '/routes-example', icon: BookOpen },
   { key: 'workflows', path: '/settings/workflow/workflows', icon: Workflow },

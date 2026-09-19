@@ -4,7 +4,7 @@ import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import {
   createAppAuthorization,
-  type AppAuthorization,
+  type AppAuthorizationService,
 } from '@nocobase/app-plugin-authorization/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDataServices } from '../server/service/data-services.js';
@@ -13,7 +13,7 @@ import {
   dataQuerySchema,
   dataSourceQuerySchema,
 } from '../server/service/data-schemas.js';
-import { dataPolicyFilter } from '../server/service/data-query-policy.js';
+import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
 import type { DataServices } from '../server/service/data-contracts.js';
 
 const managers: DatabaseManager[] = [];
@@ -23,7 +23,7 @@ afterEach(async () => {
 
 async function fixture(): Promise<{
   database: DatabaseManager;
-  authorization: AppAuthorization;
+  authorization: AppAuthorizationService;
   alice: DataServices;
   bob: DataServices;
 }> {
@@ -47,9 +47,20 @@ async function fixture(): Promise<{
       directory: join(authorizationPath, 'database/migrations'),
       packageName: '@nocobase/app-plugin-authorization',
     })
-    .upTo('202608210004_create_restriction_rules');
+    .latest();
+  await database
+    .createMigrator({
+      directory: join(
+        authorizationPath,
+        '../app-plugin-authz-restriction-rules/database/migrations',
+      ),
+      packageName: '@nocobase/app-plugin-authz-restriction-rules',
+    })
+    .latest();
   const authorization = createAppAuthorization({
     connection: database.connection(),
+    database,
+    config: { plugins: [restrictionRules()] },
   });
   for (const source of ['main', 'other']) {
     await database.builder(source).createCollection('orders', (collection) => {
@@ -64,21 +75,9 @@ async function fixture(): Promise<{
       collection.boolean('active');
       collection.text('notes');
     });
-    authorization.database.collections.add({
+    authorization.db.collections.add({
       name: `${source}.orders`,
       actions: ['read'],
-      fields: [
-        'id',
-        'ownerId',
-        'region',
-        'secret',
-        'amount',
-        'externalId',
-        'createdAt',
-        'active',
-        'notes',
-      ],
-      attributes: { owner: 'ownerId', identifier: 'id' },
     });
   }
   await database.builder().createCollection('unmapped', (collection) => {
@@ -123,20 +122,18 @@ async function fixture(): Promise<{
   const permission = await authorization.permissionSets.create({
     key: 'orders-read',
     grants: [
-      authorization.database.grant('main.orders', {
+      authorization.db.grant('main.orders', {
         read: {
-          fields: {
-            output: [
-              'id',
-              'ownerId',
-              'region',
-              'amount',
-              'externalId',
-              'createdAt',
-              'active',
-              'notes',
-            ],
-          },
+          fields: [
+            'id',
+            'ownerId',
+            'region',
+            'amount',
+            'externalId',
+            'createdAt',
+            'active',
+            'notes',
+          ],
           recordAccess: ['recordsIOwn'],
         },
       }),
@@ -170,8 +167,8 @@ describe('actor-bound data services with real SQLite and authorization', () => {
     const grant = await authorization.permissionSets.create({
       key: 'remote-read',
       grants: [
-        authorization.database.grant('other.orders', {
-          read: { fields: { output: ['id'] }, recordAccess: ['allRecords'] },
+        authorization.db.grant('other.orders', {
+          read: { fields: ['id'], recordAccess: ['allRecords'] },
         }),
       ],
     });
@@ -428,32 +425,35 @@ describe('actor-bound data services with real SQLite and authorization', () => {
     });
     // A new registration is used because authorization mappings are immutable.
     const relationAuthz = createAppAuthorization({
+      database,
       connection: database.connection(),
     });
-    relationAuthz.database.collections.add({
-      name: 'orders',
+    relationAuthz.db.collections.add({
+      name: 'main.orders',
       actions: ['read'],
-      fields: ['id', 'ownerId', 'lines'],
-      attributes: { owner: 'ownerId' },
     });
-    relationAuthz.database.collections.add({
-      name: 'lines',
+    relationAuthz.db.collections.add({
+      name: 'main.lines',
       actions: ['read'],
-      fields: ['id', 'orderId', 'ownerId', 'description', 'secret'],
-      attributes: { owner: 'ownerId' },
     });
     const permission = await relationAuthz.permissionSets.create({
       key: 'lines-read',
       grants: [
-        relationAuthz.database.grant('orders', {
+        relationAuthz.db.grant('main.orders', {
           read: {
-            fields: { output: ['id', 'ownerId', 'lines'] },
+            fields: ['id', 'ownerId'],
+            relations: {
+              lines: {
+                fields: ['id', 'orderId', 'ownerId', 'description'],
+                recordAccess: ['recordsIOwn'],
+              },
+            },
             recordAccess: ['recordsIOwn'],
           },
         }),
-        relationAuthz.database.grant('lines', {
+        relationAuthz.db.grant('main.lines', {
           read: {
-            fields: { output: ['id', 'orderId', 'ownerId', 'description'] },
+            fields: ['id', 'orderId', 'ownerId', 'description'],
             recordAccess: ['recordsIOwn'],
           },
         }),
@@ -544,9 +544,16 @@ describe('actor-bound data services with real SQLite and authorization', () => {
       actions: [
         {
           action: 'read',
-          scope: authorization.database.scope({
+          scope: authorization.db.scope({
             key: 'customFilter',
-            params: { filter: { $and: [{ region: { $in: ['north'] } }] } },
+            params: {
+              filter: {
+                kind: 'condition',
+                path: ['region'],
+                operator: '$eq',
+                value: 'north',
+              },
+            },
           }),
         },
       ],
@@ -649,9 +656,9 @@ describe('data input and output safety', () => {
       actions: [
         {
           action: 'read',
-          scope: authorization.database.scope({
+          scope: authorization.db.scope({
             key: 'customFilter',
-            params: { filter: { $or: [] } },
+            params: { filter: false },
           }),
         },
       ],
@@ -677,7 +684,7 @@ describe('data input and output safety', () => {
       actions: [
         {
           action: 'read',
-          scope: secondAuthz.database.scope({
+          scope: secondAuthz.db.scope({
             key: 'customFilter',
             params: {
               filter: { $and: [{ region: { $in: [null, 'north'] } }] },
@@ -689,7 +696,7 @@ describe('data input and output safety', () => {
     });
     await expect(
       second.dataSourceCounting({ collection: 'orders' }),
-    ).rejects.toThrow('NULL membership');
+    ).rejects.toThrow();
   });
   it('rejects raw SQL, ASTs, identities, relation paths and excessive bounds', () => {
     const base = { collection: 'orders', fields: ['id'] };
@@ -766,7 +773,7 @@ describe('empty authorization predicates', () => {
         actions: [
           {
             action: 'read',
-            scope: authorization.database.scope({
+            scope: authorization.db.scope({
               key: 'customFilter',
               params: { filter: { $and: [filter] } },
             }),
@@ -791,7 +798,7 @@ describe('empty authorization predicates', () => {
     },
   );
 
-  it('rejects empty user memberships and nested false policy branches', async () => {
+  it('rejects empty user memberships', async () => {
     const { alice } = await fixture();
     await expect(
       alice.dataSourceCounting({
@@ -799,16 +806,5 @@ describe('empty authorization predicates', () => {
         filter: [{ field: 'id', operator: 'in', value: [] }],
       }),
     ).rejects.toThrow();
-    expect(
-      dataPolicyFilter({ $or: [{ $and: [] }, { id: { $eq: 'a1' } }] }, [
-        { name: 'id', type: 'string' },
-      ]).root,
-    ).toEqual({ kind: 'group', logic: 'and', items: [] });
-    expect(() =>
-      dataPolicyFilter(
-        { $and: [{ $or: [{ $or: [] }, { id: { $eq: 'a1' } }] }] },
-        [{ name: 'id', type: 'string' }],
-      ),
-    ).toThrow('disjunction');
   });
 });

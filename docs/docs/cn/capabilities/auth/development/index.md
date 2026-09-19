@@ -28,7 +28,7 @@ keywords: 'NocoBase,认证开发,Authentication Skill,Agent'
 Agent 知道这些，但你审核时也可以对照：
 
 - 会话和 Cookie 只由 Better Auth 签发。自己造一套 token 或把会话放浏览器存储，会让退出、禁用和守卫全部失效。
-- 「登录了」不等于「有权限」。数据范围和菜单可见性交给[权限](../../authorization.md)。
+- 「登录了」不等于「有权限」。数据范围和菜单可见性交给[权限](../../authorization/index.md)。
 - 所有改动在应用目录里。插件包的代码和迁移不动。
 - 新认证方式要的表由应用自己的 migration 建，Agent 会对照 Better Auth 文档逐项写，不让框架自动改库。
 

@@ -101,6 +101,7 @@
     "lucide-react": "catalog:",
     "react": "^19.0.0",
     "tailwind-merge": "catalog:",
+    "react-router": "catalog:",
     "@nocobase/authorization": "workspace:^"
   },
   "devDependencies": {
@@ -115,6 +116,9 @@
     "tw-animate-css": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "@testing-library/react": "catalog:"
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
+    "jsdom": "catalog:",
+    "react-dom": "catalog:"
   }
 }

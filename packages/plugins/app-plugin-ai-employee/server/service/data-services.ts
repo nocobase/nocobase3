@@ -1,5 +1,5 @@
 import type {
-  AppAuthorization,
+  AppAuthorizationService,
   DatabaseAuthorizationConditions,
   DatabaseAuthorizationParams,
 } from '@nocobase/app-plugin-authorization/server';
@@ -9,6 +9,7 @@ import type {
   ReadNode,
   RelationFieldDefinition,
   RepositoryPolicy,
+  FilterAst,
   SelectIncludeNode,
 } from '@nocobase/db';
 import type {
@@ -39,12 +40,7 @@ import {
   getDataSourcesSchema,
   searchFieldMetadataSchema,
 } from './data-schemas.js';
-import {
-  DataAccessError,
-  dataFilter,
-  dataPolicyFilter,
-  dataSort,
-} from './data-query-policy.js';
+import { DataAccessError, dataFilter, dataSort } from './data-query-policy.js';
 import { dataOutput } from './data-output.js';
 import { parseDataInput } from './data-validation.js';
 
@@ -54,7 +50,8 @@ interface Access {
   definition: CollectionDefinition;
   fields: (FieldDefinition | RelationFieldDefinition)[];
   allowed: Set<string>;
-  read: ReadNode;
+  read: ReadNode & { scope: true | FilterAst };
+  relations: DatabaseAuthorizationConditions['relations'];
 }
 const safeName = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
 const unsupportedNames = new Set(['__proto__', 'prototype', 'constructor']);
@@ -85,7 +82,7 @@ export function createDataServices(
 }
 
 class ActorDataServices implements DataServices {
-  private readonly authorization?: AppAuthorization;
+  private readonly authorization?: AppAuthorizationService;
   private readonly principalId: string;
   private get timezone(): string {
     return this.options.timezone ?? 'UTC';
@@ -99,7 +96,7 @@ class ActorDataServices implements DataServices {
         : String(options.actor.id);
   }
 
-  private requireAuthorization(): AppAuthorization {
+  private requireAuthorization(): AppAuthorizationService {
     if (
       !this.authorization ||
       !this.principalId.trim() ||
@@ -110,7 +107,7 @@ class ActorDataServices implements DataServices {
   }
 
   private mappings(): Array<{ source: string; name: string }> {
-    const registered = this.requireAuthorization().database.collections.list();
+    const registered = this.requireAuthorization().db.collections.list();
     if (registered.length > 1000)
       throw new DataAccessError('Data catalog exceeds the supported size');
     return registered
@@ -120,7 +117,10 @@ class ActorDataServices implements DataServices {
           parts.every(
             (part) => safeName.test(part) && !unsupportedNames.has(part),
           ) &&
-          item.actions.includes('read')
+          this.requireAuthorization().db.collections.actionRegistry.resolve(
+            item.name,
+            'read',
+          )
           ? [{ source: parts[0], name: parts[1] }]
           : [];
       })
@@ -138,11 +138,13 @@ class ActorDataServices implements DataServices {
   ): Promise<Access> {
     const authz = this.requireAuthorization();
     const resourceId = `${source}.${name}`;
-    const registered = authz.database.collections.get(resourceId);
+    const registered = authz.db.collections
+      .list()
+      .find((item) => item.name === resourceId);
     if (
       !registered ||
       registered.name !== resourceId ||
-      !registered.actions.includes('read')
+      !authz.db.collections.actionRegistry.resolve(resourceId, 'read')
     )
       throw new DataAccessError();
     const decision = await authz
@@ -165,16 +167,12 @@ class ActorDataServices implements DataServices {
       conditions.collection !== resourceId ||
       conditions.action !== 'read' ||
       !conditions.fields ||
-      !conditions.filter
+      conditions.scope === undefined
     )
       throw new DataAccessError();
     const allowed = new Set(
-      registered.fields.filter(
-        (field) =>
-          safeName.test(field) &&
-          !unsupportedNames.has(field) &&
-          (conditions.fields.output === '*' ||
-            conditions.fields.output.includes(field)),
+      [...conditions.fields, ...Object.keys(conditions.relations ?? {})].filter(
+        (field) => safeName.test(field) && !unsupportedNames.has(field),
       ),
     );
     if (requested.some((field) => !allowed.has(field)))
@@ -209,8 +207,12 @@ class ActorDataServices implements DataServices {
       definition,
       fields,
       allowed,
+      relations: conditions.relations,
       read: {
-        scope: dataPolicyFilter(conditions.filter, fields),
+        scope:
+          conditions.scope === true
+            ? true
+            : { ...conditions.scope, collection: name },
         fields: outputFields,
         relations: false,
       },
@@ -265,6 +267,27 @@ class ActorDataServices implements DataServices {
     if (!sourceKey || !targetKey) return undefined;
     const target = await this.visibleAccess(access.source, field.target);
     if (!target) return undefined;
+    const relation = access.relations?.[name];
+    if (!relation || !('fields' in relation)) return undefined;
+    const targetScope = target.read.scope;
+    const scope =
+      relation.scope === true
+        ? targetScope
+        : targetScope === true
+          ? { ...relation.scope, collection: target.name }
+          : {
+              kind: 'filter' as const,
+              version: 1 as const,
+              collection: target.name,
+              root: {
+                kind: 'group' as const,
+                logic: 'and' as const,
+                items: [relation.scope.root, targetScope.root],
+              },
+            };
+    const fields = relation.fields.filter((field) => target.allowed.has(field));
+    target.allowed = new Set(fields);
+    target.read = { ...target.read, scope, fields, relations: false };
     try {
       this.assertScalars(access, [sourceKey]);
       this.assertScalars(target, [targetKey]);
@@ -428,7 +451,7 @@ class ActorDataServices implements DataServices {
     const access = await this.access(
       input.dataSource ?? 'main',
       input.collection,
-      [...used, ...(input.relations?.map((item) => item.relation) ?? [])],
+      used,
     );
     this.assertScalars(access, used);
     const includes: SelectIncludeNode[] = [];

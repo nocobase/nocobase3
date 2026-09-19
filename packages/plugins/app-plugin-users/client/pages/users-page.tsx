@@ -1,3 +1,7 @@
+import { Link } from 'react-router';
+import { useClientApplication } from '@nocobase/app-client';
+import { PermissionSelection } from '../components/permission-selection.js';
+import { PermissionAssignmentDrawer } from '../components/permission-assignment-drawer.js';
 import { useAuthentication } from '@nocobase/app-plugin-authentication/client';
 import { toast } from 'sonner';
 import { PageContainer } from '../components/page-container.js';
@@ -37,7 +41,6 @@ import {
 } from '../components/ui/dialog.js';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
@@ -99,6 +102,13 @@ export default function UsersPage(): ReactElement {
   const api = useApiClient();
   const authorization = useService(authorizationClientToken);
   const users = useMemo(() => new UsersClient(api), [api]);
+  const app = useClientApplication();
+  const inspector = app.runtime.settings.find(
+    (route) =>
+      route.id === '@nocobase/app-plugin-authorization:inspector' &&
+      route.packageName === '@nocobase/app-plugin-authorization',
+  );
+  const [canInspect, setCanInspect] = useState(false);
   const [options, setOptions] = useState<UsersOptions>({ roleScopes: [] });
   const [result, setResult] = useState<ManagedUserPage>(EMPTY_PAGE);
   const [search, setSearch] = useState('');
@@ -120,6 +130,10 @@ export default function UsersPage(): ReactElement {
     [t],
   );
   const [editor, setEditor] = useState<ManagedUser | 'create'>();
+  const [assignment, setAssignment] = useState<{
+    user: ManagedUser;
+    scope: UserRoleScopeOption;
+  }>();
   const [passwordUser, setPasswordUser] = useState<ManagedUser>();
   const [stateUser, setStateUser] = useState<ManagedUser>();
   const [globalCapabilities, setGlobalCapabilities] =
@@ -129,8 +143,10 @@ export default function UsersPage(): ReactElement {
   >({});
 
   const localizedOptions: UsersOptions = {
-    roleScopes: localizeRoleScopes(options.roleScopes, (key, namespace) =>
-      t(key, namespace ? { ns: namespace } : undefined),
+    roleScopes: localizeRoleScopes(
+      options.roleScopes,
+      (key, namespace, defaultValue) =>
+        t(key, { ...(namespace ? { ns: namespace } : {}), defaultValue }),
     ),
   };
   const roleChoices = localizedOptions.roleScopes.flatMap((scope) =>
@@ -148,8 +164,8 @@ export default function UsersPage(): ReactElement {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [nextOptions, nextPage, nextGlobalCapabilities] = await Promise.all(
-        [
+      const [nextOptions, nextPage, nextGlobalCapabilities, inspectAllowed] =
+        await Promise.all([
           users.options(),
           users.list({
             page,
@@ -164,8 +180,11 @@ export default function UsersPage(): ReactElement {
                 }),
           }),
           loadUserCapabilities(authorization, '*'),
-        ],
-      );
+          authorization.can({
+            resource: { type: 'settings', id: 'authorization.inspector' },
+            action: 'inspect',
+          }),
+        ]);
       const capabilityEntries: readonly (readonly [
         string,
         UserCapabilities,
@@ -179,6 +198,7 @@ export default function UsersPage(): ReactElement {
       );
       const nextUserCapabilities: Readonly<Record<string, UserCapabilities>> =
         Object.fromEntries(capabilityEntries);
+      setCanInspect(inspectAllowed);
       setOptions(nextOptions);
       setResult(nextPage);
       setGlobalCapabilities(nextGlobalCapabilities);
@@ -328,6 +348,7 @@ export default function UsersPage(): ReactElement {
                 const canDelete =
                   capabilities.delete && user.id !== session?.user.id;
                 const hasActions =
+                  (canInspect && !!inspector) ||
                   capabilities.update ||
                   capabilities['reset-password'] ||
                   capabilities['revoke-sessions'] ||
@@ -360,20 +381,19 @@ export default function UsersPage(): ReactElement {
                             roleValues(user.roleScopes[scope.key] ?? ''),
                           ),
                         ) ? (
-                          <RoleEditor
+                          <Button
+                            variant='ghost'
+                            className='h-auto max-w-72 justify-start px-2 py-1.5 text-left font-normal'
                             disabled={busy}
-                            scope={scope}
-                            value={user.roleScopes[scope.key] ?? ''}
-                            onChange={(value) =>
-                              void perform(() =>
-                                users.replaceRoleScope(
-                                  user.id,
-                                  scope.key,
-                                  value,
-                                ),
-                              )
-                            }
-                          />
+                            aria-label={`${t('assignment.title')} · ${user.name} · ${scope.label}`}
+                            onClick={() => setAssignment({ user, scope })}
+                          >
+                            <RoleValue
+                              scope={scope}
+                              value={user.roleScopes[scope.key] ?? ''}
+                            />
+                            <ChevronDown className='size-4 shrink-0 text-muted-foreground' />
+                          </Button>
                         ) : (
                           <RoleValue
                             scope={scope}
@@ -394,6 +414,18 @@ export default function UsersPage(): ReactElement {
                             </span>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align='end'>
+                            {canInspect && inspector && (
+                              <DropdownMenuItem
+                                render={
+                                  <Link
+                                    to={`${inspector.path}?subjectType=user&subjectId=${encodeURIComponent(user.id)}`}
+                                  />
+                                }
+                              >
+                                {t('assignment.inspect')}
+                              </DropdownMenuItem>
+                            )}
+
                             {capabilities.update ? (
                               <DropdownMenuItem onClick={() => setEditor(user)}>
                                 {t('page.actions.edit')}
@@ -477,6 +509,26 @@ export default function UsersPage(): ReactElement {
         </div>
       </div>
 
+      {assignment && userCapabilities[assignment.user.id]?.['assign-role'] ? (
+        <PermissionAssignmentDrawer
+          user={assignment.user}
+          scope={
+            localizedOptions.roleScopes.find(
+              (scope) => scope.key === assignment.scope.key,
+            ) ?? assignment.scope
+          }
+          onClose={() => setAssignment(undefined)}
+          onSave={async (value) => {
+            await users.replaceRoleScope(
+              assignment.user.id,
+              assignment.scope.key,
+              value,
+            );
+            setAssignment(undefined);
+            await load();
+          }}
+        />
+      ) : null}
       {editor &&
       (editor === 'create'
         ? globalCapabilities.create && globalCapabilities['assign-role']
@@ -563,12 +615,17 @@ function RoleValue({
     );
   }
   return (
-    <div className='flex flex-wrap gap-1.5'>
-      {values.map((entry) => {
+    <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+      {values.slice(0, 2).map((entry) => {
         const option = scope.options.find((item) => item.value === entry);
         return (
-          <Badge key={entry} variant='secondary'>
-            {option?.label ?? entry}
+          <Badge
+            key={entry}
+            variant='secondary'
+            className='max-w-48'
+            title={option?.label ?? entry}
+          >
+            <span className='truncate'>{option?.label ?? entry}</span>
             {option?.removable === false ? (
               <LockKeyhole
                 aria-label={t('page.protectedRole')}
@@ -578,112 +635,12 @@ function RoleValue({
           </Badge>
         );
       })}
+      {values.length > 2 && (
+        <span className='text-xs text-muted-foreground'>
+          +{values.length - 2}
+        </span>
+      )}
     </div>
-  );
-}
-
-function RoleEditor({
-  disabled,
-  scope,
-  value,
-  onChange,
-}: {
-  readonly disabled: boolean;
-  readonly scope: UserRoleScopeOption;
-  readonly value: UserRoleValue;
-  readonly onChange: (value: UserRoleValue) => void;
-}): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
-  if (scope.selection === 'multiple') {
-    const selected = roleValues(value);
-    const selectedLabels = selected.map(
-      (entry) =>
-        scope.options.find((option) => option.value === entry)?.label ?? entry,
-    );
-    return (
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant='outline'
-              size='sm'
-              disabled={disabled}
-              aria-label={scope.label}
-              className='max-w-64 justify-between font-normal'
-            />
-          }
-        >
-          <span className='truncate'>
-            {selectedLabels.join(', ') || t('page.noDirectRoles')}
-          </span>
-          <ChevronDown className='text-muted-foreground' />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align='start' className='min-w-56'>
-          {scope.options.map((option) => {
-            const checked = selected.includes(option.value);
-            const protectedOption = checked
-              ? option.removable === false
-              : option.assignable === false;
-            return (
-              <DropdownMenuCheckboxItem
-                key={option.value}
-                checked={checked}
-                disabled={disabled || protectedOption}
-                onCheckedChange={(nextChecked) =>
-                  onChange(
-                    nextChecked
-                      ? [...selected, option.value]
-                      : selected.filter((entry) => entry !== option.value),
-                  )
-                }
-              >
-                <span className='min-w-0 flex-1'>
-                  <span className='block truncate'>{option.label}</span>
-                  {option.description ? (
-                    <span className='block truncate text-xs text-muted-foreground'>
-                      {option.description}
-                    </span>
-                  ) : null}
-                </span>
-                {protectedOption ? (
-                  <LockKeyhole
-                    aria-label={t('page.protectedRole')}
-                    className='size-3.5 text-muted-foreground'
-                  />
-                ) : null}
-              </DropdownMenuCheckboxItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    );
-  }
-  const selectedRole = typeof value === 'string' ? value : '';
-  const selectedOption = scope.options.find(
-    (option) => option.value === selectedRole,
-  );
-  return (
-    <Select
-      items={scope.options}
-      disabled={disabled || selectedOption?.removable === false}
-      value={selectedRole}
-      onValueChange={(next) => onChange(String(next))}
-    >
-      <SelectTrigger aria-label={scope.label} className='w-44'>
-        <SelectValue placeholder={t('page.selectRole')} />
-      </SelectTrigger>
-      <SelectContent>
-        {scope.options.map((option) => (
-          <SelectItem
-            key={option.value}
-            value={option.value}
-            disabled={option.assignable === false}
-          >
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 
@@ -790,17 +747,22 @@ function UserDialog({
               </Field>
               {creationRoleScopes.map((scope) => (
                 <Field key={scope.key} label={scope.label}>
-                  <RoleEditor
-                    disabled={busy}
-                    scope={scope}
-                    value={roles[scope.key] ?? ''}
-                    onChange={(value) =>
-                      setRoles((current) => ({
-                        ...current,
-                        [scope.key]: value,
-                      }))
-                    }
-                  />
+                  <div className='flex max-h-80 flex-col overflow-hidden rounded-lg border'>
+                    <PermissionSelection
+                      disabled={busy}
+                      scope={scope}
+                      selected={roleValues(roles[scope.key] ?? '')}
+                      onChange={(value) =>
+                        setRoles((current) => ({
+                          ...current,
+                          [scope.key]:
+                            scope.selection === 'single'
+                              ? (value[0] ?? '')
+                              : value,
+                        }))
+                      }
+                    />
+                  </div>
                 </Field>
               ))}
             </>

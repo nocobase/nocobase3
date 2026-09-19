@@ -67,8 +67,6 @@ const zhCN: AppResource = {
   'navigation.brandApps': 'NocoBase 应用',
   'auth.passwordMismatch': '两次输入的密码不一致。',
   'status.deniedDescription': '你没有访问 {{label}} 的权限。',
-  'status.settingFailedDescription':
-    '无法加载 {{packageName}} 的设置 {{label}}。',
   'status.routeFailedDescription':
     '无法加载 {{packageName}} 的路由 {{label}}。',
   shell: {
@@ -247,6 +245,10 @@ const zhCN: AppResource = {
       title: '订单与商品',
       description: '通过订单、明细和商品，体验关联业务数据的管理方式。',
     },
+    authorization: {
+      title: '权限控制',
+      description: '配置销售功能权限和数据范围，体验默认访问、共享与限制规则。',
+    },
     files: {
       title: '文件管理',
       description: '体验文件仓库示例中的上传入口和文件管理界面。',
@@ -274,7 +276,7 @@ const zhCN: AppResource = {
     filter: '按状态筛选',
     search: '搜索文章标题…',
     loading: '正在加载文章…',
-    loadError: '文章加载失败，请检查网络连接和文章访问权限。',
+    loadError: '文章加载失败，请检查网络连接后重试。',
     retry: '重试',
     empty: '没有找到文章',
     emptyHint: '换个关键词，或创建你的第一篇文章。',

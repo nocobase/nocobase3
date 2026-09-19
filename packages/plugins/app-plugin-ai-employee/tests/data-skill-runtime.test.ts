@@ -476,7 +476,7 @@ it('runs the activated query/report chain against real SQLite and real user auth
         directory: join(authRoot, 'database/migrations'),
         packageName: '@nocobase/app-plugin-authorization',
       })
-      .upTo('202608210004_create_restriction_rules');
+      .latest();
     await database.builder().createCollection('orders', (collection) => {
       collection.string('id').primary();
       collection.string('ownerId');
@@ -490,19 +490,18 @@ it('runs the activated query/report chain against real SQLite and real user auth
     });
     const authorization = createAppAuthorization({
       connection: database.connection(),
+      database,
     });
-    authorization.database.collections.add({
+    authorization.db.collections.add({
       name: 'main.orders',
       actions: ['read'],
-      fields: ['id', 'ownerId', 'amount'],
-      attributes: { owner: 'ownerId' },
     });
     await authorization.permissionSets.create({
       key: 'own-orders',
       grants: [
-        authorization.database.grant('main.orders', {
+        authorization.db.grant('main.orders', {
           read: {
-            fields: { output: ['id', 'amount'] },
+            fields: ['id', 'amount'],
             recordAccess: ['recordsIOwn'],
           },
         }),
