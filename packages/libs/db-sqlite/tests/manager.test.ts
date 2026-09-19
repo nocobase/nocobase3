@@ -29,6 +29,34 @@ function createTestDatabase(config: DatabaseConfig<SqliteConnectionConfig>) {
 }
 
 describe('DatabaseManager', () => {
+  it('refreshes a warmed naming index when a transaction creates an underscored collection', async () => {
+    const db = createTestDatabase({
+      metadataStore: new InMemoryCollectionMetadataStore(),
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    try {
+      await db.collections().list();
+      await db.transaction(async (connection) => {
+        await connection.collections.list();
+        await connection.builder.createCollection(
+          'invoice_files',
+          (collection) => {
+            collection.uuid('id').primary().notNull();
+            collection.datetime('createdAt').notNull();
+          },
+        );
+        await expect(
+          connection.collections.get('invoice_files'),
+        ).resolves.toMatchObject({ name: 'invoice_files' });
+      });
+      await expect(
+        db.collections().get('invoice_files'),
+      ).resolves.toMatchObject({ name: 'invoice_files' });
+    } finally {
+      await db.destroy();
+    }
+  });
+
   it('rejects physical aliases instead of dropping logical field metadata', async () => {
     const db = createTestDatabase({
       metadataStore: new InMemoryCollectionMetadataStore(),
