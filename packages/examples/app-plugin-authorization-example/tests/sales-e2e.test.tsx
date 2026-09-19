@@ -470,6 +470,15 @@ it('separates project editing, quote submission and delivery with server-side st
   expect((await fixture.request('delivery', 'sales/projects')).status).toBe(
     403,
   );
+  for (const deliveryReference of [null, '', '   ']) {
+    expect(
+      (
+        await fixture.request('delivery', 'sales/orders/order-2/deliver', {
+          deliveryReference,
+        })
+      ).status,
+    ).toBe(400);
+  }
   expect(
     (
       await fixture.request('delivery', 'sales/orders/order-2/deliver', {
@@ -571,6 +580,11 @@ it('creates and removes all example schema through the real migrator', async () 
     directory: path.resolve(import.meta.dirname, '../database/migrations'),
     packageName: '@nocobase/app-plugin-authorization-example',
   });
+  await connection.query
+    .updateTable(ORDERS)
+    .set({ deliveryReference: 'ROLLBACK-TEST' })
+    .where('deliveryReference', 'is', null)
+    .execute();
   await migrator.rollback();
   for (const name of [
     MEMBERS,
@@ -1370,7 +1384,7 @@ it('only lets administrators restore practice records and preserves authorizatio
         .executeTakeFirst(),
     ).toMatchObject({
       status: 'ready',
-      deliveryReference: '',
+      deliveryReference: null,
       quoteId: 'quote-history-2',
     });
     expect(
