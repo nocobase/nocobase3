@@ -2,6 +2,7 @@ import {
   defaultAppConfigs,
   type AppConfigFactory,
 } from '@nocobase/app-server/config';
+import audit from './audit.js';
 import auth from './auth.js';
 import notification from './notification.js';
 import session from './session.js';
@@ -20,6 +21,7 @@ import ai from './ai.js';
 import workflow from './workflow.js';
 
 const defaultConfigs: AppConfigFactory<{
+  audit: ReturnType<typeof audit>;
   auth: ReturnType<typeof auth>;
   notification: ReturnType<typeof notification>;
   session: ReturnType<typeof session>;
@@ -37,6 +39,7 @@ const defaultConfigs: AppConfigFactory<{
   ai: ReturnType<typeof ai>;
   workflow: ReturnType<typeof workflow>;
 }> = defaultAppConfigs({
+  audit,
   auth,
   notification,
   session,

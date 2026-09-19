@@ -1,3 +1,5 @@
+import audit from '@nocobase/app-plugin-audit/server';
+import auditExample from '@nocobase/app-plugin-audit-example/server';
 import authentication from '@nocobase/app-plugin-authentication/server';
 import aiEmployee from '@nocobase/app-plugin-ai-employee/server/plugin';
 import authorization from '@nocobase/app-plugin-authorization/server';
@@ -48,6 +50,8 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   file,
   fileExample,
   scheduler,
+  audit,
+  auditExample,
 ]);
 
 export default serverPlugins;

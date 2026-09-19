@@ -2,6 +2,7 @@ import {
   defineClientPlugins,
   type AppClientPlugins,
 } from '@nocobase/app-client/plugins';
+import auditExample from '@nocobase/app-plugin-audit-example/client';
 import aiEmployee from '@nocobase/app-plugin-ai-employee/client';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
@@ -40,6 +41,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   file(),
   fileExample(),
   scheduler(),
+  auditExample(),
 ]);
 
 export default clientPlugins;
