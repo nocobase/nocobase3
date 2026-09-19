@@ -1198,19 +1198,23 @@ describe('Hub client pages', () => {
         </Routes>
       </MemoryRouter>,
     );
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Deploy v1.0.0' }),
-    );
-    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled(),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getByRole('button', {
-        name: 'Deploy release',
-      }),
-    );
+    const deploy = await screen.findByRole('button', { name: 'Deploy v1.0.0' });
+    await waitFor(() => expect(deploy).toBeEnabled());
+    // Opening the wizard loads releases and configuration before mounting its portal.
+    // Flush those updates before querying the dialog, rather than racing the default query timeout.
+    await act(async () => fireEvent.click(deploy));
+    const dialog = within(await screen.findByRole('dialog'));
+    const selectRelease = dialog.getByRole('button', { name: 'Continue' });
+    await waitFor(() => expect(selectRelease).toBeEnabled());
+    await act(async () => fireEvent.click(selectRelease));
+    const confirmConfig = dialog.getByRole('button', { name: 'Continue' });
+    await waitFor(() => expect(confirmConfig).toBeEnabled());
+    await act(async () => fireEvent.click(confirmConfig));
+    const confirmDeploy = dialog.getByRole('button', {
+      name: 'Deploy release',
+    });
+    await waitFor(() => expect(confirmDeploy).toBeEnabled());
+    await act(async () => fireEvent.click(confirmDeploy));
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
