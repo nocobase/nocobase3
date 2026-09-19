@@ -103,7 +103,7 @@ export function NavigationTree({
               : undefined
           }
           openOnHover
-          delay={100}
+          delay={0}
           closeDelay={150}
           onFocus={(event) => {
             if (restoringFocusRef.current) {

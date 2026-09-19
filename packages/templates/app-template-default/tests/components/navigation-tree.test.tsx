@@ -141,7 +141,7 @@ describe('collapsed navigation', () => {
   });
 
   it.each([false, true])(
-    'opens a group list on hover (clickable parent: %s)',
+    'opens a group list immediately on hover (clickable parent: %s)',
     async (clickable) => {
       const user = userEvent.setup();
       const onNavigate = show({
@@ -156,7 +156,7 @@ describe('collapsed navigation', () => {
       await user.hover(
         screen.getByRole(clickable ? 'link' : 'button', { name: 'Group' }),
       );
-      const popup = await screen.findByRole('dialog', { name: 'Group' });
+      const popup = screen.getByRole('dialog', { name: 'Group' });
       const link = within(popup).getByRole('link', { name: 'child' });
       expect(link).toHaveAttribute('aria-current', 'page');
       expect(link).toHaveAttribute('href', '/child');
