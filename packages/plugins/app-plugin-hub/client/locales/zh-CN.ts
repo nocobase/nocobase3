@@ -418,7 +418,7 @@ const zhCN: HubResource = {
     secretWarning:
       'config.yml 可能包含密钥。Hub 会为此应用保存完整文件，获得授权的管理员可以查看其内容。',
     secretAutoGeneration:
-      '使用配置文件部署时，Hub 会为缺失、空白或示例占位的 auth.secret 和已配置的 session.secret 自动生成安全随机密钥，并优先复用已有密钥；保留自定义值。未单独配置 session 时沿用运行时的密钥回退机制。外部配置不由 Hub 补全。',
+      '使用配置文件部署时，Hub 会自动补全缺失、空白或示例占位的 auth.secret 和 session.secret，即使未填写对应配置段，也会生成安全随机密钥。已有密钥会继续复用，自定义值会保留。外部配置不由 Hub 补全。',
     noSourceChanges: '配置来源未变更',
     continue: '继续',
     review: '检查',

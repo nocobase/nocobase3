@@ -1106,7 +1106,7 @@ export function DeploymentDialog({
                 <AlertDescription>
                   {t('configuration.secretAutoGeneration', {
                     defaultValue:
-                      'For Config file deployments, Hub fills missing, blank or example auth.secret and configured session.secret values with secure random secrets, reusing existing secrets and preserving custom values. An omitted session section keeps the runtime secret fallback. External configuration is not modified.',
+                      'For Config file deployments, Hub automatically fills missing, blank or example auth.secret and session.secret values, including omitted sections, with secure random secrets. Existing secrets are reused and custom values are preserved. External configuration is not modified.',
                   })}
                 </AlertDescription>
               </Alert>
