@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { I18nProvider, NamespaceScope } from '@nocobase/i18n/client';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import clientLocales from '../../client/locales/index.js';
@@ -39,4 +39,31 @@ describe('workflow plugin Client i18n', () => {
       expect(screen.getByText(description)).toBeDefined();
     },
   );
+  it('translates attempt statuses when the language changes without remounting', async () => {
+    const runtime = await createWorkflowI18nRuntime(clientLocales, 'en-US');
+    render(
+      <I18nProvider runtime={runtime}>
+        <WorkflowInspector
+          nodeKey='task'
+          attempts={[
+            {
+              id: 'attempt-1',
+              workflowRunId: 'run-1',
+              nodeId: 'node-1',
+              branchKey: null,
+              nodeKey: 'task',
+              status: 1,
+              startedAt: '2026-09-19T00:00:00Z',
+              finishedAt: '2026-09-19T00:00:01Z',
+            },
+          ]}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByRole('option', { name: '1 · Succeeded' })).toBeDefined();
+    await act(async () => {
+      await runtime.changeLanguage('zh-CN');
+    });
+    expect(screen.getByRole('option', { name: '1 · 成功' })).toBeDefined();
+  });
 });

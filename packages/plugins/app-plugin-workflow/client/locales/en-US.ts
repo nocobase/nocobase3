@@ -115,6 +115,11 @@ const enUS = {
     unserializable: '[Unserializable value]',
   },
   canvas: {
+    controls: 'Canvas controls',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    fitView: 'Fit view',
+
     start: 'Start',
     end: 'End',
     condition: 'Condition',
