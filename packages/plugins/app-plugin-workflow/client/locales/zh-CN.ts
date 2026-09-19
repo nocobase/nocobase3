@@ -1,6 +1,7 @@
 import type { WorkflowResource } from './en-US.js';
 
 const zhCN: WorkflowResource = {
+  authorization: { title: '工作流', read: '查看' },
   nav: {
     automation: '自动化',
     workflows: '工作流',

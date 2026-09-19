@@ -2,6 +2,8 @@ export default {
   resourceTitle: 'Sharing Rules',
   navigation: { title: 'Sharing Rules' },
   sharingRules: {
+    noResources:
+      'No business resources supporting record scopes have been defined. Ask AI to define the business permissions and record scopes before configuring rules here.',
     page: {
       title: 'Sharing Rules',
       description:

@@ -21,6 +21,7 @@ export function ManagementToolbar({
   onSearch,
   actionLabel,
   onAction,
+  actionDisabled,
   filters,
 }: {
   filters?: ReactNode;
@@ -31,6 +32,7 @@ export function ManagementToolbar({
   onSearch: (value: string) => void;
   actionLabel: string;
   onAction: () => void;
+  actionDisabled?: boolean;
 }): ReactElement {
   const t = useAuthorizationTranslation();
   return (
@@ -44,7 +46,9 @@ export function ManagementToolbar({
       />
       {filters}
       <FilterBarSpacer />
-      <Button onClick={onAction}>{actionLabel}</Button>
+      <Button onClick={onAction} disabled={actionDisabled}>
+        {actionLabel}
+      </Button>
     </FilterBar>
   );
 }

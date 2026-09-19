@@ -122,7 +122,6 @@ const zhCN: AuthorizationResource = {
   editors: {
     resourceGroup: '资源分组',
     actions: '操作',
-    actionsPlaceholder: 'read, create, update',
     addCondition: '添加条件',
     assignments: '适用对象',
     assignmentsSelected: {
@@ -139,7 +138,6 @@ const zhCN: AuthorizationResource = {
     recordAccessPolicy: '记录访问策略',
     recordScope: '记录范围',
     resource: '资源',
-    resourceIdPlaceholder: '资源 ID',
     resourceType: '资源类型',
     searchPeople: '搜索人员',
     searchPeoplePlaceholder: '搜索姓名、用户名或邮箱',
@@ -187,6 +185,12 @@ const zhCN: AuthorizationResource = {
     details: '基本信息',
     unsaved: '有未保存的修改',
     showMore: '显示更多',
+    development: {
+      pages:
+        '尚未定义需要授权的页面。可以让 AI 为业务页面添加访问权限，开发后即可在这里配置。',
+      business:
+        '尚未定义业务权限。可以让 AI 设计业务操作、字段及数据范围，开发后即可在这里配置。',
+    },
     configuredOnly: '仅显示已配置资源',
     configured: '此权限集中已配置',
     backResources: '返回资源列表',

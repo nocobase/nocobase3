@@ -23,7 +23,7 @@ export default defineAppRoutes([
 ]);
 ```
 
-The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. Register the page server-side with `authz.pages.add({ name: 'sales.quotes', title, actions: ['access'] })` so it appears in management. Page navigation groups come from client navigation, whereas business and administration groups come from `resourceGroups`. A page grant opens an entry; business data needs its own action grants.
+The page module default-exports a React component. Translate the navigation key in its owning namespace. Paths omit the deployment base path. The management UI discovers grantable pages from the client's normalized route declarations. Registering the same stable page ID server-side with `authz.pages.add({ name: 'sales.quotes', title, actions: ['access'] })` also supplies metadata to server consumers; server registration is not required for client page discovery. The page and business permission categories remain visible when empty and explain how to ask AI to develop their resources; those placeholders grant no access. Page navigation groups come from client navigation, whereas business and administration groups come from `resourceGroups`. A page grant opens an entry; business data needs its own action grants.
 
 ## Check feature visibility
 
@@ -145,3 +145,5 @@ Use `defineSettingsRoutes` with a stable `settings` resource ID/action, a lazy p
 For a new configuration screen, use the shared API client, one saved baseline and one draft per saved section, route-backed child tabs with `Outlet`, unsaved-navigation protection and explicit save/error states. Read-only access should render data without writable controls. Options/search endpoints need the calling settings permission too. Only add an independent directory permission if the business directory has that additional boundary; the example's team authorization picker relies on existing management permissions.
 
 Verify menu and direct URL behavior, no-grant/page-only/action-only cases, pending/failed checks, session switching, out-of-scope rows, stale transitions, relation target constraints and post-save refresh. Perform actual API requests as ordinary users in addition to UI checks.
+
+Settings routes and their standalone detail routes use the relevant `settings` capability, never `page/access`. Their grants belong to composed administration resources. Do not add the Settings route tree to ordinary page discovery, and do not infer authorization ownership solely from whether a route was declared with `defineAppRoutes`.

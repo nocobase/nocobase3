@@ -8,6 +8,12 @@ Define the configuration entity, stable identifier, persistence service and who 
 
 Put validation, persistence and transactions in the owning service. Routes authenticate, authorize, validate input and map errors. Keep declarations static and service tokens owned by their exporting package. Database migrations create the fixed schema; seeds initialize missing defaults without overwriting administrator edits. Never store user-editable settings by rewriting source files or environment variables at runtime.
 
+## Settings and ordinary pages have different authorization ownership
+
+Settings routes are system administration resources, not ordinary page resources. Use the resource's `settings/read` capability for its entry, children and standalone detail routes, including details declared with `defineAppRoutes`. Do not register `page/access` for these routes or add the Settings route tree to ordinary page permission discovery. Route declaration helpers and URL paths do not decide authorization ownership; the function of the page does.
+
+Group related administration resources by the user's management area. For example, `automation` is the administration group, while Workflow and Schedules are resources inside it; each resource exposes its own `read` action and any management actions its plugin implements. Plugins contributing to a shared group should check `authz.resourceGroups.has('automation')` before registering it so installation order does not cause duplicate registration. Keep page entry checks separate from the server operation checks described below.
+
 ## Register administration capabilities
 
 Resolve `authorizationToken` in provider boot. Register an administration group and a composed resource. These declarations make actions configurable; an assigned permission set activates them.

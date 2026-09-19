@@ -2,6 +2,8 @@ export default {
   resourceTitle: '限制规则',
   navigation: { title: '限制规则' },
   restrictionRules: {
+    noResources:
+      '尚未定义支持记录范围的业务资源。可以让 AI 定义业务权限和记录范围，开发后即可在这里配置规则。',
     page: {
       title: '限制规则',
       description: '限制指定用户可访问的记录范围，本身不授予权限。',

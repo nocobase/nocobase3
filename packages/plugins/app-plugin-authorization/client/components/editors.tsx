@@ -8,7 +8,6 @@ import { useState, type ReactElement, type ReactNode } from 'react';
 
 import { useAuthorizationTranslation } from '../i18n.js';
 import { SearchField } from './filters.js';
-import { Input } from './ui/input.js';
 import { Label } from './ui/label.js';
 import type {
   AccessScope,
@@ -77,27 +76,19 @@ export function ResourceEditor({
         />
       </Field>
       <Field label={t('editors.resource')}>
-        {selected && selected.resources.length > 0 ? (
-          <SelectField
-            aria-label={t('editors.resource')}
-            className={selectClass}
-            value={id}
-            onValueChange={(selectedValue) =>
-              onChange({ type, id: selectedValue })
-            }
-            options={selected.resources.map((item) => ({
-              value: item.value,
-              label: item.label,
-            }))}
-          />
-        ) : (
-          <Input
-            required
-            placeholder={t('editors.resourceIdPlaceholder')}
-            value={id}
-            onChange={(event) => onChange({ type, id: event.target.value })}
-          />
-        )}
+        <SelectField
+          aria-label={t('editors.resource')}
+          className={selectClass}
+          value={id}
+          disabled={!selected?.resources.length}
+          onValueChange={(selectedValue) =>
+            onChange({ type, id: selectedValue })
+          }
+          options={(selected?.resources ?? []).map((item) => ({
+            value: item.value,
+            label: item.label,
+          }))}
+        />
       </Field>
     </>
   );
@@ -134,17 +125,7 @@ export function ActionsEditor({
       (rightIndex < 0 ? order.length : rightIndex)
     );
   });
-  if (actions.length === 0)
-    return (
-      <Field label={t('editors.actions')}>
-        <Input
-          required
-          placeholder={t('editors.actionsPlaceholder')}
-          value={value.join(', ')}
-          onChange={(event) => onChange(csv(event.target.value))}
-        />
-      </Field>
-    );
+
   return (
     <Field label={t('editors.actions')}>
       <div className='flex min-h-9 flex-wrap items-center gap-4 rounded-lg border px-3 py-2'>

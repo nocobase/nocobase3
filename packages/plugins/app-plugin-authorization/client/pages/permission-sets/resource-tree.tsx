@@ -47,15 +47,16 @@ export function ResourceTypeList({
             onClick={() => onSelect(item.value)}
           >
             <span className='truncate'>{item.label}</span>
-            {configuredTypes.has(item.value) ||
-            grants.some(
-              (grant) =>
-                grant.actions.length > 0 &&
-                grant.resource.type === item.resourceType &&
-                item.resources.some(
-                  (resource) => resource.value === grant.resource.id,
-                ),
-            ) ? (
+            {item.resources.length > 0 &&
+            (configuredTypes.has(item.value) ||
+              grants.some(
+                (grant) =>
+                  grant.actions.length > 0 &&
+                  grant.resource.type === item.resourceType &&
+                  item.resources.some(
+                    (resource) => resource.value === grant.resource.id,
+                  ),
+              )) ? (
               <span
                 title={t('permissionWorkspace.configured')}
                 role='img'

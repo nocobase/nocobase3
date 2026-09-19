@@ -100,7 +100,10 @@ describe('locale-independent option descriptors', () => {
 
     expect(response.status).toBe(200);
     const { data } = await readOptions(response);
-    expect(data.resourceTypes.map((type) => type.value)).toEqual(['resource']);
+    expect(data.resourceTypes.map((type) => type.value)).toEqual([
+      'resource',
+      'page',
+    ]);
     const settings = resourceType(data, 'resource');
     expect(settings.groups).toContainEqual({
       value: 'authorization',
@@ -292,7 +295,10 @@ describe('locale-independent option descriptors', () => {
     );
 
     const { data } = await readOptions(response, 'zh-CN');
-    expect(data.resourceTypes.map((type) => type.value)).toEqual(['resource']);
+    expect(data.resourceTypes.map((type) => type.value)).toEqual([
+      'resource',
+      'page',
+    ]);
     const settings = resourceType(data, 'resource');
     expect(settings.groups).toContainEqual({
       value: 'authorization',

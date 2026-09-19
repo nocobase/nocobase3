@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent, type ReactElement } from 'react';
-import { resourceSections } from '../../components/resource-sections.js';
+import { PermissionDevelopmentHint } from '../../components/permission-development-hint.js';
+import { permissionSections } from '../../components/resource-sections.js';
 import { Checkbox } from '../../components/ui/checkbox.js';
 import type {
   AuthorizationOptions,
@@ -40,17 +41,27 @@ export function PermissionSetEditor({
 }): ReactElement {
   const t = useAuthorizationTranslation();
   const configurationRef = useRef<HTMLDivElement>(null);
-  const [type, setType] = useState(
-    () => resourceSections(options)[0]?.value ?? '',
-  );
+  const sections = permissionSections(options, t);
+  const initialSection =
+    sections.find((section) => section.resources.length > 0) ?? sections[0];
+  const [type, setType] = useState(initialSection?.value ?? 'page');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   const [businessGroup, setBusinessGroup] = useState(
-    () =>
-      resourceSections(options).find((section) => section.value === 'resource')
-        ?.key ?? '',
+    initialSection?.key ?? 'page',
   );
+  const selectedSection = sections.find((section) =>
+    type === 'resource'
+      ? section.key === businessGroup
+      : section.value === type,
+  );
+  const emptyCategory =
+    selectedSection?.resources.length === 0 &&
+    (selectedSection.category === 'pages' ||
+      selectedSection.category === 'business')
+      ? selectedSection.category
+      : undefined;
   const [search, setSearch] = useState('');
   const [configuredOnly, setConfiguredOnly] = useState(false);
   const [limit, setLimit] = useState(80);
@@ -190,7 +201,7 @@ export function PermissionSetEditor({
                 <aside className='w-44 shrink-0 overflow-auto border-r bg-muted/15 xl:w-52'>
                   <ResourceTypeList
                     label={t('permissionSets.picker.resourceTypes')}
-                    types={resourceSections(options).map((section) => ({
+                    types={sections.map((section) => ({
                       ...section,
                       value: section.key,
                       resourceType: section.value,
@@ -198,7 +209,7 @@ export function PermissionSetEditor({
                     grants={draft.grants}
                     type={type === 'resource' ? businessGroup : type}
                     onSelect={(key) => {
-                      const section = resourceSections(options).find(
+                      const section = sections.find(
                         (item) => item.key === key,
                       )!;
                       setType(section.value);
@@ -213,107 +224,123 @@ export function PermissionSetEditor({
                   className='flex min-h-0 min-w-0 flex-1 flex-col'
                   aria-label={t('permissionSets.picker.resources')}
                 >
-                  <div className='flex shrink-0 flex-wrap items-center gap-3 border-b p-3'>
-                    <Input
-                      className='min-w-32 flex-1'
-                      aria-label={t('permissionSets.picker.searchResources')}
-                      placeholder={t('permissionSets.picker.searchResources')}
-                      value={search}
-                      onChange={(event) => {
-                        setSearch(event.target.value);
-                        setLimit(80);
-                      }}
-                    />
-                    <label className='flex items-center gap-2 text-xs text-muted-foreground'>
-                      <Checkbox
-                        checked={configuredOnly}
-                        onCheckedChange={(checked) =>
-                          setConfiguredOnly(checked)
-                        }
-                      />
-                      {t('permissionWorkspace.configuredOnly')}
-                    </label>
-                  </div>
-                  <div className='flex shrink-0 items-center justify-between gap-3 px-4 py-2'>
-                    <p className='text-xs text-muted-foreground'>
-                      {t(
-                        type === 'page'
-                          ? 'permissionWorkspace.pageAccessHint'
-                          : 'permissionWorkspace.clickScope',
-                      )}
-                    </p>
-                  </div>
-                  <div className='min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]'>
-                    {
-                      <ModulePermissions
-                        container={configurationRef}
-                        type={type}
-                        label={
-                          type === 'resource'
-                            ? (options.resourceGroups?.find(
-                                (group) => group.value === businessGroup,
-                              )?.label ?? type)
-                            : (resourceType?.label ?? type)
-                        }
-                        rows={rows.slice(0, limit)}
-                        items={visible}
-                        actions={actions}
-                        draft={draft}
-                        disabled={busy || readOnly}
-                        filtered={Boolean(query) || configuredOnly}
-                        collapsed={query ? new Set() : collapsed}
-                        onCollapse={(id) =>
-                          setCollapsed((previous) => {
-                            const next = new Set(previous);
-                            if (next.has(id)) next.delete(id);
-                            else next.add(id);
-                            return next;
-                          })
-                        }
-                        onChange={onChange}
-                        onToggle={choose}
-                      />
-                    }
-                    {!visible.length ? (
-                      <p className='p-6 text-sm text-muted-foreground'>
-                        {t('permissionSets.picker.noResources')}
-                      </p>
-                    ) : null}
-                    {rows.length > limit ? (
-                      <Button
-                        className='m-3'
-                        type='button'
-                        variant='outline'
-                        onClick={() => setLimit(limit + 80)}
-                      >
-                        {t('permissionWorkspace.showMore')}
-                      </Button>
-                    ) : null}
-                  </div>
-                  <div className='shrink-0 border-t p-3'>
-                    {
-                      <div className='flex flex-wrap gap-4 text-xs text-muted-foreground'>
-                        {(['all', 'scoped', 'none'] as const).map((value) => {
-                          const label = t(
-                            value === 'all'
-                              ? 'permissionWorkspace.moduleGranted'
-                              : value === 'scoped'
-                                ? 'permissionWorkspace.modulePartial'
-                                : 'permissionWorkspace.moduleNotGranted',
-                          );
-                          return (
-                            <span
-                              key={value}
-                              className='flex items-center gap-2'
-                            >
-                              <ScopeMark value={value} legend label={label} />
-                              {label}
-                            </span>
-                          );
-                        })}
+                  {emptyCategory ? (
+                    <PermissionDevelopmentHint category={emptyCategory} />
+                  ) : (
+                    <>
+                      <div className='flex shrink-0 flex-wrap items-center gap-3 border-b p-3'>
+                        <Input
+                          className='min-w-32 flex-1'
+                          aria-label={t(
+                            'permissionSets.picker.searchResources',
+                          )}
+                          placeholder={t(
+                            'permissionSets.picker.searchResources',
+                          )}
+                          value={search}
+                          onChange={(event) => {
+                            setSearch(event.target.value);
+                            setLimit(80);
+                          }}
+                        />
+                        <label className='flex items-center gap-2 text-xs text-muted-foreground'>
+                          <Checkbox
+                            checked={configuredOnly}
+                            onCheckedChange={(checked) =>
+                              setConfiguredOnly(checked)
+                            }
+                          />
+                          {t('permissionWorkspace.configuredOnly')}
+                        </label>
                       </div>
-                    }
-                  </div>
+                      <div className='flex shrink-0 items-center justify-between gap-3 px-4 py-2'>
+                        <p className='text-xs text-muted-foreground'>
+                          {t(
+                            type === 'page'
+                              ? 'permissionWorkspace.pageAccessHint'
+                              : 'permissionWorkspace.clickScope',
+                          )}
+                        </p>
+                      </div>
+                      <div className='min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]'>
+                        {
+                          <ModulePermissions
+                            container={configurationRef}
+                            type={type}
+                            label={
+                              type === 'resource'
+                                ? (options.resourceGroups?.find(
+                                    (group) => group.value === businessGroup,
+                                  )?.label ?? type)
+                                : (resourceType?.label ?? type)
+                            }
+                            rows={rows.slice(0, limit)}
+                            items={visible}
+                            actions={actions}
+                            draft={draft}
+                            disabled={busy || readOnly}
+                            filtered={Boolean(query) || configuredOnly}
+                            collapsed={query ? new Set() : collapsed}
+                            onCollapse={(id) =>
+                              setCollapsed((previous) => {
+                                const next = new Set(previous);
+                                if (next.has(id)) next.delete(id);
+                                else next.add(id);
+                                return next;
+                              })
+                            }
+                            onChange={onChange}
+                            onToggle={choose}
+                          />
+                        }
+                        {!visible.length ? (
+                          <p className='p-6 text-sm text-muted-foreground'>
+                            {t('permissionSets.picker.noResources')}
+                          </p>
+                        ) : null}
+                        {rows.length > limit ? (
+                          <Button
+                            className='m-3'
+                            type='button'
+                            variant='outline'
+                            onClick={() => setLimit(limit + 80)}
+                          >
+                            {t('permissionWorkspace.showMore')}
+                          </Button>
+                        ) : null}
+                      </div>
+                      <div className='shrink-0 border-t p-3'>
+                        {
+                          <div className='flex flex-wrap gap-4 text-xs text-muted-foreground'>
+                            {(['all', 'scoped', 'none'] as const).map(
+                              (value) => {
+                                const label = t(
+                                  value === 'all'
+                                    ? 'permissionWorkspace.moduleGranted'
+                                    : value === 'scoped'
+                                      ? 'permissionWorkspace.modulePartial'
+                                      : 'permissionWorkspace.moduleNotGranted',
+                                );
+                                return (
+                                  <span
+                                    key={value}
+                                    className='flex items-center gap-2'
+                                  >
+                                    <ScopeMark
+                                      value={value}
+                                      legend
+                                      label={label}
+                                    />
+                                    {label}
+                                  </span>
+                                );
+                              },
+                            )}
+                          </div>
+                        }
+                      </div>
+                    </>
+                  )}
                 </section>
               </div>
             </>

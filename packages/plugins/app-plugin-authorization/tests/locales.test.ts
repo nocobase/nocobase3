@@ -32,7 +32,7 @@ describe('locales', () => {
         /\p{L}/u.test(english.replace(/\{\{\w+\}\}/gu, ''))
       );
     });
-    expect(copied).toEqual(['editors.actionsPlaceholder']);
+    expect(copied).toEqual([]);
   });
 
   it('loads one module per locale', () => {

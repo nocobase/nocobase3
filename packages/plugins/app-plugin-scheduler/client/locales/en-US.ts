@@ -1,6 +1,7 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  authorization: { title: 'Schedules', read: 'Read' },
   nav: { automation: 'Automation', schedules: 'Scheduled tasks' },
   page: {
     title: 'Scheduled tasks',

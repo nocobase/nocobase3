@@ -209,7 +209,7 @@ it('defaults to the first populated type when pages have no registered resources
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Pages' }));
   expect(
-    await screen.findByText(en.inspector.noRegisteredResources),
+    await screen.findByText(en.permissionWorkspace.development.pages),
   ).toBeInTheDocument();
 });
 
@@ -675,4 +675,26 @@ it('shows a team grant once despite different underlying policies and retains th
     screen.getAllByText(en.inspector.reasonCodes.USER_CONTEXT_REQUIRED),
   ).toHaveLength(1);
   expect(screen.queryByText(en.inspector.summary.none)).not.toBeInTheDocument();
+});
+
+it('keeps empty page and business categories with development guidance in the inspector', async () => {
+  mocks.loadOptions.mockResolvedValue({ ...options, resourceTypes: [] });
+  mocks.inspectConfigured.mockResolvedValue({
+    unrestricted: true,
+    types: [],
+    resources: [],
+  });
+  mount();
+  await screen.findByText(en.permissionWorkspace.development.pages);
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: en.permissionWorkspace.categories.business,
+    }),
+  );
+  expect(
+    await screen.findByText(en.permissionWorkspace.development.business),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('img', { name: en.permissionWorkspace.configured }),
+  ).not.toBeInTheDocument();
 });

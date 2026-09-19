@@ -36,7 +36,11 @@ const options: AuthorizationOptions = {
     },
   ],
 };
-function Harness() {
+function Harness({
+  resourceOptions = options,
+}: {
+  resourceOptions?: AuthorizationOptions;
+}) {
   const [draft, setDraft] = useState<Draft>({
     originalKey: 'staff',
     key: 'staff',
@@ -46,7 +50,7 @@ function Harness() {
   return (
     <PermissionSetEditor
       dirty={true}
-      options={options}
+      options={resourceOptions}
       draft={draft}
       busy={false}
       onChange={setDraft}
@@ -156,4 +160,30 @@ it('edits page entry independently from a business resource with the same ID', (
   expect(
     current.grants.find((grant) => grant.resource.type === 'resource')?.actions,
   ).toEqual(['view']);
+});
+
+it('keeps page and business categories discoverable before resources are developed', () => {
+  render(<Harness resourceOptions={{ ...options, resourceTypes: [] }} />);
+  expect(
+    screen.getByRole('button', { name: 'Page permissions' }),
+  ).toBeVisible();
+  expect(screen.getByText(/No pages requiring authorization/)).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Business permissions' }));
+  expect(
+    screen.getByText(/No business permissions have been defined/),
+  ).toBeVisible();
+  expect(screen.queryByText(/Try telling AI:/)).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('img', { name: 'Configured in this set' }),
+  ).not.toBeInTheDocument();
+});
+
+it('distinguishes empty search results from missing business permission development', () => {
+  render(<Harness />);
+  fireEvent.change(screen.getByRole('textbox', { name: 'Search resources' }), {
+    target: { value: 'missing' },
+  });
+  expect(
+    screen.queryByText(/No business permissions have been defined/),
+  ).not.toBeInTheDocument();
 });

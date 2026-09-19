@@ -200,7 +200,6 @@ export async function permissionSetOptions(
 function pageResourceOptions(authz: AppAuthorizationService) {
   if (!authz.resourceTypes.list().includes('page')) return [];
   const items = authz.getResource('page').items.list();
-  if (!items.length) return [];
   const actions = [
     { value: 'access', label: optionLabel('options.actions.access', 'Access') },
   ];

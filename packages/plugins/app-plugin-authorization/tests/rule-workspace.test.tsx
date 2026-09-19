@@ -297,3 +297,26 @@ it('labels the resource type sidebar without adding a synthetic table group', as
     screen.queryByRole('button', { name: 'Tables', expanded: true }),
   ).toBeNull();
 });
+
+it.each(['sharing', 'restriction'] as const)(
+  'disables creation and ignores a new-rule URL when %s resources are absent',
+  async (kind) => {
+    authz.listSharingRules.mockResolvedValue([]);
+    authz.listRestrictionRules.mockResolvedValue([]);
+    const Panel =
+      kind === 'sharing' ? SharingRulesPanel : RestrictionRulesPanel;
+    const labels = kind === 'sharing' ? en.sharingRules : en.restrictionRules;
+    render(
+      <MemoryRouter initialEntries={['/?new=1']}>
+        <Panel options={{ ...options, resourceTypes: [] }} />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(labels.noResources)).toBeVisible();
+    expect(screen.getByRole('button', { name: labels.create })).toBeDisabled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('database.collection')).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText('read, create, update'),
+    ).not.toBeInTheDocument();
+  },
+);

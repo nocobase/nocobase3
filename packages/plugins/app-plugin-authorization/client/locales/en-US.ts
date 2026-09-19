@@ -123,7 +123,6 @@ const messages = {
   editors: {
     resourceGroup: 'Resource group',
     actions: 'Actions',
-    actionsPlaceholder: 'read, create, update',
     addCondition: 'Add condition',
     assignments: 'Assignments',
     assignmentsSelected: {
@@ -140,7 +139,6 @@ const messages = {
     recordAccessPolicy: 'Record Access Policy',
     recordScope: 'Record scope',
     resource: 'Resource',
-    resourceIdPlaceholder: 'Resource ID',
     resourceType: 'Resource type',
     searchPeople: 'Search people',
     searchPeoplePlaceholder: 'Search name, username, or email',
@@ -192,6 +190,12 @@ const messages = {
     details: 'Basic information',
     unsaved: 'Unsaved changes',
     showMore: 'Show more',
+    development: {
+      pages:
+        'No pages requiring authorization have been defined. Ask AI to add page access permissions for your business pages, then configure them here.',
+      business:
+        'No business permissions have been defined. Ask AI to design operations, fields and record scopes for your business, then configure them here.',
+    },
     configuredOnly: 'Only configured resources',
     configured: 'Configured in this set',
     backResources: 'Back to resources',

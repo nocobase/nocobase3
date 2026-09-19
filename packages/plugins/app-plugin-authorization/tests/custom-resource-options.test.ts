@@ -94,3 +94,17 @@ it('exposes pages independently while keeping raw collections and custom handler
     ).resourceTypes[0].resources.map((item) => item.value),
   ).toEqual(['sales.orders']);
 });
+
+it('keeps an empty page catalog available for client-declared pages', async () => {
+  const options = (await permissionSetOptions(
+    createAppAuthorization({}),
+    undefined,
+  )) as AuthorizationOptions<LocalizedText>;
+  expect(
+    options.resourceTypes.find((type) => type.value === 'page'),
+  ).toMatchObject({
+    category: 'pages',
+    resources: [],
+    actions: [{ value: 'access' }],
+  });
+});

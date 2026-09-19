@@ -1,8 +1,9 @@
+import { PermissionDevelopmentHint } from '../components/permission-development-hint.js';
 import {
   useSubjectNames,
   subjectKey,
 } from '../components/use-subject-names.js';
-import { resourceSections } from '../components/resource-sections.js';
+import { permissionSections } from '../components/resource-sections.js';
 import { Checkbox } from '../components/ui/checkbox.js';
 import { SubjectPicker } from '../components/subject-picker.js';
 import { useResourceOptions } from '../components/use-resource-options.js';
@@ -85,11 +86,16 @@ function Inspector({
     options.subjectTypes,
     subject ? [subject] : [],
   );
-  const sections = useMemo(() => resourceSections(options), [options]);
+  const sections = useMemo(() => permissionSections(options, t), [options, t]);
   const type =
     sections.find((item) => item.key === params.get('type')) ??
     sections.find((item) => item.resources.length > 0) ??
     sections[0];
+  const emptyCategory =
+    type?.resources.length === 0 &&
+    (type.category === 'pages' || type.category === 'business')
+      ? type.category
+      : undefined;
   const search = params.get('search') ?? '';
   const configuredOnly = params.get('configuredOnly') === 'true';
   const requestedPage = Number(params.get('page'));
@@ -313,7 +319,8 @@ function Inspector({
                   }}
                 >
                   <span className='flex-1 text-left'>{item.label}</span>
-                  {configured?.key === configurationKey &&
+                  {item.resources.length > 0 &&
+                  configured?.key === configurationKey &&
                   (configured.unrestricted ||
                     configured.resources.some(
                       (resource) =>
@@ -488,7 +495,9 @@ function Inspector({
                   )}
                 </tbody>
               </table>
-              {!visible.length && !loading ? (
+              {!visible.length && !loading && emptyCategory ? (
+                <PermissionDevelopmentHint category={emptyCategory} />
+              ) : !visible.length && !loading ? (
                 <p className='p-8 text-center text-muted-foreground'>
                   {t(
                     type?.resources.length

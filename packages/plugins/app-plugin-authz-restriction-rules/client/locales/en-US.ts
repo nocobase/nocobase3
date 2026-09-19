@@ -2,6 +2,8 @@ export default {
   resourceTitle: 'Restriction Rules',
   navigation: { title: 'Restriction Rules' },
   restrictionRules: {
+    noResources:
+      'No business resources supporting record scopes have been defined. Ask AI to define the business permissions and record scopes before configuring rules here.',
     page: {
       title: 'Restriction Rules',
       description:

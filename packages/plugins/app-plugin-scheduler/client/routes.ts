@@ -19,8 +19,8 @@ const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
         path: '/schedules',
         navigation: { title: 'nav.schedules', icon: CalendarClock },
         authz: {
-          resource: { type: 'page', id: SCHEDULER_ACCESS_RESOURCE },
-          action: 'access',
+          resource: { type: 'settings', id: SCHEDULER_ACCESS_RESOURCE },
+          action: 'read',
         },
         componentLoader: () => import('./pages/schedules-page.js'),
       },
@@ -33,8 +33,8 @@ const detailRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'schedule-detail',
     path: '/settings/schedules/:scheduleId',
     authz: {
-      resource: { type: 'page', id: SCHEDULER_ACCESS_RESOURCE },
-      action: 'access',
+      resource: { type: 'settings', id: SCHEDULER_ACCESS_RESOURCE },
+      action: 'read',
     },
     componentLoader: () => import('./pages/schedule-detail-page.js'),
   },

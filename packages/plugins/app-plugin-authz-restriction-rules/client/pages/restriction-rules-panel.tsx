@@ -86,6 +86,7 @@ export function RestrictionRulesPanel({
   const [search, setSearch] = useState('');
   const [sectionKey, setSectionKey] = useState('');
   const sections = useMemo(() => resourceSections(options), [options]);
+  const hasResources = sections.some((section) => section.resources.length > 0);
   const [page, setPage] = useState(1);
   const [errorCause, setErrorCause] = useState<unknown>();
   const error = errorCause === undefined ? undefined : message(t, errorCause);
@@ -208,8 +209,16 @@ export function RestrictionRulesPanel({
         searchPlaceholder={t('restrictionRules.search')}
         onSearch={changeSearch}
         actionLabel={t('restrictionRules.create')}
-        onAction={() => edit()}
+        actionDisabled={!hasResources}
+        onAction={() => {
+          if (hasResources) edit();
+        }}
       />
+      {!hasResources && rules.length > 0 ? (
+        <p className='text-sm text-muted-foreground'>
+          {t('restrictionRules.noResources')}
+        </p>
+      ) : null}
       <ManagementTable>
         <Table className='min-w-[64rem] table-fixed'>
           <colgroup>
@@ -367,7 +376,11 @@ export function RestrictionRulesPanel({
             {visibleRules.length === 0 ? (
               <EmptyTableRow colSpan={5}>
                 {rules.length === 0
-                  ? t('restrictionRules.emptyNone')
+                  ? t(
+                      hasResources
+                        ? 'restrictionRules.emptyNone'
+                        : 'restrictionRules.noResources',
+                    )
                   : t('restrictionRules.emptySearch')}
               </EmptyTableRow>
             ) : null}
@@ -394,7 +407,7 @@ export function RestrictionRulesPanel({
           title: titleText(draft?.title, t, humanize(originalKey ?? '')),
         })}
       </ConfirmDialog>
-      {draft ? (
+      {draft && (originalKey || hasResources) ? (
         <RuleDrawer
           title={t(
             originalKey
@@ -554,7 +567,7 @@ function fresh(options: AuthorizationOptions): RestrictionRule {
     key: '',
     title: '',
     resource: {
-      type: type?.value ?? 'database.collection',
+      type: type?.value ?? 'resource',
       id: type?.resources[0]?.value ?? '',
     },
     actions:
