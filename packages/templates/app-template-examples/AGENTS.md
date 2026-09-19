@@ -376,3 +376,5 @@ Navigation groups retain their expanded or collapsed state while the navigation 
 ## Examples notification header
 
 Examples adds an application-owned notification bell in `client/layouts/components/header-actions.tsx`, linking to `/notifications` from App, Settings, and Dev headers. `client/components/notification-button.tsx` mounts the public in-app notification Provider for the authenticated user, resets it when the user changes, and displays the unread count. The route menu cannot provide a persistent header badge, so this product-specific shell addition stays in Examples. Keep the inbox page’s local Provider; both refresh from server realtime invalidations and window focus.
+
+The application, Settings and Dev sidebars use independent shadcn Sidebar providers. Follow `client/AGENTS.md` for state, navigation, accessibility and responsive behavior; do not reintroduce a second sidebar state owner.

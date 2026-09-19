@@ -356,3 +356,5 @@ Navigation groups retain their expanded or collapsed state while the navigation 
 `runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
 
 `server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.
+
+The application, Settings and Dev sidebars use independent shadcn Sidebar providers. Follow `client/AGENTS.md` for state, navigation, accessibility and responsive behavior; do not reintroduce a second sidebar state owner.

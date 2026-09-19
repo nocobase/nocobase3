@@ -4,4 +4,4 @@
 "@nocobase/app-template-hub": patch
 ---
 
-Show menu labels and interactive group navigation on hover in collapsed desktop sidebars.
+Adopt shadcn Sidebar providers, menu components and Collapsible across application layouts, with leaf tooltips and interactive group popovers for collapsed navigation.

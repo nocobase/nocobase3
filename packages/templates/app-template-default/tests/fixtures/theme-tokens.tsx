@@ -1,7 +1,6 @@
 import { Refine } from '@refinedev/core';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router';
-import { useState } from 'react';
 import { Button } from '../../client/components/ui/button';
 import { Input } from '../../client/components/ui/input';
 import {
@@ -10,40 +9,95 @@ import {
   PopoverContent,
   PopoverTitle,
 } from '../../client/components/ui/popover';
-import { LayoutSidebar } from '../../client/layouts/components/layout-sidebar';
+import {
+  Sidebar,
+  SidebarProvider,
+  SidebarContent,
+  SidebarMenu,
+  SidebarTrigger,
+} from '../../client/components/ui/sidebar';
 import { AppThemeProvider, ThemeSettings } from '../../client/theme';
 import '../../client/styles.css';
+import { Folder, File } from 'lucide-react';
+import { NavigationTree } from '../../client/layouts/components/navigation-tree';
+import type { RouteNavigationItem } from '../../client/routing/route-navigation';
+
+const navigation: RouteNavigationItem[] = Array.from(
+  { length: 40 },
+  (_, index) => ({
+    route: {
+      id: String(index),
+      name: String(index),
+      path: `/fixture/${index}`,
+      packageName: 'fixture',
+      source: 'application',
+      auth: 'optional',
+      navigation: {
+        title:
+          index === 0
+            ? '中文长标题：验证侧栏收起后的完整名称提示与浮层内容显示'
+            : `Menu ${index + 1}`,
+        icon: File,
+      },
+      componentLoader: async () => ({ default: () => null }),
+    },
+    children: [],
+  }),
+);
+const group: RouteNavigationItem = {
+  route: {
+    ...navigation[0]!.route,
+    id: 'group',
+    name: 'group',
+    componentLoader: undefined,
+    navigation: { title: '多级导航分组与长列表', icon: Folder },
+  },
+  children: [
+    {
+      route: {
+        ...navigation[1]!.route,
+        id: 'nested',
+        name: 'nested',
+        componentLoader: undefined,
+        navigation: { title: '嵌套分组', icon: Folder },
+      },
+      children: navigation.slice(0, 2),
+    },
+    ...navigation,
+  ],
+};
 
 // A server-free browser fixture using the real shell, primitives and theme provider.
 // Run Vite and open /main/tests/fixtures/theme-tokens.html.
 export default function Fixture() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   return (
     <MemoryRouter>
       <AppThemeProvider>
         <Refine options={{ disableTelemetry: true }}>
-          <div className='flex min-h-svh'>
-            <LayoutSidebar
-              aria-label='Fixture sidebar'
-              desktopState={collapsed ? 'collapsed' : 'expanded'}
-              mobileOpen={mobileOpen}
-              onMobileOpenChange={setMobileOpen}
-            >
-              <Button onClick={() => setMobileOpen(false)}>
-                Close sidebar
-              </Button>
+          <SidebarProvider>
+            <Sidebar collapsible='icon' aria-label='Fixture sidebar'>
               <Input aria-label='Sidebar content' />
-            </LayoutSidebar>
+              <SidebarContent
+                role='navigation'
+                aria-label='Fixture navigation'
+                className='p-2 overflow-y-auto group-data-[collapsible=icon]:overflow-y-auto'
+              >
+                <SidebarMenu>
+                  {[group, ...navigation].map((item) => (
+                    <NavigationTree
+                      key={item.route.id}
+                      item={item}
+                      selectedKey={undefined}
+                      onNavigate={() => {}}
+                    />
+                  ))}
+                </SidebarMenu>
+              </SidebarContent>
+            </Sidebar>
             <main className='min-w-0 flex-1 space-y-6 p-6'>
               <div className='flex flex-wrap gap-2'>
                 <ThemeSettings />
-                <Button onClick={() => setCollapsed(!collapsed)}>
-                  Collapse sidebar
-                </Button>
-                <Button onClick={() => setMobileOpen(true)}>
-                  Open sidebar
-                </Button>
+                <SidebarTrigger />
               </div>
               <h1 className='text-3xl'>Theme tokens · 主题样式</h1>
               <p data-testid='body'>Body text · 中文内容与 English text</p>
@@ -109,7 +163,7 @@ export default function Fixture() {
                 <div className='shadow-2xl p-2'>2xl</div>
               </div>
             </main>
-          </div>
+          </SidebarProvider>
         </Refine>
       </AppThemeProvider>
     </MemoryRouter>
