@@ -19,9 +19,9 @@ import type {
 /**
  * Builds the manager from the application's own database config.
  *
- * The app-server package deliberately does not depend on any concrete database
- * driver. Official drivers are loaded on demand by @nocobase/db; explicit
- * database.drivers registrations continue to override those defaults.
+ * Call resolveDatabaseConfig before this synchronous factory when using official
+ * drivers without explicit registrations. Application runtime preparation and
+ * standalone database tasks perform that asynchronous step.
  */
 export function createAppDatabaseManager<TConfig extends AppDatabaseConfig>(
   config: TConfig,

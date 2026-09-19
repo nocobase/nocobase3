@@ -627,12 +627,21 @@ importers:
       '@nocobase/api-client':
         specifier: workspace:*
         version: link:../../libs/api-client
+      '@nocobase/db-dameng':
+        specifier: workspace:*
+        version: link:../../libs/db-dameng
+      '@nocobase/db-kingbase':
+        specifier: workspace:*
+        version: link:../../libs/db-kingbase
       '@nocobase/db-mssql':
         specifier: workspace:*
         version: link:../../libs/db-mssql
       '@nocobase/db-mysql':
         specifier: workspace:*
         version: link:../../libs/db-mysql
+      '@nocobase/db-oceanbase':
+        specifier: workspace:*
+        version: link:../../libs/db-oceanbase
       '@nocobase/db-oracle':
         specifier: workspace:*
         version: link:../../libs/db-oracle
@@ -1466,30 +1475,6 @@ importers:
 
   packages/libs/db:
     dependencies:
-      '@nocobase/db-dameng':
-        specifier: workspace:^
-        version: link:../db-dameng
-      '@nocobase/db-kingbase':
-        specifier: workspace:^
-        version: link:../db-kingbase
-      '@nocobase/db-mssql':
-        specifier: workspace:^
-        version: link:../db-mssql
-      '@nocobase/db-mysql':
-        specifier: workspace:^
-        version: link:../db-mysql
-      '@nocobase/db-oceanbase':
-        specifier: workspace:^
-        version: link:../db-oceanbase
-      '@nocobase/db-oracle':
-        specifier: workspace:^
-        version: link:../db-oracle
-      '@nocobase/db-postgres':
-        specifier: workspace:^
-        version: link:../db-postgres
-      '@nocobase/db-sqlite':
-        specifier: workspace:^
-        version: link:../db-sqlite
       '@nocobase/repository-input':
         specifier: workspace:^
         version: link:../repository-input
@@ -1515,9 +1500,6 @@ importers:
       prettier:
         specifier: 'catalog:'
         version: 3.9.6
-      tsx:
-        specifier: 'catalog:'
-        version: 4.23.12
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

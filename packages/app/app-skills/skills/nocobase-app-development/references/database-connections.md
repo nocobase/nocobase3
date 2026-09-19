@@ -16,7 +16,7 @@ The callback passed to `defineAppDatabaseConfig` receives the runtime context an
 
 `config.yml` deep-merges into code defaults. Changing a dialect in code does not remove an old YAML override or fields belonging to the previous dialect. Update both layers when switching, and check any existing environment overrides using the Configuration section of `README.MD` in the application root.
 
-Official drivers are optional peers of `@nocobase/db`. Install the needed package in application `dependencies` and configure its dialect; no driver import or registration is required. The core synchronously loads a driver when a connection or application preparation step first needs it. Merely creating a manager does not load drivers or open connections. YAML cannot install packages. Explicit `drivers` and connection-level `databaseDriver` values retain precedence and conflict checking. Custom dialects still require explicit registration. The registration key must match the driver's declared dialect: `{ postgres }` is valid; aliases such as `{ pg: postgres }` and mismatches such as `{ mysql: postgres }` fail at runtime.
+Official drivers are optional peers of `@nocobase/app-server`. Install the needed package in application `dependencies` and configure its dialect; no driver import or registration is required. The application runtime awaits `resolveDatabaseConfig()` after configuration and defaults are merged, before provider registration. It imports only configured dialects and does not open connections. The core manager stays synchronous and requires prepared or explicitly registered drivers. YAML cannot install packages. Explicit `drivers` and connection-level `databaseDriver` values retain precedence and conflict checking. Custom dialects require explicit registration; registration keys must match their driver's dialect.
 
 ### SQLite paths
 
@@ -158,9 +158,9 @@ When adding a driver dependency, also run `pnpm build` to verify deployment pack
 
 An official dialect without its package reports the connection name and an installation command such as `pnpm add @nocobase/db-postgres`. Install it in `dependencies`; no source registration is needed. Unknown dialects require an explicit custom driver. Errors inside an installed package retain their original cause and must not be treated as missing-driver errors.
 
-### Source development and synchronous ESM
+### Driver loading outside the application runtime
 
-Official driver packages expose the same ESM implementation to `import` and `require`. Node 24 or newer loads it synchronously; the driver and its static dependency graph must not contain top-level `await`. Source applications use `node --import tsx/esm` so synchronous driver loading shares module identities with static imports. Do not replace it with the full `tsx` loader, which can transform required TypeScript into a separate CommonJS module. The development watcher launches an isolated ESM-only server process for this reason.
+Import `resolveDatabaseConfig` from `@nocobase/app-server/database` and await it before synchronous database preparation or manager creation. The built-in standalone migration/seed runner and collection artifact generator already do this. Configured dialects load during preparation, including connections not used immediately; unconfigured dialects are not imported. Ordinary `tsx` development and Vitest configuration work without synchronous ESM loader overrides.
 
 ### Installation and platform binaries
 

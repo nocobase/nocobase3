@@ -1,27 +1,10 @@
-import { createRequire } from 'node:module';
 import type {
   ConnectionConfig,
   DatabaseDriverDefinition,
   DatabaseDriverRegistration,
 } from './config.js';
 
-const require = createRequire(import.meta.url);
-const officialPackages: Readonly<Record<string, string>> = {
-  sqlite: '@nocobase/db-sqlite',
-  mysql: '@nocobase/db-mysql',
-  postgres: '@nocobase/db-postgres',
-  mssql: '@nocobase/db-mssql',
-  oracle: '@nocobase/db-oracle',
-  dameng: '@nocobase/db-dameng',
-  kingbase: '@nocobase/db-kingbase',
-  oceanbase: '@nocobase/db-oceanbase',
-};
-
-/**
- * Resolve explicit drivers first, then synchronously load an official optional peer.
- * Node caches the module; application registrations are never cached globally.
- * Resolving a driver does not open a database connection.
- */
+/** Validate explicitly supplied drivers without loading packages. */
 export function resolveDatabaseDriver(
   connection: ConnectionConfig,
   drivers?: Record<string, DatabaseDriverRegistration>,
@@ -45,37 +28,7 @@ export function resolveDatabaseDriver(
     );
   }
   if (supplied || registered) return supplied ?? registered;
-  const packageName = Object.hasOwn(officialPackages, connection.dialect)
-    ? officialPackages[connection.dialect]
-    : undefined;
-  if (!packageName) return undefined;
-
-  let entry: string;
-  try {
-    entry = require.resolve(packageName);
-  } catch (cause) {
-    if ((cause as NodeJS.ErrnoException).code !== 'MODULE_NOT_FOUND')
-      throw cause;
-    throw new Error(
-      `Database connection "${name}" requires "${packageName}". Install it with "pnpm add ${packageName}".`,
-      { cause },
-    );
-  }
-  let loaded: { default?: DatabaseDriverRegistration };
-  try {
-    loaded = require(entry) as { default?: DatabaseDriverRegistration };
-  } catch (cause) {
-    throw new Error(
-      `Failed to load database driver "${packageName}" for connection "${name}".`,
-      { cause },
-    );
-  }
-  if (!loaded?.default) {
-    throw new Error(
-      `Database driver "${packageName}" must have a default export.`,
-    );
-  }
-  return resolveDriverDefinition(loaded.default, connection.dialect);
+  return undefined;
 }
 
 function resolveDriverDefinition(

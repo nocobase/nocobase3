@@ -81,10 +81,6 @@ const db = createDatabaseManager({
 
 `connections` 以名称区分数据库连接。`default` 指定 Manager 快捷方法使用的连接；省略时，当前实现使用配置中的第一个连接。应用配置应显式指定 `default`，避免连接顺序变化影响行为。
 
-## Official driver fallback
-
-Official dialect packages load synchronously on first use and are optional peer dependencies. Install only the needed package in application `dependencies`; `drivers` can be omitted. Explicit driver registrations and connection-level `databaseDriver` values preserve their existing precedence and conflict checks. Static imports still load eagerly. Without explicit registrations, use a driver-owned connection type with `satisfies` for strict field checking; automatic runtime discovery does not infer installed dialects in TypeScript.
-
 ## 选择方言配置
 
 | 方言       | 默认驱动         | 关键配置                                                              |

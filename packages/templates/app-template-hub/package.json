@@ -132,7 +132,7 @@
     "directory": "packages/templates/app-template-hub"
   },
   "scripts": {
-    "dev": "node --import tsx/esm ./scripts/dev/index.mjs",
+    "dev": "tsx ./scripts/dev/index.mjs",
     "build": "node ./scripts/build.mjs",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
@@ -143,7 +143,7 @@
     "collections:generate": "pnpm nocobase app collections generate",
     "migrate": "pnpm nocobase app migrate",
     "seed": "pnpm nocobase app seed",
-    "nocobase": "node --import tsx/esm ./cli/index.ts",
+    "nocobase": "tsx ./cli/index.ts",
     "plugin:register": "nocobase plugin register",
     "plugin:inspect": "nocobase plugin inspect",
     "plugin:unregister": "nocobase plugin unregister",

@@ -23,19 +23,11 @@ const db = createDatabaseManager({
 
 ## Dialect 包
 
-Official dialect packages are optional peers. Install the package in application `dependencies`, then configure its dialect without a static import:
+The core manager consumes explicitly registered drivers and remains synchronous. It does not discover or import dialect packages. Register a factory in `drivers`, or supply the connection returned by a dialect factory.
 
-```ts
-const db = createDatabaseManager({
-  connections: {
-    main: { dialect: 'mysql', database: 'app' },
-  },
-});
-```
+Applications built with `@nocobase/app-server` can install an official driver and configure its dialect without a static import. The application runtime calls `resolveDatabaseConfig()` from `@nocobase/app-server/database` after loading configuration. This asynchronously imports only configured dialects, then passes registered drivers to the synchronous manager. Standalone core consumers can keep explicit registration; they do not need an application runtime dependency.
 
-Creating the manager does not load any driver. The first `connection()` call synchronously loads the needed official package and creates the connection object; network connections and queries remain asynchronous. Unused drivers need not be installed. Source development uses `node --import tsx/esm` so `require()` and `import` share ESM module identities. Published packages load compiled ESM on Node 24 or newer; their static dependency graph must not contain top-level `await`.
-
-Explicit factories and descriptors remain supported and override official fallback resolution. Custom dialects require explicit registration. The following explicit forms are equivalent:
+Factories and descriptors remain supported. The following explicit forms are equivalent:
 
 ```ts
 import postgres from '@nocobase/db-postgres';

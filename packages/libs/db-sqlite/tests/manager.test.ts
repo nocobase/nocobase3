@@ -29,6 +29,16 @@ function createTestDatabase(config: DatabaseConfig<SqliteConnectionConfig>) {
 }
 
 describe('DatabaseManager', () => {
+  it('keeps core manager construction synchronous and requires explicitly registered drivers', () => {
+    const db = createDatabaseManager({
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    expect(db).not.toBeInstanceOf(Promise);
+    expect(() => db.connection()).toThrow(
+      'Database dialect "sqlite" is not registered.',
+    );
+  });
+
   it('mirrors connection collections through db.collections()', async () => {
     const db = createTestDatabase({
       default: 'main',

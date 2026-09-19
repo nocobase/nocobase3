@@ -1,10 +1,14 @@
+import { resolveDatabaseConfig } from './resolve-config.js';
 import {
   planAppRuntimeDatabaseTasks,
   type AppRuntimeDatabaseTaskPlanOptions,
   type AppDatabaseTask,
   type AppDatabaseTaskKind,
 } from './plan.js';
-import type { DatabaseDriverRegistration, DatabaseManager } from '@nocobase/db';
+import {
+  type DatabaseDriverRegistration,
+  type DatabaseManager,
+} from '@nocobase/db';
 
 import type { AppPaths } from '../config/index.js';
 import {
@@ -137,6 +141,10 @@ export async function runAppDatabaseTasks(
   if (options.fresh && options.kind !== 'migrations') {
     throw new Error('--fresh is only supported for migrations.');
   }
+  config = await resolveDatabaseConfig({
+    ...config,
+    drivers: { ...config.drivers, ...drivers },
+  });
   const plan = planAppRuntimeDatabaseTasks(config, [options.kind], options);
   if (!plan.length) return { ok: true, status: 'not-configured', results: [] };
   if (options.fresh) {

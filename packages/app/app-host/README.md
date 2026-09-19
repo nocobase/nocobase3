@@ -9,9 +9,11 @@ pnpm --filter @nocobase/app-host build
 APP_REVISIONS_DIR="$PWD/packages/app/app-host/fixtures/app-dist" pnpm --filter @nocobase/app-host start
 ```
 
-The workspace start scripts use `node --import tsx/esm` because internal package exports resolve to TypeScript source during monorepo development. Published package exports resolve to compiled JavaScript instead.
+The workspace start scripts use `tsx` because internal package exports resolve
+to TypeScript source during monorepo development. Published package exports
+resolve to compiled JavaScript instead.
 
-When embedding `AppHostSupervisor`, use `driver: 'auto'` to follow the loaded package: a supervisor loaded from TypeScript launches the source CLI with `node --import tsx/esm`, while a supervisor loaded from compiled JavaScript launches the compiled CLI with Node. This selection is independent of `NODE_ENV`, so an installed package can run in development without shipping its sources. An omitted driver still defaults to `node`; explicit `node` and `tsx` selections keep their existing behavior.
+When embedding `AppHostSupervisor`, use `driver: 'auto'` to follow the loaded package: a supervisor loaded from TypeScript launches the source CLI with `tsx`, while a supervisor loaded from compiled JavaScript launches the compiled CLI with Node. This selection is independent of `NODE_ENV`, so an installed package can run in development without shipping its sources. An omitted driver still defaults to `node`; explicit `node` and `tsx` selections keep their existing behavior.
 
 By default the host listens on `127.0.0.1:3000` and discovers deployed apps
 from `./storage/apps/revisions` in the current working directory.
@@ -217,5 +219,3 @@ Set `appRevisionsDir` (configuration `host.appRevisionsDir`, environment `APP_RE
 Supervisor callers may set `childOutputDir` to capture stdout/stderr as bounded JSON Lines with retention, independently of terminal forwarding. Host logging uses `logging.file.directory`; neither directory is inferred from the generated Host configuration path.
 
 Successful artifact deployment records the selected checksum in `<appId>/.active-revision` atomically. Standalone rescans and restarts use that revision; a failed candidate leaves the selection unchanged. Managed recovery continues to use the desired deployment set. Manually supplied standalone applications may still place their package directly under `<appId>/`.
-
-Source supervision uses the ESM-only tsx loader so synchronously required database drivers share module identities with static imports. Managed children run once; standalone source supervision uses Node watch mode. The `tsxCli` option still selects the tsx installation, from which the ESM loader is resolved.
