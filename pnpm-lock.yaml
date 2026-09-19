@@ -4042,6 +4042,9 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.7.1(@opentelemetry/api@1.9.0)(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.10)
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.2
     devDependencies:
       '@ai-sdk/react':
         specifier: 2.0.0
@@ -4205,9 +4208,6 @@ importers:
       eventsource-parser:
         specifier: 3.1.0
         version: 3.1.0
-      hono:
-        specifier: 'catalog:'
-        version: 4.13.2
       ignore:
         specifier: 'catalog:'
         version: 7.0.6

@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { builtinModules } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
+
+import { collectRuntimeSpecifiers } from '../../scripts/check-runtime-deps.mjs';
 
 const root = path.resolve(import.meta.dirname, '../../packages/templates');
 const templates = ['default', 'examples', 'hub'].map((kind) => {
@@ -16,6 +19,10 @@ const templates = ['default', 'examples', 'hub'].map((kind) => {
   };
 });
 const [baseline] = templates;
+const runtimeExtensions = ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs'];
+const builtins = new Set(
+  builtinModules.flatMap((name) => [name, name.replace(/^node:/u, '')]),
+);
 
 function filesIn(directory, prefix = '') {
   return readdirSync(directory, { withFileTypes: true })
@@ -26,6 +33,91 @@ function filesIn(directory, prefix = '') {
         : [relative];
     })
     .sort();
+}
+
+function runtimeFilesIn(directory) {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (
+      ['dev-commands', 'dist', 'node_modules', 'tests'].includes(entry.name)
+    ) {
+      return [];
+    }
+    const target = path.join(directory, entry.name);
+    if (entry.isDirectory()) return runtimeFilesIn(target);
+    return runtimeExtensions.includes(path.extname(entry.name)) ? [target] : [];
+  });
+}
+
+function resolveRuntimeRelative(from, specifier) {
+  const unresolved = path.resolve(path.dirname(from), specifier);
+  const base = unresolved.replace(/\.(?:c|m)?js$/u, '');
+  const candidates = [
+    unresolved,
+    ...runtimeExtensions.map((extension) => `${base}${extension}`),
+    ...runtimeExtensions.map((extension) =>
+      path.join(base, `index${extension}`),
+    ),
+  ];
+  return candidates.find(
+    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+  );
+}
+
+function runtimePackageName(specifier) {
+  if (
+    specifier.startsWith('.') ||
+    specifier.startsWith('/') ||
+    specifier.startsWith('#') ||
+    specifier.startsWith('@/') ||
+    specifier.startsWith('node:')
+  ) {
+    return undefined;
+  }
+  const segments = specifier.split('/');
+  return specifier.startsWith('@')
+    ? segments.slice(0, 2).join('/')
+    : segments[0];
+}
+
+function runtimeDependencies(template) {
+  const pending = ['server', 'database', 'cli'].flatMap((directory) =>
+    runtimeFilesIn(path.join(template.directory, directory)),
+  );
+  const visited = new Set();
+  const imported = new Map();
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (!file || visited.has(file)) continue;
+    visited.add(file);
+    for (const specifier of collectRuntimeSpecifiers(
+      readFileSync(file, 'utf8'),
+      file,
+    )) {
+      if (specifier.startsWith('.')) {
+        const resolved = resolveRuntimeRelative(file, specifier);
+        assert.ok(
+          resolved,
+          `${template.kind}: unresolved ${specifier} from ${file}`,
+        );
+        if (
+          !resolved.includes(`${path.sep}cli${path.sep}dev-commands${path.sep}`)
+        ) {
+          pending.push(resolved);
+        }
+        continue;
+      }
+      const dependency = runtimePackageName(specifier);
+      if (
+        dependency &&
+        dependency !== template.manifest.name &&
+        !builtins.has(dependency)
+      ) {
+        imported.set(dependency, path.relative(template.directory, file));
+      }
+    }
+  }
+  return imported;
 }
 
 function sharedFrameworkSource(template, file) {
@@ -162,7 +254,7 @@ for (const template of templates) {
     }
   });
 
-  test(`${template.kind} declares a single dependency category and the database runtime peer`, () => {
+  test(`${template.kind} declares server runtime packages in dependencies only`, () => {
     const { dependencies, devDependencies } = template.manifest;
     const duplicates = Object.keys(dependencies).filter(
       (name) => name in devDependencies,
@@ -170,6 +262,14 @@ for (const template of templates) {
     assert.deepEqual(duplicates, []);
     assert.ok(dependencies['@nocobase/db']);
     assert.ok(dependencies['@nocobase/db-sqlite']);
+    assert.equal(dependencies.hono, 'catalog:');
+    assert.equal(devDependencies.hono, undefined);
+    for (const [name, file] of runtimeDependencies(template)) {
+      assert.ok(
+        dependencies[name],
+        `${template.kind}: ${name} is imported at runtime by ${file} but is not in dependencies`,
+      );
+    }
     for (const field of [
       'engines',
       'packageManager',
