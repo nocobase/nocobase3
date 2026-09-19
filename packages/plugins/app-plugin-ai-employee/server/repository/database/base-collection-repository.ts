@@ -36,7 +36,16 @@ function applyFilter<Q extends SelectQuery | UpdateQuery | DeleteQuery>(
       typeof raw === 'object' &&
       !Array.isArray(raw) &&
       Object.keys(raw).some((key) =>
-        ['$in', '$notIn', '$ne', '$lt', '$lte', '$gt', '$gte'].includes(key),
+        [
+          '$in',
+          '$notIn',
+          '$ne',
+          '$lt',
+          '$lte',
+          '$gt',
+          '$gte',
+          '$includes',
+        ].includes(key),
       )
     ) {
       for (const [operator, value] of Object.entries(
@@ -60,7 +69,10 @@ function applyFilter<Q extends SelectQuery | UpdateQuery | DeleteQuery>(
                         : operator === '$gte'
                           ? '>='
                           : '=';
-        current = current.where(field, op, value);
+        current =
+          operator === '$includes'
+            ? current.where(field, 'like', `%${String(value)}%`)
+            : current.where(field, op, value);
       }
     } else {
       current = current.where(

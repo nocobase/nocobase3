@@ -6,6 +6,7 @@ import {
   useAI,
   type AISubAgentConversation as AISubAgentConversationType,
   type AIToolCallDecision,
+  type AIEmployee,
 } from '../../providers/index.js';
 import { AIEmployeeAvatar } from './ai-employee-avatar.js';
 import { MarkdownMessage } from './markdown-message.js';
@@ -17,29 +18,50 @@ import {
 } from './tool-call-card.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
 
-export function SubAgentConversation({
-  conversation,
-  onToolCallDecision,
-  status = 'ready',
-  decideToolCall,
-  focusComposer,
-}: {
+type SubAgentConversationProps = {
   conversation: AISubAgentConversationType;
   onToolCallDecision?: (decision: AIToolCallDecision) => void | Promise<void>;
   status?: 'submitted' | 'streaming' | 'ready' | 'error';
   decideToolCall?: (decision: AIToolCallDecision) => Promise<void>;
   focusComposer?: () => void;
-}) {
-  const t = useAITranslate();
+  readOnly?: boolean;
+};
+
+export function SubAgentConversation(props: SubAgentConversationProps) {
+  return props.readOnly ? (
+    <SubAgentConversationView {...props} />
+  ) : (
+    <ConnectedSubAgentConversation {...props} />
+  );
+}
+
+function ConnectedSubAgentConversation(props: SubAgentConversationProps) {
   const ai = useAI();
-  const completed = conversation.status === 'completed';
-  const [expanded, setExpanded] = useState(true);
-  const employee = ai.employees.find(
-    (item) => item.username === conversation.username,
-  ) ?? {
+  return (
+    <SubAgentConversationView
+      {...props}
+      employee={ai.employees.find(
+        (item) => item.username === props.conversation.username,
+      )}
+    />
+  );
+}
+
+function SubAgentConversationView({
+  conversation,
+  onToolCallDecision,
+  status = 'ready',
+  decideToolCall,
+  focusComposer,
+  readOnly = false,
+  employee = {
     username: conversation.username,
     nickname: conversation.username,
-  };
+  },
+}: SubAgentConversationProps & { employee?: AIEmployee }) {
+  const t = useAITranslate();
+  const completed = conversation.status === 'completed';
+  const [expanded, setExpanded] = useState(true);
   const messages =
     conversation.messages[0]?.role === 'user'
       ? conversation.messages.slice(1)
@@ -99,6 +121,7 @@ export function SubAgentConversation({
                   <SubAgentConversation
                     key={part.id ?? part.data.sessionId}
                     conversation={part.data}
+                    readOnly={readOnly}
                     onToolCallDecision={onToolCallDecision}
                     status={status}
                     decideToolCall={decideToolCall}
@@ -113,8 +136,10 @@ export function SubAgentConversation({
                   part={part}
                   approval={message.metadata?.toolApprovals?.[part.toolCallId]}
                   disabled={interactionPending}
+                  readOnly={readOnly}
                   onRevise={focusComposer}
                   onDecision={async (decision, input) => {
+                    if (readOnly) return;
                     const toolDecision = {
                       messageId: message.id,
                       toolCallId: part.toolCallId,

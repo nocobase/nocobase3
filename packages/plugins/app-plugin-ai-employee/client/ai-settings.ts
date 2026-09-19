@@ -1,8 +1,15 @@
 import type {
   AppClientRouteComponentLoader,
-  AppClientSettingsRoutePageDefinition,
+  AppClientSettingsRouteGroupDefinition,
 } from '@nocobase/app-client/plugins';
-import { Bot } from 'lucide-react';
+import {
+  Bot,
+  BrainCircuit,
+  ContactRound,
+  Plug,
+  Sparkles,
+  Wrench,
+} from 'lucide-react';
 
 export interface AISettingsTabDefinition {
   readonly key: string;
@@ -16,19 +23,10 @@ const coreTabs: readonly AISettingsTabDefinition[] = [
     labelKey: 'AI Employee',
     pageLoader: () => import('./pages/ai-employee-page.js'),
   },
-  {
-    key: 'llm-service',
-    labelKey: 'LLM Service',
-    pageLoader: () => import('./pages/llm-service-page.js'),
-  },
-  {
-    key: 'mcp',
-    labelKey: 'MCP',
-    pageLoader: () => import('./pages/mcp-page.js'),
-  },
 ];
 const contributedTabs = new Map<string, AISettingsTabDefinition>();
 let cachedTabs: readonly AISettingsTabDefinition[] = coreTabs;
+/** @deprecated Contribute Settings routes with parent: 'aiGroup' instead. No longer rendered by the employee page. */
 export function registerAISettingsTabs(
   tabs: readonly AISettingsTabDefinition[],
 ): void {
@@ -38,16 +36,85 @@ export function registerAISettingsTabs(
   cachedTabs = [...coreTabs, ...contributedTabs.values()];
 }
 
+/** @deprecated Legacy registry only; the employee shell no longer renders these tabs. */
 export function getAISettingsTabs(): readonly AISettingsTabDefinition[] {
   return cachedTabs;
 }
 
-export function createAISettings(): AppClientSettingsRoutePageDefinition {
+export function createAISettings(): AppClientSettingsRouteGroupDefinition {
   return {
-    name: 'ai',
-    path: '/ai',
-    navigation: { title: 'AI Employee', icon: Bot },
-    authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
-    componentLoader: () => import('./pages/settings-page.js'),
+    name: 'aiGroup',
+    navigation: { title: 'AI', icon: Bot },
+    children: [
+      {
+        name: 'ai',
+        path: '/ai',
+        navigation: { title: 'AI Employees', icon: ContactRound },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
+        componentLoader: () => import('./pages/settings-page.js'),
+      },
+      {
+        name: 'aiSkills',
+        path: '/ai/skills',
+        navigation: { title: 'Skills', icon: Sparkles },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
+        componentLoader: () => import('./pages/skills-settings-page.js'),
+      },
+      {
+        name: 'aiTools',
+        path: '/ai/tools',
+        navigation: { title: 'tools.title', icon: Wrench },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
+        componentLoader: () => import('./pages/tools-settings-page.js'),
+      },
+      {
+        name: 'aiConversations',
+        path: '/ai/conversations',
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
+        componentLoader: () =>
+          import('./pages/conversation-center-settings-page.js'),
+      },
+      {
+        name: 'aiLLMServices',
+        path: '/ai/llm-services',
+        navigation: { title: 'LLM services', icon: BrainCircuit },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
+        componentLoader: () => import('./pages/llm-service-settings-page.js'),
+      },
+      {
+        name: 'aiMCPServices',
+        path: '/ai/mcp-services',
+        navigation: { title: 'MCP services', icon: Plug },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
+        componentLoader: () => import('./pages/mcp-service-settings-page.js'),
+      },
+      {
+        name: 'aiSettings',
+        path: '/ai/settings',
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
+        componentLoader: () => import('./pages/service-settings-page.js'),
+      },
+    ],
   };
 }

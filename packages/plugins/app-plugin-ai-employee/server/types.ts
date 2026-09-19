@@ -1,9 +1,81 @@
+import type { AIEmployeeSkillSettings } from '@nocobase/ai-employee';
+
 export interface Actor {
   readonly id: string | number;
   readonly roles: readonly string[];
   readonly isRoot: boolean;
   readonly locale?: string;
   readonly scope?: string;
+}
+
+export interface ConversationManagementActor {
+  readonly id: string | number;
+  readonly canReadAllConversations?: boolean;
+}
+
+export interface SkillsManagementActor {
+  readonly id: string | number;
+  readonly canReadAllSkills?: boolean;
+}
+
+export interface ToolsManagementActor {
+  readonly id: string | number;
+  readonly canReadAllTools?: boolean;
+}
+
+export interface ManagedToolSummary {
+  i18n?: { namespace: string };
+  name: string;
+  title: string;
+  description: string;
+  about: string;
+  scope: string;
+  source: string;
+}
+
+export interface ManagedToolList {
+  rows: ManagedToolSummary[];
+}
+
+export type ManagedToolSchemaValue =
+  | string
+  | number
+  | boolean
+  | null
+  | ManagedToolSchemaValue[]
+  | ManagedToolInputSchema;
+
+export interface ManagedToolInputSchema {
+  [key: string]: ManagedToolSchemaValue;
+}
+
+export interface ManagedToolDetail extends ManagedToolSummary {
+  inputSchema: ManagedToolInputSchema | null;
+}
+
+export interface ManagedSkillTool {
+  i18n?: { namespace: string };
+  name: string;
+  title: string;
+  description: string;
+  about: string;
+  available: boolean;
+}
+
+export interface ManagedSkillSummary {
+  i18n?: { namespace: string };
+  name: string;
+  title: string;
+  description: string;
+  tools: ManagedSkillTool[];
+}
+
+export interface ManagedSkillList {
+  rows: ManagedSkillSummary[];
+}
+
+export interface ManagedSkillDetail extends ManagedSkillSummary {
+  content: string;
 }
 
 export interface ModelRef {
@@ -76,10 +148,7 @@ export type AIEmployeeDefinition = {
   enabled?: boolean;
   systemPrompt?: string | null;
   chatSettings?: Record<string, unknown>;
-  skillSettings?: {
-    skills?: string[];
-    tools?: Array<{ name: string; autoCall?: boolean }>;
-  };
+  skillSettings?: Partial<AIEmployeeSkillSettings>;
   modelSettings?: {
     enabled?: boolean;
     llmService?: string;
@@ -105,10 +174,7 @@ export type AIEmployeeDto = {
   builtIn?: boolean;
   userConfig?: { prompt?: string; sort?: number };
   chatSettings?: Record<string, unknown>;
-  skillSettings?: {
-    skills?: string[];
-    tools?: Array<{ name: string; autoCall?: boolean }>;
-  };
+  skillSettings?: Partial<AIEmployeeSkillSettings>;
   modelSettings?: {
     enabled?: boolean;
     llmService?: string;

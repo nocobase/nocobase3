@@ -77,6 +77,7 @@ export class SkillsLoader extends LoadAndRegister<SkillsLoaderOptions> {
           entry.description = data['description'];
           entry.content = content;
           entry.introduction = data['introduction'];
+          entry.i18n = data['i18n'];
           entry.tools = data['tools'] ?? [];
         } catch (e) {
           this.logger?.error(
@@ -131,6 +132,7 @@ export class SkillsLoader extends LoadAndRegister<SkillsLoaderOptions> {
         content: descriptor.content,
         tools: descriptor.tools,
         introduction: descriptor.introduction,
+        i18n: descriptor.i18n,
       });
     }
   }
@@ -144,6 +146,7 @@ export type SkillsDescriptor = {
   skillsFile: FileDescriptor;
   skillsDir: FileDescriptor;
   tools?: string[];
+  i18n?: { namespace: string };
   introduction?: {
     title: string;
     about?: string;

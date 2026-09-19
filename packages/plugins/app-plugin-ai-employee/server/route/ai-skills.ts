@@ -2,11 +2,31 @@ import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Hono } from 'hono';
 import type { AISkillResourceInput } from './contracts.js';
 import { requiredString } from './utils.js';
+import { validationError } from '../types.js';
 
 export function createAISkillsRouter(
   app: Hono,
   services: ServiceFactory,
 ): void {
+  app.get('/aiSkills:listAll', async (context) => {
+    const result = await services.skillService.listAll({
+      actor: context.get('skillsManagementActor'),
+    });
+    return context.json(result);
+  });
+
+  app.get('/aiSkills:getDetails', async (context) => {
+    const names = context.req.queries('name');
+    if (!names || names.length !== 1) {
+      throw validationError('A single name is required');
+    }
+    const result = await services.skillService.getDetails({
+      actor: context.get('skillsManagementActor'),
+      name: names[0],
+    });
+    return context.json(result);
+  });
+
   app.get('/aiSkills:list', async (context) => {
     const result = await services.skillService.list({});
     return context.json(result as never);

@@ -121,6 +121,7 @@ type ToolCallCardProps = {
   onRevise?: () => void;
   inlineActions?: ReactNode;
   disabled?: boolean;
+  readOnly?: boolean;
 };
 
 export function ToolCallCard({
@@ -130,6 +131,7 @@ export function ToolCallCard({
   onRevise,
   inlineActions,
   disabled = false,
+  readOnly = false,
 }: ToolCallCardProps) {
   const t = useAITranslate();
   const resolvedApproval = approval ?? approvalFromPart(part);
@@ -138,7 +140,8 @@ export function ToolCallCard({
   );
   const [deciding, setDeciding] = useState(false);
   const renderer = useAIToolRenderer(getToolCallName(part));
-  const Renderer = renderer?.component;
+  // Custom renderers can invoke tools on mount; disabled controls alone are not a read-only boundary.
+  const Renderer = readOnly ? undefined : renderer?.component;
   const [open, setOpen] = useState(false);
   const toolStatus = getStatus(part, t);
   const approvalRequired =
@@ -174,7 +177,7 @@ export function ToolCallCard({
     decision: 'approve' | 'reject' | 'edit',
     input?: unknown,
   ) => {
-    if (disabled) return;
+    if (disabled || readOnly) return;
     setDeciding(true);
     try {
       await onDecision?.(decision, input);
@@ -239,11 +242,11 @@ export function ToolCallCard({
           </span>
           <ChevronDown className='size-3.5 shrink-0 transition-transform group-data-panel-open/tool-call:rotate-180' />
         </CollapsibleTrigger>
-        {inlineActions ? (
+        {inlineActions && !readOnly ? (
           <div className='flex shrink-0 items-center pr-2'>{inlineActions}</div>
         ) : null}
       </div>
-      {approvalRequired && !renderer?.handlesApproval ? (
+      {approvalRequired && !readOnly && !renderer?.handlesApproval ? (
         <div className='flex items-center justify-between gap-3 border-t px-3 py-2.5'>
           <p className='text-xs text-muted-foreground'>
             {t(
@@ -291,6 +294,12 @@ export function ToolCallCard({
         ) : hasInput ? (
           <ToolCallValue label={t('tool.input', 'Input')} value={part.input} />
         ) : null}
+        {readOnly && part.state === 'output-available' ? (
+          <ToolCallValue
+            label={t('tool.output', 'Output')}
+            value={part.output}
+          />
+        ) : null}
         {part.state === 'output-error' ? (
           <ToolCallValue
             label={t('tool.error', 'Error')}
@@ -298,7 +307,10 @@ export function ToolCallCard({
             error
           />
         ) : null}
-        {!Renderer && !hasInput && !hasError ? (
+        {!Renderer &&
+        !hasInput &&
+        !hasError &&
+        !(readOnly && part.state === 'output-available') ? (
           <p className='px-3 py-3 text-xs text-muted-foreground'>
             {t('tool.waitingInput', 'Waiting for tool input…')}
           </p>

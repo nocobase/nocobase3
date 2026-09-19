@@ -231,6 +231,35 @@ export class AIConversationsManager {
       });
     }
 
+    return this.readMessages({ sessionId, cursor, paginate });
+  }
+
+  /** Read persisted history after the caller has authorized app-wide access. */
+  async getAllMessages({
+    sessionId,
+    cursor,
+  }: {
+    sessionId: string;
+    cursor?: string;
+  }): Promise<GetAIConversationMessagesResult> {
+    const conversation = await this.aiConversationsRepo.findOne({
+      filter: { sessionId },
+    });
+    if (!conversation) {
+      throw new Error('invalid sessionId');
+    }
+    return this.readMessages({ sessionId, cursor, paginate: true });
+  }
+
+  private async readMessages({
+    sessionId,
+    cursor,
+    paginate,
+  }: {
+    sessionId: string;
+    cursor?: string;
+    paginate: boolean;
+  }): Promise<GetAIConversationMessagesResult> {
     const pageSize = 10;
     const maxLimit = 200;
     const messageRepository = this.repositories.aiMessages;

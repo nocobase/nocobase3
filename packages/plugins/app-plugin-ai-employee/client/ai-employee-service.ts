@@ -48,6 +48,8 @@ export interface AIEmployeeRecord extends Record<string, unknown> {
   knowledgeBase?: AIEmployeeKnowledgeBaseSettings;
   missingKnowledgeBaseKeys?: string[];
   skillSettings?: {
+    enabledSkills?: string[] | null;
+    enabledTools?: string[] | null;
     skills?: string[];
     tools?: AIEmployeeToolSetting[];
   };
@@ -66,12 +68,14 @@ export interface KnowledgeBaseOption {
 
 export interface AIMetadataItem {
   name: string;
+  i18n?: { namespace: string };
   title?: string;
   description?: string;
   about?: string;
   scope?: string;
   from?: string;
   defaultPermission?: string;
+  tools?: string[];
 }
 
 export interface AIEmployeeEditableValues {
@@ -79,6 +83,8 @@ export interface AIEmployeeEditableValues {
   about: string | null;
   modelSettings: AIEmployeeModelSettings;
   skillSettings: {
+    enabledSkills?: string[] | null;
+    enabledTools?: string[] | null;
     skills: string[];
     tools: AIEmployeeToolSetting[];
   };
@@ -120,6 +126,22 @@ export function buildEditableValues(
     about: employee.about ?? null,
     modelSettings: { ...(employee.modelSettings ?? {}) },
     skillSettings: {
+      ...(employee.skillSettings?.enabledSkills !== undefined
+        ? {
+            enabledSkills:
+              employee.skillSettings.enabledSkills === null
+                ? null
+                : [...employee.skillSettings.enabledSkills],
+          }
+        : {}),
+      ...(employee.skillSettings?.enabledTools !== undefined
+        ? {
+            enabledTools:
+              employee.skillSettings.enabledTools === null
+                ? null
+                : [...employee.skillSettings.enabledTools],
+          }
+        : {}),
       skills: [...(employee.skillSettings?.skills ?? [])],
       tools: (employee.skillSettings?.tools ?? []).map((tool) => ({ ...tool })),
     },
@@ -147,6 +169,22 @@ export function buildAIEmployeeUpdatePayload(
       ...editable.modelSettings,
     },
     skillSettings: {
+      ...(editable.skillSettings.enabledSkills !== undefined
+        ? {
+            enabledSkills:
+              editable.skillSettings.enabledSkills === null
+                ? null
+                : [...editable.skillSettings.enabledSkills],
+          }
+        : {}),
+      ...(editable.skillSettings.enabledTools !== undefined
+        ? {
+            enabledTools:
+              editable.skillSettings.enabledTools === null
+                ? null
+                : [...editable.skillSettings.enabledTools],
+          }
+        : {}),
       skills: [...editable.skillSettings.skills],
       tools: editable.skillSettings.tools.map((tool) => ({ ...tool })),
     },
@@ -278,47 +316,86 @@ async function listMetadata(
   signal?: AbortSignal,
   client?: ApiClient,
 ): Promise<AIMetadataItem[]> {
-  try {
-    const response = await requestAIAction<unknown>(
-      resource,
-      'list',
-      { method: 'GET', signal },
-      client,
-    );
-    return normalizeArrayResponse<UnknownRecord>(response).flatMap((item) => {
-      const definition = isRecord(item.definition) ? item.definition : item;
-      const name = definition.name;
-      if (typeof name !== 'string') return [];
+  const response = await requestAIAction<unknown>(
+    resource,
+    'list',
+    { method: 'GET', signal },
+    client,
+  );
+  return normalizeArrayResponse<UnknownRecord>(
+    response,
+  ).flatMap<AIMetadataItem>((item) => {
+    const definition = isRecord(item.definition) ? item.definition : item;
+    const name = definition.name;
+    if (typeof name !== 'string') return [];
+    const i18n =
+      isRecord(item.i18n) && typeof item.i18n.namespace === 'string'
+        ? { namespace: item.i18n.namespace }
+        : undefined;
+    if (resource === 'aiSkills') {
+      const introduction = isRecord(item.introduction) ? item.introduction : {};
       return [
         {
           name,
+          i18n,
           title:
-            typeof definition.title === 'string'
-              ? definition.title
+            typeof introduction.title === 'string'
+              ? introduction.title
               : typeof item.title === 'string'
                 ? item.title
                 : undefined,
           description:
-            typeof item.about === 'string'
-              ? item.about
-              : typeof definition.description === 'string'
-                ? definition.description
-                : typeof item.description === 'string'
-                  ? item.description
-                  : undefined,
-          about: typeof item.about === 'string' ? item.about : undefined,
+            typeof item.description === 'string' ? item.description : undefined,
+          about:
+            typeof introduction.about === 'string'
+              ? introduction.about
+              : undefined,
           scope: typeof item.scope === 'string' ? item.scope : undefined,
           from: typeof item.from === 'string' ? item.from : undefined,
-          defaultPermission:
-            typeof item.defaultPermission === 'string'
-              ? item.defaultPermission
-              : undefined,
+          tools: Array.isArray(item.tools)
+            ? item.tools.filter(
+                (name): name is string => typeof name === 'string',
+              )
+            : undefined,
         },
       ];
-    });
-  } catch {
-    return [];
-  }
+    }
+    const introduction = isRecord(item.introduction) ? item.introduction : {};
+    return [
+      {
+        name,
+        i18n,
+        title:
+          typeof introduction.title === 'string'
+            ? introduction.title
+            : typeof definition.title === 'string'
+              ? definition.title
+              : typeof item.title === 'string'
+                ? item.title
+                : undefined,
+        description:
+          typeof item.about === 'string'
+            ? item.about
+            : typeof definition.description === 'string'
+              ? definition.description
+              : typeof item.description === 'string'
+                ? item.description
+                : undefined,
+        about:
+          typeof introduction.about === 'string'
+            ? introduction.about
+            : typeof item.about === 'string'
+              ? item.about
+              : undefined,
+        scope: typeof item.scope === 'string' ? item.scope : undefined,
+        from: typeof item.from === 'string' ? item.from : undefined,
+        defaultPermission:
+          typeof item.defaultPermission === 'string'
+            ? item.defaultPermission
+            : undefined,
+      },
+    ];
+  });
 }
 
 export const listAISkills = (

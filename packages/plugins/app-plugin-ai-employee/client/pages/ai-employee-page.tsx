@@ -3,16 +3,30 @@ import {
   Check,
   ChevronDown,
   CircleAlert,
-  Plus,
+  ChevronLeft,
+  ChevronRight,
   RefreshCw,
   Save,
-  Trash2,
   Undo2,
   X,
 } from 'lucide-react';
 import { useNotification } from '@refinedev/core';
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react';
 
+import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
+import { Switch as SkillSwitch } from '../../registry/nocobase-ai/shared/ui/switch.js';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../../registry/nocobase-ai/shared/ui/collapsible.js';
 import {
   buildEditableValues,
   getAIEmployee,
@@ -31,7 +45,16 @@ import {
 } from '../ai-employee-service.js';
 import { AIEmployeeAvatar } from '../avatar.js';
 import { ConfirmDialog } from '../components/confirm-dialog.js';
+import { EmployeeCatalogStatus } from '../components/employee-catalog-status.js';
+import { EmployeeToolPermission } from '../components/employee-tool-permission.js';
+import { ToolListContent } from '../components/tool-list-content.js';
+import { TooltipProvider } from '../../registry/nocobase-ai/shared/ui/tooltip.js';
+import {
+  effectiveSkillNames,
+  effectiveToolNames,
+} from '../employee-tool-selection.js';
 import { useT } from '../locales/index.js';
+import { useCatalogDisplay } from '../catalog-display.js';
 
 type DetailTab =
   'profile' | 'role' | 'models' | 'skills' | 'tools' | 'knowledge';
@@ -80,148 +103,11 @@ function ReadonlyField({
   );
 }
 
-function SectionLabel({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}): ReactElement {
-  return (
-    <div>
-      <div className='text-sm font-semibold'>{title}</div>
-      <div className='text-sm text-muted-foreground'>{description}</div>
-    </div>
-  );
-}
-
 function EmptyList({ label }: { label: string }): ReactElement {
   return (
     <p className='rounded-md border border-dashed p-5 text-sm text-muted-foreground'>
       {label}
     </p>
-  );
-}
-
-function MetadataList({
-  items,
-  emptyLabel,
-  renderExtra,
-}: {
-  items: AIMetadataItem[];
-  emptyLabel: string;
-  renderExtra?: (item: AIMetadataItem) => ReactElement | null;
-}): ReactElement {
-  if (!items.length) return <EmptyList label={emptyLabel} />;
-  return (
-    <div className='divide-y rounded-md border'>
-      {items.map((item) => (
-        <div
-          key={item.name}
-          className='flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between'
-        >
-          <div className='min-w-0'>
-            <div className='font-medium'>{item.title ?? item.name}</div>
-            {item.description ? (
-              <div className='mt-1 text-sm text-muted-foreground'>
-                {item.description}
-              </div>
-            ) : null}
-          </div>
-          {renderExtra?.(item)}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function CollapsibleSection({
-  title,
-  description,
-  action,
-  children,
-  defaultOpen = false,
-}: {
-  title: string;
-  description: string;
-  action?: ReactElement;
-  children: ReactElement;
-  defaultOpen?: boolean;
-}): ReactElement {
-  return (
-    <details className='group border-b py-2' open={defaultOpen}>
-      <summary className='flex cursor-pointer list-none items-center gap-3 py-3 marker:content-none'>
-        <ChevronDown className='h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180' />
-        <div className='min-w-0 flex-1'>
-          <SectionLabel title={title} description={description} />
-        </div>
-        {action ? (
-          <div
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-            }}
-          >
-            {action}
-          </div>
-        ) : null}
-      </summary>
-      <div className='pb-4 pl-7'>{children}</div>
-    </details>
-  );
-}
-
-function AddMenu({
-  label,
-  items,
-  onAdd,
-}: {
-  label: string;
-  items: AIMetadataItem[];
-  onAdd: (name: string) => void;
-}): ReactElement {
-  const [open, setOpen] = useState(false);
-  const disabled = items.length === 0;
-  return (
-    <div
-      className='relative'
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <button
-        type='button'
-        disabled={disabled}
-        aria-expanded={open}
-        onFocus={() => setOpen(true)}
-        className={`inline-flex list-none items-center gap-2 rounded-md px-3 py-2 text-sm font-medium ${disabled ? 'pointer-events-none bg-muted text-muted-foreground' : 'cursor-pointer bg-primary text-primary-foreground'}`}
-      >
-        <Plus className='h-4 w-4' /> {label}
-      </button>
-      {open && !disabled ? (
-        <div className='absolute right-0 z-30 mt-1 max-h-72 min-w-72 overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md'>
-          {items.map((item) => (
-            <button
-              type='button'
-              key={item.name}
-              onClick={() => {
-                onAdd(item.name);
-                setOpen(false);
-              }}
-              className='block w-full rounded-sm px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground'
-            >
-              <span className='block text-sm font-medium'>
-                {item.title ?? item.name}
-              </span>
-              {item.description ? (
-                <span className='mt-1 block text-xs text-muted-foreground'>
-                  {item.description}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -469,17 +355,59 @@ function ModelMultiSelect({
 export default function AIEmployeePage(): ReactElement {
   const api = useApiClient();
   const t = useT();
+  const { skillTitle, skillDescription, toolTitle, toolAbout, compareTitles } =
+    useCatalogDisplay();
   const { open } = useNotification();
   const [employees, setEmployees] = useState<AIEmployeeRecord[]>([]);
+  const [employeeListExpanded, setEmployeeListExpanded] = useState<boolean>();
+  const employeeListOpen = employeeListExpanded ?? employees.length > 1;
+  const employeeListId = useId();
+  const employeeDividerRef = useRef<HTMLDivElement>(null);
+  const alignEmployeeToggle = useCallback((header: HTMLElement | null) => {
+    const divider = employeeDividerRef.current;
+    if (!header || !divider) return;
+
+    const measure = (): void => {
+      const bounds = header.getBoundingClientRect();
+      if (!bounds.height) return;
+      // Include the detail padding, but not the height of the editor or sidebar.
+      divider.style.setProperty(
+        '--employee-header-midpoint',
+        `${bounds.top + bounds.height / 2 - divider.getBoundingClientRect().top}px`,
+      );
+    };
+    measure();
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? undefined
+        : new ResizeObserver(measure);
+    observer?.observe(header, { box: 'border-box' });
+    observer?.observe(divider, { box: 'border-box' });
+    const section = header.closest('section');
+    if (section) observer?.observe(section);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      divider.style.removeProperty('--employee-header-midpoint');
+    };
+  }, []);
   const [selectedUsername, setSelectedUsername] = useState<string>();
   const [selected, setSelected] = useState<AIEmployeeRecord>();
   const [draft, setDraft] = useState<AIEmployeeEditableValues>();
+  const [customRoleMode, setCustomRoleMode] = useState<boolean>();
   const [models, setModels] = useState<EnabledModelOption[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseOption[]>(
     [],
   );
   const [skills, setSkills] = useState<AIMetadataItem[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(true);
+  const [skillsError, setSkillsError] = useState(false);
+  const [skillsRequest, setSkillsRequest] = useState(0);
   const [tools, setTools] = useState<AIMetadataItem[]>([]);
+  const [toolsLoading, setToolsLoading] = useState(true);
+  const [toolsError, setToolsError] = useState(false);
+  const [toolsRequest, setToolsRequest] = useState(0);
   const [tab, setTab] = useState<DetailTab>('profile');
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -499,19 +427,14 @@ export default function AIEmployeePage(): ReactElement {
     setLoading(true);
     setError('');
     try {
-      const [employeeRows, modelRows, knowledgeRows, skillRows, toolRows] =
-        await Promise.all([
-          listAIEmployees(controller.signal, api),
-          listEnabledModels(controller.signal, api),
-          listEnabledKnowledgeBases(controller.signal, api).catch(() => []),
-          listAISkills(controller.signal, api),
-          listAITools(controller.signal, api),
-        ]);
+      const [employeeRows, modelRows, knowledgeRows] = await Promise.all([
+        listAIEmployees(controller.signal, api),
+        listEnabledModels(controller.signal, api),
+        listEnabledKnowledgeBases(controller.signal, api).catch(() => []),
+      ]);
       setEmployees(employeeRows);
       setModels(modelRows);
       setKnowledgeBases(knowledgeRows);
-      setSkills(skillRows);
-      setTools(toolRows);
       setSelectedUsername((current) =>
         current && employeeRows.some((item) => item.username === current)
           ? current
@@ -531,6 +454,40 @@ export default function AIEmployeePage(): ReactElement {
   }, [load]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    setSkillsLoading(true);
+    setSkillsError(false);
+    void listAISkills(controller.signal, api)
+      .then((items) => {
+        if (!controller.signal.aborted) setSkills(items);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setSkillsError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSkillsLoading(false);
+      });
+    return () => controller.abort();
+  }, [api, skillsRequest]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setToolsLoading(true);
+    setToolsError(false);
+    void listAITools(controller.signal, api)
+      .then((items) => {
+        if (!controller.signal.aborted) setTools(items);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setToolsError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setToolsLoading(false);
+      });
+    return () => controller.abort();
+  }, [api, toolsRequest]);
+
+  useEffect(() => {
     if (!selectedUsername) {
       setSelected(undefined);
       setDraft(undefined);
@@ -544,6 +501,7 @@ export default function AIEmployeePage(): ReactElement {
         if (controller.signal.aborted) return;
         setSelected(employee);
         setDraft(buildEditableValues(employee));
+        setCustomRoleMode(undefined);
         setEmployees((current) =>
           current.map((item) =>
             item.username === employee.username
@@ -583,30 +541,59 @@ export default function AIEmployeePage(): ReactElement {
   };
 
   const updateSkillNames = (update: (skills: string[]) => string[]): void => {
+    if (skillsLoading || skillsError || saving) return;
     setDraft((current) => {
       if (!current) return current;
       return {
         ...current,
         skillSettings: {
           ...current.skillSettings,
-          skills: update(current.skillSettings.skills),
+          enabledSkills: update(
+            effectiveSkillNames(current.skillSettings, skills),
+          ),
         },
       };
     });
   };
 
-  const updateToolSettings = (
-    update: (
-      tools: AIEmployeeEditableValues['skillSettings']['tools'],
-    ) => AIEmployeeEditableValues['skillSettings']['tools'],
-  ): void => {
+  const toolEditsDisabled =
+    toolsLoading || toolsError || skillsLoading || skillsError || saving;
+
+  const updateToolNames = (name: string, checked: boolean): void => {
+    if (toolEditsDisabled) return;
     setDraft((current) => {
       if (!current) return current;
+      const names = effectiveToolNames(current.skillSettings, tools, skills);
       return {
         ...current,
         skillSettings: {
           ...current.skillSettings,
-          tools: update(current.skillSettings.tools),
+          enabledTools: checked
+            ? [...new Set([...names, name])]
+            : names.filter((value) => value !== name),
+        },
+      };
+    });
+  };
+
+  const updateToolPermission = (name: string, autoCall: boolean): void => {
+    if (toolEditsDisabled) return;
+    setDraft((current) => {
+      if (
+        !current ||
+        !effectiveToolNames(current.skillSettings, tools, skills).includes(name)
+      )
+        return current;
+      const settings = current.skillSettings.tools;
+      return {
+        ...current,
+        skillSettings: {
+          ...current.skillSettings,
+          tools: settings.some((tool) => tool.name === name)
+            ? settings.map((tool) =>
+                tool.name === name ? { ...tool, autoCall } : tool,
+              )
+            : [...settings, { name, autoCall }],
         },
       };
     });
@@ -630,6 +617,7 @@ export default function AIEmployeePage(): ReactElement {
       const updated = await updateAIEmployee(selected, draft, api);
       setSelected(updated);
       setDraft(buildEditableValues(updated));
+      setCustomRoleMode(undefined);
       setEmployees((current) =>
         current.map((item) =>
           item.username === updated.username ? { ...item, ...updated } : item,
@@ -681,6 +669,7 @@ export default function AIEmployeePage(): ReactElement {
     );
   }
 
+  const useCustomRole = customRoleMode ?? draft?.about != null;
   const selectedModels = draft?.modelSettings.models ?? [];
   const selectedModelValues = new Set(
     selectedModels.map((item) => `${item.llmService}::${item.model}`),
@@ -694,40 +683,58 @@ export default function AIEmployeePage(): ReactElement {
   const configuredTools = draft?.skillSettings.tools ?? [];
   const skillsByName = new Map(skills.map((item) => [item.name, item]));
   const toolsByName = new Map(tools.map((item) => [item.name, item]));
-  const generalSkills = skills.filter((item) => item.scope === 'GENERAL');
-  const specifiedSkills = configuredSkills
-    .map((name) => skillsByName.get(name))
-    .filter(
-      (item): item is AIMetadataItem => !!item && item.scope === 'SPECIFIED',
-    );
-  const customSkills = configuredSkills.filter((name) => {
-    const item = skillsByName.get(name);
-    return !item || item.scope === 'CUSTOM';
-  });
-  const availableCustomSkills = skills.filter(
-    (item) => item.scope === 'CUSTOM' && !configuredSkills.includes(item.name),
+  const enabledSkills = new Set(
+    effectiveSkillNames(draft?.skillSettings, skills),
   );
-  const generalTools = tools.filter(
-    (item) => item.scope === 'GENERAL' && item.from === 'loader',
+  const skillNames = [
+    ...new Set([
+      ...skillsByName.keys(),
+      ...configuredSkills,
+      ...(selected?.skillSettings?.enabledSkills ?? []),
+      ...(draft?.skillSettings.enabledSkills ?? []),
+    ]),
+  ].sort((left, right) =>
+    compareTitles(
+      skillTitle(skillsByName.get(left) ?? { name: left }),
+      skillTitle(skillsByName.get(right) ?? { name: right }),
+      left,
+      right,
+    ),
   );
-  const specifiedTools = configuredTools.filter((setting) => {
-    const item = toolsByName.get(setting.name);
-    return item && item.scope !== 'GENERAL' && item.scope !== 'CUSTOM';
-  });
-  const customTools = configuredTools.filter((setting) => {
-    const item = toolsByName.get(setting.name);
-    return !item || item.scope === 'CUSTOM';
-  });
-  const availableCustomTools = tools.filter(
-    (item) =>
-      item.scope === 'CUSTOM' &&
-      !configuredTools.some((setting) => setting.name === item.name),
+  const enabledTools = new Set(
+    effectiveToolNames(draft?.skillSettings, tools, skills),
+  );
+  const toolNames = [
+    ...new Set([
+      ...toolsByName.keys(),
+      ...configuredTools.map((item) => item.name),
+      ...(selected?.skillSettings?.enabledTools ?? []),
+      ...(draft?.skillSettings.enabledTools ?? []),
+      ...enabledTools,
+    ]),
+  ].sort((left, right) =>
+    compareTitles(
+      toolTitle(toolsByName.get(left) ?? { name: left }),
+      toolTitle(toolsByName.get(right) ?? { name: right }),
+      left,
+      right,
+    ),
   );
 
   return (
-    <main className='grid min-h-[calc(100vh-9rem)] grid-cols-1 lg:grid-cols-[19rem_minmax(0,1fr)]'>
-      <aside className='border-b p-4 lg:border-b-0 lg:border-r'>
-        <div className='max-h-[calc(100vh-13rem)] space-y-2 overflow-y-auto pr-1'>
+    <Collapsible
+      open={employeeListOpen}
+      onOpenChange={setEmployeeListExpanded}
+      render={<main />}
+      className={`grid h-[clamp(52rem,85dvh,68rem)] min-h-0 grid-cols-[44px_minmax(0,1fr)] overflow-hidden lg:h-[clamp(40rem,80dvh,64rem)] ${employeeListOpen ? 'grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[19rem_32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[19rem_44px_minmax(0,1fr)]' : 'grid-rows-[minmax(0,1fr)] lg:grid-cols-[32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]'} lg:grid-rows-[minmax(0,1fr)]`}
+    >
+      <CollapsibleContent
+        keepMounted
+        id={employeeListId}
+        render={<aside aria-label={t('AI Employees')} />}
+        className='col-span-2 min-h-0 min-w-0 overflow-hidden border-b p-4 lg:col-span-1 lg:border-b-0'
+      >
+        <div className='max-h-40 space-y-2 overflow-y-auto pr-1 lg:h-full lg:max-h-none'>
           {employees.map((employee) => {
             const active = employee.username === selectedUsername;
             return (
@@ -770,16 +777,52 @@ export default function AIEmployeePage(): ReactElement {
             </p>
           ) : null}
         </div>
-      </aside>
+      </CollapsibleContent>
 
-      <section className='min-w-0 p-4 sm:p-6 lg:p-8'>
+      {/* Reserve the pointer target's width so the divider never covers either panel. */}
+      <div ref={employeeDividerRef} className='relative min-h-11 self-stretch'>
+        <div
+          aria-hidden='true'
+          className='absolute inset-y-0 left-1/2 border-l'
+        />
+        <CollapsibleTrigger
+          render={<Button variant='outline' size='icon' />}
+          aria-controls={employeeListId}
+          aria-label={
+            employeeListOpen
+              ? t('Collapse employee list')
+              : t('Expand employee list')
+          }
+          title={
+            employeeListOpen
+              ? t('Collapse employee list')
+              : t('Expand employee list')
+          }
+          style={{ top: 'var(--employee-header-midpoint, 3rem)' }}
+          className='absolute left-1/2 size-[44px] -translate-x-1/2 -translate-y-1/2 text-muted-foreground transition-colors active:not-aria-[haspopup]:-translate-y-1/2 lg:size-[32px] lg:pointer-coarse:size-[44px]'
+        >
+          {employeeListOpen ? (
+            <ChevronLeft className='size-4' aria-hidden='true' />
+          ) : (
+            <ChevronRight className='size-4' aria-hidden='true' />
+          )}
+        </CollapsibleTrigger>
+      </div>
+
+      <section className='min-h-0 min-w-0 overflow-hidden p-4 sm:p-6 lg:p-8'>
         {detailLoading || !selected || !draft ? (
-          <p className='text-sm text-muted-foreground'>
+          <p
+            ref={alignEmployeeToggle}
+            className='text-sm text-muted-foreground'
+          >
             {t('Loading employee details…')}
           </p>
         ) : (
-          <div className='flex min-h-[calc(100vh-9rem)] flex-col gap-6'>
-            <header className='flex flex-col gap-4 rounded-xl border p-5 sm:flex-row sm:items-center'>
+          <div className='relative flex h-full min-h-0 flex-col gap-6 pb-16'>
+            <header
+              ref={alignEmployeeToggle}
+              className='flex shrink-0 flex-col gap-4 rounded-xl border p-5 sm:flex-row sm:items-center'
+            >
               <AIEmployeeAvatar
                 src={selected.avatar}
                 name={selected.nickname}
@@ -801,7 +844,10 @@ export default function AIEmployeePage(): ReactElement {
               />
             </header>
 
-            <div className='flex gap-1 overflow-x-auto border-b' role='tablist'>
+            <div
+              className='flex shrink-0 gap-1 overflow-x-auto border-b'
+              role='tablist'
+            >
               {detailTabs.map((item) => (
                 <button
                   type='button'
@@ -816,7 +862,9 @@ export default function AIEmployeePage(): ReactElement {
               ))}
             </div>
 
-            <div className='min-h-72'>
+            <div
+              className={`min-h-0 min-w-0 flex-1 overflow-y-auto pb-6 ${tab === 'skills' || tab === 'tools' ? 'overflow-x-hidden' : ''}`}
+            >
               {tab === 'profile' ? (
                 <div className='grid gap-4'>
                   <ReadonlyField
@@ -845,7 +893,7 @@ export default function AIEmployeePage(): ReactElement {
               ) : null}
 
               {tab === 'role' ? (
-                <div className='space-y-4'>
+                <div className='flex h-full min-h-80 flex-col gap-4'>
                   <div className='flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800'>
                     <CircleAlert
                       className='mt-0.5 h-4 w-4 shrink-0'
@@ -854,7 +902,7 @@ export default function AIEmployeePage(): ReactElement {
                     <span>{t('Role setting description')}</span>
                   </div>
                   {selected.builtIn ? (
-                    <fieldset className='grid gap-3 text-sm'>
+                    <fieldset className='flex min-h-0 min-w-0 flex-1 flex-col gap-3 text-sm'>
                       <legend className='font-medium'>
                         {t('Role settings')}
                       </legend>
@@ -863,8 +911,11 @@ export default function AIEmployeePage(): ReactElement {
                           <input
                             type='radio'
                             name='role-setting-mode'
-                            checked={draft.about === null}
-                            onChange={() => patchDraft({ about: null })}
+                            checked={!useCustomRole}
+                            onChange={() => {
+                              setCustomRoleMode(false);
+                              patchDraft({ about: null });
+                            }}
                           />
                           <span>{t('System default')}</span>
                         </label>
@@ -872,36 +923,51 @@ export default function AIEmployeePage(): ReactElement {
                           <input
                             type='radio'
                             name='role-setting-mode'
-                            checked={draft.about !== null}
-                            onChange={() => patchDraft({ about: '' })}
+                            checked={useCustomRole}
+                            onChange={() => {
+                              setCustomRoleMode(true);
+                              patchDraft({
+                                about:
+                                  draft.about ??
+                                  buildEditableValues(selected).about,
+                              });
+                            }}
                           />
                           <span>{t('Custom')}</span>
                         </label>
                       </div>
-                      {draft.about === null ? (
-                        <pre className='max-h-[30rem] min-h-[20rem] whitespace-pre-wrap overflow-auto rounded-md border bg-muted/30 p-3 text-sm'>
+                      {!useCustomRole ? (
+                        <pre className='min-h-0 w-full flex-1 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm'>
                           {selected.defaultPrompt ?? ''}
                         </pre>
                       ) : (
                         <textarea
-                          value={draft.about}
+                          aria-label={t('Role settings')}
+                          placeholder={t('employees.rolePlaceholder')}
+                          value={draft.about ?? ''}
                           onChange={(event) =>
-                            patchDraft({ about: event.target.value })
+                            patchDraft({
+                              about:
+                                event.target.value === '' &&
+                                buildEditableValues(selected).about === null
+                                  ? null
+                                  : event.target.value,
+                            })
                           }
-                          className='min-h-[20rem] w-full rounded-md border bg-background p-3'
+                          className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-background p-3'
                         />
                       )}
                     </fieldset>
                   ) : (
-                    <label className='grid gap-2 text-sm'>
+                    <label className='flex min-h-0 flex-1 flex-col gap-2 text-sm'>
                       <span className='font-medium'>{t('Role settings')}</span>
                       <textarea
                         value={draft.about ?? ''}
                         onChange={(event) =>
                           patchDraft({ about: event.target.value })
                         }
-                        className='min-h-[24rem] rounded-md border bg-background p-3'
-                        placeholder={t('Role setting placeholder')}
+                        className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-background p-3'
+                        placeholder={t('employees.rolePlaceholder')}
                       />
                     </label>
                   )}
@@ -970,214 +1036,151 @@ export default function AIEmployeePage(): ReactElement {
               ) : null}
 
               {tab === 'skills' ? (
-                <div>
-                  <CollapsibleSection
-                    title={t('General skills')}
-                    description={t('Shared by all AI employees.')}
-                  >
-                    <MetadataList
-                      items={generalSkills}
-                      emptyLabel={t('None configured.')}
-                    />
-                  </CollapsibleSection>
-                  {selected.builtIn && specifiedSkills.length ? (
-                    <CollapsibleSection
-                      title={t('Employee-specific skills')}
-                      description={t('Only available to this AI employee.')}
+                <div className='space-y-4' aria-busy={skillsLoading}>
+                  <EmployeeCatalogStatus
+                    loading={skillsLoading}
+                    error={skillsError}
+                    loadingLabel={t('employeeSkills.loading')}
+                    errorLabel={t('employeeSkills.error')}
+                    onRetry={() => setSkillsRequest((current) => current + 1)}
+                  />
+                  {skillNames.length ? (
+                    <ul
+                      aria-label={t('Skills')}
+                      className='divide-y divide-border'
                     >
-                      <MetadataList
-                        items={specifiedSkills}
-                        emptyLabel={t('None configured.')}
-                      />
-                    </CollapsibleSection>
+                      {skillNames.map((name) => {
+                        const item = skillsByName.get(name);
+                        const title = skillTitle(item ?? { name });
+                        return (
+                          <li
+                            key={name}
+                            className='flex items-start justify-between gap-4 py-4'
+                          >
+                            <div className='min-w-0 flex-1 space-y-1 [overflow-wrap:anywhere]'>
+                              <div className='font-medium'>{title}</div>
+                              {title !== name ? (
+                                <div className='text-sm text-muted-foreground'>
+                                  {name}
+                                </div>
+                              ) : null}
+                              {item?.description ? (
+                                <p className='text-sm text-muted-foreground'>
+                                  {skillDescription(item)}
+                                </p>
+                              ) : null}
+                              {!item && !skillsLoading && !skillsError ? (
+                                <p className='text-sm text-muted-foreground'>
+                                  {t('employeeSkills.unavailable')}
+                                </p>
+                              ) : null}
+                            </div>
+                            <SkillSwitch
+                              className='mt-1'
+                              aria-label={t('employeeSkills.use', {
+                                name: title,
+                              })}
+                              checked={enabledSkills.has(name)}
+                              disabled={skillsLoading || skillsError || saving}
+                              onCheckedChange={(checked) =>
+                                updateSkillNames((current) =>
+                                  checked
+                                    ? [...new Set([...current, name])]
+                                    : current.filter((value) => value !== name),
+                                )
+                              }
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : !skillsLoading && !skillsError ? (
+                    <EmptyList label={t('None configured.')} />
                   ) : null}
-                  <CollapsibleSection
-                    title={t('Custom skills')}
-                    description={t(
-                      'Can be added to or removed from this AI employee.',
-                    )}
-                    defaultOpen={customSkills.length > 0}
-                    action={
-                      <AddMenu
-                        label={t('Add skill')}
-                        items={availableCustomSkills}
-                        onAdd={(name) =>
-                          updateSkillNames((currentSkills) => [
-                            ...currentSkills,
-                            name,
-                          ])
-                        }
-                      />
-                    }
-                  >
-                    <MetadataList
-                      items={customSkills.map(
-                        (name) =>
-                          skillsByName.get(name) ?? { name, title: name },
-                      )}
-                      emptyLabel={t('None configured.')}
-                      renderExtra={(item) => (
-                        <button
-                          type='button'
-                          aria-label={`${t('Remove')} ${item.title ?? item.name}`}
-                          className='rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground'
-                          onClick={() =>
-                            updateSkillNames((currentSkills) =>
-                              currentSkills.filter(
-                                (name) => name !== item.name,
-                              ),
-                            )
-                          }
-                        >
-                          <Trash2 className='h-4 w-4' />
-                        </button>
-                      )}
-                    />
-                  </CollapsibleSection>
                 </div>
               ) : null}
 
               {tab === 'tools' ? (
-                <div>
-                  <CollapsibleSection
-                    title={t('General tools')}
-                    description={t('Shared by all AI employees.')}
-                  >
-                    <MetadataList
-                      items={generalTools}
-                      emptyLabel={t('None configured.')}
-                      renderExtra={(item) => (
-                        <div className='flex items-center gap-2 text-sm'>
-                          <span className='text-muted-foreground'>
-                            {t('Permission')}
-                          </span>
-                          <span className='rounded-md bg-muted px-3 py-1'>
-                            {item.defaultPermission === 'ALLOW'
-                              ? t('Allow')
-                              : t('Ask')}
-                          </span>
-                        </div>
-                      )}
-                    />
-                  </CollapsibleSection>
-                  {selected.builtIn && specifiedTools.length ? (
-                    <CollapsibleSection
-                      title={t('Employee-specific tools')}
-                      description={t('Only available to this AI employee.')}
-                    >
-                      <MetadataList
-                        items={specifiedTools.map(
-                          (setting) =>
-                            toolsByName.get(setting.name) ?? {
-                              name: setting.name,
-                              title: setting.name,
-                            },
-                        )}
-                        emptyLabel={t('None configured.')}
-                        renderExtra={(item) => (
-                          <div className='flex items-center gap-2 text-sm'>
-                            <span className='text-muted-foreground'>
-                              {t('Permission')}
-                            </span>
-                            <span className='rounded-md bg-muted px-3 py-1'>
-                              {configuredTools.find(
-                                (setting) => setting.name === item.name,
-                              )?.autoCall
-                                ? t('Allow')
-                                : t('Ask')}
-                            </span>
-                          </div>
-                        )}
-                      />
-                    </CollapsibleSection>
-                  ) : null}
-                  <CollapsibleSection
-                    title={t('Custom tools')}
-                    description={t(
-                      'Created by workflow. You can add/remove and set default permissions.',
-                    )}
-                    defaultOpen={customTools.length > 0}
-                    action={
-                      <AddMenu
-                        label={t('Add tool')}
-                        items={availableCustomTools}
-                        onAdd={(name) =>
-                          updateToolSettings((currentTools) => [
-                            ...currentTools,
-                            { name, autoCall: false },
-                          ])
-                        }
-                      />
-                    }
-                  >
-                    <MetadataList
-                      items={customTools.map(
-                        (setting) =>
-                          toolsByName.get(setting.name) ?? {
-                            name: setting.name,
-                            title: setting.name,
-                          },
-                      )}
-                      emptyLabel={t('None configured.')}
-                      renderExtra={(item) => {
-                        const setting = configuredTools.find(
-                          (candidate) => candidate.name === item.name,
-                        );
-                        return (
-                          <div className='flex items-center gap-2'>
-                            <span className='text-sm text-muted-foreground'>
-                              {t('Permission')}
-                            </span>
-                            <div className='inline-flex rounded-md bg-muted p-0.5'>
-                              {(['ASK', 'ALLOW'] as const).map((permission) => {
-                                const active =
-                                  permission ===
-                                  (setting?.autoCall ? 'ALLOW' : 'ASK');
-                                return (
-                                  <button
-                                    type='button'
-                                    key={permission}
-                                    onClick={() =>
-                                      updateToolSettings((currentTools) =>
-                                        currentTools.map((tool) =>
-                                          tool.name === item.name
-                                            ? {
-                                                ...tool,
-                                                autoCall:
-                                                  permission === 'ALLOW',
-                                              }
-                                            : tool,
-                                        ),
-                                      )
-                                    }
-                                    className={`rounded px-3 py-1 text-sm ${active ? 'bg-background shadow-sm' : 'text-muted-foreground'}`}
-                                  >
-                                    {permission === 'ALLOW'
-                                      ? t('Allow')
-                                      : t('Ask')}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                            <button
-                              type='button'
-                              aria-label={`${t('Remove')} ${item.title ?? item.name}`}
-                              className='rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground'
-                              onClick={() =>
-                                updateToolSettings((currentTools) =>
-                                  currentTools.filter(
-                                    (tool) => tool.name !== item.name,
-                                  ),
-                                )
-                              }
+                <div
+                  className='flex flex-col gap-4'
+                  aria-busy={toolsLoading || skillsLoading}
+                >
+                  <p className='text-sm text-muted-foreground'>
+                    {t('employeeTools.description')}
+                  </p>
+                  <EmployeeCatalogStatus
+                    loading={toolsLoading || skillsLoading}
+                    error={toolsError || skillsError}
+                    loadingLabel={t('employeeTools.loading')}
+                    errorLabel={t('employeeTools.error')}
+                    onRetry={() => {
+                      if (toolsError) setToolsRequest((current) => current + 1);
+                      if (skillsError)
+                        setSkillsRequest((current) => current + 1);
+                    }}
+                  />
+                  {toolNames.length ? (
+                    <TooltipProvider>
+                      <ul
+                        aria-label={t('Tools')}
+                        className='divide-y divide-border pr-4'
+                      >
+                        {toolNames.map((name) => {
+                          const item = toolsByName.get(name);
+                          const title = toolTitle(item ?? { name });
+                          const checked = enabledTools.has(name);
+                          return (
+                            <li
+                              key={name}
+                              className='flex h-32 min-w-0 items-center justify-between gap-4 overflow-hidden py-4'
                             >
-                              <Trash2 className='h-4 w-4' />
-                            </button>
-                          </div>
-                        );
-                      }}
-                    />
-                  </CollapsibleSection>
+                              <ToolListContent
+                                name={name}
+                                title={title}
+                                about={item ? toolAbout(item) : undefined}
+                                status={
+                                  !item && !toolsLoading && !toolsError ? (
+                                    <span className='text-xs text-muted-foreground'>
+                                      {t('employeeTools.unavailable')}
+                                    </span>
+                                  ) : null
+                                }
+                              />
+                              <div className='flex shrink-0 flex-col items-end justify-center gap-2 sm:flex-row sm:items-center sm:gap-5'>
+                                <EmployeeToolPermission
+                                  item={item}
+                                  setting={configuredTools.find(
+                                    (setting) => setting.name === name,
+                                  )}
+                                  title={title}
+                                  enabled={checked}
+                                  disabled={toolEditsDisabled}
+                                  onChange={(autoCall) =>
+                                    updateToolPermission(name, autoCall)
+                                  }
+                                />
+                                <SkillSwitch
+                                  aria-label={t('employeeTools.use', {
+                                    name: title,
+                                  })}
+                                  checked={checked}
+                                  disabled={toolEditsDisabled}
+                                  onCheckedChange={(value) =>
+                                    updateToolNames(name, value)
+                                  }
+                                />
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </TooltipProvider>
+                  ) : !toolsLoading &&
+                    !toolsError &&
+                    !skillsLoading &&
+                    !skillsError ? (
+                    <EmptyList label={t('None configured.')} />
+                  ) : null}
                 </div>
               ) : null}
 
@@ -1370,13 +1373,14 @@ export default function AIEmployeePage(): ReactElement {
               </p>
             ) : null}
             {dirty ? (
-              <footer className='sticky bottom-0 z-40 mt-auto border-t bg-background/95 backdrop-blur'>
-                <div className='mx-auto flex max-w-5xl justify-end gap-2 px-4 py-4 sm:px-6 lg:px-8'>
+              <footer className='absolute inset-x-0 bottom-0 border-t bg-background'>
+                <div className='flex w-full justify-end gap-2 py-2'>
                   <button
                     type='button'
-                    className='inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm'
+                    className='inline-flex h-8 items-center gap-2 rounded-md border px-3 text-sm'
                     onClick={() => {
                       setDraft(buildEditableValues(selected));
+                      setCustomRoleMode(undefined);
                       setSaveError('');
                     }}
                   >
@@ -1385,7 +1389,7 @@ export default function AIEmployeePage(): ReactElement {
                   <button
                     type='button'
                     disabled={saving}
-                    className='inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50'
+                    className='inline-flex h-8 items-center gap-2 rounded-md bg-primary px-3 text-sm text-primary-foreground disabled:opacity-50'
                     onClick={() => void save()}
                   >
                     <Save className='h-4 w-4' />{' '}
@@ -1414,6 +1418,6 @@ export default function AIEmployeePage(): ReactElement {
           }
         }}
       />
-    </main>
+    </Collapsible>
   );
 }

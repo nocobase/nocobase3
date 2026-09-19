@@ -22,6 +22,7 @@ type ChatMessageProps = {
   message: AIChatMessageType;
   onToolCallDecision?: (decision: AIToolCallDecision) => void | Promise<void>;
   showActions?: boolean;
+  readOnly?: boolean;
   status?: 'submitted' | 'streaming' | 'ready' | 'error';
   retryMessage?: (message: AIChatMessageType) => Promise<void>;
   decideToolCall?: (decision: AIToolCallDecision) => Promise<void>;
@@ -33,6 +34,7 @@ function ChatMessageComponent({
   message,
   onToolCallDecision,
   showActions = true,
+  readOnly = false,
   status = 'ready',
   retryMessage,
   decideToolCall,
@@ -94,7 +96,7 @@ function ChatMessageComponent({
             </div>
           ) : null}
         </div>
-        {showActions ? (
+        {showActions && !readOnly ? (
           <div className='pointer-events-none mt-1 flex h-6 items-center gap-1 opacity-0 transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'>
             <Button
               variant='ghost'
@@ -182,6 +184,7 @@ function ChatMessageComponent({
               <SubAgentConversation
                 key={part.id ?? part.data.sessionId}
                 conversation={part.data}
+                readOnly={readOnly}
                 onToolCallDecision={onToolCallDecision}
                 status={status}
                 decideToolCall={decideToolCall}
@@ -196,13 +199,18 @@ function ChatMessageComponent({
               part={part}
               approval={message.metadata?.toolApprovals?.[part.toolCallId]}
               disabled={interactionPending}
+              readOnly={readOnly}
               onRevise={focusComposer}
               inlineActions={
-                showActions && useInlineToolActions && part === singleToolCall
+                showActions &&
+                !readOnly &&
+                useInlineToolActions &&
+                part === singleToolCall
                   ? messageActions
                   : undefined
               }
               onDecision={async (decision, input) => {
+                if (readOnly) return;
                 const toolDecision = {
                   messageId: message.id,
                   toolCallId: part.toolCallId,
@@ -233,7 +241,9 @@ function ChatMessageComponent({
           </div>
         ) : null}
       </div>
-      {showActions && (text || (toolCalls.length && !useInlineToolActions)) ? (
+      {showActions &&
+      !readOnly &&
+      (text || (toolCalls.length && !useInlineToolActions)) ? (
         <div className='pointer-events-none mt-1 flex h-6 items-center gap-1 opacity-0 transition-opacity group-hover/message:pointer-events-auto group-hover/message:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100'>
           {messageActions}
         </div>
@@ -248,6 +258,7 @@ export const ChatMessage = memo(
     previous.message === next.message &&
     previous.status === next.status &&
     previous.showActions === next.showActions &&
+    previous.readOnly === next.readOnly &&
     previous.onToolCallDecision === next.onToolCallDecision &&
     previous.retryMessage === next.retryMessage &&
     previous.decideToolCall === next.decideToolCall &&

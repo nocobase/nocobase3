@@ -1,4 +1,11 @@
 import { Button } from '../../shared/ui/button.js';
+import { Alert, AlertDescription, AlertTitle } from '../../shared/ui/alert.js';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '../../shared/ui/input-group.js';
 import { LoadingState } from '../../shared/loading-state.js';
 import {
   Dialog,
@@ -11,13 +18,14 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../../shared/ui/dropdown-menu.js';
 import { cn } from '../../shared/utils.js';
 import { Input } from '../../shared/ui/input.js';
 import { Label } from '../../shared/ui/label.js';
-import { useAIChatBase } from '../../providers/index.js';
+import { useAIChatBase, type AIConversation } from '../../providers/index.js';
 import {
   MoreHorizontal,
   PanelLeftClose,
@@ -28,7 +36,13 @@ import {
   X,
   LoaderCircle,
 } from 'lucide-react';
-import { useEffect, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 export function ConversationList({
@@ -114,168 +128,78 @@ export function ConversationList({
   };
 
   return (
-    <div className='flex h-full min-w-0 flex-1 flex-col overflow-hidden overscroll-contain bg-card'>
-      <div className='flex h-12 shrink-0 items-center justify-between border-b px-3'>
-        <div className='flex min-w-0 items-center gap-1.5'>
-          {showCloseButton ? (
-            <Button
-              variant='ghost'
-              size='icon-sm'
-              aria-label={t(
-                'chat.closeConversationList',
-                'Close conversation list',
-              )}
-              onClick={() =>
-                onClose ? onClose() : setConversationListOpen(false)
+    <>
+      <AIConversationList
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        onSelect={selectConversation}
+        onCreate={startNewConversation}
+        onClose={
+          showCloseButton
+            ? () => (onClose ? onClose() : setConversationListOpen(false))
+            : undefined
+        }
+        searchValue={searchValue}
+        onSearchChange={setSearchValue}
+        onSearch={(value) => {
+          void searchConversations(value).catch(() => undefined);
+        }}
+        submittedSearchValue={conversationSearch}
+        loading={conversationsLoading}
+        error={historyError}
+        onRetry={() => {
+          void searchConversations(conversationSearch).catch(() => undefined);
+        }}
+        renderActions={(conversation) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant='ghost'
+                  size='icon-xs'
+                  className='min-h-[44px] min-w-[44px] shrink-0 touch-manipulation'
+                  aria-label={t(
+                    'chat.conversationActions',
+                    'Conversation actions',
+                  )}
+                />
               }
             >
-              <PanelLeftClose />
-            </Button>
-          ) : null}
-          <span className='truncate text-sm font-semibold'>
-            {t('chat.conversations', 'Conversations')}
-          </span>
-        </div>
-        <Button
-          variant='ghost'
-          size='icon-sm'
-          aria-label={t('chat.newConversationAction', 'New conversation')}
-          onClick={startNewConversation}
-        >
-          <Plus />
-        </Button>
-      </div>
-      <form
-        className='shrink-0 border-b p-2.5'
-        onSubmit={(event) => {
-          event.preventDefault();
-          void searchConversations(searchValue).catch(() => undefined);
-        }}
-      >
-        <div className='relative'>
-          <Search className='pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground' />
-          <Input
-            value={searchValue}
-            className='h-8 pl-8 pr-8 text-sm'
-            placeholder={t('chat.searchConversations', 'Search conversations')}
-            aria-label={t('chat.searchConversations', 'Search conversations')}
-            onChange={(event) => setSearchValue(event.target.value)}
-          />
-          {conversationsLoading && conversationSearch ? (
-            <LoaderCircle className='absolute right-2.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground' />
-          ) : searchValue ? (
-            <Button
-              type='button'
-              variant='ghost'
-              size='icon-xs'
-              className='absolute right-1.5 top-1/2 -translate-y-1/2'
-              aria-label={t(
-                'chat.clearConversationSearch',
-                'Clear conversation search',
-              )}
-              onClick={() => {
-                setSearchValue('');
-                void searchConversations('').catch(() => undefined);
-              }}
-            >
-              <X />
-            </Button>
-          ) : null}
-        </div>
-      </form>
-      <div className='min-h-0 flex-1 overflow-y-auto overscroll-contain p-2'>
-        {conversationsLoading ? (
-          <LoadingState className='py-8' />
-        ) : conversations.length ? (
-          <div className='space-y-1'>
-            {conversations.map((conversation) => {
-              const active = conversation.id === activeConversationId;
-              return (
-                <div
-                  key={conversation.id}
-                  className={cn(
-                    'group/conversation flex items-start rounded-lg pr-1 transition-colors',
-                    active ? 'bg-accent' : 'hover:bg-muted/70',
-                  )}
+              <MoreHorizontal aria-hidden='true' />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align='end' className='w-36'>
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  className='min-h-[44px]'
+                  onClick={() =>
+                    setRenameTarget({
+                      id: conversation.id,
+                      title: conversation.title,
+                    })
+                  }
                 >
-                  <button
-                    type='button'
-                    className='flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2.5 text-left'
-                    onClick={() => selectConversation(conversation.id)}
-                  >
-                    {conversation.unread && !active ? (
-                      <span
-                        className='size-2 shrink-0 rounded-full bg-destructive'
-                        aria-label={t(
-                          'chat.unreadConversation',
-                          'Unread conversation',
-                        )}
-                      />
-                    ) : null}
-                    <span className='block min-w-0 flex-1 truncate text-sm font-medium'>
-                      {conversation.title}
-                    </span>
-                  </button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          variant='ghost'
-                          size='icon-xs'
-                          className='mt-1.5 opacity-0 group-hover/conversation:opacity-100 data-popup-open:opacity-100'
-                          aria-label={t(
-                            'chat.conversationActions',
-                            'Conversation actions',
-                          )}
-                        />
-                      }
-                    >
-                      <MoreHorizontal />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align='end' className='w-36'>
-                      <DropdownMenuItem
-                        onClick={() =>
-                          setRenameTarget({
-                            id: conversation.id,
-                            title: conversation.title,
-                          })
-                        }
-                      >
-                        <Pencil />
-                        {t('actions.rename', 'Rename')}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant='destructive'
-                        onClick={() => {
-                          setDeleteError(undefined);
-                          setDeleteTarget({
-                            id: conversation.id,
-                            title: conversation.title,
-                          });
-                        }}
-                      >
-                        <Trash2 />
-                        {t('actions.delete', 'Delete')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className='px-3 py-8 text-center text-sm text-muted-foreground'>
-            {conversationSearch
-              ? t('chat.noMatchingConversations', 'No matching conversations.')
-              : t('chat.noConversations', 'No conversations yet.')}
-          </div>
+                  <Pencil />
+                  {t('actions.rename', 'Rename')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className='min-h-[44px]'
+                  variant='destructive'
+                  onClick={() => {
+                    setDeleteError(undefined);
+                    setDeleteTarget({
+                      id: conversation.id,
+                      title: conversation.title,
+                    });
+                  }}
+                >
+                  <Trash2 />
+                  {t('actions.delete', 'Delete')}
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
-        {historyError ? (
-          <div className='mx-2 mt-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive'>
-            {historyError.message}
-          </div>
-        ) : null}
-      </div>
+      />
       <Dialog
         open={!!renameTarget}
         onOpenChange={(open) => {
@@ -370,6 +294,258 @@ export function ConversationList({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+export type AIConversationListItem = Pick<AIConversation, 'id' | 'title'> &
+  Partial<Pick<AIConversation, 'unread'>>;
+
+export type AIConversationListProps<
+  T extends AIConversationListItem = AIConversationListItem,
+> = {
+  conversations: readonly T[];
+  activeConversationId?: string;
+  onSelect: (id: string) => void;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  /** Called on submit and when clearing the search. */
+  onSearch?: (value: string) => void;
+  /** The applied query, when it differs from the input draft. */
+  submittedSearchValue?: string;
+  loading?: boolean;
+  error?: Error | string | null;
+  /** Called only by the error state's retry action; the caller owns fetching. */
+  onRetry?: () => void;
+  /** Defaults to the localized Conversations heading when omitted. */
+  heading?: ReactNode;
+  onCreate?: () => void;
+  onClose?: () => void;
+  renderActions?: (conversation: T) => ReactNode;
+  /** Noninteractive content inside the selection button, below its title. */
+  renderMetadata?: (conversation: T) => ReactNode;
+  /** Noninteractive avatar or icon inside the selection button. */
+  renderLeading?: (conversation: T) => ReactNode;
+  footer?: ReactNode;
+  className?: string;
+};
+
+export function AIConversationList<T extends AIConversationListItem>({
+  conversations,
+  activeConversationId,
+  onSelect,
+  searchValue = '',
+  onSearchChange,
+  onSearch,
+  submittedSearchValue = searchValue,
+  loading = false,
+  error,
+  onRetry,
+  heading,
+  onCreate,
+  onClose,
+  renderActions,
+  renderMetadata,
+  renderLeading,
+  footer,
+  className,
+}: AIConversationListProps<T>) {
+  const t = useAITranslate();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div
+      className={cn(
+        'flex h-full min-w-0 flex-1 flex-col overflow-hidden overscroll-contain bg-card text-card-foreground',
+        className,
+      )}
+    >
+      <div className='flex min-h-12 shrink-0 items-center justify-between gap-2 border-b px-3'>
+        <div className='flex min-w-0 items-center gap-1.5'>
+          {onClose ? (
+            <Button
+              variant='ghost'
+              size='icon-sm'
+              className='min-h-[44px] min-w-[44px] shrink-0 touch-manipulation'
+              aria-label={t(
+                'chat.closeConversationList',
+                'Close conversation list',
+              )}
+              onClick={onClose}
+            >
+              <PanelLeftClose aria-hidden='true' />
+            </Button>
+          ) : null}
+          <h2 className='truncate text-sm font-semibold'>
+            {heading === undefined
+              ? t('chat.conversations', 'Conversations')
+              : heading}
+          </h2>
+        </div>
+        {onCreate ? (
+          <Button
+            variant='ghost'
+            size='icon-sm'
+            className='min-h-[44px] min-w-[44px] shrink-0 touch-manipulation'
+            aria-label={t('chat.newConversationAction', 'New conversation')}
+            onClick={onCreate}
+          >
+            <Plus aria-hidden='true' />
+          </Button>
+        ) : null}
+      </div>
+      {onSearchChange ? (
+        <form
+          className='shrink-0 border-b p-2.5'
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSearch?.(searchValue);
+          }}
+        >
+          {/* Keep touch targets at least 44px even with a compact theme. */}
+          <InputGroup className='h-auto min-h-[44px]'>
+            <InputGroupInput
+              ref={searchInputRef}
+              name='conversation-search'
+              type='search'
+              autoComplete='off'
+              enterKeyHint='search'
+              value={searchValue}
+              className='min-h-[44px] min-w-0 [&::-webkit-search-cancel-button]:appearance-none'
+              placeholder={t(
+                'chat.searchConversationsPlaceholder',
+                'Search conversations…',
+              )}
+              aria-label={t('chat.searchConversations', 'Search conversations')}
+              onChange={(event) => onSearchChange(event.target.value)}
+            />
+            <InputGroupAddon align='inline-end' className='gap-2 py-0'>
+              {searchValue ? (
+                <InputGroupButton
+                  type='button'
+                  size='icon-sm'
+                  className='min-h-[44px] min-w-[44px] touch-manipulation'
+                  aria-label={t(
+                    'chat.clearConversationSearch',
+                    'Clear conversation search',
+                  )}
+                  onClick={() => {
+                    onSearchChange('');
+                    onSearch?.('');
+                    searchInputRef.current?.focus();
+                  }}
+                >
+                  <X aria-hidden='true' />
+                </InputGroupButton>
+              ) : null}
+              {onSearch ? (
+                <InputGroupButton
+                  type='submit'
+                  size='icon-sm'
+                  className='min-h-[44px] min-w-[44px] touch-manipulation'
+                  aria-label={t(
+                    'chat.searchConversations',
+                    'Search conversations',
+                  )}
+                >
+                  <Search aria-hidden='true' />
+                </InputGroupButton>
+              ) : null}
+            </InputGroupAddon>
+          </InputGroup>
+        </form>
+      ) : null}
+      <div className='min-h-0 flex-1 overflow-y-auto overscroll-contain p-2'>
+        {error ? (
+          <Alert variant='destructive' className='mb-2'>
+            <AlertTitle>
+              {t('chat.conversationsError', 'Unable to load conversations')}
+            </AlertTitle>
+            <AlertDescription className='break-words'>
+              {error instanceof Error ? error.message : error}
+            </AlertDescription>
+            {onRetry ? (
+              <Button
+                type='button'
+                variant='outline'
+                className='mt-2 min-h-[44px] w-fit touch-manipulation'
+                disabled={loading}
+                onClick={() => onRetry()}
+              >
+                {t('chat.retryConversations', 'Retry')}
+              </Button>
+            ) : null}
+          </Alert>
+        ) : null}
+        {loading ? (
+          <LoadingState
+            className='py-8'
+            label={t('chat.loadingConversations', 'Loading conversations…')}
+          />
+        ) : conversations.length ? (
+          <div className='flex flex-col gap-1'>
+            {conversations.map((conversation) => {
+              const active = conversation.id === activeConversationId;
+              return (
+                <div
+                  key={conversation.id}
+                  className={cn(
+                    'group/conversation flex items-start rounded-lg pr-1 transition-colors motion-reduce:transition-none',
+                    active
+                      ? 'bg-accent text-accent-foreground'
+                      : 'hover:bg-muted/70',
+                  )}
+                >
+                  <button
+                    type='button'
+                    className='flex min-h-[44px] min-w-0 flex-1 touch-manipulation items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
+                    aria-current={active ? 'true' : undefined}
+                    onClick={() => onSelect(conversation.id)}
+                  >
+                    {renderLeading ? (
+                      <span className='flex shrink-0 items-center'>
+                        {renderLeading(conversation)}
+                      </span>
+                    ) : null}
+                    {conversation.unread && !active ? (
+                      <span
+                        className='size-2 shrink-0 rounded-full bg-destructive'
+                        aria-label={t(
+                          'chat.unreadConversation',
+                          'Unread conversation',
+                        )}
+                      />
+                    ) : null}
+                    <span className='flex min-w-0 flex-1 flex-col gap-1 text-sm'>
+                      <span
+                        className='block truncate font-medium'
+                        title={conversation.title}
+                      >
+                        {conversation.title}
+                      </span>
+                      {renderMetadata ? (
+                        <span className='flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 break-words text-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]'>
+                          {renderMetadata(conversation)}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                  {renderActions?.(conversation)}
+                </div>
+              );
+            })}
+          </div>
+        ) : !error ? (
+          <div
+            role='status'
+            className='px-3 py-8 text-center text-sm text-muted-foreground'
+          >
+            {submittedSearchValue
+              ? t('chat.noMatchingConversations', 'No matching conversations.')
+              : t('chat.noConversations', 'No conversations yet.')}
+          </div>
+        ) : null}
+      </div>
+      {footer}
     </div>
   );
 }

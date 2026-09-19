@@ -42,6 +42,6 @@
 // }
 //
 // export const tongyiProviderOptions = {
-//   title: '{{t("Tongyi", {ns: "ai"})}}',
+//   title: 'Tongyi',
 //   provider: TongyiProvider,
 // };

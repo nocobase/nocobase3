@@ -71,6 +71,7 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
       await this.registerEmployeeInRepository(
         repository,
         this.toEmployeeOptions(employee),
+        employee.skillSettings,
       );
     }
     this.repository = repository;
@@ -80,14 +81,39 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
     const current = await this.repository.findOne({
       filter: { username: entry.username },
     });
+    const values: AIEmployeeEntity = {
+      ...entry,
+      skillSettings: { ...entry.skillSettings },
+    };
+    for (const key of ['enabledSkills', 'enabledTools'] as const) {
+      const selection =
+        entry.skillSettings[key] === undefined
+          ? current?.skillSettings?.[key]
+          : entry.skillSettings[key];
+      if (
+        selection != null &&
+        (!Array.isArray(selection) ||
+          !selection.every(
+            (name) => typeof name === 'string' && name.trim().length > 0,
+          ))
+      ) {
+        throw new TypeError(
+          `skillSettings.${key} must be an array of non-empty strings or null`,
+        );
+      }
+      if (selection !== undefined) {
+        values.skillSettings[key] =
+          selection === null ? null : [...new Set(selection)];
+      }
+    }
     if (current) {
       await this.repository.update({
         filter: { username: entry.username },
-        values: entry,
+        values,
       });
-      return { ...current, ...entry };
+      return { ...current, ...values };
     }
-    return this.repository.create({ values: entry });
+    return this.repository.create({ values });
   }
 
   async deleteEmployee(username: string): Promise<void> {
@@ -97,12 +123,53 @@ export class DefaultAIEmployeeManager implements AIEmployeeManager {
   private async registerEmployeeInRepository(
     repository: AIEmployeeRepository,
     options: AIEmployeeOptions,
+    sourceSettings?: AIEmployeeEntity['skillSettings'],
   ): Promise<void> {
     const current =
       (await repository.findOne({
         filter: { username: options.username },
       })) ?? undefined;
     const value = this.toBuiltInEmployee(options, current);
+    // Registration refreshes legacy arrays, never an administrator's override.
+    for (const key of ['enabledSkills', 'enabledTools'] as const) {
+      const selection =
+        current?.skillSettings?.[key] !== undefined
+          ? current.skillSettings[key]
+          : sourceSettings?.[key];
+      if (selection !== undefined) {
+        value.skillSettings[key] =
+          selection === null ? null : [...new Set(selection)];
+      }
+    }
+    if (Array.isArray(value.skillSettings.enabledTools)) {
+      // The manager cannot classify dynamic tools by scope. Keep all saved
+      // settings; runtime only consults these permissions for CUSTOM tools.
+      // Saved ASK must win over a subsequently registered ALLOW default.
+      value.skillSettings.tools = [
+        ...new Map(
+          [
+            ...value.skillSettings.tools,
+            ...(sourceSettings?.tools ?? []),
+            ...(current?.skillSettings?.tools ?? []),
+          ].map((tool) => [tool.name, tool]),
+        ).values(),
+      ];
+    }
+    // Approval overrides are independent of selection overrides. Legacy
+    // employees still inherit the registered tool list, but not new approval
+    // defaults for names whose permissions have already been saved.
+    const savedTools = new Map(
+      [
+        ...(sourceSettings?.tools ?? []),
+        ...(current?.skillSettings?.tools ?? []),
+      ].map((tool) => [tool.name, tool]),
+    );
+    value.skillSettings.tools = value.skillSettings.tools.map((tool) => {
+      const saved = savedTools.get(tool.name);
+      return typeof saved?.autoCall === 'boolean'
+        ? { ...tool, autoCall: saved.autoCall }
+        : tool;
+    });
     if (current) {
       await repository.update({
         filter: { username: options.username },

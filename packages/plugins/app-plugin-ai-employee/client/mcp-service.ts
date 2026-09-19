@@ -43,6 +43,7 @@ export interface MCPTestResult {
 
 export interface MCPToolEntry {
   name: string;
+  i18n?: { namespace: string };
   title: string;
   description?: string;
   serverName: string;

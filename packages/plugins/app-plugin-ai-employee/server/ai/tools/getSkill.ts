@@ -9,14 +9,14 @@
 
 import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 export default defineTools<AgentContext<{}, {}>>({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
-    title: `{{t("Load specific SKILLS", { ns: "${packageMetadata.name}" })}}`,
-    about: `{{t("Loading content of the specific SKILLS", { ns: "${packageMetadata.name}" })}}`,
+    title: 'Load skill',
+    about: 'Load the content and related tools for a specified skill.',
   },
   definition: {
     name: 'getSkill',
@@ -26,8 +26,10 @@ export default defineTools<AgentContext<{}, {}>>({
     }),
   },
   invoke: async (ctx, args) => {
-    const target = await ctx.ai.skillsManager.getSkills(
-      args.skillName as string,
+    // Discovery and persisted activation are not authorization grants. Require
+    // the host's current visibility policy even for a direct tool invocation.
+    const target = (await ctx.availableSkills?.())?.find(
+      (skill) => skill.name === args.skillName,
     );
     if (!target) {
       return {

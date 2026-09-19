@@ -17,6 +17,8 @@ export type ToolsEntity<TContext = unknown> = {
   /** Default policy supplied by the registered tool definition. */
   defaultPermission?: ToolsPermission;
   silence?: boolean;
+  /** UI translation metadata; model-facing descriptions remain unchanged. */
+  i18n?: { namespace: string };
   introduction?: { title: string; about?: string };
   definition: { name: string; description: string; schema?: any };
   invoke: (ctx: TContext, args: any, runtime: ToolsRuntime) => Promise<any>;

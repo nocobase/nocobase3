@@ -16,7 +16,21 @@ describe('AI Employee client routes', () => {
 
     expect(settingsContribution).toMatchObject({
       parent: 'settings',
-      routes: [{ name: 'ai', path: '/ai' }],
+      routes: [
+        {
+          name: 'aiGroup',
+          navigation: { title: 'AI' },
+          children: [
+            { name: 'ai', path: '/ai' },
+            { name: 'aiSkills', path: '/ai/skills' },
+            { name: 'aiTools', path: '/ai/tools' },
+            { name: 'aiConversations', path: '/ai/conversations' },
+            { name: 'aiLLMServices', path: '/ai/llm-services' },
+            { name: 'aiMCPServices', path: '/ai/mcp-services' },
+            { name: 'aiSettings', path: '/ai/settings' },
+          ],
+        },
+      ],
     });
     expect(devContribution).toMatchObject({
       parent: 'dev',
@@ -34,6 +48,22 @@ describe('AI Employee client routes', () => {
         },
       ],
     });
+
+    if (settingsContribution?.parent !== 'settings') {
+      throw new Error('Missing AI Employee Settings Route contribution.');
+    }
+    const settingsPages = await Promise.all(
+      (settingsContribution.routes[0]?.children ?? []).map((route) => {
+        if (!route.componentLoader) {
+          throw new Error(`Missing settings page loader: ${route.name}`);
+        }
+        return route.componentLoader();
+      }),
+    );
+    expect(settingsPages).toHaveLength(7);
+    for (const page of settingsPages) {
+      expect(page.default).toEqual(expect.any(Function));
+    }
 
     if (devContribution?.parent !== 'dev') {
       throw new Error('Missing AI Employee Dev Route contribution.');

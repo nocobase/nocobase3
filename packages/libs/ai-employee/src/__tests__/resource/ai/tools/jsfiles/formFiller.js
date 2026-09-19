@@ -40,8 +40,8 @@ var formFiller_default = (0, import_ai.defineTools)({
   defaultPermission: 'ALLOW',
   execution: 'frontend',
   introduction: {
-    title: '{{t("Form filler")}}',
-    about: '{{t("Fill the form with the given content")}}',
+    title: 'Form filler',
+    about: 'Fill the form with the given content',
   },
   definition: {
     name: 'formFiller',

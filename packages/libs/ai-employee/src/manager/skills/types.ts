@@ -23,6 +23,7 @@ export type SkillsOptions = {
   description: string;
   content: string;
   tools?: string[];
+  i18n?: { namespace: string };
   introduction?: {
     title: string;
     about?: string;

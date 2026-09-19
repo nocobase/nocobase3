@@ -237,6 +237,19 @@ function resolveResourceUrl(value: string): string {
   return resolveAppUrl(value.replace(/^\/+/, ''));
 }
 
+/** Convert a newest-first server history page using the shared chat protocol. */
+export function toAIChatHistoryMessages(
+  rows: readonly unknown[],
+): AIChatMessage[] {
+  return [...rows]
+    .reverse()
+    .filter(
+      (value) =>
+        !isRecord(value) || (value.role !== 'tool' && value.role !== 'system'),
+    )
+    .map((value, index) => toHistoryMessage(value, index, resolveResourceUrl));
+}
+
 export class NocoBaseAIService implements AIService {
   constructor(
     private readonly client: ApiClient = createApiClient({
@@ -377,15 +390,7 @@ export class NocoBaseAIService implements AIService {
     const rows = Array.isArray(response)
       ? response
       : (response.data ?? response.rows ?? []);
-    return [...rows]
-      .reverse()
-      .filter((value) => {
-        if (!isRecord(value)) return true;
-        return value.role !== 'tool' && value.role !== 'system';
-      })
-      .map((value, index) =>
-        toHistoryMessage(value, index, resolveResourceUrl),
-      );
+    return toAIChatHistoryMessages(rows);
   }
 
   async getConversationActiveState(sessionId: string) {

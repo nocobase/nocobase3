@@ -1,5 +1,9 @@
 ---
 name: data-metadata
+i18n:
+  namespace: '@nocobase/app-plugin-ai-employee'
+introduction:
+  title: Data metadata
 scope: GENERAL
 description: Discover accessible database connections, collections, fields, and relationships before querying business data.
 tools:

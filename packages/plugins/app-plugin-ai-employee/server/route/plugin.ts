@@ -1,5 +1,6 @@
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { authenticationToken } from '@nocobase/app-plugin-authentication/server';
+import { authorizationToken } from '@nocobase/app-plugin-authorization';
 import {
   defineApiRoutes,
   type AppApiRouteContribution,
@@ -17,6 +18,7 @@ export const aiEmployeeApiRoutes: AppApiRouteContribution<AppPluginApplication> 
       '/ai',
       createAIEmployeeRoutes({
         authentication: container.resolve(authenticationToken),
+        authorization: container.resolve(authorizationToken),
         services: container.resolve(serviceFactoryToken),
         logger: container.resolve(loggingToken).getLogger('ai-employee'),
       }),

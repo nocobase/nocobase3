@@ -42,6 +42,8 @@ const expectedActions = [
   'aiEmployees:update',
   'aiEmployees:destroy',
   'aiConversations:list',
+  'aiConversations:listAll',
+  'aiConversations:getAllMessages',
   'aiConversations:unreadCounts',
   'aiConversations:unreadCount',
   'aiConversations:getMessages',
@@ -60,7 +62,11 @@ const expectedActions = [
   'aiFiles:create',
   'aiFiles:preview',
   ...managedActions('aiTools'),
+  'aiTools:listAll',
+  'aiTools:getDetails',
   ...managedActions('aiSkills'),
+  'aiSkills:listAll',
+  'aiSkills:getDetails',
   ...managedActions('llmServices'),
   'aiMcpServers:list',
   'aiMcpServers:get',
@@ -83,6 +89,7 @@ describe('AI action routers', () => {
     const { deps, services } = createTestAIEmployeeFixture();
     const routes = createAIEmployeeRoutes({
       authentication: deps.auth,
+      authorization: deps.authorization,
       services,
       logger: deps.logging.getLogger('ai-employee-test'),
     });
@@ -125,6 +132,7 @@ describe('AI action routers', () => {
     });
     const routes = createAIEmployeeRoutes({
       authentication: deps.auth,
+      authorization: deps.authorization,
       services,
       logger: deps.logging.getLogger('ai-employee-test'),
     });
@@ -158,6 +166,7 @@ describe('AI action routers', () => {
     services.ready = async () => undefined;
     const routes = createAIEmployeeRoutes({
       authentication: deps.auth,
+      authorization: deps.authorization,
       services,
       logger: deps.logging.getLogger('ai-employee-test'),
     });

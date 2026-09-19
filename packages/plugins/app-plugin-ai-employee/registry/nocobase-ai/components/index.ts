@@ -12,6 +12,11 @@ export {
 export { AIChatCompact, type AIChatCompactProps } from './chat/chat-compact.js';
 export { AIChatHistoryDialog } from './chat/chat-history-dialog.js';
 export {
+  AIConversationList,
+  type AIConversationListItem,
+  type AIConversationListProps,
+} from './chat/conversation-list.js';
+export {
   AIChatMessageList,
   ChatMessages,
   type AIChatMessageListProps,

@@ -10,7 +10,7 @@ import { createMockServer } from './mock-server.js';
 
 import path from 'node:path';
 import { createLogger } from '@nocobase/logging';
-const GOLDEN_EMPLOYEES = ['atlas', 'dex', 'ellis', 'lexi', 'vera', 'viz'];
+const GOLDEN_EMPLOYEES = ['atlas'];
 describe('package AI resources', () => {
   it('warns only for required missing directories and preserves resource provenance at debug level', async () => {
     const fixture = await createMockServer();
@@ -95,7 +95,14 @@ describe('package AI resources', () => {
     const fixture = await createMockServer();
     await new AIEmployeeResources().registerAIResources(fixture.aiManager);
     const skills = await fixture.aiManager.skillsManager.listSkills();
-    expect(skills.map((skill) => skill.name)).toContain('data-modeling');
+    expect(skills.map((skill) => skill.name)).not.toContain('data-modeling');
+    expect(skills.map((skill) => skill.name)).toEqual(
+      expect.arrayContaining([
+        'data-metadata',
+        'data-query',
+        'business-analysis-report',
+      ]),
+    );
     const employees = await fixture.aiManager.employeeManager.listEmployees();
     expect(new Set(employees.map((employee) => employee.username))).toEqual(
       new Set(GOLDEN_EMPLOYEES),
@@ -106,7 +113,17 @@ describe('package AI resources', () => {
       builtIn: true,
       defaultPrompt: expect.stringContaining('orchestration lead'),
     });
-    for (const username of ['dara', 'lina', 'nathan', 'orin']) {
+    for (const username of [
+      'dex',
+      'ellis',
+      'lexi',
+      'vera',
+      'viz',
+      'dara',
+      'lina',
+      'nathan',
+      'orin',
+    ]) {
       expect(
         await fixture.aiManager.employeeManager.getEmployee(username),
       ).toBeUndefined();
@@ -120,8 +137,9 @@ describe('package AI resources', () => {
     ).toMatchObject({
       definition: { name: 'chartGenerator' },
       introduction: {
-        title: expect.stringContaining('@nocobase/app-plugin-ai-employee'),
-        about: expect.stringContaining('@nocobase/app-plugin-ai-employee'),
+        title: 'Chart generator',
+        about:
+          'Generates ECharts options (JSON) based on user input or data context.',
       },
     });
   });

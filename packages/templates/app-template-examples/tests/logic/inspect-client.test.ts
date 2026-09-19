@@ -410,8 +410,58 @@ describe('client inspection', () => {
         }),
       ]),
     );
-    expect(inspection.settings.slice(0, 10).map(({ id }) => id)).toEqual([
-      'ai',
+    const aiPages = inspection.settings.filter(
+      ({ packageName }) => packageName === '@nocobase/app-plugin-ai-employee',
+    );
+    expect(aiPages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'ai',
+          title: 'AI Employees',
+          path: '/settings/ai',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiSkills',
+          title: 'Skills',
+          path: '/settings/ai/skills',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiTools',
+          title: 'tools.title',
+          path: '/settings/ai/tools',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiConversations',
+          title: 'Conversations',
+          path: '/settings/ai/conversations',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiLLMServices',
+          title: 'LLM services',
+          path: '/settings/ai/llm-services',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiMCPServices',
+          title: 'MCP services',
+          path: '/settings/ai/mcp-services',
+          groupId: 'aiGroup',
+        }),
+      ]),
+    );
+    expect(
+      inspection.settings
+        .filter(
+          ({ packageName }) =>
+            packageName !== '@nocobase/app-plugin-ai-employee',
+        )
+        .slice(0, 9)
+        .map(({ id }) => id),
+    ).toEqual([
       'permission-sets',
       'new',
       'edit',

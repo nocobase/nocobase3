@@ -1,5 +1,9 @@
 ---
 name: data-query
+i18n:
+  namespace: '@nocobase/app-plugin-ai-employee'
+introduction:
+  title: Data query
 scope: GENERAL
 description: Query current authorized business records, counts, aggregates, and grouped summaries using bounded NocoBase 3 Repository queries.
 tools:

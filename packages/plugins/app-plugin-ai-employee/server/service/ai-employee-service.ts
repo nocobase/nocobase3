@@ -37,6 +37,12 @@ function cloneEmployee(employee: AIEmployeeEntity): AIEmployeeRecord {
       ? {
           skillSettings: {
             ...skillSettings,
+            ...(Array.isArray(skillSettings.enabledSkills)
+              ? { enabledSkills: [...new Set(skillSettings.enabledSkills)] }
+              : {}),
+            ...(Array.isArray(skillSettings.enabledTools)
+              ? { enabledTools: [...new Set(skillSettings.enabledTools)] }
+              : {}),
             skills: Array.isArray(skillSettings.skills)
               ? [...skillSettings.skills]
               : skillSettings.skills,
@@ -166,8 +172,53 @@ function getSkillSettings(
     : [];
   const tools = Array.isArray(record.tools)
     ? record.tools.filter(isAIEmployeeToolSetting)
-    : [];
-  return { skills, tools };
+    : (fallback?.tools ?? []);
+  const enabledSkills = hasOwn(record, 'enabledSkills')
+    ? record.enabledSkills
+    : fallback?.enabledSkills;
+  if (
+    hasOwn(record, 'enabledSkills') &&
+    enabledSkills !== null &&
+    (!Array.isArray(enabledSkills) ||
+      !enabledSkills.every(
+        (name) => typeof name === 'string' && name.trim().length > 0,
+      ))
+  ) {
+    throw badRequest(
+      'skillSettings.enabledSkills must be an array of non-empty strings or null',
+    );
+  }
+  const enabledTools = hasOwn(record, 'enabledTools')
+    ? record.enabledTools
+    : fallback?.enabledTools;
+  if (
+    hasOwn(record, 'enabledTools') &&
+    enabledTools !== null &&
+    (!Array.isArray(enabledTools) ||
+      !enabledTools.every(
+        (name) => typeof name === 'string' && name.trim().length > 0,
+      ))
+  ) {
+    throw badRequest(
+      'skillSettings.enabledTools must be an array of non-empty strings or null',
+    );
+  }
+  return {
+    skills,
+    tools,
+    ...(enabledTools === undefined
+      ? {}
+      : {
+          enabledTools:
+            enabledTools === null ? null : [...new Set<string>(enabledTools)],
+        }),
+    ...(enabledSkills === undefined
+      ? {}
+      : {
+          enabledSkills:
+            enabledSkills === null ? null : [...new Set<string>(enabledSkills)],
+        }),
+  };
 }
 
 function getKnowledgeBaseKeys(employee: AIEmployeeRecord): string[] {
@@ -252,9 +303,7 @@ export class AIEmployeeService {
     const skills = await this.ai.skillsManager.listSkills({
       scope: 'GENERAL',
     });
-    const tools = await this.ai.toolsManager.listTools({
-      scope: 'GENERAL',
-    });
+    const tools = await this.ai.toolsManager.listTools({});
     const userId = actor.id;
     const where: Record<string, unknown> = { enabled: true };
 
@@ -285,14 +334,37 @@ export class AIEmployeeService {
         };
       if (!Array.isArray(skillSettings.skills)) skillSettings.skills = [];
       if (!Array.isArray(skillSettings.tools)) skillSettings.tools = [];
+      const toolSettings = new Map(
+        skillSettings.tools.map((tool) => [tool.name, tool]),
+      );
       for (const tool of tools) {
-        const toolSetting: AIEmployeeToolSetting = {
-          name: tool.definition.name,
-          autoCall: tool.defaultPermission === 'ALLOW',
-        };
-        skillSettings.tools.push(toolSetting);
+        const name = tool.definition.name;
+        if (
+          tool.scope === 'GENERAL' ||
+          skillSettings.enabledTools?.includes(name)
+        ) {
+          toolSettings.set(name, {
+            name,
+            autoCall:
+              tool.scope === 'CUSTOM' && toolSettings.has(name)
+                ? toolSettings.get(name)?.autoCall === true
+                : tool.defaultPermission === 'ALLOW',
+          });
+        }
       }
-      for (const skill of skills) skillSettings.skills.push(skill.name);
+      skillSettings.tools = Array.isArray(skillSettings.enabledTools)
+        ? [...new Set(skillSettings.enabledTools)].map(
+            (name) => toolSettings.get(name) ?? { name },
+          )
+        : [...toolSettings.values()];
+      skillSettings.skills = [
+        ...new Set(
+          skillSettings.enabledSkills ?? [
+            ...skillSettings.skills,
+            ...skills.map((skill) => skill.name),
+          ],
+        ),
+      ];
       return {
         username: serialized.username,
         nickname: serialized.nickname ?? serialized.username,
