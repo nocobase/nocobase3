@@ -29,6 +29,25 @@ describe('database generation', () => {
   it('preserves SQLite paths and original formatting', () => {
     expect(configureDatabase(example, 'sqlite', 'crm')).toBe(example);
   });
+  it.each(['  default: analytics\n', ''])(
+    'selects main while preserving an existing SQLite connection: %s',
+    (defaultLine) => {
+      const configured = parse(
+        configureDatabase(
+          example.replace('  default: main\n', defaultLine),
+          'sqlite',
+          'crm',
+        ),
+      ) as {
+        database: { default: string; connections: unknown };
+      };
+      const original = parse(example) as { database: { connections: unknown } };
+      expect(configured.database.default).toBe('main');
+      expect(configured.database.connections).toEqual(
+        original.database.connections,
+      );
+    },
+  );
   it.each(DIALECTS)(
     'generates %s and preserves policies and other connections',
     (dialect) => {

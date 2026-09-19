@@ -148,6 +148,7 @@ async function run(
   assertValidAppName(name);
   const targetDirectory = path.resolve(process.cwd(), name);
   result.directory = targetDirectory;
+  result.stage = 'scaffold';
   await assertTargetIsUsable(targetDirectory);
   const registry =
     input.flags.registry ?? process.env.NOCOBASE_REGISTRY ?? DEFAULT_REGISTRY;
@@ -228,6 +229,11 @@ async function run(
     throw new Error(
       verification.reason ?? 'Database driver verification failed.',
     );
+  if (input.flags.dialect !== 'sqlite') {
+    const warning = `Post-install native dependency verification only checks better-sqlite3 when present. The selected ${input.flags.dialect} driver and database connection have not been verified; configure config.yml and verify startup against your database.`;
+    result.warnings.push(warning);
+    progress(warning);
+  }
   progress('Synchronizing NocoBase package skills');
   const synchronized = await syncSkills(targetDirectory);
   if (!synchronized.ok) {

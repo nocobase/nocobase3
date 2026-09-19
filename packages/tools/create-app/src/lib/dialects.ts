@@ -25,8 +25,14 @@ export function configureDatabase(
       `Invalid config.example.yml: ${document.errors[0].message}`,
     );
   const main = ['database', 'connections', 'main'];
-  if (dialect === 'sqlite' && document.getIn([...main, 'dialect']) === 'sqlite')
-    return contents;
+  if (
+    dialect === 'sqlite' &&
+    document.getIn([...main, 'dialect']) === 'sqlite'
+  ) {
+    if (document.getIn(['database', 'default']) === 'main') return contents;
+    document.setIn(['database', 'default'], 'main');
+    return document.toString();
+  }
   const policyKeys = [
     'schemaManagement',
     'debug',

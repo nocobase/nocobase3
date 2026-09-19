@@ -168,3 +168,5 @@ node ./bin/run.js crm --template ../../templates/app-template-default
 ```
 
 A local directory is packed with `pnpm pack`, which resolves `workspace:` and `catalog:` into real version ranges, so the generated project installs outside the repository too.
+
+Post-install native dependency verification checks `better-sqlite3` when present. It does not verify other selected drivers or database connectivity. Non-SQLite creation reports this limitation in its output and JSON `warnings`; configure `database.connections.main` in `config.yml` and verify startup against the target database.

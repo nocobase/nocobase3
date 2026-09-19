@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,6 +47,7 @@ async function template(kind = 'app'): Promise<void> {
       version: '1.0.0',
       dependencies: {
         '@nocobase/db-postgres': '^1.0.0',
+        '@nocobase/db-oracle': '^1.0.0',
         '@nocobase/db-sqlite': '^1.0.0',
       },
     }),
@@ -119,6 +120,38 @@ describe('JSON creation flow', () => {
         stage: 'input',
       });
       expect(downloadTemplate).not.toHaveBeenCalled();
+    },
+  );
+  it('reports an occupied target as a scaffold failure without changing its contents', async () => {
+    await mkdir(path.join(root, 'crm'));
+    await writeFile(path.join(root, 'crm/keep.txt'), 'existing content');
+    expect(await run(['crm', '--json'])).toBe(1);
+    expect(JSON.parse(stdout)).toMatchObject({
+      status: 'error',
+      stage: 'scaffold',
+      projectCreated: false,
+    });
+    expect(downloadTemplate).not.toHaveBeenCalled();
+    expect(await readFile(path.join(root, 'crm/keep.txt'), 'utf8')).toBe(
+      'existing content',
+    );
+  });
+  it.each(['postgres', 'oracle'])(
+    'states verification limits for %s even after a successful install',
+    async (dialect) => {
+      await template();
+      expect(await run(['crm', '--dialect', dialect, '--json'])).toBe(0);
+      expect(JSON.parse(stdout)).toMatchObject({
+        status: 'success',
+        dependenciesInstalled: true,
+        databaseConnectionVerified: false,
+        warnings: [
+          expect.stringContaining(
+            `The selected ${dialect} driver and database connection have not been verified`,
+          ),
+        ],
+      });
+      expect(verifyDriver).toHaveBeenCalledWith(path.join(root, 'crm'));
     },
   );
   it('returns help as JSON', async () => {
