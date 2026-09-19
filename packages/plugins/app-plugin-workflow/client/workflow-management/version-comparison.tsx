@@ -30,43 +30,40 @@ function FieldDiff({ fields }: { fields: FieldDifference[] }): ReactElement {
   const value = (item: unknown): string =>
     item === undefined ? t('comparison.absent') : JSON.stringify(item, null, 2);
   return fields.length ? (
-    <div>
-      {fields.map((field) => (
-        <table
-          key={field.path}
-          className='w-full table-fixed border-t border-border text-left text-sm'
-        >
-          <caption className='border-t border-border bg-muted/40 px-3 py-2 text-left font-mono text-xs break-words'>
-            <span className='sr-only'>{t('comparison.field')}: </span>
-            {field.path}
-          </caption>
-          <thead>
-            <tr>
-              <th scope='col' className='w-1/2 p-2 font-medium'>
-                {t('comparison.before')}
-              </th>
-              <th scope='col' className='w-1/2 p-2 font-medium'>
-                {t('comparison.after')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className='bg-destructive/5 p-2 align-top'>
+    <table className='w-full table-fixed border-t border-border text-left text-sm'>
+      <thead>
+        <tr>
+          <th scope='col' className='w-1/2 p-2 font-medium'>
+            {t('comparison.before')}
+          </th>
+          <th scope='col' className='w-1/2 p-2 font-medium'>
+            {t('comparison.after')}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {fields.map((field) => (
+          <tr key={field.path}>
+            {(['before', 'after'] as const).map((side) => (
+              <td
+                key={side}
+                className={
+                  side === 'before'
+                    ? 'bg-destructive/5 p-2 align-top'
+                    : 'bg-primary/5 p-2 align-top'
+                }
+              >
                 <pre className='text-xs whitespace-pre-wrap break-words'>
-                  {value(field.before)}
+                  <span className='text-muted-foreground'>{field.path}</span>
+                  {'\n'}
+                  {value(field[side])}
                 </pre>
               </td>
-              <td className='bg-primary/5 p-2 align-top'>
-                <pre className='text-xs whitespace-pre-wrap break-words'>
-                  {value(field.after)}
-                </pre>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      ))}
-    </div>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   ) : (
     <p className='p-2 text-muted-foreground'>{t('comparison.noChanges')}</p>
   );

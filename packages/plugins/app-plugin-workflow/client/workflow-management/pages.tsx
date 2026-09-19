@@ -755,7 +755,7 @@ function WorkflowRow({
                   className='workflow-pending-version-link'
                   to={workflowPath(pendingArtifact.hash)}
                 >
-                  <Badge variant='secondary'>
+                  <Badge className='bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'>
                     {t('workflows.newVersionAvailable')}
                   </Badge>
                 </Link>
@@ -1146,7 +1146,7 @@ export function WorkflowDetailPage(): React.ReactElement {
                 className='workflow-pending-version-link'
                 to={workflowPath(pendingArtifact.hash)}
               >
-                <Badge variant='secondary'>
+                <Badge className='bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'>
                   {t('workflows.newVersionAvailable')}
                 </Badge>
               </Link>
