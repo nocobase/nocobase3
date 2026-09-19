@@ -102,7 +102,7 @@ pnpm create @nocobase/app crm --template=@nocobase/app-template-default@1.0.0-be
 pnpm create @nocobase/app crm --template=./packages/templates/app-template-default
 ```
 
-Dependencies are installed automatically; `--no-install` skips that.
+Dependencies are installed automatically; `--no-install` skips that. Generated `pnpm-workspace.yaml` defaults to `verifyDepsBeforeRun: false`, so `pnpm dev`, `pnpm build`, and `pnpm start` do not implicitly install dependencies. Run `pnpm install` explicitly after changing dependencies, or before starting an app created with `--no-install`. An explicit template setting is preserved. Existing applications can add `verifyDepsBeforeRun: false` to their own `pnpm-workspace.yaml`.
 
 ## What gets generated
 
