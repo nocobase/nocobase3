@@ -169,6 +169,7 @@ const enUS = {
     allApplications: 'All applications',
     visit: 'Visit',
     refreshStatus: 'Refresh status',
+    refreshing: 'Refreshing…',
     release: 'Release',
     notDeployed: 'Not deployed',
     startup: 'Startup',
@@ -394,6 +395,11 @@ const enUS = {
     importDraftNotice:
       'Imported into the editor only. Review and submit to apply changes. Undo import also discards edits made after importing.',
     undoImport: 'Undo import',
+    serverChanged:
+      'Server configuration has changed. Your unsaved draft has been preserved.',
+    discardDraftWarning: 'Reloading discards your unsaved changes. Continue?',
+    discardAndReload: 'Discard draft and reload',
+    reloadServerConfig: 'Reload server configuration',
     importError:
       'Choose a non-empty UTF-8 .yml or .yaml file up to 1 MiB with a valid YAML object.',
     replaceDraft: 'Importing replaces your edited draft. Continue?',

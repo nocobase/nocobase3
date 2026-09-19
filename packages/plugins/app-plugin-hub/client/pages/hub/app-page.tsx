@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactElement,
   type ReactNode,
@@ -121,6 +122,8 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   });
   const [deploymentsLoading, setDeploymentsLoading] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [refreshing, setRefreshing] = useState<'auto' | 'manual' | null>(null);
+  const refreshInFlightRef = useRef(false);
   const [selectedReleaseId, setSelectedReleaseId] = useState<string>();
   const [deploymentReleaseId, setDeploymentReleaseId] = useState<string>();
   const [rollbackDeploymentId, setRollbackDeploymentId] = useState<string>();
@@ -281,11 +284,17 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         selectedApp.releases[0]?.id),
   );
 
+  const configTab = activeTab === 'configuration' || activeTab === 'resources';
+  // Config is refreshed on explicit actions or a deployment change, not every
+  // status response. Other panels still refresh as deployment progress changes.
+  const panelDetail = configTab ? Boolean(detail) : detail;
+  const panelVersion =
+    activeTab === 'deployments' || configTab ? 0 : refreshVersion;
   useEffect(() => {
-    if (!detail || !activeTab) return;
+    if (!panelDetail || !activeTab) return;
     let cancelled = false;
     // Refresh deployment rows in place; only a tab/page change needs a skeleton.
-    const key = `${appId}:${activeTab}:${deploymentPage}:${activeTab === 'deployments' ? 0 : refreshVersion}`;
+    const key = `${appId}:${activeTab}:${deploymentPage}:${panelVersion}`;
     const load = async (): Promise<void> => {
       if (activeTab === 'deployments') {
         setDeploymentsLoading(true);
@@ -338,7 +347,8 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     fetchConfig,
     refreshVersion,
     reportError,
-    detail,
+    panelDetail,
+    panelVersion,
     detail?.app.currentDeploymentId,
   ]);
 
@@ -350,6 +360,12 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     let timer: number;
     let failures = 0;
     const poll = async (): Promise<void> => {
+      if (refreshInFlightRef.current) {
+        timer = window.setTimeout(() => void poll(), 1_500);
+        return;
+      }
+      refreshInFlightRef.current = true;
+      setRefreshing('auto');
       let keepPolling = true;
       try {
         const nextDetail = await loadDetail();
@@ -359,7 +375,6 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
           nextDetail.hasPendingDeployment ||
           nextDetail.runtime.state === 'pending';
         setDetail(nextDetail);
-        setRefreshVersion((value) => value + 1);
         setPollNotice(keepPolling ? undefined : { appId, state: 'finished' });
       } catch (reason) {
         if (cancelled) return;
@@ -375,6 +390,8 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
           setPollNotice({ appId, state: 'retrying' });
         }
       } finally {
+        refreshInFlightRef.current = false;
+        setRefreshing(null);
         // Schedule after completion so slow requests never overlap. Unchanged
         // pending flags must not stop polling; transient errors back off.
         if (!cancelled && keepPolling)
@@ -493,8 +510,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     capabilities,
     busy,
     panelLoading:
-      panelKey !==
-      `${appId}:${activeTab}:${deploymentPage}:${activeTab === 'deployments' ? 0 : refreshVersion}`,
+      panelKey !== `${appId}:${activeTab}:${deploymentPage}:${panelVersion}`,
     deploymentsLoading,
     configMode,
     configContent,
@@ -578,13 +594,27 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         });
       }),
     onRemove: () => setRemoveOpen(true),
-    onRefresh: () =>
-      void perform(async () => {
-        await client.request({
-          path: `hub/apps/${appId}/refresh`,
-          method: 'POST',
-        });
-      }),
+    onRefresh: () => {
+      if (refreshInFlightRef.current) return;
+      refreshInFlightRef.current = true;
+      setRefreshing('manual');
+      setError(undefined);
+      void (async () => {
+        try {
+          await client.request({
+            path: `hub/apps/${appId}/refresh`,
+            method: 'POST',
+          });
+          setDetail(await loadDetail());
+          setRefreshVersion((value) => value + 1);
+        } catch (reason) {
+          reportError(reason);
+        } finally {
+          refreshInFlightRef.current = false;
+          setRefreshing(null);
+        }
+      })();
+    },
   };
 
   return (
@@ -609,6 +639,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
           )}
           <HubAppPageContext.Provider value={contextValue}>
             <Detail
+              refreshing={refreshing}
               app={selectedApp}
               capabilities={capabilities}
               tab={effectiveTab}

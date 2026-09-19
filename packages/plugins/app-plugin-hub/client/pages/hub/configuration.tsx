@@ -282,8 +282,8 @@ function useConfigImport({
 }
 
 export function Configuration({
-  mode,
-  content,
+  mode: serverMode,
+  content: serverContent,
   busy,
   canUpdate,
   onSave,
@@ -295,9 +295,26 @@ export function Configuration({
   readonly onSave: (content: string) => void;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const [baseline, setBaseline] = useState({
+    mode: serverMode,
+    content: serverContent,
+  });
+  const { mode, content } = baseline;
   const source = CONFIG_MODES.find((item) => item.value === mode);
-  const [draft, setDraft] = useState(content);
+  const [draft, setDraft] = useState(serverContent);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [confirmReload, setConfirmReload] = useState(false);
+  const serverChanged = serverMode !== mode || serverContent !== content;
+  // Adjust pristine state before rendering children. Dirty drafts (including
+  // imported files) remain attached to their original baseline until confirmed.
+  if (
+    serverChanged &&
+    (draft === content || (serverMode === mode && draft === serverContent))
+  ) {
+    setBaseline({ mode: serverMode, content: serverContent });
+    setDraft(serverContent);
+    setConfirmReload(false);
+  }
   const configImport = useConfigImport({
     content: draft,
     initial: content,
@@ -309,6 +326,60 @@ export function Configuration({
   const changed = draft !== content;
   return (
     <div className='space-y-5'>
+      {serverChanged && (
+        <div
+          role='alert'
+          className='flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm'
+        >
+          <p>
+            {t('configuration.serverChanged', {
+              defaultValue:
+                'Server configuration has changed. Your unsaved draft has been preserved.',
+            })}
+          </p>
+          {confirmReload ? (
+            <>
+              <p>
+                {t('configuration.discardDraftWarning', {
+                  defaultValue:
+                    'Reloading discards your unsaved changes. Continue?',
+                })}
+              </p>
+              <Button
+                size='sm'
+                onClick={() => {
+                  setBaseline({ mode: serverMode, content: serverContent });
+                  setDraft(serverContent);
+                  setConfirmReload(false);
+                  setReviewOpen(false);
+                  configImport.reset();
+                }}
+              >
+                {t('configuration.discardAndReload', {
+                  defaultValue: 'Discard draft and reload',
+                })}
+              </Button>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() => setConfirmReload(false)}
+              >
+                {t('releases.cancel', { defaultValue: 'Cancel' })}
+              </Button>
+            </>
+          ) : (
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={() => setConfirmReload(true)}
+            >
+              {t('configuration.reloadServerConfig', {
+                defaultValue: 'Reload server configuration',
+              })}
+            </Button>
+          )}
+        </div>
+      )}
       <div className='flex flex-wrap items-start justify-between gap-3'>
         <div>
           <h2 className='font-semibold'>
@@ -372,6 +443,7 @@ export function Configuration({
                 <Button
                   disabled={
                     busy ||
+                    serverChanged ||
                     configImport.blocked ||
                     !changed ||
                     validationError !== null
@@ -422,6 +494,7 @@ export function Configuration({
               <Button
                 disabled={
                   busy ||
+                  serverChanged ||
                   configImport.blocked ||
                   !changed ||
                   validationError !== null

@@ -247,6 +247,91 @@ describe('Hub client pages', () => {
     vi.unstubAllGlobals();
   });
 
+  it.each([false, true])(
+    'shows manual refresh feedback and clears it after failure=%s',
+    async (fail) => {
+      renderAppPage('/apps/customer/deployments');
+      const button = await screen.findByRole('button', {
+        name: 'Refresh status',
+      });
+      let finish!: () => void;
+      const response = new Promise<void>((resolve, reject) => {
+        finish = () => (fail ? reject(new Error('Refresh failed')) : resolve());
+      });
+      mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+        if (path.endsWith('/refresh')) return response;
+        if (path === 'hub/apps/customer')
+          return Promise.resolve({ data: detail() });
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
+      });
+      fireEvent.click(button);
+      expect(button).toHaveTextContent('Refreshing…');
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('aria-busy', 'true');
+      expect(button.querySelector('svg')).toHaveClass('animate-spin');
+      fireEvent.click(button);
+      expect(
+        mocks.client.request.mock.calls.filter(([request]) =>
+          request.path.endsWith('/refresh'),
+        ),
+      ).toHaveLength(1);
+      await act(async () => finish());
+      expect(button).toHaveTextContent('Refresh status');
+      expect(button).toBeEnabled();
+      expect(button.querySelector('svg')).not.toHaveClass('animate-spin');
+    },
+  );
+
+  it.each([false, true])(
+    'animates only during automatic requests and clears after failure=%s',
+    async (fail) => {
+      vi.useFakeTimers();
+      renderAppPage(
+        '/apps/customer/deployments',
+        detail({ hasPendingDeployment: true }),
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      const button = screen.getByRole('button', { name: 'Refresh status' });
+      let finish!: () => void;
+      const response = new Promise<unknown>((resolve, reject) => {
+        finish = () =>
+          fail
+            ? reject(new Error('Temporary failure'))
+            : resolve({ data: detail({ hasPendingDeployment: true }) });
+      });
+      mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+        if (path === 'hub/apps/customer') return response;
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
+      });
+      expect(button.querySelector('svg')).not.toHaveClass('animate-spin');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      expect(button).toHaveTextContent('Refresh status');
+      expect(button).toBeDisabled();
+      expect(button.querySelector('svg')).toHaveClass('animate-spin');
+      fireEvent.click(button);
+      expect(
+        mocks.client.request.mock.calls.some(([request]) =>
+          request.path.endsWith('/refresh'),
+        ),
+      ).toBe(false);
+      await act(async () => finish());
+      expect(button).toBeEnabled();
+      expect(button.querySelector('svg')).not.toHaveClass('animate-spin');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(button).toBeEnabled();
+    },
+  );
+
   it.each(['running', 'failed'] as const)(
     'polls unchanged pending states until %s and stops',
     async (state) => {

@@ -152,6 +152,7 @@ const zhCN: HubResource = {
     allApplications: '全部应用',
     visit: '访问',
     refreshStatus: '刷新状态',
+    refreshing: '刷新中…',
     release: '版本',
     notDeployed: '未部署',
     startup: '启动方式',
@@ -362,6 +363,10 @@ const zhCN: HubResource = {
     importDraftNotice:
       '文件仅导入编辑器，检查并提交后才会生效。撤销导入也会丢弃导入后的编辑。',
     undoImport: '撤销导入',
+    serverChanged: '服务器配置已更新，已保留你的未保存草稿。',
+    discardDraftWarning: '重新加载将丢弃未保存的修改，是否继续？',
+    discardAndReload: '放弃草稿并重新加载',
+    reloadServerConfig: '重新加载服务器配置',
     importError:
       '请选择非空、UTF-8 编码且不超过 1 MiB 的 .yml 或 .yaml 文件，内容须为有效的 YAML 对象。',
     replaceDraft: '导入将覆盖已编辑的草稿，是否继续？',

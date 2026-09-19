@@ -76,6 +76,70 @@ const app: AppDetail = {
 const loadTemplate = async (): Promise<string> => template;
 const noop = (): void => undefined;
 
+describe('configuration server refresh', () => {
+  it('preserves dirty drafts and requires confirmation before loading new server content', async () => {
+    const props = {
+      mode: 'file' as const,
+      busy: false,
+      canUpdate: true,
+      onSave: vi.fn(),
+    };
+    const { rerender } = render(
+      <Configuration {...props} content={template} />,
+    );
+    const editor = await screen.findByLabelText('Draft');
+    fireEvent.change(editor, {
+      target: { value: 'database:\n  driver: mysql\n' },
+    });
+    rerender(<Configuration {...props} content={imported} />);
+    expect(screen.getByLabelText('Draft')).toBe(editor);
+    expect(editor).toHaveValue('database:\n  driver: mysql\n');
+    expect(
+      screen.getByRole('button', { name: 'Save and publish' }),
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reload server configuration' }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(editor).toHaveValue('database:\n  driver: mysql\n');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reload server configuration' }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Discard draft and reload' }),
+    );
+    expect(editor).toHaveValue(imported);
+    expect(
+      screen.queryByText(/Server configuration has changed/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('synchronizes pristine content without remounting and accepts a saved draft', async () => {
+    const props = {
+      mode: 'file' as const,
+      busy: false,
+      canUpdate: true,
+      onSave: vi.fn(),
+    };
+    const { rerender } = render(
+      <Configuration {...props} content={template} />,
+    );
+    const editor = await screen.findByLabelText('Draft');
+    rerender(<Configuration {...props} content={imported} />);
+    expect(screen.getByLabelText('Draft')).toBe(editor);
+    expect(editor).toHaveValue(imported);
+    fireEvent.change(editor, { target: { value: template } });
+    rerender(<Configuration {...props} content={template} />);
+    expect(editor).toHaveValue(template);
+    expect(
+      screen.getByRole('button', { name: 'Save and publish' }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByText(/Server configuration has changed/),
+    ).not.toBeInTheDocument();
+  });
+});
+
 async function setup() {
   const complete = vi.fn();
   function Harness() {
