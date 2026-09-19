@@ -2,7 +2,14 @@ import type {
   AppClientRouteComponentLoader,
   AppClientSettingsRouteGroupDefinition,
 } from '@nocobase/app-client/plugins';
-import { Bot } from 'lucide-react';
+import {
+  Bot,
+  BrainCircuit,
+  ContactRound,
+  Plug,
+  Sparkles,
+  Wrench,
+} from 'lucide-react';
 
 export interface AISettingsTabDefinition {
   readonly key: string;
@@ -42,7 +49,7 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
       {
         name: 'ai',
         path: '/ai',
-        navigation: { title: 'AI Employees' },
+        navigation: { title: 'AI Employees', icon: ContactRound },
         authz: {
           resource: { type: 'page', id: 'ai.settings' },
           action: 'access',
@@ -52,7 +59,7 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
       {
         name: 'aiSkills',
         path: '/ai/skills',
-        navigation: { title: 'Skills' },
+        navigation: { title: 'Skills', icon: Sparkles },
         authz: {
           resource: { type: 'page', id: 'ai.settings' },
           action: 'access',
@@ -62,7 +69,7 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
       {
         name: 'aiTools',
         path: '/ai/tools',
-        navigation: { title: 'tools.title' },
+        navigation: { title: 'tools.title', icon: Wrench },
         authz: {
           resource: { type: 'page', id: 'ai.settings' },
           action: 'access',
@@ -72,7 +79,6 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
       {
         name: 'aiConversations',
         path: '/ai/conversations',
-        navigation: { title: 'Conversations' },
         authz: {
           resource: { type: 'page', id: 'ai.settings' },
           action: 'access',
@@ -83,7 +89,7 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
       {
         name: 'aiLLMServices',
         path: '/ai/llm-services',
-        navigation: { title: 'LLM services' },
+        navigation: { title: 'LLM services', icon: BrainCircuit },
         authz: {
           resource: { type: 'page', id: 'ai.settings' },
           action: 'access',
@@ -93,7 +99,7 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
       {
         name: 'aiMCPServices',
         path: '/ai/mcp-services',
-        navigation: { title: 'MCP services' },
+        navigation: { title: 'MCP services', icon: Plug },
         authz: {
           resource: { type: 'page', id: 'ai.settings' },
           action: 'access',

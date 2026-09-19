@@ -144,10 +144,9 @@ function expectCenterWithoutEmployeeShell() {
     screen.queryByRole('button', { name: 'LLM services' }),
   ).not.toBeInTheDocument();
   expect(screen.queryByText('Employee content')).not.toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Conversations' })).toHaveAttribute(
-    'aria-current',
-    'page',
-  );
+  expect(
+    screen.queryByRole('link', { name: 'Conversations' }),
+  ).not.toBeInTheDocument();
   expect(
     screen.getByRole('link', { name: 'AI Employees' }),
   ).not.toHaveAttribute('aria-current');
@@ -243,7 +242,6 @@ describe('AI settings page navigation', () => {
       'AI Employees',
       'Skills',
       'Tools',
-      'Conversations',
       'LLM services',
       'MCP services',
     ]);
@@ -447,7 +445,7 @@ describe('AI settings page navigation', () => {
     expect(router.state.location.pathname).toBe(
       '/main/settings/ai/mcp-services',
     );
-    openMenuPage('Conversations');
+    await act(() => router.navigate('/settings/ai/conversations'));
     expect(await screen.findByText('Conversation content')).toBeInTheDocument();
     expectCenterWithoutEmployeeShell();
     expect(router.state.location.pathname).toBe(
@@ -473,7 +471,7 @@ describe('AI settings page navigation', () => {
         }),
       ).not.toBeInTheDocument();
       expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
-      openMenuPage('Conversations');
+      await act(() => router.navigate('/settings/ai/conversations'));
       expect(
         await screen.findByText('Conversation content'),
       ).toBeInTheDocument();
