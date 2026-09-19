@@ -1,7 +1,7 @@
 import { useTranslation } from '@nocobase/i18n/client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { ArrowLeft, X } from 'lucide-react';
-import { useMemo, type ComponentProps, type ReactElement } from 'react';
+import { ArrowLeft, PanelLeft, X } from 'lucide-react';
+import { useMemo, useState, type ReactElement } from 'react';
 import { Link, Navigate, Routes, useLocation, useNavigate } from 'react-router';
 
 import { Loading } from '@/components/loading';
@@ -19,15 +19,7 @@ import {
 } from '../routing/route-navigation.js';
 import { NavigationTree } from './components/navigation-tree.js';
 import { LayoutHeader } from './components/layout-header.js';
-import {
-  Sidebar,
-  SidebarProvider,
-  SidebarHeader,
-  SidebarContent,
-  SidebarMenu,
-  SidebarTrigger,
-  useSidebar,
-} from '@/components/ui/sidebar';
+import { LayoutSidebar } from './components/layout-sidebar.js';
 import { SurfaceEmpty, type SurfaceCopy } from './components/surface-empty.js';
 import { AppBrand } from './components/app-brand.js';
 import { HeaderActions } from './components/header-actions.js';
@@ -38,17 +30,7 @@ export interface DevLayoutProps {
   readonly routes?: readonly AppClientRegisteredRoute[];
 }
 
-export function DevLayout(
-  props: ComponentProps<typeof DevLayoutContent>,
-): ReactElement {
-  return (
-    <SidebarProvider className='h-svh overflow-hidden'>
-      <DevLayoutContent {...props} />
-    </SidebarProvider>
-  );
-}
-
-function DevLayoutContent({
+export function DevLayout({
   routeTree,
   routes = EMPTY_ARRAY,
 }: DevLayoutProps): ReactElement {
@@ -65,8 +47,8 @@ function DevLayoutContent({
     }),
   };
 
-  const { state, isMobile, setOpenMobile } = useSidebar();
-  const desktopSidebarCollapsed = !isMobile && state === 'collapsed';
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
   const { items: navEntries, loading, denied } = useRouteNavigation(routeTree);
   const settingsNavigation = useRouteNavigation(
     useClientApplication().runtime.settingsRouteTree,
@@ -108,17 +90,18 @@ function DevLayoutContent({
   }
 
   return (
-    <div className='flex h-svh w-full bg-background'>
-      <Sidebar
-        collapsible='icon'
-        role={isMobile ? undefined : 'complementary'}
+    <div className='flex h-svh bg-background'>
+      <LayoutSidebar
         aria-label={t('surface.navigation', {
           title: copy.title,
           defaultValue: `${copy.title} navigation`,
         })}
+        desktopState={desktopSidebarCollapsed ? 'collapsed' : 'expanded'}
+        mobileOpen={mobileSidebarOpen}
+        onMobileOpenChange={setMobileSidebarOpen}
       >
-        <SidebarHeader
-          className={`flex flex-row h-16 shrink-0 items-center justify-between overflow-hidden border-b border-sidebar-border/70 px-5 ${desktopSidebarCollapsed ? 'md:justify-center md:px-0' : ''}`}
+        <div
+          className={`flex h-16 shrink-0 items-center justify-between overflow-hidden border-b border-sidebar-border/70 px-5 ${desktopSidebarCollapsed ? 'md:justify-center md:px-0' : ''}`}
         >
           <div className='md:hidden'>
             <AppBrand />
@@ -131,35 +114,62 @@ function DevLayoutContent({
               defaultValue: 'Close navigation',
             })}
             className='md:hidden hover:bg-sidebar-accent dark:hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:border-sidebar-ring focus-visible:ring-sidebar-ring'
-            onClick={() => setOpenMobile(false)}
+            onClick={() => setMobileSidebarOpen(false)}
             size='icon'
             variant='ghost'
           >
             <X />
           </Button>
-        </SidebarHeader>
-        <SidebarContent
-          role='navigation'
+        </div>
+        <nav
           aria-label={copy.title}
-          className='overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:overflow-y-auto p-2'
+          className={`flex-1 min-h-0 space-y-1 overflow-x-hidden overflow-y-auto py-4 ${desktopSidebarCollapsed ? 'px-3 md:px-2' : 'px-3'}`}
         >
-          <SidebarMenu>
-            {navEntries.map((entry) => (
-              <NavigationTree
-                key={routeKey(entry.route)}
-                item={entry}
-                selectedKey={selectedKey}
-                onNavigate={() => setOpenMobile(false)}
-              />
-            ))}
-          </SidebarMenu>
-        </SidebarContent>
-      </Sidebar>
+          {navEntries.map((entry) => (
+            <NavigationTree
+              key={routeKey(entry.route)}
+              item={entry}
+              collapsed={desktopSidebarCollapsed}
+              selectedKey={selectedKey}
+              onNavigate={() => setMobileSidebarOpen(false)}
+            />
+          ))}
+        </nav>
+      </LayoutSidebar>
       <div className='flex min-w-0 flex-1 flex-col'>
         <LayoutHeader className='sticky top-0 z-40 justify-between'>
           <div className='flex min-w-0 items-center gap-3'>
-            {isMobile ? <SidebarTrigger /> : null}
-            {!isMobile ? <SidebarTrigger /> : null}
+            <Button
+              aria-label={t('navigation.open', {
+                defaultValue: 'Open navigation',
+              })}
+              className='size-9 rounded-xl text-muted-foreground md:hidden'
+              onClick={() => setMobileSidebarOpen(true)}
+              size='icon'
+              variant='ghost'
+            >
+              <PanelLeft />
+            </Button>
+            <Button
+              aria-label={
+                desktopSidebarCollapsed
+                  ? t('navigation.expand', {
+                      defaultValue: 'Expand navigation',
+                    })
+                  : t('navigation.collapse', {
+                      defaultValue: 'Collapse navigation',
+                    })
+              }
+              aria-pressed={desktopSidebarCollapsed}
+              className='hidden size-9 rounded-xl text-muted-foreground hover:text-foreground md:inline-flex'
+              onClick={() =>
+                setDesktopSidebarCollapsed((collapsed) => !collapsed)
+              }
+              size='icon'
+              variant='ghost'
+            >
+              <PanelLeft />
+            </Button>
             <div className='hidden h-5 w-px bg-border md:block' />
             <Link
               className='inline-flex min-w-0 items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground'

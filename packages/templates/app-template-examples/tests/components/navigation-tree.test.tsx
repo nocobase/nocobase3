@@ -1,11 +1,3 @@
-beforeEach(() =>
-  vi.stubGlobal('matchMedia', () => ({
-    matches: false,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  })),
-);
-afterEach(() => vi.unstubAllGlobals());
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -16,7 +8,6 @@ import {
   routeKey,
   type RouteNavigationItem,
 } from '../../client/routing/route-navigation.js';
-import { SidebarProvider } from '../../client/components/ui/sidebar';
 import { NavigationTree } from '../../client/layouts/components/navigation-tree.js';
 
 vi.mock('@nocobase/i18n/client', () => ({
@@ -56,21 +47,26 @@ describe.each([
   function tree(selectedKey: string | undefined) {
     return (
       <MemoryRouter>
-        <SidebarProvider>
-          <NavigationTree
-            item={item}
-            selectedKey={selectedKey}
-            onNavigate={() => {}}
-          />
-        </SidebarProvider>
+        <NavigationTree
+          item={item}
+          collapsed={false}
+          selectedKey={selectedKey}
+          onNavigate={() => {}}
+        />
       </MemoryRouter>
     );
   }
   function toggle() {
-    return screen.getByRole('button', { name: 'Group' });
+    return clickable
+      ? screen.getByRole('button', { name: 'Group' })
+      : screen
+          .getByText('Group', { selector: 'summary span.truncate' })
+          .closest('summary')!;
   }
   function expectExpanded(expanded: boolean) {
-    expect(toggle()).toHaveAttribute('aria-expanded', String(expanded));
+    if (clickable)
+      expect(toggle()).toHaveAttribute('aria-expanded', String(expanded));
+    else expect(toggle().closest('details')!.open).toBe(expanded);
   }
 
   it('keeps an active group open when navigating to another group', () => {
@@ -120,13 +116,12 @@ describe('collapsed navigation', () => {
     const onNavigate = vi.fn();
     render(
       <MemoryRouter>
-        <SidebarProvider open={!collapsed}>
-          <NavigationTree
-            item={item}
-            selectedKey={routeKey(child)}
-            onNavigate={onNavigate}
-          />
-        </SidebarProvider>
+        <NavigationTree
+          item={item}
+          collapsed={collapsed}
+          selectedKey={routeKey(child)}
+          onNavigate={onNavigate}
+        />
       </MemoryRouter>,
     );
     return onNavigate;
@@ -222,13 +217,12 @@ describe('collapsed navigation', () => {
     };
     const tree = (collapsed: boolean) => (
       <MemoryRouter>
-        <SidebarProvider open={!collapsed}>
-          <NavigationTree
-            item={item}
-            selectedKey={undefined}
-            onNavigate={() => {}}
-          />
-        </SidebarProvider>
+        <NavigationTree
+          item={item}
+          collapsed={collapsed}
+          selectedKey={undefined}
+          onNavigate={() => {}}
+        />
       </MemoryRouter>
     );
     const { rerender } = render(tree(true));
@@ -243,7 +237,6 @@ describe('collapsed navigation', () => {
   it.each(['expanded', 'mobile'])(
     'does not add hover overlays when %s',
     async (mode) => {
-      if (mode === 'mobile') vi.stubGlobal('innerWidth', 390);
       if (mode === 'mobile')
         vi.stubGlobal('matchMedia', () => ({
           matches: false,
