@@ -209,26 +209,18 @@ export default function DevelopmentPage(): ReactElement {
             <p className='text-sm text-muted-foreground'>
               {t('development.uploadDescription', {
                 defaultValue:
-                  'Upload storage/dist.tar.gz in Releases. Then choose Deploy in Deployments to select the release and review its configuration.',
+                  'Upload storage/dist.tar.gz in Releases & deployments. Then choose Deploy on the release and review its configuration.',
               })}
             </p>
             <div className='flex flex-wrap items-center gap-3'>
-              {capabilities['read-release'] && (
+              {(capabilities['read-release'] ||
+                capabilities['read-deployment'] ||
+                capabilities['upload-release']) && (
                 <Button
-                  render={<Link to={{ pathname: '../releases', search }} />}
-                >
-                  {t('development.openReleases', {
-                    defaultValue: 'Go to Releases',
-                  })}
-                </Button>
-              )}
-              {capabilities['read-deployment'] && (
-                <Button
-                  variant='ghost'
                   render={<Link to={{ pathname: '../deployments', search }} />}
                 >
-                  {t('development.openDeployments', {
-                    defaultValue: 'Go to Deployments',
+                  {t('development.openWorkspace', {
+                    defaultValue: 'Go to Releases & deployments',
                   })}
                 </Button>
               )}

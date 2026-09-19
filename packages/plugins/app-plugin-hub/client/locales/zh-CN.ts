@@ -142,10 +142,11 @@ const zhCN: HubResource = {
     createTitle: '创建应用',
     createDescription: '先创建稳定的应用标识，再发布版本。',
     applicationName: '应用名称',
-    applicationNamePlaceholder: '客户门户',
+    applicationNamePlaceholder: '请输入应用名称',
     applicationId: '应用 ID',
-    applicationIdHint: '自动生成，可编辑；全局唯一，创建后不可修改。',
-    applicationIdPlaceholder: 'customer-portal',
+    applicationIdHint:
+      '必填，仅支持字母、数字、连字符和下划线；全局唯一，创建后不可修改。',
+    applicationIdPlaceholder: '请输入应用 ID',
     create: '创建应用',
   },
   detail: {
@@ -160,8 +161,8 @@ const zhCN: HubResource = {
     onFirstVisit: '首次访问时',
     updated: '更新于 {{date}}',
     tabs: {
-      logs: '日志',
-      deployments: '部署',
+      logs: '运行日志',
+      deployments: '发布与部署',
       releases: '版本',
       development: '开发',
       resources: '资源',
@@ -243,7 +244,7 @@ const zhCN: HubResource = {
   deployments: {
     statusRetrying: '状态更新暂时中断，正在自动重试…',
     statusFinished: '部署或启动流程已结束，请查看最新状态和部署记录确认结果。',
-    title: '部署',
+    title: '部署记录',
     description:
       '每一行代表一次部署操作。回滚会使用选定的版本和配置创建新的部署。',
     deploy: '部署版本',
@@ -287,8 +288,23 @@ const zhCN: HubResource = {
     },
   },
   releases: {
-    title: '版本',
-    description: '上传并查看此应用的不可变版本制品。',
+    uploadedOnly: '上传成功。',
+    expand: '展开版本',
+    collapse: '收起版本',
+    uploadedAt: '上传时间',
+    size: '大小',
+    deploy: '部署',
+    deployVersion: '部署 v{{version}}',
+    latestUpload: '最近上传',
+    uploaded: '上传成功，点击新版本右侧的「部署」继续。',
+    reusable: '同一版本包可重复部署，每次部署单独记录。',
+    showAll: '查看全部 {{count}} 个版本',
+    showLess: '收起更多版本',
+    firstTitle: '上传第一个版本，开始部署',
+    firstDescription: '先上传构建产物，再确认配置并部署，查看进度和日志。',
+
+    title: '版本包',
+    description: '上传新版本，或选择已有版本再次部署。',
     upload: '上传版本',
     noReleases: '暂无上传版本',
     active: '当前版本',
@@ -455,6 +471,7 @@ const zhCN: HubResource = {
     remove: '删除应用',
   },
   development: {
+    openWorkspace: '前往发布与部署',
     buildTitle: '构建版本',
     projectSource: '项目来源',
     prepareTitle: '准备项目',
@@ -477,7 +494,7 @@ const zhCN: HubResource = {
     buildTarget:
       '部署到另一台机器？使用 --target 和 --node-version 匹配 Hub 主机环境，支持的选项见 pnpm build --help。',
     uploadDescription:
-      '在“版本”中上传 storage/dist.tar.gz，再到“部署”中点击“部署”，选择版本并检查配置。',
+      '在“发布与部署”中上传 storage/dist.tar.gz，再点击版本右侧的“部署”并检查配置。',
     openReleases: '前往版本',
     deployDescription: '上传不会启动应用，请在部署成功后再访问。',
     openDeployments: '前往部署',

@@ -1,7 +1,21 @@
-import { Archive, CloudUpload } from 'lucide-react';
+import {
+  Archive,
+  CloudUpload,
+  ChevronDown,
+  ChevronUp,
+  Play,
+} from 'lucide-react';
 import { Badge } from '../../components/ui/badge.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
+import {
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from '../../components/ui/table.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   useEffect,
@@ -13,86 +27,179 @@ import {
 } from 'react';
 import type { AppDetail } from './types.js';
 import { Empty, AppDialog } from './shared.js';
-import { formatDate, formatBytes } from './utils.js';
+import { appActionState, formatDate, formatBytes } from './utils.js';
 
 export function Releases({
   app,
-  selected,
+  canRead,
   canUpload,
-  onSelect,
+  canDeploy,
+  busy,
+  collapsed,
+  onCollapsed,
+  onDeploy,
   onUpload,
 }: {
   readonly app: AppDetail;
-  readonly selected: string | undefined;
+  readonly canRead: boolean;
   readonly canUpload: boolean;
-  readonly onSelect: (id: string) => void;
+  readonly canDeploy: boolean;
+  readonly busy: boolean;
+  readonly collapsed: boolean;
+  readonly onCollapsed: (value: boolean) => void;
+  readonly onDeploy: (id: string) => void;
   readonly onUpload: () => void;
 }): ReactElement {
   const { t, i18n } = useTranslation('@nocobase/app-plugin-hub');
+  const [showAll, setShowAll] = useState(false);
+  const state = appActionState(app, 'deploy', busy);
+  const reason = state.reason ? t(`actions.${state.reason}`) : undefined;
+  // The release endpoint orders persisted uploads newest first; versions are not unique.
+  const latestReleaseId = app.releases[0]?.id;
+  const highlightedReleaseId =
+    latestReleaseId !== app.deployment.observedReleaseId
+      ? latestReleaseId
+      : undefined;
   return (
-    <div>
-      <div className='mb-5 flex items-center justify-between'>
+    <section aria-label={t('releases.title', { defaultValue: 'Releases' })}>
+      <div className='mb-4 flex flex-wrap items-start justify-between gap-3'>
         <div>
-          <h2 className='font-semibold'>
+          <h2 className='text-sm font-semibold'>
             {t('releases.title', { defaultValue: 'Releases' })}
+            {canRead ? (
+              <span className='ml-2 font-normal text-muted-foreground'>
+                {app.releases.length}
+              </span>
+            ) : null}
           </h2>
-          <p className='mt-1 text-sm text-muted-foreground'>
-            {t('releases.description', {
-              defaultValue:
-                'Upload and inspect immutable release artifacts for this application.',
-            })}
+          <p className='mt-1 text-xs text-muted-foreground'>
+            {t('releases.description')}
           </p>
         </div>
-        {canUpload ? (
-          <div className='flex gap-2'>
-            <Button onClick={onUpload} variant='outline'>
-              <CloudUpload className='size-4' />{' '}
+        <div className='flex flex-wrap gap-2'>
+          {canRead && app.releases.length > 0 ? (
+            <Button
+              variant='ghost'
+              size='sm'
+              aria-expanded={!collapsed}
+              aria-controls='hub-release-list'
+              onClick={() => onCollapsed(!collapsed)}
+            >
+              {collapsed ? <ChevronDown /> : <ChevronUp />}
+              {t(collapsed ? 'releases.expand' : 'releases.collapse')}
+            </Button>
+          ) : null}
+          {canUpload ? (
+            <Button onClick={onUpload}>
+              <CloudUpload />
               {t('releases.upload', { defaultValue: 'Upload release' })}
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
-      <div className='overflow-hidden rounded-xl border'>
-        {app.releases.length ? (
-          app.releases.map((item) => (
-            <Button
-              className={`grid h-auto w-full grid-cols-[minmax(0,1fr)_120px_140px] justify-stretch rounded-none border-b px-4 py-3 text-left text-sm last:border-0 ${selected === item.id ? 'bg-primary/5' : ''}`}
-              key={item.id}
-              onClick={() => onSelect(item.id)}
-              variant='ghost'
-            >
-              <span className='flex items-center gap-3'>
-                <Archive className='size-4 text-muted-foreground' />
-                <span>
-                  <span className='block font-medium'>v{item.version}</span>
-                  <span className='font-mono text-[11px] text-muted-foreground'>
-                    {item.checksum.slice(0, 12)}
-                  </span>
-                </span>
-                {item.id === app.deployment.observedReleaseId ? (
-                  <Badge className='bg-emerald-500/10 text-emerald-700'>
-                    {t('releases.active', { defaultValue: 'Active' })}
-                  </Badge>
-                ) : null}
-              </span>
-              <span className='text-muted-foreground'>
-                {formatBytes(item.size)}
-              </span>
-              <span className='text-muted-foreground'>
-                {formatDate(item.createdAt, i18n.language)}
-              </span>
-            </Button>
-          ))
-        ) : (
+      {canRead && !collapsed && app.releases.length > 0 ? (
+        <div id='hub-release-list'>
+          <div className='overflow-hidden rounded-lg border'>
+            <Table>
+              <TableHeader className='bg-muted/20'>
+                <TableRow>
+                  <TableHead>{t('deployments.release')}</TableHead>
+                  <TableHead>{t('releases.uploadedAt')}</TableHead>
+                  <TableHead>{t('releases.size')}</TableHead>
+                  <TableHead className='text-right'>
+                    {t('deployments.actions')}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(showAll ? app.releases : app.releases.slice(0, 3)).map(
+                  (item) => (
+                    <TableRow
+                      key={item.id}
+                      className={
+                        item.id === highlightedReleaseId
+                          ? 'bg-primary/5'
+                          : undefined
+                      }
+                    >
+                      <TableCell>
+                        <div className='flex flex-wrap items-center gap-2'>
+                          <span className='font-medium'>v{item.version}</span>
+                          {item.id === app.deployment.observedReleaseId ? (
+                            <Badge className='bg-emerald-500/10 text-emerald-700'>
+                              {t('releases.active')}
+                            </Badge>
+                          ) : null}
+                          {item.id === latestReleaseId ? (
+                            <Badge className='bg-sky-500/10 text-sky-700 dark:text-sky-300'>
+                              {t('releases.latestUpload')}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <span className='font-mono text-xs text-muted-foreground'>
+                          {item.checksum.slice(0, 12)}
+                        </span>
+                      </TableCell>
+                      <TableCell className='text-muted-foreground'>
+                        {formatDate(item.createdAt, i18n.language)}
+                      </TableCell>
+                      <TableCell className='text-muted-foreground'>
+                        {formatBytes(item.size)}
+                      </TableCell>
+                      <TableCell className='text-right'>
+                        {canDeploy ? (
+                          <Button
+                            size='sm'
+                            variant={
+                              item.id === highlightedReleaseId
+                                ? 'default'
+                                : 'outline'
+                            }
+                            disabled={!state.enabled}
+                            title={reason}
+                            aria-label={t('releases.deployVersion', {
+                              version: item.version,
+                              defaultValue: `Deploy v${item.version}`,
+                            })}
+                            onClick={() => onDeploy(item.id)}
+                          >
+                            <Play />
+                            {t('releases.deploy', { defaultValue: 'Deploy' })}
+                          </Button>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ),
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className='mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground'>
+            <span>{t('releases.reusable')}</span>
+            {app.releases.length > 3 ? (
+              <Button
+                size='sm'
+                variant='ghost'
+                onClick={() => setShowAll(!showAll)}
+              >
+                {t(showAll ? 'releases.showLess' : 'releases.showAll', {
+                  count: app.releases.length,
+                })}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {!app.hasReleases ? (
+        <div className='rounded-lg border border-dashed bg-muted/20 py-8'>
           <Empty
             icon={<Archive />}
-            title={t('releases.noReleases', {
-              defaultValue: 'No releases uploaded',
-            })}
+            title={t('releases.firstTitle')}
+            description={t('releases.firstDescription')}
           />
-        )}
-      </div>
-    </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
