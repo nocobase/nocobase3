@@ -1,5 +1,38 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.19
+
+### Patch Changes
+
+- e13ed84: Preserve structured workflow context alongside queued run return values when integrating scheduled execution. Route terminal observer failures and registered queue jobs through application loggers while retaining committed workflow outcomes.
+- e13ed84: Persist per-deployment phase and failure logs and expose application runtime logs in Hub with scoped access, incremental reading, retention, and independent file and console outputs.
+
+  Unify runtime logging configuration and source routing, merge default outputs into app files, connect workflow diagnostics with execution identities, and preserve legacy configuration and historical log readability.
+
+  Enforce hosted capture policy, declare the Host server runtime peer, merge paged source logs chronologically with bounded opaque cursors, and preserve correlation and error details when truncating oversized records. Handle expired scans explicitly in the Hub viewer and downloads.
+
+  Route HTTP request logs to separate request files by default in all application templates.
+
+- 25cf9f6: Return manual workflow runs after persistence without waiting for node completion and show submission feedback before navigating to the execution record.
+- 49a7890: Yield workflow execution before running script nodes in the background, then resume the persisted node attempt with its result. Preserve error propagation, timeout cancellation, and graceful shutdown draining.
+- Updated dependencies [e0c4b3d]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [00362cf]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.1
+  - @nocobase/queue@0.1.0-beta.6
+  - @nocobase/db@1.0.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.19
+  - @nocobase/logging@0.1.0-beta.5
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/nb3-cli@1.0.0-beta.9
+
 ## 0.1.0-beta.18
 
 ### Minor Changes
