@@ -82,6 +82,12 @@ export interface WorkflowNodeRunPayload {
   truncated: boolean;
 }
 export interface WorkflowCanvasProps {
+  focusRequest?: number;
+  changedConnections?: ReadonlySet<string>;
+  differences?: ReadonlyMap<
+    string,
+    import('./version-diff.js').DifferenceStatus
+  >;
   definition: WorkflowNestedDefinition;
   overlay?: WorkflowExecutionOverlay;
   nodeRuns?: readonly WorkflowNodeRunRecord[];

@@ -491,11 +491,18 @@ describe('workflow node descriptions', () => {
       </MemoryRouter>,
     );
 
-    const picker = await screen.findByRole('combobox');
+    const picker = await screen.findByRole('button', { name: 'Version' });
     fireEvent.click(picker);
     await waitFor(() =>
       expect(
-        [...screen.getAllByRole('option')].map((option) => option.textContent),
+        [
+          ...screen
+            .getAllByRole('menuitem')
+            .filter(
+              (item) =>
+                !item.getAttribute('aria-label')?.startsWith('Compare with'),
+            ),
+        ].map((option) => option.textContent),
       ).toEqual(['Unpublished', '>version-1']),
     );
 

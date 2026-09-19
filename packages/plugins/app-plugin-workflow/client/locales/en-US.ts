@@ -1,6 +1,32 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  comparison: {
+    connectionsChanged: 'Connections changed',
+    untitledNode: 'Untitled node',
+    compare: 'Compare',
+    compareWith: 'Compare with {{version}}',
+    title: 'Compare versions',
+    description:
+      'Select two versions, then select a node to inspect its definition and connection changes. Nodes are matched by key; a renamed key appears as removal and addition. Runtime parameter values, execution data, and external script/resource contents are excluded.',
+    needVersions: 'At least two versions are needed',
+    direction: 'Changes from baseline to target',
+    before: 'Baseline version',
+    after: 'Target version',
+    added: 'Added',
+    removed: 'Removed',
+    changed: 'Changed',
+    unchanged: 'Unchanged',
+    swap: 'Swap versions',
+    current: 'Current',
+    field: 'Field path',
+    absent: 'Not present',
+    noChanges: 'No definition changes',
+    missingNode: 'This node does not exist in this version',
+    changedNodes: 'Changed nodes',
+    workflowFields: 'Workflow settings',
+    details: 'Change details',
+  },
   nav: {
     automation: 'Automation',
     workflows: 'Workflows',

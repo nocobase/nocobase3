@@ -1,3 +1,4 @@
+import { SelectionFocus } from './selection-focus.js';
 import { terminalEdgePoints } from './graph/terminal-edge.js';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -43,6 +44,8 @@ import type { WorkflowCanvasProps, WorkflowNodeRunRecord } from './types.js';
 import './workflow-canvas.css';
 
 interface CanvasNodeData extends Record<string, unknown> {
+  difference?: string;
+  connectionsChanged?: boolean;
   title: string;
   nodeType: string | null;
   kind: string;
@@ -100,7 +103,7 @@ function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>): ReactElement {
             : Terminal;
   return (
     <div
-      className={`workflow-flow-node ${boundary ? 'boundary' : ''} ${data.kind} ${instructionClass} ${data.status}`}
+      className={`workflow-flow-node ${boundary ? 'boundary' : ''} ${data.kind} ${instructionClass} ${data.status} ${data.difference ? `workflow-diff-${data.difference}` : ''}`}
     >
       {data.kind !== 'start' ? (
         <Handle
@@ -114,6 +117,13 @@ function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>): ReactElement {
       </span>
       <span className='workflow-flow-copy'>
         <strong>{data.title}</strong>
+        {data.difference && data.difference !== 'unchanged' ? (
+          <span className={`workflow-diff-label ${data.difference}`}>
+            {data.connectionsChanged
+              ? t('comparison.connectionsChanged')
+              : t(`comparison.${data.difference}`)}
+          </span>
+        ) : null}
       </span>
       {data.kind === 'end' ? null : condition ? (
         <>
@@ -242,6 +252,9 @@ const edgeTypes = { workflow: RoutedWorkflowEdge };
 
 export function WorkflowCanvas({
   definition,
+  focusRequest,
+  differences,
+  changedConnections,
   overlay,
   nodeRuns = EMPTY_NODE_RUNS,
   selectedNodeKey,
@@ -357,6 +370,13 @@ export function WorkflowCanvas({
         type: 'workflow',
         position: positions.get(node.id) ?? { x: 0, y: 0 },
         data: {
+          connectionsChanged: Boolean(
+            node.workflowNodeKey &&
+            changedConnections?.has(node.workflowNodeKey),
+          ),
+          difference: node.workflowNodeKey
+            ? differences?.get(node.workflowNodeKey)
+            : undefined,
           title: node.title,
           nodeType: node.nodeType,
           kind: node.kind,
@@ -379,6 +399,8 @@ export function WorkflowCanvas({
       })),
     [
       attemptsByNode,
+      differences,
+      changedConnections,
       direction,
       graph,
       onViewNodeRun,
@@ -512,6 +534,18 @@ export function WorkflowCanvas({
             minZoom={0.2}
             maxZoom={1.5}
           >
+            <SelectionFocus
+              node={nodes.find(
+                (node) =>
+                  node.id ===
+                  graph.nodes.find(
+                    (item) => item.workflowNodeKey === selectedNodeKey,
+                  )?.id,
+              )}
+              request={focusRequest}
+              ready={viewportReady}
+              selected={selectedNodeKey}
+            />
             <Background color='var(--border)' gap={24} size={1} />
             <Panel position='top-right' className='workflow-layout-toggle'>
               <button
@@ -536,6 +570,7 @@ export function WorkflowCanvas({
               </button>
             </Panel>
             <MiniMap
+              style={differences ? { width: 120, height: 90 } : undefined}
               nodeColor={minimapColor}
               nodeStrokeColor={minimapStroke}
               nodeBorderRadius={8}

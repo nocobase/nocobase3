@@ -1,4 +1,9 @@
-:where(.workflow-page, .workflow-runs-dialog, .workflow-node-result-dialog) {
+:where(
+  .workflow-page,
+  .workflow-runs-dialog,
+  .workflow-node-result-dialog,
+  .workflow-comparison-dialog
+) {
   --workflow-emphasis: var(--foreground);
   --workflow-emphasis-soft: color-mix(
     in oklab,
@@ -1193,4 +1198,215 @@
   line-height: var(--text-xs--line-height);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Viewport constraints keep two independently navigable graphs visible in the comparison. */
+.workflow-comparison-dialog {
+  /* Diff changes retain their yellow meaning independently of the chart palette. */
+  --workflow-diff-changed: oklch(0.76 0.14 85);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  width: calc(100vw - 2rem);
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+}
+.workflow-comparison-dialog .workflow-canvas {
+  height: 45vh;
+  min-height: 18rem;
+}
+.workflow-diff-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.workflow-diff-label.added {
+  color: var(--workflow-success);
+}
+.workflow-diff-label.removed {
+  color: var(--destructive);
+}
+.workflow-diff-label.changed {
+  color: var(--workflow-diff-changed);
+}
+.workflow-flow-node.workflow-diff-added {
+  border: 2px solid var(--workflow-success);
+}
+.workflow-flow-node.workflow-diff-removed {
+  border: 2px dashed var(--destructive);
+}
+.workflow-flow-node.workflow-diff-changed {
+  border: 2px solid var(--workflow-diff-changed);
+}
+.workflow-comparison-dialog [aria-pressed='true'] {
+  outline: 2px solid var(--ring);
+}
+
+@media (max-width: 640px) {
+  .workflow-comparison-dialog .react-flow__minimap {
+    display: none;
+  }
+}
+
+.workflow-comparison-layout {
+  display: grid;
+  grid-template-columns: calc(var(--spacing) * 52) minmax(0, 1fr);
+  gap: calc(var(--spacing) * 4);
+  align-items: stretch;
+}
+.workflow-comparison-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 2);
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: calc(var(--spacing) * 1);
+}
+.workflow-comparison-sidebar button {
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
+.workflow-comparison-sidebar [aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.dark .workflow-comparison-dialog {
+  --workflow-diff-changed: oklch(0.87 0.13 85);
+}
+@media (max-width: 1023px) {
+  .workflow-comparison-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workflow-comparison-sidebar {
+    max-height: 12rem;
+  }
+}
+
+.workflow-version-menu-row {
+  position: relative;
+  border-radius: var(--radius-md);
+}
+.workflow-version-menu-row:hover,
+.workflow-version-menu-row:focus-within {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.workflow-version-menu-option {
+  width: 100%;
+  padding-right: calc(var(--spacing) * 16);
+  background: transparent;
+}
+.workflow-version-compare-action {
+  position: absolute;
+  right: var(--spacing);
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0;
+  background: var(--accent);
+  font-size: var(--text-xs);
+  color: var(--primary);
+}
+.workflow-version-menu-row:hover .workflow-version-compare-action,
+.workflow-version-menu-row:focus-within .workflow-version-compare-action {
+  opacity: 1;
+}
+@media (hover: none) {
+  .workflow-version-compare-action {
+    opacity: 1;
+  }
+}
+.workflow-comparison-dialog {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.workflow-comparison-layout {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.workflow-comparison-sidebar {
+  height: 100%;
+}
+.workflow-comparison-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 3);
+}
+.workflow-comparison-main > * {
+  flex-shrink: 0;
+}
+.workflow-comparison-sidebar button {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing);
+  font-size: var(--text-xs);
+  flex-shrink: 0;
+}
+.workflow-comparison-sidebar .workflow-diff-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+.workflow-comparison-dialog .workflow-flow-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing);
+}
+.workflow-comparison-dialog .workflow-flow-copy strong {
+  font-size: var(--text-xs);
+}
+.workflow-comparison-dialog .workflow-flow-copy .workflow-diff-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+.workflow-flow-node.workflow-diff-changed {
+  background: color-mix(
+    in oklab,
+    var(--workflow-diff-changed) 10%,
+    var(--card)
+  );
+}
+.workflow-comparison-canvases {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: calc(var(--spacing) * 12);
+}
+.workflow-comparison-swap {
+  position: absolute;
+  left: 50%;
+  /* Version selector header (h-8 + p-3), panel border, then half the canvas height. */
+  top: calc(var(--spacing) * 14 + 1px + max(22.5vh, 9rem));
+  transform: translate(-50%, -50%);
+  padding: calc(var(--spacing) * 2);
+  z-index: 1;
+}
+@media (max-width: 1023px) {
+  .workflow-comparison-dialog {
+    overflow: auto;
+  }
+  .workflow-comparison-layout {
+    overflow: visible;
+    flex-shrink: 0;
+  }
+  .workflow-comparison-sidebar {
+    height: auto;
+    max-height: 12rem;
+  }
+  .workflow-comparison-main {
+    overflow: visible;
+  }
+  .workflow-comparison-canvases {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: calc(var(--spacing) * 12);
+    gap: calc(var(--spacing) * 3);
+  }
+  .workflow-comparison-swap {
+    top: 0;
+    transform: translateX(-50%);
+  }
 }
