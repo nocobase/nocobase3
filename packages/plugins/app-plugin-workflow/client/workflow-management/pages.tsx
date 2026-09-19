@@ -1,5 +1,9 @@
+import { ChevronDownIcon } from 'lucide-react';
 import { Button as BaseButton } from '@base-ui/react/button';
 import { Input } from './ui/input.js';
+import { definition } from './record-definition.js';
+import { WorkflowComparisonDialog } from './version-comparison.js';
+import { Button } from './ui/button.js';
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -45,9 +49,6 @@ import {
 import {
   buildExecutionOverlay,
   projectWorkflowGraph,
-  restoreFromFlatIr,
-  type JsonObject,
-  type WorkflowNestedDefinition,
 } from '@nocobase/app-plugin-workflow/client';
 import { createWorkflowEventKey, workflowApi } from './data.js';
 import { WorkflowInputDialog, WorkflowRunResultDialog } from './inspector.js';
@@ -346,43 +347,6 @@ function displayInputValue(value: unknown, fallback: string): string {
   } catch {
     return fallback;
   }
-}
-function definition(workflow: WorkflowDetailRecord): WorkflowNestedDefinition {
-  return restoreFromFlatIr({
-    title: workflow.title ?? workflow.key,
-    ...(workflow.description ? { description: workflow.description } : {}),
-    inputSchema: workflow.inputSchema,
-    parameters: normalizeWorkflowParameters(workflow.parametersSchema),
-    start: workflow.nodes.find((node) => node.upstreamKey == null)?.key ?? null,
-    nodes: workflow.nodes.map((node) => ({
-      key: node.key,
-      title: node.title ?? undefined,
-      description: node.description ?? undefined,
-      type: node.type,
-      config: node.config,
-      upstreamKey: node.upstreamKey,
-      downstreamKey: node.downstreamKey,
-      branchKey: node.branchKey,
-    })),
-  });
-}
-function normalizeWorkflowParameters(
-  parametersSchema: WorkflowDetailRecord['parametersSchema'],
-): JsonObject {
-  return Object.fromEntries(
-    Object.entries(parametersSchema).map(([key, input]) => [
-      key,
-      {
-        type: input.type,
-        ...(input.title === undefined ? {} : { title: input.title }),
-        ...(input.description === undefined
-          ? {}
-          : { description: input.description }),
-        ...(input.default === undefined ? {} : { default: input.default }),
-        ...(input.enum === undefined ? {} : { enum: input.enum }),
-      },
-    ]),
-  );
 }
 function useAsync<T>(load: () => Promise<T>): {
   value: T | null;
@@ -791,7 +755,7 @@ function WorkflowRow({
                   className='workflow-pending-version-link'
                   to={workflowPath(pendingArtifact.hash)}
                 >
-                  <Badge className='workflow-version-tag pending'>
+                  <Badge variant='secondary'>
                     {t('workflows.newVersionAvailable')}
                   </Badge>
                 </Link>
@@ -1016,12 +980,13 @@ export function WorkflowDetailPage(): React.ReactElement {
     [workflowId],
   );
   const loaded = useAsync(loadWorkflow);
-  // Loaded with the definition rather than when the picker is opened. A native
-  // select renders its options as the popup opens, so options that arrive while
-  // it is open stay invisible until the next open -- and the candidate revision
-  // is the one option someone opens this picker to find.
+  // Load revisions alongside the definition so navigation and comparison are ready when the menu opens.
   const revisionList = useAsync(loadRevisions);
-  const [dialog, setDialog] = useState<'parameters' | 'manual' | null>(null);
+  const [comparisonTarget, setComparisonTarget] =
+    useState<WorkflowDetailRecord | null>(null);
+  const [dialog, setDialog] = useState<
+    'parameters' | 'manual' | 'compare' | null
+  >(null);
   const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null);
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
   const canvasCardRef = useRef<HTMLElement>(null);
@@ -1087,41 +1052,71 @@ export function WorkflowDetailPage(): React.ReactElement {
         <header className='workflow-canvas-header'>
           <div className='workflow-canvas-header-leading'>
             {running ? <span role='status'>{t('common.running')}</span> : null}
-            <label>
-              {t('workflows.version')}{' '}
-              <Select
-                value={identifier}
-                onValueChange={(value) =>
-                  value && void navigate(workflowPath(value))
-                }
-              >
-                <SelectTrigger className='min-w-28'>
-                  <SelectValue>
-                    <span className={workflow.version ? '' : 'italic'}>
-                      {workflow.version ?? t('common.unpublished')}
-                    </span>
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {(revisions ?? [workflow]).map((item) => (
-                    <SelectItem
-                      key={item.id ?? item.hash ?? item.key}
-                      value={item.id ?? item.hash ?? item.key}
-                    >
-                      <span
-                        aria-hidden='true'
-                        className='workflow-version-current-marker'
-                      >
-                        {item.current === true ? '>' : ''}
-                      </span>
-                      <span className={item.version ? '' : 'italic'}>
-                        {item.version ?? t('common.unpublished')}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
+            <div className='flex items-center gap-2'>
+              <span>{t('workflows.version')}</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      className='h-8 gap-1.5 py-0 pr-2 pl-2.5'
+                      aria-label={t('workflows.version')}
+                    />
+                  }
+                >
+                  <span className={workflow.version ? '' : 'italic'}>
+                    {workflow.version ?? t('common.unpublished')}
+                  </span>
+                  <ChevronDownIcon
+                    className='size-4 shrink-0 text-muted-foreground'
+                    aria-hidden='true'
+                  />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align='start'
+                  side='bottom'
+                  className='min-w-64'
+                >
+                  {(revisions ?? [workflow]).map((item) => {
+                    const target = item.id ?? item.hash ?? item.key;
+                    const selected = target === identifier;
+                    return (
+                      <div key={target} className='workflow-version-menu-row'>
+                        <DropdownMenuItem
+                          className='workflow-version-menu-option'
+                          onClick={() => {
+                            if (!selected) void navigate(workflowPath(target));
+                          }}
+                        >
+                          <span
+                            aria-hidden='true'
+                            className='workflow-version-current-marker'
+                          >
+                            {item.current === true ? '>' : ''}
+                          </span>
+                          <span className={item.version ? '' : 'italic'}>
+                            {item.version ?? t('common.unpublished')}
+                          </span>
+                        </DropdownMenuItem>
+                        {!selected ? (
+                          <DropdownMenuItem
+                            className='workflow-version-compare-action'
+                            aria-label={t('comparison.compareWith', {
+                              version: item.version ?? t('common.unpublished'),
+                            })}
+                            onClick={() => {
+                              setComparisonTarget(item);
+                              setDialog('compare');
+                            }}
+                          >
+                            {t('comparison.compare')}
+                          </DropdownMenuItem>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <WorkflowStatusSwitch
               checked={enabled}
               label={t(
@@ -1138,12 +1133,20 @@ export function WorkflowDetailPage(): React.ReactElement {
                   .then(() => loaded.reload());
               }}
             />
+            {revisionList.error ? (
+              <span role='alert'>
+                {revisionList.error}{' '}
+                <Button onClick={revisionList.reload}>
+                  {t('common.refresh')}
+                </Button>
+              </span>
+            ) : null}
             {pendingArtifact ? (
               <Link
                 className='workflow-pending-version-link'
                 to={workflowPath(pendingArtifact.hash)}
               >
-                <Badge className='workflow-version-tag pending'>
+                <Badge variant='secondary'>
                   {t('workflows.newVersionAvailable')}
                 </Badge>
               </Link>
@@ -1229,6 +1232,15 @@ export function WorkflowDetailPage(): React.ReactElement {
           title={selectedNode.title ?? selectedNode.key}
           description={selectedNode.description}
           onClose={() => setSelectedNodeKey(null)}
+        />
+      ) : null}
+      {dialog === 'compare' && revisions && comparisonTarget ? (
+        <WorkflowComparisonDialog
+          key={identifier}
+          workflow={workflow}
+          target={comparisonTarget}
+          revisions={revisions}
+          onClose={() => setDialog(null)}
         />
       ) : null}
       {dialog === 'parameters' ? (

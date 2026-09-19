@@ -1,6 +1,32 @@
 import type { WorkflowResource } from './en-US.js';
 
 const zhCN: WorkflowResource = {
+  comparison: {
+    connectionsChanged: '位置 / 连接变更',
+    untitledNode: '未命名节点',
+    compare: '对比',
+    compareWith: '与 {{version}} 对比',
+    title: '版本对比',
+    description:
+      '选择两个版本，点击节点查看定义和连接关系的差异。按节点 key 匹配；修改 key 会显示为删除和新增。不包含运行时参数值、执行数据及外部脚本和资源文件内容。',
+    needVersions: '至少需要两个版本才能对比',
+    direction: '从基准版本到目标版本的变化',
+    before: '基准版本',
+    after: '目标版本',
+    added: '新增',
+    removed: '删除',
+    changed: '变更',
+    unchanged: '未变更',
+    swap: '交换版本',
+    current: '当前版本',
+    field: '字段路径',
+    absent: '不存在',
+    noChanges: '定义没有变化',
+    missingNode: '此版本中不存在该节点',
+    changedNodes: '变更节点',
+    workflowFields: '工作流设置',
+    details: '变更详情',
+  },
   authorization: { title: '工作流', read: '查看' },
   nav: {
     automation: '自动化',
