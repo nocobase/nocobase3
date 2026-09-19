@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactElement,
   type ReactNode,
@@ -121,6 +122,8 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   });
   const [deploymentsLoading, setDeploymentsLoading] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [refreshing, setRefreshing] = useState<'auto' | 'manual' | null>(null);
+  const refreshInFlightRef = useRef(false);
   const [selectedReleaseId, setSelectedReleaseId] = useState<string>();
   const [deploymentReleaseId, setDeploymentReleaseId] = useState<string>();
   const [rollbackDeploymentId, setRollbackDeploymentId] = useState<string>();
@@ -138,6 +141,10 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   >();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ReadableError>();
+  const [pollNotice, setPollNotice] = useState<{
+    appId: string;
+    state: 'retrying' | 'finished';
+  }>();
 
   const reportError = useCallback(
     (reason: unknown): void => {
@@ -277,10 +284,17 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         selectedApp.releases[0]?.id),
   );
 
+  const configTab = activeTab === 'configuration' || activeTab === 'resources';
+  // Config is refreshed on explicit actions or a deployment change, not every
+  // status response. Other panels still refresh as deployment progress changes.
+  const panelDetail = configTab ? Boolean(detail) : detail;
+  const panelVersion =
+    activeTab === 'deployments' || configTab ? 0 : refreshVersion;
   useEffect(() => {
-    if (!detail || !activeTab) return;
+    if (!panelDetail || !activeTab) return;
     let cancelled = false;
-    const key = `${appId}:${activeTab}:${deploymentPage}:${refreshVersion}`;
+    // Refresh deployment rows in place; only a tab/page change needs a skeleton.
+    const key = `${appId}:${activeTab}:${deploymentPage}:${panelVersion}`;
     const load = async (): Promise<void> => {
       if (activeTab === 'deployments') {
         setDeploymentsLoading(true);
@@ -333,7 +347,8 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     fetchConfig,
     refreshVersion,
     reportError,
-    detail,
+    panelDetail,
+    panelVersion,
     detail?.app.currentDeploymentId,
   ]);
 
@@ -342,17 +357,51 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
       detail?.hasPendingDeployment || detail?.runtime.state === 'pending';
     if (!pending) return;
     let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void loadDetail()
-        .then((nextDetail) => {
-          if (cancelled) return;
-          setDetail(nextDetail);
-          setRefreshVersion((value) => value + 1);
-        })
-        .catch((reason) => {
-          if (!cancelled) reportError(reason);
-        });
-    }, 1_500);
+    let timer: number;
+    let failures = 0;
+    const poll = async (): Promise<void> => {
+      if (refreshInFlightRef.current) {
+        timer = window.setTimeout(() => void poll(), 1_500);
+        return;
+      }
+      refreshInFlightRef.current = true;
+      setRefreshing('auto');
+      let keepPolling = true;
+      try {
+        const nextDetail = await loadDetail();
+        if (cancelled) return;
+        failures = 0;
+        keepPolling =
+          nextDetail.hasPendingDeployment ||
+          nextDetail.runtime.state === 'pending';
+        setDetail(nextDetail);
+        setPollNotice(keepPolling ? undefined : { appId, state: 'finished' });
+      } catch (reason) {
+        if (cancelled) return;
+        // Authentication/authorization failures need user action, not retries.
+        if (
+          reason instanceof ApiClientError &&
+          (reason.status === 401 || reason.status === 403)
+        ) {
+          keepPolling = false;
+          reportError(reason);
+        } else {
+          failures += 1;
+          setPollNotice({ appId, state: 'retrying' });
+        }
+      } finally {
+        refreshInFlightRef.current = false;
+        setRefreshing(null);
+        // Schedule after completion so slow requests never overlap. Unchanged
+        // pending flags must not stop polling; transient errors back off.
+        if (!cancelled && keepPolling)
+          timer = window.setTimeout(
+            () => void poll(),
+            Math.min(1_500 * 2 ** Math.min(failures, 3), 12_000),
+          );
+      }
+    };
+    timer = window.setTimeout(() => void poll(), 1_500);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -360,6 +409,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   }, [
     loadDetail,
     reportError,
+    appId,
     detail?.hasPendingDeployment,
     detail?.runtime.state,
   ]);
@@ -460,7 +510,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     capabilities,
     busy,
     panelLoading:
-      panelKey !== `${appId}:${activeTab}:${deploymentPage}:${refreshVersion}`,
+      panelKey !== `${appId}:${activeTab}:${deploymentPage}:${panelVersion}`,
     deploymentsLoading,
     configMode,
     configContent,
@@ -544,21 +594,52 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         });
       }),
     onRemove: () => setRemoveOpen(true),
-    onRefresh: () =>
-      void perform(async () => {
-        await client.request({
-          path: `hub/apps/${appId}/refresh`,
-          method: 'POST',
-        });
-      }),
+    onRefresh: () => {
+      if (refreshInFlightRef.current) return;
+      refreshInFlightRef.current = true;
+      setRefreshing('manual');
+      setError(undefined);
+      void (async () => {
+        try {
+          await client.request({
+            path: `hub/apps/${appId}/refresh`,
+            method: 'POST',
+          });
+          setDetail(await loadDetail());
+          setRefreshVersion((value) => value + 1);
+        } catch (reason) {
+          reportError(reason);
+        } finally {
+          refreshInFlightRef.current = false;
+          setRefreshing(null);
+        }
+      })();
+    },
   };
 
   return (
     <>
       <main className='min-h-[calc(100svh-4rem)] bg-muted/20 [&_button:not(:disabled)]:cursor-pointer'>
         <div className='mx-auto max-w-[1600px] px-5 py-6 sm:px-8 sm:py-8'>
+          {pollNotice?.appId === appId && (
+            <p role='status' className='mb-3 text-sm text-muted-foreground'>
+              {pollNotice.state === 'retrying'
+                ? t('deployments.statusRetrying', {
+                    defaultValue:
+                      'Status updates interrupted. Retrying automatically…',
+                  })
+                : !selectedApp.hasPendingDeployment &&
+                    selectedApp.runtime.state !== 'pending'
+                  ? t('deployments.statusFinished', {
+                      defaultValue:
+                        'Deployment or startup has finished. Check the latest status and deployment record for the result.',
+                    })
+                  : null}
+            </p>
+          )}
           <HubAppPageContext.Provider value={contextValue}>
             <Detail
+              refreshing={refreshing}
               app={selectedApp}
               capabilities={capabilities}
               tab={effectiveTab}
@@ -658,9 +739,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
             void perform(async () => {
               if (!deploymentReleaseId || deploymentMode === 'managed') return;
               const endpoint = rollbackDeploymentId ? 'rollback' : 'deploy';
-              const accepted = await client.request<
-                ApiResponse<{ id: string }>
-              >({
+              await client.request<ApiResponse<{ id: string }>>({
                 path: `hub/apps/${appId}/${endpoint}`,
                 method: 'POST',
                 json: {
@@ -678,9 +757,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
               setSelectedReleaseId(deploymentReleaseId);
               setDeployOpen(false);
               setRollbackDeploymentId(undefined);
-              await navigate(
-                `${appPath.pathname}/deployments/${accepted.data.id}/logs`,
-              );
+              await navigate(`${appPath.pathname}/deployments`);
               setDeploymentPage(1);
             })
           }

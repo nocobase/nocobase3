@@ -83,6 +83,16 @@ export class CollectionRegistry
     return (await this.getResolution(name))?.collection;
   }
 
+  /** Resolve Query's relative table identifiers without treating them as logical names. */
+  async getForQuery(name: string): Promise<CollectionDefinition | undefined> {
+    const index = await this.namingIndex();
+    const tableName = new DefaultNamingStrategy(
+      this.options.naming,
+    ).collectionToTableName(name);
+    const identity = index.resolvePhysicalCollection({ tableName });
+    return identity ? this.get(identity.name) : undefined;
+  }
+
   async getPhysical(
     name: string,
   ): Promise<PhysicalCollectionSchema | undefined> {
@@ -281,6 +291,16 @@ export class CollectionRegistry
         ]);
       }
       return undefined;
+    }
+    const canonical = index.resolvePhysicalCollection(physical);
+    if (canonical && canonical.name !== name) {
+      throw new CollectionResolutionError([
+        {
+          code: 'COLLECTION_NAME_CONFLICT',
+          path: ['collections', name],
+          message: `Collection name "${name}" resolves to physical table "${physical.tableName}", which belongs to logical Collection "${canonical.name}". Use the logical Collection name "${canonical.name}".`,
+        },
+      ]);
     }
     if (identity.metadata) {
       const defaultTableName = new DefaultNamingStrategy(

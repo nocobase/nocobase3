@@ -9,7 +9,7 @@ import type {
   CollectionMetadataSummary,
 } from '../../metadata/document-store.js';
 import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
-import type { PhysicalCollectionIdentity } from '../../schema/inspector/types.js';
+import type { PhysicalCollectionIdentifier } from '../../schema/inspector/types.js';
 
 export interface IndexedCollectionIdentity extends CollectionNamingIdentity {
   readonly tableName: string;
@@ -87,7 +87,7 @@ export class CollectionNamingIndex implements CollectionResolutionContext {
   }
 
   resolvePhysicalCollection(
-    identity: PhysicalCollectionIdentity,
+    identity: PhysicalCollectionIdentifier,
   ): CollectionNamingIdentity | undefined {
     const explicit = this.byTableName.get(identity.tableName);
     if (explicit) return explicit;
@@ -105,8 +105,12 @@ export class CollectionNamingIndex implements CollectionResolutionContext {
       throw new CollectionResolutionError([
         {
           code: 'COLLECTION_NAME_CONFLICT',
-          path: ['physical', identity.schema, identity.tableName],
-          message: `Physical Collection "${identity.schema}.${identity.tableName}" maps to logical name "${name}", which Metadata maps to "${explicitLogical.tableName}".`,
+          path: [
+            'physical',
+            identity.schema ?? '<default>',
+            identity.tableName,
+          ],
+          message: `Physical Collection "${identity.schema ?? '<default>'}.${identity.tableName}" maps to logical name "${name}", which Metadata maps to "${explicitLogical.tableName}".`,
         },
       ]);
     }

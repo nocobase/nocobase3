@@ -20,12 +20,16 @@ import {
   coreInstructions,
   RunInstruction,
 } from '../server/instructions/index.js';
-import { defineTestInstruction } from './fixtures/instructions.js';
+import {
+  defineTestInstruction,
+  pendingInstruction,
+} from './fixtures/instructions.js';
 import {
   createTestDatabase,
   createTestWorkflow,
   findRun,
   listNodeRuns,
+  readRun,
   type TestNodeInput,
 } from './helpers.js';
 
@@ -49,6 +53,7 @@ const instructions = new Map<string, WorkflowInstructionClass>([
   ...coreInstructions,
   ['echo', echo],
   ['failing', failing],
+  ['pending', pendingInstruction],
 ]);
 
 function createDispatcher(database: DatabaseManager): Dispatcher {
@@ -286,12 +291,132 @@ describe('condition instruction', () => {
 
     const run = await findRun(database, 'rejected');
     expect(run.status).toBe(EXECUTION_STATUS.FAILED);
-    expect(
-      (await listNodeRuns(database, run.id as number)).map(
-        (nodeRun) => nodeRun.nodeKey,
-      ),
-    ).toEqual(['check', 'onYes']);
+    expect(await listNodeRuns(database, run.id as number)).toEqual([
+      { nodeKey: 'check', status: NODE_RUN_STATUS.RESOLVED, result: true },
+      {
+        nodeKey: 'onYes',
+        status: NODE_RUN_STATUS.FAILED,
+        result: null,
+        error: 'rejected',
+      },
+    ]);
   });
+
+  it('keeps nested conditions resolved while waiting and resumes each successor once', async () => {
+    const workflow = await createTestWorkflow(database, {
+      key: 'waiting-branch',
+      nodes: [
+        { key: 'outer', type: 'condition', downstreamKey: 'afterOuter' },
+        {
+          key: 'inner',
+          type: 'condition',
+          upstreamKey: 'outer',
+          branchKey: 'yes',
+          downstreamKey: 'afterInner',
+        },
+        {
+          key: 'wait',
+          type: 'pending',
+          upstreamKey: 'inner',
+          branchKey: 'yes',
+        },
+        { key: 'afterInner', type: 'echo', upstreamKey: 'inner' },
+        { key: 'afterOuter', type: 'echo', upstreamKey: 'outer' },
+      ],
+    });
+    await createDispatcher(database).trigger(
+      workflow,
+      {},
+      { eventKey: 'waiting', manually: true },
+    );
+    const row = await findRun(database, 'waiting');
+    expect(row.status).toBe(EXECUTION_STATUS.STARTED);
+    expect(await listNodeRuns(database, row.id as number)).toEqual([
+      { nodeKey: 'outer', status: NODE_RUN_STATUS.RESOLVED, result: true },
+      { nodeKey: 'inner', status: NODE_RUN_STATUS.RESOLVED, result: true },
+      { nodeKey: 'wait', status: NODE_RUN_STATUS.PENDING, result: null },
+    ]);
+    const processor = new Processor({
+      database,
+      workflow,
+      execution: await readRun(database, row.id as number),
+      instructions,
+      workflowResourceRoot: null,
+    });
+    await processor.prepare();
+    const before = processor.execution.nodeRuns!.filter(
+      (item) => item.nodeKey !== 'wait',
+    );
+    const waiting = processor.execution.nodeRuns!.find(
+      (item) => item.nodeKey === 'wait',
+    )!;
+    await processor.resume(waiting);
+    expect((await readRun(database, row.id as number)).status).toBe(
+      EXECUTION_STATUS.RESOLVED,
+    );
+    expect(
+      (await listNodeRuns(database, row.id as number)).map(
+        (item) => item.nodeKey,
+      ),
+    ).toEqual(['outer', 'inner', 'wait', 'afterInner', 'afterOuter']);
+    await processor.prepare();
+    expect(
+      processor.execution.nodeRuns!.filter((item) =>
+        ['outer', 'inner'].includes(item.nodeKey),
+      ),
+    ).toEqual(before);
+  });
+
+  it.each([
+    NODE_RUN_STATUS.FAILED,
+    NODE_RUN_STATUS.ERROR,
+    NODE_RUN_STATUS.ABORTED,
+  ])(
+    'propagates nested branch status %s without changing condition results',
+    async (status) => {
+      const workflow = await createTestWorkflow(database, {
+        key: 'nested-failure',
+        nodes: [
+          { key: 'outer', type: 'condition', downstreamKey: 'afterOuter' },
+          {
+            key: 'inner',
+            type: 'condition',
+            upstreamKey: 'outer',
+            branchKey: 'yes',
+            downstreamKey: 'afterInner',
+          },
+          {
+            key: 'fail',
+            type: 'failure',
+            upstreamKey: 'inner',
+            branchKey: 'yes',
+          },
+          { key: 'afterInner', type: 'echo', upstreamKey: 'inner' },
+          { key: 'afterOuter', type: 'echo', upstreamKey: 'outer' },
+        ],
+      });
+      const registry = new Map(instructions);
+      registry.set(
+        'failure',
+        defineTestInstruction('failure', async () => ({
+          status,
+          error: 'branch failure',
+        })),
+      );
+      await new Dispatcher({ database, instructions: registry }).trigger(
+        workflow,
+        {},
+        { eventKey: 'failure', manually: true },
+      );
+      const run = await findRun(database, 'failure');
+      expect(run.status).toBe(Processor.StatusMap[status]);
+      expect(await listNodeRuns(database, run.id as number)).toEqual([
+        { nodeKey: 'outer', status: NODE_RUN_STATUS.RESOLVED, result: true },
+        { nodeKey: 'inner', status: NODE_RUN_STATUS.RESOLVED, result: true },
+        { nodeKey: 'fail', status, result: null, error: 'branch failure' },
+      ]);
+    },
+  );
 
   it('reports an invalid config as an ERROR nodeRun', async () => {
     const workflow = await createTestWorkflow(database, {

@@ -9,11 +9,13 @@ export const WORKFLOW_ROUTE_IDS: WorkflowRouteIds = Object.freeze({
 });
 
 export interface WorkflowSettingPaths {
+  readonly root: string;
   readonly workflows: string;
   readonly workflowRuns: string;
 }
 
 export const WORKFLOW_SETTING_PATHS: WorkflowSettingPaths = Object.freeze({
-  workflows: '/settings/automation/workflows',
-  workflowRuns: '/settings/automation/workflow-runs',
+  root: '/settings/workflow',
+  workflows: '/settings/workflow/workflows',
+  workflowRuns: '/settings/workflow/runs',
 });

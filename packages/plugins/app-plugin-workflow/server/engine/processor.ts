@@ -763,33 +763,8 @@ export default class Processor {
       return savedNodeRun;
     }
 
-    if (
-      savedNodeRun.status === NODE_RUN_STATUS.RESOLVED ||
-      (savedNodeRun.status === NODE_RUN_STATUS.PENDING &&
-        result.nextKey != null)
-    ) {
-      const next =
-        result.nextKey === undefined
-          ? node.downstream
-          : result.nextKey == null
-            ? undefined
-            : this.nodesMap.get(result.nextKey);
-      if (result.nextKey != null && !next) {
-        const missing = await this.saveNodeRun(
-          {
-            nodeId: node.id,
-            nodeKey: node.key,
-            status: NODE_RUN_STATUS.ERROR,
-            error: `Downstream node "${result.nextKey}" was not found`,
-          },
-          savedNodeRun,
-        );
-        await this.exit(NODE_RUN_STATUS.ERROR);
-        return missing;
-      }
-      if (next) {
-        return this.run(next, savedNodeRun, options);
-      }
+    if (savedNodeRun.status === NODE_RUN_STATUS.RESOLVED && node.downstream) {
+      return this.run(node.downstream, savedNodeRun, options);
     }
     return this.end(node, savedNodeRun);
   }

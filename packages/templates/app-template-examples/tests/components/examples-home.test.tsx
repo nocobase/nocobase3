@@ -45,7 +45,7 @@ it.each(['en-US', 'zh-CN'])(
       '/demo/repository-example/orders',
       '/demo/file-repository',
       '/demo/routes-example',
-      '/demo/settings/automation/workflows',
+      '/demo/settings/workflow/workflows',
     ]);
   },
 );

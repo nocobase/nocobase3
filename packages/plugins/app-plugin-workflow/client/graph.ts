@@ -38,6 +38,7 @@ export interface WorkflowGraphEdge {
   readonly source: string;
   readonly target: string;
   readonly kind: WorkflowGraphEdgeKind;
+  readonly terminal?: boolean;
   readonly branchOwnerKey: string | null;
   readonly branchKey: string | null;
   readonly label: string | null;
@@ -156,6 +157,7 @@ function projectBlock(
         source: nodeId,
         target: endNodeId(),
         kind: 'main',
+        terminal: true,
         branchOwnerKey: null,
         branchKey: null,
         label: null,
@@ -184,40 +186,15 @@ function projectBlock(
     for (const branchKey of branchKeys) {
       const branch = node.branches?.[branchKey] ?? [];
       if (branch.length === 0) {
-        const anchorId = branchAnchorId(node.key, branchKey);
-        addNode(nodes, {
-          id: anchorId,
-          kind: 'branch-anchor',
-          workflowNodeKey: null,
-          nodeType: null,
-          title: 'Empty branch',
-          description: null,
-          virtual: true,
-          width: 24,
-          height: 24,
-          branchOwnerKey: node.key,
-          branchKey,
-          config: null,
-          summary: null,
-        });
         addEdge(edges, {
-          id: branchEdgeId(nodeId, branchKey, anchorId),
+          id: branchEdgeId(nodeId, branchKey, continuationId),
           source: nodeId,
-          target: anchorId,
+          target: continuationId,
           kind: 'branch',
           branchOwnerKey: node.key,
           branchKey,
           label:
             contract?.getBranchLabel?.(branchKey, node.config) ?? branchKey,
-        });
-        addEdge(edges, {
-          id: edgeId(anchorId, continuationId, 'main'),
-          source: anchorId,
-          target: continuationId,
-          kind: 'main',
-          branchOwnerKey: node.key,
-          branchKey,
-          label: null,
         });
       } else {
         const headId = projectBlock(

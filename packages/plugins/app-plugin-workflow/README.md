@@ -90,8 +90,8 @@ compiler.
 
 The client contributes Workflows and Workflow runs under the application's
 Automation settings group. Their record detail routes stay inside the settings
-layout at `/settings/automation/workflows/:workflowId` and
-`/settings/automation/workflow-runs/:runId`.
+layout at `/settings/workflow/workflows/:id` and
+`/settings/workflow/runs/:id`.
 
 Register it with `pnpm plugin:register workflow --app app-template-default`.
 Application-owned workflow source remains in the application package. The

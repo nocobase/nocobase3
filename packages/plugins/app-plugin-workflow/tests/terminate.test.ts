@@ -174,10 +174,60 @@ describe('terminate instruction', () => {
     const run = await findRun(database, 'branch-terminate');
     expect(run.status).toBe(EXECUTION_STATUS.RESOLVED);
     expect(await listNodeRuns(database, run.id as number)).toEqual([
-      { nodeKey: 'check', status: NODE_RUN_STATUS.PENDING, result: false },
+      { nodeKey: 'check', status: NODE_RUN_STATUS.RESOLVED, result: false },
       { nodeKey: 'stop', status: NODE_RUN_STATUS.RESOLVED, result: null },
     ]);
   });
+
+  it.each(['success', 'failure'] as const)(
+    'preserves nested condition results when terminating with %s',
+    async (outcome) => {
+      const workflow = await createTestWorkflow(database, {
+        key: 'nested-terminate',
+        nodes: [
+          { key: 'outer', type: 'condition', downstreamKey: 'afterOuter' },
+          {
+            key: 'inner',
+            type: 'condition',
+            upstreamKey: 'outer',
+            branchKey: 'yes',
+            downstreamKey: 'afterInner',
+          },
+          {
+            key: 'stop',
+            type: 'terminate',
+            config: { outcome },
+            upstreamKey: 'inner',
+            branchKey: 'yes',
+            downstreamKey: 'afterStop',
+          },
+          { key: 'afterStop', type: 'echo', upstreamKey: 'stop' },
+          { key: 'afterInner', type: 'echo', upstreamKey: 'inner' },
+          { key: 'afterOuter', type: 'echo', upstreamKey: 'outer' },
+        ],
+      });
+      await new Dispatcher({ database, instructions }).trigger(
+        workflow,
+        {},
+        { eventKey: outcome, manually: true },
+      );
+      const run = await findRun(database, outcome);
+      const status =
+        outcome === 'success'
+          ? NODE_RUN_STATUS.RESOLVED
+          : NODE_RUN_STATUS.FAILED;
+      expect(run.status).toBe(
+        outcome === 'success'
+          ? EXECUTION_STATUS.RESOLVED
+          : EXECUTION_STATUS.FAILED,
+      );
+      expect(await listNodeRuns(database, run.id as number)).toEqual([
+        { nodeKey: 'outer', status: NODE_RUN_STATUS.RESOLVED, result: true },
+        { nodeKey: 'inner', status: NODE_RUN_STATUS.RESOLVED, result: true },
+        { nodeKey: 'stop', status, result: null },
+      ]);
+    },
+  );
 
   it('exposes a typed DSL expression and validates config', () => {
     expect(

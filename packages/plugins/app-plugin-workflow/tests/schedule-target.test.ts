@@ -43,7 +43,7 @@ describe('WorkflowScheduleTarget', () => {
       await expect(
         target.describe({ workflowKey: 'daily' }),
       ).resolves.toMatchObject({
-        href: '/settings/automation/workflows/1',
+        href: '/settings/workflow/workflows/1',
       });
     } finally {
       await database.destroy();

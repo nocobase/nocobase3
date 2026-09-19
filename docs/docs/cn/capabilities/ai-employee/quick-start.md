@@ -18,10 +18,9 @@ keywords: 'NocoBase,AI 员工,快速开始,config.yml,LLM,全局对话'
 
 ## 创建应用
 
-先配置 NocoBase 私有 Registry，再创建并进入应用目录：
+创建并进入应用目录：
 
 ```bash
-pnpm config set @nocobase:registry https://npm.nocobase.ai/
 pnpm create @nocobase/app ai-workspace
 cd ai-workspace
 ```

@@ -1,5 +1,13 @@
 import { Toaster, toast } from 'sonner';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import {
   MemoryRouter,
   Route,
@@ -7,7 +15,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router';
-import type { ReactElement } from 'react';
+import { useEffect, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -18,6 +26,7 @@ import type {
 } from '../client/pages/hub/types.js';
 
 const mocks = vi.hoisted(() => ({
+  logMounted: vi.fn(),
   authorizationClientToken: Symbol('authorization-client'),
   client: {
     request: vi.fn(),
@@ -60,6 +69,7 @@ vi.mock('@nocobase/i18n/client', () => ({
 import AppPage from '../client/pages/hub/app-page.js';
 import DevelopmentPage from '../client/pages/hub/tabs/development-page.js';
 import DeploymentsPage from '../client/pages/hub/tabs/deployments-page.js';
+import ReleasesPage from '../client/pages/hub/tabs/releases-page.js';
 import SettingsPage from '../client/pages/hub/tabs/settings-page.js';
 import { Detail } from '../client/pages/hub/detail.js';
 import { ApplicationsCatalog } from '../client/pages/hub-page.js';
@@ -203,6 +213,21 @@ const getPaginationControl = (label: string): HTMLElement => {
   return control;
 };
 
+function Logs(): ReactElement {
+  useEffect(() => {
+    mocks.logMounted();
+  }, []);
+  const navigate = useNavigate();
+  return (
+    <div>
+      <input aria-label='Log search' />
+      <button onClick={() => void navigate('/apps/customer/deployments')}>
+        Close logs
+      </button>
+    </div>
+  );
+}
+
 describe('Hub client pages', () => {
   beforeEach(() => {
     render(<Toaster position='top-right' />);
@@ -215,9 +240,186 @@ describe('Hub client pages', () => {
   });
 
   afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
     toast.dismiss();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it.each([false, true])(
+    'shows manual refresh feedback and clears it after failure=%s',
+    async (fail) => {
+      renderAppPage('/apps/customer/deployments');
+      const button = await screen.findByRole('button', {
+        name: 'Refresh status',
+      });
+      let finish!: () => void;
+      const response = new Promise<void>((resolve, reject) => {
+        finish = () => (fail ? reject(new Error('Refresh failed')) : resolve());
+      });
+      mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+        if (path.endsWith('/refresh')) return response;
+        if (path === 'hub/apps/customer')
+          return Promise.resolve({ data: detail() });
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
+      });
+      fireEvent.click(button);
+      expect(button).toHaveTextContent('Refreshing…');
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('aria-busy', 'true');
+      expect(button.querySelector('svg')).toHaveClass('animate-spin');
+      fireEvent.click(button);
+      expect(
+        mocks.client.request.mock.calls.filter(([request]) =>
+          request.path.endsWith('/refresh'),
+        ),
+      ).toHaveLength(1);
+      await act(async () => finish());
+      expect(button).toHaveTextContent('Refresh status');
+      expect(button).toBeEnabled();
+      expect(button.querySelector('svg')).not.toHaveClass('animate-spin');
+    },
+  );
+
+  it.each([false, true])(
+    'animates only during automatic requests and clears after failure=%s',
+    async (fail) => {
+      vi.useFakeTimers();
+      renderAppPage(
+        '/apps/customer/deployments',
+        detail({ hasPendingDeployment: true }),
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      const button = screen.getByRole('button', { name: 'Refresh status' });
+      let finish!: () => void;
+      const response = new Promise<unknown>((resolve, reject) => {
+        finish = () =>
+          fail
+            ? reject(new Error('Temporary failure'))
+            : resolve({ data: detail({ hasPendingDeployment: true }) });
+      });
+      mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+        if (path === 'hub/apps/customer') return response;
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
+      });
+      expect(button.querySelector('svg')).not.toHaveClass('animate-spin');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      expect(button).toHaveTextContent('Refresh status');
+      expect(button).toBeDisabled();
+      expect(button.querySelector('svg')).toHaveClass('animate-spin');
+      fireEvent.click(button);
+      expect(
+        mocks.client.request.mock.calls.some(([request]) =>
+          request.path.endsWith('/refresh'),
+        ),
+      ).toBe(false);
+      await act(async () => finish());
+      expect(button).toBeEnabled();
+      expect(button.querySelector('svg')).not.toHaveClass('animate-spin');
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(button).toBeEnabled();
+    },
+  );
+
+  it.each(['running', 'failed'] as const)(
+    'polls unchanged pending states until %s and stops',
+    async (state) => {
+      vi.useFakeTimers();
+      renderAppPage(
+        '/apps/customer/deployments',
+        detail({ hasPendingDeployment: true }),
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+      let calls = 0;
+      mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+        if (path === 'hub/apps/customer') {
+          calls += 1;
+          return Promise.resolve({
+            data: detail({
+              hasPendingDeployment: calls < 3,
+              runtime: {
+                hostAvailable: true,
+                state: calls < 3 ? 'running' : state,
+              },
+            }),
+          });
+        }
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
+      });
+      for (let i = 1; i <= 3; i += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(1_500);
+        });
+        expect(calls).toBe(i);
+      }
+      expect(
+        screen.getByText(/Deployment or startup has finished/),
+      ).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(calls).toBe(3);
+      expect(
+        mocks.client.request.mock.calls.filter(
+          ([request]) => request.path === 'hub/apps/customer/deployments',
+        ).length,
+      ).toBeGreaterThanOrEqual(3);
+    },
+  );
+
+  it('retries transient polling failures and cancels polling on unmount', async () => {
+    vi.useFakeTimers();
+    renderAppPage(
+      '/apps/customer/deployments',
+      detail({ hasPendingDeployment: true }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    let calls = 0;
+    mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+      if (path === 'hub/apps/customer') {
+        calls += 1;
+        if (calls === 1) return Promise.reject(new Error('offline'));
+        return Promise.resolve({
+          data: detail({ hasPendingDeployment: true }),
+        });
+      }
+      return Promise.resolve({
+        data: { items: [], page: 1, pageSize: 20, total: 0 },
+      });
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(screen.getByText(/Status updates interrupted/)).toBeInTheDocument();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(calls).toBe(2);
+    expect(
+      screen.queryByText(/Status updates interrupted/),
+    ).not.toBeInTheDocument();
+    cleanup();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(calls).toBe(2);
   });
 
   it('requires confirmation before deleting an owned App and returns to the catalog', async () => {
@@ -660,6 +862,22 @@ describe('Hub client pages', () => {
     expect(
       screen.getByRole('button', { name: 'Copy create-app command' }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText('pnpm create @nocobase/app customer'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Build a CRM application based on this NocoBase 3 project template.',
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Copy example prompt' }),
+    );
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        'Build a CRM application based on this NocoBase 3 project template.',
+      ),
+    );
     expect(screen.getByText('pnpm build --tar')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Copy build command' }));
     await waitFor(() =>
@@ -703,7 +921,7 @@ describe('Hub client pages', () => {
     );
     expect(
       await screen.findByText(
-        'Could not copy. Select and copy the command manually.',
+        'Could not copy. Select and copy the text manually.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -714,6 +932,106 @@ describe('Hub client pages', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('accepts a dragged release artifact in the upload dialog', async () => {
+    mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+      if (path === 'hub/apps/customer') {
+        return Promise.resolve({ data: detail() });
+      }
+      if (path === 'hub/apps/customer/releases') {
+        return Promise.resolve({ data: [] });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    render(
+      <MemoryRouter initialEntries={['/apps/customer/releases']}>
+        <Routes>
+          <Route path='/apps'>
+            <Route path=':appId' element={<AppPage />}>
+              <Route path='releases' element={<ReleasesPage />} />
+            </Route>
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Upload release' }),
+    );
+    const zone = await screen.findByLabelText(
+      'Click or drag a .tar.gz / .tgz artifact here',
+    );
+    expect(zone).not.toHaveAttribute('accept');
+    expect(zone).toHaveAttribute('type', 'file');
+    fireEvent.change(zone, {
+      target: {
+        files: [new File(['artifact'], 'picked.tar.gz', { type: '' })],
+      },
+    });
+    expect(screen.getByText('picked.tar.gz')).toBeInTheDocument();
+    fireEvent.change(zone, {
+      target: { files: [new File(['text'], 'notes.txt')] },
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Select exactly one .tar.gz or .tgz file.',
+    );
+    expect(screen.getByText('picked.tar.gz')).toBeInTheDocument();
+    expect(
+      mocks.client.request.mock.calls.some(
+        ([request]) => request.method === 'POST',
+      ),
+    ).toBe(false);
+
+    // A drag carrying no file has nothing to upload, so it neither highlights the zone nor clears the selection.
+    fireEvent.dragOver(zone, {
+      dataTransfer: { files: [], types: ['text/plain'] },
+    });
+    expect(
+      screen.queryByText('Drop to select this artifact'),
+    ).not.toBeInTheDocument();
+    fireEvent.dragOver(zone, { dataTransfer: { files: [], types: ['Files'] } });
+    expect(
+      screen.getByText('Drop to select this artifact'),
+    ).toBeInTheDocument();
+
+    const file = new File(['artifact'], 'dist.tar.gz', {
+      type: 'application/gzip',
+    });
+    fireEvent.drop(zone, { dataTransfer: { files: [file], types: ['Files'] } });
+
+    expect(await screen.findByText('dist.tar.gz')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Drop to select this artifact'),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Upload release',
+      }),
+    ).toBeEnabled();
+
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [file], types: ['text/plain'] },
+    });
+    expect(screen.getByText('dist.tar.gz')).toBeInTheDocument();
+    fireEvent.drop(zone, {
+      dataTransfer: {
+        files: [new File(['text'], 'notes.txt')],
+        types: ['Files'],
+      },
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Select exactly one .tar.gz or .tgz file.',
+    );
+    expect(screen.getByText('dist.tar.gz')).toBeInTheDocument();
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [file, file], types: ['Files'] },
+    });
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    fireEvent.change(zone, {
+      target: { files: [new File(['artifact'], 'updated.tgz')] },
+    });
+    expect(screen.getByText('updated.tgz')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
   it('defaults the deploy dialog to the newest release rather than the running one', async () => {
     // Two uploads of the same version: "release-2" is newer, "release-1" is what the App is running (see detail()).
     const release = (id: string, createdAt: string): ReleaseRecord => ({
@@ -770,6 +1088,135 @@ describe('Hub client pages', () => {
     expect(rows[0]).toHaveClass('bg-primary/5');
     expect(rows[1]).toHaveTextContent('Current');
     expect(rows[1]).not.toHaveClass('bg-primary/5');
+  });
+
+  it('keeps the deployment list after first deployment without automatically opening logs', async () => {
+    let accepted = false;
+    mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+      if (path === 'hub/apps/customer')
+        return Promise.resolve({
+          data: detail({
+            app: { ...detail().app, currentDeploymentId: null },
+            hasPendingDeployment: accepted,
+          }),
+        });
+      if (path.endsWith('/deployments'))
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
+      if (path.endsWith('/releases'))
+        return Promise.resolve({
+          data: [
+            {
+              id: 'release-1',
+              version: '1.0.0',
+              size: 1,
+              checksum: 'checksum',
+              hasConfigTemplate: false,
+              createdAt: '2026-09-18T00:00:00Z',
+            },
+          ],
+        });
+      if (path.endsWith('/config'))
+        return Promise.resolve({ data: { mode: 'external', content: null } });
+      if (path.endsWith('/config-template'))
+        return Promise.resolve({ data: { content: null } });
+      if (path.endsWith('/deploy')) {
+        accepted = true;
+        return Promise.resolve({ data: { id: 'deployment-new' } });
+      }
+      return Promise.reject(new Error(`Unexpected request: ${path}`));
+    });
+    function Location() {
+      return (
+        <output data-testid='deploy-location'>{useLocation().pathname}</output>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={['/apps/customer/deployments']}>
+        <Location />
+        <Routes>
+          <Route path='/apps/:appId' element={<AppPage />}>
+            <Route path='deployments' element={<DeploymentsPage />}>
+              <Route
+                path=':deploymentId/logs'
+                element={<div>Unexpected automatic logs</div>}
+              />
+            </Route>
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Deploy release' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Deploy release',
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(accepted).toBe(true);
+    expect(screen.getByTestId('deploy-location')).toHaveTextContent(
+      '/apps/customer/deployments',
+    );
+    expect(
+      screen.queryByText('Unexpected automatic logs'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps manually opened logs mounted during pending deployment refreshes', async () => {
+    vi.useFakeTimers();
+    const mounted = mocks.logMounted.mockClear();
+    mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+      if (path === 'hub/apps/customer')
+        return Promise.resolve({
+          data: detail({ hasPendingDeployment: true }),
+        });
+      return Promise.resolve({
+        data: { items: [], page: 1, pageSize: 20, total: 0 },
+      });
+    });
+    render(
+      <MemoryRouter
+        initialEntries={['/apps/customer/deployments/deployment-1/logs']}
+      >
+        <Routes>
+          <Route path='/apps/:appId' element={<AppPage />}>
+            <Route path='deployments' element={<DeploymentsPage />}>
+              <Route path=':deploymentId/logs' element={<Logs />} />
+            </Route>
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.change(screen.getByLabelText('Log search'), {
+      target: { value: 'keep filter' },
+    });
+    const input = screen.getByLabelText('Log search');
+    for (let i = 0; i < 3; i += 1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+    expect(mounted).toHaveBeenCalledOnce();
+    expect(screen.getByLabelText('Log search')).toBe(input);
+    expect(input).toHaveValue('keep filter');
+    fireEvent.click(screen.getByRole('button', { name: 'Close logs' }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(screen.queryByLabelText('Log search')).not.toBeInTheDocument();
+    expect(mounted).toHaveBeenCalledOnce();
   });
 
   it('renders an unavailable state for an explicit Tab without access', async () => {
