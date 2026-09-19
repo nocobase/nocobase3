@@ -8,6 +8,7 @@ const zhCN: WorkflowResource = {
     runs: '执行记录',
   },
   common: {
+    back: '返回',
     cancel: '取消',
     save: '保存',
     refresh: '刷新',
@@ -23,6 +24,7 @@ const zhCN: WorkflowResource = {
     runCount_other: '{{count}} 次运行',
   },
   status: {
+    notExecuted: '未执行',
     queued: '排队中',
     running: '运行中',
     resolved: '已完成',
@@ -89,6 +91,7 @@ const zhCN: WorkflowResource = {
     triggeredAt: '触发时间 {{time}}',
   },
   inspector: {
+    notExecuted: '本次执行未运行此节点，因此没有执行结果。',
     label: '工作流检查器',
     overview: '工作流概览',
     selectNode: '选择一个节点以查看详情。',
@@ -110,6 +113,7 @@ const zhCN: WorkflowResource = {
     end: '结束',
     condition: '条件',
     terminate: '终止',
+    terminates: '工作流在此终止',
     run: '运行',
     emptyBranch: '空分支',
     yes: '是',
@@ -121,6 +125,8 @@ const zhCN: WorkflowResource = {
     verticalLayout: '垂直布局',
     fitting: '正在适配全览视图…',
     layingOut: '正在布局流程…',
+    fullscreen: '进入全屏',
+    exitFullscreen: '退出全屏',
   },
   pages: {
     list: {

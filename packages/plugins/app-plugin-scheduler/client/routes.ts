@@ -10,7 +10,7 @@ export const SCHEDULER_ACCESS_RESOURCE: string = 'scheduler.schedules';
 const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
   {
     name: 'automation',
-    path: '/automation',
+
     extend: true,
     navigation: { title: 'nav.automation', icon: CalendarClock },
     children: [
@@ -28,7 +28,7 @@ const settingsRoutes: AppClientRouteContribution = defineSettingsRoutes([
 const detailRoutes: AppClientRouteContribution = defineAppRoutes([
   {
     name: 'schedule-detail',
-    path: '/settings/automation/schedules/:scheduleId',
+    path: '/settings/schedules/:scheduleId',
     access: { resource: SCHEDULER_ACCESS_RESOURCE, action: 'access' },
     componentLoader: () => import('./pages/schedule-detail-page.js'),
   },

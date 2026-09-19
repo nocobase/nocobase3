@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import type {
@@ -49,30 +51,19 @@ export function AuthorizationSettingsPage(inputProps: {
   const { eyebrow, title, description, error, loading, children } = inputProps;
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
-      <header className='border-b bg-background px-6 py-7'>
-        <div className='mx-auto w-full max-w-7xl'>
-          <p className='text-xs font-medium tracking-wide text-muted-foreground uppercase'>
-            {eyebrow}
-          </p>
-          <h1 className='mt-1 text-2xl font-semibold tracking-tight'>
-            {title}
-          </h1>
-          <p className='mt-1 max-w-3xl text-sm text-muted-foreground'>
-            {description}
-          </p>
+    <PageContainer
+      header={
+        <PageHeader eyebrow={eyebrow} title={title} description={description} />
+      }
+    >
+      {error ? <ErrorBox value={error} /> : null}
+      {loading ? (
+        <div className='rounded-xl border bg-card p-8 text-sm text-muted-foreground shadow-sm'>
+          {t('loading', { defaultValue: 'Loading…' })}
         </div>
-      </header>
-      <div className='mx-auto w-full max-w-7xl space-y-5 px-6 py-6'>
-        {error ? <ErrorBox value={error} /> : null}
-        {loading ? (
-          <div className='rounded-xl border bg-card p-8 text-sm text-muted-foreground shadow-sm'>
-            {t('loading', { defaultValue: 'Loading…' })}
-          </div>
-        ) : (
-          children
-        )}
-      </div>
-    </main>
+      ) : (
+        children
+      )}
+    </PageContainer>
   );
 }

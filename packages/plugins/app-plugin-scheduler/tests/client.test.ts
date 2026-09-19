@@ -10,7 +10,7 @@ describe('@nocobase/app-plugin-scheduler', () => {
         routes: [
           {
             name: 'automation',
-            path: '/automation',
+
             extend: true,
             navigation: { title: 'nav.automation' },
             children: [
@@ -32,7 +32,7 @@ describe('@nocobase/app-plugin-scheduler', () => {
         routes: [
           {
             name: 'schedule-detail',
-            path: '/settings/automation/schedules/:scheduleId',
+            path: '/settings/schedules/:scheduleId',
             access: {
               resource: 'scheduler.schedules',
               action: 'access',
@@ -41,6 +41,7 @@ describe('@nocobase/app-plugin-scheduler', () => {
         ],
       },
     ]);
+    expect(routes[0]?.routes[0]).not.toHaveProperty('path');
     const list = routes[0]?.routes[0]?.children?.[0];
     await expect(list?.componentLoader?.()).resolves.toHaveProperty('default');
     const detail = routes[1]?.routes[0];

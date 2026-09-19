@@ -7,20 +7,42 @@ import { Workflow as WorkflowIcon, Zap } from 'lucide-react';
 const settings: AppClientSettingsRoutesContribution = defineSettingsRoutes([
   {
     name: 'automation',
-    path: '/automation',
+
     navigation: { title: 'nav.automation', icon: Zap },
     breadcrumb: { title: 'nav.automation' },
     children: [
       {
         name: 'workflows',
-        path: '/workflows',
+        path: '/workflow',
         navigation: { title: 'nav.workflows', icon: WorkflowIcon },
         breadcrumb: { title: 'nav.workflows' },
         access: { resource: 'workflow', action: 'access' },
         componentLoader: () =>
           import('./workflow-management/pages.js').then(
-            ({ WorkflowListPage }) => ({ default: WorkflowListPage }),
+            ({ WorkflowManagementPage }) => ({
+              default: WorkflowManagementPage,
+            }),
           ),
+        children: [
+          {
+            name: 'workflow-flows',
+            path: 'workflows',
+            access: { resource: 'workflow', action: 'access' },
+            componentLoader: () =>
+              import('./workflow-management/pages.js').then(
+                ({ WorkflowListPage }) => ({ default: WorkflowListPage }),
+              ),
+          },
+          {
+            name: 'workflow-runs',
+            path: 'runs',
+            access: { resource: 'workflow', action: 'access' },
+            componentLoader: () =>
+              import('./workflow-management/pages.js').then(
+                ({ WorkflowRunListPage }) => ({ default: WorkflowRunListPage }),
+              ),
+          },
+        ],
       },
     ],
   },

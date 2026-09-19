@@ -29,7 +29,7 @@ const examples = [
   { key: 'orders', path: '/repository-example/orders', icon: ShoppingCart },
   { key: 'files', path: '/file-repository', icon: FolderOpen },
   { key: 'routes', path: '/routes-example', icon: BookOpen },
-  { key: 'workflows', path: '/settings/automation/workflows', icon: Workflow },
+  { key: 'workflows', path: '/settings/workflow/workflows', icon: Workflow },
 ] as const;
 
 export default function ExamplesHomePage(): ReactElement {

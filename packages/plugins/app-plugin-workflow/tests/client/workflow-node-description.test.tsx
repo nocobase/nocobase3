@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { I18nProvider } from '@nocobase/i18n/client';
@@ -18,6 +19,7 @@ import {
   WorkflowDetailPage,
   WorkflowRunDetailPage,
 } from '../../client/workflow-management/pages.js';
+import type { WorkflowNodeRunRecord } from '../../client/workflow-management/types.js';
 import type { WorkflowNestedDefinition } from '../../client/types.js';
 import clientLocales from '../../client/locales/index.js';
 import { createWorkflowI18nRuntime } from '../i18n.js';
@@ -36,14 +38,27 @@ vi.mock('../../client/workflow-management/workflow-canvas.js', async () => {
     WorkflowCanvas: ({
       definition,
       onSelectNode,
+      onViewNodeRun,
+      nodeRuns = [],
     }: {
       definition: WorkflowNestedDefinition;
       onSelectNode?: (nodeKey: string | null) => void;
+      onViewNodeRun?: (run: WorkflowNodeRunRecord) => void;
+      nodeRuns?: readonly WorkflowNodeRunRecord[];
     }) => {
       canvasDefinitions.push(definition);
       return createElement(
         'button',
-        { type: 'button', onClick: () => onSelectNode?.('notify') },
+        {
+          type: 'button',
+          onClick: () => {
+            onSelectNode?.('notify');
+            const latest = nodeRuns
+              .filter((run) => run.nodeKey === 'notify')
+              .at(-1);
+            if (latest) onViewNodeRun?.(latest);
+          },
+        },
         'Notify owner node',
       );
     },
@@ -94,8 +109,12 @@ function workflow(overrides: Record<string, unknown> = {}) {
 }
 
 function CurrentLocation() {
+  const location = useLocation();
   return (
-    <output aria-label='Current location'>{useLocation().pathname}</output>
+    <output aria-label='Current location'>
+      {location.pathname}
+      {location.search}
+    </output>
   );
 }
 
@@ -104,6 +123,97 @@ describe('workflow node descriptions', () => {
     cleanup();
     canvasDefinitions.length = 0;
     vi.restoreAllMocks();
+  });
+
+  it.each([false, true])(
+    'opens node information in execution detail (executed: %s)',
+    async (executed) => {
+      vi.spyOn(workflowApi, 'run').mockResolvedValue({
+        id: 'run-1',
+        workflowId: 'workflow-1',
+        workflowKey: 'notification',
+        eventKey: 'event-1',
+        status: 1,
+        nodeRuns: executed ? [nodeRun] : [],
+      });
+      vi.spyOn(workflowApi, 'workflow').mockResolvedValue(workflow());
+      const payload = vi.spyOn(workflowApi, 'payload').mockResolvedValue({
+        id: nodeRun.id,
+        truncated: false,
+        result: { delivered: true },
+        error: null,
+        log: null,
+      });
+      const attempts = vi
+        .spyOn(workflowApi, 'nodeRuns')
+        .mockResolvedValue([nodeRun]);
+      renderWithI18n(
+        <MemoryRouter initialEntries={['/workflow-runs/run-1']}>
+          <Routes>
+            <Route
+              path='/workflow-runs/:id'
+              element={<WorkflowRunDetailPage />}
+            />
+          </Routes>
+        </MemoryRouter>,
+      );
+      fireEvent.click(await screen.findByText('Notify owner node'));
+      expect(screen.getAllByRole('dialog')).toHaveLength(1);
+      expect(
+        screen.getByRole('heading', { name: 'Notify owner' }),
+      ).toBeDefined();
+      expect(
+        screen.getByText('Send the final result to the record owner.'),
+      ).toBeDefined();
+      const disclosure = screen.getByText('Description').closest('details');
+      expect(disclosure?.open).toBe(false);
+      fireEvent.click(screen.getByText('Description'));
+      expect(disclosure?.open).toBe(true);
+      if (executed) {
+        await waitFor(() =>
+          expect(payload).toHaveBeenCalledWith('run-1', 'node-run-1'),
+        );
+        expect(await screen.findByText(/"delivered": true/)).toBeDefined();
+      } else {
+        expect(payload).not.toHaveBeenCalled();
+        expect(attempts).not.toHaveBeenCalled();
+        expect(screen.getByText('Not executed')).toBeDefined();
+        expect(screen.getByRole('status').textContent).toBe(
+          'This node was not executed in this run, so no result is available.',
+        );
+        expect(screen.queryByRole('heading', { name: 'Result' })).toBeNull();
+        expect(
+          within(screen.getByRole('dialog')).queryByText(/Duration/),
+        ).toBeNull();
+      }
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    },
+  );
+
+  it('renders the unexecuted state in Chinese without a description', async () => {
+    const runtime = await createWorkflowI18nRuntime(clientLocales, 'zh-CN');
+    render(
+      <I18nProvider runtime={runtime}>
+        <WorkflowRunResultDialog
+          runId='run-1'
+          nodeRun={null}
+          nodeTitle='Notify owner'
+          onClose={() => {}}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByText('未执行')).toBeDefined();
+    expect(screen.getByRole('status').textContent).toBe(
+      '本次执行未运行此节点，因此没有执行结果。',
+    );
+    const disclosure = screen.getByText('描述').closest('details');
+    expect(disclosure?.open).toBe(false);
+    fireEvent.click(screen.getByText('描述'));
+    expect(disclosure?.open).toBe(true);
+    expect(screen.getByText('暂无节点描述。')).toBeDefined();
+    fireEvent.click(screen.getByText('描述'));
+    expect(disclosure?.open).toBe(false);
   });
 
   it('keeps the canvas definition stable when the description dialog closes', async () => {
@@ -117,10 +227,7 @@ describe('workflow node descriptions', () => {
     renderWithI18n(
       <MemoryRouter initialEntries={['/workflows/workflow-1']}>
         <Routes>
-          <Route
-            path='/workflows/:workflowId'
-            element={<WorkflowDetailPage />}
-          />
+          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -132,6 +239,66 @@ describe('workflow node descriptions', () => {
 
     expect(canvasDefinitions.length).toBeGreaterThan(1);
     expect(new Set(canvasDefinitions).size).toBe(1);
+  });
+
+  it('expands the canvas, exits with Escape, and restores scrolling on unmount', async () => {
+    vi.spyOn(workflowApi, 'workflow').mockResolvedValue(workflow());
+    vi.spyOn(workflowApi, 'revisions').mockResolvedValue([workflow()]);
+    const { unmount } = renderWithI18n(
+      <MemoryRouter initialEntries={['/workflows/workflow-1']}>
+        <Routes>
+          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const button = await screen.findByRole('button', {
+      name: 'Enter fullscreen',
+    });
+    const card = button.closest('section');
+    const previousOverflow = document.body.style.overflow;
+    fireEvent.click(button);
+    expect(card?.classList.contains('workflow-canvas-fullscreen')).toBe(true);
+    expect(document.body.style.overflow).toBe('hidden');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(card?.classList.contains('workflow-canvas-fullscreen')).toBe(false);
+    expect(document.body.style.overflow).toBe(previousOverflow);
+    fireEvent.click(button);
+    unmount();
+    expect(document.body.style.overflow).toBe(previousOverflow);
+  });
+
+  it('enables a historical version with the same switch as the current version', async () => {
+    vi.spyOn(workflowApi, 'workflow').mockResolvedValue(
+      workflow({ current: false }),
+    );
+    vi.spyOn(workflowApi, 'revisions').mockResolvedValue([
+      workflow({ current: false }),
+      workflow({
+        id: 'workflow-2',
+        version: '2.0.0',
+        current: true,
+        enabled: true,
+      }),
+    ]);
+    const enable = vi
+      .spyOn(workflowApi, 'enable')
+      .mockResolvedValue(workflow({ enabled: true, current: true }));
+    renderWithI18n(
+      <MemoryRouter initialEntries={['/workflows/workflow-1']}>
+        <Routes>
+          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(
+      await screen.findByRole('switch', {
+        name: 'Enable Notification workflow',
+      }),
+    );
+    await waitFor(() => expect(enable).toHaveBeenCalledWith('workflow-1'));
+    expect(
+      screen.queryByRole('button', { name: 'Enable this version' }),
+    ).toBeNull();
   });
 
   it('reloads the current workflow after changing its enabled status', async () => {
@@ -147,10 +314,7 @@ describe('workflow node descriptions', () => {
     renderWithI18n(
       <MemoryRouter initialEntries={['/workflows/workflow-1']}>
         <Routes>
-          <Route
-            path='/workflows/:workflowId'
-            element={<WorkflowDetailPage />}
-          />
+          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -192,10 +356,7 @@ describe('workflow node descriptions', () => {
       <MemoryRouter initialEntries={['/workflows/workflow-hash']}>
         <CurrentLocation />
         <Routes>
-          <Route
-            path='/workflows/:workflowId'
-            element={<WorkflowDetailPage />}
-          />
+          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -208,7 +369,7 @@ describe('workflow node descriptions', () => {
 
     await waitFor(() =>
       expect(screen.getByLabelText('Current location').textContent).toBe(
-        '/settings/automation/workflows/workflow-42',
+        '/settings/workflow/workflows/workflow-42',
       ),
     );
   });
@@ -233,10 +394,7 @@ describe('workflow node descriptions', () => {
       <MemoryRouter initialEntries={['/workflows/workflow-1']}>
         <CurrentLocation />
         <Routes>
-          <Route
-            path='/workflows/:workflowId'
-            element={<WorkflowDetailPage />}
-          />
+          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -248,42 +406,58 @@ describe('workflow node descriptions', () => {
 
     await waitFor(() =>
       expect(screen.getByLabelText('Current location').textContent).toBe(
-        '/settings/automation/workflow-runs/run-42',
+        '/settings/workflow/runs/run-42',
       ),
     );
   });
 
-  it('returns from an execution detail to its workflow detail', async () => {
-    vi.spyOn(workflowApi, 'run').mockResolvedValue({
-      id: 'run-42',
-      workflowId: 'workflow-1',
-      workflowKey: 'notification',
-      workflowTitle: 'Notification workflow',
-      eventKey: 'event-42',
-      status: 1,
-      createdAt: '2026-09-02T08:00:00.000Z',
-    });
-    vi.spyOn(workflowApi, 'workflow').mockResolvedValue(
-      workflow({ enabled: true, current: true }),
-    );
+  it.each([
+    '/settings/workflow/runs?status=failed',
+    '/settings/workflow/workflows/workflow-1',
+  ])(
+    'returns from execution detail to its history entry %s',
+    async (origin) => {
+      vi.spyOn(workflowApi, 'run').mockResolvedValue({
+        id: 'run-42',
+        workflowId: 'workflow-1',
+        workflowKey: 'notification',
+        workflowTitle: 'Notification workflow',
+        eventKey: 'event-42',
+        status: 1,
+        createdAt: '2026-09-02T08:00:00.000Z',
+      });
+      vi.spyOn(workflowApi, 'workflow').mockResolvedValue(
+        workflow({ enabled: true, current: true }),
+      );
 
-    renderWithI18n(
-      <MemoryRouter initialEntries={['/workflow-runs/run-42']}>
-        <Routes>
-          <Route
-            path='/workflow-runs/:runId'
-            element={<WorkflowRunDetailPage />}
-          />
-        </Routes>
-      </MemoryRouter>,
-    );
+      renderWithI18n(
+        <MemoryRouter
+          initialEntries={[origin, '/workflow-runs/run-42']}
+          initialIndex={1}
+        >
+          <CurrentLocation />
+          <Routes>
+            <Route
+              path='/workflow-runs/:id'
+              element={<WorkflowRunDetailPage />}
+            />
+          </Routes>
+        </MemoryRouter>,
+      );
 
-    expect(
-      (await screen.findByRole('link', { name: '← Workflows' })).getAttribute(
-        'href',
-      ),
-    ).toBe('/settings/automation/workflows/workflow-1');
-  });
+      expect(
+        (
+          await screen.findByRole('link', { name: 'Notification workflow' })
+        ).getAttribute('href'),
+      ).toBe('/settings/workflow/workflows/workflow-1');
+      fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+      await waitFor(() =>
+        expect(screen.getByLabelText('Current location').textContent).toBe(
+          origin,
+        ),
+      );
+    },
+  );
 
   it('offers the candidate revision in the version picker without enabling it', async () => {
     const running = workflow({
@@ -312,10 +486,7 @@ describe('workflow node descriptions', () => {
       <MemoryRouter initialEntries={['/workflows/workflow-1']}>
         <CurrentLocation />
         <Routes>
-          <Route
-            path='/workflows/:workflowId'
-            element={<WorkflowDetailPage />}
-          />
+          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -334,7 +505,7 @@ describe('workflow node descriptions', () => {
 
     await waitFor(() =>
       expect(screen.getByLabelText('Current location').textContent).toBe(
-        '/settings/automation/workflows/candidate-hash',
+        '/settings/workflow/workflows/candidate-hash',
       ),
     );
     expect(enable).not.toHaveBeenCalled();
@@ -363,10 +534,7 @@ describe('workflow node descriptions', () => {
       <MemoryRouter initialEntries={['/workflows/candidate-hash']}>
         <CurrentLocation />
         <Routes>
-          <Route
-            path='/workflows/:workflowId'
-            element={<WorkflowDetailPage />}
-          />
+          <Route path='/workflows/:id' element={<WorkflowDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -388,7 +556,7 @@ describe('workflow node descriptions', () => {
     expect(enable).toHaveBeenCalledWith('candidate-hash');
     await waitFor(() =>
       expect(screen.getByLabelText('Current location').textContent).toBe(
-        '/settings/automation/workflows/workflow-42',
+        '/settings/workflow/workflows/workflow-42',
       ),
     );
   });

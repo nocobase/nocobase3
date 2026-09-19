@@ -39,19 +39,19 @@ describe('workflow canvas theme', () => {
       /\.workflow-node-description-disclosure\s*\{[^}]*background:/s,
     );
     expect(stylesheet).toMatch(
-      /\.workflow-node-description-disclosure summary\s*\{[^}]*font-size: 12px/s,
+      /\.workflow-node-description-disclosure summary\s*\{[^}]*font-size: var\(--text-sm\)/s,
     );
     expect(stylesheet).toMatch(
-      /\.workflow-node-description-disclosure p\s*\{[^}]*font-size: 12px/s,
+      /\.workflow-node-description-disclosure p\s*\{[^}]*font-size: var\(--text-sm\)/s,
     );
     expect(stylesheet).toMatch(
-      /\.workflow-node-description-disclosure summary\s*\{[^}]*gap: 6px[^}]*list-style: none/s,
+      /\.workflow-node-description-disclosure summary\s*\{[^}]*gap: calc\(var\(--spacing\) \* 1.5\)[^}]*list-style: none/s,
     );
     expect(stylesheet).toMatch(
-      /\.workflow-node-description-disclosure summary::before\s*\{[^}]*width: 10px/s,
+      /\.workflow-node-description-disclosure summary::before\s*\{[^}]*width: calc\(var\(--spacing\) \* 2.5\)/s,
     );
     expect(stylesheet).toMatch(
-      /\.workflow-node-description-disclosure p\s*\{[^}]*padding-left: 16px/s,
+      /\.workflow-node-description-disclosure p\s*\{[^}]*padding-left: calc\(var\(--spacing\) \* 4\)/s,
     );
   });
 });
