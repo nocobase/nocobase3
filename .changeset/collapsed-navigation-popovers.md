@@ -4,4 +4,4 @@
 "@nocobase/app-template-hub": patch
 ---
 
-Show menu labels and interactive group navigation immediately on hover in collapsed desktop sidebars.
+Show menu labels and interactive group navigation immediately on hover in collapsed desktop sidebars, with no group popover closing delay.
