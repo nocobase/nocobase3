@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { OrderRelations } from './order-relations.js';
 import { Link, useSearchParams } from 'react-router';
 import { useState, type ReactElement } from 'react';
@@ -30,19 +32,17 @@ export default function SalesPage({
   const { t } = useTranslation(NS);
   const [revision, setRevision] = useState(0);
   return (
-    <main className='mx-auto max-w-6xl space-y-6 p-6'>
-      <header>
-        <h1 className='text-2xl font-semibold'>{t(`sales.${path}`)}</h1>
-        <p className='mt-2 text-muted-foreground'>
-          {t(`sales.descriptions.${path}`)}
-        </p>
-      </header>
+    <PageContainer>
+      <PageHeader
+        title={t(`sales.${path}`)}
+        description={t(`sales.descriptions.${path}`)}
+      />
       <SalesTable
         path={path}
         onSaved={() => setRevision((value) => value + 1)}
       />
       {path === 'orders' && <OrderRelations revision={revision} />}
-    </main>
+    </PageContainer>
   );
 }
 function SalesTable({

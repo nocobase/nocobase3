@@ -1,3 +1,4 @@
+import { ShieldCheck } from 'lucide-react';
 import {
   defineAppRoutes,
   type AppClientRouteContribution,
@@ -7,7 +8,7 @@ const routes: readonly AppClientRouteContribution[] = [
     {
       name: 'authorization-example',
       auth: 'required',
-      navigation: { title: 'title' },
+      navigation: { title: 'title', icon: ShieldCheck },
       children: [
         {
           name: 'authorization-example-overview',

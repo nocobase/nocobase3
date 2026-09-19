@@ -760,6 +760,9 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.13.2
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.487.0(react@19.2.8)
       react:
         specifier: ^19.0.0
         version: 19.2.8
