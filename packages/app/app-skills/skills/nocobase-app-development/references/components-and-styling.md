@@ -123,3 +123,9 @@ Every user-visible string goes through a translation key. See [internationalizat
 - Loading, empty, and error states all render.
 
 For creating or editing theme presets, read `.agents/skills/nocobase-app-development/references/themes.md` from the application root.
+
+## Sidebar navigation
+
+Application, Settings and Dev layouts each own a shadcn `SidebarProvider`. Read state with `useSidebar`; use `SidebarMenuButton.tooltip`, `SidebarMenuSub` and controlled `Collapsible` for navigation. Collapsed groups combine a hover Popover with the same permission-filtered tree; the popup must not introduce another provider or rebuild entries from raw routes. Keep parent links navigable and icon-mode menus vertically scrollable. Preserve the main page scroll region and route overlay positioning.
+
+The provider uses shadcn widths and Ctrl/Cmd+B, writes its sidebar cookie without restoring it, and starts expanded per layout. Mobile closure and breakpoint changes may remount children. Translate auxiliary text and test permission refresh, hover/focus, keyboard dismissal and narrow screens whenever changing navigation.

@@ -34,4 +34,8 @@ For UI styling, use the shared color, font, size, spacing, radius and shadow con
 
 ## Layout containers
 
-`layouts/components/layout-header.tsx` and `layouts/components/layout-sidebar.tsx` are presentation containers accepting ordinary children. Each of `AppLayout`, `SettingsLayout`, and `DevLayout` owns its arrangement, sidebar state, permission queries and route rendering. Keep menus, branding, action visibility and page redirects out of the containers. Supply an accessible sidebar label and a mobile close button from the owning layout. Sidebar contents own their scroll regions and their collapsed presentation; the container never rewrites children.
+`layouts/components/layout-header.tsx` remains a presentation container. Each of `AppLayout`, `SettingsLayout`, and `DevLayout` has an independent shadcn `SidebarProvider`; `useSidebar` owns desktop collapse and the mobile Sheet. Keep permission queries, redirects, branding and route composition in the layouts. Preserve the page scroll region and route overlay positioning when changing the shell.
+
+`NavigationTree` consumes only the permission-filtered navigation tree. Use `SidebarMenuButton.tooltip` for leaf names and controlled `Collapsible` with `SidebarMenuSub` for nested groups. Collapsed groups use a hover Popover containing a full-text list under the same provider; do not create another provider in the popup. Parent links remain navigable. Keep icon-mode menus vertically scrollable and retain translated accessible labels.
+
+The sidebar follows shadcn sizing and Ctrl/Cmd+B behavior. Its provider writes the standard sidebar cookie but does not read it; layouts initialize expanded and keep independent state. Mobile Sheet closure and breakpoint changes may remount navigation content, so do not rely on arbitrary child state surviving them.
