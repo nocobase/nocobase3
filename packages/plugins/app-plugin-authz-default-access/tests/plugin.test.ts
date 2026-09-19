@@ -8,8 +8,8 @@ describe('@nocobase/app-plugin-authz-default-access', () => {
       packageName: '@nocobase/app-plugin-authz-default-access',
       database: {
         migrations: './database/migrations',
-        seeds: './database/seeds',
       },
     });
+    expect(plugin.database).not.toHaveProperty('seeds');
   });
 });

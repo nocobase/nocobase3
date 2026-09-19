@@ -8,8 +8,8 @@ describe('@nocobase/app-plugin-authz-sharing-rules', () => {
       packageName: '@nocobase/app-plugin-authz-sharing-rules',
       database: {
         migrations: './database/migrations',
-        seeds: './database/seeds',
       },
     });
+    expect(plugin.database).not.toHaveProperty('seeds');
   });
 });

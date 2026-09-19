@@ -13,7 +13,6 @@ const authzDefaultAccessPlugin: AppServerPlugin = defineServerPlugin({
   locales: () => import('./locales/index.js'),
   database: {
     migrations: './database/migrations',
-    seeds: './database/seeds',
   },
 });
 
