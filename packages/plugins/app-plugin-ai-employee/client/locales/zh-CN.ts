@@ -640,8 +640,7 @@ export default {
     '限制此 AI 员工仅使用选中的模型。',
   'Role setting description':
     'AI 模型的系统提示词，决定了“我”是谁，遵循哪些要求来工作和完成任务。',
-  'Role setting placeholder':
-    'AI 模型的系统提示词，决定了“我”是谁，遵循哪些要求来工作和完成任务。',
+  'employees.rolePlaceholder': '描述角色、职责和工作要求。',
   'System default': '系统默认',
   Custom: '自定义',
   'General skills': '通用技能',

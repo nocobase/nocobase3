@@ -359,7 +359,8 @@ export default function AIEmployeePage(): ReactElement {
     useCatalogDisplay();
   const { open } = useNotification();
   const [employees, setEmployees] = useState<AIEmployeeRecord[]>([]);
-  const [employeeListOpen, setEmployeeListOpen] = useState(false);
+  const [employeeListExpanded, setEmployeeListExpanded] = useState<boolean>();
+  const employeeListOpen = employeeListExpanded ?? employees.length > 1;
   const employeeListId = useId();
   const employeeDividerRef = useRef<HTMLDivElement>(null);
   const alignEmployeeToggle = useCallback((header: HTMLElement | null) => {
@@ -723,7 +724,7 @@ export default function AIEmployeePage(): ReactElement {
   return (
     <Collapsible
       open={employeeListOpen}
-      onOpenChange={setEmployeeListOpen}
+      onOpenChange={setEmployeeListExpanded}
       render={<main />}
       className={`grid h-[clamp(52rem,85dvh,68rem)] min-h-0 grid-cols-[44px_minmax(0,1fr)] overflow-hidden lg:h-[clamp(40rem,80dvh,64rem)] ${employeeListOpen ? 'grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[19rem_32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[19rem_44px_minmax(0,1fr)]' : 'grid-rows-[minmax(0,1fr)] lg:grid-cols-[32px_minmax(0,1fr)] lg:pointer-coarse:grid-cols-[44px_minmax(0,1fr)]'} lg:grid-rows-[minmax(0,1fr)]`}
     >
@@ -784,30 +785,28 @@ export default function AIEmployeePage(): ReactElement {
           aria-hidden='true'
           className='absolute inset-y-0 left-1/2 border-l'
         />
-        {employees.length > 1 ? (
-          <CollapsibleTrigger
-            render={<Button variant='outline' size='icon' />}
-            aria-controls={employeeListId}
-            aria-label={
-              employeeListOpen
-                ? t('Collapse employee list')
-                : t('Expand employee list')
-            }
-            title={
-              employeeListOpen
-                ? t('Collapse employee list')
-                : t('Expand employee list')
-            }
-            style={{ top: 'var(--employee-header-midpoint, 3rem)' }}
-            className='absolute left-1/2 size-[44px] -translate-x-1/2 -translate-y-1/2 text-muted-foreground transition-colors active:not-aria-[haspopup]:-translate-y-1/2 lg:size-[32px] lg:pointer-coarse:size-[44px]'
-          >
-            {employeeListOpen ? (
-              <ChevronLeft className='size-4' aria-hidden='true' />
-            ) : (
-              <ChevronRight className='size-4' aria-hidden='true' />
-            )}
-          </CollapsibleTrigger>
-        ) : null}
+        <CollapsibleTrigger
+          render={<Button variant='outline' size='icon' />}
+          aria-controls={employeeListId}
+          aria-label={
+            employeeListOpen
+              ? t('Collapse employee list')
+              : t('Expand employee list')
+          }
+          title={
+            employeeListOpen
+              ? t('Collapse employee list')
+              : t('Expand employee list')
+          }
+          style={{ top: 'var(--employee-header-midpoint, 3rem)' }}
+          className='absolute left-1/2 size-[44px] -translate-x-1/2 -translate-y-1/2 text-muted-foreground transition-colors active:not-aria-[haspopup]:-translate-y-1/2 lg:size-[32px] lg:pointer-coarse:size-[44px]'
+        >
+          {employeeListOpen ? (
+            <ChevronLeft className='size-4' aria-hidden='true' />
+          ) : (
+            <ChevronRight className='size-4' aria-hidden='true' />
+          )}
+        </CollapsibleTrigger>
       </div>
 
       <section className='min-h-0 min-w-0 overflow-hidden p-4 sm:p-6 lg:p-8'>
@@ -894,7 +893,7 @@ export default function AIEmployeePage(): ReactElement {
               ) : null}
 
               {tab === 'role' ? (
-                <div className='space-y-4'>
+                <div className='flex h-full min-h-80 flex-col gap-4'>
                   <div className='flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800'>
                     <CircleAlert
                       className='mt-0.5 h-4 w-4 shrink-0'
@@ -903,7 +902,7 @@ export default function AIEmployeePage(): ReactElement {
                     <span>{t('Role setting description')}</span>
                   </div>
                   {selected.builtIn ? (
-                    <fieldset className='grid gap-3 text-sm'>
+                    <fieldset className='flex min-h-0 min-w-0 flex-1 flex-col gap-3 text-sm'>
                       <legend className='font-medium'>
                         {t('Role settings')}
                       </legend>
@@ -938,12 +937,13 @@ export default function AIEmployeePage(): ReactElement {
                         </label>
                       </div>
                       {!useCustomRole ? (
-                        <pre className='h-80 w-full overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm'>
+                        <pre className='min-h-0 w-full flex-1 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm'>
                           {selected.defaultPrompt ?? ''}
                         </pre>
                       ) : (
                         <textarea
                           aria-label={t('Role settings')}
+                          placeholder={t('employees.rolePlaceholder')}
                           value={draft.about ?? ''}
                           onChange={(event) =>
                             patchDraft({
@@ -954,20 +954,20 @@ export default function AIEmployeePage(): ReactElement {
                                   : event.target.value,
                             })
                           }
-                          className='h-80 w-full resize-none overflow-auto rounded-md border bg-background p-3'
+                          className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-background p-3'
                         />
                       )}
                     </fieldset>
                   ) : (
-                    <label className='grid gap-2 text-sm'>
+                    <label className='flex min-h-0 flex-1 flex-col gap-2 text-sm'>
                       <span className='font-medium'>{t('Role settings')}</span>
                       <textarea
                         value={draft.about ?? ''}
                         onChange={(event) =>
                           patchDraft({ about: event.target.value })
                         }
-                        className='h-80 w-full resize-none overflow-auto rounded-md border bg-background p-3'
-                        placeholder={t('Role setting placeholder')}
+                        className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-background p-3'
+                        placeholder={t('employees.rolePlaceholder')}
                       />
                     </label>
                   )}

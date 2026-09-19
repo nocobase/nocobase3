@@ -695,8 +695,8 @@ export default {
     'Restrict this AI employee to the selected models.',
   'Role setting description':
     'The system prompt for the AI model, defines who "I" am, as well as the rules and requirements I follow to perform tasks.',
-  'Role setting placeholder':
-    'The system prompt for the AI model, defines who "I" am, as well as the rules and requirements I follow to perform tasks.',
+  'employees.rolePlaceholder':
+    'Describe the role, responsibilities, and working guidelines.',
   'System default': 'System default',
   Custom: 'Custom',
   'General skills': 'General skills',

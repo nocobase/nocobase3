@@ -123,10 +123,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function renderPage() {
+async function renderPage({ collapsed = true }: { collapsed?: boolean } = {}) {
   const view = render(<AIEmployeePage />);
   await screen.findByRole('heading', { name: 'Ellis' });
   await screen.findByRole('switch', { name: 'Enabled' });
+  if (
+    collapsed &&
+    screen.queryByRole('button', { name: 'Collapse employee list' })
+  ) {
+    toggleList();
+  }
   return view;
 }
 
@@ -141,6 +147,23 @@ function toggleList() {
 }
 
 describe('AI employee list disclosure', () => {
+  it('expands multiple employees by default and restores that default on remount', async () => {
+    const view = await renderPage({ collapsed: false });
+    expect(
+      screen.getByRole('button', { name: 'Collapse employee list' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(employeeList().getByRole('button', { name: /Dex/ })).toBeVisible();
+    toggleList();
+    expect(
+      screen.getByRole('button', { name: 'Expand employee list' }),
+    ).toHaveAttribute('aria-expanded', 'false');
+    view.unmount();
+    await renderPage({ collapsed: false });
+    expect(
+      screen.getByRole('button', { name: 'Collapse employee list' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('keeps role editors equally sized and only shows right-aligned actions for actual edits', async () => {
     mocks.get.mockResolvedValue({
       ...employees[0],
@@ -151,12 +174,13 @@ describe('AI employee list disclosure', () => {
     await renderPage();
     fireEvent.click(screen.getByRole('tab', { name: 'Role settings' }));
     expect(screen.getByText('System instructions')).toHaveClass(
-      'h-80',
+      'flex-1',
+      'min-h-0',
       'overflow-auto',
     );
     fireEvent.click(screen.getByRole('radio', { name: 'Custom' }));
     const editor = screen.getByRole('textbox', { name: 'Role settings' });
-    expect(editor).toHaveClass('h-80', 'resize-none');
+    expect(editor).toHaveClass('flex-1', 'min-h-0', 'resize-none');
     expect(editor).toHaveValue('');
     expect(
       screen.queryByRole('button', { name: 'Save' }),
@@ -188,19 +212,27 @@ describe('AI employee list disclosure', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('hides the list toggle when there is only one employee', async () => {
+  it('defaults to collapsed for one employee while keeping the toggle usable', async () => {
     mocks.list.mockResolvedValue([employees[0]]);
-    await renderPage();
-    expect(
-      screen.queryByRole('button', {
-        name: /^(Expand|Collapse) employee list$/,
-      }),
-    ).not.toBeInTheDocument();
+    await renderPage({ collapsed: false });
+    const toggle = screen.getByRole('button', { name: 'Expand employee list' });
+    expect(toggle).toBeVisible();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle.querySelector('svg')).toHaveClass('lucide-chevron-right');
+    toggleList();
+    expect(screen.getByRole('button', { name: 'Collapse employee list' })).toBe(
+      toggle,
+    );
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(employeeList().getByRole('button', { name: /Ellis/ })).toBeVisible();
+    toggleList();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Ellis' })).toBeVisible();
     expect(screen.getByRole('switch', { name: 'Enabled' })).toBeVisible();
   });
 
-  it('starts collapsed with an icon-only toggle aligned to the identity header on the left divider', async () => {
+  it('can be collapsed with an icon-only toggle aligned to the identity header on the left divider', async () => {
     await renderPage();
     const toggle = screen.getByRole('button', { name: 'Expand employee list' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -374,6 +406,7 @@ describe('AI employee list disclosure', () => {
     );
     render(<AIEmployeePage />);
     const loading = await screen.findByText('Loading employee details…');
+    toggleList();
     const toggle = screen.getByRole('button', { name: 'Expand employee list' });
     const divider = toggle.parentElement!;
     const loadingObserver = resizeObservers.find((item) =>
