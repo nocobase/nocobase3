@@ -13,7 +13,7 @@ const stateFile = path.join(stateDir, 'state.json');
 const container = `nocobase-local-registry-${id}`;
 const help = `Local published-package testing
 
-pnpm local-registry:prepare [--port 4873]
+pnpm local-registry:prepare [--port 4873] [--reset]
 pnpm local-registry:create NAME [--template default|examples|hub] [--dialect sqlite]
   [--output-dir /parent/directory] [--json] [--no-install]
 pnpm local-registry:verify [--template default|examples|hub] [--dialect sqlite]
@@ -21,6 +21,7 @@ pnpm local-registry:verify [--template default|examples|hub] [--dialect sqlite]
 pnpm local-registry:stop
 
 Prepare builds and publishes all workspace packages to a fresh loopback registry.
+Use --reset to stop the previous session and clear its snapshot before preparing again.
 Verify runs dev/build/start and retains applications and logs outside the repository.
 Non-SQLite verification requires --config pointing to a dedicated test database;
 application migrations and seeds may modify it. Stop removes registry state, not test applications.
@@ -44,6 +45,10 @@ export function parseArgs(argv) {
     stop: [],
   };
   for (let i = 0; i < args.length; i++) {
+    if (action === 'prepare' && args[i] === '--reset') {
+      options.reset = true;
+      continue;
+    }
     if (action === 'create' && ['--json', '--no-install'].includes(args[i])) {
       options[args[i].slice(2)] = true;
       continue;
@@ -180,7 +185,7 @@ export function assertWorkdir(directory, root = repo) {
 async function prepare(options) {
   if (fs.existsSync(stateFile))
     throw new Error(
-      'A local registry session already exists. Run pnpm local-registry:stop before preparing a fresh snapshot.',
+      'A local registry session already exists. Run pnpm local-registry:prepare --reset to prepare a fresh snapshot.',
     );
   const packages = fs
     .globSync('packages/*/*/package.json', { cwd: repo })
@@ -352,6 +357,49 @@ export function createManually(args, cwd = process.cwd()) {
   );
 }
 
+function stop() {
+  if (fs.existsSync(stateFile)) {
+    const state = readState();
+    const names = run(
+      'docker',
+      [
+        'ps',
+        '-a',
+        '--filter',
+        `name=^/${container}$`,
+        '--format',
+        '{{.Names}}',
+      ],
+      { capture: true },
+    );
+    if (names) {
+      const label = run(
+        'docker',
+        [
+          'inspect',
+          '--format',
+          '{{index .Config.Labels "nocobase.local-registry"}}',
+          state.container,
+        ],
+        { capture: true },
+      );
+      if (label !== id)
+        throw new Error(
+          'Refusing to remove a container not owned by this checkout.',
+        );
+      run('docker', ['rm', '-f', '-v', state.container]);
+    }
+  }
+  // Keep the operation lock in place throughout reset and preparation.
+  for (const entry of fs.readdirSync(stateDir)) {
+    if (entry !== 'lock')
+      fs.rmSync(path.join(stateDir, entry), { recursive: true, force: true });
+  }
+  console.log(
+    'Local registry and isolated caches removed. Test applications and logs retained.',
+  );
+}
+
 async function main() {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     console.log(help);
@@ -374,8 +422,10 @@ async function main() {
   }
   fs.writeFileSync(lock, String(process.pid), { flag: 'wx' });
   try {
-    if (options.action === 'prepare') await prepare(options);
-    else if (options.action === 'create') {
+    if (options.action === 'prepare') {
+      if (options.reset) stop();
+      await prepare(options);
+    } else if (options.action === 'create') {
       const state = readState();
       if (!state.ready)
         throw new Error('Run pnpm local-registry:prepare first.');
@@ -446,42 +496,7 @@ async function main() {
         { env },
       );
     } else {
-      if (fs.existsSync(stateFile)) {
-        const state = readState();
-        const names = run(
-          'docker',
-          [
-            'ps',
-            '-a',
-            '--filter',
-            `name=^/${container}$`,
-            '--format',
-            '{{.Names}}',
-          ],
-          { capture: true },
-        );
-        if (names) {
-          const label = run(
-            'docker',
-            [
-              'inspect',
-              '--format',
-              '{{index .Config.Labels "nocobase.local-registry"}}',
-              state.container,
-            ],
-            { capture: true },
-          );
-          if (label !== id)
-            throw new Error(
-              'Refusing to remove a container not owned by this checkout.',
-            );
-          run('docker', ['rm', '-f', '-v', state.container]);
-        }
-      }
-      fs.rmSync(stateDir, { recursive: true, force: true });
-      console.log(
-        'Local registry and isolated caches removed. Test applications and logs retained.',
-      );
+      stop();
     }
   } finally {
     fs.rmSync(lock, { force: true });
