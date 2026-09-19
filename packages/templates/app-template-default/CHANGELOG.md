@@ -1,5 +1,20 @@
 # @nocobase/app-template-default
 
+## 1.0.0-beta.37
+
+### Patch Changes
+
+- 0cd728d: Declare Hono as a runtime dependency so generated application server routes can resolve it after deployment.
+- f93f147: Remove the default SQLite driver dependency from application templates. Application creation supplies the database driver selected by --dialect, defaulting to SQLite.
+- Updated dependencies [c175bef]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+  - @nocobase/app-plugin-workflow@0.1.0-beta.22
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.18
+
 ## 1.0.0-beta.36
 
 ### Patch Changes

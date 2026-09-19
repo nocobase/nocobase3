@@ -1,5 +1,19 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.18
+
+### Patch Changes
+
+- 8f5eacf: Document a configuration readiness gate for embedded AI chat so the first message can be sent after initial navigation or refresh without switching employees or models. Include complete integration examples, actionable loading and unavailable states, and first-send verification steps.
+- 8f5eacf: Document conversation history response fields, stable message identifiers, pagination, nullability, and authenticated HTTP examples. Clarify the current SSE response limitation for non-streaming execution and distinguish history rows from message inputs and server agent results.
+- 8f5eacf: Fix AI conversation keyword searches failing with a SQL binding error. Use native repository substring filters with literal wildcard escaping while preserving user and scope isolation and conversation ordering.
+- 8f5eacf: Fix missing knowledge base options in the AI employee editor by using the knowledge base plugin's AI API route. Exclude disabled knowledge bases from the available options.
+- 8f5eacf: Use the shared Dialog and Button components for the LLM model editor so backdrop clicks and Escape dismiss it, focus is managed and restored, and modal styling matches the application's component library.
+
+  Use a searchable multi-select Combobox for provider models, with selected chips and the search input inside the same field. Filter by model label or ID, preserve selections while searching, and portal the options outside the editor's scroll container with viewport-aware list scrolling. Escape closes the picker before the editor.
+
+  Show localized loading and empty states while discovering LLM services instead of leaving the settings table blank.
+
 ## 0.1.0-beta.17
 
 ### Patch Changes
