@@ -1,5 +1,12 @@
 # @nocobase/queue
 
+## 0.1.0-beta.7
+
+### Patch Changes
+
+- fe564d9: Add opt-in strict startup verification that propagates job import failures and exits development and production processes on startup failure.
+- @nocobase/db@1.0.0-beta.11
+
 ## 0.1.0-beta.6
 
 ### Minor Changes

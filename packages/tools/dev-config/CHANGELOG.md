@@ -1,5 +1,11 @@
 # @nocobase/dev-config
 
+## 0.1.0-beta.10
+
+### Patch Changes
+
+- fe564d9: Transform the queue loader in both Vitest presets so dynamically discovered TypeScript jobs load through the test runtime instead of Node's strip-only loader. Document the shared preset requirement for application job-discovery tests.
+
 ## 0.1.0-beta.9
 
 ### Patch Changes
