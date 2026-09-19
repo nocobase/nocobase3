@@ -10,7 +10,7 @@ import { createMockServer } from './mock-server.js';
 
 import path from 'node:path';
 import { createLogger } from '@nocobase/logging';
-const GOLDEN_EMPLOYEES = ['atlas', 'dex', 'ellis', 'lexi', 'vera', 'viz'];
+const GOLDEN_EMPLOYEES = ['atlas'];
 describe('package AI resources', () => {
   it('warns only for required missing directories and preserves resource provenance at debug level', async () => {
     const fixture = await createMockServer();
@@ -113,7 +113,17 @@ describe('package AI resources', () => {
       builtIn: true,
       defaultPrompt: expect.stringContaining('orchestration lead'),
     });
-    for (const username of ['dara', 'lina', 'nathan', 'orin']) {
+    for (const username of [
+      'dex',
+      'ellis',
+      'lexi',
+      'vera',
+      'viz',
+      'dara',
+      'lina',
+      'nathan',
+      'orin',
+    ]) {
       expect(
         await fixture.aiManager.employeeManager.getEmployee(username),
       ).toBeUndefined();
