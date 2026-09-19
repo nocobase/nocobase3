@@ -1,85 +1,52 @@
-import type { LoggingConfig } from '@nocobase/logging';
-import { Type } from '@sinclair/typebox';
+import { reportLoggingFailure } from '@nocobase/logging';
+import type {
+  LoggingConfig,
+  FileLogOptions,
+  ConsoleLogOptions,
+} from '@nocobase/logging';
 
-import {
-  defineAppConfig,
-  envBoolean,
-  envString,
-  envStrings,
-  type AppConfigDefinition,
-} from '../config/index.js';
-
-const defaultRedactPaths = [
-  'password',
-  'password_confirmation',
-  'token',
-  'accessToken',
-  'refreshToken',
-  'secret',
-  'authorization',
-  'Authorization',
-  'cookie',
-  'Cookie',
-  'headers.authorization',
-  'headers.Authorization',
-  'headers.cookie',
-  'headers.Cookie',
-];
 export interface AppLoggingConfig extends LoggingConfig {
   readonly pretty?: boolean;
-  readonly nodeEnv?: string;
 }
 
-export const loggingConfig: AppConfigDefinition<AppLoggingConfig> =
-  defineAppConfig({
-    namespace: 'logging',
-    schema: Type.Unsafe<AppLoggingConfig>(
-      Type.Object(
-        {
-          default: Type.Optional(Type.String()),
-          name: Type.Optional(Type.String()),
-          level: Type.Optional(
-            Type.Union([
-              Type.Literal('fatal'),
-              Type.Literal('error'),
-              Type.Literal('warn'),
-              Type.Literal('info'),
-              Type.Literal('debug'),
-              Type.Literal('trace'),
-              Type.Literal('silent'),
-            ]),
-          ),
-          redact: Type.Optional(
-            Type.Union([Type.Literal(false), Type.Array(Type.String())]),
-          ),
-          base: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-          transport: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-          loggers: Type.Optional(
-            Type.Record(
-              Type.String(),
-              Type.Record(Type.String(), Type.Unknown()),
-            ),
-          ),
-          pretty: Type.Optional(Type.Boolean()),
-          nodeEnv: Type.Optional(Type.String()),
-        },
-        { additionalProperties: true },
-      ),
-    ),
-    defaults: {
-      default: 'system',
-      name: 'app',
-      level: 'info',
-      base: { service: 'app' },
-      redact: defaultRedactPaths,
+export interface AppRuntimeLogging {
+  readonly file?: FileLogOptions;
+  readonly enabled?: boolean;
+  readonly level?: string;
+  readonly retentionDays?: number;
+  readonly maxSizeMB?: number;
+  readonly console?: boolean | ConsoleLogOptions;
+  readonly bindings?: Readonly<Record<string, string>>;
+}
+
+/** Normalize legacy Host policy fields once at the App/Host boundary. */
+export function normalizeRuntimeLogging(
+  policy: AppRuntimeLogging = {},
+): AppRuntimeLogging {
+  if (
+    policy.enabled !== undefined ||
+    policy.retentionDays !== undefined ||
+    policy.maxSizeMB !== undefined
+  ) {
+    reportLoggingFailure(
+      'Legacy runtime logging fields are deprecated; move enabled, retentionDays and maxSizeMB to file.enabled, file.retentionDays and file.maxTotalSizeMB',
+    );
+  }
+  return {
+    ...policy,
+    file: {
+      ...policy.file,
+      ...(policy.enabled === undefined ? {} : { enabled: policy.enabled }),
+      ...(policy.retentionDays === undefined
+        ? {}
+        : { retentionDays: policy.retentionDays }),
+      ...(policy.maxSizeMB === undefined
+        ? {}
+        : { maxTotalSizeMB: policy.maxSizeMB }),
     },
-    envMappings: {
-      LOG_DEFAULT: envString('default'),
-      LOG_NAME: envString('name'),
-      LOG_LEVEL: envString('level'),
-      LOG_SERVICE: envString('base.service'),
-      LOG_REDACT: envStrings('redact'),
-      LOG_PRETTY: envBoolean('pretty'),
-      NODE_ENV: envString('nodeEnv'),
-    },
-  });
+    console:
+      typeof policy.console === 'boolean'
+        ? { enabled: policy.console }
+        : policy.console,
+  };
+}

@@ -1,5 +1,63 @@
 # @nocobase/app-plugin-notification-providers
 
+## 0.2.0-beta.6
+
+### Patch Changes
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [a60decd]
+- Updated dependencies [1a85a86]
+- Updated dependencies [63db898]
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/app-plugin-notification@0.1.0-beta.9
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.2.0-beta.5
+
+### Minor Changes
+
+- 426bd48: Remove logical IM `target` recipients and make `send().to` optional so Webhook Providers can be selected directly by Provider name or fan-out strategy.
+
+### Patch Changes
+
+- Updated dependencies [a009e2d]
+- Updated dependencies [426bd48]
+  - @nocobase/app-server@1.0.0-beta.10
+  - @nocobase/i18n@1.0.0-beta.3
+  - @nocobase/app-plugin-notification@0.1.0-beta.7
+
+## 0.2.0-beta.4
+
+### Patch Changes
+
+- 0a3fa83: Ship package changelogs, return stable localized error envelopes for notification-owned failures, and show user-facing Channel and Provider labels in notification logs.
+- 0a3fa83: Require stable send idempotency keys, expose ordered notification status observation and reason-required Delivery retry APIs, persist inferred retry resolutions and Provider idempotency windows, and declare built-in Provider idempotency capabilities.
+- Updated dependencies [e3fa827]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [0a3fa83]
+  - @nocobase/app-server@1.0.0-beta.9
+  - @nocobase/app-plugin-notification@0.1.0-beta.6
+
+## 0.2.0-beta.3
+
+### Patch Changes
+
+- 52d1107: Declare each peer dependency once, dropping the devDependency that used to accompany it.
+
+  The pairing was required on the grounds that a peer range is wide enough for development to drift off this repository's copy. It is not: pnpm installs a peer and links it into the plugin's own `node_modules`, resolving `workspace:^` to the same package `workspace:*` would. A plugin with the devDependency removed still links, typechecks, builds, and tests against it — verified against a clean install with every plugin's `node_modules` deleted first.
+
+  What remained was a second declaration that changed nothing and had to be kept in step with the first. `pnpm peers:check` no longer asks for it, and `create-plugin` no longer emits it.
+
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+  - @nocobase/app-plugin-notification@0.1.0-beta.5
+
 ## Unreleased
 
 ### Minor Changes

@@ -1,76 +1,31 @@
-import type { AuthClientOptions, AuthSession } from './types.js';
+import { createAuthClient } from 'better-auth/client';
+import type { usernameClient } from 'better-auth/client/plugins';
 
-export class AuthClient {
-  constructor(private readonly options: AuthClientOptions) {}
+export { createAuthClient };
+export type AuthConfig = import('better-auth').BetterAuthClientOptions;
 
-  async getSession(): Promise<AuthSession | null> {
-    return this.send<AuthSession | null>('get-session');
-  }
-
-  async signIn(identifier: string, password: string): Promise<AuthSession> {
-    const isEmail = identifier.includes('@');
-    const session = await this.send<AuthSession>(
-      isEmail ? 'sign-in/email' : 'sign-in/username',
-      {
-        method: 'POST',
-        body: JSON.stringify(
-          isEmail
-            ? { email: identifier, password }
-            : { username: identifier, password },
-        ),
-      },
-    );
-    this.options.client.realtime?.refreshSession();
-    return session;
-  }
-
-  async signUp(
-    name: string,
-    username: string,
-    email: string,
-    password: string,
-  ): Promise<AuthSession> {
-    const session = await this.send<AuthSession>('sign-up/email', {
-      method: 'POST',
-      body: JSON.stringify({ name, username, email, password }),
-    });
-    this.options.client.realtime?.refreshSession();
-    return session;
-  }
-
-  async signOut(): Promise<void> {
-    await this.send('sign-out', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    this.options.client.realtime?.refreshSession();
-  }
-
-  async requestPasswordReset(email: string, redirectTo: string): Promise<void> {
-    await this.send('request-password-reset', {
-      method: 'POST',
-      body: JSON.stringify({ email, redirectTo }),
-    });
-  }
-
-  async resetPassword(newPassword: string, token: string): Promise<void> {
-    await this.send('reset-password', {
-      method: 'POST',
-      body: JSON.stringify({ newPassword, token }),
-    });
-  }
-
-  refreshRealtimeSession(): void {
-    this.options.client.realtime?.refreshSession();
-  }
-
-  private async send<T>(path: string, init: RequestInit = {}): Promise<T> {
-    return this.options.client.request<T>(`auth/${path}`, {
-      ...init,
-    });
-  }
+/**
+ * The Better Auth client plugins an application registers, by plugin id.
+ *
+ * The client is created here, from the application's config, so its type
+ * cannot be inferred from the plugins the application actually passes. A
+ * plugin package that adds a Better Auth client plugin augments this
+ * interface instead, and `AuthClient` picks it up:
+ *
+ * ```ts
+ * declare module '@nocobase/app-plugin-authentication/client' {
+ *   interface AuthClientPluginRegistry {
+ *     'api-key': ReturnType<typeof apiKeyClient>;
+ *   }
+ * }
+ * ```
+ */
+export interface AuthClientPluginRegistry {
+  username: ReturnType<typeof usernameClient<{ displayUsername: false }>>;
 }
 
-export function createAuthClient(options: AuthClientOptions): AuthClient {
-  return new AuthClient(options);
-}
+export type AuthClient = ReturnType<
+  typeof createAuthClient<{
+    plugins: AuthClientPluginRegistry[keyof AuthClientPluginRegistry][];
+  }>
+>;

@@ -80,9 +80,9 @@ Rules:
 # Application Decision Rules
 
 - **Declarative LLM service:** configure `<appRoot>/config.yml` under `ai.llmServices`. The configured name set is authoritative. Invoke application config reload after editing; no process restart, rebuild, repack, or AI resource rescan is required.
-- **Static backend tool:** add `<appRoot>/ai/tools/<name>.ts` or `<name>/index.ts`.
-- **Static skill:** add `<appRoot>/ai/skills/<directory>/SKILLS.md`, with optional local tools.
-- **Static employee:** add `<appRoot>/ai/employees/<name>.ts` or `<name>/index.ts`, with optional `prompt.md`, local tools, and local skills.
+- **Static backend tool:** add `<appRoot>/server/ai/tools/<name>.ts` or `<name>/index.ts`.
+- **Static skill:** add `<appRoot>/ai/skills/<directory>/SKILL.md`, with optional local tools.
+- **Static employee:** add `<appRoot>/server/ai/employees/<name>.ts` or `<name>/index.ts`, with `systemPrompt` field in the TypeScript definition.
 - **Static MCP connection:** add a direct module under `<appRoot>/ai/mcp/`.
 - **Context/request/session-dependent tools:** call `deps.ai.toolsManager.registerDynamicTools(...)` from plugin bootstrap.
 - **Computed application resources:** call the appropriate manager from plugin bootstrap rather than generating files at runtime.
@@ -128,7 +128,7 @@ Rollback guidance:
 
 1. Add one App tool and verify it is listed and invokable after App startup.
 2. Add a skill with a local tool and an employee referencing that skill; verify both names resolve.
-3. Add an employee directory with `prompt.md`; verify the prompt and explicit/discovered tools are applied.
+3. Define an Employee with an inline `systemPrompt` and explicit `skills` and `tools`; verify no Employee-local resources are discovered.
 4. Register a dynamic tool through an enabled plugin's `server/bootstrap.ts`; verify it appears only for matching context/filter conditions.
 5. Add or update an MCP definition; verify connection testing, client rebuild, and exposed tool names.
 6. Register a custom provider, configure a matching service, and resolve/instantiate a selected model.

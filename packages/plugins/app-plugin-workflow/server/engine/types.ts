@@ -1,5 +1,6 @@
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
+import type { WorkflowRunServices } from './run-services.js';
 
 import type {
   WorkflowParameterSchema,
@@ -73,6 +74,8 @@ export interface WorkflowRun {
   createdAt: string;
   manually: boolean;
   reason: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
   workflow?: WorkflowDefinition;
   nodeRuns?: WorkflowNodeRun[];
 }
@@ -101,16 +104,18 @@ export interface WorkflowLogger {
 }
 
 export interface WorkflowEventOptions {
-  /** Explicitly request publication through the configured queue. */
-  enqueueOnly?: boolean;
   eventKey?: string;
   deferred?: boolean;
+  /** Return after persisting a manual run while the runtime tracks its execution. */
+  waitForCompletion?: boolean;
   /** Execute any workflow manually, bypassing its enabled state and trigger-specific event validation. */
   manually?: boolean;
   force?: boolean;
   stack?: WorkflowId[];
   parentRunId?: WorkflowId;
   parameterValues?: WorkflowParameterValues;
+  sourceType?: string;
+  sourceId?: string;
   onTriggerFail?: (
     workflow: WorkflowDefinition,
     input: unknown,
@@ -120,8 +125,6 @@ export interface WorkflowEventOptions {
 }
 
 export interface WorkflowExecutionQueueTask {
-  /** Stable server-generated attempt identity for duplicate rerun deliveries. */
-  attemptId?: string;
   executionId: WorkflowId;
   nodeRunId?: WorkflowId;
   rerun?: ProcessorRerunOptions;
@@ -145,8 +148,8 @@ export interface WorkflowEngineOptions {
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
-  /** Application value exposed to `run` scripts as `runtime.app`. */
-  app?: unknown;
+  /** Read-only application services exposed to `run` modules. */
+  services?: WorkflowRunServices;
   /** Immutable production artifacts. When present, run nodes never read source directories. */
   artifactStore?: WorkflowArtifactStore;
   /** Development-only root containing one source package per workflow key. */
@@ -171,4 +174,19 @@ export interface WorkflowEngineOptions {
   timeoutReaperBatchSize?: number;
   /** Forwarded to `Dispatcher.recover()` during initialization. */
   recoverGracePeriod?: number;
+  terminalObserver?: WorkflowTerminalObserver;
 }
+
+export interface WorkflowTerminalEvent {
+  readonly runId: WorkflowId;
+  readonly status: number;
+  readonly reason: string | null;
+  readonly output: unknown;
+  readonly finishedAt: string;
+  readonly sourceType: string | null;
+  readonly sourceId: string | null;
+}
+
+export type WorkflowTerminalObserver = (
+  event: WorkflowTerminalEvent,
+) => void | Promise<void>;

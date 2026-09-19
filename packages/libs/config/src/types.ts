@@ -1,6 +1,7 @@
 export type ConfigPrimitive = string | number | boolean | null;
 
-export type ConfigValue = ConfigPrimitive | readonly ConfigValue[] | ConfigMap;
+export type ConfigValue =
+  ConfigPrimitive | undefined | object | ((...args: never[]) => unknown);
 
 export interface ConfigMap {
   readonly [key: string]: ConfigValue;

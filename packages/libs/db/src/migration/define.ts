@@ -1,26 +1,9 @@
 import type { MigrationDefinition } from './types.js';
+import { markMigrationDefinition } from './internal/marker.js';
 
-export const MIGRATION_DEFINITION_SYMBOL: symbol = Symbol.for(
-  '@nocobase/db.migration',
-);
-
+/** Marks and returns a migration definition for discovery by the migration loader. */
 export function defineMigration<T extends MigrationDefinition>(
   definition: T,
 ): T {
-  Object.defineProperty(definition, MIGRATION_DEFINITION_SYMBOL, {
-    value: true,
-    enumerable: false,
-    configurable: false,
-  });
-  return definition;
-}
-
-export function isDefinedMigration(
-  value: unknown,
-): value is MigrationDefinition {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[MIGRATION_DEFINITION_SYMBOL] === true
-  );
+  return markMigrationDefinition(definition);
 }

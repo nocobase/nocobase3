@@ -1,0 +1,27 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "NocoBase 3 是什么"
+  },
+  {
+    "type": "file",
+    "name": "overview",
+    "label": "开始前准备"
+  },
+  {
+    "type": "file",
+    "name": "create-app",
+    "label": "AI Agent 创建应用"
+  },
+  {
+    "type": "file",
+    "name": "create-app-manually",
+    "label": "手动创建应用"
+  },
+  {
+    "type": "file",
+    "name": "first-feature",
+    "label": "让 AI Agent 做第一个功能"
+  }
+]

@@ -2,8 +2,14 @@ import { createPortalViteConfig } from '@nocobase/dev-config/vite/portal';
 import agentAnnotations from '@gchust/agent-annotations/vite';
 import fs from 'node:fs';
 import path from 'path';
+import { createDevProxy } from './scripts/dev/proxy.mjs';
 
-import { isAgentAnnotationsEnabled } from './scripts/agent-annotations.js';
+const AGENT_ANNOTATIONS_DISABLED_VALUES = new Set(['false', '0', 'no', 'off']);
+
+function isAgentAnnotationsEnabled(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return !normalized || !AGENT_ANNOTATIONS_DISABLED_VALUES.has(normalized);
+}
 
 const portalTemplate = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8'),
@@ -93,7 +99,26 @@ export default createPortalViteConfig(({ command }) => {
         : []),
     ],
     server: {
-      watch: { ignored: ['**/.agent-annotations/**'] },
+      proxy:
+        command === 'serve'
+          ? createDevProxy(appBase, env.PROXY_TARGET_URL)
+          : undefined,
+      watch: {
+        ignored: [
+          '**/.agent-annotations/**',
+          '**/storage/**',
+          // Vite only excludes dist/client automatically. The server build and
+          // vendored packages also live in dist and can exhaust file watchers.
+          // Scope this to the app so linked dependencies still receive HMR.
+          (filePath: string) => {
+            const relativePath = path.relative(__dirname, filePath);
+            return (
+              relativePath === 'dist' ||
+              relativePath.startsWith(`dist${path.sep}`)
+            );
+          },
+        ],
+      },
       ...(command === 'serve'
         ? {
             hmr: {

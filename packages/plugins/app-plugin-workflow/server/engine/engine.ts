@@ -1,4 +1,3 @@
-import { recordWorkflowPhase } from '../audit-internal.js';
 import type { DatabaseManager } from '@nocobase/db';
 import path from 'node:path';
 
@@ -10,7 +9,7 @@ import {
   type WorkflowQueueAdapter,
 } from '../queue.js';
 import { createTimeoutReaper, type TimeoutReaper } from './timeout-reaper.js';
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import { workflowStore, type WorkflowStore } from '../collections/store.js';
 import type {
   JsonObject,
   WorkflowDefinition,
@@ -21,7 +20,7 @@ import type {
   WorkflowEngineOptions,
 } from './types.js';
 import { noopWorkflowLogger } from './utils.js';
-import { loadNodeRun, serializeJson } from './utils.js';
+import { asIdFilter, loadNodeRun, serializeJson } from './utils.js';
 
 /**
  * The assembly layer.
@@ -69,7 +68,7 @@ export default class WorkflowEngine {
       instructions: this.instructions,
       resolveWorkflowResourceRoot: (workflow, execution) =>
         this.resolveWorkflowResourceRoot(workflow, execution),
-      app: options.app,
+      services: options.services,
       ...(this.queueAdapter === null ? {} : { queue: this.queueAdapter }),
       logger: this.logger,
       ...(options.environment === undefined
@@ -78,6 +77,9 @@ export default class WorkflowEngine {
       ...(options.functions === undefined
         ? {}
         : { functions: options.functions }),
+      ...(options.terminalObserver === undefined
+        ? {}
+        : { terminalObserver: options.terminalObserver }),
     });
 
     this.reaper =
@@ -95,7 +97,14 @@ export default class WorkflowEngine {
             ...(options.timeoutReaperBatchSize === undefined
               ? {}
               : { batchSize: options.timeoutReaperBatchSize }),
+            ...(options.terminalObserver === undefined
+              ? {}
+              : { terminalObserver: options.terminalObserver }),
           });
+  }
+
+  private get store(): WorkflowStore {
+    return workflowStore(this.database, this.options.connectionName);
   }
 
   /** `true` once every task the dispatcher accepted has settled. */
@@ -179,7 +188,7 @@ export default class WorkflowEngine {
     workflow: WorkflowDefinition,
     input: JsonObject,
     options: WorkflowEventOptions = {},
-  ): Promise<Processor | null | void> {
+  ): Promise<Processor | import('./types.js').WorkflowRun | null | void> {
     return this.dispatcher.trigger(workflow, input, options);
   }
 
@@ -188,29 +197,16 @@ export default class WorkflowEngine {
     nodeRunId: import('./types.js').WorkflowId,
     result: unknown,
   ): Promise<void> {
-    const nodeRun = await loadNodeRun(
-      this.database.query(this.options.connectionName),
-      nodeRunId,
-    );
+    const store = this.store;
+    const nodeRun = await loadNodeRun(store, nodeRunId);
     if (!nodeRun || String(nodeRun.workflowRunId) !== String(runId))
       throw new Error(
         `Node run "${String(nodeRunId)}" does not belong to run "${String(runId)}"`,
       );
-    await this.database.transaction(async (connection) => {
-      await connection.query
-        .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
-        .set({ result: serializeJson(result) })
-        .where('id', '=', nodeRunId)
-        .execute();
-      await recordWorkflowPhase(
-        this.database,
-        connection,
-        runId,
-        'resumed',
-        'accepted',
-        { human: true, phaseKey: String(nodeRunId) },
-      );
-    }, this.options.connectionName);
+    await store.nodeRuns.updateMany({
+      filter: { id: asIdFilter(nodeRunId) },
+      values: { result: serializeJson(result) },
+    });
     await this.dispatcher.dispatch({ executionId: runId, nodeRunId });
   }
 }

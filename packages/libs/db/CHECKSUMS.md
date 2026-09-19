@@ -1,0 +1,11 @@
+# Migration and seed checksums across builds
+
+TypeScript tasks use the SHA-256 of their source text as their history checksum. Build plugins and applications with `nocobase-db-manifests` from `@nocobase/dev-config` after compilation and JavaScript rewriting. Each generated JavaScript task has a manifest marker and an entry in its directory's `.manifest.json` with `sourceChecksum` and `artifactChecksum`. The loader validates all listed artifacts before importing modules, then uses the source checksum for history. TS and JS can use the same database without rerunning tasks. Seeds follow the same rules. A new entry changes only that task's identity; the manifest file itself is not a migration checksum.
+
+Malformed manifests, unsupported versions, missing entries, missing artifacts, and altered artifacts fail loading. Marked JavaScript without a manifest also fails and never falls back to TypeScript. Handwritten or legacy unmarked JavaScript without a manifest retains its raw content checksum. The loader cannot distinguish an old compiler's unmarked output from handwritten JavaScript; rebuild old packages to adopt the manifest contract.
+
+## Upgrading existing history
+
+Existing TS checksums already match the new source identity. For existing JS checksums, the loader derives the pre-marker JavaScript hash from the verified artifact. After validating the entire participating history, the migrator or seeder converts an exact matching legacy hash to the source checksum under its task lock and in a database transaction. It changes only the checksum, preserving the migration batch, timestamp, and duration; it never reruns the task. Rollback uses the same validation and conversion rules.
+
+Run the compiled representation once before switching an old JS database to source development. Rebuild using the original source and compilation settings so the emitted JavaScript still matches the recorded hash. If the artifact cannot be reproduced exactly, conversion fails with the existing checksum error: restore the original release and recover its source/build provenance before upgrading. Do not edit historical migrations, copy arbitrary old hashes into manifests, overwrite history, or disable validation to pass this check. This mechanism assumes the installed package and its manifest are trusted.

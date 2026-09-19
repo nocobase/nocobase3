@@ -47,6 +47,40 @@ describe('Config', () => {
     expect(config.cut('logging').string('level')).toBe('debug');
   });
 
+  it('preserves code values while merging environment overrides', async () => {
+    const sendEmail = async () => 'sent';
+    const service = new Map([['key', 'value']]);
+    const plugin = { id: 'example', init: () => service };
+    const config = new Config();
+    await config.load(
+      objectProvider({
+        auth: {
+          plugins: [plugin],
+          emailAndPassword: { enabled: true, sendResetPassword: sendEmail },
+          service,
+        },
+      }),
+    );
+    await config.load(
+      objectProvider({
+        auth: {
+          emailAndPassword: { enabled: false },
+          secret: 'environment-secret',
+        },
+      }),
+    );
+    expect(config.get('auth.emailAndPassword.sendResetPassword')).toBe(
+      sendEmail,
+    );
+    expect(config.get('auth.service')).toBe(service);
+    expect(config.get('auth.plugins')).toEqual([plugin]);
+    expect(config.get('auth.emailAndPassword.enabled')).toBe(false);
+    expect(Object.isFrozen(sendEmail)).toBe(false);
+    expect(Object.isFrozen(service)).toBe(false);
+    await config.load(objectProvider({ auth: { plugins: [] } }));
+    expect(config.get('auth.plugins')).toEqual([]);
+  });
+
   it('rejects type changes in strict merge mode', async () => {
     const config = new Config({ strictMerge: true });
     await config.load(objectProvider({ server: { port: 3000 } }));
@@ -61,8 +95,6 @@ describe('Config', () => {
     expect(() => config.set('__proto__.polluted', true)).toThrow(
       ConfigPathError,
     );
-    expect(() => config.set('date', new Date() as never)).toThrow(
-      ConfigPathError,
-    );
+    expect(() => config.set('invalid', Infinity)).toThrow(ConfigPathError);
   });
 });

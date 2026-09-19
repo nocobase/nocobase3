@@ -8,6 +8,7 @@ export {
   withNamespace,
   type I18nProviderProps,
   type NamespaceScopeProps,
+  type UseTranslationOptions,
   type UseTranslationResponse,
 } from './context.js';
 export {

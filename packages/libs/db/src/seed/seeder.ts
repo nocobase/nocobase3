@@ -1,11 +1,12 @@
-import { createSeedContext } from './context.js';
+import { upgradeTaskChecksums } from '../migration/checksum-history.js';
+import { createSeedContext } from './internal/context.js';
 import {
   DEFAULT_SEED_TABLE,
   ensureSeedTable,
   readSeedHistory,
   recordSeedCompleted,
-} from './history.js';
-import { DEFAULT_SEED_LOCK_TABLE, withSeedLock } from './lock.js';
+} from './internal/history.js';
+import { DEFAULT_SEED_LOCK_TABLE, withSeedLock } from './internal/lock.js';
 import { loadSeeds } from './loader.js';
 import type {
   CreateSeederOptions,
@@ -14,10 +15,13 @@ import type {
   SeedRunResult,
 } from './types.js';
 
+/** Executes pending seed definitions for one database connection. */
 export interface Seeder {
+  /** Executes every seed that has no matching history record. */
   run(): Promise<SeedRunResult>;
 }
 
+/** Creates a seed runner backed by the supplied database manager. */
 export function createSeeder(options: CreateSeederOptions): Seeder {
   return new DefaultSeeder(options);
 }
@@ -48,6 +52,12 @@ class DefaultSeeder implements Seeder {
           this.options.tableName,
         );
         validateAppliedSeedHistory(seeds, history);
+        await upgradeTaskChecksums(
+          seedConnection,
+          this.options.tableName ?? DEFAULT_SEED_TABLE,
+          seeds,
+          history,
+        );
 
         const appliedNames = new Set(history.map((record) => record.name));
         const pending = seeds.filter((seed) => !appliedNames.has(seed.name));
@@ -110,7 +120,11 @@ function validateAppliedSeedHistory(
     if (!record) {
       continue;
     }
-    if (record.checksum !== seed.checksum) {
+    if (
+      record.checksum !== seed.checksum &&
+      (record.packageName !== seed.packageName ||
+        record.checksum !== seed.legacyChecksum)
+    ) {
       throw new Error(
         `Executed seed "${record.name}" checksum changed. Package: "${record.packageName}".`,
       );

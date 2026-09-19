@@ -1,0 +1,285 @@
+# `@nocobase/app-server`
+
+## Standalone proxy
+
+`defineStandaloneServer()` accepts an optional `proxy: ({ application }) => ({ match, target })` factory, evaluated after application startup. `match(pathname)` chooses requests before the application's public base path adapter; `target()` returns the current upstream HTTP(S) origin or `null`. Both `create()` and `start()` configure this boundary. Applications without a proxy retain their normal routing.
+
+The listener applies the same rule to HTTP and WebSocket upgrades. It preserves request paths, query strings, public Host, Origin, cookies and authorization, forwards the protocol through `X-Forwarded-Proto`, streams HTTP bodies without decompressing them, and tunnels the upstream WebSocket handshake and connection. Configure the outer reverse proxy to preserve the public Host and set trustworthy protocol headers. Returning `null` yields 503; connection failures yield 502. Reading a target does not start an upstream, and changes apply to new requests and connections. Proxy connections are disposed with the standalone scope; upgraded connections are closed before HTTP shutdown drains.
+
+## Repository API routes
+
+`defineRepositoryApiRoutes()` exposes explicitly configured Collection Repository
+methods as API route contributions. Importing or declaring a contribution does
+not resolve services or query the database. The application resolves
+`databaseManagerToken` when it creates the router.
+
+```ts
+import { defineRepositoryApiRoutes } from '@nocobase/app-server/router';
+import path from 'node:path';
+import { defineServerPlugin } from '@nocobase/app-server/plugins';
+
+const repositoryRoutes = defineRepositoryApiRoutes({
+  repositories: [
+    {
+      name: 'orders',
+      actions: {
+        findMany: { maxLimit: 100 },
+        findOne: {},
+        count: {},
+        exists: {},
+        createOne: {},
+        updateOne: {},
+        deleteOne: {},
+        aggregate: {},
+        groupBy: {},
+      },
+      policy: {
+        read: true,
+        create: { scope: true, fields: ['id', 'status'] },
+        update: { scope: true, fields: ['status'] },
+        delete: true,
+      },
+    },
+    {
+      name: 'sales/orders',
+      collection: 'orders',
+      actions: {
+        findMany: { maxLimit: 100 },
+        findOne: {},
+      },
+      policy: { read: true, create: false, update: false, delete: false },
+    },
+  ],
+});
+
+export default defineServerPlugin({
+  baseDir: path.resolve(import.meta.dirname, '..'),
+  packageName: '@nocobase/app-plugin-orders',
+  routes: [repositoryRoutes],
+});
+```
+
+Register the plugin in the target application's existing `server/plugins.ts`.
+Applications may also include the contribution directly in their route array.
+The Collection must already exist; this helper does not create schema or run
+migrations. No repositories are exposed automatically.
+
+Each entry requires `name` and an explicit `actions` object. `collection` defaults
+to `name`; optional `connection` selects a configured database connection. Names
+must be unique and non-empty and cannot contain `*`. Empty action objects expose
+nothing. `actions.findMany.maxLimit` defaults to 100 and is both the default and maximum
+`findMany` limit. A limit of zero returns an empty list.
+
+Action values must be configuration objects: `{}` enables an endpoint with defaults,
+while an omitted action registers no endpoint. Boolean values and the former action
+arrays are rejected. Unknown configuration keys fail at declaration time. Configure
+pagination only in `actions.findMany.maxLimit`.
+
+Every entry declares a `policy`, and it governs every action of that exposure.
+It is a Repository Policy from `@nocobase/db`: `read`, `create`, `update` and
+`delete`, each `true`, `false`, or a rule node. All four are required — an
+exposure with a half-written Policy reads as configured while leaving the rest
+open — so the shape is spelled out rather than defaulted. `buildRepositoryPolicy`
+denies each node you do not mention, which is the compact way to write one.
+
+```ts
+import { buildRepositoryPolicy } from '@nocobase/db';
+
+defineRepositoryApiRoutes({
+  repositories: [
+    {
+      name: 'projects',
+      policy: buildRepositoryPolicy(
+        (policy) =>
+          policy
+            .read((read) => read.scope(true).fields('id', 'name', 'status'))
+            .create((create) =>
+              create
+                .scope(true)
+                .fields('id', 'name', 'status')
+                .relation('tasks', (tasks) =>
+                  tasks.create((task) => task.fields('id', 'title')),
+                ),
+            )
+            .update((update) =>
+              update
+                .scope(true)
+                .fields('name', 'status')
+                .relation('tasks', (tasks) =>
+                  tasks
+                    .update((task) => task.fields('title'))
+                    .connect((edge) =>
+                      edge.through((through) => through.fields('role')),
+                    ),
+                ),
+            ),
+        // `delete` is not mentioned, so deleting is refused.
+      ),
+      actions: { findMany: {}, createOne: {}, updateOne: {} },
+    },
+  ],
+});
+```
+
+A node that is `false` refuses that operation with 403 before the request body
+is read, so an empty or malformed payload is reported as forbidden rather than
+as invalid input. A node with no `fields` is not the same thing: it accepts no
+caller-supplied field while still allowing a create composed entirely of
+`defaults`. Missing `fields` and `relations` each mean "nothing". There are no
+wildcards and no implicit merges. Each nested `create` and `update` carries its
+own field and relation rules, relation `upsert` requires both branches, and
+many-to-many `create`, `connect` and `set` may allow a join payload with
+`through: { fields: ['role'] }`. A `create` node's relations accept only
+`create` and `connect`, because a create performs nothing else.
+
+`read` governs reading everywhere it happens, which includes the record a write
+returns: a `select` naming a field outside `read.fields` is refused rather than
+quietly trimmed, and omitting `select` trims the result to what `read` allows.
+
+### Scoping a Policy to the caller
+
+Declare `policy` as a function of a principal and pass a resolver:
+
+```ts
+defineRepositoryApiRoutes<Session>({
+  principal: (context) => context.get('auth'),
+  repositories: [
+    {
+      name: 'projects',
+      policy: (session) => ({
+        read: { scope: { ownerId: session.userId }, fields: ['id', 'name'] },
+        create: {
+          scope: { ownerId: session.userId },
+          fields: ['name'],
+          defaults: { ownerId: session.userId },
+        },
+        update: { scope: { ownerId: session.userId }, fields: ['name'] },
+        delete: false,
+      }),
+      actions: { findMany: {}, createOne: {}, updateOne: {} },
+    },
+  ],
+});
+```
+
+The resolver is the application's: this router installs no authentication and
+does not know how a request carries identity. It runs once per request; a
+resolver returning `undefined` or `null` refuses the request with 403
+`PRINCIPAL_REQUIRED` rather than binding a Policy built from a principal that is
+not there. Declaring a Policy function without a resolver fails at declaration.
+
+The two shapes differ in when they are checked. A fixed Policy is normalized
+once, when the routes are defined, so a malformed one fails where it is written.
+A Policy function cannot be — it is evaluated per request, and so is its
+validation. Such a failure is `INVALID_POLICY`, and it propagates to the host
+error handler as a server error rather than a 400, because a Policy is
+server-owned and its mistakes are the server's.
+
+`ref()` is rejected at declaration: a reference resolves against a
+`withPolicies` map, and these routes bind one Policy per exposure. Write the
+relation's rules out, or bind the Policies on the connection.
+
+HTTP input cannot supply a Policy. `readInput` validates the body key by key
+against a per-action allowlist and neither `policy` nor `scope` appears on any
+of them, so both are refused with 400. `WRITE_FORBIDDEN`,
+`FIELD_WRITE_FORBIDDEN` and `RELATION_WRITE_FORBIDDEN` return 403 with a
+diagnostic `path` and `details`; `READ_FORBIDDEN`, `FIELD_READ_FORBIDDEN`,
+`RELATION_READ_FORBIDDEN` and `SCOPE_VIOLATION` return 403;
+`RECORD_OUTSIDE_SCOPE` returns 409. The entire mutation is checked before any
+write. A scope that simply does not match is a different thing and never reaches
+those codes: it is a 404 or an empty result, so forbidden and absent stay
+indistinguishable.
+
+Internal `db.repository()` calls are unaffected — they bind no Policy, as
+before. The method-level `writePolicy` option remains available there for a
+single call; it is no longer part of a route declaration. User authentication
+and database cascades remain separate concerns. See the
+[Policy quick start](../../libs/db/docs/zh-CN/repository/policy-quick-start.md).
+
+The application adds `/api` under its deployment mount path. Each action uses `POST /api/<encodeURIComponent(name)>:<action>` with a JSON object containing Repository options.
+
+The following is an independent HTTP client's call to those server routes, not code to put in a server route handler. A Node script must supply an absolute API URL; replace the example host and mount path with the target application's actual API base URL and provide whatever authentication that application requires.
+
+```ts
+import { createApiClient } from '@nocobase/api-client';
+
+const api = createApiClient({ baseURL: 'https://example.com/main/api' });
+const orders = api.repository<{ id: string; status: string }>('orders');
+
+const records = await orders.findMany({
+  filter: { status: 'draft' },
+  limit: 20,
+});
+
+for await (const record of orders.findMany({
+  filter: { status: 'draft' },
+  limit: 20,
+})) {
+  console.log(record);
+}
+const result = await orders.createOne({
+  values: { id: 'order-1', status: 'draft' },
+});
+```
+
+Inside a NocoBase React component or custom Hook, obtain this client with `useApiClient()` from `@nocobase/app-client` instead of creating another instance. Non-React application client code can resolve `apiClientToken` through `app.services.resolve(apiClientToken)` or receive the client explicitly. These paths reuse the application's configured `api.baseURL`; the Repository calls are otherwise the same. See [frontend API usage](../app-skills/skills/nocobase-app-development/references/client-api.md) for examples. Server code accessing its own database uses `db.repository()` as described above.
+
+Supported actions are `findMany`, `findOne`, `count`, `exists`, `createOne`,
+`updateOne`, `deleteOne`, `aggregate`, and `groupBy`. Unconfigured names and actions have no route.
+Responses use `{ data: result }`, including complete mutation results (`record`,
+`createdTargets`, and optional `version`). Missing `findOne` records return
+`{ data: null }`, which the client converts to `undefined`. Delete success also
+returns JSON (`{ data: { deleted: true } }`), not an empty 204 response.
+
+`findMany()` also supports asynchronous iteration. Awaiting the query sends
+`Accept: application/json` and returns the complete array. Iterating it sends
+`Accept: application/x-ndjson`; the route consumes the database query as an
+`AsyncIterable` and returns framed `record`, `error`, and `end` lines. The same
+query instance supports only one consumption mode. Stopping iteration cancels
+the response and closes the database iterator.
+
+The adapter requires `application/json`, limits request bodies to 1 MiB, checks
+the options envelope, and delegates AST, field, and mutation validation to the
+Repository. JSON shorthand and AST inputs are supported; JavaScript builder
+callbacks and client-supplied `context` are not. `idempotencyKey` is currently
+rejected as an unsupported option rather than silently ignored. `ifVersion` is
+forwarded for updates and deletes.
+
+Input errors return 400, record-not-found errors return 404, and version or
+single-record cardinality conflicts return 409, with `{ code, message }` bodies.
+Malformed JSON returns 400, non-JSON content returns 415, and oversized bodies
+return 413. Unexpected/database-configuration errors propagate to the host error
+handler as server errors.
+
+This basic adapter deliberately does **not** install authentication or
+authorization. Configured endpoints accept anonymous requests and have no field
+or record permission filtering. Exposure configuration is not a permission
+policy. No application endpoints are enabled merely by importing this helper.
+
+## Repository aggregate endpoints
+
+Add `aggregate` and `groupBy` to an exposure's `actions` to enable
+`POST /<name>:aggregate` and `POST /<name>:groupBy`. Neither endpoint is enabled
+implicitly. As with other Repository actions, the contribution installs no
+access policy: the owning application or plugin must guard its declared routes.
+
+`aggregate` accepts a required Aggregate AST and an optional `filter`.
+`groupBy` also requires a non-empty `by` array and accepts `having` and `sort`
+over grouped fields and aggregate aliases. Envelopes must be JSON objects;
+unknown options, callbacks, database context, and pagination are unsupported.
+Repository validates AST versions, expressions, aliases and field capabilities
+and returns the existing `{ code, message }` error response with status 400.
+The 1 MiB body limit also applies to both actions.
+
+`maxLimit` applies only to `findMany`. Aggregations operate over all matching
+rows, and `groupBy` returns all matching groups without pagination. Responses
+are `{ data: aggregateObject }` or `{ data: groupObjects }`. BigInt scalar results
+become decimal strings without precision loss. See the
+[`@nocobase/api-client` examples](../../libs/api-client/README.md#aggregate-and-grouped-queries)
+for the JSON Aggregate, Filter and Sort AST contracts.
+
+## Plugin resource directories
+
+Every Server plugin declares an absolute `baseDir`. In `server/plugin.ts`, use `baseDir: path.resolve(import.meta.dirname, '..')`; the same declaration in `dist/server/plugin.js` points to `dist`. Migrations, Seeds, and Queue Jobs resolve only against that directory. The runtime does not try a second source or build directory and does not infer the choice from `NODE_ENV` or the application command. Source and publish exports must load the matching plugin declaration.
+
+`rootDir` remains the package root: the resolver walks upward from `baseDir` to a `package.json` whose name matches `packageName`. Inspection includes both directories and the resolved contribution paths, so an installed copy cannot silently borrow another copy's metadata. Missing `baseDir` is an API error; update all Server plugin declarations when upgrading.

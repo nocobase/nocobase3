@@ -25,34 +25,107 @@ const chartPlaceholderPattern = /\{\{\s*chart\s*:\s*(\d+)\s*\}\}/gi;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
-export function normalizeBusinessReportCharts(
-  value: unknown,
-): BusinessReportChart[] {
-  let charts = value;
-  if (typeof value === 'string') {
+// Persisted results may predate server validation. Never hand navigation,
+// resource loading, or executable values from those results to ECharts.
+function isSafeChartJson(value: unknown, depth = 0): boolean {
+  if (depth > 16) return false;
+  if (typeof value === 'string') return !/^\s*image:\/\//i.test(value);
+  if (value === null || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value))
+    return value.every((child) => isSafeChartJson(child, depth + 1));
+  if (!isRecord(value)) return false;
+  return Object.entries(value).every(
+    ([key, child]) =>
+      ![
+        'link',
+        'sublink',
+        'href',
+        'image',
+        '__proto__',
+        'prototype',
+        'constructor',
+      ].includes(key.toLowerCase()) &&
+      !(key === 'type' && child === 'image') &&
+      isSafeChartJson(child, depth + 1),
+  );
+}
+
+function readBusinessReportResult(output: unknown): Record<string, unknown> {
+  // Persisted tool content may be JSON text; chart definitions themselves must
+  // always remain structured JSON, never repaired or parsed independently.
+  if (typeof output === 'string') {
     try {
-      charts = JSON.parse(value) as unknown;
+      output = JSON.parse(output) as unknown;
     } catch {
-      return [];
+      return {};
     }
   }
-  if (!Array.isArray(charts)) return [];
-  return charts.flatMap((item) => {
-    if (!isRecord(item) || !isRecord(item.options)) return [];
-    return [
-      {
-        title: typeof item.title === 'string' ? item.title : undefined,
-        summary: typeof item.summary === 'string' ? item.summary : undefined,
-        options: item.options,
-      },
-    ];
-  });
+  if (!isRecord(output)) return {};
+  if ('status' in output) {
+    if (output.status !== 'success') return {};
+    return readBusinessReportResult(output.content);
+  }
+  return output;
+}
+
+export function getValidatedBusinessReport(
+  output: unknown,
+): BusinessReportData | undefined {
+  const result = readBusinessReportResult(output);
+  const report = result.report;
+  if (
+    result.success !== true ||
+    !Array.isArray(result.errors) ||
+    result.errors.length !== 0 ||
+    !Array.isArray(result.warnings) ||
+    !result.warnings.every((item) => typeof item === 'string') ||
+    !isRecord(report) ||
+    typeof report.title !== 'string' ||
+    !report.title.trim() ||
+    typeof report.markdown !== 'string' ||
+    (report.summary !== undefined && typeof report.summary !== 'string') ||
+    (report.fileName !== undefined && typeof report.fileName !== 'string') ||
+    !Array.isArray(report.charts) ||
+    result.chartCount !== report.charts.length
+  )
+    return undefined;
+  const charts: BusinessReportChart[] = [];
+  for (const chart of report.charts) {
+    if (
+      !isRecord(chart) ||
+      !isRecord(chart.options) ||
+      !isSafeChartJson(chart.options) ||
+      (chart.title !== undefined && typeof chart.title !== 'string') ||
+      (chart.summary !== undefined && typeof chart.summary !== 'string') ||
+      !Array.isArray(chart.options.series) ||
+      chart.options.series.length === 0 ||
+      !chart.options.series.every(
+        (series) => isRecord(series) && typeof series.type === 'string',
+      )
+    )
+      return undefined;
+    charts.push({
+      title: chart.title,
+      summary: chart.summary,
+      options: chart.options,
+    });
+  }
+  return {
+    title: report.title,
+    summary: report.summary,
+    markdown: report.markdown,
+    charts,
+    fileName: report.fileName,
+  };
 }
 
 const buildChartMarkdownBlock = (chart: BusinessReportChart, index: number) => {
   const parts = [`## ${chart.title || `Chart ${index + 1}`}`];
   if (chart.summary) parts.push(chart.summary);
-  parts.push(`<echarts>${JSON.stringify(chart.options, null, 2)}</echarts>`);
+  // Prevent a data label containing </echarts> from terminating the generated block.
+  const json = JSON.stringify(chart.options, null, 2).replace(/</g, '\\u003c');
+  parts.push(`<echarts>${json}</echarts>`);
   return parts.join('\n\n');
 };
 
@@ -193,16 +266,9 @@ export async function buildBusinessReportHtml(
       body.push(await renderBusinessReportMarkdownToHtml(part.content));
       continue;
     }
-    try {
-      const source = await renderChartImage(part.options);
-      body.push(`<img class="report-chart" src="${source}" alt="" />`);
-    } catch (error) {
-      body.push(
-        `<pre class="chart-error">${escapeHtml(
-          error instanceof Error ? error.message : 'Unable to render chart',
-        )}</pre>`,
-      );
-    }
+    // Do not export a partially rendered report as a successful download.
+    const source = await renderChartImage(part.options);
+    body.push(`<img class="report-chart" src="${source}" alt="" />`);
   }
   const printMode = options.printMode === true;
   return `<!doctype html>
@@ -233,7 +299,6 @@ export async function buildBusinessReportHtml(
       th, td { border: 1px solid #d4d4d4; padding: 10px 12px; text-align: left; }
       pre { overflow: auto; white-space: pre-wrap; word-break: break-word; }
       .report-chart { display: block; width: 100%; height: auto; margin: 24px 0 32px; border: 1px solid #d4d4d4; break-inside: avoid; }
-      .chart-error { color: #b91c1c; }
       @page { size: A4; margin: 12mm; }
       @media print { body { background: #fff; } .report-shell { max-width: none; padding: 0; } .report-paper { border: 0; padding: 0; } }
     </style>

@@ -1,10 +1,11 @@
+import { loggingToken } from '../logging/token.js';
 import type { Application } from '../application/index.js';
+import { NodeServerProxy, type NodeServerProxyOptions } from './proxy.js';
 import {
   resolveAppRuntime,
   type AppRuntimeDefinition,
   type ResolvedAppRuntime,
 } from '../runtime/definition.js';
-import type { AppConfigToken } from '../config/index.js';
 import type { NodeServerConfig } from './config.js';
 import { createPublicBasePathAdapter } from '../runtime/mount.js';
 import type { AppScope } from '../runtime/types.js';
@@ -38,8 +39,11 @@ export type StandaloneServerFactory = (scope: AppScope) => Promise<Application>;
 export interface StandaloneApplicationDefinition {
   readonly rootDir: string;
   readonly appRuntime: AppRuntimeDefinition;
-  readonly serverConfig?: AppConfigToken<NodeServerConfig>;
   readonly createServer: StandaloneServerFactory;
+  /** Configure listener-level forwarding after the application has started. */
+  readonly proxy?: (context: {
+    readonly application: Application;
+  }) => NodeServerProxyOptions;
 }
 
 export type StandaloneServerOptions = CreateStandaloneRuntimeScopeOptions & {
@@ -60,13 +64,17 @@ export async function createStandaloneServer(
   options: CreateStandaloneServerOptions,
 ): Promise<StandaloneServer> {
   const {
-    appRuntime: _appRuntime,
+    appRuntime,
     createServer,
-    serverConfig,
+    proxy: configureProxy,
     ...serverOptions
   } = options;
   const scope = createStandaloneRuntimeScope(
-    resolveStandaloneServerScopeOptions(serverOptions),
+    resolveStandaloneServerScopeOptions({
+      ...serverOptions,
+      deploymentRootDir:
+        serverOptions.deploymentRootDir ?? appRuntime.deploymentRootDir,
+    }),
   );
 
   try {
@@ -75,14 +83,13 @@ export async function createStandaloneServer(
       application,
       application.publicBasePath,
     );
-    const serverConfigValue = serverConfig
-      ? application.config.get(serverConfig)
-      : {
-          host: '127.0.0.1',
-          port: 13000,
-          startLog: true,
-          viteDevUrl: undefined,
-        };
+    const proxy = configureProxy
+      ? new NodeServerProxy(configureProxy({ application }))
+      : undefined;
+    if (proxy) scope.registerDisposer('standalone-proxy', () => proxy.close());
+    const serverConfigValue = application.config.get<NodeServerConfig>(
+      'server',
+    ) ?? { host: '127.0.0.1', port: 13000, startLog: true };
     const listenOptions: StandaloneServerListenOptions = {
       hostname: serverConfigValue.host,
       port: serverConfigValue.port,
@@ -91,7 +98,11 @@ export async function createStandaloneServer(
     const server: StandaloneServer = {
       application,
       close: (): Promise<void> => scope.destroy(),
-      fetch: mounted.fetch,
+      fetch: (request, env, executionContext) =>
+        proxy?.matches(new URL(request.url).pathname)
+          ? proxy.fetch(request)
+          : mounted.fetch(request, env, executionContext),
+      proxy,
       listenOptions,
       signal: scope.signal,
     };
@@ -146,7 +157,14 @@ export function resolveStandaloneAppRuntime(
   definition: AppRuntimeDefinition,
   options: CreateStandaloneRuntimeScopeOptions,
 ): Promise<ResolvedAppRuntime> {
-  return resolveAppRuntime(definition, createStandaloneRuntimeScope(options));
+  return resolveAppRuntime(
+    definition,
+    createStandaloneRuntimeScope({
+      ...options,
+      deploymentRootDir:
+        options.deploymentRootDir ?? definition.deploymentRootDir,
+    }),
+  );
 }
 
 async function startStandaloneServer(
@@ -154,8 +172,19 @@ async function startStandaloneServer(
 ): Promise<void> {
   const app = await createStandaloneServer(options);
 
+  const logger = app.application.container.has(loggingToken)
+    ? app.application.container.resolve(loggingToken).getLogger('server')
+    : undefined;
   try {
     await startNodeAppServer(app, {
+      ...(logger
+        ? {
+            logger: {
+              error: (message: string, err?: unknown) =>
+                logger.error({ err }, message),
+            },
+          }
+        : {}),
       hostname: app.listenOptions.hostname,
       port: app.listenOptions.port,
       onListen: (info): void => {
@@ -163,9 +192,9 @@ async function startStandaloneServer(
           return;
         }
 
-        console.log(
-          `App server listening on http://${info.address}:${info.port}`,
-        );
+        const message = `App server listening on http://${info.address}:${info.port}`;
+        if (logger) logger.info(message);
+        else console.log(message);
       },
     });
   } catch (error) {

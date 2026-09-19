@@ -1,5 +1,4 @@
 import * as clack from '@clack/prompts';
-import { DIALECT_CHOICES, type DatabaseDialect } from './database.ts';
 import { assertValidAppName } from './scaffold.ts';
 
 /** Thrown when the user aborts a prompt with Ctrl+C, so the caller can exit quietly rather than print a stack. */
@@ -54,22 +53,6 @@ export async function promptAppName(): Promise<string> {
   );
 
   return name.trim();
-}
-
-export async function promptDialect(): Promise<DatabaseDialect> {
-  assertInteractive('A database type', '--db-dialect');
-
-  return unwrap(
-    await clack.select<DatabaseDialect>({
-      message: 'Which database will this app use?',
-      options: DIALECT_CHOICES.map((choice) => ({
-        value: choice.value,
-        label: choice.label,
-        hint: choice.hint,
-      })),
-      initialValue: 'postgres',
-    }),
-  );
 }
 
 export const intro: typeof clack.intro = clack.intro;

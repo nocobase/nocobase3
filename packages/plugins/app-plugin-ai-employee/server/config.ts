@@ -1,15 +1,46 @@
-import {
-  defineAppConfig,
-  type AppConfigDefinition,
-} from '@nocobase/app-server/config';
 import type {
   EnabledModelsConfig,
   LLMServiceOptions,
+  MCPOptions,
 } from '@nocobase/ai-employee';
-import { Type } from '@sinclair/typebox';
 
 export interface AIStorageConfig {
   readonly disk?: readonly string[];
+}
+
+export interface AIKnowledgeBaseVectorDatabaseConnectionConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly user: string;
+  readonly password?: string;
+  readonly database: string;
+  readonly tableName: string;
+}
+
+/**
+ * `key` is the unique identifier of a vector database entry within one
+ * configuration, and is what synchronization matches an existing record by.
+ * `name` is an optional display title and falls back to `key` when omitted,
+ * so two entries may share the same name.
+ */
+export interface AIKnowledgeBaseVectorDatabaseConfig {
+  readonly key: string;
+  readonly name?: string;
+  readonly provider?: string;
+  readonly databaseSpec?: string;
+  readonly connection: AIKnowledgeBaseVectorDatabaseConnectionConfig;
+  readonly enabled?: boolean;
+}
+
+export interface AIKnowledgeBaseManifestConfig {
+  readonly disk: string;
+  readonly locations: readonly string[];
+}
+
+export interface AIKnowledgeBaseConfig {
+  readonly storage?: AIStorageConfig;
+  readonly vectorDatabases?: readonly AIKnowledgeBaseVectorDatabaseConfig[];
+  readonly manifests?: readonly AIKnowledgeBaseManifestConfig[];
 }
 
 export interface AIEmployeeEnabledModelConfig {
@@ -17,6 +48,9 @@ export interface AIEmployeeEnabledModelConfig {
   readonly value: string;
 }
 
+export interface AISkillsConfig {
+  readonly paths?: readonly string[];
+}
 export type AIEmployeeLLMServiceConfig = Omit<
   LLMServiceOptions,
   'enabledModels'
@@ -29,79 +63,14 @@ export interface AIApplicationConfig {
   readonly aiEmployee?: {
     readonly storage?: AIStorageConfig;
   };
-  readonly aiKnowledgeBase?: {
-    readonly storage?: AIStorageConfig;
-  };
+  readonly skills?: AISkillsConfig;
+  readonly mcpServers?: Readonly<Record<string, MCPOptions>>;
+  readonly aiKnowledgeBase?: AIKnowledgeBaseConfig;
   readonly llmServices: AIEmployeeLLMServiceConfig[];
   readonly [key: string]: unknown;
 }
 
 export type AIEmployeeConfig = AIApplicationConfig;
-
-const storageSchema = Type.Object(
-  {
-    disk: Type.Optional(Type.Array(Type.String())),
-  },
-  { additionalProperties: false },
-);
-
-const enabledModelItemSchema = Type.Object(
-  {
-    label: Type.String(),
-    value: Type.String(),
-  },
-  { additionalProperties: false },
-);
-
-const enabledModelsSchema = Type.Array(enabledModelItemSchema);
-
-const llmServiceSchema = Type.Object(
-  {
-    name: Type.String({ pattern: '.*\\S.*' }),
-    title: Type.Optional(Type.String()),
-    provider: Type.String({ pattern: '.*\\S.*' }),
-    options: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    enabledModels: Type.Optional(enabledModelsSchema),
-    modelOptions: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    enabled: Type.Optional(Type.Boolean()),
-    sort: Type.Optional(Type.Number()),
-  },
-  { additionalProperties: false },
-);
-
-export const aiConfig: AppConfigDefinition<AIApplicationConfig> =
-  defineAppConfig({
-    namespace: 'ai',
-    schema: Type.Unsafe<AIApplicationConfig>(
-      Type.Object(
-        {
-          storage: storageSchema,
-          aiEmployee: Type.Object(
-            { storage: storageSchema },
-            { additionalProperties: false },
-          ),
-          aiKnowledgeBase: Type.Object(
-            { storage: storageSchema },
-            { additionalProperties: false },
-          ),
-          llmServices: Type.Array(llmServiceSchema, {
-            uniqueItemProperties: ['name'],
-          }),
-        },
-        { additionalProperties: true },
-      ),
-    ),
-    defaults: {
-      storage: {},
-      aiEmployee: { storage: {} },
-      aiKnowledgeBase: { storage: {} },
-      llmServices: [],
-    },
-  });
-
-export const aiEmployeeConfig: AppConfigDefinition<AIApplicationConfig> =
-  aiConfig;
-
 export type AIEmployeeEnabledModelsConfig = EnabledModelsConfig;
 
 export function normalizeDisks(

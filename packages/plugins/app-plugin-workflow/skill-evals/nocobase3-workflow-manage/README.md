@@ -6,6 +6,10 @@ first adapter uses the official Codex App Server JSON-RPC protocol.
 
 The runner does not send `expected` or `forbidden` fields to the tested agent.
 They remain in the JSON report for human or later automated evaluation.
+Cases use explicit Skill injection by default. A case with
+`skillMode: implicit` instead installs the published Skill into the isolated
+application's `.agents/skills/` directory and sends only the natural-language
+prompt, so description-based automatic selection can be evaluated separately.
 
 ## Commands
 

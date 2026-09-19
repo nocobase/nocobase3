@@ -1,20 +1,17 @@
 import type { DatabaseConnection } from '@nocobase/db';
 import {
+  APIError,
   betterAuth,
   type BetterAuthOptions,
+  type BetterAuthPlugin,
+  type FilteredAPI,
   type Session,
   type User,
 } from 'better-auth';
 import { username } from 'better-auth/plugins';
-import { createAuthMiddleware } from 'better-auth/api';
 import type { Context, MiddlewareHandler } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { databaseAdapter } from './better-auth/database-adapter.js';
-import {
-  captureAuthenticatedUser,
-  declareAudit,
-  withAuditIdentity,
-} from './audit-internal.js';
-import type { AuthenticationAuditDeclaration } from './audit.js';
 
 export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
   connection: DatabaseConnection;
@@ -39,9 +36,13 @@ export interface AuthMiddlewareOptions {
 
 export class Auth {
   private readonly auth;
+  private readonly connection: DatabaseConnection;
+  private readonly options: AuthOptions;
 
   constructor(options: AuthOptions) {
     const { connection, ...config } = options;
+    this.connection = connection;
+    this.options = options;
     if (!config.secret || config.secret.trim().length === 0) {
       throw new Error('Authentication secret is required.');
     }
@@ -50,30 +51,90 @@ export class Auth {
     )
       ? config.plugins
       : [username({ displayUsername: false }), ...(config.plugins ?? [])];
+    const configuredSessionCreate = config.databaseHooks?.session?.create;
     this.auth = betterAuth({
       ...config,
       appName: config.appName ?? 'NocoBase3',
       database: databaseAdapter(connection),
-      plugins: [
-        ...(plugins ?? []),
-        {
-          id: 'nocobase-audit-identity',
-          hooks: {
-            after: [
-              {
-                matcher: () => true,
-                handler: createAuthMiddleware(async (context) => {
-                  const user = context.context.newSession?.user;
-                  if (user) captureAuthenticatedUser(user.id);
-                }),
-              },
-            ],
-          },
-        },
-      ],
+      plugins,
       emailAndPassword: {
         ...config.emailAndPassword,
         enabled: config.emailAndPassword?.enabled ?? true,
+      },
+      user: {
+        ...config.user,
+        additionalFields: {
+          ...config.user?.additionalFields,
+          deletedAt: { type: 'date', required: false, input: false },
+          deletedBy: { type: 'string', required: false, input: false },
+          disabledAt: {
+            type: 'date',
+            required: false,
+            input: false,
+          },
+        },
+      },
+      databaseHooks: {
+        ...config.databaseHooks,
+        session: {
+          ...config.databaseHooks?.session,
+          create: {
+            ...configuredSessionCreate,
+            after: async (session, context) => {
+              await configuredSessionCreate?.after?.(session, context);
+              const user = context
+                ? await context.context.internalAdapter.findUserById(
+                    session.userId,
+                  )
+                : await connection.query
+                    .selectFrom('user')
+                    .select('disabledAt')
+                    .where('id', '=', session.userId)
+                    .executeTakeFirst();
+              if (!user || Reflect.get(user, 'disabledAt') != null) {
+                // A login already in flight may persist after user deletion.
+                // Remove its new session before returning it to the caller.
+                const adapter =
+                  context?.context.internalAdapter ??
+                  (await this.auth.$context).internalAdapter;
+                await adapter.deleteSession(session.token);
+                throw APIError.from('FORBIDDEN', {
+                  code: 'ACCOUNT_DISABLED',
+                  message: 'This account is disabled.',
+                });
+              }
+            },
+            before: async (session, context) => {
+              const configuredResult = await configuredSessionCreate?.before?.(
+                session,
+                context,
+              );
+              if (configuredResult === false) return false;
+              const candidate =
+                typeof configuredResult === 'object' &&
+                configuredResult !== null &&
+                'data' in configuredResult
+                  ? { ...session, ...configuredResult.data }
+                  : session;
+              const user = context
+                ? await context.context.internalAdapter.findUserById(
+                    candidate.userId,
+                  )
+                : await connection.query
+                    .selectFrom('user')
+                    .select(['id', 'disabledAt'])
+                    .where('id', '=', candidate.userId)
+                    .executeTakeFirst();
+              if (!user || Reflect.get(user, 'disabledAt') != null) {
+                throw APIError.from('FORBIDDEN', {
+                  code: 'ACCOUNT_DISABLED',
+                  message: 'This account is disabled.',
+                });
+              }
+              return configuredResult;
+            },
+          },
+        },
       },
       advanced: {
         ...config.advanced,
@@ -91,13 +152,41 @@ export class Auth {
     return this.auth.handler(request);
   }
 
-  getSession(headers: Headers): Promise<AuthSession> {
-    return this.auth.api.getSession({ headers });
+  async getSession(headers: Headers): Promise<AuthSession> {
+    const session = await this.auth.api.getSession({ headers });
+    if (!session) return null;
+    const user = await this.connection.query
+      .selectFrom('user')
+      .select(['id', 'disabledAt'])
+      .where('id', '=', session.user.id)
+      .executeTakeFirst();
+    if (!user || user.disabledAt != null) return null;
+    return session;
   }
 
-  /** Declarative observation only; identity remains owned by authentication. */
-  auditHttp(declaration: AuthenticationAuditDeclaration): MiddlewareHandler {
-    return declareAudit(this, declaration);
+  /** Returns only a registered plugin's API methods, including the normal hook pipeline. */
+  pluginApi<TPlugin extends BetterAuthPlugin>(
+    pluginId: TPlugin['id'],
+  ): FilteredAPI<NonNullable<TPlugin['endpoints']>> {
+    const plugin = this.options.plugins?.find((item) => item.id === pluginId);
+    if (!plugin?.endpoints)
+      throw new Error(`Authentication plugin "${pluginId}" is not registered.`);
+    const api: Record<string, unknown> = {};
+    for (const name of Object.keys(plugin.endpoints)) {
+      const endpoint: unknown = Reflect.get(this.auth.api, name);
+      if (typeof endpoint === 'function') api[name] = endpoint;
+    }
+    return api as FilteredAPI<NonNullable<TPlugin['endpoints']>>;
+  }
+
+  /** @internal Used by the Authentication-owned administration service. */
+  administrationContext(): typeof this.auth.$context {
+    return this.auth.$context;
+  }
+
+  /** Binds trusted server operations to a caller-owned connection or transaction. */
+  forConnection(connection: DatabaseConnection): Auth {
+    return new Auth({ ...this.options, connection });
   }
 
   optional(options: AuthMiddlewareOptions = {}): MiddlewareHandler<AuthEnv> {
@@ -106,9 +195,18 @@ export class Auth {
         await next();
         return;
       }
-      const session = await this.getSession(context.req.raw.headers);
-      context.set('auth', session);
-      await withAuditIdentity(this, context, session?.user.id, next);
+      try {
+        context.set('auth', await this.getSession(context.req.raw.headers));
+      } catch (error) {
+        if (error instanceof APIError) {
+          return context.json(
+            error.body ?? { code: error.status, message: error.message },
+            error.statusCode as ContentfulStatusCode,
+          );
+        }
+        throw error;
+      }
+      await next();
     };
   }
 
@@ -118,20 +216,30 @@ export class Auth {
         await next();
         return;
       }
-      const auth = await this.getSession(context.req.raw.headers);
+      let auth: AuthSession;
+      try {
+        auth = await this.getSession(context.req.raw.headers);
+        // A refused credential is Better Auth's APIError; answer with its own status and body.
+      } catch (error) {
+        if (error instanceof APIError) {
+          return context.json(
+            error.body ?? { code: error.status, message: error.message },
+            error.statusCode as ContentfulStatusCode,
+          );
+        }
+        throw error;
+      }
       if (!auth) {
-        return withAuditIdentity(this, context, undefined, () =>
-          context.json(
-            {
-              code: 'UNAUTHORIZED',
-              message: 'Authentication required',
-            },
-            401,
-          ),
+        return context.json(
+          {
+            code: 'UNAUTHORIZED',
+            message: 'Authentication required',
+          },
+          401,
         );
       }
       context.set('auth', auth);
-      await withAuditIdentity(this, context, auth.user.id, next);
+      await next();
     };
   }
 }

@@ -12,8 +12,8 @@ name: Release Beta
 # 之后每一轮发版都由这个 workflow 完成，转正后 CI 会自动重新进入 pre 模式。
 #
 # 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
-# 已知限制是它推送的 commit 不会触发其它 workflow（GitHub 防死循环的
-# 设计）—— 对本流程无影响，同步过去的内容已经在发版时 build + test 过。
+# GITHUB_TOKEN pushes do not trigger push workflows, but its PRs create CI runs awaiting approval.
+# Add [skip ci] to generated commits to skip version-sync PR checks; this workflow still runs its own checks.
 # 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
 
 on:
@@ -21,6 +21,10 @@ on:
     inputs:
       dry_run:
         description: 'Dry run: compute versions and run checks without publishing or pushing'
+        type: boolean
+        default: false
+      skip_smoke_test:
+        description: 'Skip the create-app smoke test (use only when the smoke test itself is broken)'
         type: boolean
         default: false
 
@@ -36,10 +40,12 @@ jobs:
   release:
     name: Publish beta
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     outputs:
       tag: ${{ steps.branch.outputs.name }}
       merged: ${{ steps.merge.outputs.merged }}
+      create_app_version: ${{ steps.hub_versions.outputs.create_app_version }}
+      hub_template_version: ${{ steps.hub_versions.outputs.hub_template_version }}
     steps:
       - name: Check out develop
         uses: actions/checkout@v4
@@ -166,6 +172,22 @@ jobs:
           pnpm build
           pnpm -r --if-present test
 
+      # A generated application is the only thing that exercises what this release actually publishes. Everything
+      # above resolves through the workspace, where `workspace:` links every package to a directory on disk; an
+      # installed application resolves through published manifests instead, so a dependency declared in the wrong
+      # place builds and tests cleanly here and fails on first boot there.
+      #
+      # It runs on a dry run too. That is the only way to exercise this without publishing anything, and a dry run is
+      # already the rehearsal step.
+      - name: Verify create-app against this release
+        if: '!inputs.skip_smoke_test'
+        uses: ./.github/actions/verify-create-app
+
+      - name: Note the skipped smoke test
+        if: inputs.skip_smoke_test
+        run: |
+          echo "::warning::The create-app smoke test was skipped for this release."
+
       - name: Stop here on dry run
         if: inputs.dry_run
         run: echo "dry_run=true — stopping here. The release branch was not pushed."
@@ -186,7 +208,7 @@ jobs:
         run: |
           NAME="${{ steps.branch.outputs.name }}"
           git add -A
-          git commit -m "chore: release ${{ steps.branch.outputs.batch }}"
+          git commit -m "chore: release ${{ steps.branch.outputs.batch }} [skip ci]"
           git tag "$NAME"
           git push origin "refs/heads/${NAME}:refs/heads/${NAME}"
           git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
@@ -249,6 +271,16 @@ jobs:
       - name: Push package tags
         if: '!inputs.dry_run'
         run: git push origin --tags
+
+      # Pin the image build to this release instead of resolving moving npm dist-tags later.
+      - name: Capture Hub image package versions
+        if: '!inputs.dry_run'
+        id: hub_versions
+        run: |
+          {
+            echo "create_app_version=$(node -p "require('./packages/tools/create-app/package.json').version")"
+            echo "hub_template_version=$(node -p "require('./packages/templates/app-template-hub/package.json').version")"
+          } >> "$GITHUB_OUTPUT"
 
       # 用 --merge 而不是 --squash：保留 tag 与 develop 历史的血缘，
       # git describe 才能用。不加 --admin：冲突时要让 PR 停下等人处理，
@@ -363,3 +395,24 @@ jobs:
       tag: ${{ needs.release.outputs.tag }}
     permissions:
       contents: write
+
+  hub-image:
+    name: Publish Hub Docker image
+    needs: [release, github-release]
+    if: >-
+      !cancelled() && !inputs.dry_run
+      && needs.release.result == 'success'
+      && needs.github-release.result == 'success'
+      && needs.release.outputs.merged == 'true'
+    uses: ./.github/workflows/docker-hub.yml
+    with:
+      create_app_version: ${{ needs.release.outputs.create_app_version }}
+      hub_template_version: ${{ needs.release.outputs.hub_template_version }}
+      image_tag: latest
+    secrets:
+      ALI_DOCKER_REGISTRY: ${{ secrets.ALI_DOCKER_REGISTRY }}
+      ALI_DOCKER_USERNAME: ${{ secrets.ALI_DOCKER_USERNAME }}
+      ALI_DOCKER_PASSWORD: ${{ secrets.ALI_DOCKER_PASSWORD }}
+    permissions:
+      contents: read
+      packages: write

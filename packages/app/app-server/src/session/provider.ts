@@ -8,12 +8,13 @@ import {
 } from '@nocobase/session';
 import { ServiceProvider } from '@nocobase/service-provider';
 
+import { assertSecretIsNotPlaceholder } from '../config/placeholder-secret.js';
 import type { AppPluginApplication } from '../plugins/index.js';
 import {
   defineHttpMiddleware,
   type AppHttpMiddleware,
 } from '../router/index.js';
-import { sessionConfig, type AppSessionConfigInput } from './config.js';
+import { type AppSessionConfigInput } from './config.js';
 import { sessionManagerToken } from './token.js';
 
 export class SessionProvider extends ServiceProvider<AppPluginApplication> {
@@ -25,9 +26,8 @@ export class SessionProvider extends ServiceProvider<AppPluginApplication> {
     this.app.container.singleton(sessionManagerToken, () =>
       createSessionManager(
         resolveAppSessionConfig(
-          this.app.config.get(sessionConfig),
+          this.app.config.get<AppSessionConfigInput>('session')!,
           this.ephemeralSecret,
-          this.app.config.get<string>('server.nodeEnv') === 'production',
         ),
       ),
     );
@@ -41,9 +41,11 @@ export class SessionProvider extends ServiceProvider<AppPluginApplication> {
 export function resolveAppSessionConfig(
   configured: AppSessionConfigInput,
   ephemeralSecret: string,
-  production: boolean,
 ): AppSessionConfig {
   const { gcLottery: configuredGcLottery, secret, ...rest } = configured;
+  // Before the fallback below, because a placeholder is a value that was configured rather than one that was left
+  // unset, and silently replacing it with an ephemeral secret would hide the mistake rather than report it.
+  assertSecretIsNotPlaceholder(secret, 'session.secret');
   const gcLottery = configuredGcLottery ?? { hits: 2, total: 100 };
   if (gcLottery.hits > gcLottery.total) {
     throw new Error(
@@ -52,10 +54,6 @@ export function resolveAppSessionConfig(
   }
   return {
     ...rest,
-    cookie: {
-      ...configured.cookie,
-      secure: configured.cookie.secure ?? production,
-    },
     secret: secret ?? ephemeralSecret,
     gcLottery: [gcLottery.hits, gcLottery.total],
   };

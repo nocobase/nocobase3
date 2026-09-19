@@ -47,7 +47,7 @@ export default defineAIEmployee({
 });
 ```
 
-Skills use `SKILLS.md`. Declarative LLM services use the application plugin's exported `aiEmployeeConfig` contract at `config.yml` `ai.llmServices`; the framework-neutral core package intentionally has no config-definition helper.
+Skills use `SKILL.md`. Declarative LLM services use the application plugin's exported `aiEmployeeConfig` contract at `config.yml` `ai.llmServices`; the framework-neutral core package intentionally has no config-definition helper.
 
 ## Shared Manager Type
 
@@ -182,12 +182,12 @@ Prefer the smallest public type needed by the App code.
 
 ## APIs Applications Usually Should Not Call
 
-The package also exports low-level factories, loaders, repositories, memory adapters, and scanners. They are public for framework integrations and standalone consumers, but a normal generated App should let its enabled AI employee application plugin own them.
+The package also exports low-level factories, the Skill/MCP loaders, repositories, memory adapters, and scanners. They are public for framework integrations and standalone consumers, but a normal generated App should let its enabled AI employee application plugin own them.
 
 Do not normally call these from application customization:
 
 - `createAIManager` or `new AIManager(...)`
-- `AIEmployeeLoader`, `ToolsLoader`, `SkillsLoader`, `MCPLoader`
+- `SkillsLoader`, `MCPLoader`
 - repository switch methods
 - `MemoryRepositoryFactory`
 - directory scanners

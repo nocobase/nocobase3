@@ -40,26 +40,44 @@ export async function assertTargetIsUsable(directory: string): Promise<void> {
 }
 
 /**
- * The minimum a generated project must ignore. `config.yml` carries the generated `AUTH_SECRET`, so committing it
- * would publish a credential; the rest are build output and local state.
+ * The minimum a generated project must ignore. `config.yml` carries the generated `auth.secret` and `.env` carries a
+ * hub's settings, so committing either would publish local configuration; the rest are build output and local state.
  */
 const FALLBACK_GITIGNORE = [
   'node_modules/',
   'dist/',
   'coverage/',
   '',
-  '# Local configuration, including the generated AUTH_SECRET.',
+  '# Local configuration, including the generated auth.secret.',
   '/config.yml',
+  '/config.toml',
+  '/.env',
+  '/.env.local',
   '',
   '# Local application state.',
   '/storage/',
+  '/database.sqlite',
+  '/database.sqlite-journal',
+  '/database.sqlite-wal',
+  '/database.sqlite-shm',
   '/.agents/',
+  '/.agent-annotations/',
   '/.nocobase/',
   '*.log',
   '',
 ].join('\n');
 
-const REQUIRED_GITIGNORE_ENTRIES = ['/.agents/'] as const;
+/**
+ * Entries added even to a `.gitignore` the template shipped itself.
+ *
+ * Each names something this command writes rather than something the template owns, which is why a template has no
+ * particular reason to have thought of it.
+ */
+const REQUIRED_GITIGNORE_ENTRIES = [
+  '/.env',
+  '/.agents/',
+  '/.agent-annotations/',
+] as const;
 
 /**
  * Ensures the generated project has a `.gitignore`.
@@ -103,7 +121,7 @@ async function restoreGitignore(directory: string): Promise<void> {
     const separator = contents === '' || contents.endsWith('\n') ? '' : '\n';
     await writeFile(
       target,
-      `${contents}${separator}\n# Agent synchronization output.\n${missing.join('\n')}\n`,
+      `${contents}${separator}\n# Written when this project was generated.\n${missing.join('\n')}\n`,
       'utf8',
     );
   }
@@ -199,6 +217,20 @@ export async function scaffoldFromTemplate(
 
   manifest.name = name;
 
+  // Records which template this application was generated from, because nothing else left in the manifest can say.
+  // `name` has just become the application's own, and `nocobase.templateKind` is `app` for both Default and Examples,
+  // so an upgrade that has to diff two releases of the originating template would have nothing to resolve. Written
+  // under `nocobase` beside `defaultTemplateVersion`, which records how far that source has been merged.
+  if (templateName !== '') {
+    const nocobase =
+      typeof manifest.nocobase === 'object' && manifest.nocobase !== null
+        ? (manifest.nocobase as Record<string, unknown>)
+        : {};
+
+    nocobase.templatePackage = templateName;
+    manifest.nocobase = nocobase;
+  }
+
   // `displayName` is what the client shell renders in its sidebar footer, through the `__PORTAL_TEMPLATE_NAME__`
   // constant `vite.config.ts` defines from it. Deleting it left that constant `undefined`, so a generated app fell
   // back to the literal "Default Template" baked into the shell — the template's label, on every app built from it.
@@ -236,7 +268,8 @@ export async function removeDirectory(directory: string): Promise<void> {
 }
 
 /**
- * Reads the template's `config.example.yml` for callers that inspect the example.
+ * Reads the template's `config.example.yml`, which becomes the generated `config.yml`. A template is not required to
+ * ship one, so the caller falls back rather than failing.
  */
 export async function readConfigExample(
   directory: string,

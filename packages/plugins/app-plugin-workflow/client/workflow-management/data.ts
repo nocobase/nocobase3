@@ -1,3 +1,5 @@
+import type { ApiJsonRequestOptions } from '@nocobase/app-client';
+
 import type {
   WorkflowDetailRecord,
   WorkflowListRecord,
@@ -11,15 +13,28 @@ interface DataResponse<T> {
   readonly data: T;
 }
 
+export interface WorkflowPage<T> {
+  readonly data: T[];
+  readonly meta: { page: number; pageSize: number; total: number };
+}
+
 const pendingRequests = new Map<string, Promise<unknown>>();
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const method = init?.method ?? 'GET';
+type WorkflowRequestOptions = Omit<ApiJsonRequestOptions, 'path'>;
+
+async function request<T>(
+  path: string,
+  options: WorkflowRequestOptions = {},
+): Promise<T> {
+  const method = options.method ?? 'GET';
   const key = `${method}:${path}`;
   const pending = method === 'GET' ? pendingRequests.get(key) : undefined;
   if (pending) return (await pending) as T;
   const operation = getWorkflowClient()
-    .request<DataResponse<T>>(path, init)
+    .request<DataResponse<T>>({
+      path,
+      ...options,
+    })
     .then((response) => {
       if (
         response === null ||
@@ -37,15 +52,52 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (pendingRequests.get(key) === operation) pendingRequests.delete(key);
   }
 }
+
+async function requestPage<T>(path: string): Promise<WorkflowPage<T>> {
+  const key = `GET:${path}`;
+  const pending = pendingRequests.get(key);
+  if (pending) return (await pending) as WorkflowPage<T>;
+  const operation = getWorkflowClient()
+    .request<WorkflowPage<T>>({ path })
+    .then((response) => {
+      if (
+        response === null ||
+        typeof response !== 'object' ||
+        !Array.isArray(response.data)
+      ) {
+        throw new Error('Workflow API returned an invalid paginated response.');
+      }
+      return {
+        data: response.data,
+        meta: response.meta ?? {
+          page: 1,
+          pageSize: 20,
+          total: response.data.length,
+        },
+      };
+    });
+  pendingRequests.set(key, operation);
+  try {
+    return await operation;
+  } finally {
+    if (pendingRequests.get(key) === operation) pendingRequests.delete(key);
+  }
+}
 export const workflowApi = {
   workflows: (query: string = ''): Promise<WorkflowListRecord[]> =>
     request(`/workflows${query}`),
+  workflowPage: (
+    query: string = '',
+  ): Promise<WorkflowPage<WorkflowListRecord>> =>
+    requestPage(`/workflows${query}`),
   workflow: (id: string): Promise<WorkflowDetailRecord> =>
     request(`/workflows/${encodeURIComponent(id)}`),
   revisions: (id: string): Promise<WorkflowDetailRecord[]> =>
     request(`/workflows/${encodeURIComponent(id)}/revisions`),
   runs: (query: string = ''): Promise<WorkflowRunRecord[]> =>
     request(`/workflow-runs${query}`),
+  runPage: (query: string = ''): Promise<WorkflowPage<WorkflowRunRecord>> =>
+    requestPage(`/workflow-runs${query}`),
   workflowRuns: (id: string): Promise<WorkflowRunRecord[]> =>
     request(`/workflows/${encodeURIComponent(id)}/runs`),
   run: (id: string): Promise<WorkflowRunRecord> =>
@@ -64,7 +116,7 @@ export const workflowApi = {
   status: (id: string, enabled: boolean): Promise<WorkflowListRecord> =>
     request(`/workflows/${encodeURIComponent(id)}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ enabled }),
+      json: { enabled },
     }),
   enable: (idOrHash: string): Promise<WorkflowListRecord> =>
     request(`/workflows/${encodeURIComponent(idOrHash)}/enable`, {
@@ -76,7 +128,7 @@ export const workflowApi = {
   ): Promise<object> =>
     request(`/workflows/${encodeURIComponent(id)}/parameters`, {
       method: 'PUT',
-      body: JSON.stringify({ parameterValues }),
+      json: { parameterValues },
     }),
   execute: (
     id: string,
@@ -86,7 +138,7 @@ export const workflowApi = {
     request(`/workflows/${encodeURIComponent(id)}/run`, {
       method: 'POST',
       headers: { 'event-key': eventKey },
-      body: JSON.stringify({ input }),
+      json: { input },
     }),
 };
 

@@ -6,6 +6,11 @@ const enUS = {
     logs: 'Notification logs',
   },
   logs: {
+    deliveryOperations: 'Delivery operations',
+    recipeDescription: 'Trace each channel handoff and every provider attempt.',
+    redacted: 'Message bodies, recipients, and lease tokens are redacted.',
+    providerAttempts: 'Provider attempts',
+
     eyebrow: 'Notifications',
     title: 'Notification logs',
     description:
@@ -40,12 +45,13 @@ const enUS = {
   test: {
     title: 'Send test notification',
     description:
-      'Select a Channel and Provider, then click Send. The message is sent to the recipient you provide and recorded below.',
+      'Select a delivery method, then click Send. The message is sent to the recipient you provide and recorded below.',
     close: 'Close test notification dialog',
     loadingProviders: 'Loading configured Providers…',
     noProviders: 'No enabled Providers are configured.',
-    channelProvider: 'Channel and Provider',
-    selectProvider: 'Select a Channel and Provider',
+    channelProvider: 'Delivery method',
+    selectProvider: 'Select a delivery method',
+    singleProviderLabel: '{{channel}} ({{provider}})',
     recipient: 'Recipient',
     userIdPlaceholder: 'User ID',
     emailHelp: 'The email address that should receive this test.',

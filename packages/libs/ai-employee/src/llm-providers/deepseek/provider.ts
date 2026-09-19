@@ -465,6 +465,7 @@ export const deepseekProviderOptions: LLMProviderMeta = {
   supportedModel: [SupportedModel.LLM],
   models: {
     [SupportedModel.LLM]: [
+      'deepseek-flash',
       'deepseek-v4-pro',
       'deepseek-v4-flash',
       'deepseek-chat',
@@ -472,6 +473,6 @@ export const deepseekProviderOptions: LLMProviderMeta = {
     ],
   },
   supportWebSearch: true,
-  webSearchModels: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+  webSearchModels: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro'],
   provider: DeepSeekProvider,
 };

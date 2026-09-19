@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { APP_NS, BASE_NAMESPACE } from '../src/core/registry.js';
+import {
+  APP_NS as APP_NS_SENTINEL,
+  BASE_NAMESPACE,
+} from '../src/core/registry.js';
 import { I18nRuntime } from '../src/core/runtime.js';
 
 const APP_NS = '@acme/app';
@@ -228,15 +231,74 @@ describe('I18nRuntime', () => {
   });
 });
 
+describe('supported locales', () => {
+  it('derives them from the application namespace rather than from plugins', () => {
+    const runtime = new I18nRuntime({ defaultLocale: 'en-US' });
+    runtime.registerApplicationNamespace(APP_NS, {
+      'en-US': () => Promise.resolve({ default: {} }),
+      'zh-CN': () => Promise.resolve({ default: {} }),
+    });
+    // A plugin translating a third language does not put that language on offer.
+    runtime.registerNamespace(PLUGIN_NS, {
+      'en-US': () => Promise.resolve({ default: {} }),
+      'ja-JP': () => Promise.resolve({ default: {} }),
+    });
+
+    expect(runtime.getLocales()).toEqual(['en-US', 'zh-CN']);
+  });
+
+  it('keeps the default locale on offer even when the application does not declare it', () => {
+    const runtime = new I18nRuntime({ defaultLocale: 'fr-FR' });
+    runtime.registerApplicationNamespace(APP_NS, {
+      'en-US': () => Promise.resolve({ default: {} }),
+    });
+
+    expect(runtime.getLocales()).toEqual(['en-US', 'fr-FR']);
+  });
+
+  it('offers only the default before any namespace has registered', () => {
+    const runtime = new I18nRuntime({ defaultLocale: 'en-US' });
+
+    expect(runtime.getLocales()).toEqual(['en-US']);
+  });
+
+  it('lets an explicit list win over what the application declares', () => {
+    const runtime = new I18nRuntime({
+      defaultLocale: 'en-US',
+      locales: ['en-US', 'ja-JP'],
+    });
+    runtime.registerApplicationNamespace(APP_NS, {
+      'en-US': () => Promise.resolve({ default: {} }),
+      'zh-CN': () => Promise.resolve({ default: {} }),
+    });
+
+    expect(runtime.getLocales()).toEqual(['en-US', 'ja-JP']);
+  });
+
+  it('resolves a requested locale against the application list alone', () => {
+    const runtime = new I18nRuntime({ defaultLocale: 'en-US' });
+    runtime.registerApplicationNamespace(APP_NS, {
+      'en-US': () => Promise.resolve({ default: {} }),
+      'zh-CN': () => Promise.resolve({ default: {} }),
+    });
+    runtime.registerNamespace(PLUGIN_NS, {
+      'ja-JP': () => Promise.resolve({ default: {} }),
+    });
+
+    expect(runtime.resolveLocale('zh-CN')).toBe('zh-CN');
+    expect(runtime.resolveLocale('ja-JP')).toBe('en-US');
+  });
+});
+
 describe('APP_NS', () => {
   it('resolves to the application namespace without naming it', async () => {
     const runtime = createRuntime();
     await runtime.init('en-US');
 
     // A plugin cannot know the application's package name, so it asks for it through the sentinel.
-    expect(runtime.getFixedT(PLUGIN_NS)('welcome', { ns: APP_NS })).toBe(
-      'Welcome',
-    );
+    expect(
+      runtime.getFixedT(PLUGIN_NS)('welcome', { ns: APP_NS_SENTINEL }),
+    ).toBe('Welcome');
   });
 
   it('still finds the base terms when no application is registered', async () => {
@@ -246,6 +308,51 @@ describe('APP_NS', () => {
     });
     await runtime.init('en-US');
 
-    expect(runtime.getFixedT(PLUGIN_NS)('save', { ns: APP_NS })).toBe('Save');
+    expect(runtime.getFixedT(PLUGIN_NS)('save', { ns: APP_NS_SENTINEL })).toBe(
+      'Save',
+    );
+  });
+});
+
+describe('fallback language', () => {
+  // The application offers Spanish because it translated it; the plugin never did, and its default is Chinese. Falling
+  // back to the application's default would show a Spanish-speaking visitor Chinese, so English backs it up.
+  it('falls back to English when the plugin has neither the language in use nor the default', async () => {
+    const runtime = new I18nRuntime({
+      defaultLocale: 'zh-CN',
+      applicationNamespace: APP_NS,
+    });
+    runtime.registerApplicationNamespace(APP_NS, {
+      'zh-CN': () => Promise.resolve({ default: { welcome: '欢迎' } }),
+      'es-ES': () => Promise.resolve({ default: { welcome: 'Bienvenido' } }),
+    });
+    // This plugin translated English alone.
+    runtime.registerNamespace(PLUGIN_NS, {
+      'en-US': () => Promise.resolve({ default: { trigger: 'Trigger' } }),
+    });
+    await runtime.init('es-ES');
+
+    // The application itself has Spanish.
+    expect(runtime.getFixedT(APP_NS)('welcome')).toBe('Bienvenido');
+    // The plugin has neither es-ES nor the application's zh-CN default, so English backs it up.
+    expect(runtime.getFixedT(PLUGIN_NS)('trigger')).toBe('Trigger');
+  });
+
+  it("prefers the application's default over English when the plugin has it", async () => {
+    const runtime = new I18nRuntime({
+      defaultLocale: 'zh-CN',
+      applicationNamespace: APP_NS,
+    });
+    runtime.registerApplicationNamespace(APP_NS, {
+      'zh-CN': () => Promise.resolve({ default: { welcome: '欢迎' } }),
+      'es-ES': () => Promise.resolve({ default: { welcome: 'Bienvenido' } }),
+    });
+    runtime.registerNamespace(PLUGIN_NS, {
+      'en-US': () => Promise.resolve({ default: { trigger: 'Trigger' } }),
+      'zh-CN': () => Promise.resolve({ default: { trigger: '触发' } }),
+    });
+    await runtime.init('es-ES');
+
+    expect(runtime.getFixedT(PLUGIN_NS)('trigger')).toBe('触发');
   });
 });

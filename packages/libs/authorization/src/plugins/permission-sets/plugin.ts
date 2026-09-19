@@ -16,6 +16,7 @@ import type {
   PermissionSetAssignment,
   PermissionSetSubject,
 } from './model.js';
+import type { DatabaseConnection } from '@nocobase/db';
 import { createPermissionSetHandler } from './routes.js';
 import { DatabasePermissionSetStore } from './database-store.js';
 import type { PermissionSetStore } from './store.js';
@@ -43,6 +44,13 @@ export interface PermissionSetsApi {
   listAssignments(
     permissionSet?: string,
   ): Promise<readonly PermissionSetAssignment[]>;
+  replaceSubjectAssignments(input: {
+    subject: PermissionSetSubject;
+    managedPermissionSets: readonly string[];
+    permissionSets: readonly string[];
+  }): Promise<readonly PermissionSetAssignment[]>;
+  notifyAssignmentsChanged(subject: PermissionSetSubject): Promise<void>;
+  withConnection(connection: DatabaseConnection): PermissionSetsApi;
   getEffective(input: {
     principal: Principal;
     subjects?: readonly AuthorizationSubject[];
@@ -59,6 +67,7 @@ export interface PermissionSetHandlerInput {
 export interface PermissionSetsOptions {
   /** Overrides the database-backed store, primarily for custom backends and tests. */
   store?: PermissionSetStore;
+  onAssignmentsChanged?(subject: PermissionSetSubject): void | Promise<void>;
 }
 
 export class PermissionSetNotFoundError extends Error {
@@ -85,7 +94,7 @@ export type PermissionSetsPlugin =
 export function permissionSets(
   options: PermissionSetsOptions = {},
 ): PermissionSetsPlugin {
-  const service = new PermissionSetService(options.store);
+  const service = new PermissionSetService(options);
   return {
     id: 'permission-sets',
     grants: service,
@@ -97,7 +106,10 @@ export function permissionSets(
             'Permission Sets requires createAuthorization({ connection }) or an explicit store',
           );
         }
-        service.initialize(new DatabasePermissionSetStore(authz.connection));
+        service.initialize(
+          new DatabasePermissionSetStore(authz.connection),
+          authz.connection,
+        );
       }
       authz.resources.add({
         resourceType: 'authorization.settings',
@@ -138,18 +150,24 @@ class PermissionSetService
   implements AuthorizationGrantService, PermissionSetsApi
 {
   private store?: PermissionSetStore;
+  private connection?: DatabaseConnection;
   readonly handler: (input: PermissionSetHandlerInput) => Promise<Response>;
 
-  constructor(store?: PermissionSetStore) {
-    this.store = store;
+  constructor(
+    private readonly options: PermissionSetsOptions = {},
+    connection?: DatabaseConnection,
+  ) {
+    this.store = options.store;
+    this.connection = connection;
     this.handler = createPermissionSetHandler(this);
   }
 
-  initialize(store: PermissionSetStore): void {
+  initialize(store: PermissionSetStore, connection?: DatabaseConnection): void {
     if (this.store) {
       throw new Error('Permission Sets store has already been initialized');
     }
     this.store = store;
+    this.connection = connection;
   }
 
   async resolve(
@@ -234,17 +252,22 @@ class PermissionSetService
         `Permission Set already exists: ${input.key}`,
       );
     }
-    return this.getStore().updatePermissionSet(
+    const affectedSubjects = await this.assignedSubjects(key);
+    const permissionSet = await this.getStore().updatePermissionSet(
       key,
       this.toPermissionSet(input),
     );
+    await this.notifySubjectsChanged(affectedSubjects);
+    return permissionSet;
   }
 
   async delete(key: string): Promise<void> {
     if (!(await this.getStore().getPermissionSet(key))) {
       throw new PermissionSetNotFoundError(key);
     }
-    return this.getStore().deletePermissionSet(key);
+    const affectedSubjects = await this.assignedSubjects(key);
+    await this.getStore().deletePermissionSet(key);
+    await this.notifySubjectsChanged(affectedSubjects);
   }
 
   get(key: string): Promise<PermissionSet | undefined> {
@@ -261,15 +284,23 @@ class PermissionSetService
     if (!(await this.getStore().getPermissionSet(input.permissionSet))) {
       throw new PermissionSetNotFoundError(input.permissionSet);
     }
-    return this.getStore().assignPermissionSet({
+    const assignment = await this.getStore().assignPermissionSet({
       id: input.id ?? this.createAssignmentId(input),
       subject: input.subject,
       permissionSet: input.permissionSet,
     });
+    await this.notifyAssignmentsChanged(input.subject);
+    return assignment;
   }
 
-  revoke(id: string): Promise<void> {
-    return this.getStore().revokeAssignment(id);
+  async revoke(id: string): Promise<void> {
+    const assignment = (await this.getStore().listAssignments()).find(
+      (item) => item.id === id,
+    );
+    await this.getStore().revokeAssignment(id);
+    if (assignment) {
+      await this.notifyAssignmentsChanged(assignment.subject);
+    }
   }
 
   listAssignments(
@@ -278,11 +309,111 @@ class PermissionSetService
     return this.getStore().listAssignments(permissionSet);
   }
 
+  async replaceSubjectAssignments(input: {
+    subject: PermissionSetSubject;
+    managedPermissionSets: readonly string[];
+    permissionSets: readonly string[];
+  }): Promise<readonly PermissionSetAssignment[]> {
+    const managed = new Set(input.managedPermissionSets);
+    const requested = [...new Set(input.permissionSets)];
+    if (requested.some((key) => !managed.has(key))) {
+      throw new TypeError(
+        'Replacement Permission Sets must belong to the managed scope',
+      );
+    }
+    for (const key of requested) {
+      if (!(await this.getStore().getPermissionSet(key))) {
+        throw new PermissionSetNotFoundError(key);
+      }
+    }
+    const existing = (await this.getStore().listAssignments()).filter(
+      (assignment) =>
+        assignment.subject.type === input.subject.type &&
+        assignment.subject.id === input.subject.id &&
+        managed.has(assignment.permissionSet),
+    );
+    const requestedSet = new Set(requested);
+    for (const assignment of existing) {
+      if (!requestedSet.has(assignment.permissionSet)) {
+        await this.getStore().revokeAssignment(assignment.id);
+      }
+    }
+    const existingKeys = new Set(
+      existing.map((assignment) => assignment.permissionSet),
+    );
+    const created: PermissionSetAssignment[] = [];
+    for (const permissionSet of requested) {
+      if (existingKeys.has(permissionSet)) continue;
+      const assignment: PermissionSetAssignment = {
+        id: this.createAssignmentId({
+          subject: input.subject,
+          permissionSet,
+        }),
+        subject: input.subject,
+        permissionSet,
+      };
+      created.push(await this.getStore().assignPermissionSet(assignment));
+    }
+    if (
+      created.length > 0 ||
+      existing.some((assignment) => !requestedSet.has(assignment.permissionSet))
+    ) {
+      await this.notifyAssignmentsChanged(input.subject);
+    }
+    const kept = existing.filter((assignment) =>
+      requestedSet.has(assignment.permissionSet),
+    );
+    return [...kept, ...created];
+  }
+
+  async notifyAssignmentsChanged(subject: PermissionSetSubject): Promise<void> {
+    await this.options.onAssignmentsChanged?.(subject);
+  }
+
+  withConnection(connection: DatabaseConnection): PermissionSetsApi {
+    if (!this.connection && this.options.store) {
+      throw new Error(
+        'A custom Permission Set store cannot be rebound to a database transaction',
+      );
+    }
+    return new PermissionSetService(
+      {
+        ...this.options,
+        store: new DatabasePermissionSetStore(connection),
+        // The caller that owns the transaction publishes after commit.
+        onAssignmentsChanged: undefined,
+      },
+      connection,
+    );
+  }
+
   private getStore(): PermissionSetStore {
     if (!this.store) {
       throw new Error('Permission Sets has not been initialized');
     }
     return this.store;
+  }
+
+  private async assignedSubjects(
+    permissionSet: string,
+  ): Promise<readonly PermissionSetSubject[]> {
+    const assignments = await this.getStore().listAssignments(permissionSet);
+    const subjects = new Map<string, PermissionSetSubject>();
+    for (const assignment of assignments) {
+      subjects.set(
+        `${assignment.subject.type}\u0000${assignment.subject.id}`,
+        assignment.subject,
+      );
+    }
+    return [...subjects.values()];
+  }
+
+  private async notifySubjectsChanged(
+    subjects: readonly PermissionSetSubject[],
+  ): Promise<void> {
+    for (const subject of subjects) {
+      await this.notifyAssignmentsChanged(subject);
+    }
   }
 
   private toPermissionSet(input: CreatePermissionSetInput): PermissionSet {

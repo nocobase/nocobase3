@@ -18,15 +18,6 @@ export default createClientLibraryConfig({
       },
     },
     {
-      // Refine's AuthProvider callbacks expose form payloads as any. The
-      // adapter normalizes each field before passing it to the typed client.
-      files: ['client/auth-provider.ts'],
-      rules: {
-        '@typescript-eslint/no-unsafe-assignment': 'off',
-        '@typescript-eslint/no-unsafe-member-access': 'off',
-      },
-    },
-    {
       // Better Auth and Knex intentionally exchange dynamic adapter rows and
       // comparison values at this boundary.
       files: ['server/better-auth/database-adapter.ts'],

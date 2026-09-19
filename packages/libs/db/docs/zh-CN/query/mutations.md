@@ -1,3 +1,8 @@
+---
+title: Query 数据写入
+description: 使用 insertInto、updateTable 和 deleteFrom 写入记录，安全处理全表更新或删除，并理解跨方言返回值。
+---
+
 # insert / update / delete
 
 写入入口按操作类型拆分：
@@ -88,7 +93,7 @@ await db.query().deleteFrom('orders').allowAllRows().execute();
 
 ## 返回值
 
-V1 返回轻量 mutation result：
+当前 API 返回轻量 mutation result：
 
 ```ts
 interface InsertResult {

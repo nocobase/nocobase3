@@ -8,7 +8,7 @@
   },
   "include": [
     "index.ts",
-    "bin/**/*.ts",
+    "cli/**/*.ts",
     "build/**/*.ts",
     "client/**/*.ts",
     "client/**/*.tsx",

@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { AppConfig } from '../src/config/index.js';
-import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
+import {
+  databaseManagerToken,
+  type DatabaseDriverDefinition,
+  type DatabaseManager,
+} from '@nocobase/db';
 import {
   ServiceContainer,
   ServiceProviderRegistry,
@@ -27,15 +31,29 @@ vi.mock('@nocobase/db', async (importOriginal) => {
 
 import {
   DatabaseProvider,
-  databaseLifecycleObserverToken,
-  databaseConfig,
+  type AppDatabaseConfig,
+  type AppDatabaseTaskContributions,
   runAppMigrations,
   runAppSeeds,
-  type AppDatabaseConfig,
   type DatabaseProviderApplication,
 } from '../src/database/index.js';
 
+/** An application that registered no server plugins. */
+const contributions: AppDatabaseTaskContributions = {
+  appPackageName: 'app',
+  migrations: [],
+  seeds: [],
+};
+
 const tempDirs: string[] = [];
+const sqliteStorageDriver: DatabaseDriverDefinition<'sqlite'> = {
+  dialect: 'sqlite',
+  prepareStorage: async (source, context) => {
+    const filename = (source as { filename?: string }).filename;
+    if (!filename || filename === ':memory:') return;
+    await context.ensureDirectory(path.dirname(filename));
+  },
+};
 
 beforeEach(() => {
   createDatabaseManagerMock.mockReset();
@@ -50,29 +68,6 @@ afterEach(() => {
 });
 
 describe('DatabaseProvider', () => {
-  it('resolves lifecycle observers lazily and rejects admission before creating a migrator', async () => {
-    createDatabaseManagerMock.mockReturnValue(createMockDatabase());
-    const { provider, container } = await createProvider(
-      createConfig(createTempDirectory(), true),
-    );
-    const error = new Error('Admission unavailable');
-    const after = vi.fn();
-    const resolve = vi.fn(() => ({
-      before: async () => {
-        throw error;
-      },
-      after,
-    }));
-    container.singleton(databaseLifecycleObserverToken, resolve);
-    provider.register();
-    expect(resolve).not.toHaveBeenCalled();
-    await expect(provider.boot()).rejects.toBe(error);
-    expect(resolve).toHaveBeenCalledOnce();
-    expect(createDatabaseMigratorMock).not.toHaveBeenCalled();
-    expect(createDatabaseSeederMock).not.toHaveBeenCalled();
-    expect(after).not.toHaveBeenCalled();
-  });
-
   it('registers a lazy database manager created from runtime config', async () => {
     const database = createMockDatabase();
     createDatabaseManagerMock.mockReturnValue(database);
@@ -98,7 +93,7 @@ describe('DatabaseProvider', () => {
     expect(container.has(databaseManagerToken)).toBe(false);
   });
 
-  it('runs migrations before seeds and preserves their success after observation fails', async () => {
+  it('prepares storage, runs migrations before seeds, and destroys the database', async () => {
     const calls: string[] = [];
     const root = createTempDirectory();
     const database = createMockDatabase(() => calls.push('destroy'));
@@ -118,57 +113,17 @@ describe('DatabaseProvider', () => {
     });
     const config = createConfig(root, true);
     const { provider, container } = await createProvider(config);
-    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const after = vi.fn<
-      import('../src/database/lifecycle-observer.js').DatabaseLifecycleObserver['after']
-    >(async (result) => {
-      calls.push('after:' + result.phase);
-      throw new Error('Private observer failure');
-    });
-    container.instance(databaseLifecycleObserverToken, {
-      before: async (phase) => {
-        calls.push('before:' + phase);
-      },
-      after,
-    });
     const registry = new ServiceProviderRegistry();
     registry.add(provider);
     registry.registerAll();
 
-    try {
-      await registry.bootAll();
-      await registry.shutdown();
-      expect(after.mock.calls).toEqual(
-        ['migrations', 'seeds'].map((phase) => [
-          {
-            phase,
-            outcome: 'success',
-            code: 'DATABASE_TASK_COMPLETED',
-          },
-        ]),
-      );
-      expect(diagnostic.mock.calls).toEqual(
-        ['migrations', 'seeds'].map((phase) => [
-          'Database lifecycle observation failed.',
-          { code: 'DATABASE_LIFECYCLE_OBSERVATION_FAILED', phase },
-        ]),
-      );
-    } finally {
-      diagnostic.mockRestore();
-    }
+    await registry.bootAll();
+    await registry.shutdown();
 
     expect(existsSync(path.dirname(config.connections.main.filename))).toBe(
       true,
     );
-    expect(calls).toEqual([
-      'before:migrations',
-      'migrate',
-      'after:migrations',
-      'before:seeds',
-      'seed',
-      'after:seeds',
-      'destroy',
-    ]);
+    expect(calls).toEqual(['migrate', 'seed', 'destroy']);
     expect(container.resolveIfCreated(databaseManagerToken)).toBe(database);
   });
 
@@ -186,36 +141,6 @@ describe('DatabaseProvider', () => {
     expect(database.destroy).toHaveBeenCalledOnce();
   });
 
-  it('reports missing task directories as unobserved without creating runners', async () => {
-    createDatabaseManagerMock.mockReturnValue(createMockDatabase());
-    const config = createConfig(createTempDirectory(), true);
-    const directory = path.join(config.migrations.directory, 'missing');
-    const { provider, container } = await createProvider({
-      ...config,
-      migrations: { ...config.migrations, directory },
-      seeds: { ...config.seeds!, directory },
-    });
-    const after = vi.fn();
-    container.instance(databaseLifecycleObserverToken, {
-      before: async () => {},
-      after,
-    });
-    provider.register();
-    await provider.boot();
-    expect(after.mock.calls).toEqual(
-      ['migrations', 'seeds'].map((phase) => [
-        {
-          phase,
-          outcome: 'unknown',
-          code: 'DATABASE_TASK_SKIPPED',
-        },
-      ]),
-    );
-    expect(createDatabaseMigratorMock).not.toHaveBeenCalled();
-    expect(createDatabaseSeederMock).not.toHaveBeenCalled();
-    await provider.shutdown();
-  });
-
   it('stops before seeds and destroys the database when migrations fail', async () => {
     const error = new Error('migration failed');
     const database = createMockDatabase();
@@ -224,31 +149,14 @@ describe('DatabaseProvider', () => {
       latest: vi.fn().mockRejectedValue(error),
       rollback: vi.fn(),
     });
-    const { provider, container } = await createProvider(
+    const { provider } = await createProvider(
       createConfig(createTempDirectory(), true),
     );
-    const after = vi.fn(async () => {
-      throw new Error('Private observer failure');
-    });
-    container.instance(databaseLifecycleObserverToken, {
-      before: async () => {},
-      after,
-    });
-    const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {});
     const registry = new ServiceProviderRegistry();
     registry.add(provider);
     registry.registerAll();
 
-    try {
-      await expect(registry.bootAll()).rejects.toBe(error);
-      expect(after).toHaveBeenCalledExactlyOnceWith({
-        phase: 'migrations',
-        outcome: 'failed',
-        code: 'DATABASE_TASK_FAILED',
-      });
-    } finally {
-      diagnostic.mockRestore();
-    }
+    await expect(registry.bootAll()).rejects.toMatchObject({ cause: error });
 
     expect(createDatabaseSeederMock).not.toHaveBeenCalled();
     expect(database.destroy).toHaveBeenCalledOnce();
@@ -266,8 +174,8 @@ describe('standalone database tasks', () => {
     });
 
     await expect(
-      runAppMigrations(createConfig(createTempDirectory())),
-    ).rejects.toBe(error);
+      runAppMigrations(createConfig(createTempDirectory()), { contributions }),
+    ).rejects.toMatchObject({ cause: error });
     expect(database.destroy).toHaveBeenCalledOnce();
   });
 
@@ -279,7 +187,7 @@ describe('standalone database tasks', () => {
     });
 
     await expect(
-      runAppSeeds(createConfig(createTempDirectory())),
+      runAppSeeds(createConfig(createTempDirectory()), { contributions }),
     ).resolves.toEqual({
       status: 'completed',
       executed: ['seed'],
@@ -295,9 +203,11 @@ describe('standalone database tasks', () => {
       connections: {},
     };
 
-    await expect(runAppMigrations(config)).resolves.toBeUndefined();
     await expect(
-      runAppSeeds({ ...config, seeds: undefined }),
+      runAppMigrations(config, { contributions }),
+    ).resolves.toBeUndefined();
+    await expect(
+      runAppSeeds({ ...config, seeds: undefined }, { contributions }),
     ).resolves.toBeUndefined();
   });
 });
@@ -307,13 +217,13 @@ async function createProvider(database: AppDatabaseConfig): Promise<{
   readonly container: ServiceContainer;
 }> {
   const container = new ServiceContainer();
-  const appConfig = new AppConfig([{ ...databaseConfig, defaults: database }], {
-    context: {},
-  });
+  const appConfig = new AppConfig();
   await appConfig.loadAll();
+  appConfig.mergeDefaults({ database });
   const app: DatabaseProviderApplication = {
     config: appConfig,
     container,
+    databaseTaskContributions: contributions,
   };
   return {
     provider: new DatabaseProvider(app),
@@ -330,6 +240,7 @@ function createConfig(
   };
 } {
   return {
+    drivers: { sqlite: sqliteStorageDriver },
     default: 'main',
     connections: {
       main: {
@@ -361,6 +272,8 @@ function createMockDatabase(onDestroy?: () => void): DatabaseManager {
     connection: vi.fn() as DatabaseManager['connection'],
     builder: vi.fn() as DatabaseManager['builder'],
     query: vi.fn() as DatabaseManager['query'],
+    createMigrator: vi.fn() as DatabaseManager['createMigrator'],
+    createSeeder: vi.fn() as DatabaseManager['createSeeder'],
     connect: vi.fn() as DatabaseManager['connect'],
     transaction: vi.fn() as DatabaseManager['transaction'],
     disconnect: vi.fn() as DatabaseManager['disconnect'],

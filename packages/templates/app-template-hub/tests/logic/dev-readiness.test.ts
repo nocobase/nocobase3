@@ -4,7 +4,7 @@ import http from 'node:http';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { waitForHttpReady } from '../../scripts/dev-readiness.mjs';
+import { waitForHttpReady } from '../../scripts/dev/readiness.mjs';
 
 const servers: http.Server[] = [];
 

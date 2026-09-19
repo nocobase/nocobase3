@@ -1,12 +1,7 @@
-import { workflowDatabaseTime } from './database-time.js';
-import {
-  recordWorkflowPhase,
-  retryWorkflowFinalization,
-  workflowExecutionAudit,
-} from '../audit-internal.js';
-import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/db';
+import { bindWorkflowLogger } from './logger.js';
+import type { DatabaseManager } from '@nocobase/db';
 
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import { workflowStore, type WorkflowStore } from '../collections/store.js';
 import {
   EXECUTION_REASON,
   EXECUTION_STATUS,
@@ -24,8 +19,15 @@ import type {
   WorkflowRun,
   WorkflowNodeRun,
 } from './types.js';
-import { hydrateNodeRun, noopWorkflowLogger, serializeJson } from './utils.js';
+import {
+  asIdFilter,
+  hydrateNodeRun,
+  noopWorkflowLogger,
+  nowInstant,
+  serializeJson,
+} from './utils.js';
 import { resolveWorkflowValue } from './value-resolver.js';
+import { finalizeWorkflowRun } from './finalize-run.js';
 
 export type ProcessorRunOptions = {
   rerun?: true;
@@ -45,10 +47,12 @@ export interface ProcessorOptions {
   execution: WorkflowRun;
   instructions: Map<string, WorkflowInstructionClass>;
   workflowResourceRoot: string | null;
-  app?: unknown;
+  services?: import('./run-services.js').WorkflowRunServices;
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
+  resumeNode?: (nodeRunId: WorkflowId) => Promise<void>;
+  terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
 type RerunContext = {
@@ -92,12 +96,23 @@ export default class Processor {
   readonly workflow: WorkflowDefinition;
   readonly execution: WorkflowRun;
   readonly workflowResourceRoot: string | null;
-  readonly app: unknown;
+  readonly services:
+    import('./run-services.js').WorkflowRunServices | undefined;
   readonly nodes: WorkflowNode[] = [];
   readonly nodesMap: Map<string, WorkflowNode> = new Map();
+  readonly resumeNode: ProcessorOptions['resumeNode'];
   readonly abortController: AbortController = new AbortController();
 
   lastSavedNodeRun: WorkflowNodeRun | null = null;
+  private readonly deferredTasks: Array<() => Promise<void>> = [];
+
+  defer(task: () => Promise<void>): void {
+    this.deferredTasks.push(task);
+  }
+
+  takeDeferredTasks(): Array<() => Promise<void>> {
+    return this.deferredTasks.splice(0);
+  }
 
   private readonly connectionName?: string;
   private readonly instructions: Map<string, WorkflowInstructionClass>;
@@ -111,26 +126,32 @@ export default class Processor {
   private rerunContext: RerunContext | null = null;
   private timeoutGuard: ReturnType<typeof setTimeout> | null = null;
   private abortReason: string | null = null;
+  private readonly terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 
   constructor(options: ProcessorOptions) {
+    this.resumeNode = options.resumeNode;
     this.database = options.database;
     this.connectionName = options.connectionName;
     this.workflow = options.workflow;
     this.execution = options.execution;
     this.workflowResourceRoot = options.workflowResourceRoot;
-    this.app = options.app;
+    this.services = options.services;
     this.instructions = options.instructions;
-    this.logger = options.logger ?? noopWorkflowLogger;
+    this.logger = bindWorkflowLogger(options.logger ?? noopWorkflowLogger, {
+      workflowId: options.workflow.id,
+      executionId: options.execution.id,
+    });
     this.environment = options.environment;
     this.functions = options.functions ?? {};
+    this.terminalObserver = options.terminalObserver;
   }
 
   get abortSignal(): AbortSignal {
     return this.abortController.signal;
   }
 
-  get query(): QueryAdapter {
-    return this.database.query(this.connectionName);
+  get store(): WorkflowStore {
+    return workflowStore(this.database, this.connectionName);
   }
 
   abortExecution(reason?: string): void {
@@ -205,30 +226,22 @@ export default class Processor {
   async findPendingNodeRun(
     nodeRunId: WorkflowId,
   ): Promise<WorkflowNodeRun | null> {
-    const row = await this.query
-      .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-      .selectAll()
-      .where('id', '=', nodeRunId)
-      .where('status', '=', NODE_RUN_STATUS.PENDING)
-      .executeTakeFirst<Row>();
+    const row = await this.store.nodeRuns.findOne({
+      filter: {
+        id: asIdFilter(nodeRunId),
+        status: NODE_RUN_STATUS.PENDING,
+      },
+    });
     return row ? hydrateNodeRun(row) : null;
   }
 
   async prepare(): Promise<void> {
-    await workflowExecutionAudit(
-      this.execution,
-      this.database,
-      this.query,
-      this.execution.id,
-    );
     this.makeNodes(this.workflow.nodes);
-    const nodeRuns = await this.query
-      .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-      .selectAll()
-      .where('workflowRunId', '=', this.execution.id)
-      .orderBy('id')
-      .execute<Row>();
-    this.execution.nodeRuns = nodeRuns.map(hydrateNodeRun);
+    const nodeRuns = await this.store.nodeRuns.findMany({
+      filter: { workflowRunId: asIdFilter(this.execution.id) },
+      sort: (sort) => sort.field('id').asc(),
+    });
+    this.execution.nodeRuns = nodeRuns.map((row) => hydrateNodeRun(row));
     for (const nodeRun of this.execution.nodeRuns) {
       this.nodeRunsMapByNodeKey[nodeRun.nodeKey] = nodeRun;
       this.nodeResultsByNodeKey[nodeRun.nodeKey] = nodeRun.result;
@@ -335,6 +348,8 @@ export default class Processor {
       `Running instruction "${node.type}" for node "${node.key}"`,
       {
         executionId: this.execution.id,
+        nodeId: node.id,
+        nodeKey: node.key,
       },
     );
     const nodeRun = await this.createNodeRun(node);
@@ -375,62 +390,21 @@ export default class Processor {
     const executionStatus = Processor.StatusMap[status] ?? Math.sign(status);
     const reason =
       executionStatus === EXECUTION_STATUS.ABORTED ? this.abortReason : null;
-    const finishedAt = new Date().toISOString();
-    const auditContext = await workflowExecutionAudit(
-      this.execution,
-      this.database,
-      this.query,
-      this.execution.id,
-    );
-    const result = await retryWorkflowFinalization(() =>
-      this.database.transaction(async (connection) => {
-        const result = await connection.query
-          .updateTable(WORKFLOW_COLLECTIONS.runs)
-          .set({
-            status: executionStatus,
-            ...(auditContext && executionStatus !== EXECUTION_STATUS.STARTED
-              ? { auditContext: serializeJson(auditContext) }
-              : {}),
-            output: serializeJson(output),
-            reason,
-            finishedAt: workflowDatabaseTime(
-              finishedAt,
-              this.database.connection(this.connectionName).dialect,
-            ),
-          })
-          .where('id', '=', this.execution.id)
-          .where('status', '=', EXECUTION_STATUS.STARTED)
-          .execute();
-        if ((result.updatedCount ?? 0) > 0) {
-          const phase =
-            executionStatus === EXECUTION_STATUS.RESOLVED
-              ? 'completed'
-              : executionStatus === EXECUTION_STATUS.ABORTED
-                ? 'cancelled'
-                : executionStatus === EXECUTION_STATUS.STARTED
-                  ? 'waiting'
-                  : 'failed';
-          await recordWorkflowPhase(
-            this.database,
-            connection,
-            this.execution.id,
-            phase,
-            executionStatus === EXECUTION_STATUS.RESOLVED
-              ? 'success'
-              : executionStatus === EXECUTION_STATUS.STARTED
-                ? 'unknown'
-                : 'failed',
-            { context: auditContext },
-          );
-        }
-        return result;
-      }, this.connectionName),
-    );
-    if ((result.updatedCount ?? 0) > 0) {
+    const terminal = await finalizeWorkflowRun({
+      store: this.store,
+      runId: this.execution.id,
+      expectedStatus: EXECUTION_STATUS.STARTED,
+      status: executionStatus,
+      reason,
+      output,
+      observer: this.terminalObserver,
+      logger: this.logger,
+    });
+    if (terminal) {
       this.execution.status = executionStatus;
       this.execution.output = output;
       this.execution.reason = reason;
-      this.execution.finishedAt = finishedAt;
+      this.execution.finishedAt = terminal.finishedAt;
     }
     return null;
   }
@@ -443,7 +417,7 @@ export default class Processor {
     existing?: WorkflowNodeRun,
     timing?: { startedAt: string; finishedAt: string },
   ): Promise<WorkflowNodeRun> {
-    const startedAt = timing?.startedAt ?? new Date().toISOString();
+    const startedAt = timing?.startedAt ?? nowInstant();
     const finishedAt = isTerminalNodeStatus(payload.status)
       ? (timing?.finishedAt ?? startedAt)
       : null;
@@ -466,25 +440,18 @@ export default class Processor {
 
     let nodeRun: WorkflowNodeRun;
     if (overwrite) {
-      await this.query
-        .updateTable(WORKFLOW_COLLECTIONS.nodeRuns)
-        .set({
+      await this.store.nodeRuns.updateMany({
+        filter: { id: asIdFilter(overwrite.id) },
+        values: {
           status: payload.status,
           result: serializeJson(result),
           error,
           meta: serializeJson(payload.meta ?? null),
           log: payload.log ?? null,
-          startedAt: workflowDatabaseTime(
-            startedAt,
-            this.database.connection(this.connectionName).dialect,
-          ),
-          finishedAt: workflowDatabaseTime(
-            finishedAt,
-            this.database.connection(this.connectionName).dialect,
-          ),
-        })
-        .where('id', '=', overwrite.id)
-        .execute();
+          startedAt,
+          finishedAt,
+        },
+      });
       nodeRun = {
         ...overwrite,
         status: payload.status,
@@ -497,51 +464,26 @@ export default class Processor {
         expiresAt: overwrite.expiresAt,
       };
     } else {
-      const insert = await this.query
-        .insertInto(WORKFLOW_COLLECTIONS.nodeRuns)
-        .values({
-          workflowRunId: this.execution.id,
-          nodeId: payload.nodeId,
+      // `createOne` hands back the row it wrote, on every dialect, which is why
+      // there is no read-back here. There used to be one — "newest row of this
+      // node in this run" — and it was only sound while a single processor
+      // owned an execution, because two processes racing on the same execution
+      // could read each other's row.
+      const created = await this.store.nodeRuns.createOne({
+        values: {
+          workflowRunId: asIdFilter(this.execution.id),
+          nodeId: asIdFilter(payload.nodeId),
           nodeKey: payload.nodeKey,
           status: payload.status,
           meta: serializeJson(payload.meta ?? null),
           result: serializeJson(result),
           error,
-          startedAt: workflowDatabaseTime(
-            startedAt,
-            this.database.connection(this.connectionName).dialect,
-          ),
-          finishedAt: workflowDatabaseTime(
-            finishedAt,
-            this.database.connection(this.connectionName).dialect,
-          ),
+          startedAt,
+          finishedAt,
           log: payload.log ?? null,
-        })
-        .execute();
-      // The insert is read back by "newest row of this node in this run"
-      // because the query layer has no cross-dialect RETURNING yet. That is
-      // sound only while a single processor owns an execution at a time, which
-      // `Dispatcher.withExecutionLock()` guarantees inside one process. Two
-      // processes racing on the same execution could read each other's row —
-      // acceptable for the single-instance first version, and the reason a
-      // multi-instance deployment needs RETURNING (or a row lock) here first.
-      const inserted = await this.query
-        .selectFrom(WORKFLOW_COLLECTIONS.nodeRuns)
-        .selectAll()
-        .where('workflowRunId', '=', this.execution.id)
-        .where('nodeKey', '=', payload.nodeKey)
-        .orderBy('id', 'desc')
-        .limit(1)
-        .executeTakeFirst<Row>();
-      if (!inserted) {
-        throw new Error(
-          `Failed to reload inserted node run for node "${payload.nodeKey}"`,
-        );
-      }
-      nodeRun = hydrateNodeRun({
-        ...inserted,
-        id: inserted.id ?? insert.insertId,
+        },
       });
+      nodeRun = hydrateNodeRun(created.record);
     }
 
     this.lastSavedNodeRun = nodeRun;
@@ -549,7 +491,11 @@ export default class Processor {
     this.nodeResultsByNodeKey[nodeRun.nodeKey] = nodeRun.result;
     this.logger.debug(
       `Saved node run "${nodeRun.id}" for node "${nodeRun.nodeKey}"`,
-      { status: nodeRun.status },
+      {
+        status: nodeRun.status,
+        nodeId: nodeRun.nodeId,
+        nodeKey: nodeRun.nodeKey,
+      },
     );
     return nodeRun;
   }
@@ -757,7 +703,9 @@ export default class Processor {
     options: ProcessorRunOptions = {},
   ): Promise<WorkflowNodeRun | null | undefined> {
     if (!(await this.shouldContinueExecution())) {
-      await this.exit();
+      await this.exit(
+        this.abortSignal.aborted ? NODE_RUN_STATUS.ABORTED : undefined,
+      );
       return null;
     }
 
@@ -785,7 +733,7 @@ export default class Processor {
     } catch (error) {
       this.logger.error(
         `Instruction "${node.type}" failed for node "${node.key}"`,
-        { error },
+        { error, nodeId: node.id, nodeKey: node.key },
       );
       result = {
         status: this.abortSignal.aborted
@@ -802,7 +750,7 @@ export default class Processor {
         nodeKey: node.key,
       },
       nodeRun,
-      { startedAt: nodeRun.startedAt, finishedAt: new Date().toISOString() },
+      { startedAt: nodeRun.startedAt, finishedAt: nowInstant() },
     );
 
     if (this.abortSignal.aborted) {
@@ -912,12 +860,13 @@ export default class Processor {
     if (this.abortSignal.aborted) {
       return false;
     }
-    const status = await this.query
-      .selectFrom(WORKFLOW_COLLECTIONS.runs)
-      .where('id', '=', this.execution.id)
-      .value<number | null>('status');
+    const row = await this.store.runs.findOne({
+      filter: { id: asIdFilter(this.execution.id) },
+      select: (select) => select.fields('status'),
+    });
+    const status = row?.status == null ? null : Number(row.status);
     if (status !== EXECUTION_STATUS.STARTED) {
-      this.execution.status = status ?? null;
+      this.execution.status = status;
       return false;
     }
     return true;

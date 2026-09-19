@@ -1,149 +1,167 @@
-import { fileURLToPath } from 'node:url';
-
-import { createConfigPaths } from '@nocobase/app-server/config';
-import { createMigrator } from '@nocobase/db';
-import { Hono } from 'hono';
+import { fileStorageFactoryToken } from '@nocobase/ai-employee';
+import { cachingToken } from '@nocobase/app-server/caching';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+import { loggingToken } from '@nocobase/app-server/logging';
+import { databaseManagerToken } from '@nocobase/db';
+import { ServiceContainer } from '@nocobase/service-provider';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  createPluginContextMiddleware,
-  createPluginRuntime,
-  initializePluginRuntimeResources,
-  waitForPluginReady,
-  type PluginEnv,
-} from '../server/runtime.js';
+  ManagerFactory,
+  managerFactoryToken,
+} from '../server/factory/manager-factory.js';
+import {
+  RepositoryFactory,
+  repositoryFactoryToken,
+} from '../server/factory/repository-factory.js';
+import {
+  ServiceFactory,
+  serviceFactoryToken,
+} from '../server/factory/service-factory.js';
+import { aiManagerToken } from '../server/provider/ai-employee.js';
+import {
+  AgentServiceFactory,
+  agentServiceFactoryToken,
+} from '../server/agent/service/agent-service-factory.js';
+import type { AgentProviders } from '../server/agent/types.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
-import { createAICurrentUserMiddleware } from '../server/routes/utils.js';
-describe('AI employee facade', () => {
-  it('attaches a fresh request Context over one shared runtime', async () => {
-    const deps = createTestAppDeps();
-    initializePluginRuntimeResources(deps, { loadResources: false });
-    const runtime = createPluginRuntime({ deps });
-    const app = new Hono<PluginEnv>();
-    const requestContexts: unknown[] = [];
-    vi.spyOn(deps.auth, 'getSession').mockResolvedValue({
-      session: {} as never,
-      user: {
-        id: 'fixture-user',
-        roles: ['member'],
-        isRoot: false,
-      } as never,
-    });
-    app.use('*', createAICurrentUserMiddleware(deps.auth));
-    app.use('*', createPluginContextMiddleware(runtime));
-    app.get('/manager', (context) => {
-      requestContexts.push(context.var.ctx);
-      return context.json({
-        shared: context.var.ai === runtime.ai,
-        contextSharesAI: context.var.ctx.ai === runtime.ai,
-        contextSharesRepositories:
-          context.var.ctx.repositories === runtime.repositories,
-        contextSharesLogger: context.var.ctx.logger === runtime.logger,
-        currentUser: context.var.ctx.currentUser,
-      });
+import { TestAIResourceRegistrar } from './app/test-context.js';
+
+import {
+  AgentServiceFactory,
+  agentServiceFactoryToken,
+} from '../server/agent/service/agent-service-factory.js';
+import { AgentService } from '../server/agent/service/agent-service.js';
+function createContainer(): ServiceContainer {
+  const deps = createTestAppDeps();
+  const container = new ServiceContainer();
+  container.instance(databaseManagerToken, deps.database);
+  container.instance(idGeneratorToken, deps.idGenerator);
+  container.instance(loggingToken, deps.logging);
+  container.instance(cachingToken, deps.caching);
+  container.instance(fileStorageFactoryToken, deps.fileStorageFactory);
+  container.instance(aiManagerToken, deps.ai);
+  container.singleton(
+    repositoryFactoryToken,
+    (resolver) => new RepositoryFactory({ container: resolver }),
+  );
+  container.singleton(
+    managerFactoryToken,
+    (resolver) => new ManagerFactory({ container: resolver }),
+  );
+  container.singleton(
+    serviceFactoryToken,
+    () => new ServiceFactory({ container }),
+  );
+  container.singleton(
+    agentServiceFactoryToken,
+    (resolver) => new AgentServiceFactory({ container: resolver }),
+  );
+  return container;
+}
+
+describe('AI employee container-scoped factories', () => {
+  it('keeps lazy singleton bindings and getter instances inside one container', () => {
+    const container = createContainer();
+
+    expect(container.resolveIfCreated(repositoryFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(managerFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(serviceFactoryToken)).toBeUndefined();
+
+    const repositories = container.resolve(repositoryFactoryToken);
+    const managers = container.resolve(managerFactoryToken);
+    const services = container.resolve(serviceFactoryToken);
+    managers.configure({ aiStorageDisk: 'local' });
+    services.configure({
+      llmServices: [],
+      resourceRegistrar: new TestAIResourceRegistrar(),
     });
 
-    const first = await app.request('http://localhost/manager');
-    const second = await app.request('http://localhost/manager');
-
-    expect(await first.json()).toEqual({
-      shared: true,
-      contextSharesAI: true,
-      contextSharesRepositories: true,
-      contextSharesLogger: true,
-      currentUser: { id: 'fixture-user', roles: ['member'], isRoot: false },
-    });
-    expect(requestContexts[0]).not.toBe(requestContexts[1]);
+    expect(container.resolve(repositoryFactoryToken)).toBe(repositories);
+    expect(container.resolve(managerFactoryToken)).toBe(managers);
+    expect(container.resolve(serviceFactoryToken)).toBe(services);
+    expect(repositories.aiEmployees).toBe(repositories.aiEmployees);
+    expect(managers.aiEmployeesManager).toBe(managers.aiEmployeesManager);
+    expect(managers.fileStorage).toBe(managers.fileStorage);
+    expect(managers.documentLoaders).toBe(managers.documentLoaders);
+    expect(managers.subAgentsDispatcher).toBe(managers.subAgentsDispatcher);
+    expect(services.modelService).toBe(services.modelService);
+    expect(services.toolService).toBe(services.toolService);
   });
-
-  it('uses the authenticated database user as the current user', async () => {
-    const deps = createTestAppDeps();
-    vi.spyOn(deps.auth, 'getSession').mockResolvedValue({
-      session: {} as never,
-      user: { id: 'database-user-id', username: 'nocobase' } as never,
+  it('creates a Fixed AgentService through the registered container factory', async () => {
+    const container = createContainer();
+    const factory = container.resolve(agentServiceFactoryToken);
+    const ai = container.resolve(aiManagerToken);
+    const provider = {
+      createModel: vi.fn(() => ({ invoke: vi.fn(), stream: vi.fn() })),
+      resolveTools: vi.fn(() => []),
+    };
+    vi.spyOn(ai.llmProviderManager, 'resolveModel').mockResolvedValue({
+      provider: 'test',
+      llmService: 'test-service',
+      model: 'test-model',
     });
-    initializePluginRuntimeResources(deps, { loadResources: false });
-    const runtime = createPluginRuntime({ deps });
-    const app = new Hono<PluginEnv>();
-    app.use('*', createAICurrentUserMiddleware(deps.auth));
-    app.use('*', createPluginContextMiddleware(runtime));
-    app.get('/actor', (context) =>
-      context.json({ currentUser: context.var.ctx.currentUser }),
+    vi.spyOn(ai.llmProviderManager, 'getLLMService').mockResolvedValue({
+      provider,
+      service: { name: 'test-service', provider: 'test' },
+    } as never);
+    const agent = await factory.createAgent({ sessionId: 'factory-session' });
+    expect(agent).toBeInstanceOf(AgentService);
+    const second = await factory.createAgent({
+      sessionId: 'factory-session-2',
+    });
+    const firstProviders = (agent as unknown as { providers: AgentProviders })
+      .providers;
+    const secondProviders = (second as unknown as { providers: AgentProviders })
+      .providers;
+    expect(firstProviders.conversation.messages).not.toBe(
+      secondProviders.conversation.messages,
     );
-
-    const response = await app.request('http://localhost/actor');
-
-    expect(await response.json()).toEqual({
-      currentUser: {
-        id: 'database-user-id',
-        roles: ['member'],
-        isRoot: false,
-      },
-    });
-  });
-
-  it('initializes resources without invoking database schema builders', async () => {
-    const deps = createTestAppDeps();
-    await deps.database.connect();
-    const migrator = createMigrator({
-      database: deps.database,
-      packageName: '@nocobase/app-plugin-ai-employee',
-      directory: fileURLToPath(
-        new URL('../database/migrations', import.meta.url),
-      ),
-    });
-    await migrator.latest();
-    const createCollection = vi.spyOn(
-      deps.database.builder(),
-      'createCollection',
+    expect(firstProviders.conversation.streamCache).not.toBe(
+      secondProviders.conversation.streamCache,
     );
-
-    try {
-      initializePluginRuntimeResources({
-        ...deps,
-        paths: createConfigPaths({
-          rootDir: fileURLToPath(
-            new URL('./resource/application', import.meta.url),
-          ),
-        }),
-      });
-      await expect(waitForPluginReady()).resolves.toBeUndefined();
-      await expect(
-        deps.ai.employeeManager.getEmployee('atlas'),
-      ).resolves.toMatchObject({ username: 'atlas' });
-      expect(createCollection).not.toHaveBeenCalled();
-    } finally {
-      await deps.database.disconnect();
-    }
+    expect(firstProviders.conversation.event).not.toBe(
+      secondProviders.conversation.event,
+    );
+    expect(firstProviders.conversation.abort).not.toBe(
+      secondProviders.conversation.abort,
+    );
   });
 
-  it('does not load LLM services from application or storage resource directories', async () => {
-    const deps = createTestAppDeps();
-    await deps.database.connect();
-    const migrator = createMigrator({
-      database: deps.database,
-      packageName: '@nocobase/app-plugin-ai-employee',
-      directory: fileURLToPath(
-        new URL('../database/migrations', import.meta.url),
-      ),
+  it('isolates repositories, services, readiness and mutable managers by container', async () => {
+    const firstContainer = createContainer();
+    const secondContainer = createContainer();
+    const firstManagers = firstContainer.resolve(managerFactoryToken);
+    const secondManagers = secondContainer.resolve(managerFactoryToken);
+    const first = firstContainer.resolve(serviceFactoryToken);
+    const second = secondContainer.resolve(serviceFactoryToken);
+    firstManagers.configure({ aiStorageDisk: 'local' });
+    secondManagers.configure({ aiStorageDisk: 'local' });
+    first.configure({
+      llmServices: [],
+      resourceRegistrar: new TestAIResourceRegistrar(),
     });
-    await migrator.latest();
+    second.configure({
+      llmServices: [],
+      resourceRegistrar: new TestAIResourceRegistrar(),
+    });
 
-    try {
-      initializePluginRuntimeResources({
-        ...deps,
-        paths: createConfigPaths({
-          rootDir: fileURLToPath(
-            new URL('./resource/application', import.meta.url),
-          ),
-        }),
-      });
-      await expect(waitForPluginReady()).resolves.toBeUndefined();
-      await expect(
-        deps.ai.llmServiceManager.listLLMServices(),
-      ).resolves.toEqual([]);
-    } finally {
-      await deps.database.disconnect();
-    }
+    expect(first).not.toBe(second);
+    expect(firstContainer.resolve(repositoryFactoryToken)).not.toBe(
+      secondContainer.resolve(repositoryFactoryToken),
+    );
+    expect(first.conversationService).not.toBe(second.conversationService);
+    await expect(first.ready()).rejects.toThrow('has not been initialized');
+    await expect(second.ready()).rejects.toThrow('has not been initialized');
+
+    expect(firstManagers.fileStorage).not.toBe(secondManagers.fileStorage);
+    expect(firstManagers.documentLoaders).not.toBe(
+      secondManagers.documentLoaders,
+    );
+    expect(firstManagers.aiEmployeesManager).not.toBe(
+      secondManagers.aiEmployeesManager,
+    );
+    expect(first).not.toHaveProperty('createRequestRuntime');
+    expect(second).not.toHaveProperty('createRequestRuntime');
   });
 });

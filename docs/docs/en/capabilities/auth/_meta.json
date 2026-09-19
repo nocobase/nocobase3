@@ -1,0 +1,18 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "Overview"
+  },
+  {
+    "type": "file",
+    "name": "quick-start",
+    "label": "Quick start"
+  },
+  {
+    "type": "dir",
+    "collapsed": true,
+    "name": "development",
+    "label": "Develop with an Agent"
+  }
+]

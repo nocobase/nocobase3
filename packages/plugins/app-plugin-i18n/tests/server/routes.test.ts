@@ -1,4 +1,9 @@
 import { I18nRuntime } from '@nocobase/i18n';
+import {
+  createI18nMiddleware,
+  getRequestLocale,
+  getRequestTranslator,
+} from '@nocobase/i18n/server';
 import { i18nToken } from '@nocobase/app-server/i18n';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
@@ -12,12 +17,17 @@ interface StoredSession {
 
 async function createRouter(
   session?: StoredSession,
+  defaultLocale = 'en-US',
 ): Promise<{ router: Hono; session?: StoredSession }> {
   const runtime = new I18nRuntime({
-    defaultLocale: 'en-US',
+    defaultLocale,
     locales: ['en-US', 'zh-CN'],
   });
-  await runtime.init('en-US');
+  runtime.registerApplicationNamespace('@test/app', {
+    'en-US': () => Promise.resolve({ default: { greeting: 'Hello' } }),
+    'zh-CN': () => Promise.resolve({ default: { greeting: '你好' } }),
+  });
+  await runtime.init(defaultLocale);
 
   const container = new ServiceContainer();
   container.instance(i18nToken, runtime);
@@ -42,7 +52,14 @@ async function createRouter(
       await next();
     });
   }
+  router.use('*', createI18nMiddleware(runtime));
   router.route('/', routes);
+  router.get('/translated', (context) =>
+    context.json({
+      locale: getRequestLocale(context),
+      message: getRequestTranslator(context)('greeting'),
+    }),
+  );
 
   return { router, session };
 }
@@ -75,12 +92,17 @@ describe('POST /i18n/locale', () => {
     });
 
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      locale: 'zh-CN',
+      requestedLocale: 'zh-CN',
+      fallback: false,
+    });
     expect(session.values).toEqual({ locale: 'zh-CN' });
   });
 
-  it('rejects a locale the application does not offer', async () => {
-    const session: StoredSession = { values: {} };
-    const { router } = await createRouter(session);
+  it('falls back to English and uses it on subsequent requests even with a Chinese default', async () => {
+    const session: StoredSession = { values: { locale: 'zh-CN' } };
+    const { router } = await createRouter(session, 'zh-CN');
 
     const response = await router.request('/i18n/locale', {
       method: 'POST',
@@ -88,9 +110,20 @@ describe('POST /i18n/locale', () => {
       body: JSON.stringify({ locale: 'fr-FR' }),
     });
 
-    // The value comes from the browser, so it is checked rather than stored as sent.
-    expect(response.status).toBe(400);
-    expect(session.values).toEqual({});
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      locale: 'en-US',
+      requestedLocale: 'fr-FR',
+      fallback: true,
+    });
+    expect(session.values).toEqual({ locale: 'en-US' });
+    const translated = await router.request('/translated', {
+      headers: { 'Accept-Language': 'zh-CN' },
+    });
+    await expect(translated.json()).resolves.toEqual({
+      locale: 'en-US',
+      message: 'Hello',
+    });
   });
 
   it('rejects a request with no locale', async () => {
@@ -116,6 +149,21 @@ describe('POST /i18n/locale', () => {
 
     expect(response.status).toBe(400);
   });
+
+  it.each(['', '  ', 42, null])(
+    'rejects an invalid locale %j',
+    async (locale) => {
+      const session: StoredSession = { values: { locale: 'zh-CN' } };
+      const { router } = await createRouter(session);
+      const response = await router.request('/i18n/locale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locale }),
+      });
+      expect(response.status).toBe(400);
+      expect(session.values).toEqual({ locale: 'zh-CN' });
+    },
+  );
 
   it('succeeds with no session mounted', async () => {
     const { router } = await createRouter();

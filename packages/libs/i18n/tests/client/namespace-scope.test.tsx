@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -6,9 +6,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   I18nProvider,
   NamespaceScope,
+  useTranslation as useNocoBaseTranslation,
   withNamespace,
 } from '../../src/client/index.js';
-import { APP_NS, I18nRuntime } from '../../src/core/index.js';
+import { APP_NS, BASE_NAMESPACE, I18nRuntime } from '../../src/core/index.js';
 
 const APP = '@acme/app';
 const PLUGIN = '@acme/plugin';
@@ -29,6 +30,10 @@ async function createRuntime(): Promise<I18nRuntime> {
     'en-US': () => Promise.resolve({ default: { title: 'Plugin title' } }),
     'zh-CN': () => Promise.resolve({ default: { title: '插件标题' } }),
   });
+  runtime.registerNamespace(BASE_NAMESPACE, {
+    'en-US': () => Promise.resolve({ default: { cancel: 'Cancel' } }),
+    'zh-CN': () => Promise.resolve({ default: { cancel: '取消' } }),
+  });
   await runtime.init('en-US');
   return runtime;
 }
@@ -42,6 +47,26 @@ function ScopedTitle(): ReactElement {
 function ScopedSave(): ReactElement {
   const { t } = useTranslation();
   return <span data-testid='save'>{t('save')}</span>;
+}
+
+function ApplicationTitleFromHook(): ReactElement {
+  const [t] = useNocoBaseTranslation(APP_NS);
+  return <span data-testid='application-title'>{t('title')}</span>;
+}
+
+function ApplicationTermsFromPlugin(): ReactElement {
+  const { t } = useNocoBaseTranslation(PLUGIN);
+  return (
+    <>
+      <span data-testid='explicit-application-title'>
+        {t('title', { ns: APP_NS })}
+      </span>
+      <span data-testid='application-fallback'>
+        {t('cancel', 'Missing cancel', { ns: APP_NS })}
+      </span>
+      <span data-testid='plugin-fallback'>{t('save')}</span>
+    </>
+  );
 }
 
 let runtime: I18nRuntime;
@@ -130,5 +155,41 @@ describe('withNamespace', () => {
 
     // This is the fix for the trap above.
     expect(screen.getByTestId('title')).toHaveTextContent('Plugin title');
+  });
+});
+
+describe('useTranslation', () => {
+  it('resolves APP_NS passed to the hook and reacts to language changes', async () => {
+    render(
+      <I18nProvider runtime={runtime}>
+        <ApplicationTitleFromHook />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByTestId('application-title')).toHaveTextContent(
+      'App title',
+    );
+
+    await act(() => runtime.changeLanguage('zh-CN'));
+
+    expect(screen.getByTestId('application-title')).toHaveTextContent(
+      '应用标题',
+    );
+  });
+
+  it('resolves APP_NS in call options and keeps the application fallback chain', () => {
+    render(
+      <I18nProvider runtime={runtime}>
+        <ApplicationTermsFromPlugin />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByTestId('explicit-application-title')).toHaveTextContent(
+      'App title',
+    );
+    expect(screen.getByTestId('application-fallback')).toHaveTextContent(
+      'Cancel',
+    );
+    expect(screen.getByTestId('plugin-fallback')).toHaveTextContent('Save');
   });
 });

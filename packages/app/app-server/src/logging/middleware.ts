@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Context, Hono, MiddlewareHandler } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { Logger } from '@nocobase/logging';
@@ -37,12 +38,13 @@ export function requestLogger(
       return;
     }
 
+    const logger = options.logger.child({ requestId: randomUUID() });
     const startedAt = Date.now();
     const app = options.app;
     const method = context.req.method;
     const path = context.req.path;
 
-    options.logger.info(
+    logger.debug(
       {
         ...(app ? { app } : {}),
         req: {
@@ -55,13 +57,13 @@ export function requestLogger(
           ),
         },
       },
-      'request started',
+      `${method} ${path} started`,
     );
 
     try {
       await next();
     } catch (error) {
-      options.logger.error(
+      logger.error(
         completionBindings(
           context,
           app,
@@ -70,8 +72,9 @@ export function requestLogger(
           startedAt,
           statusFromError(error),
           error,
+          options.requestHeaders,
         ),
-        'request failed',
+        `${method} ${path} failed`,
       );
       throw error;
     }
@@ -85,17 +88,18 @@ export function requestLogger(
       startedAt,
       status,
       context.error,
+      options.requestHeaders,
     );
 
     if (status >= 500) {
-      options.logger.error(bindings, 'request failed');
+      logger.error(bindings, `${method} ${path} ${status} failed`);
       return;
     }
     if (status >= 400) {
-      options.logger.warn(bindings, 'request completed');
+      logger.warn(bindings, `${method} ${path} ${status} completed`);
       return;
     }
-    options.logger.info(bindings, 'request completed');
+    logger.info(bindings, `${method} ${path} ${status} completed`);
   });
 }
 
@@ -108,8 +112,13 @@ export const requestLoggingMiddleware: AppHttpMiddleware<AppPluginApplication> =
         '*',
         requestLogger({
           logger: logging.getLogger('request'),
-          app: app.appName,
-          skip: (context) => context.req.path.endsWith('/api/healthz'),
+          skip: (context) => {
+            const path = context.req.path;
+            return (
+              (path !== '/api' && !path.startsWith('/api/')) ||
+              path === '/api/healthz'
+            );
+          },
         }),
       );
     },
@@ -123,6 +132,7 @@ function completionBindings(
   startedAt: number,
   status: number,
   error?: unknown,
+  requestHeaders: readonly string[] = defaultRequestHeaders,
 ): Record<string, unknown> {
   return {
     ...(app ? { app } : {}),
@@ -131,6 +141,12 @@ function completionBindings(
       path,
       route: context.req.routePath,
       params: context.req.param(),
+      ...(status >= 400
+        ? {
+            query: context.req.query(),
+            headers: selectHeaders(context, requestHeaders),
+          }
+        : {}),
     },
     res: {
       status,

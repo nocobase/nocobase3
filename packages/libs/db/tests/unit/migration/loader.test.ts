@@ -15,6 +15,58 @@ describe('migration loader', () => {
     );
   });
 
+  it('rejects an invalid execution condition declaration', async () => {
+    const directory = await createTempDirectory();
+    await writeMigration(
+      directory,
+      '202608170001_invalid_condition',
+      `
+      import { defineMigration } from '../../../src/index.js';
+      export default defineMigration({
+        name: '202608170001_invalid_condition',
+        shouldRun: true,
+        async up() {},
+        async down() {},
+      });
+    `,
+    );
+    await expect(loadMigrations({ directory })).rejects.toThrow(
+      'shouldRun must be a function',
+    );
+  });
+
+  it('assigns stable distinct identities to immutable source parameters', async () => {
+    const directory = await createTempDirectory();
+    await writeMigration(
+      directory,
+      '202608180001_targets',
+      migrationSource('202608180001_targets'),
+    );
+    const source = { packageName: 'test', directory };
+    const [first] = await loadMigrations({
+      sources: [
+        { ...source, parameters: { table: 'first', schema: 'public' } },
+      ],
+    });
+    const [reordered] = await loadMigrations({
+      sources: [
+        { ...source, parameters: { schema: 'public', table: 'first' } },
+      ],
+    });
+    const [second] = await loadMigrations({
+      sources: [
+        { ...source, parameters: { table: 'second', schema: 'public' } },
+      ],
+    });
+    expect(first.name).toBe(reordered.name);
+    expect(first.name).not.toBe(second.name);
+    expect(first.checksum).toBe(second.checksum);
+    expect(Object.isFrozen(first.parameters)).toBe(true);
+    expect((await loadMigrations({ sources: [source] }))[0].name).toBe(
+      '202608180001_targets',
+    );
+  });
+
   it('loads only default defineMigration exports and sorts by migration name', async () => {
     const directory = await createTempDirectory();
     await writeMigration(

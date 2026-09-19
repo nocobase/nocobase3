@@ -1,9 +1,11 @@
+import { messageKey } from '../../lib/message-key.js';
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
+import { PageHeader } from '../../components/page-header.js';
 import {
   ToolCallCard,
   type ToolCallPart,
 } from '../../../registry/nocobase-ai/components/chat/tool-call-card.js';
 import { PromptOutput } from '../../../registry/nocobase-ai/shared/prompt-output.js';
-import { Badge } from '../../../registry/nocobase-ai/shared/ui/badge.js';
 import {
   Card,
   CardContent,
@@ -86,7 +88,7 @@ Ticket volume remained stable, but unresolved priority requests increased in the
         },
       ],
     },
-    output: { ready: true },
+    output: undefined,
   },
   chart: {
     type: 'dynamic-tool',
@@ -185,7 +187,16 @@ const specializedCards = [
   [
     'Business report',
     'Open a generated report for preview and export.',
-    tools.report,
+    {
+      ...tools.report,
+      output: {
+        success: true,
+        chartCount: tools.report.input.charts.length,
+        errors: [],
+        warnings: [],
+        report: tools.report.input,
+      },
+    },
   ],
   [
     'Chart',
@@ -205,6 +216,10 @@ const specializedCards = [
 ] as const;
 
 export function ToolCardsPage() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const t = useAITranslate();
   const [decision, setDecision] = useState('Waiting for a decision');
   const [workflowDecision, setWorkflowDecision] = useState(
@@ -212,34 +227,28 @@ export function ToolCardsPage() {
   );
 
   return (
-    <div className='space-y-10 pb-12'>
-      <section className='flex flex-wrap items-start justify-between gap-5 border-b pb-8'>
-        <div>
-          <div className='flex items-center gap-2'>
-            <Badge variant='secondary'>
-              {t('demo.badge.components', 'AI Components')}
-            </Badge>
-            <Badge variant='outline'>
-              {t('demo.badge.toolRenderers', 'Tool renderers')}
-            </Badge>
-          </div>
-          <h1 className='mt-4 text-3xl font-semibold tracking-[-0.035em]'>
-            {t('demo.tools.title', 'Tool Cards')}
-          </h1>
-          <p className='mt-3 max-w-3xl text-sm leading-6 text-muted-foreground'>
-            {t(
-              'demo.tools.description',
-              'Specialized tools render their complete business interaction. Tools without a registered renderer fall back to the shared status, approval, error, and input disclosure card.',
-            )}
-          </p>
-        </div>
-      </section>
+    <div className='space-y-6'>
+      <PageHeader
+        title={t('demo.tools.title', 'Tool Cards')}
+        description={t(
+          'demo.tools.description',
+          'Specialized tools render their complete business interaction. Tools without a registered renderer fall back to the shared status, approval, error, and input disclosure card.',
+        )}
+      />
 
       <section className='space-y-5'>
         <SectionTitle
-          eyebrow='Specialized renderers'
-          title='Adapt NocoBase tool results to the job they represent'
-          description="These cards follow the original AI employee patterns while using the starter's shadcn and Base UI component system."
+          eyebrow={translateDemo('demo.specializedRenderers', {
+            defaultValue: 'Specialized renderers',
+          })}
+          title={translateDemo('demo.toolCardsTitle', {
+            defaultValue:
+              'Adapt NocoBase tool results to the job they represent',
+          })}
+          description={translateDemo('demo.toolCardsDescription', {
+            defaultValue:
+              "These cards follow the original AI employee patterns while using the starter's shadcn and Base UI component system.",
+          })}
         />
         <div className='grid gap-4 lg:grid-cols-2'>
           {specializedCards.map(([title, description, part]) => (
@@ -283,9 +292,16 @@ export function ToolCardsPage() {
 
       <section className='space-y-5'>
         <SectionTitle
-          eyebrow='Default Tool Card'
-          title='One shared shell for every normal tool state'
-          description='Tools without a specialized renderer still use the same compact status, input disclosure, error, and permission behavior.'
+          eyebrow={translateDemo('demo.defaultToolCard', {
+            defaultValue: 'Default Tool Card',
+          })}
+          title={translateDemo('demo.toolShellTitle', {
+            defaultValue: 'One shared shell for every normal tool state',
+          })}
+          description={translateDemo('demo.toolShellDescription', {
+            defaultValue:
+              'Tools without a specialized renderer still use the same compact status, input disclosure, error, and permission behavior.',
+          })}
         />
         <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
           {[
@@ -305,7 +321,11 @@ export function ToolCardsPage() {
           ))}
           <Card className='gap-0 py-0 md:col-span-2 xl:col-span-2'>
             <CardHeader className='border-b py-3'>
-              <CardTitle className='text-sm'>Approval required</CardTitle>
+              <CardTitle className='text-sm'>
+                {translateDemo('demo.approvalRequired', {
+                  defaultValue: 'Approval required',
+                })}
+              </CardTitle>
             </CardHeader>
             <CardContent className='p-4'>
               <ToolCallCard
@@ -327,9 +347,17 @@ export function ToolCardsPage() {
 
       <section className='space-y-5'>
         <SectionTitle
-          eyebrow='Code prompt'
-          title='Generate an implementation prompt for a specialized Tool Card'
-          description='Choose the nearest existing renderer and describe the business interaction. The generated prompt tells the coding agent exactly where and how to implement it.'
+          eyebrow={translateDemo('demo.codePrompt', {
+            defaultValue: 'Code prompt',
+          })}
+          title={translateDemo('demo.toolPromptTitle', {
+            defaultValue:
+              'Generate an implementation prompt for a specialized Tool Card',
+          })}
+          description={translateDemo('demo.toolPromptDescription', {
+            defaultValue:
+              'Choose the nearest existing renderer and describe the business interaction. The generated prompt tells the coding agent exactly where and how to implement it.',
+          })}
         />
         <ToolCardCodePrompt />
       </section>
@@ -372,6 +400,10 @@ const referenceRenderers: Record<
 };
 
 function ToolCardCodePrompt() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const [toolName, setToolName] = useState('reviewSupportQueue');
   const [reference, setReference] = useState<ReferenceRenderer>('workflow');
   const [behavior, setBehavior] = useState(
@@ -418,16 +450,22 @@ Verification:
     <div className='grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]'>
       <Card className='gap-0 py-0'>
         <CardHeader className='border-b py-4'>
-          <CardTitle className='text-base'>Describe the Tool Card</CardTitle>
+          <CardTitle className='text-base'>
+            {translateDemo('demo.toolCardSettings', {
+              defaultValue: 'Describe the Tool Card',
+            })}
+          </CardTitle>
           <p className='text-xs leading-5 text-muted-foreground'>
-            The examples above remain the visual reference; these values define
-            the implementation task.
+            {translateDemo('demo.toolCardSettingsHint', {
+              defaultValue:
+                'The examples above remain the visual reference; these values define the implementation task.',
+            })}
           </p>
         </CardHeader>
         <CardContent className='space-y-5 p-4'>
           <div className='space-y-2'>
             <label className='text-xs font-medium' htmlFor='tool-name'>
-              Tool name
+              {translateDemo('demo.toolName', { defaultValue: 'Tool name' })}
             </label>
             <Input
               id='tool-name'
@@ -436,7 +474,11 @@ Verification:
             />
           </div>
           <div className='space-y-2'>
-            <div className='text-xs font-medium'>Closest example</div>
+            <div className='text-xs font-medium'>
+              {translateDemo('demo.closestExample', {
+                defaultValue: 'Closest example',
+              })}
+            </div>
             <Select
               value={reference}
               onValueChange={(value) => {
@@ -447,12 +489,18 @@ Verification:
               }}
             >
               <SelectTrigger className='w-full'>
-                <SelectValue>{referenceDefinition.label}</SelectValue>
+                <SelectValue>
+                  {translateDemo(messageKey(referenceDefinition.label), {
+                    defaultValue: referenceDefinition.label,
+                  })}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {Object.entries(referenceRenderers).map(([value, option]) => (
                   <SelectItem key={value} value={value}>
-                    {option.label}
+                    {translateDemo(messageKey(option.label), {
+                      defaultValue: option.label,
+                    })}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -460,7 +508,9 @@ Verification:
           </div>
           <div className='space-y-2'>
             <label className='text-xs font-medium' htmlFor='tool-behavior'>
-              Business interaction
+              {translateDemo('demo.businessInteraction', {
+                defaultValue: 'Business interaction',
+              })}
             </label>
             <Textarea
               id='tool-behavior'
@@ -471,9 +521,16 @@ Verification:
           </div>
           <label className='flex items-center justify-between gap-4 border-t pt-4 text-sm'>
             <span>
-              <span className='block font-medium'>Card owns approval UI</span>
+              <span className='block font-medium'>
+                {translateDemo('demo.customApproval', {
+                  defaultValue: 'Card owns approval UI',
+                })}
+              </span>
               <span className='block text-xs text-muted-foreground'>
-                Enable for actions such as Approve, Revise, and Reject.
+                {translateDemo('demo.customApprovalHint', {
+                  defaultValue:
+                    'Enable for actions such as Approve, Revise, and Reject.',
+                })}
               </span>
             </span>
             <Switch
@@ -485,8 +542,12 @@ Verification:
         </CardContent>
       </Card>
       <PromptOutput
-        title='Coding prompt'
-        description='Ready to paste into an implementation task.'
+        title={translateDemo('demo.codingPrompt', {
+          defaultValue: 'Coding prompt',
+        })}
+        description={translateDemo('demo.codingPromptHint', {
+          defaultValue: 'Ready to paste into an implementation task.',
+        })}
         prompt={prompt}
         promptClassName='max-h-[720px] min-h-[560px]'
       />

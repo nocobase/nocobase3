@@ -1,47 +1,25 @@
 import {
   useOptionalI18nRuntime,
   useLocale as useRuntimeLocale,
-  applyDocumentLocale,
   type Locale,
   type LocaleDefinition,
 } from '@nocobase/i18n/client';
 import {
-  createAppClient,
+  useApiClient,
   writeStoredLocale,
-  type AppClient,
+  type ApiClient,
 } from '@nocobase/app-client';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+import type { ServerLocaleResult } from '../locale-result.js';
 
 /** Path under the application's API root, which is where the server is told which language to answer in. */
 const LOCALE_PATH = 'i18n/locale';
 
-let client: AppClient | undefined;
-
-/**
- * Hands the plugin the Application's own API client. The client ServiceProvider calls this during boot, which is what
- * makes a configured `api.baseURL` apply here too instead of being silently ignored.
- */
-export function configureLocaleClient(appClient: AppClient): AppClient {
-  client = appClient;
-  return appClient;
-}
-
-/**
- * The API client. The Application's own once it has booted, and otherwise one created here.
- *
- * The fallback covers a component rendered outside an Application, which is what a focused test does. It resolves
- * paths against the application's own base — an app served from `/main/` answers at `/main/api`, so a hard-coded
- * `/api/...` would miss it entirely.
- */
-function getClient(): AppClient {
-  client ??= createAppClient();
-  return client;
-}
-
 export interface UseAppLocaleResult {
   readonly locale: Locale;
   readonly locales: readonly LocaleDefinition[];
-  readonly setLocale: (locale: Locale) => Promise<void>;
+  readonly setLocale: (locale: Locale) => Promise<ServerLocaleResult>;
   readonly switching: boolean;
   readonly error: Error | undefined;
 }
@@ -49,48 +27,58 @@ export interface UseAppLocaleResult {
 /**
  * Tells the server which language to answer in.
  *
- * Exported so the path resolution can be tested: it has to land under the application's base, not the origin root.
+ * Uses the caller's application client so its API configuration and request hooks apply.
  */
-export async function notifyServerLocale(locale: Locale): Promise<void> {
-  await getClient().request(LOCALE_PATH, {
+export async function notifyServerLocale(
+  api: ApiClient,
+  locale: Locale,
+): Promise<ServerLocaleResult> {
+  return api.request<ServerLocaleResult>({
+    path: LOCALE_PATH,
     method: 'POST',
-    body: JSON.stringify({ locale }),
+    json: { locale },
   });
 }
 
 /**
  * The current language and a way to change it.
  *
- * Switching writes storage first so a refresh cannot lose the choice, loads every namespace's resources for the new
- * language, tells the server, then changes the language — all namespaces at once, so no frame renders half-translated.
+ * Loads and switches the interface before persisting the choice and notifying the server. A server fallback is a
+ * successful result the control can explain; transport failures reject without undoing the browser's language.
  */
 export function useAppLocale(): UseAppLocaleResult {
+  const api = useApiClient();
   const runtime = useOptionalI18nRuntime();
   const { locale, locales, setLocale, switching, error } = useRuntimeLocale();
-
-  useEffect(() => {
-    if (runtime) applyDocumentLocale(runtime);
-  }, [runtime, locale]);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<Error>();
 
   const changeLocale = useCallback(
-    async (next: Locale): Promise<void> => {
-      writeStoredLocale(next);
-      await setLocale(next);
+    async (next: Locale): Promise<ServerLocaleResult> => {
+      setSyncing(true);
+      setSyncError(undefined);
       try {
-        await notifyServerLocale(next);
+        await setLocale(next);
+        const selected = runtime?.getLocale() ?? next;
+        writeStoredLocale(selected);
+        return await notifyServerLocale(api, selected);
       } catch (cause) {
-        // The interface has already switched; only server-rendered strings lag behind, and the next startup
-        // reconciles them. Failing the switch over this would be worse than the inconsistency.
-        console.warn(
-          'Unable to tell the server about the language change',
-          cause,
-        );
+        setSyncError(cause instanceof Error ? cause : new Error(String(cause)));
+        throw cause;
+      } finally {
+        setSyncing(false);
       }
     },
-    [setLocale],
+    [api, runtime, setLocale],
   );
 
-  return { locale, locales, setLocale: changeLocale, switching, error };
+  return {
+    locale,
+    locales,
+    setLocale: changeLocale,
+    switching: switching || syncing,
+    error: syncError ?? error,
+  };
 }
 
 /**
@@ -100,14 +88,16 @@ export function useAppLocale(): UseAppLocaleResult {
  * another tab — and this is what brings them back together.
  */
 export function useSyncServerLocale(): void {
+  const api = useApiClient();
   // Optional, so the shell can call this unconditionally: an application composed without i18n, which is what a
   // focused test renders, has no language to report and simply does nothing.
   const runtime = useOptionalI18nRuntime();
 
   useEffect(() => {
     if (!runtime) return;
-    void notifyServerLocale(runtime.getLocale()).catch(() => {
+    const synchronization = notifyServerLocale(api, runtime.getLocale());
+    synchronization.catch(() => {
       // Nothing to do: the interface is already correct, and the next startup tries again.
     });
-  }, [runtime]);
+  }, [api, runtime]);
 }

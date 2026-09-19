@@ -4,6 +4,10 @@ A full-stack NocoBase 3 application. The server runs on `@nocobase/app-server` a
 
 You own everything in this directory. Add pages, API routes, database tables, and business logic directly here — this is your application's source code, not a framework you extend from the outside.
 
+The primary console owns applications, Hub roles, and Users. The shared Settings entry exposes API Keys and other registered settings pages without redirecting them into the application list.
+
+The standalone listener also proxies App Host through the same public port. Requests at the Hub's exact public base path and its descendants stay in Hub; all other HTTP paths and WebSocket upgrades retain their path and query and forward to the current ready Host port. With `APP_BASE_PATH=/hub`, `/hub` and `/hub/*` serve Hub, while `/customer/*` serves the customer App. `/` also forwards to Host, whose managed mode currently returns 404 there. Host probes such as `/__live` follow the same forwarding rule. A disabled or restarting Host returns 503; an upstream connection failure returns 502. Visit App links use the same public origin through `hub.publicHostUrl: /`. Configure an outer reverse proxy to preserve public Host and protocol information.
+
 ## Getting started
 
 Start the development server:
@@ -14,15 +18,50 @@ pnpm dev
 
 `pnpm dev` starts the API server and the Vite client together, picks free ports if the defaults are taken, and prints the URL to open. Use the printed URL rather than assuming a port.
 
+### Develop against another backend
+
+Set `PROXY_TARGET_URL` to the backend application's public URL, including its mount path but excluding `/api`:
+
+```bash
+# Example only: replace /main with the backend's actual public mount path.
+PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+```
+
+**`/main` is the fallback, not a required or fixed path.** Local development reads `APP_BASE_PATH` from the command-line environment, then `.env.local`, then `.env`, falling back to `/main` when unset. The remote path comes from `PROXY_TARGET_URL`; it is not inferred from the local `APP_BASE_PATH`. Read the target application's actual public URL before constructing this value. If it is mounted at the origin root, use the origin URL without a mount path.
+
+For example, these applications can use different paths:
+
+```bash
+APP_BASE_PATH=/local PROXY_TARGET_URL=http://127.0.0.1:13000/crm pnpm dev
+# /local/api/users -> http://127.0.0.1:13000/crm/api/users
+# /local/ws        -> ws://127.0.0.1:13000/crm/ws
+```
+
+This runs Vite with your local client source and proxies API and WebSocket requests to that application. It does not start a local backend, allocate its port, wait for its health endpoint, or watch server configuration/plugins. Existing `beforeDev` hooks still run to prepare client artifacts. Open the printed **Local** URL (the Vite port); **Backend** identifies the target.
+
+The target can be another local project running `pnpm dev`, or an HTTP(S) deployment. Use its printed application URL, not its Vite URL. Local `APP_BASE_PATH` and the remote mount path may differ: local `/main/api/users` can map to remote `/crm/api/users`. Trailing slashes are accepted. Credentials, query strings, and fragments are not accepted in the target URL.
+
+Requests use the remote backend's data and permissions, including writes. Only `<APP_BASE_PATH>/api` and `<APP_BASE_PATH>/ws` are proxied; application root callbacks and absolute URLs returned by the backend keep their original routing. Cookie domain/path scopes are adapted to the local application. HTTP and WebSocket requests whose Origin matches the local request's protocol and Host are forwarded with the target Origin, so browser authentication and realtime connections pass the backend's same-origin checks. Same-origin Referer URLs within the local app base are mapped to the target app base as well; requests without Origin keep it absent. Other origins and referers remain unchanged and subject to backend validation. HTTPS-only cookie requirements remain enforced, and authentication flows using explicit callback URLs still require appropriate callback configuration.
+
+The variable can also be set in `.env` or `.env.local`; the command-line environment takes precedence. Restart `pnpm dev` after changing the target. Without this variable, development still starts both the local backend and Vite. Production builds ignore it.
+
+Use `APP_SERVER_PORT` to choose the local application port in either development mode. With `PROXY_TARGET_URL` set, it selects Vite's preferred port (5173 when unset); without a proxy target, it selects the local backend's preferred port (13000 when unset), while Vite still starts from 5173. If the preferred port is occupied, development selects the next available port and prints the actual URL. The remote backend address is always taken from `PROXY_TARGET_URL`.
+
+```bash
+APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
+# Local: http://127.0.0.1:13399/main/ when 13399 is available.
+# Replace /main with the remote application's actual mount path.
+```
+
 ### Review your configuration
 
-This template declares `nocobase.scaffoldProfile: "app-v1"`; use a compatible `@nocobase/create-app` generator. `config.yml` was written when the project was created, carrying the database you chose and a generated `auth.secret`. The generated `.env` keeps Hub identity and mount settings alongside `config.yml`. It gets you running; adjust it for your situation:
+`config.yml` was generated from `config.example.yml` when the project was created, with `auth.secret` and `session.secret` filled in. It gets you running on SQLite; adjust it for your situation:
 
-- **Database.** Point the connection at the database you actually intend to use — dialect, host, port, and credentials.
-- **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/hub` when generated by create-app, so the development URL looks like `http://127.0.0.1:13000/hub/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
-- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. `config.example.yml` documents every available option, including sections your `config.yml` does not yet have.
+- **Database.** SQLite needs no server and works as it is. To use another one, register its dialect in `server/config/database.ts`, add the matching `@nocobase/db-*` package, and point the connection here at it — host, port, and credentials. Drivers are code rather than settings, so a dialect the application does not register cannot be introduced from this file.
+- **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.
+- **Anything a feature you enable requires** — mail delivery, IM webhooks, storage. Every section is already here, commented out where it is optional.
 
-`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it, and run `pnpm server:config` to see what the application resolved.
+`config.yml` is gitignored because it holds your `auth.secret`. Deploy it through your secret management rather than committing it.
 
 To run against a production build instead:
 
@@ -30,6 +69,8 @@ To run against a production build instead:
 pnpm build
 pnpm start
 ```
+
+The managed App Host uses `auto` in development: workspace source packages run through `tsx`, and installed packages run their compiled JavaScript through Node. Production explicitly uses `node`. Override `hub.host.driver` only when you need a specific launcher; published packages do not contain the source entrypoint required by `tsx`.
 
 ## Project structure
 
@@ -66,9 +107,8 @@ database/
 
 tests/                   Unit and integration tests
 e2e/                     Browser tests needing a real server
-config.yml               Your configuration, generated at setup; gitignored
+config.yml              Your configuration, generated at setup; gitignored
 config.example.yml       Documented configuration template
-skills/                  In-depth development guides for AI agents
 ```
 
 The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are composition roots: they list what the application is made of. Reading them tells you what is loaded and in what order.
@@ -77,20 +117,24 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 ### Everyday development
 
-| Script       | What it does                                      |
-| ------------ | ------------------------------------------------- |
-| `pnpm dev`   | Start the API server and client with hot reload   |
-| `pnpm build` | Build the client and server into `dist/`          |
-| `pnpm start` | Run the built server; requires `pnpm build` first |
+| Script             | What it does                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `pnpm dev`         | Start the API server and client with hot reload                                      |
+| `pnpm build`       | Build the client and server into `dist/`                                             |
+| `pnpm start`       | Run the built server; requires `pnpm build` first                                    |
+| `pnpm build --tar` | Build, then pack `dist/` and `config.example.yml` into `storage/exports/dist.tar.gz` |
 
 ### Database
 
-| Script         | What it does                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| `pnpm migrate` | Apply pending migrations from your `database/migrations/` and from every registered plugin |
-| `pnpm seed`    | Run seeds from `database/seeds/` and from registered plugins                               |
+| Script                      | What it does                                                                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm migrate`              | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations     |
+| `pnpm seed`                 | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                                   |
+| `pnpm collections:generate` | Write `collection.json`, `metadata.json` and `schema.json` for every Collection under `database/<connection>/collections/`, plus a `_manifest.json`; `--check` fails when the files are out of date |
 
-Migrations also run automatically on startup while `database.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+
+Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](.agents/skills/nocobase-app-development/references/migrations.md).
 
 ### Checks
 
@@ -104,59 +148,200 @@ Migrations also run automatically on startup while `database.migrations.autoRun`
 | `pnpm fix`           | Fix lint problems, then format                               |
 | `pnpm check`         | Everything above plus a build; what to run before committing |
 
+`pnpm nocobase app i18n:check` reports a language declared in `client/locales/` but not `server/locales/`, or the reverse, and exits nonzero until the lists align. The browser builds its language picker from the client list, so a client-only language still works in the interface; server messages fall back to English and the language control explains that fallback. Add the matching server locale when server-produced text should use the same language.
+
 ### Plugins
 
 Plugins add features to your application. Let these commands edit `package.json`, `client/plugins.ts`, and `server/plugins.ts` for you rather than editing those files by hand.
 
-| Script                          | What it does                                              |
-| ------------------------------- | --------------------------------------------------------- |
-| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server   |
-| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                            |
-| `pnpm plugin:update`            | Upgrade registered plugins and re-sync their agent skills |
-| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only           |
-| `pnpm plugin:skills:sync`       | Re-copy plugin agent skills into `.agents/skills/`        |
+| Script                          | What it does                                                |
+| ------------------------------- | ----------------------------------------------------------- |
+| `pnpm plugin:register <name>`   | Install a plugin and wire it into the client and server     |
+| `pnpm plugin:unregister <name>` | Remove a plugin and its wiring                              |
+| `pnpm plugin:update [name]`     | Upgrade one or all registered plugins and re-sync skills    |
+| `pnpm plugin:inspect <name>`    | Report a plugin's registration state; read-only             |
+| `pnpm package:remove <name>`    | Remove a direct NocoBase package and its synchronized Skill |
+| `pnpm skills:sync`              | Sync direct NocoBase package Skills into `.agents/skills/`  |
+
+`pnpm plugin:skills:sync` remains an alias for older automation; use `pnpm skills:sync` in new scripts and documentation.
+
+Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
+
+```bash
+pnpm plugin:update @nocobase/app-plugin-authentication  # Update one registered plugin
+pnpm plugin:update authentication                      # Equivalent short name
+pnpm plugin:update                                     # Update all registered plugins
+pnpm plugin:update @nocobase/app-plugin-authentication --dry-run  # Preview only
+```
+
+Without a name, the command collects registered plugins from `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. It uses the application's package manager; with pnpm, `update` follows the declared version ranges without `--latest`. An unregistered name is rejected, and an application with no registered plugins is left unchanged. After a successful package update, all registered plugins' agent skills are re-synchronized, even when only one package was selected.
 
 Ordering in `client/plugins.ts` and `server/plugins.ts` is contribution order, and a plugin is enabled by appearing in the array. Reorder entries or pass a plugin its options by hand; leave adding and removing entries to the commands.
 
+### Removing a NocoBase package
+
+Before removing a direct `@nocobase/*` dependency, search the application's imports, plugin registrations, routes, services, configuration keys, tests, and build scripts for references to it. Migrate or remove those references first. The removal command updates package metadata and synchronized Skills; it does not rewrite application source or configuration and cannot decide whether the capability is still required.
+
+```bash
+pnpm package:remove @nocobase/example
+pnpm package:remove @nocobase/example --dry-run
+pnpm package:remove @nocobase/example --json
+```
+
+For an ordinary package, the command uses the application's package manager to remove the dependency and update both `package.json` and the lockfile, then removes only the Skill directories recorded as owned by that package. For an `@nocobase/app-plugin-*` package, it reuses the `plugin:unregister` workflow so Client, Server, and CLI registrations are removed together with the dependency and its Skills. `pnpm plugin:unregister <name>` remains available when the task is specifically expressed as unregistering a plugin.
+
+An older application with the new CLI but without the script can run `pnpm nocobase package remove @nocobase/example`. If the installed CLI does not provide `package remove`, update `@nocobase/nb3-cli` first; as a compatibility fallback on a version that already provides `skills:sync`, remove the dependency with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, make sure the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing a package already absent from the manifest to `package:remove` can clean its recorded historical Skill ownership without uninstalling any other package.
+
 ### Diagnostics
 
-| Script                | What it does                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------- |
-| `pnpm server:config`  | Print resolved configuration: paths, database, queue, providers. Secrets are redacted |
-| `pnpm client:inspect` | Print the resolved client composition: routes, providers, and which file owns each    |
-| `pnpm server:inspect` | Print the resolved server composition                                                 |
+| Script                      | What it does                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each          |
+| `pnpm server:inspect`       | Print the resolved server composition                                                       |
+| `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
+| `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
 
 These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
 
+#### Deploying to a different machine
+
+`pnpm build` produces `dist/`, which is the whole deployment: copy it to a server and run it. It carries its own `package.json`, and `pnpm install --prod` there installs exactly what the server needs.
+
+Client packages are not among them. Plugins declare what their browser code needs as peer dependencies, so your application installs one shared copy for its Vite build, while `dist/` opts out of peer installation entirely — `lucide-react`, `@base-ui/react`, `sonner` and the rest never reach a server that has no browser in it.
+
+**The build targets the machine you run it on**, so `pnpm build && pnpm start` works. Deploying elsewhere means saying where:
+
+```bash
+pnpm build --help                                 # all build options
+pnpm build                                        # this machine
+pnpm build --target linux-x64                     # most Linux servers
+pnpm build --target linux-arm64                   # ARM servers, Graviton
+pnpm build --target linux-x64-musl                # Alpine, and most slim container images
+pnpm build --target linux-x64 --node-version 24   # explicitly target Node 24
+```
+
+A `.node` binary is compiled for one platform, architecture, C library, and Node version at once, so a build made on a Mac installs binaries a Linux server cannot load. `--target` sets platform, architecture, and C library together, because they are chosen together: `linux-x64` and `linux-x64-musl` are different binaries, and Alpine needs the musl one. If you are unsure, `ldd --version` on the server prints `musl` for musl and `GNU libc` otherwise.
+
+`--node-version` takes the major version your server runs, separately, because the same Linux host may run any of several. The binary retargeter knows ABI mappings for 20, 22, 24, and 26; the application itself requires Node >=24.
+
+`pnpm build --help` (or `-h`) lists build options and exits without loading build dependencies, running hooks, or modifying `dist/`. Every successful build records `nocobase.buildTarget` in `dist/package.json`, including builds with no native modules: `platform`, `arch`, `libc`, `nodeMajor`, and `nodeAbi`. Use `libc` only for Linux; its value on other platforms is a compatibility placeholder. Deployment checks should compare these fields with the host runtime and also respect `engines.node`. With `--target current` (the default), the Node version and ABI come from the running process; an explicit platform target defaults to Node 24 unless `--node-version` is supplied.
+
+For example, `pnpm build --target linux-x64 --node-version 24` produces:
+
+```json
+{
+  "nocobase": {
+    "buildTarget": {
+      "platform": "linux",
+      "arch": "x64",
+      "libc": "glibc",
+      "nodeMajor": 24,
+      "nodeAbi": 137
+    }
+  }
+}
+```
+
+`nodeMajor` describes the target runtime, not the Node version used to run the build. No target patch version is implied. These fields provide platform and Node ABI checks for Hub deployment; they do not describe system libraries, CPU instruction requirements, or other runtime prerequisites.
+
+If your application has no native modules — `pg`, `mysql2`, and `tedious` are all plain JavaScript — no platform-specific binaries need retargeting. The build still records the selected target, and the deployment runtime must satisfy `engines.node`.
+
+#### Packing the build
+
+`pnpm build --tar` writes `storage/exports/dist.tar.gz`, the artifact you upload to a Hub to deploy this application.
+
+The archive has two levels: `config.example.yml` and `dist/` sit at the root, and the build is inside `dist/`. What `dist/` holds varies with the application; this is the shape:
+
+```text
+dist.tar.gz
+├── config.example.yml
+└── dist/
+    ├── cli/
+    ├── client/
+    ├── node_modules/
+    ├── server/
+    ├── package.json
+    └── pnpm-workspace.yaml
+```
+
+Combine it with `--target` when the archive is for another machine:
+
+```bash
+pnpm build --target linux-x64 --tar
+```
+
+#### Adding a dependency
+
+Where a package goes depends on which half of your application imports it.
+
+| Imported from                     | Declare it in     |
+| --------------------------------- | ----------------- |
+| `server/`, `database/`, or `cli/` | `dependencies`    |
+| `client/`, build tooling, tests   | `devDependencies` |
+
+`dist/package.json` is generated from `dependencies` and is what a server installs, so a package in `devDependencies` is missing there however well it works locally. Client packages need nothing at runtime — Vite resolves and inlines them into `dist/client` while building.
+
+Plugins' browser packages need nothing from you: a plugin declares those as peer dependencies, so installing the plugin brings one shared copy into your application, and `dist/` never installs them.
+
+`pnpm build` verifies the server half and fails the build if something is missing, naming the package. One case it cannot check is an import whose name is assembled while the program runs:
+
+```ts
+await import(`${name}/index.js`);
+```
+
+Nothing can tell in advance which package that names, so declare it in `dependencies` when you write the code.
+
+#### When the build or the deployment goes wrong
+
+**`Cannot find module` on the server, but it runs locally.** The package is in `devDependencies`, which `dist/package.json` is not generated from. Move it to `dependencies` and rebuild.
+
+**A browser package fails to resolve while building your application.** A plugin declares it as a peer dependency and something has to provide it. Add it to your `devDependencies`.
+
+**`Error loading shared library`, `invalid ELF header`, or a bare reference to a `.node` file at startup.** The binary does not match the server. Compare what the build targeted against the server:
+
+```bash
+node -e "console.log(require('./dist/package.json').nocobase.buildTarget)"
+node -p "process.platform + '-' + process.arch"   # on the server
+node -p "process.versions.modules"                # on the server: the ABI
+```
+
+Rebuild with a matching `--target` and `--node-version`. ABI 115 is Node 20, 127 is Node 22, 137 is Node 24, 147 is Node 26.
+
+**`no prebuilt binary for <target>` during the build.** The package publishes no build for that combination. Check whether the version you depend on supports the target, and whether a musl build exists if you asked for one — musl coverage is thinner than glibc.
+
 ## Configuration
 
-`config.yml` holds application configuration alongside the Hub mount settings in `.env`, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. `config.example.yml` documents every available option, including sections the generated file leaves out.
+`server/config/` and `client/config/` contain editable TypeScript defaults. `config.yml` holds environment-specific overrides, written for you at generation time and yours to edit from there. It is gitignored because it carries your `auth.secret`; deploy it through your secret management rather than committing it. It is generated from `config.example.yml`, which is kept beside it as the reference for every option.
 
 Two settings decide where the application is reachable:
 
-- `APP_BASE_PATH` is the public path the application is mounted at, `/hub` when generated by create-app. The browser API base URL is derived from it as `<APP_BASE_PATH>/api`.
+- `APP_BASE_PATH` is the public path the application is mounted at, `/main` by default. The browser API base URL is derived from it as `<APP_BASE_PATH>/api`.
 - `APP_PUBLIC_ORIGIN` is the external origin used to build callback and redirect URLs. Set it in production. It must not repeat the base path — the runtime joins the two.
 
-Run `pnpm server:config` to see what the application actually resolved, which is faster than reasoning about precedence between the file, environment variables, and defaults.
+Configuration is resolved from the file, environment variables, and defaults in that order of precedence.
 
 ## Testing
 
 Tests live in `tests/`, never beside the source they cover. Put logic and integration tests under `tests/logic/` and component tests under `tests/components/`. Tests needing a real server, real authentication, or a real database belong in `e2e/`.
 
-### Notification testing
-
-After signing in with the `notification:test` `send` permission, use the
-notification logs settings page to send a real message through the durable
-Notification Manager. The form is generated from safe Channel test metadata;
-Email tests require an address and IM tests use the configured logical target.
-The button is unavailable unless the protected targets endpoint is authorized,
-and testing is disabled unless `notification.test.enabled` is explicitly set
-to `true` in `config.yml`.
-
 ## Working with an AI agent
 
-`AGENTS.md` describes how to build features here, and `skills/` holds the in-depth references it links to. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keeping these accurate as your application grows is what keeps agent-written code consistent with the rest of it.
+`AGENTS.md` describes how to build features here, and `.agents/skills/` contains package-owned guidance generated by `pnpm skills:sync`. If you use Claude Code, `CLAUDE.md` points at the same guidance. Keep application-specific rules in committed `AGENTS.md` files because synchronization replaces package-owned Skill directories.
 
 ## License
 
 MIT
+
+## Hub storage layout
+
+New installations use `storage/hub` for the Hub database (`database/main.sqlite`), local files (`files`), desired application configurations (`desired-configs/<appId>/<deploymentId>.yml`), and logs (`logs/app`, `logs/request`, `logs/deployments/<appId>`). Host configuration is generated at `storage/host/runtime/config.yml`; Host logs and captured child output use `storage/host/logs/host` and `storage/host/logs/child-output`. Capturing child output does not change terminal forwarding. Each log directory has its own retention and size limit; deployment log limits apply per application.
+
+`storage/apps/artifacts/<appId>/<releaseId>.tar.gz` contains release archives, `storage/apps/revisions/<appId>/<sha256>` contains expanded archives, and `storage/apps/volumes/<appId>` contains runtime configurations and application-owned `storage/`. The checksum identifies the archive bytes. Hub desired configurations and Host runtime configurations have different owners; neither is a historical configuration archive. Restart recovery requires the installed revision and does not automatically re-extract a missing one.
+
+Standalone Hub source and compiled entries share the deployment directory's `storage`. Explicit storage paths take precedence over `HUB_STORAGE_DIR`; relative values resolve from the deployment directory. Embedded Hub instances use the Host-provided volume. Expanded releases use `appRevisionsDir/<appId>/<sha256>`. Directory defaults do not depend on existing files.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

@@ -16,7 +16,6 @@ import {
   notificationServiceToken,
 } from '../tokens.js';
 import type { NotificationChannelMap, NotificationConfig } from '../types.js';
-import { notificationConfig } from '../config.js';
 
 export interface NotificationProviderApplicationConfig {
   readonly app: {
@@ -50,10 +49,13 @@ export class NotificationProvider<
       createNotificationManager<NotificationChannelMap>({
         database: container.resolve(databaseManagerToken),
         queue: container.resolve(queueManagerToken),
-        logger: container.resolve(loggingToken).getLogger().child({
-          module: 'notification',
-        }),
-        config: this.app.config.get(notificationConfig),
+        logger: container
+          .resolve(loggingToken)
+          .getLogger('notification')
+          .child({
+            module: 'notification',
+          }),
+        config: this.app.config.get<NotificationConfig>('notification')!,
         registry,
       }),
     );

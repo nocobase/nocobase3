@@ -4,22 +4,20 @@ import {
 } from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/db';
 import { createAppDatabaseManager } from './manager.js';
-import { createAppMigrator } from './migrator.js';
-import { createAppSeeder } from './seeder.js';
+import { executeAppDatabasePlan } from './tasks.js';
+import { planAppRuntimeDatabaseTasks } from './plan.js';
 import { prepareAppDatabaseStorage } from './storage.js';
-import { databaseConfig } from './config.js';
-import type { AppConfigAccessor, ConfigPaths } from '../config/index.js';
-import type { AppDatabaseConfig } from './types.js';
-import {
-  databaseLifecycleObserverToken,
-  type DatabaseLifecyclePhase,
-  type DatabaseLifecycleResult,
-} from './lifecycle-observer.js';
+import type { AppConfigAccessor, AppPaths } from '../config/index.js';
+import type {
+  AppDatabaseConfig,
+  AppDatabaseTaskContributions,
+} from './types.js';
 
 export interface DatabaseProviderApplication {
   readonly config: AppConfigAccessor;
   readonly container: ServiceContainer;
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
+  readonly databaseTaskContributions: AppDatabaseTaskContributions;
 }
 
 export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplication> {
@@ -48,29 +46,22 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
     }
 
     const config = this.getDatabaseConfig();
-    await prepareAppDatabaseStorage(config, this.app.paths);
+    const plan = planAppRuntimeDatabaseTasks(config, ['migrations', 'seeds'], {
+      paths: this.app.paths,
+      contributions: this.app.databaseTaskContributions,
+      runtimeConfig: this.app.config,
+      autoRun: true,
+    });
+    // All SQLite connections must be usable by runtime services even without automatic tasks.
+    await prepareAppDatabaseStorage(
+      config,
+      this.app.paths,
+      Object.keys(config.connections),
+    );
     const database = container.resolve(databaseManagerToken);
-
-    if (config.migrations.autoRun) {
-      await this.runObserved('migrations', () =>
-        createAppMigrator({
-          database,
-          config: config.migrations,
-          sources: config.migrations.sources,
-        }).latest(),
-      );
-    }
-
-    if (config.seeds?.autoRun) {
-      const seeds = config.seeds;
-      await this.runObserved('seeds', () =>
-        createAppSeeder({
-          database,
-          config: seeds,
-          sources: seeds.sources,
-        }).run(),
-      );
-    }
+    await executeAppDatabasePlan(database, config, plan, {
+      paths: this.app.paths,
+    });
   }
 
   public override async shutdown(): Promise<void> {
@@ -78,43 +69,6 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
   }
 
   private getDatabaseConfig(): AppDatabaseConfig {
-    return this.app.config.get(databaseConfig);
-  }
-
-  private async runObserved(
-    phase: DatabaseLifecyclePhase,
-    run: () => Promise<{ status: 'completed' | 'skipped' }>,
-  ): Promise<void> {
-    const observer = this.app.container.has(databaseLifecycleObserverToken)
-      ? this.app.container.resolve(databaseLifecycleObserverToken)
-      : undefined;
-    // Admission failures are not failed DDL: the task has not started yet.
-    await observer?.before(phase);
-    const observe = async (result: DatabaseLifecycleResult): Promise<void> => {
-      if (!observer) return;
-      try {
-        await observer.after(result);
-      } catch {
-        console.error('Database lifecycle observation failed.', {
-          code: 'DATABASE_LIFECYCLE_OBSERVATION_FAILED',
-          phase,
-        });
-      }
-    };
-    let result: { status: 'completed' | 'skipped' };
-    try {
-      result = await run();
-    } catch (error) {
-      await observe({ phase, outcome: 'failed', code: 'DATABASE_TASK_FAILED' });
-      throw error;
-    }
-    await observe({
-      phase,
-      outcome: result.status === 'completed' ? 'success' : 'unknown',
-      code:
-        result.status === 'completed'
-          ? 'DATABASE_TASK_COMPLETED'
-          : 'DATABASE_TASK_SKIPPED',
-    });
+    return this.app.config.get<AppDatabaseConfig>('database')!;
   }
 }

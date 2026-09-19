@@ -18,6 +18,10 @@ export interface WorkflowListItem {
   hash: string | null;
   activeRunCount: number;
   latestRun: { id: string; status: number | null; createdAt: string } | null;
+  pendingArtifact: {
+    hash: string;
+    title: string | null;
+  } | null;
 }
 
 export interface WorkflowRunListItem extends Pick<
@@ -88,8 +92,13 @@ export interface WorkflowDefinitionView {
   version: string | null;
   enabled: boolean;
   current: boolean | null;
+  hasParameters: boolean;
   executed: number;
   latestRun: { id: string; status: number | null; createdAt: string } | null;
+  pendingArtifact: {
+    hash: string;
+    title: string | null;
+  } | null;
   inputSchema: unknown;
   parametersSchema: WorkflowParameterSchema;
   parameterValues: WorkflowParameterValues;

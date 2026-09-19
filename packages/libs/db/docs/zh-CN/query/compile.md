@@ -1,6 +1,15 @@
+---
+title: Query 编译与清除条件
+description: 使用 compile 检查 SQL 和参数，复用不可变 Query Builder，并通过 clear 方法移除已有查询片段。
+---
+
 # compile 和 clear
 
 `compile()` 用于把 Query 编译成 SQL 和参数，适合调试、dry-run、测试断言和 Agent 解释。
+它是同步操作，不查询字段元数据。PG/MySQL 的 DECIMAL 使用原生结果，无需在执行时补充文本投影。
+其他数据库按需在异步执行阶段补充 DECIMAL 文本投影及聚合输入类型适配（例如浮点聚合使用原生函数），
+因此实际 SQL 可能与 `compile()` 不同。
+直接用 Knex 执行编译出的 SQL 不会执行 Query 的结果解码，包括 COUNT 的安全 number 转换。
 
 ```ts
 const compiled = db
@@ -14,7 +23,7 @@ compiled.sql;
 compiled.parameters;
 ```
 
-在 `underscored: true` 下，`compile()` 输出的是归一化后的物理 identifier：
+启用 `underscored` 时，`compile()` 输出归一化后的物理 identifier：
 
 ```text
 orderNo -> order_no

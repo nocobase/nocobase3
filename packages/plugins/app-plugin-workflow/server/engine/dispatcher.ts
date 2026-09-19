@@ -1,19 +1,14 @@
-import { workflowDatabaseTime } from './database-time.js';
-import {
-  captureWorkflowAudit,
-  beginWorkflowAttempt,
-  bindWorkflowExecutionAudit,
-  loadWorkflowAudit,
-  workflowAudit,
-  WorkflowAuditWriteError,
-  recordWorkflowPhase,
-  withWorkflowAudit,
-} from '../audit-internal.js';
+import { bindWorkflowLogger } from './logger.js';
 import { randomUUID } from 'node:crypto';
 
-import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/db';
+import type { DatabaseManager } from '@nocobase/db';
 
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import { anyOfIds } from '../collections/filters.js';
+import {
+  workflowStore,
+  workflowStoreOf,
+  type WorkflowStore,
+} from '../collections/store.js';
 import { EXECUTION_STATUS } from './constants.js';
 import Processor from './processor.js';
 import type {
@@ -30,11 +25,13 @@ import type {
   WorkflowNodeRun,
 } from './types.js';
 import {
+  asIdFilter,
   hydrateRun,
   loadNodeRun,
   loadRun,
   loadWorkflow,
   noopWorkflowLogger,
+  nowInstant,
   serializeJson,
 } from './utils.js';
 import {
@@ -50,13 +47,14 @@ export interface DispatcherOptions {
     workflow: WorkflowDefinition,
     execution: WorkflowRun,
   ) => Promise<string | null>;
-  app?: unknown;
+  services?: import('./run-services.js').WorkflowRunServices;
   queue?: WorkflowQueue;
   logger?:
     | WorkflowLogger
     | ((workflowId: WorkflowId | 'dispatcher') => WorkflowLogger);
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
+  terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
 type ExecutionPlan = {
@@ -64,7 +62,6 @@ type ExecutionPlan = {
   workflow: WorkflowDefinition;
   nodeRun?: WorkflowNodeRun;
   rerun?: ProcessorRerunOptions;
-  attemptId?: string;
 };
 
 const RECOVERY_BATCH_SIZE = 100;
@@ -80,6 +77,10 @@ export default class Dispatcher {
 
   constructor(private readonly options: DispatcherOptions) {}
 
+  private get store(): WorkflowStore {
+    return workflowStore(this.options.database, this.options.connectionName);
+  }
+
   get idle(): boolean {
     return this.inFlight.size === 0 && this.pendingEventKeys.size === 0;
   }
@@ -88,7 +89,7 @@ export default class Dispatcher {
     workflow: WorkflowDefinition,
     input: unknown,
     options: WorkflowEventOptions = {},
-  ): Promise<Processor | null | void> {
+  ): Promise<Processor | WorkflowRun | null | void> {
     const operation = this.triggerEvent(workflow, input, options);
     this.inFlight.add(operation);
     return operation.finally(() => {
@@ -100,15 +101,10 @@ export default class Dispatcher {
     workflow: WorkflowDefinition,
     input: unknown,
     options: WorkflowEventOptions,
-  ): Promise<Processor | null | void> {
-    const logger = this.getLogger(workflow.id);
-    if (options.enqueueOnly && options.deferred) {
-      throw new Error(
-        'Workflow enqueue and deferred execution are mutually exclusive',
-      );
-    }
-    if (options.enqueueOnly && !this.options.queue)
-      throw new Error('Workflow enqueue requires a configured queue');
+  ): Promise<Processor | WorkflowRun | null | void> {
+    const logger = bindWorkflowLogger(this.getLogger(workflow.id), {
+      workflowId: workflow.id,
+    });
     if (!options.force && !options.manually && !workflow.enabled) {
       logger.warn(`Workflow "${workflow.key}" is disabled; event ignored`);
       return;
@@ -124,13 +120,7 @@ export default class Dispatcher {
       logger.warn(`Duplicate workflow event "${eventKey}" ignored`);
       return;
     }
-    if (
-      await this.options.database
-        .query(this.options.connectionName)
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .where('eventKey', '=', eventKey)
-        .exists()
-    ) {
+    if (await this.store.runs.exists({ filter: { eventKey } })) {
       logger.warn(
         `Persisted workflow event "${eventKey}" already exists; event ignored`,
       );
@@ -143,12 +133,29 @@ export default class Dispatcher {
         ...options,
         eventKey,
       });
-      if (!options.enqueueOnly && (options.deferred || options.manually)) {
+      if (options.manually && options.waitForCompletion === false) {
+        // Keep execution owned by the runtime (including shutdown draining),
+        // without making the HTTP request wait for node completion.
+        const operation = this.dispatch({ executionId: execution.id }).catch(
+          (error: unknown) => {
+            logger.error(
+              `Execution "${execution.id}" could not be dispatched`,
+              {
+                error,
+              },
+            );
+          },
+        );
+        this.inFlight.add(operation);
+        void operation.finally(() => this.inFlight.delete(operation));
+        return null;
+      }
+      if (options.deferred || options.manually) {
         const entered = await this.acquireExecution(execution, workflow);
         return entered ? this.process({ execution: entered, workflow }) : null;
       }
       await this.enqueue({ executionId: execution.id });
-      return null;
+      return execution;
     } finally {
       this.pendingEventKeys.delete(eventKey);
     }
@@ -165,30 +172,27 @@ export default class Dispatcher {
   }
 
   async recover(options: { gracePeriod?: number } = {}): Promise<number> {
-    const query = this.options.database.query(this.options.connectionName);
-    let selection = query
-      .selectFrom(WORKFLOW_COLLECTIONS.runs)
-      .selectAll()
-      .where('dispatched', '=', false)
-      .where('status', 'is', null)
-      .orderBy('id')
-      .limit(RECOVERY_BATCH_SIZE);
-    if ((options.gracePeriod ?? 0) > 0) {
-      selection = selection.where(
-        'createdAt',
-        '<',
-        workflowDatabaseTime(
-          new Date(Date.now() - (options.gracePeriod ?? 0)).toISOString(),
-          this.options.database.connection(this.options.connectionName).dialect,
-        ),
-      );
-    }
-    const rows = await selection.execute<Row>();
+    const store = this.store;
+    const gracePeriod = options.gracePeriod ?? 0;
+    const createdBefore =
+      gracePeriod > 0 ? new Date(Date.now() - gracePeriod).toISOString() : null;
+    const rows = await store.runs.findMany({
+      filter: (filter) =>
+        filter.and([
+          filter.boolean('dispatched').isFalse(),
+          filter.number('status').empty(),
+          ...(createdBefore
+            ? [filter.date('createdAt').before(createdBefore)]
+            : []),
+        ]),
+      sort: (sort) => sort.field('id').asc(),
+      limit: RECOVERY_BATCH_SIZE,
+    });
     let recovered = 0;
     for (const row of rows) {
       const execution = hydrateRun(row);
-      const workflow = await loadWorkflow(query, execution.workflowId);
-      if (!workflow?.enabled) {
+      const workflow = await loadWorkflow(store, execution.workflowId);
+      if (!workflow || (!workflow.enabled && !execution.manually)) {
         continue;
       }
       await this.enqueue({ executionId: execution.id });
@@ -198,16 +202,14 @@ export default class Dispatcher {
   }
 
   async drain(): Promise<void> {
-    await Promise.allSettled([...this.inFlight]);
+    while (this.inFlight.size) {
+      await Promise.allSettled([...this.inFlight]);
+    }
   }
 
   async enqueue(task: WorkflowQueueTask): Promise<void> {
     if (this.options.queue) {
-      await this.options.queue.publish(
-        task.rerun && !task.attemptId
-          ? { ...task, attemptId: randomUUID() }
-          : task,
-      );
+      await this.options.queue.publish(task);
       return;
     }
     await this.dispatch(task);
@@ -216,8 +218,8 @@ export default class Dispatcher {
   private async resolveAndProcessTask(
     task: WorkflowExecutionQueueTask,
   ): Promise<Processor | null> {
-    const query = this.options.database.query(this.options.connectionName);
-    const execution = await loadRun(query, task.executionId);
+    const store = this.store;
+    const execution = await loadRun(store, task.executionId);
     if (!execution) {
       this.getLogger('dispatcher').warn(
         `Execution "${task.executionId}" was not found; queue task ignored`,
@@ -236,7 +238,7 @@ export default class Dispatcher {
       return null;
     }
 
-    const workflow = await loadWorkflow(query, execution.workflowId);
+    const workflow = await loadWorkflow(store, execution.workflowId);
     if (!workflow) {
       this.getLogger(execution.workflowId).warn(
         `Workflow "${execution.workflowId}" was not found`,
@@ -246,7 +248,7 @@ export default class Dispatcher {
 
     let nodeRun: WorkflowNodeRun | undefined;
     if (task.nodeRunId != null) {
-      nodeRun = (await loadNodeRun(query, task.nodeRunId)) ?? undefined;
+      nodeRun = (await loadNodeRun(store, task.nodeRunId)) ?? undefined;
       if (!nodeRun || String(nodeRun.workflowRunId) !== String(execution.id)) {
         this.getLogger(execution.workflowId).warn(
           `Node run "${task.nodeRunId}" does not belong to execution "${execution.id}"`,
@@ -264,7 +266,6 @@ export default class Dispatcher {
       workflow,
       nodeRun,
       rerun: task.rerun,
-      attemptId: task.attemptId,
     });
   }
 
@@ -280,9 +281,9 @@ export default class Dispatcher {
       }
 
       return await this.options.database.transaction(async (connection) => {
-        const query = connection.query;
+        const store = workflowStoreOf(connection);
         const eventKey = options.eventKey ?? randomUUID();
-        const createdAt = new Date().toISOString();
+        const createdAt = nowInstant();
         const parameters = resolveWorkflowParameters(
           workflow.parametersSchema,
           options.parameterValues
@@ -292,10 +293,9 @@ export default class Dispatcher {
               )
             : workflow.parameterValues,
         );
-        await query
-          .insertInto(WORKFLOW_COLLECTIONS.runs)
-          .values({
-            workflowId: workflow.id,
+        const created = await store.runs.createOne({
+          values: {
+            workflowId: asIdFilter(workflow.id),
             workflowKey: workflow.key,
             hash: workflow.hash,
             eventKey,
@@ -305,51 +305,27 @@ export default class Dispatcher {
               ? EXECUTION_STATUS.STARTED
               : EXECUTION_STATUS.QUEUEING,
             dispatched: options.deferred ?? false,
-            parentRunId: options.parentRunId ?? null,
+            parentRunId:
+              options.parentRunId == null
+                ? null
+                : asIdFilter(options.parentRunId),
             stack: serializeJson(stack),
             output: serializeJson(null),
-            startedAt: workflowDatabaseTime(
-              options.deferred ? createdAt : null,
-              connection.dialect,
-            ),
+            startedAt: options.deferred ? createdAt : null,
             finishedAt: null,
             expiresAt: options.deferred
-              ? workflowDatabaseTime(
-                  this.getExpiresAt(workflow, createdAt),
-                  connection.dialect,
-                )
+              ? this.getExpiresAt(workflow, createdAt)
               : null,
-            createdAt: workflowDatabaseTime(createdAt, connection.dialect),
+            createdAt,
             manually: options.manually ?? false,
             reason: null,
-            auditContext: serializeJson(
-              captureWorkflowAudit(this.options.database),
-            ),
-          })
-          .execute();
-        const row = await query
-          .selectFrom(WORKFLOW_COLLECTIONS.runs)
-          .selectAll()
-          .where('eventKey', '=', eventKey)
-          .executeTakeFirstOrThrow<Row>();
-        await this.incrementStats(query, workflow);
-        const execution = hydrateRun(row);
+            sourceType: options.sourceType ?? null,
+            sourceId: options.sourceId ?? null,
+          },
+        });
+        await this.incrementStats(store, workflow);
+        const execution = hydrateRun(created.record);
         execution.workflow = workflow;
-        await recordWorkflowPhase(
-          this.options.database,
-          connection,
-          execution.id,
-          'accepted',
-          'accepted',
-        );
-        if (options.deferred)
-          await recordWorkflowPhase(
-            this.options.database,
-            connection,
-            execution.id,
-            'started',
-            'unknown',
-          );
         return execution;
       }, this.options.connectionName);
     } catch (error) {
@@ -374,109 +350,91 @@ export default class Dispatcher {
       return null;
     }
 
-    const startedAt = new Date().toISOString();
-    return this.options.database.transaction(async (connection) => {
-      const query = connection.query;
-      const result = await query
-        .updateTable(WORKFLOW_COLLECTIONS.runs)
-        .set({
-          dispatched: true,
-          status: EXECUTION_STATUS.STARTED,
-          startedAt: workflowDatabaseTime(startedAt, connection.dialect),
-          finishedAt: null,
-          expiresAt: workflowDatabaseTime(
-            this.getExpiresAt(workflow, startedAt),
-            connection.dialect,
-          ),
-        })
-        .where('id', '=', execution.id)
-        .where('dispatched', '=', false)
-        .where('status', 'is', null)
-        .execute();
-      if ((result.updatedCount ?? 0) === 0) {
-        return null;
-      }
-      const entered = await loadRun(query, execution.id);
-      if (entered) {
-        entered.workflow = workflow;
-        await recordWorkflowPhase(
-          this.options.database,
-          connection,
-          entered.id,
-          'started',
-          'unknown',
-        );
-      }
-      return entered;
-    }, this.options.connectionName);
+    const startedAt = nowInstant();
+    const store = this.store;
+    // The filter is the claim: whoever flips `dispatched` first owns this run,
+    // and a second dispatcher updates nothing and backs out.
+    const result = await store.runs.updateMany({
+      filter: (filter) =>
+        filter.and([
+          filter.number('id').eq(asIdFilter(execution.id)),
+          filter.boolean('dispatched').isFalse(),
+          filter.number('status').empty(),
+        ]),
+      values: {
+        dispatched: true,
+        status: EXECUTION_STATUS.STARTED,
+        startedAt,
+        finishedAt: null,
+        expiresAt: this.getExpiresAt(workflow, startedAt),
+      },
+    });
+    if (result.updatedCount === 0) {
+      return null;
+    }
+    const entered = await loadRun(store, execution.id);
+    if (entered) {
+      entered.workflow = workflow;
+    }
+    return entered;
   }
 
-  private async process(plan: ExecutionPlan): Promise<Processor | null> {
-    const logger = this.getLogger(plan.workflow.id);
-    return this.withExecutionLock(plan.execution.id, async () => {
-      const query = this.options.database.query(this.options.connectionName);
-      const execution = await loadRun(query, plan.execution.id);
-      if (!execution || execution.status !== EXECUTION_STATUS.STARTED)
-        return null;
-      const context = !workflowAudit(this.options.database)
-        ? null
-        : plan.rerun
-          ? await this.options.database.transaction(
-              (connection) =>
-                beginWorkflowAttempt(
-                  this.options.database,
-                  connection,
-                  execution.id,
-                  plan.attemptId ?? randomUUID(),
-                ),
-              this.options.connectionName,
-            )
-          : await loadWorkflowAudit(query, execution.id);
-      if (context === undefined) return null;
-      bindWorkflowExecutionAudit(execution, context);
-      plan = { ...plan, execution };
-      return withWorkflowAudit(
-        this.options.database,
-        this.options.database.query(this.options.connectionName),
-        plan.execution.id,
-        async () => {
-          const workflowResourceRoot =
-            (await this.options.resolveWorkflowResourceRoot?.(
-              plan.workflow,
-              plan.execution,
-            )) ?? null;
-          const processor = new Processor({
-            database: this.options.database,
-            connectionName: this.options.connectionName,
-            workflow: plan.workflow,
-            execution: plan.execution,
-            instructions: this.options.instructions,
-            workflowResourceRoot,
-            app: this.options.app,
-            logger,
-            environment: this.options.environment,
-            functions: this.options.functions,
-          });
-          try {
-            if (plan.rerun) {
-              await processor.rerun(plan.rerun);
-            } else if (plan.nodeRun) {
-              await processor.resume(plan.nodeRun);
-            } else {
-              await processor.start();
-            }
-          } catch (error) {
-            if (error instanceof WorkflowAuditWriteError) throw error;
-            logger.error(`Execution "${plan.execution.id}" failed`, { error });
-            await processor.exit(-2, {
-              message: error instanceof Error ? error.message : String(error),
-            });
-          }
-          return processor;
-        },
-        context,
-      );
+  private async process(plan: ExecutionPlan): Promise<Processor> {
+    const logger = bindWorkflowLogger(this.getLogger(plan.workflow.id), {
+      workflowId: plan.workflow.id,
+      executionId: plan.execution.id,
     });
+    const processor = await this.withExecutionLock(
+      plan.execution.id,
+      async () => {
+        const workflowResourceRoot =
+          (await this.options.resolveWorkflowResourceRoot?.(
+            plan.workflow,
+            plan.execution,
+          )) ?? null;
+        const processor = new Processor({
+          database: this.options.database,
+          connectionName: this.options.connectionName,
+          workflow: plan.workflow,
+          execution: plan.execution,
+          instructions: this.options.instructions,
+          workflowResourceRoot,
+          services: this.options.services,
+          logger,
+          environment: this.options.environment,
+          functions: this.options.functions,
+          terminalObserver: this.options.terminalObserver,
+          resumeNode: async (nodeRunId) => {
+            await this.enqueue({ executionId: plan.execution.id, nodeRunId });
+          },
+        });
+        try {
+          if (plan.rerun) {
+            await processor.rerun(plan.rerun);
+          } else if (plan.nodeRun) {
+            await processor.resume(plan.nodeRun);
+          } else {
+            await processor.start();
+          }
+        } catch (error) {
+          logger.error(`Execution "${plan.execution.id}" failed`, { error });
+          await processor.exit(-2, {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+        return processor;
+      },
+    );
+    for (const task of processor.takeDeferredTasks()) {
+      const operation = new Promise<void>((resolve) => setImmediate(resolve))
+        .then(task)
+        .catch((error: unknown) => {
+          logger.error('Background workflow node failed', { error });
+        });
+      this.inFlight.add(operation);
+      void operation.finally(() => this.inFlight.delete(operation));
+    }
+    return processor;
   }
 
   private async validateEvent(
@@ -486,15 +444,15 @@ export default class Dispatcher {
   ): Promise<boolean> {
     const stack = options.stack ?? [];
     if (stack.length) {
-      const countRow = await this.options.database
-        .query(this.options.connectionName)
-        .selectFrom(WORKFLOW_COLLECTIONS.runs)
-        .select(({ fn }) => [fn.countAll().as('count')])
-        .where('workflowId', '=', workflow.id)
-        .where('id', 'in', stack)
-        .executeTakeFirst<{ count: number | string }>();
+      const repeats = await this.store.runs.count({
+        filter: (filter) =>
+          filter.and([
+            filter.number('workflowId').eq(asIdFilter(workflow.id)),
+            anyOfIds(filter, 'id', stack),
+          ]),
+      });
       const limit = Number(workflow.options.stackLimit ?? 1);
-      if (Number(countRow?.count ?? 0) >= limit) {
+      if (repeats >= limit) {
         return false;
       }
     }
@@ -511,52 +469,31 @@ export default class Dispatcher {
     if (parentRunId == null) {
       return [];
     }
-    const parent = await loadRun(
-      this.options.database.query(this.options.connectionName),
-      parentRunId,
-    );
+    const parent = await loadRun(this.store, parentRunId);
     return parent ? [...parent.stack, parent.id] : [];
   }
 
+  /**
+   * Both counters are upserts with a database-side increment rather than the
+   * read-then-write they used to be: the Repository locks the row by its unique
+   * selector, so two concurrent triggers of the same workflow can no longer
+   * read the same count and each write it back plus one.
+   */
   private async incrementStats(
-    query: QueryAdapter,
+    store: WorkflowStore,
     workflow: WorkflowDefinition,
   ): Promise<void> {
-    const workflowStats = await query
-      .selectFrom(WORKFLOW_COLLECTIONS.stats)
-      .selectAll()
-      .where('key', '=', workflow.key)
-      .executeTakeFirst<Row>();
-    if (workflowStats) {
-      await query
-        .updateTable(WORKFLOW_COLLECTIONS.stats)
-        .set({ executed: Number(workflowStats.executed ?? 0) + 1 })
-        .where('key', '=', workflow.key)
-        .execute();
-    } else {
-      await query
-        .insertInto(WORKFLOW_COLLECTIONS.stats)
-        .values({ key: workflow.key, executed: 1 })
-        .execute();
-    }
-
-    const versionStats = await query
-      .selectFrom(WORKFLOW_COLLECTIONS.versionStats)
-      .selectAll()
-      .where('id', '=', workflow.id)
-      .executeTakeFirst<Row>();
-    if (versionStats) {
-      await query
-        .updateTable(WORKFLOW_COLLECTIONS.versionStats)
-        .set({ executed: Number(versionStats.executed ?? 0) + 1 })
-        .where('id', '=', workflow.id)
-        .execute();
-    } else {
-      await query
-        .insertInto(WORKFLOW_COLLECTIONS.versionStats)
-        .values({ id: workflow.id, executed: 1 })
-        .execute();
-    }
+    await store.stats.upsertOne({
+      filter: { key: workflow.key },
+      create: { key: workflow.key, executed: 1 },
+      update: { executed: (value) => value.increment(1) },
+    });
+    const workflowId = asIdFilter(workflow.id);
+    await store.versionStats.upsertOne({
+      filter: { id: workflowId },
+      create: { id: workflowId, executed: 1 },
+      update: { executed: (value) => value.increment(1) },
+    });
   }
 
   private getExpiresAt(

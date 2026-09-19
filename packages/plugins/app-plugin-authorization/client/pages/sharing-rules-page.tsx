@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import type { ReactElement } from 'react';
 import { SharingRulesPanel } from './sharing-rules-panel.js';
 import {
@@ -6,15 +7,20 @@ import {
 } from './page-support.js';
 
 export default function SharingRulesPage(): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+
   const { options, users, error } = useAuthorizationPageData(
     'authz/sharing-rules/options',
     'authz/sharing-rules/users',
   );
   return (
     <AuthorizationSettingsPage
-      eyebrow='Record access'
-      title='Sharing Rules'
-      description='Grant selected users access to specific records or a reusable record scope.'
+      eyebrow={t('recordAccess', { defaultValue: 'Record access' })}
+      title={t('sharingRules', { defaultValue: 'Sharing Rules' })}
+      description={t('sharingRulesDescription', {
+        defaultValue:
+          'Grant selected users access to specific records or a reusable record scope.',
+      })}
       error={error}
       loading={!options}
     >

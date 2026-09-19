@@ -1,8 +1,21 @@
+import {
+  ClientApplication,
+  ClientApplicationContext,
+  createAppClientConfig,
+  defineAppClientRenderConfig,
+  readStoredLocale,
+} from '@nocobase/app-client';
+import { defineClientPlugins } from '@nocobase/app-client/plugins';
+import {
+  defineAppRuntime,
+  resolveAppRuntime,
+} from '@nocobase/app-client/runtime';
 import { I18nProvider } from '@nocobase/i18n/client';
 import { I18nRuntime } from '@nocobase/i18n';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DropdownMenu,
@@ -12,9 +25,31 @@ import {
 
 import { LanguageSwitcher } from '@/shell/language-switcher';
 
-const APP = '@nocobase/app-template-hub';
+vi.mock('sonner', () => ({
+  toast: { info: vi.fn(), error: vi.fn() },
+}));
 
-async function createRuntime(locales: string[]): Promise<I18nRuntime> {
+const APP = '@nocobase/app-template-hub';
+const FALLBACK_NOTICE = '服务端不支持该语言，服务端内容已回落为英文。';
+const CHANGE_FAILED_NOTICE = '未能完成语言切换，请重试。';
+const fetchMock = vi.fn();
+const applications: ClientApplication[] = [];
+
+function createServerResponse(fallback = false): Response {
+  return new Response(
+    JSON.stringify({
+      locale: fallback ? 'en-US' : 'zh-CN',
+      requestedLocale: 'zh-CN',
+      fallback,
+    }),
+    { headers: { 'Content-Type': 'application/json' } },
+  );
+}
+
+async function createRuntime(locales: string[]): Promise<{
+  app: ClientApplication;
+  runtime: I18nRuntime;
+}> {
   const runtime = new I18nRuntime({
     defaultLocale: 'en-US',
     locales,
@@ -22,37 +57,77 @@ async function createRuntime(locales: string[]): Promise<I18nRuntime> {
   });
   runtime.registerApplicationNamespace(APP, {
     'en-US': () =>
-      Promise.resolve({ default: { actions: { language: 'Language' } } }),
+      Promise.resolve({
+        default: {
+          actions: { language: 'Language' },
+          notices: {
+            serverLocaleFallback:
+              'The server does not support this language, so server messages will use English.',
+            languageChangeFailed:
+              'Unable to complete the language change. Please try again.',
+          },
+        },
+      }),
     'zh-CN': () =>
-      Promise.resolve({ default: { actions: { language: '语言' } } }),
+      Promise.resolve({
+        default: {
+          actions: { language: '语言' },
+          notices: {
+            serverLocaleFallback: FALLBACK_NOTICE,
+            languageChangeFailed: CHANGE_FAILED_NOTICE,
+          },
+        },
+      }),
   });
   await runtime.init('en-US');
-  return runtime;
+  const appRuntime = await resolveAppRuntime(
+    defineAppRuntime({
+      packageName: APP,
+      createAppConfig: createAppClientConfig,
+      plugins: defineClientPlugins([]),
+    }),
+    { rawConfig: { api: { baseURL: '/api' } } },
+  );
+  const app = new ClientApplication({
+    runtime: appRuntime,
+    createRenderConfig: () => defineAppClientRenderConfig({ routes: null }),
+  });
+  await app.start();
+  applications.push(app);
+  return { app, runtime };
 }
 
 beforeEach(() => {
-  // The switch tells the server which language to answer in; the interface must not depend on that succeeding.
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}')));
+  vi.clearAllMocks();
+  globalThis.localStorage.clear();
+  fetchMock.mockImplementation(() => Promise.resolve(createServerResponse()));
+  vi.stubGlobal('fetch', fetchMock);
 });
 
-function renderMenu(runtime: I18nRuntime) {
+afterEach(async () => {
+  await Promise.all(applications.splice(0).map((app) => app.shutdown()));
+});
+
+function renderMenu(app: ClientApplication, runtime: I18nRuntime) {
   return render(
-    <I18nProvider runtime={runtime}>
-      <DropdownMenu>
-        <DropdownMenuTrigger>Account</DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <LanguageSwitcher />
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </I18nProvider>,
+    <ClientApplicationContext.Provider value={app}>
+      <I18nProvider runtime={runtime}>
+        <DropdownMenu>
+          <DropdownMenuTrigger>Account</DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <LanguageSwitcher />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </I18nProvider>
+    </ClientApplicationContext.Provider>,
   );
 }
 
 describe('LanguageSwitcher', () => {
   it('shows the current language by name rather than by locale code', async () => {
-    const runtime = await createRuntime(['en-US', 'zh-CN']);
+    const { app, runtime } = await createRuntime(['en-US', 'zh-CN']);
 
-    renderMenu(runtime);
+    renderMenu(app, runtime);
     screen.getByRole('button', { name: 'Account' }).focus();
     await userEvent.keyboard('{ArrowDown}');
 
@@ -71,10 +146,10 @@ describe('LanguageSwitcher', () => {
   });
 
   it('switches the language when another is chosen', async () => {
-    const runtime = await createRuntime(['en-US', 'zh-CN']);
+    const { app, runtime } = await createRuntime(['en-US', 'zh-CN']);
     const user = userEvent.setup();
 
-    renderMenu(runtime);
+    renderMenu(app, runtime);
     screen.getByRole('button', { name: 'Account' }).focus();
     await userEvent.keyboard('{ArrowDown}');
 
@@ -85,16 +160,86 @@ describe('LanguageSwitcher', () => {
     fireEvent.click(await screen.findByRole('menuitemradio', { name: '中文' }));
 
     await waitFor(() => expect(runtime.getLocale()).toBe('zh-CN'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(screen.getByRole('menuitem', { name: /语言\s*中文/ })).toBeVisible();
     expect(
       await screen.findByRole('menuitemradio', { name: '中文' }),
     ).toBeChecked();
+    expect(toast.info).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('keeps the control pending and shows an informational notice when the server falls back', async () => {
+    const { app, runtime } = await createRuntime(['en-US', 'zh-CN']);
+    const user = userEvent.setup();
+    let resolveRequest: ((response: Response) => void) | undefined;
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+
+    renderMenu(app, runtime);
+    screen.getByRole('button', { name: 'Account' }).focus();
+    await user.keyboard('{ArrowDown}');
+    await user.click(
+      await screen.findByRole('menuitem', { name: /Language\s*English/ }),
+    );
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: '中文' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(runtime.getLocale()).toBe('zh-CN');
+    expect(readStoredLocale()).toBe('zh-CN');
+    expect(screen.getByRole('menuitemradio', { name: '中文' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    if (!resolveRequest) throw new Error('Locale request did not start.');
+    resolveRequest(createServerResponse(true));
+
+    await waitFor(() =>
+      expect(toast.info).toHaveBeenCalledWith(FALLBACK_NOTICE),
+    );
+    expect(
+      screen.getByRole('menuitemradio', { name: '中文' }),
+    ).not.toHaveAttribute('aria-disabled');
+    expect(toast.error).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}{Escape}');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Account' })).toHaveFocus(),
+    );
+  });
+
+  it('keeps the interface language and reports a server synchronization failure', async () => {
+    const { app, runtime } = await createRuntime(['en-US', 'zh-CN']);
+    const user = userEvent.setup();
+    fetchMock.mockImplementation(() => Promise.reject(new Error('offline')));
+
+    renderMenu(app, runtime);
+    screen.getByRole('button', { name: 'Account' }).focus();
+    await user.keyboard('{ArrowDown}');
+    await user.click(
+      await screen.findByRole('menuitem', { name: /Language\s*English/ }),
+    );
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: '中文' }));
+
+    await waitFor(() => expect(runtime.getLocale()).toBe('zh-CN'));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(CHANGE_FAILED_NOTICE),
+    );
+    expect(readStoredLocale()).toBe('zh-CN');
+    expect(toast.info).not.toHaveBeenCalled();
+    await user.keyboard('{Escape}{Escape}');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Account' })).toHaveFocus(),
+    );
   });
 
   it('supports switching from the keyboard', async () => {
-    const runtime = await createRuntime(['en-US', 'zh-CN']);
+    const { app, runtime } = await createRuntime(['en-US', 'zh-CN']);
     const user = userEvent.setup();
-    renderMenu(runtime);
+    renderMenu(app, runtime);
 
     await user.tab();
     await user.keyboard('{ArrowDown}');
@@ -104,11 +249,14 @@ describe('LanguageSwitcher', () => {
       ).toHaveFocus(),
     );
     await user.keyboard('{ArrowRight}');
-    expect(
-      await screen.findByRole('menuitemradio', { name: 'English' }),
-    ).toHaveFocus();
+    await waitFor(() =>
+      expect(
+        screen.getByRole('menuitemradio', { name: 'English' }),
+      ).toHaveFocus(),
+    );
     await user.keyboard('{ArrowDown}{Enter}');
     expect(runtime.getLocale()).toBe('zh-CN');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(screen.getByRole('menuitemradio', { name: '中文' })).toBeChecked();
     await user.keyboard('{Escape}{Escape}');
     await waitFor(() =>
@@ -117,12 +265,14 @@ describe('LanguageSwitcher', () => {
   });
 
   it('renders nothing when the application offers one language', async () => {
-    const runtime = await createRuntime(['en-US']);
+    const { app, runtime } = await createRuntime(['en-US']);
 
     const { container } = render(
-      <I18nProvider runtime={runtime}>
-        <LanguageSwitcher />
-      </I18nProvider>,
+      <ClientApplicationContext.Provider value={app}>
+        <I18nProvider runtime={runtime}>
+          <LanguageSwitcher />
+        </I18nProvider>
+      </ClientApplicationContext.Provider>,
     );
 
     expect(container).toBeEmptyDOMElement();

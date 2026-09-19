@@ -10,19 +10,17 @@ export {
   type AppServerRouteSnapshot,
 } from './inspect.js';
 export {
-  createAppPluginDatabaseConfig,
+  createAppDatabaseTaskContributions,
   createPluginJobLocations,
   createPluginMigrationSources,
   createPluginSeedSources,
-  resolveAppPluginDatabaseConfig,
   resolveAppServerPlugins,
   type ResolveAppServerPluginsOptions,
-  type ResolvedAppPluginDatabaseConfig,
 } from './resolve.js';
 export type * from './types.js';
 
 import type { Hono } from 'hono';
-import type { ConfigPaths } from '../config/types.js';
+import type { AppPaths } from '../config/types.js';
 
 export interface AppPluginRoutesContext<
   TDeps = unknown,
@@ -33,7 +31,7 @@ export interface AppPluginRoutesContext<
   readonly config: TConfig;
   readonly deps: TDeps;
   readonly services: TServices;
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
 }
 
 export type AppPluginDisposer = () => void | Promise<void>;
@@ -51,7 +49,7 @@ export interface AppPluginServerContext<
   readonly deps: TDeps;
   readonly services: TServices;
   readonly lifecycle: AppPluginLifecycle;
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
 }
 
 export type AppPluginBootstrap<

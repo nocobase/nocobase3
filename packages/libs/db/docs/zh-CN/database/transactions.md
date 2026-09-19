@@ -1,4 +1,9 @@
-# 事务
+---
+title: Database Transaction：事务与 Connection 传播
+description: 使用 db.transaction() 或 connection.transaction() 原子执行操作，并保持事务 Connection 贯穿回调。
+---
+
+# Database Transaction：事务与 Connection 传播
 
 `db.transaction()` 在一个连接事务中执行多个操作。事务回调里的 `connection` 表示当前事务连接。
 
@@ -69,13 +74,10 @@ await analytics.transaction(async (connection) => {
 });
 ```
 
-## 未来 Repository
-
-Repository 和 Filter Builder 目前还没有实现。未来 Repository 实现后，事务内也应使用回调参数里的 `connection.repository()`，这样 Repository 读写和同一事务里的 Builder、Query 操作共享同一个连接上下文；详细规划见 [Repository 概览](../repository/overview.md) 和 [Filter Builder](../repository/filter-builder.md)。
-
-## Agent 注意事项
+## 使用注意事项
 
 - transaction 内只使用回调里的 `connection`。
 - 需要 Builder、Query 混合操作时，也应全部走同一个事务 connection。
 - 如果事务抛错，底层 driver 应回滚事务。
 - 测试事务行为时使用真实数据库集成测试。
+- 事务内使用回调 Connection 的 `connection.repository('projects')`；不要复用事务外的 Repository。嵌套写入与 ifVersion 见 [Repository 事务](../repository/transactions.md)。

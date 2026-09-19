@@ -2,6 +2,7 @@ import {
   Fragment,
   createContext,
   createElement,
+  useCallback,
   useContext,
   useMemo,
   type ComponentType,
@@ -12,7 +13,10 @@ import {
   I18nextProvider,
   useTranslation as useI18nextTranslation,
 } from 'react-i18next';
-import type { UseTranslationResponse } from 'react-i18next';
+import type {
+  UseTranslationOptions,
+  UseTranslationResponse,
+} from 'react-i18next';
 
 import type { I18nRuntime, Namespace } from '../core/index.js';
 
@@ -125,7 +129,50 @@ export function withNamespace<TProps extends object>(
   return Wrapped;
 }
 
-export type { UseTranslationResponse };
+export type { UseTranslationOptions, UseTranslationResponse };
+
+type DynamicTranslation = (
+  key: unknown,
+  optionsOrDefaultValue?: unknown,
+  options?: unknown,
+) => unknown;
+
+function isNamespaceList(value: unknown): value is readonly Namespace[] {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === 'string')
+  );
+}
+
+function resolveNamespaces(
+  runtime: I18nRuntime,
+  namespaces: Namespace | readonly Namespace[],
+): Namespace[] {
+  const requested = typeof namespaces === 'string' ? [namespaces] : namespaces;
+  const primary = requested.map((namespace) =>
+    runtime.registry.resolveNamespace(namespace),
+  );
+  const fallbacks = requested.flatMap((namespace) =>
+    runtime.getNamespaceChain(namespace).slice(1),
+  );
+  return [...new Set([...primary, ...fallbacks])];
+}
+
+function resolveTranslationOptions(
+  runtime: I18nRuntime,
+  value: unknown,
+): unknown {
+  if (typeof value !== 'object' || value === null || !('ns' in value)) {
+    return value;
+  }
+  const options = value as { readonly ns?: unknown };
+  if (typeof options.ns !== 'string' && !isNamespaceList(options.ns)) {
+    return value;
+  }
+  return {
+    ...value,
+    ns: resolveNamespaces(runtime, options.ns),
+  };
+}
 
 /**
  * Translates within the namespace in scope, or the one named.
@@ -134,8 +181,51 @@ export type { UseTranslationResponse };
  * declared default instead of warning. Callers therefore have to pass `defaultValue` for a string that must stay
  * readable in that case; `t('a.b')` on its own would render as its key.
  */
-export function useTranslation(
+export function useTranslation<KPrefix = undefined>(
   ns?: Namespace | readonly Namespace[],
-): UseTranslationResponse<never, undefined> {
-  return useI18nextTranslation(ns as never);
+  options?: UseTranslationOptions<KPrefix>,
+): UseTranslationResponse<never, KPrefix> {
+  const runtime = useOptionalI18nRuntime();
+  const resolvedNamespaces = useMemo(
+    () => (runtime && ns ? resolveNamespaces(runtime, ns) : ns),
+    [runtime, ns],
+  );
+  const response = useI18nextTranslation(
+    resolvedNamespaces as never,
+    options as never,
+  ) as UseTranslationResponse<never, KPrefix>;
+  const underlyingT = response.t as unknown as DynamicTranslation;
+  const t = useCallback(
+    ((
+      key: unknown,
+      optionsOrDefaultValue?: unknown,
+      trailingOptions?: unknown,
+    ) => {
+      if (!runtime) {
+        return underlyingT(key, optionsOrDefaultValue, trailingOptions);
+      }
+      if (typeof optionsOrDefaultValue === 'string') {
+        return underlyingT(
+          key,
+          optionsOrDefaultValue,
+          resolveTranslationOptions(runtime, trailingOptions),
+        );
+      }
+      return underlyingT(
+        key,
+        resolveTranslationOptions(runtime, optionsOrDefaultValue),
+      );
+    }) as unknown as typeof response.t,
+    [runtime, underlyingT],
+  );
+
+  return useMemo(
+    () =>
+      Object.assign([t, response.i18n, response.ready], {
+        t,
+        i18n: response.i18n,
+        ready: response.ready,
+      }) as UseTranslationResponse<never, KPrefix>,
+    [response.i18n, response.ready, t],
+  );
 }

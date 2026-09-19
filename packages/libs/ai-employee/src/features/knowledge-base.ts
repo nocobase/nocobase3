@@ -10,7 +10,6 @@
 import {
   DocumentSegmentedWithScore,
   KnowledgeBase,
-  KnowledgeBaseGroup,
   SearchOptions,
 } from '../types/index.js';
 
@@ -20,9 +19,6 @@ export type KnowledgeBaseAccessOptions = Pick<
 >;
 export interface KnowledgeBaseFeature {
   getKnowledgeBase(knowledgeBaseKeys: string[]): Promise<KnowledgeBase[]>;
-  getKnowledgeBaseGroup(
-    knowledgeBaseKeys: string[],
-  ): Promise<KnowledgeBaseGroup[]>;
   getAccessibleKnowledgeBaseKeys?(
     options: KnowledgeBaseAccessOptions,
   ): Promise<string[]>;

@@ -12,3 +12,8 @@ export {
   type WorkflowInstructionContext,
   type WorkflowInstructionResult,
 } from './instructions/base.js';
+
+export {
+  resolveWorkflowRuntimeConfig,
+  type WorkflowRuntimeConfig,
+} from './config.js';

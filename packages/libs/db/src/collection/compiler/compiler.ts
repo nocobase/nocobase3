@@ -1,7 +1,10 @@
+import { DefaultNamingStrategy } from '../../naming/default-strategy.js';
+import { validateEnumDefinition, assertEnumExpansion } from '../enum.js';
 import {
-  DefaultNamingStrategy,
-  type NamingStrategy,
-} from '../../naming/index.js';
+  requireRelationOption,
+  validateRelationOptions,
+} from '../relation-contract.js';
+import type { NamingStrategy } from '../../naming/strategy.js';
 import type {
   AnyFieldDefinition,
   CollectionAlterDefinition,
@@ -24,7 +27,6 @@ import type {
 
 export interface CollectionCompilerOptions {
   naming?: NamingOptions;
-  namingStrategy?: NamingStrategy;
 }
 
 export interface CollectionCompilerContext {
@@ -34,16 +36,13 @@ export interface CollectionCompilerContext {
 export class CollectionCompiler {
   private readonly naming: NamingStrategy;
   private readonly namingOptions: Required<NamingOptions>;
-  private readonly customNamingStrategy: boolean;
 
   constructor(options: CollectionCompilerOptions = {}) {
     this.namingOptions = {
       underscored: options.naming?.underscored ?? true,
       tablePrefix: options.naming?.tablePrefix ?? '',
     };
-    this.customNamingStrategy = Boolean(options.namingStrategy);
-    this.naming =
-      options.namingStrategy ?? new DefaultNamingStrategy(this.namingOptions);
+    this.naming = new DefaultNamingStrategy(this.namingOptions);
   }
 
   compile(
@@ -56,21 +55,14 @@ export class CollectionCompiler {
   }
 
   effectiveTableName(name: string, definition?: CollectionDefinition): string {
-    return (
-      definition?.tableName ??
-      this.namingFor(definition).collectionToTableName(name)
-    );
+    return this.namingFor(definition).collectionToTableName(name);
   }
 
   effectiveColumnName(
     field: string,
-    definition?: AnyFieldDefinition,
-    collection?: CollectionDefinition,
+    definition?: CollectionDefinition,
   ): string {
-    return (
-      definition?.columnName ??
-      this.namingFor(collection).fieldToColumnName(field)
-    );
+    return this.namingFor(definition).fieldToColumnName(field);
   }
 
   private compileOperation(
@@ -110,9 +102,6 @@ export class CollectionCompiler {
           }),
         ];
       case 'renameCollection':
-        if (!operation.renameTable && !operation.renameTableTo) {
-          return [];
-        }
         return [
           {
             type: 'renameTable',
@@ -120,16 +109,10 @@ export class CollectionCompiler {
               operation.from,
               context.collections?.[operation.from],
             ),
-            to:
-              operation.renameTableTo ??
-              this.effectiveTableName(
-                operation.to,
-                this.renameDefinition(
-                  context.collections?.[operation.from],
-                  operation.to,
-                  true,
-                ),
-              ),
+            to: this.effectiveTableName(
+              operation.to,
+              context.collections?.[operation.from],
+            ),
           },
         ];
       case 'createViewCollection':
@@ -238,9 +221,6 @@ export class CollectionCompiler {
             context,
           ),
         ];
-      case 'updateCollectionMetadata':
-      case 'updateFieldMetadata':
-        return [];
       default:
         return assertNever(operation);
     }
@@ -253,6 +233,12 @@ export class CollectionCompiler {
   ): TableSchemaDefinition {
     const tableName = this.effectiveTableName(name, definition);
     const normalized = this.normalizeCollectionDefinition(definition);
+    const indexes = deduplicatePhysicalIndexes(
+      tableName,
+      normalized.indexes.map((index) =>
+        this.compileIndex(tableName, index, normalized.fields, definition),
+      ),
+    );
 
     return {
       name: tableName,
@@ -260,11 +246,7 @@ export class CollectionCompiler {
       columns: normalized.fields.flatMap((field) =>
         this.compileFieldColumns(field, definition),
       ),
-      indexes: [
-        ...normalized.indexes.map((index) =>
-          this.compileIndex(tableName, index, normalized.fields, definition),
-        ),
-      ],
+      indexes,
       constraints: normalized.constraints.map((constraint) =>
         this.compileConstraint(
           tableName,
@@ -293,10 +275,12 @@ export class CollectionCompiler {
         ? this.compileViewQuery(definition.view.as, context)
         : undefined,
       raw: definition.view?.asRaw,
-      indexes:
+      indexes: deduplicatePhysicalIndexes(
+        tableName,
         definition.indexes?.map((index) =>
           this.compileIndex(tableName, index, fields, definition),
         ) ?? [],
+      ),
     };
   }
 
@@ -420,7 +404,72 @@ export class CollectionCompiler {
     }
 
     for (const field of changes.alterFields ?? []) {
-      const existing = existingFields.find((item) => item.name === field.name);
+      const previous = existingFields.find((item) => item.name === field.name);
+      if (previous?.type === 'enum' || field.changes.type === 'enum') {
+        if (
+          previous?.type !== 'enum' ||
+          (field.changes.type !== undefined && field.changes.type !== 'enum')
+        )
+          throw new Error(
+            'Changing an existing Field to or from enum requires an explicit migration.',
+          );
+        const merged = {
+          ...previous,
+          ...field.changes,
+          name: field.name,
+          db: field.changes.db,
+        } as FieldDefinition;
+        validateEnumDefinition(merged);
+        assertEnumExpansion(previous.values, merged.values!);
+        if (
+          Object.keys(field.changes).every((key) =>
+            ['title', 'description', 'values'].includes(key),
+          )
+        ) {
+          if (
+            previous.length !== undefined &&
+            merged.values!.some((value) => value.length > previous.length!)
+          )
+            throw new Error(
+              'Added enum members exceed current storage capacity; widen the column explicitly.',
+            );
+          continue;
+        }
+        const [definition] = this.compileFieldColumns(merged, current);
+        operations.push({
+          type: 'alterColumn',
+          column: definition.name,
+          changes: definition,
+        });
+        continue;
+      }
+      if (previous?.type === 'char' || field.changes.type === 'char') {
+        if (
+          Object.keys(field.changes).every((key) =>
+            ['title', 'description'].includes(key),
+          )
+        )
+          continue;
+        const merged = {
+          ...previous,
+          ...field.changes,
+          name: field.name,
+        } as FieldDefinition;
+        if (
+          field.changes.length !== undefined ||
+          field.changes.type !== undefined
+        )
+          merged.db = field.changes.db;
+        const [definition] = this.compileFieldColumns(merged, current);
+        // Existing primary keys are constraints, not new column declarations.
+        delete definition.primaryKey;
+        operations.push({
+          type: 'alterColumn',
+          column: definition.name,
+          changes: definition,
+        });
+        continue;
+      }
       const oldColumnName = this.resolveColumn(
         field.name,
         existingFields,
@@ -431,8 +480,7 @@ export class CollectionCompiler {
         column: oldColumnName,
         changes: {
           ...field.changes,
-          name:
-            field.changes.columnName ?? existing?.columnName ?? oldColumnName,
+          name: oldColumnName,
         },
       });
     }
@@ -474,10 +522,20 @@ export class CollectionCompiler {
     }
 
     for (const constraint of changes.dropConstraints ?? []) {
-      operations.push({ type: 'dropConstraint', name: constraint });
+      operations.push({
+        type: 'dropConstraint',
+        name: constraint,
+        constraintType: current?.constraints?.find(
+          (candidate) => candidate.name === constraint,
+        )?.type,
+      });
     }
 
-    return { type: 'alterTable', tableName, operations };
+    return {
+      type: 'alterTable',
+      tableName,
+      operations: deduplicateAlterIndexOperations(tableName, operations),
+    };
   }
 
   private normalizeCollectionDefinition(
@@ -524,9 +582,21 @@ export class CollectionCompiler {
       }
       const relation = relationField(field);
       if (relation?.type === 'belongsTo') {
+        const relationColumn = relation.foreignKey
+          ? this.columnName(relation, {
+              ...definition,
+              fields,
+            })
+          : undefined;
         if (
           relation.index !== false &&
-          !indexes.some((index) => index.fields?.includes(relation.name))
+          relationColumn &&
+          !indexes.some((index) => {
+            const columns = index.fields?.map((fieldName) =>
+              this.resolveColumn(fieldName, fields, definition),
+            );
+            return columns?.length === 1 && columns[0] === relationColumn;
+          })
         ) {
           indexes.push({ fields: [relation.name] });
         }
@@ -544,6 +614,7 @@ export class CollectionCompiler {
     collection?: CollectionDefinition,
   ): ColumnSchemaDefinition[] {
     const relation = relationField(field);
+    if (relation) validateRelationOptions(relation);
     if (
       relation &&
       (relation.type === 'hasOne' ||
@@ -557,10 +628,15 @@ export class CollectionCompiler {
       if (this.relationUsesExistingField(relation, collection)) {
         return [];
       }
+      if (!relation.foreignKeyType) {
+        throw new Error(
+          `Relation "${relation.name}" requires an existing scalar foreignKey Field or an explicit foreignKeyType.`,
+        );
+      }
       return [
         {
           name: this.columnName(relation, collection),
-          type: relation.foreignKeyType ?? 'bigInt',
+          type: relation.foreignKeyType,
           nullable: relation.nullable ?? true,
           unsigned: relation.unsigned,
           db: relation.db,
@@ -569,6 +645,39 @@ export class CollectionCompiler {
     }
 
     const scalarField = field as FieldDefinition;
+    validateEnumDefinition(scalarField);
+    if (
+      scalarField.type === 'enum' &&
+      collection?.constraints?.some(
+        (constraint) =>
+          (constraint.type === 'primary' || constraint.type === 'unique') &&
+          constraint.fields.includes(scalarField.name),
+      )
+    )
+      throw new Error('V1 enum Fields cannot be identity Fields.');
+    if (scalarField.type === 'char') {
+      if (!Number.isSafeInteger(scalarField.length) || scalarField.length! < 1)
+        throw new Error(
+          `CHAR Field "${scalarField.name}" requires a positive integer length.`,
+        );
+      if (
+        scalarField.defaultValue !== undefined &&
+        scalarField.defaultValue !== null &&
+        typeof scalarField.defaultValue !== 'string'
+      )
+        throw new Error(
+          `CHAR Field "${scalarField.name}" requires a string default.`,
+        );
+      if (
+        typeof scalarField.defaultValue === 'string' &&
+        ([...scalarField.defaultValue].length > scalarField.length! ||
+          /[\uD800-\uDFFF]/u.test(scalarField.defaultValue) ||
+          scalarField.defaultValue.includes('\0'))
+      )
+        throw new Error(
+          `CHAR Field "${scalarField.name}" has an invalid or overlong default.`,
+        );
+    }
     return [
       {
         name: this.columnName(scalarField, collection),
@@ -579,7 +688,10 @@ export class CollectionCompiler {
         autoIncrement:
           scalarField.autoIncrement ??
           (scalarField.type === 'increments' ? true : undefined),
-        length: scalarField.length,
+        length:
+          scalarField.type === 'enum'
+            ? (scalarField.length ?? 255)
+            : scalarField.length,
         precision: scalarField.precision,
         scale: scalarField.scale,
         unsigned: scalarField.unsigned,
@@ -632,6 +744,13 @@ export class CollectionCompiler {
     collection?: CollectionDefinition,
     context: CollectionCompilerContext = {},
   ): PhysicalConstraintDefinition {
+    if (
+      (constraint.type === 'primary' || constraint.type === 'unique') &&
+      constraint.fields.some((name) =>
+        fields.some((field) => field.name === name && field.type === 'enum'),
+      )
+    )
+      throw new Error('V1 enum Fields cannot be identity Fields.');
     switch (constraint.type) {
       case 'primary':
         return {
@@ -667,6 +786,14 @@ export class CollectionCompiler {
             : undefined,
         };
       case 'foreignKey': {
+        if (
+          !constraint.references.fields?.length ||
+          constraint.references.fields.length !== constraint.fields.length
+        ) {
+          throw new Error(
+            'Foreign key references.fields must explicitly match the number of local fields.',
+          );
+        }
         const target = context.collections?.[constraint.references.collection];
         const targetTable = this.effectiveTableName(
           constraint.references.collection,
@@ -687,7 +814,7 @@ export class CollectionCompiler {
             ),
           references: {
             table: targetTable,
-            columns: (constraint.references.fields ?? ['id']).map((field) =>
+            columns: constraint.references.fields.map((field) =>
               this.resolveColumn(field, target?.fields ?? [], target),
             ),
           },
@@ -708,7 +835,7 @@ export class CollectionCompiler {
       fields: [field.name],
       references: {
         collection: field.target,
-        fields: [field.targetKey ?? 'id'],
+        fields: [requireRelationOption(field, 'targetKey')],
       },
       onDelete: field.onDelete,
       onUpdate: field.onUpdate,
@@ -762,12 +889,11 @@ export class CollectionCompiler {
           collection,
         );
       }
-      return this.namingFor(collection).relationForeignKey(relation.name);
+      throw new Error(
+        `Relation "${relation.name}" requires an explicit foreignKey.`,
+      );
     }
-    return (
-      field.columnName ??
-      this.namingFor(collection).fieldToColumnName(field.name)
-    );
+    return this.namingFor(collection).fieldToColumnName(field.name);
   }
 
   private relationUsesExistingField(
@@ -786,7 +912,7 @@ export class CollectionCompiler {
   }
 
   private namingFor(definition?: CollectionDefinition): NamingStrategy {
-    if (this.customNamingStrategy || !definition?.naming) {
+    if (!definition?.naming) {
       return this.naming;
     }
     return new DefaultNamingStrategy({
@@ -804,21 +930,6 @@ export class CollectionCompiler {
       ...(collection ?? { name }),
       fields,
     };
-  }
-
-  private renameDefinition(
-    definition: CollectionDefinition | undefined,
-    name: string,
-    renamingTable: boolean,
-  ): CollectionDefinition | undefined {
-    if (!definition) {
-      return { name };
-    }
-    const next = { ...definition, name };
-    if (renamingTable) {
-      delete next.tableName;
-    }
-    return next;
   }
 }
 
@@ -859,6 +970,82 @@ function pruneUndefined<T extends Record<string, unknown>>(value: T): T {
     }
   }
   return value;
+}
+
+function deduplicatePhysicalIndexes(
+  tableName: string,
+  indexes: readonly PhysicalIndexDefinition[],
+): PhysicalIndexDefinition[] {
+  const seen = new Map<string, PhysicalIndexDefinition>();
+  const result: PhysicalIndexDefinition[] = [];
+  for (const index of indexes) {
+    if (!index.name) {
+      result.push(index);
+      continue;
+    }
+    const previous = seen.get(index.name);
+    if (!previous) {
+      seen.set(index.name, index);
+      result.push(index);
+      continue;
+    }
+
+    if (samePhysicalIndex(previous, index)) {
+      continue;
+    }
+
+    throw new Error(
+      `Collection "${tableName}" defines conflicting physical indexes with the same name "${index.name}".`,
+    );
+  }
+  return result;
+}
+
+function deduplicateAlterIndexOperations(
+  tableName: string,
+  operations: readonly TableAlterSchemaOperation[],
+): TableAlterSchemaOperation[] {
+  const seen = new Map<string, PhysicalIndexDefinition>();
+  return operations.filter((operation) => {
+    if (operation.type !== 'addIndex' || !operation.index.name) return true;
+
+    const previous = seen.get(operation.index.name);
+    if (!previous) {
+      seen.set(operation.index.name, operation.index);
+      return true;
+    }
+
+    if (samePhysicalIndex(previous, operation.index)) return false;
+
+    throw new Error(
+      `Collection "${tableName}" defines conflicting physical indexes with the same name "${operation.index.name}".`,
+    );
+  });
+}
+
+function samePhysicalIndex(
+  left: PhysicalIndexDefinition,
+  right: PhysicalIndexDefinition,
+): boolean {
+  return (
+    sameStringArray(left.columns, right.columns) &&
+    sameStringArray(left.expressions, right.expressions) &&
+    left.type === right.type &&
+    JSON.stringify(left.predicate) === JSON.stringify(right.predicate) &&
+    JSON.stringify(left.order) === JSON.stringify(right.order) &&
+    JSON.stringify(left.db) === JSON.stringify(right.db)
+  );
+}
+
+function sameStringArray(
+  left: readonly unknown[] | undefined,
+  right: readonly unknown[] | undefined,
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 function assertNever(value: never): never {

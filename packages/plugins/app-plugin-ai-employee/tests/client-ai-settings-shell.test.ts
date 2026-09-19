@@ -9,6 +9,7 @@ describe('AI settings navigation', () => {
     ).toEqual([
       { key: 'ai-employee', labelKey: 'AI Employee' },
       { key: 'llm-service', labelKey: 'LLM Service' },
+      { key: 'mcp', labelKey: 'MCP' },
     ]);
   });
 

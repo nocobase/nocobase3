@@ -16,6 +16,7 @@ import { workflowApi } from '../../client/workflow-management/data.js';
 import {
   NodeDescriptionDialog,
   WorkflowDetailPage,
+  WorkflowRunDetailPage,
 } from '../../client/workflow-management/pages.js';
 import type { WorkflowNestedDefinition } from '../../client/types.js';
 import clientLocales from '../../client/locales/index.js';
@@ -109,6 +110,9 @@ describe('workflow node descriptions', () => {
     vi.spyOn(workflowApi, 'workflow').mockResolvedValue(
       workflow({ enabled: true, current: true }),
     );
+    vi.spyOn(workflowApi, 'revisions').mockResolvedValue([
+      workflow({ enabled: true, current: true }),
+    ]);
 
     renderWithI18n(
       <MemoryRouter initialEntries={['/workflows/workflow-1']}>
@@ -135,6 +139,7 @@ describe('workflow node descriptions', () => {
       .spyOn(workflowApi, 'workflow')
       .mockResolvedValueOnce(workflow())
       .mockResolvedValueOnce(workflow({ enabled: true, current: true }));
+    vi.spyOn(workflowApi, 'revisions').mockResolvedValue([workflow()]);
     vi.spyOn(workflowApi, 'enable').mockResolvedValue(
       workflow({ enabled: true, current: true }),
     );
@@ -172,6 +177,13 @@ describe('workflow node descriptions', () => {
         current: id !== 'workflow-hash' ? true : null,
       }),
     );
+    vi.spyOn(workflowApi, 'revisions').mockImplementation(async (id) => [
+      workflow({
+        id: id === 'workflow-hash' ? null : id,
+        enabled: id !== 'workflow-hash',
+        current: id !== 'workflow-hash' ? true : null,
+      }),
+    ]);
     vi.spyOn(workflowApi, 'enable').mockResolvedValue(
       workflow({ id: 'workflow-42', enabled: true, current: true }),
     );
@@ -205,6 +217,9 @@ describe('workflow node descriptions', () => {
     vi.spyOn(workflowApi, 'workflow').mockResolvedValue(
       workflow({ enabled: true, current: true }),
     );
+    vi.spyOn(workflowApi, 'revisions').mockResolvedValue([
+      workflow({ enabled: true, current: true }),
+    ]);
     vi.spyOn(workflowApi, 'execute').mockResolvedValue({
       id: 'run-42',
       workflowId: 'workflow-1',
@@ -234,6 +249,146 @@ describe('workflow node descriptions', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('Current location').textContent).toBe(
         '/settings/automation/workflow-runs/run-42',
+      ),
+    );
+  });
+
+  it('returns from an execution detail to its workflow detail', async () => {
+    vi.spyOn(workflowApi, 'run').mockResolvedValue({
+      id: 'run-42',
+      workflowId: 'workflow-1',
+      workflowKey: 'notification',
+      workflowTitle: 'Notification workflow',
+      eventKey: 'event-42',
+      status: 1,
+      createdAt: '2026-09-02T08:00:00.000Z',
+    });
+    vi.spyOn(workflowApi, 'workflow').mockResolvedValue(
+      workflow({ enabled: true, current: true }),
+    );
+
+    renderWithI18n(
+      <MemoryRouter initialEntries={['/workflow-runs/run-42']}>
+        <Routes>
+          <Route
+            path='/workflow-runs/:runId'
+            element={<WorkflowRunDetailPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(
+      (await screen.findByRole('link', { name: '← Workflows' })).getAttribute(
+        'href',
+      ),
+    ).toBe('/settings/automation/workflows/workflow-1');
+  });
+
+  it('offers the candidate revision in the version picker without enabling it', async () => {
+    const running = workflow({
+      id: 'workflow-1',
+      enabled: true,
+      current: true,
+      version: 'version-1',
+      pendingArtifact: { hash: 'candidate-hash', title: 'Notification v2' },
+    });
+    const candidate = workflow({
+      id: null,
+      enabled: false,
+      current: null,
+      version: null,
+      hash: 'candidate-hash',
+    });
+    vi.spyOn(workflowApi, 'workflow').mockImplementation(async (id) =>
+      id === 'candidate-hash' ? candidate : running,
+    );
+    vi.spyOn(workflowApi, 'revisions').mockResolvedValue([candidate, running]);
+    const enable = vi
+      .spyOn(workflowApi, 'enable')
+      .mockResolvedValue(workflow({ id: 'workflow-42' }));
+
+    renderWithI18n(
+      <MemoryRouter initialEntries={['/workflows/workflow-1']}>
+        <CurrentLocation />
+        <Routes>
+          <Route
+            path='/workflows/:workflowId'
+            element={<WorkflowDetailPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const picker = await screen.findByRole('combobox');
+    fireEvent.click(picker);
+    await waitFor(() =>
+      expect(
+        [...screen.getAllByRole('option')].map((option) => option.textContent),
+      ).toEqual(['Unpublished', '>version-1']),
+    );
+
+    fireEvent.click(
+      screen.getByRole('link', { name: 'New version available' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Current location').textContent).toBe(
+        '/settings/automation/workflows/candidate-hash',
+      ),
+    );
+    expect(enable).not.toHaveBeenCalled();
+  });
+
+  it('enables the candidate revision from its own page', async () => {
+    const running = workflow({
+      id: 'workflow-1',
+      enabled: true,
+      current: true,
+    });
+    const candidate = workflow({
+      id: null,
+      enabled: false,
+      current: null,
+      version: null,
+      hash: 'candidate-hash',
+    });
+    vi.spyOn(workflowApi, 'workflow').mockResolvedValue(candidate);
+    vi.spyOn(workflowApi, 'revisions').mockResolvedValue([candidate, running]);
+    const enable = vi
+      .spyOn(workflowApi, 'enable')
+      .mockResolvedValue(workflow({ id: 'workflow-42' }));
+
+    renderWithI18n(
+      <MemoryRouter initialEntries={['/workflows/candidate-hash']}>
+        <CurrentLocation />
+        <Routes>
+          <Route
+            path='/workflows/:workflowId'
+            element={<WorkflowDetailPage />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Unpublished')).toBeDefined();
+    expect(screen.queryByText('Not the running version')).toBeNull();
+    expect(
+      await screen.findByRole('switch', {
+        name: 'Enable Notification workflow',
+      }),
+    ).toBeDefined();
+
+    fireEvent.click(
+      await screen.findByRole('switch', {
+        name: 'Enable Notification workflow',
+      }),
+    );
+
+    expect(enable).toHaveBeenCalledWith('candidate-hash');
+    await waitFor(() =>
+      expect(screen.getByLabelText('Current location').textContent).toBe(
+        '/settings/automation/workflows/workflow-42',
       ),
     );
   });

@@ -1,29 +1,43 @@
 export {
-  appApiClientToken,
+  apiClientToken,
   ClientApplication,
   createApp,
+  realtimeClientToken,
   type ClientApplicationOptions,
   type ClientApplicationRenderConfigFactory,
 } from './application.js';
 export { AppClientRoot, type AppClientRootProps } from './app-client.js';
+export { ClientApplicationContext } from './application-context.js';
+export { resolveAppBase, resolveAppUrl } from './client.js';
 export {
-  AppRequestError,
-  createAppClient,
-  resolveAppBase,
-  resolveAppUrl,
-  type AppClient,
-  type AppClientOptions,
-} from './client.js';
-export { useClientApplication, useService } from './hooks.js';
-export * from './realtime/index.js';
+  ApiClientError,
+  buildFindManyOptions,
+  createApiClient,
+  type ApiClient,
+  type ApiJsonRequestOptions,
+  type ApiRequestOptions,
+  type CreateApiClientOptions,
+  type RemoteFindManyOptions,
+  type RemoteFindManyOptionsJson,
+  type RemoteRepository,
+  type RemoteRepositoryQuery,
+} from '@nocobase/api-client';
+export { useApiClient, useClientApplication, useService } from './hooks.js';
+export type {
+  RealtimeClient,
+  RealtimeErrorEvent,
+  RealtimeEvent,
+  RealtimeListener,
+} from '@nocobase/realtime/client';
 export {
   createAppClientConfig,
-  defineAppClientConfig,
+  defineAppConfig,
+  defaultAppConfigs,
+  type AppConfigFactory,
   defineAppClientRenderConfig,
   normalizeAppClientBasename,
   type AppClientConfig,
   type AppClientConfigContext,
-  type AppClientConfigContribution,
   type AppClientConfigFactory,
   type AppClientConfigMap,
   type AppClientConfigPrimitive,
@@ -88,6 +102,8 @@ export type {
   AppClientRouteComponentOverrideDefinition,
   AppClientRouteContribution,
   AppClientRouteDefinition,
+  AppClientRoutePageDefinition,
+  AppClientRouteGroupDefinition,
   AppClientRoutes,
   AppClientServiceProviders,
   AppClientSettingIcon,

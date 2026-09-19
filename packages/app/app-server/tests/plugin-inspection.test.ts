@@ -31,6 +31,7 @@ describe('Server plugin inspection', () => {
     let routeFactoryCalls = 0;
     let localeLoaderCalls = 0;
     const plugin = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-example',
       serviceProviders: [FirstProvider],
       routes: [
@@ -62,6 +63,7 @@ describe('Server plugin inspection', () => {
             packageName: plugin.packageName,
             version: '1.2.3',
             rootDir: '/plugins/example',
+            baseDir: '/plugins/example',
             migrationsDirectory: '/plugins/example/database/migrations',
             seedsDirectory: '/plugins/example/database/seeds',
             jobLocations: ['/plugins/example/server/jobs/**/*.{ts,js,mts,mjs}'],
@@ -109,12 +111,16 @@ describe('Server plugin inspection', () => {
     expect(inspection.issues).toEqual([]);
     expect(inspection.consistent).toBe(true);
     expect(inspection.suggestions).toEqual([]);
-    expect(inspection.plugins[0]).not.toHaveProperty('rootDir');
+    expect(inspection.plugins[0]).toMatchObject({
+      rootDir: '/plugins/example',
+      baseDir: '/plugins/example',
+    });
   });
 
   it('keeps a locales-only plugin visible without loading its resources', () => {
     let localeLoaderCalls = 0;
     const plugin = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-locales-only',
       locales: async () => {
         localeLoaderCalls += 1;
@@ -131,6 +137,7 @@ describe('Server plugin inspection', () => {
             packageName: plugin.packageName,
             version: '1.0.0',
             rootDir: '/plugins/locales-only',
+            baseDir: '/plugins/locales-only',
             jobLocations: [],
           },
         },
@@ -151,6 +158,7 @@ describe('Server plugin inspection', () => {
 
   it('reports configured contribution locations that did not resolve', () => {
     const plugin = defineServerPlugin({
+      baseDir: import.meta.dirname,
       packageName: '@nocobase/app-plugin-missing',
       database: {
         migrations: './database/migrations',
@@ -168,6 +176,7 @@ describe('Server plugin inspection', () => {
             packageName: plugin.packageName,
             version: '1.0.0',
             rootDir: '/plugins/missing',
+            baseDir: '/plugins/missing',
             jobLocations: ['/plugins/missing/server/jobs/**/*.{ts,js,mts,mjs}'],
           },
         },

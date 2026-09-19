@@ -1,0 +1,33 @@
+{
+  "document": {
+    "description": "Orders synchronized by the external CRM database.",
+    "fields": {
+      "orderNo": {
+        "title": "Order number"
+      },
+      "placedAt": {
+        "title": "Placed at"
+      },
+      "status": {
+        "title": "Order status"
+      },
+      "totalAmount": {
+        "title": "Total amount"
+      }
+    },
+    "name": "orders",
+    "relations": {
+      "customer": {
+        "foreignKey": "customerId",
+        "target": "customers",
+        "targetKey": "id",
+        "title": "Customer",
+        "type": "belongsTo"
+      }
+    },
+    "title": "CRM orders",
+    "version": 1
+  },
+  "formatVersion": 1,
+  "name": "orders"
+}

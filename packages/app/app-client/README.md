@@ -100,12 +100,13 @@ An application owns:
 - a read-only `app.config`;
 - one application-scoped `ServiceContainer`;
 - ServiceProvider instances and lifecycle state;
-- the API client binding under `appApiClientToken`;
+- the HTTP API client binding under `apiClientToken`;
+- the WebSocket client binding under `realtimeClientToken`;
 - mutable `app.refine` setters during Provider lifecycle;
 - finalized `app.refineConfig` after startup;
 - finalized React render configuration consumed by `AppClientRoot`.
 
-The application API client also owns a lazy realtime connection. By default,
+The application owns a separate lazy realtime service under `realtimeClientToken`. By default,
 its WebSocket endpoint is the `/ws` sibling of `api.baseURL`; deployments with
 a different topology can set `api.realtimeURL` explicitly. Consumers that keep
 durable state should use `onOpen()` to refetch after the initial connection and
@@ -129,6 +130,27 @@ const app = createApp(runtime, (application) => {
 
 The default template constructs `ClientApplication` directly because it adds
 its own router and application-level i18n wrapper.
+
+Resolve HTTP and WebSocket clients independently:
+
+```ts
+import { apiClientToken, realtimeClientToken } from '@nocobase/app-client';
+
+const api = app.services.resolve(apiClientToken);
+const realtime = app.services.resolve(realtimeClientToken);
+type Order = { readonly id: string };
+
+await api.request({ path: 'healthz' });
+await api.repository<Order>('orders').findOne({
+  filter: { id: 'order-1' },
+});
+const unsubscribe = realtime.subscribe('orders:changed', (event) => {
+  console.log(event.payload);
+});
+```
+
+`ApiClient` owns `request()`, `stream()`, and `repository()`. `RealtimeClient`
+owns WebSocket connection lifecycle and subscriptions.
 
 ## ServiceProviders
 
@@ -173,6 +195,16 @@ Startup failure triggers reverse cleanup for providers that entered lifecycle.
 Async hooks retain the owning Provider context, so `this.app.refine` remains
 valid across `await` while the hook is running. Outside Provider lifecycle,
 read the finalized `app.refineConfig` instead of mutating `app.refine`.
+
+React components and custom Hooks can obtain the application's HTTP client with `useApiClient()`:
+
+```tsx
+import { useApiClient } from '@nocobase/app-client';
+
+const api = useApiClient();
+```
+
+This is a no-argument shorthand for `useService(apiClientToken)`. It returns the same application-scoped instance and requires application context; it does not create a client or manage request state. Non-React code continues to resolve the token from the application or receive the client explicitly.
 
 Application components can resolve services through:
 
@@ -295,9 +327,10 @@ Server-rendered SPA HTML contains a versioned JSON data block:
 ```
 
 `resolveAppRuntime()` reads and validates this payload, then passes its public
-`config` value to the application config factory. Plugin config contributions
-provide namespaced defaults and validation; deployment values override those
-defaults. Runtime code reads the normalized result with `app.config.get()`.
+`config` value to the application config loader. It then executes the application
+TypeScript configuration factory with the runtime and merges its defaults below
+the public values. Services read the assembled configuration through
+`app.config.get()`; `app.config` and `runtime.config` reference the same object.
 
 Only public Browser configuration belongs in this payload. Server secrets must
 never be copied into the HTML data block, Client plugin options, logs, or

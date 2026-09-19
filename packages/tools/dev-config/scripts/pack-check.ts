@@ -97,6 +97,7 @@ try {
     'vitest/node.js',
     'vitest/react.js',
     'vite/portal.js',
+    'database/database-manifests.js',
   ];
 
   for (const runtimeEntry of runtimeEntries) {
@@ -123,4 +124,5 @@ await run('pnpm', [
   'vitest/react',
   'vitest/react-setup',
   'vite/portal',
+  'build/database-manifests',
 ]);

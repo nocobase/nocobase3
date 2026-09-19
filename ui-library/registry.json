@@ -1,0 +1,6 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "nocobase",
+  "homepage": "https://www.nocobase.com",
+  "include": ["registry/auth/registry.json"]
+}

@@ -1,51 +1,38 @@
 import { mkdir } from 'node:fs/promises';
-import path from 'node:path';
 
-import type { ConfigPaths } from '../config/index.js';
+import type { DatabaseDriverRegistration } from '@nocobase/db';
+import type { AppPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
+import { resolveAppDatabaseDriver, resolveConnections } from './manager.js';
+import { defaultConnectionName } from './plan.js';
 
-export async function prepareAppDatabaseStorage(
-  config: AppDatabaseConfig,
-  paths?: ConfigPaths,
+export async function prepareAppDatabaseStorage<
+  TConfig extends AppDatabaseConfig,
+>(
+  config: TConfig,
+  paths?: AppPaths,
+  names?: readonly string[],
+  drivers?: Record<string, DatabaseDriverRegistration>,
 ): Promise<void> {
-  const connection = resolveActiveConnection(config);
-  if (!connection || connection.dialect !== 'sqlite') {
-    return;
+  if (config.default === 'none') return;
+  const primary = defaultConnectionName(config);
+  const availableDrivers = { ...config.drivers, ...drivers };
+  const connections = resolveConnections(
+    config.connections,
+    paths,
+    availableDrivers,
+  );
+  for (const name of names ?? (primary ? [primary] : [])) {
+    const connection = connections[name];
+    if (!connection) throw new Error(`Unknown database connection "${name}".`);
+    const driver = resolveAppDatabaseDriver(
+      connection.dialect,
+      availableDrivers,
+    );
+    await driver?.prepareStorage?.(connection, {
+      ensureDirectory: async (directory) => {
+        await mkdir(directory, { recursive: true });
+      },
+    });
   }
-
-  const filename = resolveSqliteFilename(connection, paths);
-  if (!filename || filename === ':memory:') {
-    return;
-  }
-
-  await mkdir(path.dirname(filename), {
-    recursive: true,
-  });
-}
-
-function resolveSqliteFilename(
-  connection: AppDatabaseConfig['connections'][string],
-  paths: ConfigPaths | undefined,
-): string | undefined {
-  if (connection.dialect !== 'sqlite') return undefined;
-  const database = (connection as typeof connection & { database?: string })
-    .database;
-  return database && paths ? paths.storage(database) : connection.filename;
-}
-
-function resolveActiveConnection(
-  config: AppDatabaseConfig,
-): AppDatabaseConfig['connections'][string] | undefined {
-  if (config.default === 'none') {
-    return undefined;
-  }
-
-  const defaultConnection = config.default
-    ? config.connections[config.default]
-    : undefined;
-  if (defaultConnection) {
-    return defaultConnection;
-  }
-
-  return Object.values(config.connections)[0];
 }

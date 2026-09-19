@@ -6,7 +6,6 @@ import {
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import type { AppPluginApplication } from '../plugins/index.js';
-import { driveConfig } from './config.js';
 import { driveManagerToken } from './token.js';
 
 export class DriveProvider extends ServiceProvider<AppPluginApplication> {
@@ -24,7 +23,7 @@ export class DriveProvider extends ServiceProvider<AppPluginApplication> {
   }
 
   private getDriveConfig(): AppDriveConfig {
-    const config = this.app.config.get(driveConfig);
+    const config = this.app.config.get<AppDriveConfig>('drive')!;
     const s3 = config.disks.s3;
     if (s3?.driver !== 's3' || s3.bucket) return config;
     const { s3: _s3, ...disks } = config.disks;

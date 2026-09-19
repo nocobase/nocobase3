@@ -1,4 +1,12 @@
-import { createRefineI18nProvider } from '@nocobase/i18n/client';
+import {
+  applyDocumentLocale,
+  createRefineI18nProvider,
+} from '@nocobase/i18n/client';
+import { createApiClient, type ApiClient } from '@nocobase/api-client';
+import {
+  createRealtimeClient,
+  type RealtimeClient,
+} from '@nocobase/realtime/client';
 import {
   createServiceToken,
   ServiceContainer,
@@ -9,7 +17,7 @@ import {
   type ServiceToken,
 } from '@nocobase/service-provider';
 
-import { createAppClient, type AppClient } from './client.js';
+import { resolveAppUrl } from './client.js';
 import type {
   AppClientConfig,
   AppClientRefineConfig,
@@ -20,21 +28,24 @@ import type {
   AppClientRegisteredServiceProvider,
   ClientServiceProviderContext,
 } from './plugins.js';
-import type { ResolvedAppRuntime } from './runtime/index.js';
+import type { AppRuntimeContext } from './runtime/index.js';
 import {
   createRefineConfigCollector,
   type AppClientRefineConfigCollector,
 } from './runtime/refine-config-collector.js';
 
-export const appApiClientToken: ServiceToken<AppClient> =
-  createServiceToken<AppClient>('@nocobase/app-client/app-api-client');
+export const apiClientToken: ServiceToken<ApiClient> =
+  createServiceToken<ApiClient>('@nocobase/app-client/api-client');
+
+export const realtimeClientToken: ServiceToken<RealtimeClient> =
+  createServiceToken<RealtimeClient>('@nocobase/app-client/realtime-client');
 
 export type ClientApplicationRenderConfigFactory = (
   app: ClientApplication,
 ) => AppClientRenderConfig;
 
 export interface ClientApplicationOptions {
-  readonly runtime: ResolvedAppRuntime;
+  readonly runtime: AppRuntimeContext;
   readonly createRenderConfig: ClientApplicationRenderConfigFactory;
 }
 
@@ -43,20 +54,41 @@ type ClientApplicationState =
 
 class CoreClientServiceProvider extends ServiceProvider<ClientApplication> {
   public readonly name: string = '@nocobase/app-client/core';
+  private readonly synchronizeDocumentLocale = (): void =>
+    applyDocumentLocale(this.app.runtime.i18n);
 
   public override register(): void {
-    this.app.container.singleton(appApiClientToken, (): AppClient => {
+    this.app.container.singleton(apiClientToken, (): ApiClient => {
       const baseURL = this.app.config.get<string>('api.baseURL');
-      const realtimeURL = this.app.config.get<string>('api.realtimeURL');
-      return createAppClient({
-        ...(baseURL === undefined ? {} : { baseURL }),
-        ...(realtimeURL === undefined ? {} : { realtimeURL }),
-      });
+      return createApiClient({ baseURL: baseURL ?? resolveAppUrl('/api') });
     });
+    this.app.container.singleton(realtimeClientToken, (): RealtimeClient =>
+      createRealtimeClient({
+        resolveUrl: () => {
+          const realtimeURL = this.app.config.get<string>('api.realtimeURL');
+          const baseURL =
+            this.app.config.get<string>('api.baseURL') ?? resolveAppUrl('/api');
+          return realtimeURL ?? `${baseURL.replace(/\/+$/u, '')}/../ws`;
+        },
+      }),
+    );
+  }
+
+  public override start(): Promise<void> {
+    this.synchronizeDocumentLocale();
+    this.app.runtime.i18n.i18n.on(
+      'languageChanged',
+      this.synchronizeDocumentLocale,
+    );
+    return Promise.resolve();
   }
 
   public override shutdown(): Promise<void> {
-    this.app.container.resolveIfCreated(appApiClientToken)?.realtime?.close();
+    this.app.runtime.i18n.i18n.off(
+      'languageChanged',
+      this.synchronizeDocumentLocale,
+    );
+    this.app.container.resolveIfCreated(realtimeClientToken)?.close();
     return Promise.resolve();
   }
 }
@@ -108,7 +140,7 @@ class ContextualServiceProvider implements ServiceProviderLifecycle {
 }
 
 export class ClientApplication {
-  public readonly runtime: ResolvedAppRuntime;
+  public readonly runtime: AppRuntimeContext;
   public readonly config: AppClientConfig;
   public readonly container: ServiceContainer;
   public readonly services: ServiceResolver;
@@ -233,7 +265,6 @@ export class ClientApplication {
       await this.providerRegistry.bootAll();
       this.resolvedRefine = this.refineCollector.finalize();
       this.resolvedRenderConfig = Object.freeze(this.createRenderConfig(this));
-      this.validateAuthenticatedRoutes();
       await this.runtime.validate?.(this);
       await this.providerRegistry.startAll();
       await this.providerRegistry.readyAll();
@@ -241,27 +272,6 @@ export class ClientApplication {
     } catch (error) {
       this.state = 'failed';
       await this.shutdownAfterFailure(error);
-    }
-  }
-
-  private validateAuthenticatedRoutes(): void {
-    if (!this.runtime.routes.some((route) => route.auth === 'required')) {
-      return;
-    }
-    if (!this.refineConfig.authProvider) {
-      throw new Error(
-        'Client Application routes requiring authentication need an auth provider.',
-      );
-    }
-    if (
-      !this.runtime.routes.some(
-        (route) =>
-          route.path.toLowerCase() === '/login' && route.auth === 'guest',
-      )
-    ) {
-      throw new Error(
-        'Client Application routes requiring authentication need a guest /login route.',
-      );
     }
   }
 
@@ -292,7 +302,7 @@ export class ClientApplication {
 }
 
 export function createApp(
-  runtime: ResolvedAppRuntime,
+  runtime: AppRuntimeContext,
   createRenderConfig: ClientApplicationRenderConfigFactory,
 ): ClientApplication {
   return new ClientApplication({ runtime, createRenderConfig });

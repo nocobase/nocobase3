@@ -53,7 +53,7 @@ export function AppHeader({
         </Button>
         <div className='hidden h-5 w-px bg-border md:block' />
         <p className='hidden truncate text-sm font-medium text-muted-foreground md:block'>
-          AI application workspace
+          {t('navigation.console', { defaultValue: 'Hub console' })}
         </p>
       </div>
       <HeaderActions />

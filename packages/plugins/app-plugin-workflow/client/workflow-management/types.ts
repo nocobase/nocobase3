@@ -18,6 +18,7 @@ export interface WorkflowListRecord {
   hash?: string | null;
   activeRunCount?: number;
   latestRun?: { id: string; status: number | null; createdAt: string } | null;
+  pendingArtifact: { hash: string; title: string | null } | null;
 }
 export interface WorkflowNodeRecord {
   id: string;

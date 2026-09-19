@@ -1,3 +1,4 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { usePasswordRegistration } from '@nocobase/app-plugin-authentication/client/actions';
 import { useState, type FormEvent, type ReactElement } from 'react';
 
@@ -7,30 +8,64 @@ import { Label } from '@/components/ui/label';
 
 import { FormStatus } from '../components/form-status';
 
-export function PasswordRegistrationForm(): ReactElement {
+export interface PasswordRegistrationAction {
+  readonly error?: { readonly message: string };
+  readonly isPending: boolean;
+  readonly submit: (input: {
+    readonly email: string;
+    readonly name: string;
+    readonly password: string;
+    readonly username: string;
+  }) => Promise<void>;
+}
+
+export interface PasswordRegistrationFormProps {
+  readonly action?: PasswordRegistrationAction;
+  readonly className?: string;
+  readonly submitLabel?: string;
+  readonly pendingLabel?: string;
+}
+
+export function PasswordRegistrationForm(
+  inputProps: PasswordRegistrationFormProps = {},
+): ReactElement {
+  const { t } = useTranslation();
+  const {
+    action: actionOverride,
+    className,
+    submitLabel = t('auth.createAccount', { defaultValue: 'Create account' }),
+    pendingLabel = t('auth.creatingAccount', {
+      defaultValue: 'Creating account…',
+    }),
+  } = inputProps;
+
   const [confirmation, setConfirmation] = useState('');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
-  const [validationError, setValidationError] = useState<string>();
-  const action = usePasswordRegistration();
+  const [passwordMismatch, setPasswordMismatch] = useState(false);
+  const validationError = passwordMismatch
+    ? t('auth.passwordMismatch', { defaultValue: "Passwords don't match." })
+    : undefined;
+  const defaultAction = usePasswordRegistration();
+  const action = actionOverride ?? defaultAction;
   const errorMessage = validationError ?? action.error?.message;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (password !== confirmation) {
-      setValidationError("Passwords don't match.");
+      setPasswordMismatch(true);
       return;
     }
-    setValidationError(undefined);
+    setPasswordMismatch(false);
     void action.submit({ email, name, password, username });
   };
 
   return (
-    <form className='space-y-5' onSubmit={handleSubmit}>
+    <form className={className ?? 'space-y-5'} onSubmit={handleSubmit}>
       <div className='space-y-2'>
-        <Label htmlFor='name'>Name</Label>
+        <Label htmlFor='name'>{t('auth.name', { defaultValue: 'Name' })}</Label>
         <Input
           id='name'
           onChange={(event) => setName(event.target.value)}
@@ -39,7 +74,9 @@ export function PasswordRegistrationForm(): ReactElement {
         />
       </div>
       <div className='space-y-2'>
-        <Label htmlFor='username'>Username</Label>
+        <Label htmlFor='username'>
+          {t('auth.username', { defaultValue: 'Username' })}
+        </Label>
         <Input
           id='username'
           autoComplete='username'
@@ -49,7 +86,9 @@ export function PasswordRegistrationForm(): ReactElement {
         />
       </div>
       <div className='space-y-2'>
-        <Label htmlFor='register-email'>Email</Label>
+        <Label htmlFor='register-email'>
+          {t('auth.email', { defaultValue: 'Email' })}
+        </Label>
         <Input
           id='register-email'
           autoComplete='email'
@@ -60,7 +99,9 @@ export function PasswordRegistrationForm(): ReactElement {
         />
       </div>
       <div className='space-y-2'>
-        <Label htmlFor='register-password'>Password</Label>
+        <Label htmlFor='register-password'>
+          {t('auth.password', { defaultValue: 'Password' })}
+        </Label>
         <Input
           id='register-password'
           autoComplete='new-password'
@@ -71,7 +112,9 @@ export function PasswordRegistrationForm(): ReactElement {
         />
       </div>
       <div className='space-y-2'>
-        <Label htmlFor='confirm-password'>Confirm password</Label>
+        <Label htmlFor='confirm-password'>
+          {t('auth.confirmPassword', { defaultValue: 'Confirm password' })}
+        </Label>
         <Input
           id='confirm-password'
           autoComplete='new-password'
@@ -85,8 +128,21 @@ export function PasswordRegistrationForm(): ReactElement {
         <FormStatus type='error'>{errorMessage}</FormStatus>
       ) : null}
       <Button className='w-full' disabled={action.isPending} type='submit'>
-        {action.isPending ? 'Creating account…' : 'Create account'}
+        {action.isPending ? pendingLabel : submitLabel}
       </Button>
+      <div className='pt-3 text-sm'>
+        <p className='text-center text-muted-foreground'>
+          {t('auth.existingAccount', {
+            defaultValue: 'Already have an account?',
+          })}{' '}
+          <a
+            className='font-semibold text-foreground underline underline-offset-4'
+            href='login'
+          >
+            {t('auth.signIn', { defaultValue: 'Sign in' })}
+          </a>
+        </p>
+      </div>
     </form>
   );
 }

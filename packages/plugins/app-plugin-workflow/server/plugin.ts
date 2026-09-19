@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import {
   defineServerPlugin,
   type AppServerPlugin,
@@ -5,7 +7,7 @@ import {
 } from '@nocobase/app-server/plugins';
 
 import routes from './routes/index.js';
-import { workflowConfig } from './config.js';
+
 import { WorkflowProvider, type WorkflowProviderConfig } from './provider.js';
 
 const serviceProviders: readonly AppPluginProviderConstructor<WorkflowProviderConfig>[] =
@@ -13,9 +15,9 @@ const serviceProviders: readonly AppPluginProviderConstructor<WorkflowProviderCo
 
 const workflowPlugin: AppServerPlugin<WorkflowProviderConfig> =
   defineServerPlugin<WorkflowProviderConfig>({
+    baseDir: path.resolve(import.meta.dirname, '..'),
     packageName: '@nocobase/app-plugin-workflow',
     locales: () => import('./locales/index.js'),
-    config: workflowConfig,
     serviceProviders,
     routes,
     database: {

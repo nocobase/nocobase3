@@ -1,14 +1,19 @@
 ---
-title: Configuration
-description: config.yml, environment variables, and how to see what the application actually resolved.
+title: 'Production configuration'
+description: 'How to supply the database address and secrets, and how to confirm they took effect.'
 ---
 
-# Configuration
+# Production configuration
 
 :::warning Being written
-This page is still being written.
+This page is being written.
 :::
 
-`config.yml` is the single source of configuration, generated when the application is created and yours to maintain from there. It carries `auth.secret`, which is why it is not committed by default.
+How to supply the database address and secrets, and how to confirm they took effect.
 
-This page will cover what the file contains, how environment variables map onto it, and how to inspect what the application finally resolved.
+## This page will cover
+
+- Where production configuration comes from
+- How to manage secrets — never commit them
+- How to inspect the configuration the application resolved
+- How local and production configuration differ

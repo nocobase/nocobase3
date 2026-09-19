@@ -10,10 +10,7 @@ import {
 } from '@nocobase/service-provider';
 import { createDefaultCachingConfig } from '@nocobase/caching';
 import { CachingProvider, cachingToken } from '@nocobase/app-server/caching';
-import type {
-  AppConfigAccessor,
-  AppConfigToken,
-} from '@nocobase/app-server/config';
+import type { AppConfigAccessor } from '@nocobase/app-server/config';
 import { DriveProvider, driveManagerToken } from '@nocobase/app-server/drive';
 import {
   IdGeneratorProvider,
@@ -44,7 +41,6 @@ describe('app service providers', () => {
               visibility: 'private',
             },
           },
-          links: {},
         },
         logging: {
           enabled: false,
@@ -120,7 +116,6 @@ describe('app service providers', () => {
                 visibility: 'public',
               },
             },
-            links: {},
           },
         }),
         container: services,
@@ -189,10 +184,12 @@ function createProviderApplication(
   values: Readonly<Record<string, unknown>>,
   container: ServiceContainer,
 ): {
+  paths: { storage: (...segments: string[]) => string };
   config: AppConfigAccessor;
   container: ServiceContainer;
 } {
   return {
+    paths: { storage: (...segments: string[]) => segments.join('/') },
     config: createTestConfig(values),
     container,
   };
@@ -202,8 +199,7 @@ function createTestConfig(
   values: Readonly<Record<string, unknown>>,
 ): AppConfigAccessor {
   return {
-    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
-      values[definition.namespace] as TValue,
+    get: <TValue>(definition: string): TValue => values[definition] as TValue,
     raw: () => values,
     reload: () => Promise.resolve({ changedNamespaces: [] }),
     subscribe: () => () => undefined,

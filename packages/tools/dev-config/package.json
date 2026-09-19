@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/dev-config",
-  "version": "0.1.0-beta.4",
+  "version": "0.1.0-beta.8",
   "description": "Shared TypeScript, ESLint, Prettier, Vitest, and Vite configuration for NocoBase packages.",
   "type": "module",
   "sideEffects": [
@@ -16,6 +16,7 @@
   },
   "files": [
     "README.md",
+    "bin",
     "docs",
     "dist",
     "eslint/README.md",
@@ -55,6 +56,10 @@
     "./vite/portal": {
       "types": "./dist/vite/portal.d.ts",
       "import": "./dist/vite/portal.js"
+    },
+    "./build/database-manifests": {
+      "types": "./dist/database/database-manifests.d.ts",
+      "import": "./dist/database/database-manifests.js"
     }
   },
   "publishConfig": {
@@ -64,12 +69,13 @@
     "clean": "node ./scripts/clean-dist.ts",
     "build": "node ./scripts/build.ts",
     "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "fix": "pnpm lint:fix && pnpm format",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "prepack": "pnpm build",
     "pack:check": "node ./scripts/pack-check.ts"
   },
@@ -141,5 +147,8 @@
     "vitest": {
       "optional": true
     }
+  },
+  "bin": {
+    "nocobase-db-manifests": "./bin/database-manifests.js"
   }
 }

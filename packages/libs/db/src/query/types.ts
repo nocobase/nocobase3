@@ -71,10 +71,10 @@ export interface FunctionModule {
     column: ReferenceExpression | Expression<unknown>,
   ): AggregateExpression<T>;
   countAll<T = number>(table?: string): AggregateExpression<T>;
-  sum<T = number>(
+  sum<T = string | number | null>(
     column: ReferenceExpression | Expression<unknown>,
   ): AggregateExpression<T>;
-  avg<T = number>(
+  avg<T = string | number | null>(
     column: ReferenceExpression | Expression<unknown>,
   ): AggregateExpression<T>;
   min<T = unknown>(
@@ -126,25 +126,26 @@ export type JoinCallback = (join: JoinBuilder) => JoinBuilder;
 export interface QueryAdapter {
   /**
    * Database-layer query builder.
-   * It accepts table/column query identifiers and does not read Collection metadata,
-   * so collection.tableName() and field.columnName() mappings are not applied.
+   * Table sources are connection-relative identifiers and use Connection naming.
+   * Collection-level naming overrides are not applied. Execution resolves
+   * numeric field types to preserve DECIMAL results before driver conversion.
    */
   selectFrom<TRecord extends Row = Row>(
     table: string,
   ): SelectQuery<TRecord, Row>;
   /**
    * Database-layer insert builder.
-   * It accepts table/column query identifiers and does not read Collection metadata.
+   * The table is a connection-relative identifier and uses Connection naming.
    */
   insertInto<TRecord extends Row = Row>(table: string): InsertQuery<TRecord>;
   /**
    * Database-layer update builder.
-   * It accepts table/column query identifiers and does not read Collection metadata.
+   * The table is a connection-relative identifier and uses Connection naming.
    */
   updateTable<TRecord extends Row = Row>(table: string): UpdateQuery<TRecord>;
   /**
    * Database-layer delete builder.
-   * It accepts table/column query identifiers and does not read Collection metadata.
+   * The table is a connection-relative identifier and uses Connection naming.
    */
   deleteFrom<TRecord extends Row = Row>(table: string): DeleteQuery<TRecord>;
 }

@@ -1,43 +1,21 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import type { AppRuntimeContext } from '../src/runtime/definition.js';
+import { defaultAppConfigs } from '../src/config/index.js';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { Type } from '@sinclair/typebox';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  AppConfig,
-  defineAppConfig,
-  defineAppConfigVariant,
-} from '../src/config/index.js';
+import { AppConfig, defineAppConfig } from '../src/config/index.js';
 import { resolveStandaloneAppRuntime } from '../src/node/index.js';
+import { defineServerPlugins } from '../src/plugins/index.js';
 import {
-  defineServerPlugin,
-  defineServerPlugins,
-} from '../src/plugins/index.js';
-import {
+  createAppFromRuntime,
   defineAppRuntime,
   resolveAppRuntime,
   type AppRuntimeDefinition,
   type AppScope,
-  type ResolvedAppRuntimeConfigContext,
 } from '../src/runtime/index.js';
-
-const featureSchema = Type.Object({ label: Type.String() });
-const featureConfig = defineAppConfig<
-  typeof featureSchema,
-  ResolvedAppRuntimeConfigContext
->({
-  namespace: 'feature',
-  schema: featureSchema,
-  defaults: { label: 'default' },
-});
 
 const tempDirs: string[] = [];
 
@@ -48,6 +26,51 @@ afterEach(() => {
 });
 
 describe('application runtime definition', () => {
+  it('assembles configuration before application creation and preserves it on reload', async () => {
+    let deploymentLabel: string | undefined = 'deployment';
+    const callback = vi.fn();
+    const configure = vi.fn((context: AppRuntimeContext) => ({
+      label: 'code',
+      callback: () => callback(context.app),
+    }));
+    const definition = createDefinition();
+    const runtime = await resolveAppRuntime(
+      {
+        ...definition,
+        createAppConfig: (context) => {
+          const config = definition.createAppConfig(context);
+          config.load({
+            name: 'environment',
+            read: async () => ({
+              kind: 'map',
+              value: deploymentLabel
+                ? { feature: { label: deploymentLabel } }
+                : {},
+            }),
+          });
+          return config;
+        },
+        defaultConfigs: defaultAppConfigs({
+          feature: defineAppConfig(configure),
+        }),
+      },
+      createScope(createAppRoot()),
+    );
+    expect(runtime.app).toBeUndefined();
+    const app = createAppFromRuntime(runtime);
+    expect(app.paths).toBe(runtime.paths);
+    expect(app.config).toBe(runtime.config);
+    expect(runtime.config.get('feature.label')).toBe('deployment');
+    const action = runtime.config.get<() => void>('feature.callback')!;
+    action();
+    expect(callback).toHaveBeenCalledWith(runtime.app);
+    deploymentLabel = undefined;
+    await runtime.config.reload();
+    expect(runtime.config.get('feature.label')).toBe('code');
+    expect(runtime.config.get('feature.callback')).toBe(action);
+    expect(configure).toHaveBeenCalledOnce();
+  });
+
   it('resolves scope, paths, plugins, and typed config definitions', async () => {
     const rootDir = createAppRoot();
     const runtime = await resolveAppRuntime(
@@ -55,9 +78,39 @@ describe('application runtime definition', () => {
       createScope(rootDir),
     );
 
-    expect(runtime.appConfig.get(featureConfig)).toEqual({ label: 'default' });
-    expect(runtime.configPaths.root()).toBe(rootDir);
+    expect(runtime.config.get('feature')).toEqual({ label: 'default' });
+    expect(runtime.paths.root()).toBe(rootDir);
     expect(runtime.plugins.appPackageName).toBe('@example/customer-app');
+  });
+
+  it('shares final paths across config factories, runtime and Application', async () => {
+    const rootDir = createAppRoot();
+    const definition = createDefinition();
+    const observed: unknown[] = [];
+    const runtime = await resolveAppRuntime(
+      {
+        ...definition,
+        resolvePaths: ({ paths }) => ({ ...paths, storageDir: 'persistent' }),
+        createAppConfig: (context) => {
+          observed.push(context.paths);
+          return new AppConfig();
+        },
+        defaultConfigs: ({ paths }) => {
+          observed.push(paths);
+          return { file: paths.storage('files') };
+        },
+      },
+      createScope(rootDir),
+    );
+    const app = createAppFromRuntime(runtime);
+    expect(observed).toEqual([runtime.paths, runtime.paths]);
+    expect(observed[0]).toBe(app.paths);
+    expect(runtime.app).toBe(app);
+    expect(runtime.config.get('file')).toBe(
+      path.join(rootDir, 'persistent/files'),
+    );
+    expect(runtime.paths.storage()).toBe(runtime.paths.storageDir);
+    expect(runtime.paths.client()).toBe(runtime.paths.clientDir);
   });
 
   it('creates standalone scopes from core defaults', async () => {
@@ -70,101 +123,18 @@ describe('application runtime definition', () => {
       name: 'main',
       publicBasePath: '/main',
     });
-    expect(runtime.appConfig.get(featureConfig).label).toBe('default');
-  });
-
-  it('loads and reloads plugin-owned config definitions', async () => {
-    let label = 'initial';
-    const pluginConfig = defineAppConfig({
-      namespace: 'pluginFeature',
-      schema: Type.Object({ label: Type.String() }),
-    });
-    const plugin = defineServerPlugin({
-      packageName: PLUGIN_PACKAGE,
-      config: pluginConfig,
-    });
-    const runtime = await resolveAppRuntime(
-      {
-        ...createDefinition(),
-        plugins: defineServerPlugins([plugin]),
-        config: async (context) => {
-          const config = new AppConfig(context.configs, { context });
-          config.load({
-            name: 'plugin-feature',
-            read: async () => ({
-              kind: 'map',
-              value: { pluginFeature: { label } },
-            }),
-          });
-          return config;
-        },
-      },
-      createScope(createAppRoot()),
+    expect(runtime.config.get<{ label: string }>('feature')!.label).toBe(
+      'default',
     );
-
-    expect(runtime.appConfig.get(pluginConfig)).toEqual({ label: 'initial' });
-
-    label = 'reloaded';
-    await runtime.appConfig.reload();
-    expect(runtime.appConfig.get(pluginConfig)).toEqual({ label: 'reloaded' });
-  });
-
-  it('collects plugin-owned config variants before loading', async () => {
-    const providersConfig = defineAppConfig({
-      namespace: 'providers',
-      schema: Type.Object({
-        entries: Type.Record(
-          Type.String(),
-          Type.Object(
-            { driver: Type.String() },
-            { additionalProperties: true },
-          ),
-        ),
-      }),
-      defaults: {
-        entries: {
-          primary: { driver: 'redis', url: 'redis://localhost:6379' },
-        },
-      },
-    });
-    const redisVariant = defineAppConfigVariant({
-      target: 'providers.entries',
-      discriminator: 'driver',
-      value: 'redis',
-      schema: Type.Object({
-        driver: Type.Literal('redis'),
-        url: Type.String(),
-      }),
-    });
-    const plugin = defineServerPlugin({
-      packageName: PLUGIN_PACKAGE,
-      config: redisVariant,
-    });
-    const runtime = await resolveAppRuntime(
-      {
-        ...createDefinition(),
-        plugins: defineServerPlugins([plugin]),
-        config: async (context) =>
-          new AppConfig([providersConfig, ...context.configs], { context }),
-      },
-      createScope(createAppRoot()),
-    );
-
-    expect(runtime.appConfig.get('providers.entries.primary')).toEqual({
-      driver: 'redis',
-      url: 'redis://localhost:6379',
-    });
   });
 });
 
 function createDefinition(): AppRuntimeDefinition {
   return defineAppRuntime({
-    config: async (context) => {
-      const config = new AppConfig([featureConfig, ...context.configs], {
-        context,
-      });
-      return config;
-    },
+    createAppConfig: () => new AppConfig(),
+    defaultConfigs: defaultAppConfigs({
+      feature: defineAppConfig(() => ({ label: 'default' })),
+    }),
     plugins: defineServerPlugins([]),
     serviceProviders: [],
     routes: [],
@@ -181,28 +151,12 @@ function createScope(rootDir: string): AppScope {
   };
 }
 
-const PLUGIN_PACKAGE = '@nocobase/app-plugin-service-provider-example';
-
 function createAppRoot(): string {
   const rootDir = mkdtempSync(path.join(tmpdir(), 'nocobase-app-runtime-'));
   tempDirs.push(rootDir);
   writeFileSync(
     path.join(rootDir, 'package.json'),
     JSON.stringify({ name: '@example/customer-app' }),
-  );
-
-  // The plugin has to be resolvable from the application root, which is what `resolveAppServerPlugins` looks up. A
-  // temporary directory has no `node_modules` of its own and inherits none, so the one plugin these tests configure
-  // is linked in explicitly.
-  const scopeDir = path.join(rootDir, 'node_modules', '@nocobase');
-  mkdirSync(scopeDir, { recursive: true });
-  symlinkSync(
-    path.resolve(
-      import.meta.dirname,
-      '../../../examples/app-plugin-service-provider-example',
-    ),
-    path.join(scopeDir, PLUGIN_PACKAGE.replace('@nocobase/', '')),
-    'dir',
   );
 
   return rootDir;

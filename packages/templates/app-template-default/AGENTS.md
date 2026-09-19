@@ -1,12 +1,20 @@
 # Application Development Guidelines
 
-This is a NocoBase 3 application. You are building the application itself — its pages, its API, its database tables. Everything under this directory is application-owned source code that you may edit directly.
+This is a NocoBase 3 application. Do not apply globally installed NocoBase 2 Skills. You are building the application itself — its pages, its API, its database tables. Everything under this directory is application-owned source code that you may edit directly.
 
 Do not create a plugin to add a feature. Plugins are separately published packages for capabilities shared across several applications; building one for this application's own feature adds a package boundary, a version, and a release process to work that belongs in `client/` and `server/`. Create one only when the user explicitly asks for a reusable published package.
 
+## Default template scope
+
+Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server routes start empty; the only built-in application provider exposes Authorization Permission Sets as direct roles in the Users page. The only application page is a localized homepage.
+
+`database/main/` contains required permission initialization only; application-owned business migrations and seeds start empty. Do not add article history, demo seeds, or compatibility copies from Examples to this template. Existing installations retain their own executed migration sources when upgrading; see the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations).
+
 ## Load the development skills
 
-`skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
+If `.agents/skills/nocobase-app-development/` is missing, run `pnpm install` and then `pnpm skills:sync` from the application root.
+
+`.agents/skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
 
 | Task                                             | Reference                               |
 | ------------------------------------------------ | --------------------------------------- |
@@ -15,11 +23,14 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 | Add an HTTP endpoint                             | `references/server-routes.md`           |
 | Read or write data                               | `references/database-and-data.md`       |
 | Change the schema                                | `references/migrations.md`              |
+| Switch or add a database connection              | `references/database-connections.md`    |
 | Add translatable text                            | `references/i18n.md`                    |
 | Add a service, background job, or scheduled task | `references/services-and-jobs.md`       |
 | Write tests and verify                           | `references/testing.md`                 |
 
 Read the one page your task needs, not the whole directory.
+
+`.agents/skills/nocobase-app-upgrade/` is a separate Skill for a separate job: merging a newer release of the template this application was generated from. Read it when the task is upgrading the template rather than building a feature, and read it before touching anything — an upgrade done by copying the newest template over this application destroys the work that made it this application.
 
 ## Where things go
 
@@ -27,30 +38,38 @@ Business code goes in these places. This is where you work, and where you should
 
 ```text
 client/routes.ts          Declare a page route
-client/pages/             The page component
+client/pages/             The page component; a folder when a page has children or files of its own
 client/components/        Your components
 client/components/ui/     shadcn/ui primitives; add with the CLI, do not hand-write
 client/locales/           Every user-visible string
-client/service-provider.ts Sidebar resources and client startup
+client/service-provider.ts Client startup and CRUD resource integration
 server/routes/            HTTP endpoints
 server/providers/         Services and their lifecycle
-database/migrations/      Schema changes
-database/seeds/           Required initial data
+database/main/migrations/      Schema changes
+database/main/seeds/           Required initial data
+database/main/collections/     Generated Collection artifacts; regenerate, never edit
+cli/commands/             Commands this application owns
 tests/                    Tests; never beside the source
 ```
 
-A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, a sidebar resource in `client/service-provider.ts`, and strings in `client/locales/`.
+A page with children or page-local helpers uses a folder with `index.tsx`; child folders mirror route paths. Keep page-local components and data in that folder, reserving `client/components/` for application-wide components. See [child routes](.agents/skills/nocobase-app-development/references/client-child-routes.md) for examples.
+
+A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
 ### The rest is framework structure
 
+Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](.agents/skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
+
+The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
+
 `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, and the tsconfigs are the scaffolding the template provides. It is still this application's own source — it shipped to the user and they may change it — but it is the part the template evolves, so an edit there is what a future upgrade has to reconcile.
 
-Prefer the mechanism the system already provides. Most tasks that look like they need a shell or router change do not: a page needs a route and a resource, a settings page needs `access`, a plugin page is customized through an option or an override. If you find yourself editing the shell to add a page, check whether you have registered the resource first.
+Prefer the mechanism the system already provides. Declare a page in `client/routes.ts` and add `navigation` when it needs a menu entry. Refine resources are only needed for CRUD integration. A settings page uses `access` to restrict access; a plugin page is customized through an option or an override. Before editing the shell to add a menu, check the route and its `navigation` declaration.
 
 When the built-in mechanism genuinely cannot express what is being asked, changing this structure is a legitimate answer — not a last resort to apologize for. Do it deliberately, and leave the next agent enough to work with:
 
 - Comment what you changed and why the built-in path did not fit. On upgrade, an agent reconciling the template's version needs to know whether your change is still needed.
-- Update this file and `skills/nocobase-app-development/` in the same change, so the guidance describes the application as it actually is. Documentation describing a layout the application no longer has is worse than none.
+- Update this file in the same change, so the guidance describes the application as it actually is. If the framework's shared guidance is wrong for every application, update the source `@nocobase/app-skills` package instead of editing its synchronized copy.
 
 ## Building a feature
 
@@ -75,19 +94,9 @@ Route paths are application-internal. Never write the deployment base path such 
 
 Use `defineSettingsRoutes()` for administrative pages, which mount under `/settings`, and `defineDevRoutes()` for development-only pages, which mount under `/dev` and are absent from a production build. Do not repeat `/settings` or `/dev` in the path. `defineDevRoutes()` is a build boundary, not a permission boundary: a page that must be restricted in production is a settings route with `access`, enforced by the server.
 
-**A route alone does not put the page in the sidebar.** The URL works, but nothing appears in navigation. Register a Refine resource in `client/service-provider.ts` as well:
+**Declare navigation on the route.** App, Settings and Dev menus read `navigation: { title: 'navigation.orders' }`; titles resolve in the owning locale namespace. Add the translation in `client/locales/`. Refine resources remain for CRUD and do not add menu entries.
 
-```ts
-this.app.refine.addResources([
-  {
-    name: 'orders',
-    list: '/orders',
-    meta: { label: 'navigation.orders', i18nNs: APP_NS },
-  },
-]);
-```
-
-`list` must match the route's `path`, and `meta.label` is a translation key added to `client/locales/`. So a navigable page is three edits: the route, the resource, and the label. Settings and dev pages are the exception — their `navigation` field handles it.
+Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For examples and the exact file list, read `.agents/skills/nocobase-app-development/references/client-child-routes.md`.
 
 ### Components and styling
 
@@ -101,7 +110,7 @@ Build your own components by composing these primitives, and put them in `client
 
 Style with the semantic Tailwind tokens — `bg-background`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary` — so pages follow the light and dark themes. Do not hard-code colors like `bg-white` or `text-gray-900`; they break the moment someone switches theme.
 
-**Visual consistency is a whole-application property.** Match the surrounding code's spacing, typography, and component choices. If a change genuinely calls for a different look, change the application's design tokens in `client/styles.css` so every page moves together. Never restyle only the part you are working on — a page that looks different from the rest is a defect, not a customization.
+**Visual consistency is a whole-application property.** Match the surrounding code's spacing, typography, and component choices. If a change genuinely calls for a different look, change the application's design tokens in `client/theme/themes/*.css` so every page moves together. Never restyle only the part you are working on — a page that looks different from the rest is a defect, not a customization.
 
 ### Server routes
 
@@ -133,7 +142,9 @@ Keep HTTP concerns in the route and domain logic in a service under `server/prov
 
 ### Database
 
-Schema changes are migrations under `database/migrations/`. Data the application requires to run is a seed under `database/seeds/`. Seeds never create structure.
+Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.
+
+`database/<connection>/collections/` holds what the database currently resolves each Collection to — `collection.json`, `metadata.json` and `schema.json` per Collection plus a `_manifest.json` — written by `pnpm collections:generate` after migrating. Every file there is derived: edit metadata through migrations or the Collection Metadata Service and regenerate, never by hand, and never import these files from a migration. `pnpm collections:generate --check` fails when they are out of date.
 
 ```ts
 const migration: MigrationDefinition = defineMigration({
@@ -157,7 +168,7 @@ Edit an existing migration only while the branch that introduced it is unmerged.
 
 The exported `name` must match the filename. Apply with `pnpm migrate` and verify against a real database.
 
-At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write.
+At runtime, resolve `databaseManagerToken` from the container and use `database.query()` to read and write the default connection. Use `database.query('analytics')` for another connection. Application tasks use `database/<connectionName>/{migrations,seeds}` and bind to that connection explicitly; plugin tasks and default runtime access stay on `database.default`. Only managed connections run migrations or seeds. See the migrations reference for execution and upgrade rules.
 
 ### User-facing text
 
@@ -170,19 +181,55 @@ t('orders.title');
 
 To reword a plugin's string, add an `overrides` block keyed by that plugin's package name in your locale file. Do not edit the plugin.
 
+The languages the application offers are its own locale files, not a configured list, and the two sides are read separately: `client/locales/` decides what the picker shows, while `server/locales/` decides which languages the server can answer in. Prefer adding a language to both when server-produced text needs translating, but a client-only language is valid: the interface switches normally and the server falls back to English with an informational notice. `pnpm nocobase app i18n:check` reports one declared on a single side and exits nonzero until the lists align; that check does not block the runtime switch.
+
 The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
+
+## Development file watching
+
+`pnpm dev` checks native file watching before starting its children. If watcher resources are exhausted or native events are unavailable, it uses polling for client and server hot updates and disables agent annotations for that run, with a warning. An explicit `CHOKIDAR_USEPOLLING=true` selects the same mode. Configuration files use stat polling so atomic saves and newly created files restart the server without native directory watchers.
+
+Vite must exclude the application's entire `dist/` tree from development file watching. Its default exclusion covers only `dist/client`; watching the compiled server and vendored packages can cause `EMFILE` after a build. Keep the exclusion scoped to this application so linked workspace dependencies, including their `dist/` files, still receive hot updates.
+
+## Developing against another backend
+
+Do not hard-code `/main` from the examples below. It is only the fallback for an unset `APP_BASE_PATH`. Local development resolves that variable from the command-line environment, then `.env.local`, then `.env`. The remote mount path is independently supplied in `PROXY_TARGET_URL`: inspect the target application's actual public URL instead of assuming it matches the local path. For example, `APP_BASE_PATH=/local PROXY_TARGET_URL=http://127.0.0.1:13000/crm pnpm dev` forwards local `/local/api` and `/local/ws` to remote `/crm/api` and `/crm/ws`.
+
+Use `PROXY_TARGET_URL=https://backend.example.com/main pnpm dev` to run only the local Vite client against another application's API and WebSocket service. The URL is the remote application base, including its mount path, without `/api`. Open the printed Local URL. The local server and server watchers are skipped; `beforeDev` hooks still run. Requests, including writes, affect the target backend. See README.MD for path mapping and authentication requirements. Leave the variable unset for normal full-stack development.
+
+The development proxy adapts same-origin HTTP and WebSocket Origin headers to the target origin, and maps same-origin Referer paths to the target app base. Other origins remain unchanged and missing Origin headers are not added. Keep backend origin checks enabled; this adaptation belongs only to Vite development, not production deployment. Production uses `APP_PUBLIC_ORIGIN` and a reverse proxy that preserves the public Host and protocol.
+
+`APP_SERVER_PORT` selects the local application entry port: Vite in proxy development mode (default 5173), or the local backend in normal development mode (default 13000). Normal development keeps Vite's preferred port at 5173. An occupied port advances to the next available port; use the printed Local URL. This variable does not change the backend URL supplied through `PROXY_TARGET_URL`.
+
+## The command line
+
+`pnpm nocobase` runs this application's CLI. Built-in `plugin *` commands manage registered plugins, `package *` commands manage direct NocoBase package dependencies, `app *` is what this application writes for itself in `cli/commands/`, and each registered plugin contributes its own commands under a topic it declares — a workflow plugin's commands appear under `workflow`.
+
+```bash
+pnpm nocobase --help          # every topic and command
+pnpm nocobase app info        # a command this application owns
+pnpm nocobase app i18n:check  # languages declared on only one side
+```
+
+Add a command of your own as an oclif `Command` subclass in `cli/commands/`, then list it in `cli/commands/index.ts`; the key becomes its name under `app`. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command.
+
+`cli/` is compiled into `dist` alongside the server, so a deployed application runs the same commands with `node ./cli/index.js`. `pnpm migrate` and `pnpm seed` are these commands rather than separate scripts.
+
+A command that cannot work in a deployment belongs in `cli/dev-commands/` instead, which the build excludes — client inspection is there because it needs Vite and the browser client, and neither exists in `dist`. Put a command there rather than shipping one that fails the moment someone runs it.
 
 ## Plugins
 
-Plugins are registered in `client/plugins.ts` and `server/plugins.ts`. Presence in the array enables a plugin and array order is contribution order.
+Plugins are registered in `client/plugins.ts`, `server/plugins.ts`, and `cli/plugins.ts`. Presence in the array enables a plugin and array order is contribution order. A plugin appears in the roots matching what it ships, so a plugin with only commands is listed in `cli/plugins.ts` alone. Bulk Skills synchronization and plugin updates discover plugins from these composition roots.
 
 Let `pnpm plugin:register` and `pnpm plugin:unregister` add and remove entries. Edit these files by hand only to reorder entries or to pass a plugin its options.
 
-To customize a plugin's page, pass an option on its registration, add a source extension under `client/extensions/*/extension.ts`, or add an entry to `client/route-overrides.ts`. Do not redeclare the plugin's route — a duplicate `/login` is a conflict, not a customization. An override replaces only `componentLoader`; route identity, path, and auth mode stay with the plugin. One route takes one override across all three mechanisms.
+Update one registered plugin with `pnpm plugin:update @nocobase/app-plugin-authentication`, or omit the name to update all registered plugins. Prefer the full package name; `authentication` is also accepted as a short name. The name is a positional argument, not `--plugin`. Use `--dry-run` to preview. With pnpm, updates stay within declared version ranges; after a successful update, all registered plugin Skills are re-synchronized. See [Plugins in the README](README.MD#plugins) for examples and update scope.
+
+To customize a page a plugin owns, pass an option on its registration, add a source extension under `client/extensions/*/extension.ts`, or add an entry to `client/route-overrides.ts`. Do not redeclare the plugin's route — a duplicate `/install` is a conflict, not a customization. An override replaces only `componentLoader`; route identity, path, and auth mode stay with the plugin. One route takes one override across all three mechanisms. Authentication pages are not plugin-owned: `/login`, `/register`, `/forgot-password`, and `/reset-password` are application routes declared in `client/routes.ts`.
 
 ### Read a plugin's Skill before building what it already does
 
-**You are not starting from scratch.** This application ships with plugins that already solve whole categories of requirement, and each one publishes a Skill explaining how to use it. Registration copies those Skills into `.agents/skills/`. Before implementing a feature, check whether a plugin already covers it:
+**You are not starting from scratch.** This application ships with NocoBase packages that already solve whole categories of requirement, and packages may publish a Skill explaining how to use them. `pnpm skills:sync` copies Skills from direct `@nocobase/*` dependencies and registered plugins into `.agents/skills/`. Before implementing a feature, check whether an installed and registered plugin already covers it:
 
 | The requirement sounds like                                                                       | Read the Skill for                    |
 | ------------------------------------------------------------------------------------------------- | ------------------------------------- |
@@ -190,16 +237,27 @@ To customize a plugin's page, pass an option on its registration, add a source e
 | Email, IM, or in-app messages; notifying someone that something happened                          | `@nocobase/app-plugin-notification`   |
 | Roles, permissions, "user A may only see their own records", field-level or row-level access      | `@nocobase/app-plugin-authorization`  |
 | Sign-in, registration, sessions, password reset                                                   | `@nocobase/app-plugin-authentication` |
-| Uploads, attachments, file fields, previews                                                       | `@nocobase/app-plugin-file`           |
+| User listing, account state, password reset, and application-owned role assignment                | `@nocobase/app-plugin-users`          |
+| File upload and metadata through Repository                                                       | `@nocobase/app-plugin-file`           |
 | Translated text and language switching                                                            | `@nocobase/app-plugin-i18n`           |
 
-Run `pnpm plugin:skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
+Run `pnpm skills:sync` if `.agents/skills/` is missing or looks out of date, then read the Skill for the plugin you need. It documents that plugin's public entries, the ownership boundary, and how to verify the result — which is faster and more correct than inferring an API from its source.
 
 Building a permission system, a notification sender, or a job scheduler by hand when a registered plugin already provides one is the most expensive mistake available here. Prefer the plugin; write your own only when you have read its Skill and confirmed it genuinely does not fit.
 
-`.agents/skills/` itself is generated output: gitignored, and every synchronized directory is replaced wholesale on the next sync, so never edit a file there. This application's own `skills/` directory is the opposite — committed source you should keep current.
+`.agents/skills/` is generated output: gitignored, and every synchronized package-owned directory is replaced wholesale on the next sync, so never edit a file there. Put application-specific guidance in committed `AGENTS.md` files.
+
+## Removing a NocoBase dependency
+
+Before removing a direct `@nocobase/*` dependency, search application imports, Client/Server/CLI plugin registrations, routes, services, configuration, tests, and build scripts for its package name and public contracts. Migrate or delete those references first. The command below changes dependency metadata and generated Skills; it does not edit application source or configuration, so never use it to remove a capability the application still needs.
+
+Use `pnpm package:remove @nocobase/example`. It invokes the application's package manager so `package.json` and the lockfile stay consistent, then deletes only synchronized Skills recorded as belonging to that package. For an `@nocobase/app-plugin-*` package it delegates to the plugin unregister workflow, removing its Client, Server, and CLI registrations together; `pnpm plugin:unregister <name>` remains a supported plugin-specific entry point. Preview with `--dry-run`, and use `--json` when another tool needs structured output.
+
+If an older application has the command but lacks the script, run `pnpm nocobase package remove @nocobase/example`. If its CLI predates the command, update `@nocobase/nb3-cli` first; where `skills:sync` is already available, the compatibility fallback is to remove the dependency with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, first confirm the manifest no longer declares the package, then run a full `pnpm skills:sync` to reconcile stale package-owned output. `package:remove` may also be passed a package already absent from the manifest to clean recorded historical Skill ownership, and it must not uninstall or clean Skills owned by another package.
 
 ## Adding a dependency
+
+Keep `@nocobase/db` in `dependencies` alongside the database driver. It supplies the driver's runtime peer and lets TypeScript resolve the inferred database configuration declaration through the public package name. Moving it to `devDependencies` can cause TS2883 in an installed application even while the source workspace builds successfully.
 
 Put a package your **server** code imports in `dependencies`. Put everything your **client** code imports — along with build tooling, tests, and type-only imports — in `devDependencies`.
 
@@ -208,6 +266,55 @@ That split looks backwards until you see how the two halves are deployed. `pnpm 
 So the two mistakes fail in opposite ways. A server import left in `devDependencies` works all through development and fails only on the server, with a bare `Cannot find package` naming nothing that points back here. A client package put in `dependencies` never breaks anything — it is just installed into every deployment, where the server never requires it. That one is invisible, so it accumulates: `lucide-react` and `@xyflow/react` were 44 MB of it before this rule was written down.
 
 What decides it is where the importing file lives and what the import is, not what the package is for. `import ts from 'typescript'` in `server/` is a runtime dependency even though TypeScript sounds like tooling. `import type { Config } from 'x'` is erased before anything runs, so it stays a devDependency wherever it appears. A dynamic `import()` counts — deferring the load changes when a package is needed, not whether.
+
+### Adding a dependency
+
+Which half of the application imports it decides where it goes.
+
+| The import is reached from              | Declare it in     |
+| --------------------------------------- | ----------------- |
+| `server/`, `database/`, or `cli/`       | `dependencies`    |
+| `client/`, build tooling, tests         | `devDependencies` |
+| `import type` only, wherever it appears | `devDependencies` |
+
+`dist/package.json` is generated from `dependencies` and is what a deployment installs from, so a server import declared as a devDependency resolves in every development checkout and is absent exactly once — on the deployed server. A client import needs nothing at runtime: Vite resolves and inlines it into `dist/client` at build time.
+
+A plugin's browser packages arrive by a third route and need nothing from you. Plugins declare those as peer dependencies, so installing a plugin brings one shared copy into this application, while `dist/` sets `autoInstallPeers: false` and installs none of them.
+
+`pnpm build` checks the server half: it reads every value import in `server/`, `database/`, and `cli/` and fails the build if any of those packages is missing from `dist/package.json`. It cannot see an import whose specifier is built at run time:
+
+```ts
+await import(`${name}/index.js`); // invisible to the check
+```
+
+Declare such a package in `dependencies` when you write the code; nothing will remind you later.
+
+### Packing the build for a deployment
+
+`pnpm build --tar` writes `storage/exports/dist.tar.gz` after the build. The archive holds `dist/` as a directory next to `config.example.yml`, so extracting it produces exactly those two paths rather than scattering `server/` and `node_modules/` into whatever directory you unpacked in.
+
+`config.example.yml` travels with it because a deployment has to write a `config.yml` before it can start, and the example is the only statement of what may go in it. Directories of executable shims are left out: a `.bin` entry points at a path on the machine that installed it, and a dangling one makes `pnpm install` in the extracted tree report a corrupt store rather than repair it.
+
+Without `--tar` no archive is produced, which is what you want when the build is only going to be run locally.
+
+### Building for another platform
+
+`pnpm build --help` (or `-h`) lists build options and exits without loading build dependencies, running hooks, or modifying `dist/`. Every successful build records `nocobase.buildTarget` in `dist/package.json`, including builds with no native modules: `platform`, `arch`, `libc`, `nodeMajor`, and `nodeAbi`. Use `libc` only for Linux; its value on other platforms is a compatibility placeholder. Deployment checks should compare these fields with the host runtime and also respect `engines.node`. With `--target current` (the default), the Node version and ABI come from the running process; an explicit platform target defaults to Node 24 unless `--node-version` is supplied.
+
+`pnpm build` targets the machine it runs on, so `pnpm build && pnpm start` works. A deployment build says where it is going: `--target linux-x64`, `--target linux-arm64`, `--target linux-x64-musl`, plus `--node-version` when the server's Node major differs. Every build prints the platform it produced and records it in `dist/package.json` under `nocobase.buildTarget`.
+
+A `.node` binary must match the target platform, architecture, and C library; addons using the Node ABI must also match its version. `better-sqlite3` 13 uses N-API and bundles its platform binaries, so cross-platform builds retain the target's binary, including the separate `linuxmusl` build for Alpine. `pg`, `mysql2`, and `tedious` are plain JavaScript, so an application using only those is portable as built.
+
+### When a build or a deployment fails
+
+| Symptom                                                                                 | Cause                                                                        | Fix                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Cannot find module 'x'` on the server, works locally                                   | `x` is in `devDependencies`, which `dist/package.json` is not generated from | Move it to `dependencies`                                                                                                                                                            |
+| A browser package will not resolve while building the application                       | A plugin declares it as a peer and nothing provides it                       | Add it to the application's `devDependencies`                                                                                                                                        |
+| `Error loading shared library`, `invalid ELF header`, or a bare `.node` path at startup | The binary does not match the server                                         | Compare `require('./dist/package.json').nocobase.buildTarget` with the server's `process.platform`, `process.arch`, and `process.versions.modules`, then rebuild with matching flags |
+| `no prebuilt binary for <target>` during the build                                      | The package publishes no build for that combination                          | Check the package supports the target; musl coverage is thinner than glibc                                                                                                           |
+
+Node ABI to major version: 115 is Node 20, 127 is 22, 137 is 24, 147 is 26.
 
 ## Before you finish
 
@@ -221,3 +328,31 @@ pnpm build
 Add tests for what you changed: a route's authenticated, unauthenticated, and unauthorized responses; a migration's `up` and `down` against a real database; a page's actual behavior. Tests belong in `tests/`, or in `e2e/` when they need a real server. Never place a test beside the source it covers.
 
 `pnpm client:inspect` and `pnpm server:inspect` show what is wired when a contribution does not appear as expected. They report composition, not correctness — a clean inspection proves nothing about behavior or security.
+
+For creating or editing theme presets, read `.agents/skills/nocobase-app-development/references/themes.md` (from the application root).
+
+For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `.agents/skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+
+Application startup defaults belong in `config.yml`: `i18n.defaultLocale` for the language, and `client.app.defaultColorScheme` and `client.app.defaultTheme` for appearance. Valid browser-local choices take precedence. Which languages the application offers is not configured — its own `client/locales/` and `server/locales/` are that list. See the i18n and themes references.
+
+## Compiled migration and seed manifests
+
+The application build generates `.manifest.json` in each compiled migrations and seeds directory after server compilation, path rewriting, and `afterServerBuild` hooks. Keep the manifest generator in the build when customizing it. Plugins generate their own manifests when built; an application must not regenerate manifests for installed dependencies.
+
+TypeScript and compiled JavaScript use the same source checksum for migration history, while the loader separately verifies emitted JavaScript. Marked JavaScript requires its manifest. For a database with old raw JavaScript checksums, first run the compiled representation with matching original output; verified legacy hashes are converted under the task lock. Unreproducible old output remains an error. Never edit historical migrations or replace checksums by hand to resolve an upgrade failure.
+
+The account menu checks Better Auth sign-out results before refreshing the session and shows a localized error toast for API or network failures. Preserve this behavior when upgrading the shell; navigation alone does not revoke a session.
+
+The authorization provider clears the permission snapshot before rendering a new session. Route navigation and page guards subscribe to the authorization revision; preserve these checks when customizing the shell so account changes and permission updates take effect without a reload. Pending checks hide protected content, and failed checks deny access.
+
+Navigation groups retain their expanded or collapsed state while the navigation tree stays mounted. Selecting a new page expands its ancestor groups without collapsing other groups; users can still collapse the active group manually. Keep this behavior aligned across the application, Settings, and Dev tools navigation.
+
+## Development logging
+
+`pnpm dev` owns the ready banner and public URL; `APP_SERVER_START_LOG=false` suppresses the underlying listener announcement through `server/environment.ts`. Keep that mapping when editing deployment environment settings. Request starts, request headers and config diagnostics use DEBUG; the normal INFO output contains completion summaries. See the shared application development Skill for hosted logging and upgrade limits.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

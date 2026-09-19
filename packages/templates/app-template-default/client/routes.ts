@@ -1,3 +1,4 @@
+import { Home } from 'lucide-react';
 import {
   defineAppRoutes,
   defineSettingsRoutes,
@@ -9,7 +10,32 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     auth: 'required',
     componentLoader: () => import('./pages/home.js'),
     name: 'home',
+    navigation: { title: 'navigation.home', icon: Home },
     path: '/',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/login.js'),
+    name: 'login',
+    path: '/login',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/register.js'),
+    name: 'register',
+    path: '/register',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/forgot-password.js'),
+    name: 'forgot-password',
+    path: '/forgot-password',
+  },
+  {
+    auth: 'guest',
+    componentLoader: () => import('./pages/auth/reset-password.js'),
+    name: 'reset-password',
+    path: '/reset-password',
   },
 ]);
 

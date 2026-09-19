@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 
 import { resolveAppUrl } from '@nocobase/app-client';
+import { useTranslation } from '@nocobase/i18n/client';
 
 import { Button } from '../components/ui/button.js';
 import InstallPage from './install-page.js';
@@ -15,8 +16,11 @@ type InstallStatus = 'checking' | 'not-installed' | 'error';
 const STATUS_RETRY_DELAY_MS = 250;
 
 export default function InstallRoute(): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-install');
   const [status, setStatus] = useState<InstallStatus>('checking');
   const [configurationSaved, setConfigurationSaved] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [statusCheckVersion, setStatusCheckVersion] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -36,6 +40,9 @@ export default function InstallRoute(): ReactElement {
         if (!active) return;
 
         if (result.installed === true) {
+          if (active) {
+            setCheckingStatus(false);
+          }
           window.location.replace(
             resolveAppUrl(resolveInstalledDestination(configurationSaved)),
           );
@@ -59,6 +66,10 @@ export default function InstallRoute(): ReactElement {
         }
 
         setStatus('error');
+      } finally {
+        if (active) {
+          setCheckingStatus(false);
+        }
       }
     };
 
@@ -68,19 +79,26 @@ export default function InstallRoute(): ReactElement {
       active = false;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [configurationSaved]);
+  }, [configurationSaved, statusCheckVersion]);
 
   if (status === 'error') {
     return (
       <main className='grid min-h-svh place-items-center bg-background px-6 py-12'>
         <section className='w-full max-w-lg space-y-5 rounded-2xl border bg-card p-8 text-card-foreground shadow-sm'>
           <h1 className='text-2xl font-semibold tracking-tight'>
-            Unable to check installation status
+            {t('errors.status', {
+              defaultValue: 'Unable to check the installation status.',
+            })}
           </h1>
           <p className='leading-7 text-muted-foreground'>
-            Make sure the application server is running, then try again.
+            {t('errors.statusDescription', {
+              defaultValue:
+                'Make sure the application server is running, then try again.',
+            })}
           </p>
-          <Button onClick={() => window.location.reload()}>Try again</Button>
+          <Button onClick={() => window.location.reload()}>
+            {t('errors.retry', { defaultValue: 'Try again' })}
+          </Button>
         </section>
       </main>
     );
@@ -90,11 +108,22 @@ export default function InstallRoute(): ReactElement {
     return (
       <main className='grid min-h-svh place-items-center bg-background px-6 py-12'>
         <p className='text-sm text-muted-foreground'>
-          Checking installation status…
+          {t('success.checking', {
+            defaultValue: 'Checking application status…',
+          })}
         </p>
       </main>
     );
   }
 
-  return <InstallPage onConfigured={() => setConfigurationSaved(true)} />;
+  return (
+    <InstallPage
+      checkingStatus={checkingStatus}
+      onCheckStatus={() => {
+        setCheckingStatus(true);
+        setStatusCheckVersion((version) => version + 1);
+      }}
+      onConfigured={() => setConfigurationSaved(true)}
+    />
+  );
 }

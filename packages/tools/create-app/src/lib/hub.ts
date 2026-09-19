@@ -10,8 +10,11 @@ export interface BuildHubEnvOptions {
 /**
  * Builds the `.env` a generated hub starts with.
  *
- * Hub identity and mount settings live in the environment file. Templates declaring app-v1 also receive
- * the application configuration file for database and authentication settings.
+ * A hub is an application like any other — it owns a database, registers plugins, and takes its secrets from
+ * `config.yml`. What it has in addition is a deployment identity: the name it is served under, the path it is mounted
+ * at, and the upstream NocoBase API it proxies. Those are environment facts rather than application settings, so they
+ * live in `.env`. The template ships `.env.example` but not `.env`, and nothing reads the example, so a hub generated
+ * without this step runs entirely on defaults with no file to edit.
  *
  * The example is used as the base rather than generating the file from scratch, so the comments explaining each
  * setting and the commented-out optional keys reach the user.
@@ -35,6 +38,7 @@ const FALLBACK_HUB_ENV = [
   '# Application',
   'APP_NAME=hub',
   'APP_BASE_PATH=/hub',
+  'AUTH_DISABLE_SIGN_UP=true',
   '',
 ].join('\n');
 

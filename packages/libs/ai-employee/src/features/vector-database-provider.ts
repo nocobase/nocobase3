@@ -48,4 +48,5 @@ export type VectorDatabaseProvider<T, R> = {
     embeddings: EmbeddingsInterface,
     connectParams: T,
   ): Promise<R>;
+  dispose(): Promise<void>;
 };

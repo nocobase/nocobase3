@@ -1,0 +1,210 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
+import { useApiClient } from '@nocobase/app-client';
+import { useTranslation } from '@nocobase/i18n/client';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import {
+  findManyOptions,
+  findManyRepository,
+  type FindManyRecord,
+} from '../find-many.js';
+import { Button } from '../components/ui/button.js';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../components/ui/card.js';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table.js';
+
+const NS = '@nocobase/app-plugin-repository-example';
+
+interface ExamplePanelProps {
+  readonly title: string;
+  readonly description: string;
+  readonly protocol: string;
+  readonly code: string;
+  readonly button: string;
+  readonly loading: boolean;
+  readonly disabled: boolean;
+  readonly records: readonly FindManyRecord[];
+  readonly onRun: () => void;
+}
+
+function ExamplePanel(props: ExamplePanelProps): ReactElement {
+  const { t } = useTranslation(NS);
+  return (
+    <Card
+      className='min-w-0 rounded-xl shadow-2xs'
+      role='region'
+      aria-label={props.title}
+    >
+      <CardHeader>
+        <CardTitle className='text-base font-semibold'>{props.title}</CardTitle>
+      </CardHeader>
+      <CardContent className='space-y-4'>
+        <p className='text-xs leading-relaxed text-muted-foreground'>
+          {props.description}
+        </p>
+        <p className='text-sm'>
+          <span className='font-medium'>{t('findManyProtocol')}:</span>{' '}
+          <code>{props.protocol}</code>
+        </p>
+        <pre className='overflow-x-auto rounded-lg border bg-muted/40 p-3 font-mono text-xs text-foreground'>
+          <code>{props.code}</code>
+        </pre>
+        <div className='flex flex-wrap items-center gap-3'>
+          <Button disabled={props.disabled} onClick={props.onRun}>
+            {props.button}
+          </Button>
+          <output
+            className='rounded-full border bg-muted/20 px-2.5 py-1 text-xs font-medium tabular-nums text-muted-foreground'
+            aria-label={`${props.title} — ${t('findManyReceived')}`}
+          >
+            {t('findManyReceivedCount', { count: props.records.length })}
+          </output>
+        </div>
+        {props.loading && (
+          <p
+            role='status'
+            className='text-xs leading-relaxed text-muted-foreground'
+          >
+            {t('loading')}
+          </p>
+        )}
+        <Table aria-label={`${props.title} — ${t('findManyResults')}`}>
+          <TableHeader className='bg-muted/30'>
+            <TableRow>
+              <TableHead>#</TableHead>
+              <TableHead>{t('findManyRecordTitle')}</TableHead>
+              <TableHead>{t('findManyCategory')}</TableHead>
+              <TableHead>{t('findManyDescription')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {props.records.map((record) => (
+              <TableRow key={record.id}>
+                <TableCell>{record.sequence}</TableCell>
+                <TableCell>{record.title}</TableCell>
+                <TableCell>{record.category}</TableCell>
+                <TableCell>{record.description}</TableCell>
+              </TableRow>
+            ))}
+            {!props.records.length && !props.loading && (
+              <TableRow>
+                <TableCell colSpan={4}>{t('findManyEmpty')}</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function FindManyPage(): ReactElement {
+  const api = useApiClient();
+  const repository = useMemo(() => findManyRepository(api), [api]);
+  const { t } = useTranslation(NS);
+  const runRef = useRef(0);
+  const [arrayRecords, setArrayRecords] = useState<FindManyRecord[]>([]);
+  const [streamRecords, setStreamRecords] = useState<FindManyRecord[]>([]);
+  const [arrayLoading, setArrayLoading] = useState(false);
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(
+    () => () => {
+      runRef.current += 1;
+    },
+    [],
+  );
+
+  async function loadArray(): Promise<void> {
+    const current = ++runRef.current;
+    setArrayLoading(true);
+    setArrayRecords([]);
+    setError('');
+    try {
+      const records = await repository.findMany(findManyOptions);
+      if (runRef.current === current) setArrayRecords(records);
+    } catch (value) {
+      if (runRef.current === current)
+        setError(value instanceof Error ? value.message : t('loadError'));
+    } finally {
+      if (runRef.current === current) setArrayLoading(false);
+    }
+  }
+
+  async function loadStream(): Promise<void> {
+    const current = ++runRef.current;
+    setStreamLoading(true);
+    setStreamRecords([]);
+    setError('');
+    try {
+      for await (const record of repository.findMany(findManyOptions)) {
+        if (runRef.current !== current) break;
+        setStreamRecords((records) => [...records, record]);
+      }
+    } catch (value) {
+      if (runRef.current === current)
+        setError(value instanceof Error ? value.message : t('loadError'));
+    } finally {
+      if (runRef.current === current) setStreamLoading(false);
+    }
+  }
+
+  const busy = arrayLoading || streamLoading;
+  return (
+    <PageContainer>
+      <PageHeader description={t('findManyIntro')} title={t('findManyTitle')} />
+      {error && (
+        <p
+          role='alert'
+          className='rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs font-medium text-destructive'
+        >
+          {error}
+        </p>
+      )}
+      <div className='grid min-w-0 items-start gap-4 xl:grid-cols-2'>
+        <ExamplePanel
+          title={t('findManyArrayTitle')}
+          description={t('findManyArrayDescription')}
+          protocol='Accept: application/json'
+          code={
+            'const records = await repository.findMany({\n  limit: 24,\n  sort: sequenceAscending,\n});'
+          }
+          button={t('findManyRunArray')}
+          loading={arrayLoading}
+          disabled={busy}
+          records={arrayRecords}
+          onRun={() => {
+            if (!busy) void loadArray();
+          }}
+        />
+        <ExamplePanel
+          title={t('findManyStreamTitle')}
+          description={t('findManyStreamDescription')}
+          protocol='Accept: application/x-ndjson'
+          code={
+            'for await (const record of repository.findMany({\n  limit: 24,\n  sort: sequenceAscending,\n})) {\n  consume(record);\n}'
+          }
+          button={t('findManyRunStream')}
+          loading={streamLoading}
+          disabled={busy}
+          records={streamRecords}
+          onRun={() => {
+            if (!busy) void loadStream();
+          }}
+        />
+      </div>
+    </PageContainer>
+  );
+}

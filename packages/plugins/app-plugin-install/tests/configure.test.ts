@@ -3,7 +3,7 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -21,18 +21,39 @@ afterEach(() => {
 });
 
 describe('installation configuration', () => {
+  it('does not replace a configured application using another supported format', async () => {
+    const rootDir = createTemporaryRoot();
+    await writeFile(path.join(rootDir, 'config.yaml'), 'auth: {}');
+    await expect(
+      configureInstallation(
+        { dialect: 'sqlite', database: 'app.sqlite' },
+        { paths: createAppPaths({ rootDir }) },
+      ),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(access(path.join(rootDir, 'config.yml'))).rejects.toThrow();
+  });
+
   it('creates a SQLite config file', async () => {
     const rootDir = createTemporaryRoot();
     await expect(
       configureInstallation(
         { dialect: 'sqlite', database: 'storage/app.sqlite', debug: true },
         {
-          paths: createConfigPaths({ rootDir }),
+          paths: createAppPaths({ rootDir }),
           generateSecret: () => 'test-secret',
         },
       ),
     ).resolves.toEqual({ configured: true, restartRequired: true });
 
+    const loaded = new AppConfig();
+    loaded.loadFile(path.join(rootDir, 'config.yml'));
+    await loaded.loadAll();
+    expect(loaded.get('database.connections.main')).toMatchObject({
+      dialect: 'sqlite',
+      database: 'storage/app.sqlite',
+      debug: true,
+    });
+    expect(loaded.get('auth.secret')).toBe('test-secret');
     const config = await readFile(path.join(rootDir, 'config.yml'), 'utf8');
     expect(config.match(/secret: "test-secret"/gu)).toHaveLength(2);
     expect(config).toContain('session:\n  secret: "test-secret"');
@@ -56,7 +77,7 @@ describe('installation configuration', () => {
         ssl: true,
       },
       {
-        paths: createConfigPaths({ rootDir }),
+        paths: createAppPaths({ rootDir }),
         generateSecret: () => 'secret',
       },
     );
@@ -82,7 +103,7 @@ describe('installation configuration', () => {
         charset: 'utf8mb4',
       },
       {
-        paths: createConfigPaths({ rootDir }),
+        paths: createAppPaths({ rootDir }),
         generateSecret: () => 'secret',
       },
     );
@@ -97,7 +118,7 @@ describe('installation configuration', () => {
     const rootDir = createTemporaryRoot();
     await configureInstallation(
       { dialect: 'sqlite', database: 'database.sqlite' },
-      { paths: createConfigPaths({ rootDir }) },
+      { paths: createAppPaths({ rootDir }) },
     );
     const config = await readFile(path.join(rootDir, 'config.yml'), 'utf8');
     expect(/secret: "([A-Za-z0-9_-]{43})"/u.exec(config)?.[1]).toBeTruthy();
@@ -132,7 +153,7 @@ describe('installation configuration', () => {
     await expect(
       configureInstallation(
         { dialect: 'sqlite', database: 'database.sqlite' },
-        { paths: createConfigPaths({ rootDir }) },
+        { paths: createAppPaths({ rootDir }) },
       ),
     ).rejects.toMatchObject<Partial<InstallConfigurationError>>({
       status: 409,
@@ -144,7 +165,7 @@ describe('installation configuration', () => {
 
   it('allows only one concurrent configuration write', async () => {
     const rootDir = createTemporaryRoot();
-    const options = { paths: createConfigPaths({ rootDir }) };
+    const options = { paths: createAppPaths({ rootDir }) };
     const results = await Promise.allSettled([
       configureInstallation(
         { dialect: 'sqlite', database: 'first.sqlite' },

@@ -1,0 +1,79 @@
+{
+  "name": "@nocobase/audit",
+  "version": "0.0.1",
+  "description": "Explicit audit events and replaceable output writers.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "prettier": "@nocobase/dev-config/prettier",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./writers/repository": {
+      "types": "./src/writers/repository.ts",
+      "import": "./src/writers/repository.ts"
+    },
+    "./writers/jsonl": {
+      "types": "./src/writers/jsonl.ts",
+      "import": "./src/writers/jsonl.ts"
+    },
+    "./writers/drive": {
+      "types": "./src/writers/drive.ts",
+      "import": "./src/writers/drive.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./writers/repository": {
+        "types": "./dist/writers/repository.d.ts",
+        "import": "./dist/writers/repository.js"
+      },
+      "./writers/jsonl": {
+        "types": "./dist/writers/jsonl.d.ts",
+        "import": "./dist/writers/jsonl.js"
+      },
+      "./writers/drive": {
+        "types": "./dist/writers/drive.d.ts",
+        "import": "./dist/writers/drive.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@nocobase/drive": "workspace:*"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nocobase/nocobase3.git",
+    "directory": "packages/libs/audit"
+  }
+}

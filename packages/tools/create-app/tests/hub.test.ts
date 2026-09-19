@@ -26,6 +26,7 @@ const TEMPLATE_ENV_EXAMPLE = [
   '# Application',
   'APP_NAME=hub',
   'APP_BASE_PATH=/hub',
+  'AUTH_DISABLE_SIGN_UP=true',
   '',
   '# Server',
   '# APP_SERVER_HOST=127.0.0.1',
@@ -62,6 +63,15 @@ describe('buildHubEnvFile', () => {
     expect(env).toContain('APP_BASE_PATH=/hub');
   });
 
+  it('disables self-service sign-up', () => {
+    const env = buildHubEnvFile({
+      example: TEMPLATE_ENV_EXAMPLE,
+      name: 'my-hub',
+    });
+
+    expect(env).toContain('AUTH_DISABLE_SIGN_UP=true');
+  });
+
   /** The comments explain each setting, and the commented-out keys are documented defaults. Both must survive. */
   it('keeps the example comments and optional keys', () => {
     const env = buildHubEnvFile({
@@ -90,6 +100,7 @@ describe('buildHubEnvFile', () => {
 
     expect(env).toContain('APP_NAME=my-hub');
     expect(env).toContain('APP_BASE_PATH=/hub');
+    expect(env).toContain('AUTH_DISABLE_SIGN_UP=true');
   });
 
   it('ends with exactly one trailing newline', () => {

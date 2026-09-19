@@ -5,12 +5,13 @@ import { WorkflowRepository } from '../server/repositories/workflow-repository.j
 import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
 import type { WorkflowServiceApi } from '../server/service.js';
 import type { WorkflowDistArtifact } from '../server/loader/index.js';
+import { asId, asIdFilter, serializeJson } from '../server/engine/utils.js';
 import {
   createTestDatabase,
   createTestWorkflow,
   insertTestRun,
+  testStore,
 } from './helpers.js';
-import { WORKFLOW_COLLECTIONS } from '../server/collections/names.js';
 import { parseWorkflowIdentifier } from '../server/repositories/mappers.js';
 
 describe('workflow repositories', () => {
@@ -21,7 +22,11 @@ describe('workflow repositories', () => {
   beforeEach(async () => {
     database = await createTestDatabase();
     const service: WorkflowServiceApi = {
-      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      trigger: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+        runId: '1',
+      }),
       triggerRevision: async () => ({
         status: 'accepted',
         eventKey: 'test-event',
@@ -105,11 +110,9 @@ describe('workflow repositories', () => {
       key: 'detail-stats',
       nodes: [],
     });
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.stats)
-      .values({ key: workflow.key, executed: 7 })
-      .execute();
+    await testStore(database).stats.createOne({
+      values: { key: workflow.key, executed: 7 },
+    });
     await insertTestRun(database, {
       workflowId: workflow.id,
       workflowKey: workflow.key,
@@ -137,7 +140,11 @@ describe('workflow repositories', () => {
 
     const ensureArtifactMaterialized = vi.fn(async () => undefined);
     const repository = new WorkflowRepository(database, {
-      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      trigger: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+        runId: '1',
+      }),
       triggerRevision: async () => ({
         status: 'accepted',
         eventKey: 'test-event',
@@ -181,7 +188,11 @@ describe('workflow repositories', () => {
       createArtifact('artifact-two'),
     ];
     const service: WorkflowServiceApi = {
-      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      trigger: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+        runId: '1',
+      }),
       triggerRevision: async () => ({
         status: 'accepted',
         eventKey: 'test-event',
@@ -195,6 +206,182 @@ describe('workflow repositories', () => {
 
     expect(page).toMatchObject({ page: 2, pageSize: 1, total: 3 });
     expect(page.data.map((item) => item.key)).toEqual(['artifact-one']);
+  });
+
+  it('keeps the current revision visible when a newer Artifact is deployed', async () => {
+    const current = await createTestWorkflow(database, {
+      key: 'deployed-update',
+      enabled: true,
+      nodes: [],
+    });
+    const currentHash = '1'.repeat(64);
+    const pending = createArtifact('deployed-update');
+    pending.workflow.title = 'Pending title';
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(current.id) },
+      values: {
+        title: 'Current title',
+        version: 'version-1',
+        hash: currentHash,
+      },
+    });
+    const service: WorkflowServiceApi = {
+      trigger: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+        runId: '1',
+      }),
+      triggerRevision: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+      }),
+      discoverArtifacts: async () => [pending],
+      ensureArtifactMaterialized: async () => undefined,
+    };
+    workflows = new WorkflowRepository(database, service);
+
+    await expect(workflows.list({ enabled: true })).resolves.toMatchObject({
+      total: 1,
+      data: [
+        {
+          id: String(current.id),
+          key: 'deployed-update',
+          title: 'Current title',
+          version: 'version-1',
+          hash: currentHash,
+          current: true,
+          enabled: true,
+          pendingArtifact: {
+            hash: pending.digest,
+            title: 'Pending title',
+          },
+        },
+      ],
+    });
+    await expect(workflows.list({ enabled: false })).resolves.toMatchObject({
+      total: 0,
+      data: [],
+    });
+    await expect(workflows.get(current.id)).resolves.toMatchObject({
+      id: String(current.id),
+      hash: currentHash,
+      current: true,
+      enabled: true,
+      pendingArtifact: { hash: pending.digest, title: 'Pending title' },
+    });
+  });
+
+  it('offers a deployed Artifact as a revision before anything materializes it', async () => {
+    const current = await createTestWorkflow(database, {
+      key: 'deployed-update',
+      enabled: true,
+      nodes: [],
+    });
+    const currentHash = '1'.repeat(64);
+    const pending = {
+      ...createArtifact('deployed-update'),
+      digest: '2'.repeat(64),
+    };
+    pending.workflow.title = 'Pending title';
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(current.id) },
+      values: {
+        title: 'Current title',
+        version: 'version-1',
+        hash: currentHash,
+      },
+    });
+    await testStore(database).stats.createOne({
+      values: { key: 'deployed-update', executed: 4 },
+    });
+    const materialize = vi.fn(async () => undefined);
+    const service: WorkflowServiceApi = {
+      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      triggerRevision: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+      }),
+      discoverArtifacts: async () => [pending],
+      ensureArtifactMaterialized: materialize,
+    };
+    workflows = new WorkflowRepository(database, service);
+
+    await expect(workflows.revisions(current.id)).resolves.toMatchObject([
+      {
+        id: null,
+        key: 'deployed-update',
+        title: 'Pending title',
+        hash: pending.digest,
+        version: null,
+        current: null,
+        enabled: false,
+        executed: 4,
+      },
+      {
+        id: String(current.id),
+        hash: currentHash,
+        version: 'version-1',
+        current: true,
+        enabled: true,
+        executed: 4,
+      },
+    ]);
+    // Reading the candidate revision must not turn it into a row, because
+    // materializing it is what enabling it does.
+    expect(materialize).not.toHaveBeenCalled();
+    await expect(
+      testStore(database).workflows.count({
+        filter: { key: 'deployed-update' },
+      }),
+    ).resolves.toBe(1);
+    await expect(workflows.get(pending.digest)).resolves.toMatchObject({
+      id: null,
+      hash: pending.digest,
+      version: null,
+      executed: 4,
+    });
+  });
+
+  it('lists a materialized Artifact once', async () => {
+    const current = await createTestWorkflow(database, {
+      key: 'materialized-update',
+      enabled: true,
+      nodes: [],
+    });
+    const pending = {
+      ...createArtifact('materialized-update'),
+      digest: '3'.repeat(64),
+    };
+    const materializedRevision = await testStore(database).workflows.createOne({
+      values: {
+        key: 'materialized-update',
+        hash: pending.digest,
+        version: 'version-2',
+        enabled: false,
+        current: null,
+        inputSchema: serializeJson({ type: 'object' }),
+        parametersSchema: serializeJson({}),
+        parameterValues: serializeJson({}),
+        options: serializeJson({}),
+      },
+      select: (select) => select.fields('id'),
+    });
+    const service: WorkflowServiceApi = {
+      trigger: async () => ({ status: 'accepted', eventKey: 'test-event' }),
+      triggerRevision: async () => ({
+        status: 'accepted',
+        eventKey: 'test-event',
+      }),
+      discoverArtifacts: async () => [pending],
+      ensureArtifactMaterialized: async () => undefined,
+    };
+    workflows = new WorkflowRepository(database, service);
+
+    const revisions = await workflows.revisions(current.id);
+    expect(revisions.map((revision) => revision.id)).toEqual([
+      String(materializedRevision.record.id),
+      String(current.id),
+    ]);
   });
 
   it('filters executions before applying pagination', async () => {
@@ -241,12 +428,10 @@ describe('workflow repositories', () => {
       key: 'versioned-run',
       nodes: [],
     });
-    await database
-      .query()
-      .updateTable(WORKFLOW_COLLECTIONS.workflows)
-      .set({ title: 'Versioned run', version: 'version-3' })
-      .where('id', '=', workflow.id)
-      .execute();
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(workflow.id) },
+      values: { title: 'Versioned run', version: 'version-3' },
+    });
     const run = await insertTestRun(database, {
       workflowId: workflow.id,
       workflowKey: workflow.key,
@@ -266,45 +451,42 @@ describe('workflow repositories', () => {
       enabled: true,
       nodes: [],
     });
-    await database
-      .query()
-      .updateTable(WORKFLOW_COLLECTIONS.workflows)
-      .set({ current: null })
-      .where('id', '=', first.id)
-      .execute();
-    await database
-      .query()
-      .insertInto(WORKFLOW_COLLECTIONS.workflows)
-      .values({
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(first.id) },
+      values: { current: null },
+    });
+    const second = await testStore(database).workflows.createOne({
+      values: {
         key: 'versioned',
         title: 'versioned v2',
         enabled: false,
         current: true,
-        inputSchema: JSON.stringify({ type: 'object' }),
-        parametersSchema: JSON.stringify({}),
-        parameterValues: JSON.stringify({}),
-        options: JSON.stringify({}),
-      })
-      .execute();
-    const second = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .where('key', '=', 'versioned')
-      .where('current', '=', true)
-      .executeTakeFirstOrThrow();
+        inputSchema: serializeJson({ type: 'object' }),
+        parametersSchema: serializeJson({}),
+        parameterValues: serializeJson({}),
+        options: serializeJson({}),
+      },
+      select: (select) => select.fields('id'),
+    });
 
-    await workflows.setStatus(second.id, true);
+    await workflows.setStatus(asId(second.record.id), true);
 
-    const revisions = await database
-      .query()
-      .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-      .select(['id', 'current', 'enabled'])
-      .where('key', '=', 'versioned')
-      .orderBy('id')
-      .execute();
+    const revisions = await testStore(database).workflows.findMany({
+      filter: { key: 'versioned' },
+      select: (select) => select.fields('id', 'current', 'enabled'),
+      sort: (sort) => sort.field('id').asc(),
+    });
     expect(revisions).toEqual([
-      expect.objectContaining({ id: first.id, current: null, enabled: 0 }),
-      expect.objectContaining({ id: second.id, current: 1, enabled: 1 }),
+      expect.objectContaining({
+        id: first.id,
+        current: null,
+        enabled: false,
+      }),
+      expect.objectContaining({
+        id: second.record.id,
+        current: true,
+        enabled: true,
+      }),
     ]);
   });
 });

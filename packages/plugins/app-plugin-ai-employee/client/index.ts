@@ -6,3 +6,4 @@ export * from './avatar.js';
 export * from './route-paths.js';
 export * from './ai-settings-shell.js';
 export * from './llm-service-service.js';
+export * from './mcp-service.js';

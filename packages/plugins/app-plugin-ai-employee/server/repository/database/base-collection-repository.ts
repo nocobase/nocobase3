@@ -47,20 +47,28 @@ function applyFilter<Q extends SelectQuery | UpdateQuery | DeleteQuery>(
             ? 'in'
             : operator === '$notIn'
               ? 'not in'
-              : operator === '$ne'
-                ? '!='
-                : operator === '$lt'
-                  ? '<'
-                  : operator === '$lte'
-                    ? '<='
-                    : operator === '$gt'
-                      ? '>'
-                      : operator === '$gte'
-                        ? '>='
-                        : '=';
+              : operator === '$ne' && value === null
+                ? 'is not'
+                : operator === '$ne'
+                  ? '!='
+                  : operator === '$lt'
+                    ? '<'
+                    : operator === '$lte'
+                      ? '<='
+                      : operator === '$gt'
+                        ? '>'
+                        : operator === '$gte'
+                          ? '>='
+                          : '=';
         current = current.where(field, op, value);
       }
-    } else current = current.where(field, Array.isArray(raw) ? 'in' : '=', raw);
+    } else {
+      current = current.where(
+        field,
+        raw === null ? 'is' : Array.isArray(raw) ? 'in' : '=',
+        raw,
+      );
+    }
   }
   return current as Q;
 }
@@ -72,7 +80,6 @@ export class BaseCollectionRepository<
     private readonly connection: DatabaseConnection,
     private readonly table: string,
     private readonly generateId: () => string | number | bigint = randomUUID,
-    private readonly jsonFields: ReadonlySet<string> = new Set(),
   ) {}
   async findOne(
     query: CollectionQuery<T> = {},
@@ -95,7 +102,7 @@ export class BaseCollectionRepository<
       );
     if (query.limit !== undefined) statement = statement.limit(query.limit);
     if (query.offset !== undefined) statement = statement.offset(query.offset);
-    return (await statement.execute<T>()).map((row) => this.decodeRow(row));
+    return statement.execute<T>();
   }
   create(
     input: { values: Partial<T> },
@@ -168,12 +175,15 @@ export class BaseCollectionRepository<
     const normalized: Record<string, unknown> = { ...value };
     if (this.table === 'aiConversations' && normalized.sessionId == null)
       normalized.sessionId = randomUUID();
-    if (
-      ['aiMessages', 'aiToolMessages'].includes(this.table) &&
-      normalized[this.table === 'aiMessages' ? 'messageId' : 'id'] == null
-    )
-      normalized[this.table === 'aiMessages' ? 'messageId' : 'id'] =
-        this.generateId();
+    const generatedIdField =
+      this.table === 'aiMessages'
+        ? 'messageId'
+        : ['aiToolMessages', 'aiUsageEvents'].includes(this.table)
+          ? 'id'
+          : undefined;
+    if (generatedIdField && normalized[generatedIdField] == null) {
+      normalized[generatedIdField] = this.generateId();
+    }
     if (
       this.table !== 'aiUsageEvents' &&
       !this.table.startsWith('lcCheckpoint')
@@ -185,12 +195,6 @@ export class BaseCollectionRepository<
   }
   private encodeRow(value: Partial<T>): Partial<T> {
     const encoded: Record<string, unknown> = { ...value };
-    for (const field of this.jsonFields) {
-      const fieldValue = encoded[field];
-      if (fieldValue != null) {
-        encoded[field] = JSON.stringify(fieldValue);
-      }
-    }
     for (const field of BIGINT_TIMESTAMP_FIELDS[this.table] ?? []) {
       const fieldValue = encoded[field];
       if (fieldValue instanceof Date) {
@@ -209,18 +213,5 @@ export class BaseCollectionRepository<
       }
     }
     return encoded as Partial<T>;
-  }
-  private decodeRow(value: T): T {
-    const decoded = { ...value } as Record<string, unknown>;
-    for (const field of this.jsonFields) {
-      const fieldValue = decoded[field];
-      if (typeof fieldValue !== 'string') continue;
-      try {
-        decoded[field] = JSON.parse(fieldValue);
-      } catch {
-        // Preserve invalid legacy values rather than making the record unreadable.
-      }
-    }
-    return decoded as T;
   }
 }

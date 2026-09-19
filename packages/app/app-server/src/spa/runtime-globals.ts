@@ -29,6 +29,8 @@ export function createNocoBaseSpaRuntimeGlobals(
 const runtimeGlobalsStartMarker = '<!-- nocobase-spa-runtime:start -->';
 const runtimeGlobalsEndMarker = '<!-- nocobase-spa-runtime:end -->';
 const runtimeConfigElementId = 'nocobase-runtime-config';
+const defaultHtmlLocale = 'en-US';
+const defaultHtmlLocaleMarker = `<html lang="${defaultHtmlLocale}">`;
 
 export function injectSpaRuntimeGlobals(
   html: string,
@@ -56,7 +58,15 @@ export function injectSpaRuntimeHtml(
     readonly runtimeGlobals?: SpaRuntimeGlobals;
   } = {},
 ): string {
-  const withGlobals = injectSpaRuntimeGlobals(html, options.runtimeGlobals);
+  // SPA templates provide this stable pre-runtime marker. The client keeps `lang` synchronized after it starts.
+  const withLocale = html.replace(
+    defaultHtmlLocaleMarker,
+    `<html lang="${escapeHtmlAttribute(readHtmlLocale(options.clientConfig))}">`,
+  );
+  const withGlobals = injectSpaRuntimeGlobals(
+    withLocale,
+    options.runtimeGlobals,
+  );
   const cleanHtml = stripExistingRuntimeConfig(withGlobals);
   const configHtml = createSpaRuntimeConfigHtml(options.clientConfig ?? {});
   const moduleScriptPattern = /<script\s+[^>]*type=["']module["'][^>]*>/i;
@@ -65,6 +75,44 @@ export function injectSpaRuntimeHtml(
     return `${cleanHtml}\n${configHtml}`;
   }
   return `${cleanHtml.slice(0, moduleScriptMatch.index)}${configHtml}${cleanHtml.slice(moduleScriptMatch.index)}`;
+}
+
+function readHtmlLocale(clientConfig: SpaClientConfigMap | undefined): string {
+  const i18nConfig = clientConfig?.i18n;
+  if (!isClientConfigMap(i18nConfig)) {
+    return defaultHtmlLocale;
+  }
+
+  const configuredLocale = i18nConfig.defaultLocale;
+  if (typeof configuredLocale !== 'string') {
+    return defaultHtmlLocale;
+  }
+
+  const locale = configuredLocale.trim();
+  if (!locale) {
+    return defaultHtmlLocale;
+  }
+
+  try {
+    Intl.getCanonicalLocales(locale);
+    return locale;
+  } catch {
+    return defaultHtmlLocale;
+  }
+}
+
+function isClientConfigMap(
+  value: SpaClientConfigMap[string] | undefined,
+): value is SpaClientConfigMap {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function stripExistingRuntimeGlobals(html: string): string {

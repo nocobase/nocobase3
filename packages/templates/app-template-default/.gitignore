@@ -15,7 +15,6 @@ dist-ssr
 /.extension-state/
 /src/extensions/
 /registry.json
-/public/storage
 /coverage/
 /playwright-report/
 /test-results/
@@ -25,6 +24,13 @@ dist-ssr
 
 # Local application configuration
 /config.yml
+/.env
+
+# Local SQLite database, at the path config.example.yml gives the default connection
+/database.sqlite
+/database.sqlite-journal
+/database.sqlite-wal
+/database.sqlite-shm
 
 # E2E credentials
 .env.e2e
@@ -41,3 +47,5 @@ _.ntvs_
 _.njsproj
 _.sln
 \*.sw?
+
+/config.toml

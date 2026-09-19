@@ -1,6 +1,6 @@
 import knex from 'knex';
 import { afterEach, describe, expect, it } from 'vitest';
-import { KnexSchemaAdapter } from '../../../../../src/schema/adapters/knex/index.js';
+import { KnexSchemaAdapter } from '../../../../../src/schema/internal/knex/adapter.js';
 
 describe('KnexSchemaAdapter', () => {
   const clients: Array<ReturnType<typeof knex>> = [];
@@ -11,16 +11,46 @@ describe('KnexSchemaAdapter', () => {
   });
 
   function createClient(clientName = 'better-sqlite3') {
+    // SQL compilation does not need a native driver or a connection pool.
     const client = knex({
       client: clientName,
-      connection: {
-        filename: ':memory:',
-      },
       useNullAsDefault: true,
     });
     clients.push(client);
     return client;
   }
+
+  it.each(['better-sqlite3', 'pg', 'mysql2', 'oracledb', 'mssql'])(
+    'declares a named primary key exactly once on %s',
+    async (clientName) => {
+      const adapter = new KnexSchemaAdapter(createClient(clientName), {
+        dialect: clientName === 'oracledb' ? 'oracle' : clientName,
+      });
+      const sql = await adapter.compile([
+        {
+          type: 'createTable',
+          table: {
+            name: 'accounts',
+            columns: [
+              {
+                name: 'code',
+                type: 'string',
+                primaryKey: true,
+                nullable: false,
+              },
+            ],
+            constraints: [
+              { type: 'primary', name: 'accounts_pk', columns: ['code'] },
+            ],
+            indexes: [],
+          },
+        },
+      ]);
+      expect(sql.join('\n').match(/primary key/gi)).toHaveLength(1);
+      if (clientName !== 'better-sqlite3')
+        expect(sql.join('\n')).toContain('accounts_pk');
+    },
+  );
 
   it('compiles predicate filters for regular indexes and unique constraints', async () => {
     const adapter = new KnexSchemaAdapter(createClient());
@@ -68,6 +98,36 @@ describe('KnexSchemaAdapter', () => {
       'create unique index `uk_jobs_account_program`',
     );
     expect(sql.join('\n')).toContain('`program_id` >');
+  });
+
+  it('uses the constraint-specific MySQL drop operation', async () => {
+    const adapter = new KnexSchemaAdapter(createClient('mysql2'), {
+      dialect: 'mysql',
+    });
+
+    const sql = await adapter.compile([
+      {
+        type: 'alterTable',
+        tableName: 'orders',
+        operations: [
+          {
+            type: 'dropConstraint',
+            name: 'orders_reference_unique',
+            constraintType: 'unique',
+          },
+          {
+            type: 'dropConstraint',
+            name: 'orders_customer_foreign',
+            constraintType: 'foreignKey',
+          },
+        ],
+      },
+    ]);
+
+    expect(sql).toEqual([
+      'alter table `orders` drop index `orders_reference_unique`',
+      'alter table `orders` drop foreign key `orders_customer_foreign`',
+    ]);
   });
 
   it('compiles raw views and structured filters with supported operators', async () => {

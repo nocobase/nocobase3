@@ -1,4 +1,8 @@
-export { createAppDatabaseManager } from './manager.js';
+export { defineAppDatabaseConfig } from './define-app-database-config.js';
+export {
+  createAppDatabaseManager,
+  resolveAppDatabaseDriver,
+} from './manager.js';
 export {
   DatabaseProvider,
   type DatabaseProviderApplication,
@@ -18,16 +22,46 @@ export {
   type CreateAppSeederOptions,
 } from './seeder.js';
 export { prepareAppDatabaseStorage } from './storage.js';
-export { runAppMigrations, runAppSeeds } from './tasks.js';
+export {
+  isCollectionMetadataStoreInstance,
+  resolveAppCollectionsDirectory,
+  resolveAppMetadataStore,
+  type ResolveAppMetadataStoreOptions,
+} from './collections-directory.js';
+export {
+  generateAppCollectionsArtifact,
+  type AppCollectionsArtifactConnectionResult,
+  type AppCollectionsArtifactDifference,
+  type AppCollectionsArtifactDifferenceKind,
+  type AppCollectionsArtifactManifestSummary,
+  type AppCollectionsArtifactOptions,
+  type AppCollectionsArtifactResult,
+} from './collections-artifact.js';
+export {
+  runAppMigrations,
+  runAppSeeds,
+  runAppDatabaseTasks,
+  AppDatabaseTaskError,
+  type AppDatabaseTaskResult,
+  type AppDatabaseTaskRunOptions,
+  type AppDatabaseTasksResult,
+} from './tasks.js';
+export {
+  planAppDatabaseTasks,
+  planAppRuntimeDatabaseTasks,
+  type AppRuntimeDatabaseTaskPlanOptions,
+  type AppDatabaseMigrationSource,
+  type AppDatabaseTask,
+  type AppDatabaseTaskKind,
+  type AppDatabaseTaskPlanOptions,
+  type AppDatabaseTaskSelection,
+} from './plan.js';
 export type {
   AppDatabaseConfig,
+  AppDatabaseConfigFromDrivers,
+  AppDatabaseConnectionConfig,
+  AppMetadataStoreConfig,
   AppDatabaseMigrationConfig,
   AppDatabaseSeedConfig,
+  AppDatabaseTaskContributions,
 } from './types.js';
-export * from './config.js';
-export {
-  databaseLifecycleObserverToken,
-  type DatabaseLifecycleObserver,
-  type DatabaseLifecyclePhase,
-  type DatabaseLifecycleResult,
-} from './lifecycle-observer.js';

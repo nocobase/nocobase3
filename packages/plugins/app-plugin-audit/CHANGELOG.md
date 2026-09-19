@@ -1,7 +1,5 @@
-# @nocobase/app-plugin-audit
+# Changelog
 
 ## 0.0.1
 
-### Patch Changes
-
-- Add operation audit contracts, a stable service token and an explicit disabled bootstrap without active collectors.
+Add App audit binding, Provider lifecycle, safe diagnostics and integration Skill.

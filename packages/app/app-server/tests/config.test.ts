@@ -1,8 +1,17 @@
+import type { ConnectionConfigFromDrivers } from '@nocobase/db';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import type { DatabaseManager } from '@nocobase/db';
+import {
+  InMemoryCollectionMetadataStore,
+  type DatabaseManager,
+} from '@nocobase/db';
+import postgres from '@nocobase/db-postgres';
+import mysql from '@nocobase/db-mysql';
+import sqlite from '@nocobase/db-sqlite';
+import oracle from '@nocobase/db-oracle';
+import mssql from '@nocobase/db-mssql';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createDatabaseMigratorMock = vi.hoisted(() => vi.fn());
@@ -23,10 +32,15 @@ import {
   createAppDatabaseManager,
   createAppMigrator,
   createAppSeeder,
-  createConfigPaths,
+  createAppPaths,
   prepareAppDatabaseStorage,
-  type AppDatabaseConfig,
+  type AppDatabaseConfig as GenericAppDatabaseConfig,
 } from '../src/index.js';
+
+const drivers = { postgres, mysql, sqlite, oracle, mssql };
+type AppDatabaseConfig = GenericAppDatabaseConfig<
+  ConnectionConfigFromDrivers<typeof drivers>
+>;
 
 beforeEach(() => {
   createDatabaseMigratorMock.mockReset();
@@ -41,7 +55,7 @@ afterEach(() => {
 
 describe('app-server config runtime', () => {
   it('supports custom database runtime paths', () => {
-    const paths = createConfigPaths({
+    const paths = createAppPaths({
       rootDir: '/tmp/app',
       databaseDir: '/tmp/app/dist/database',
     });
@@ -55,6 +69,7 @@ describe('app-server config runtime', () => {
 describe('app database manager', () => {
   it('skips manager creation for the none connection', () => {
     const config: AppDatabaseConfig = {
+      drivers,
       default: 'none',
       connections: {},
       migrations: {
@@ -68,6 +83,7 @@ describe('app database manager', () => {
 
   it('creates a lazy database manager for configured connections', () => {
     const config: AppDatabaseConfig = {
+      drivers,
       default: 'sqlite',
       connections: {
         sqlite: {
@@ -83,6 +99,90 @@ describe('app database manager', () => {
 
     expect(createAppDatabaseManager(config)).toBeDefined();
   });
+
+  it('forwards the manager-level Collection Metadata Store', async () => {
+    const metadataStore = new InMemoryCollectionMetadataStore();
+    const config: AppDatabaseConfig = {
+      drivers,
+      default: 'sqlite',
+      metadataStore,
+      connections: {
+        sqlite: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+        },
+      },
+      migrations: {
+        directory: '/tmp/app/database/migrations',
+        autoRun: false,
+      },
+    };
+    const database = createAppDatabaseManager(config)!;
+
+    try {
+      await database.builder().createCollection('orders', (collection) => {
+        collection.title('Orders');
+        collection.increments('id');
+      });
+      await expect(metadataStore.get('orders')).resolves.toMatchObject({
+        document: { name: 'orders', title: 'Orders' },
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('creates an Oracle manager without opening a connection eagerly', () => {
+    const config: AppDatabaseConfig = {
+      drivers,
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'oracle',
+          host: '127.0.0.1',
+          port: 1521,
+          serviceName: 'FREEPDB1',
+          username: 'nocobase',
+          password: 'nocobase',
+        },
+      },
+      migrations: {
+        directory: '/tmp/app/database/migrations',
+        autoRun: false,
+      },
+    };
+
+    const database = createAppDatabaseManager(config);
+    expect(database?.connection().dialect).toBe('oracle');
+    expect(database?.connection().driver).toBe('oracledb');
+  });
+
+  it('creates an MSSQL manager without opening a connection eagerly', () => {
+    const config: AppDatabaseConfig = {
+      drivers,
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'mssql',
+          host: '127.0.0.1',
+          port: 1433,
+          database: 'nocobase',
+          username: 'sa',
+          password: 'secret',
+          encrypt: false,
+          trustServerCertificate: true,
+        },
+      },
+      migrations: {
+        directory: '/tmp/app/database/migrations',
+        autoRun: false,
+      },
+    };
+
+    const database = createAppDatabaseManager(config);
+    expect(database?.connection().dialect).toBe('mssql');
+    expect(database?.connection().driver).toBe('tedious');
+  });
 });
 
 describe('app database storage', () => {
@@ -92,6 +192,7 @@ describe('app database storage', () => {
     const filename = path.join(root, 'storage', 'database.sqlite');
 
     await prepareAppDatabaseStorage({
+      drivers,
       default: 'sqlite',
       connections: {
         sqlite: {
@@ -349,6 +450,8 @@ function createMockDatabaseManager(client: unknown = {}): DatabaseManager {
     }) as DatabaseManager['connection'],
     builder: vi.fn() as DatabaseManager['builder'],
     query: vi.fn() as DatabaseManager['query'],
+    createMigrator: vi.fn() as DatabaseManager['createMigrator'],
+    createSeeder: vi.fn() as DatabaseManager['createSeeder'],
     connect: vi.fn() as DatabaseManager['connect'],
     transaction: vi.fn() as DatabaseManager['transaction'],
     disconnect: vi.fn() as DatabaseManager['disconnect'],

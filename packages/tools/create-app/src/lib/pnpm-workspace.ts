@@ -21,16 +21,16 @@ export interface AllowBuildsEntry {
  * `true` allows the script; `false` records that it is deliberately skipped, which silences the same prompt without
  * running anything. Both are decisions and both belong here.
  *
- * `better-sqlite3` and `esbuild` compile native code. `better-sqlite3` is written whichever database was chosen:
- * listing it costs nothing and means switching an app to sqlite later just works, instead of failing at the first
- * query with "Could not locate the bindings file", which names nothing actionable. `tesseract.js` arrives through
- * `officeparser` in the AI runtime and its `postinstall` only prints an OpenCollective donation notice, so it is
- * skipped. The list mirrors the repository's own `pnpm-workspace.yaml`, so an application and the monorepo decide
- * the same packages the same way.
+ * `better-sqlite3`, `esbuild`, and `oracledb` compile native code. Database drivers are written whichever database
+ * was chosen: listing them costs nothing and means switching an app's database later just works, instead of failing
+ * at runtime because a native addon was not built. `tesseract.js` arrives through `officeparser` in the AI runtime
+ * and its `postinstall` only prints an OpenCollective donation notice, so it is skipped. The list mirrors the
+ * repository's own `pnpm-workspace.yaml`, so an application and the monorepo decide the same packages the same way.
  */
 export const ALLOWED_BUILDS: readonly AllowBuildsEntry[] = [
   { name: 'better-sqlite3', allowed: true },
   { name: 'esbuild', allowed: true },
+  { name: 'oracledb', allowed: true },
   { name: 'tesseract.js', allowed: false },
 ];
 

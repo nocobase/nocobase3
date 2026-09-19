@@ -1,8 +1,4 @@
-import {
-  appApiClientToken,
-  useService,
-  type AppClient,
-} from '@nocobase/app-client';
+import { useApiClient, type ApiClient } from '@nocobase/app-client';
 import { Check, ChevronDown, CircleAlert, Pencil, X } from 'lucide-react';
 import {
   useCallback,
@@ -23,21 +19,29 @@ import {
   type LLMService,
   type LLMProvider,
 } from '../llm-service-service.js';
+import { useT } from '../locales/index.js';
 
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '../../registry/nocobase-ai/shared/ui/card.js';
 export default function LLMServicePage(): ReactElement {
-  const appClient = useService(appApiClientToken);
+  const api = useApiClient();
+  const t = useT();
   const [services, setServices] = useState<LLMService[]>([]);
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState<LLMService>();
   useEffect(() => {
-    void Promise.all([listLLMServices(appClient), listLLMProviders(appClient)])
+    void Promise.all([listLLMServices(api), listLLMProviders(api)])
       .then(([nextServices, nextProviders]) => {
         setServices(nextServices);
         setProviders(nextProviders);
       })
       .catch((e: unknown) => setError(String(e)));
-  }, [appClient]);
+  }, [api]);
   const toggle = async (service: LLMService, enabled: boolean) => {
     setServices((items) =>
       items.map((item) =>
@@ -45,7 +49,7 @@ export default function LLMServicePage(): ReactElement {
       ),
     );
     try {
-      await updateLLMService(service.name, { enabled }, appClient);
+      await updateLLMService(service.name, { enabled }, api);
     } catch (e) {
       setServices((items) =>
         items.map((item) => (item.name === service.name ? service : item)),
@@ -55,64 +59,81 @@ export default function LLMServicePage(): ReactElement {
   };
   return (
     <main className='px-3 py-4 sm:px-4'>
-      {error && (
-        <div
-          role='alert'
-          className='mb-3 rounded-md border border-destructive p-3 text-sm'
-        >
-          {error}
-        </div>
-      )}
-      <div className='overflow-hidden rounded-lg border'>
-        <table className='w-full text-left text-sm'>
-          <thead className='bg-muted/40'>
-            <tr>
-              <th className='px-3 py-2.5'>UID</th>
-              <th className='px-3 py-2.5'>Title</th>
-              <th className='px-3 py-2.5'>Provider</th>
-              <th className='px-3 py-2.5'>Models</th>
-              <th className='px-3 py-2.5'>Enabled</th>
-            </tr>
-          </thead>
-          <tbody>
-            {services.map((service) => (
-              <tr key={service.name} className='border-t'>
-                <td className='px-3 py-2.5 font-mono text-xs'>
-                  {service.name}
-                </td>
-                <td className='px-3 py-2.5'>{service.title}</td>
-                <td className='px-3 py-2.5'>
-                  <ProviderCell
-                    name={service.provider}
-                    provider={providers.find(
-                      (item) => item.name === service.provider,
-                    )}
-                  />
-                </td>
-                <td className='px-3 py-2.5'>
-                  <ModelsCell
-                    service={service}
-                    provider={providers.find(
-                      (item) => item.name === service.provider,
-                    )}
-                    onEdit={() => setEditing(service)}
-                  />
-                </td>
-                <td className='px-3 py-2.5'>
-                  <Switch
-                    checked={service.enabled}
-                    label={`Enable ${service.name}`}
-                    onCheckedChange={(enabled) => void toggle(service, enabled)}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Card className='gap-0 shadow-sm'>
+        <CardHeader className='border-b px-4 py-4 sm:px-5'>
+          <CardTitle className='text-lg'>{t('LLM Service')}</CardTitle>
+          <p className='mt-1 flex items-start gap-1.5 text-sm text-muted-foreground'>
+            <CircleAlert
+              className='mt-0.5 h-4 w-4 shrink-0'
+              aria-hidden='true'
+            />
+            <span>{t('LLM services are configured in config.yml.')}</span>
+          </p>
+        </CardHeader>
+        <CardContent className='p-0'>
+          {error && (
+            <div
+              role='alert'
+              className='mb-3 rounded-md border border-destructive p-3 text-sm'
+            >
+              {error}
+            </div>
+          )}
+          <div className='overflow-x-auto'>
+            <table className='w-full min-w-[64rem] text-left text-sm'>
+              <thead className='border-b bg-muted/30 text-xs tracking-wide text-muted-foreground uppercase'>
+                <tr>
+                  <th className='w-12 px-5 py-3 text-center'>#</th>
+                  <th className='px-5 py-3'>{t('UID')}</th>
+                  <th className='px-5 py-3'>{t('Title')}</th>
+                  <th className='px-5 py-3'>{t('Provider')}</th>
+                  <th className='px-5 py-3'>{t('Models')}</th>
+                  <th className='px-5 py-3'>{t('Enabled')}</th>
+                </tr>
+              </thead>
+              <tbody className='divide-y'>
+                {services.map((service, index) => (
+                  <tr key={service.name} className='hover:bg-muted/30'>
+                    <td className='px-5 py-4 text-center text-muted-foreground'>
+                      {index + 1}
+                    </td>
+                    <td className='px-5 py-4 font-mono text-xs'>
+                      {service.name}
+                    </td>
+                    <td className='px-5 py-4'>{service.title}</td>
+                    <td className='px-5 py-4'>
+                      <ProviderCell
+                        name={service.provider}
+                        provider={providers.find(
+                          (item) => item.name === service.provider,
+                        )}
+                      />
+                    </td>
+                    <td className='px-5 py-4'>
+                      <ModelsCell
+                        service={service}
+                        onEdit={() => setEditing(service)}
+                      />
+                    </td>
+                    <td className='px-5 py-4'>
+                      <Switch
+                        checked={service.enabled}
+                        label={t('Enable {{name}}', { name: service.name })}
+                        onCheckedChange={(enabled) =>
+                          void toggle(service, enabled)
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
       {editing && (
         <ModelEditor
-          appClient={appClient}
+          api={api}
           service={editing}
           onClose={() => setEditing(undefined)}
           onSaved={(next) => {
@@ -134,6 +155,7 @@ function ProviderCell({
   name: string;
   provider?: LLMProvider;
 }): ReactElement {
+  const t = useT();
   const supportedModel = provider?.supportedModel ?? ['LLM'];
   return (
     <div className='min-w-0'>
@@ -144,7 +166,7 @@ function ProviderCell({
             key={modelType}
             className='rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground'
           >
-            {modelType === 'EMBEDDING' ? 'Embedding' : 'LLM'}
+            {modelType === 'EMBEDDING' ? t('Embedding') : t('LLM')}
           </span>
         ))}
       </div>
@@ -154,24 +176,20 @@ function ProviderCell({
 
 function ModelsCell({
   service,
-  provider,
   onEdit,
 }: {
   service: LLMService;
-  provider?: LLMProvider;
   onEdit: () => void;
 }): ReactElement {
+  const t = useT();
   const config = normalizeEnabledModels(service.enabledModels);
-  const models =
-    config.mode === 'recommended'
-      ? (provider?.recommendedModels ?? [])
-      : config.models;
+  const models = config.models;
   return (
     <div className='flex max-w-xl items-start gap-2'>
       <button
         type='button'
-        aria-label={`Edit models for ${service.name}`}
-        title='Edit models'
+        aria-label={t('Edit models for {{name}}', { name: service.name })}
+        title={t('Edit models')}
         className='mt-0.5 shrink-0 rounded p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground'
         onClick={onEdit}
       >
@@ -190,7 +208,7 @@ function ModelsCell({
           ))
         ) : (
           <span className='py-0.5 text-xs text-muted-foreground'>
-            No models
+            {t('No models')}
           </span>
         )}
       </div>
@@ -241,6 +259,7 @@ function ModelMultiSelect({
   placeholder: string;
   removeLabel: string;
 }): ReactElement {
+  const t = useT();
   const searchInputRef = useRef<HTMLInputElement>(null);
   return (
     <details
@@ -294,8 +313,8 @@ function ModelMultiSelect({
             ref={searchInputRef}
             type='search'
             className='w-full rounded border bg-background px-3 py-2 text-sm'
-            aria-label='Search provider models'
-            placeholder='Search models'
+            aria-label={t('Search provider models')}
+            placeholder={t('Search models')}
             onChange={(event) => onSearch(event.target.value)}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => event.stopPropagation()}
@@ -303,7 +322,9 @@ function ModelMultiSelect({
         </div>
         <div className='max-h-[340px] overflow-y-auto py-1'>
           {loading ? (
-            <p className='px-3 py-2 text-sm text-muted-foreground'>Loading…</p>
+            <p className='px-3 py-2 text-sm text-muted-foreground'>
+              {t('Loading…')}
+            </p>
           ) : models.length ? (
             models.map((model) => {
               const checked = value.some((item) => item.value === model.value);
@@ -330,7 +351,9 @@ function ModelMultiSelect({
               );
             })
           ) : (
-            <p className='px-3 py-2 text-sm text-muted-foreground'>No models</p>
+            <p className='px-3 py-2 text-sm text-muted-foreground'>
+              {t('No models')}
+            </p>
           )}
         </div>
       </div>
@@ -339,16 +362,17 @@ function ModelMultiSelect({
 }
 
 function ModelEditor({
-  appClient,
+  api,
   service,
   onClose,
   onSaved,
 }: {
-  appClient: AppClient;
+  api: ApiClient;
   service: LLMService;
   onClose: () => void;
   onSaved: (service: LLMService) => void;
 }): ReactElement {
+  const t = useT();
   const [config, setConfig] = useState<EnabledModelsConfig>(() => {
     const normalized = normalizeEnabledModels(service.enabledModels);
     return normalized.mode === 'custom'
@@ -369,11 +393,7 @@ function ModelEditor({
       const request = ++modelRequestRef.current;
       setLoading(true);
       try {
-        const models = await listProviderModels(
-          service.name,
-          searchValue,
-          appClient,
-        );
+        const models = await listProviderModels(service.name, searchValue, api);
         if (request === modelRequestRef.current) setProviderModels(models);
       } catch (loadError) {
         if (request === modelRequestRef.current) setError(String(loadError));
@@ -381,7 +401,7 @@ function ModelEditor({
         if (request === modelRequestRef.current) setLoading(false);
       }
     },
-    [appClient, service.name],
+    [api, service.name],
   );
 
   useEffect(() => {
@@ -391,9 +411,7 @@ function ModelEditor({
   const save = async (): Promise<void> => {
     try {
       const enabledModels = prepareEnabledModels(config);
-      onSaved(
-        await updateLLMService(service.name, { enabledModels }, appClient),
-      );
+      onSaved(await updateLLMService(service.name, { enabledModels }, api));
     } catch (saveError) {
       setError(String(saveError));
     }
@@ -402,17 +420,19 @@ function ModelEditor({
   return (
     <div
       role='dialog'
-      aria-label='Edit models'
-      className='fixed inset-0 grid place-items-center bg-black/30 p-4'
+      aria-label={t('Edit models')}
+      className='fixed inset-0 z-50 grid place-items-center bg-black/30 p-4'
     >
       <div className='w-full max-w-xl space-y-5 rounded-lg bg-background p-6 shadow-lg'>
         <div>
-          <h3 className='text-lg font-semibold'>Edit models</h3>
+          <h3 className='text-lg font-semibold'>{t('Edit models')}</h3>
         </div>
         <div className='flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800'>
           <CircleAlert className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
           <span>
-            Configure LLM models. Embedding models do not need to be added.
+            {t(
+              'Configure LLM models. Embedding models do not need to be added.',
+            )}
           </span>
         </div>
         <fieldset className='space-y-4'>
@@ -427,7 +447,7 @@ function ModelEditor({
                 void loadProviderModels('');
               }}
             />
-            Select models
+            {t('Select models')}
           </label>
           {config.mode === 'provider' && (
             <div className='space-y-2 pl-6'>
@@ -438,8 +458,8 @@ function ModelEditor({
                 value={config.models}
                 onSearch={(value) => void loadProviderModels(value)}
                 onChange={(models) => setConfig({ mode: 'provider', models })}
-                placeholder='Select models to enable'
-                removeLabel='Remove'
+                placeholder={t('Select models to enable')}
+                removeLabel={t('Remove')}
               />
             </div>
           )}
@@ -454,7 +474,7 @@ function ModelEditor({
                 setCustomModelKeys([]);
               }}
             />
-            Manual input
+            {t('Manual input')}
           </label>
           {config.mode === 'custom' && (
             <div className='space-y-2 pl-6'>
@@ -462,8 +482,8 @@ function ModelEditor({
                 <div key={customModelKeys[index]} className='flex gap-2'>
                   <input
                     className='min-w-0 flex-1 rounded border px-3 py-2 text-sm'
-                    aria-label='Model ID'
-                    placeholder='Model id'
+                    aria-label={t('Model ID')}
+                    placeholder={t('Model ID')}
                     value={model.value}
                     onChange={(event) =>
                       setConfig({
@@ -478,8 +498,8 @@ function ModelEditor({
                   />
                   <input
                     className='min-w-0 flex-1 rounded border px-3 py-2 text-sm'
-                    aria-label='Model label'
-                    placeholder='Display name'
+                    aria-label={t('Model label')}
+                    placeholder={t('Display name')}
                     value={model.label}
                     onChange={(event) =>
                       setConfig({
@@ -494,7 +514,9 @@ function ModelEditor({
                   />
                   <button
                     type='button'
-                    aria-label={`Remove model ${index + 1}`}
+                    aria-label={t('Remove model {{number}}', {
+                      number: index + 1,
+                    })}
                     className='rounded px-2 text-muted-foreground hover:bg-muted'
                     onClick={() => {
                       setConfig({
@@ -524,7 +546,7 @@ function ModelEditor({
                   setCustomModelKeys((keys) => [...keys, key]);
                 }}
               >
-                Add model
+                {t('Add model')}
               </button>
             </div>
           )}
@@ -540,14 +562,14 @@ function ModelEditor({
             className='rounded border px-3 py-1.5 text-sm'
             onClick={onClose}
           >
-            Cancel
+            {t('Cancel')}
           </button>
           <button
             type='button'
             className='rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground'
             onClick={() => void save()}
           >
-            Submit
+            {t('Submit')}
           </button>
         </div>
       </div>

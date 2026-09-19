@@ -1,3 +1,4 @@
+import locales from './locales/index.js';
 import {
   defineClientPlugin,
   type AppClientPluginFactory,
@@ -8,6 +9,7 @@ import routes from './routes.js';
 
 const routesExample: AppClientPluginFactory = defineClientPlugin({
   packageName: '@nocobase/app-plugin-routes-example',
+  locales,
   routes,
   reactProviders,
 });

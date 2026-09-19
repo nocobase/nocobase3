@@ -11,7 +11,6 @@
 '@nocobase/app-plugin-install': minor
 '@nocobase/app-plugin-notification': minor
 '@nocobase/app-plugin-notification-provider': minor
-'@nocobase/app-plugin-system-info': minor
 '@nocobase/app-plugin-workflow': minor
 '@nocobase/app-plugin-routes-example': minor
 '@nocobase/create-app': minor

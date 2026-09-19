@@ -1,92 +1,35 @@
-import type { LocaleResource } from '@nocobase/i18n';
-
-const enUS = {
-  common: {
-    actions: {
-      cancel: 'Cancel',
-      close: 'Close',
-      download: 'Download',
-      nextFile: 'Next file',
-      previousFile: 'Previous file',
-      preview: 'Preview',
-      remove: 'Remove',
-      retry: 'Retry',
-    },
-    states: {
-      done: 'Done',
-      failed: 'Failed',
-      noFiles: 'No files.',
-      pending: 'Pending',
-      uploading: 'Uploading',
-    },
-    visibility: {
-      private: 'Private',
-      public: 'Public',
-    },
-  },
-  errors: {
-    createAccessUrlFailed: 'Unable to create a file access URL.',
-    downloadFailed: 'File download failed.',
-    fileTypeNotAllowed: 'File type is not allowed.',
-    loadPreviewFailed: 'Unable to load the file preview.',
-    maxFilesReached: 'The maximum number of files has been reached.',
-    previewRequestFailed: 'Preview request failed ({{status}}).',
-    removeFailed: 'File removal failed.',
-    sizeExceeded: 'File size exceeds {{size}}.',
-    uploadFailed: 'File upload failed.',
-    urlNotAllowed: 'File URL is not allowed.',
-  },
-  list: {
-    noExtension: 'No extension',
-  },
-  inventory: {
-    nav: 'Files',
-    title: 'Files',
-    refresh: 'Refresh',
-    sources: {
-      title: 'Sources',
-      loading: 'Loading sources...',
-      empty: 'No database file sources are registered.',
-    },
-    files: {
-      loading: 'Loading files...',
-      empty: 'No file records.',
-      noSource: 'No file source selected.',
-      unavailable: 'Files unavailable',
-      columns: {
-        file: 'File',
-        disk: 'Disk',
-        size: 'Size',
-        visibility: 'Visibility',
-        created: 'Created',
-        updated: 'Updated',
-      },
-    },
-    pagination: {
-      page: 'Page {{page}}',
-      previous: 'Previous page',
-      next: 'Next page',
-    },
-    errors: {
-      loadSources: 'Unable to load file sources.',
-      loadFiles: 'Unable to load files from this source.',
-      sourcesUnavailable: 'File sources unavailable',
-    },
-  },
-  preview: {
-    downloadFile: 'Download file',
-    loading: 'Loading preview...',
-    officeLoadFailed: 'Office Online could not load this file.',
-    officePublicUrlRequired:
-      'Office Online requires an internet-accessible absolute file URL.',
-    unavailable: 'Preview is unavailable for this file type.',
-  },
-  upload: {
-    chooseFile: 'Choose file',
-    chooseFiles: 'Choose files',
-  },
+export default {
+  uploadFailed: 'File upload failed.',
+  fileLimitReached: 'The maximum number of files has been reached.',
+  fileTooLarge: 'File exceeds the maximum size.',
+  fileTypeNotAllowed: 'File type is not allowed.',
+  removalFailed: 'File removal failed.',
+  urlNotAllowed: 'File URL is not allowed.',
+  downloadFailed: 'File download failed.',
+  invalidUrl: 'File URL is missing or not allowed.',
+  pdfPreviewFailed: 'Unable to load the PDF preview.',
+  previewFailed: 'Unable to load the file preview.',
+  'files.empty': 'No files.',
+  'files.preview': 'Preview',
+  'files.download': 'Download',
+  'files.remove': 'Remove',
+  'files.chooseMany': 'Choose files',
+  'files.chooseOne': 'Choose file',
+  'files.retry': 'Retry',
+  'files.done': 'Done',
+  'files.uploading': 'Uploading',
+  'files.failed': 'Failed',
+  'files.pending': 'Pending',
+  'files.previous': 'Previous file',
+  'files.next': 'Next file',
+  'files.loadingPreview': 'Loading preview...',
+  'files.downloadFile': 'Download file',
+  'files.previewUnavailable': 'Preview is unavailable for this file type.',
+  'files.officeFailed': 'Office Online could not load this file.',
+  'files.officeUrl':
+    'Office Online requires an internet-accessible absolute file URL.',
+  'files.cancelFile': 'Cancel {{filename}}',
+  'files.status.uploading': 'Uploading',
+  'files.status.pending': 'Pending',
+  'files.status.error': 'Failed',
 };
-
-export type FileClientResource = LocaleResource<typeof enUS>;
-
-export default enUS;

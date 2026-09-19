@@ -12,7 +12,6 @@ import {
   BaseFeatureManager,
   type FeatureKeys,
   type KnowledgeBaseFeature,
-  type VectorDatabaseFeature,
   type VectorDatabaseProviderFeature,
   type VectorStoreProviderFeature,
 } from '../../features/index.js';
@@ -21,13 +20,6 @@ export class DefaultAIFeatureManager
   extends BaseFeatureManager<AIFeatures>
   implements AIFeatureManager
 {
-  get vectorDatabase(): VectorDatabaseFeature {
-    if (!this.features.vectorDatabase) {
-      throw this.featureNotSupportedError('vectorDatabase');
-    }
-    return this.features.vectorDatabase;
-  }
-
   get vectorDatabaseProvider(): VectorDatabaseProviderFeature {
     if (!this.features.vectorDatabaseProvider) {
       throw this.featureNotSupportedError('vectorDatabaseProvider');
@@ -55,7 +47,6 @@ export class DefaultAIFeatureManager
 }
 
 export const EEFeatures: FeatureKeys<AIFeatures> = {
-  vectorDatabase: 'vectorDatabase',
   vectorDatabaseProvider: 'vectorDatabaseProvider',
   vectorStoreProvider: 'vectorStoreProvider',
   knowledgeBase: 'knowledgeBase',

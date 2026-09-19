@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -5,12 +6,13 @@ import {
   createMigrator,
   type DatabaseManager,
 } from '@nocobase/db';
-import { CollectionRepositoryFactory } from '../server/repository/database/factory.js';
+import { RepositoryFactory } from '../server/factory/repository-factory.js';
 
 const managers: DatabaseManager[] = [];
 
 async function createDatabase(): Promise<DatabaseManager> {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     default: 'main',
     connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
   });
@@ -42,10 +44,53 @@ afterEach(async () => {
 });
 
 describe('native AI employee persistence', () => {
+  it('resolves logical field types after running the complete migration chain', async () => {
+    const database = await createDatabase();
+    const connection = database.connection();
+    const employee = await connection.collections.get('aiEmployees');
+    for (const name of [
+      'enabled',
+      'builtIn',
+      'deprecated',
+      'enableKnowledgeBase',
+    ]) {
+      expect(
+        employee?.fields.find((field) => field.name === name),
+      ).toMatchObject({
+        type: 'boolean',
+      });
+    }
+    expect(
+      employee?.fields.find((field) => field.name === 'sort'),
+    ).toMatchObject({
+      type: 'integer',
+    });
+    await expect(
+      connection.collectionMetadata.get('aiEmployees'),
+    ).resolves.toMatchObject({
+      document: {
+        fields: {
+          enabled: { type: 'boolean' },
+          skillSettings: { type: 'json' },
+          sort: { type: 'integer' },
+        },
+      },
+    });
+    const files = await connection.collections.get('aiFiles');
+    expect(files?.fields.some((field) => field.name === 'disk')).toBe(true);
+    expect(files?.fields.some((field) => field.name === 'storageId')).toBe(
+      false,
+    );
+    const settings = await connection.collections.get('aiSettings');
+    expect(
+      settings?.fields.some((field) => field.name === 'defaultLlmService'),
+    ).toBe(true);
+  });
+
   it('creates native tables and shares records across repository factories', async () => {
     const database = await createDatabase();
-    const first = new CollectionRepositoryFactory(database.connection());
-    const second = new CollectionRepositoryFactory(database.connection());
+    const first = new RepositoryFactory({ connection: database.connection() });
+    const second = new RepositoryFactory({ connection: database.connection() });
     await first.aiEmployees.create({
       values: {
         username: 'nathan',
@@ -86,6 +131,10 @@ describe('native AI employee persistence', () => {
     ).toMatchObject({
       nickname: 'Nathan',
       description: 'Developer assistant',
+      enabled: true,
+      builtIn: true,
+      deprecated: false,
+      enableKnowledgeBase: false,
     });
     expect(
       await second.aiMessages.find({
@@ -100,9 +149,65 @@ describe('native AI employee persistence', () => {
     ).toMatchObject({ content: { type: 'text', content: 'hello' } });
   });
 
+  it('filters nullable fields with SQL null semantics', async () => {
+    const database = await createDatabase();
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
+    const messageId = '9007199254740993';
+    await repositories.aiToolMessages.create({
+      values: [
+        {
+          messageId,
+          toolCallId: 'not-interrupted',
+          toolName: 'exampleTool',
+          invokeStatus: 'done',
+          interruptActionOrder: null,
+        },
+        {
+          messageId,
+          toolCallId: 'interrupt-0',
+          toolName: 'exampleTool',
+          invokeStatus: 'waiting',
+          interruptActionOrder: 0,
+        },
+        {
+          messageId,
+          toolCallId: 'interrupt-1',
+          toolName: 'exampleTool',
+          invokeStatus: 'waiting',
+          interruptActionOrder: 1,
+        },
+      ],
+    });
+
+    await expect(
+      repositories.aiToolMessages.find({
+        filter: {
+          messageId,
+          interruptActionOrder: { $ne: null as unknown as number },
+        },
+        sort: ['interruptActionOrder'],
+      }),
+    ).resolves.toMatchObject([
+      { toolCallId: 'interrupt-0', interruptActionOrder: 0 },
+      { toolCallId: 'interrupt-1', interruptActionOrder: 1 },
+    ]);
+    await expect(
+      repositories.aiToolMessages.find({
+        filter: {
+          messageId,
+          interruptActionOrder: null as unknown as number,
+        },
+      }),
+    ).resolves.toMatchObject([{ toolCallId: 'not-interrupted' }]);
+  });
+
   it('sorts AI employee lists by sort ascending by default', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     await repositories.aiEmployees.create({
       values: [
         {
@@ -132,7 +237,9 @@ describe('native AI employee persistence', () => {
 
   it('round-trips plain-text values stored in JSON tool-message content', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     const toolMessage = await repositories.aiToolMessages.create({
       values: {
         sessionId: '123e4567-e89b-12d3-a456-426614174000',
@@ -164,14 +271,16 @@ describe('native AI employee persistence', () => {
       invokeStatus: 'confirmed',
       status: 'success',
       content,
-      invokeStartTime: invokeStartTime.getTime(),
-      invokeEndTime: Date.parse(invokeEndTime),
+      invokeStartTime: String(invokeStartTime.getTime()),
+      invokeEndTime: String(Date.parse(invokeEndTime)),
     });
   });
 
   it('round-trips array-backed JSON fields used by LLM service configuration', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     await repositories.llmServices.create({
       values: {
         name: 'openai',
@@ -192,9 +301,35 @@ describe('native AI employee persistence', () => {
     });
   });
 
+  it.each(['0', 'false', '{"enabled":false}', '"quoted"'])(
+    'preserves JSON-looking text in tool-message content: %s',
+    async (content) => {
+      const database = await createDatabase();
+      const repositories = new RepositoryFactory({
+        connection: database.connection(),
+      });
+      const tool = await repositories.aiToolMessages.create({
+        values: { toolCallId: 'json-text', content, auto: false },
+      });
+      await expect(
+        repositories.aiToolMessages.findOne({ filter: { id: tool.id } }),
+      ).resolves.toMatchObject({ content, auto: false });
+      await expect(
+        database
+          .query()
+          .selectFrom('aiToolMessages')
+          .select('content')
+          .where('id', '=', tool.id)
+          .value('content'),
+      ).resolves.toBe(content);
+    },
+  );
+
   it('rolls back transaction-bound repository writes', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     await expect(
       database.transaction(async (connection) => {
         await repositories.aiEmployees.create(
@@ -222,7 +357,9 @@ describe('native AI employee persistence', () => {
 
   it('round-trips checkpoint blobs without a JSON record store', async () => {
     const database = await createDatabase();
-    const repositories = new CollectionRepositoryFactory(database.connection());
+    const repositories = new RepositoryFactory({
+      connection: database.connection(),
+    });
     const blob = Uint8Array.from([0, 1, 2, 255]);
     await repositories.lcCheckpointBlobs.create({
       values: {

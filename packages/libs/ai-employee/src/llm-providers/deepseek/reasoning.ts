@@ -53,6 +53,15 @@ const THINKING_UNSUPPORTED_FIELDS = new Set([
 const NO_UNSUPPORTED_FIELDS = new Set<string>();
 
 export const DEEPSEEK_MODEL_CAPABILITIES = {
+  'deepseek-flash': {
+    protocol: 'responses',
+    reasoning: 'switchable',
+    defaultThinking: 'enabled',
+    efforts: V4_EFFORTS,
+    supportsFunctionTools: true,
+    supportsStructuredOutput: true,
+    supportsWebSearch: true,
+  },
   'deepseek-v4-flash': {
     protocol: 'responses',
     reasoning: 'switchable',

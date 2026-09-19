@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-authorization",
   "displayName": "Authorization App Plugin",
   "description": "Authorization integration and permission management UI for NocoBase applications.",
-  "version": "0.2.0-beta.6",
+  "version": "0.2.0-beta.13",
   "type": "module",
   "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
@@ -72,7 +72,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "prepack": "pnpm build",
@@ -85,7 +85,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "dependencies": {
-    "@nocobase/authorization": "workspace:^",
     "hono": "catalog:"
   },
   "peerDependencies": {
@@ -94,25 +93,20 @@
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "react": "^19.0.0"
+    "lucide-react": "catalog:",
+    "react": "^19.0.0",
+    "@nocobase/authorization": "workspace:^",
+    "@nocobase/i18n": "workspace:^"
   },
   "devDependencies": {
-    "@nocobase/app-client": "workspace:*",
-    "@nocobase/app-plugin-authentication": "workspace:*",
-    "@nocobase/app-server": "workspace:*",
-    "@nocobase/db": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
-    "@nocobase/service-provider": "workspace:*",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "eslint": "catalog:",
-    "lucide-react": "^0.487.0",
     "prettier": "catalog:",
-    "react": "catalog:",
     "react-dom": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@nocobase/app-plugin-audit": "workspace:*"
+    "vitest": "catalog:"
   }
 }

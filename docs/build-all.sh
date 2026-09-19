@@ -73,7 +73,7 @@ if [ $? -eq 0 ]; then
   else
     SIZE=$(stat -c%s "$ARCHIVE_NAME" | awk '{print int($1/1024/1024)}')
   fi
-  
+
   echo ""
   echo "✓ Archive created successfully!"
   echo "  File: $ARCHIVE_NAME"

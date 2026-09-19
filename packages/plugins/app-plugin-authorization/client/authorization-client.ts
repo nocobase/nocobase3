@@ -1,4 +1,4 @@
-import type { AppClient } from '@nocobase/app-client';
+import type { ApiClient } from '@nocobase/app-client';
 
 export interface PermissionGrantAction {
   action: string;
@@ -122,8 +122,10 @@ interface DataResponse<T> {
 
 export class AuthorizationClient {
   private snapshot?: Promise<PermissionsSnapshot>;
+  private permissionsRevision = 0;
+  private readonly invalidationListeners = new Set<() => void>();
 
-  constructor(private readonly client: AppClient) {}
+  constructor(private readonly api: ApiClient) {}
 
   async can(
     resource: { type: string; id: string },
@@ -140,19 +142,35 @@ export class AuthorizationClient {
   }
 
   permissions(): Promise<PermissionsSnapshot> {
-    this.snapshot ??= this.client
-      .request<DataResponse<PermissionsSnapshot>>('authz/permissions')
-      .then((response) => response.data)
-      .catch((error: unknown) => {
-        this.snapshot = undefined;
-        throw error;
-      });
+    if (!this.snapshot) {
+      const request: Promise<PermissionsSnapshot> = this.api
+        .request<DataResponse<PermissionsSnapshot>>({
+          path: 'authz/permissions',
+        })
+        .then(
+          (response) =>
+            this.snapshot === request ? response.data : this.permissions(),
+          (error: unknown) => {
+            // A request from an earlier session must not evict its successor.
+            if (this.snapshot !== request) return this.permissions();
+            this.snapshot = undefined;
+            throw error;
+          },
+        );
+      this.snapshot = request;
+    }
     return this.snapshot;
   }
 
+  getPermissionsRevision(): number {
+    return this.permissionsRevision;
+  }
+
   listPermissionSets(): Promise<readonly PermissionSet[]> {
-    return this.client
-      .request<DataResponse<readonly PermissionSet[]>>('authz/permission-sets')
+    return this.api
+      .request<DataResponse<readonly PermissionSet[]>>({
+        path: 'authz/permission-sets',
+      })
       .then((response) => response.data);
   }
 
@@ -172,10 +190,10 @@ export class AuthorizationClient {
     type: string;
     id: string;
   }): Promise<void> {
-    await this.client.request(
-      `authz/default-access/${encodeURIComponent(resource.type)}/${encodeURIComponent(resource.id)}`,
-      { method: 'DELETE' },
-    );
+    await this.api.request({
+      path: `authz/default-access/${encodeURIComponent(resource.type)}/${encodeURIComponent(resource.id)}`,
+      method: 'DELETE',
+    });
   }
   listSharingRules(): Promise<readonly SharingRule[]> {
     return this.get<readonly SharingRule[]>('authz/sharing-rules');
@@ -205,10 +223,10 @@ export class AuthorizationClient {
     );
   }
   async deleteSharingRule(key: string): Promise<void> {
-    await this.client.request(
-      `authz/sharing-rules/${encodeURIComponent(key)}`,
-      { method: 'DELETE' },
-    );
+    await this.api.request({
+      path: `authz/sharing-rules/${encodeURIComponent(key)}`,
+      method: 'DELETE',
+    });
   }
   listRestrictionRules(): Promise<readonly RestrictionRule[]> {
     return this.get<readonly RestrictionRule[]>('authz/restriction-rules');
@@ -234,17 +252,18 @@ export class AuthorizationClient {
     );
   }
   async deleteRestrictionRule(key: string): Promise<void> {
-    await this.client.request(
-      `authz/restriction-rules/${encodeURIComponent(key)}`,
-      { method: 'DELETE' },
-    );
+    await this.api.request({
+      path: `authz/restriction-rules/${encodeURIComponent(key)}`,
+      method: 'DELETE',
+    });
   }
 
   createPermissionSet(input: PermissionSetInput): Promise<PermissionSet> {
-    return this.client
-      .request<DataResponse<PermissionSet>>('authz/permission-sets', {
+    return this.api
+      .request<DataResponse<PermissionSet>>({
+        path: 'authz/permission-sets',
         method: 'POST',
-        body: JSON.stringify(input),
+        json: input,
       })
       .then((response) => response.data);
   }
@@ -253,28 +272,29 @@ export class AuthorizationClient {
     key: string,
     input: PermissionSetInput,
   ): Promise<PermissionSet> {
-    return this.client
-      .request<DataResponse<PermissionSet>>(
-        `authz/permission-sets/${encodeURIComponent(key)}`,
-        { method: 'PUT', body: JSON.stringify(input) },
-      )
+    return this.api
+      .request<DataResponse<PermissionSet>>({
+        path: `authz/permission-sets/${encodeURIComponent(key)}`,
+        method: 'PUT',
+        json: input,
+      })
       .then((response) => response.data);
   }
 
   async deletePermissionSet(key: string): Promise<void> {
-    await this.client.request(
-      `authz/permission-sets/${encodeURIComponent(key)}`,
-      { method: 'DELETE' },
-    );
+    await this.api.request({
+      path: `authz/permission-sets/${encodeURIComponent(key)}`,
+      method: 'DELETE',
+    });
   }
 
   listAssignments(
     permissionSet: string,
   ): Promise<readonly PermissionSetAssignment[]> {
-    return this.client
-      .request<DataResponse<readonly PermissionSetAssignment[]>>(
-        `authz/permission-sets/${encodeURIComponent(permissionSet)}/assignments`,
-      )
+    return this.api
+      .request<DataResponse<readonly PermissionSetAssignment[]>>({
+        path: `authz/permission-sets/${encodeURIComponent(permissionSet)}/assignments`,
+      })
       .then((response) => response.data);
   }
 
@@ -282,28 +302,38 @@ export class AuthorizationClient {
     permissionSet: string,
     input: PermissionAssignmentInput,
   ): Promise<PermissionSetAssignment> {
-    return this.client
-      .request<DataResponse<PermissionSetAssignment>>(
-        `authz/permission-sets/${encodeURIComponent(permissionSet)}/assignments`,
-        { method: 'POST', body: JSON.stringify(input) },
-      )
+    return this.api
+      .request<DataResponse<PermissionSetAssignment>>({
+        path: `authz/permission-sets/${encodeURIComponent(permissionSet)}/assignments`,
+        method: 'POST',
+        json: input,
+      })
       .then((response) => response.data);
   }
 
   async revoke(assignmentId: string): Promise<void> {
-    await this.client.request(
-      `authz/permission-sets/assignments/${encodeURIComponent(assignmentId)}`,
-      { method: 'DELETE' },
-    );
+    await this.api.request({
+      path: `authz/permission-sets/assignments/${encodeURIComponent(assignmentId)}`,
+      method: 'DELETE',
+    });
   }
 
   invalidatePermissions(): void {
     this.snapshot = undefined;
+    this.permissionsRevision += 1;
+    for (const listener of this.invalidationListeners) listener();
+  }
+
+  onPermissionsInvalidated(listener: () => void): () => void {
+    this.invalidationListeners.add(listener);
+    return () => {
+      this.invalidationListeners.delete(listener);
+    };
   }
 
   private get<T>(path: string): Promise<T> {
-    return this.client
-      .request<DataResponse<T>>(path)
+    return this.api
+      .request<DataResponse<T>>({ path })
       .then((response) => response.data);
   }
   private send<T>(
@@ -311,8 +341,8 @@ export class AuthorizationClient {
     method: 'POST' | 'PUT',
     value: unknown,
   ): Promise<T> {
-    return this.client
-      .request<DataResponse<T>>(path, { method, body: JSON.stringify(value) })
+    return this.api
+      .request<DataResponse<T>>({ path, method, json: value })
       .then((response) => response.data);
   }
 }

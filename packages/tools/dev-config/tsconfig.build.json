@@ -8,6 +8,7 @@
     "eslint/**/*.ts",
     "prettier/**/*.ts",
     "vite/**/*.ts",
-    "vitest/**/*.ts"
+    "vitest/**/*.ts",
+    "database/**/*.ts"
   ]
 }

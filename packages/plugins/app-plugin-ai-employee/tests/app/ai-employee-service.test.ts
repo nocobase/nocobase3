@@ -1,11 +1,9 @@
+import { EEFeatures, type AIEmployeeEntity } from '@nocobase/ai-employee';
 import { describe, expect, it, vi } from 'vitest';
-import { EEFeatures } from '@nocobase/ai-employee';
-import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 
-import type { Context } from '../../server/context.js';
 import { AIEmployeeService } from '../../server/service/ai-employee-service.js';
 
-function createContext(initial: AIEmployeeEntity[] = []): Context {
+function createFixture(initial: AIEmployeeEntity[] = []) {
   const rows = new Map(
     initial.map((row) => [row.username, structuredClone(row)]),
   );
@@ -36,53 +34,60 @@ function createContext(initial: AIEmployeeEntity[] = []): Context {
       rows.delete(filter.username);
     }),
   };
-  const knowledgeBase = {
-    getKnowledgeBase: vi.fn(async (keys: string[]) =>
-      keys.includes('existing')
-        ? [{ key: 'existing', name: 'Existing', enabled: true }]
-        : [],
-    ),
-  };
-  return {
-    repositories: {
-      aiEmployees: repository,
-    },
-    database: {
-      transaction: async (run: (connection: unknown) => Promise<void>) =>
-        run({}),
-    },
-    ai: {
-      features: {
-        isFeaturesEnabled: vi.fn((features: string[]) =>
-          features.includes(EEFeatures.knowledgeBase),
+  const ai = {
+    features: {
+      isFeaturesEnabled: vi.fn((features: string[]) =>
+        features.includes(EEFeatures.knowledgeBase),
+      ),
+      knowledgeBase: {
+        getKnowledgeBase: vi.fn(async (keys: string[]) =>
+          keys.includes('existing')
+            ? [{ key: 'existing', name: 'Existing', enabled: true }]
+            : [],
         ),
-        knowledgeBase,
       },
     },
-    i18nNamespace: '@nocobase/app-plugin-ai-employee',
-    t: (key: string) => `localized:${key}`,
-  } as unknown as Context;
+  };
+  const database = {
+    transaction: async (run: (connection: unknown) => Promise<void>) => run({}),
+  };
+  const repositories = { aiEmployees: repository };
+  const translate = (key: string) => `localized:${key}`;
+  const service = new AIEmployeeService({
+    ai: ai as never,
+    repositories: repositories as never,
+    database: database as never,
+  });
+  return { service, translate };
 }
 
-describe('AI employee management service compatibility', () => {
+describe('AI employee management service', () => {
   it('preserves omitted fields and persists explicit false and empty values', async () => {
-    const context = createContext();
-    const service = new AIEmployeeService();
+    const { service, translate } = createFixture();
 
-    await service.upsert(context, {
-      username: 'support',
-      nickname: 'Support',
-      about: 'Original about',
-      enableKnowledgeBase: true,
-      knowledgeBasePrompt: 'Original prompt',
-      knowledgeBase: { knowledgeBaseKeys: ['handbook'], topK: 5, score: 0.7 },
+    await service.upsert({
+      input: {
+        username: 'support',
+        nickname: 'Support',
+        about: 'Original about',
+        enableKnowledgeBase: true,
+        knowledgeBasePrompt: 'Original prompt',
+        knowledgeBase: {
+          knowledgeBaseKeys: ['handbook'],
+          topK: 5,
+          score: 0.7,
+        },
+      },
+      translate,
     });
-    await service.upsert(context, {
-      username: 'support',
-      profile: { nickname: 'Specialist' },
+    await service.upsert({
+      input: { username: 'support', profile: { nickname: 'Specialist' } },
+      translate,
     });
 
-    await expect(service.get(context, 'support')).resolves.toMatchObject({
+    await expect(
+      service.get({ username: 'support', translate }),
+    ).resolves.toMatchObject({
       nickname: 'Specialist',
       about: 'Original about',
       enableKnowledgeBase: true,
@@ -90,15 +95,20 @@ describe('AI employee management service compatibility', () => {
       knowledgeBase: { knowledgeBaseKeys: ['handbook'], topK: 5, score: 0.7 },
     });
 
-    await service.upsert(context, {
-      username: 'support',
-      about: '',
-      enableKnowledgeBase: false,
-      knowledgeBasePrompt: '',
-      knowledgeBase: { knowledgeBaseKeys: [], topK: 3, score: 0 },
+    await service.upsert({
+      input: {
+        username: 'support',
+        about: '',
+        enableKnowledgeBase: false,
+        knowledgeBasePrompt: '',
+        knowledgeBase: { knowledgeBaseKeys: [], topK: 3, score: 0 },
+      },
+      translate,
     });
 
-    await expect(service.get(context, 'support')).resolves.toMatchObject({
+    await expect(
+      service.get({ username: 'support', translate }),
+    ).resolves.toMatchObject({
       about: '',
       enableKnowledgeBase: false,
       knowledgeBasePrompt: '',
@@ -107,7 +117,7 @@ describe('AI employee management service compatibility', () => {
   });
 
   it('serializes localized built-ins and missing knowledge base keys', async () => {
-    const context = createContext([
+    const { service, translate } = createFixture([
       {
         username: 'built-in',
         nickname: 'Built-in nickname',
@@ -125,9 +135,8 @@ describe('AI employee management service compatibility', () => {
         },
       } as AIEmployeeEntity,
     ]);
-    const service = new AIEmployeeService();
 
-    await expect(service.list(context)).resolves.toEqual([
+    await expect(service.list({ translate })).resolves.toEqual([
       expect.objectContaining({
         nickname: 'localized:Built-in nickname',
         position: 'localized:Position',

@@ -1,5 +1,74 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.16
+
+### Patch Changes
+
+- d86f6aa: Synchronize agent skills from direct NocoBase package dependencies with the new skills:sync command while preserving plugin:skills:sync compatibility, and share application development and upgrade skills through @nocobase/app-skills across all application templates.
+
+  Add package:remove to uninstall a NocoBase dependency and clean up its synchronized skills and ownership records, reusing plugin unregistration for plugin packages. Document the removal workflow in application templates and the shared development and upgrade skills.
+
+## 0.1.0-beta.15
+
+### Minor Changes
+
+- c258b92: Generate `config.yml` from the template's own `config.example.yml` and remove `--db-dialect`.
+
+  The database is no longer chosen at generation time. Since dialects were split into `@nocobase/db-*` packages, a connection may only use a dialect the application registers in `server/config/database.ts`, and that file cannot be overridden from `config.yml`. Adding a bare driver to `dependencies` — what `--db-dialect` did — therefore produced an application that failed to start with `Database dialect "postgres" is not registered.` for every dialect but SQLite. A generated application now starts on the SQLite connection its template declares, and another database is a change to that file plus the matching dialect package.
+
+  `config.yml` is built from the template's `config.example.yml` with `auth.secret` and `session.secret` filled in, rather than assembled here. The example documents everything an application can be configured with — notification channels, LLM services, additional connections — and a file written from scratch carried a fraction of it and went stale whenever the example grew.
+
+  A hub is generated the same way. It owns a database like any other application, so it now gets a `config.yml` too: without one it started in install mode on a secret regenerated every boot, which invalidated every session on restart. It also gets its plugin skills synchronized, and no longer gets the vestigial `app-dist/` directory, which nothing reads. `.env` remains, for the deployment facts that belong to it.
+
+  The fallback `.gitignore`, written when a template ships none, now also covers `.env`, `config.toml`, and the local SQLite files.
+
+## 0.1.0-beta.14
+
+### Patch Changes
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+- f17f3a6: Support TypeScript authentication options in application templates and use the native authentication client. Keep authentication plugins and callbacks in editable server and client configuration, with YAML as the default format for deployment settings.
+
+  Runtime assembly now prepares complete configuration before application creation. Module configuration factories use defineAppConfig and defaultAppConfigs, receive the runtime once, and retain their defaults when environment configuration reloads.
+
+## 0.1.0-beta.13
+
+### Patch Changes
+
+- 1d59a9c: Add a template upgrade Skill and record the source template in the generated manifest.
+
+  `skills/nocobase-app-upgrade/` describes how to merge a newer template release into an application generated from a template. It compares the two template releases to learn what changed, then decides file by file how each change lands in the application, so a customization is never reverted and a removal that breaks user code outside the changed files is caught before the upgrade is called done.
+
+  `pnpm create @nocobase/app` now writes `nocobase.templatePackage` into the generated manifest, naming the template package the application came from. An upgrade needs it to know which template to diff: `name` becomes the application's own at generation, and `templateKind` does not distinguish the app templates from each other.
+
+## 0.1.0-beta.12
+
+### Minor Changes
+
+- e3fa827: Add reusable user administration and Hub-scoped role-based authorization. Authentication now supports disabled accounts, transaction-aware administration, stable duplicate-identity conflicts, Session revocation, and immediate Realtime disconnects. Authorization supports protected Permission Sets, atomic scoped assignment replacement, and Client permission invalidation. The Users page supports protected role options, readable multi-role editing, explicit unassigned states, and a distinction between direct roles and authenticated-user defaults; password reset and database Session revocation share one transaction. The default App exposes its direct Authorization Permission Sets as application roles while keeping System administrator changes in Authorization. The Hub defines Administrator, Operator, and Viewer roles, batch-loads their user assignments, enforces every Hub and user-management action on the server, protects the final enabled Administrator, and hides unauthorized Client controls. Both templates register the reusable Users plugin; Hub exposes Applications, User management, and a read-only role matrix directly in its control-plane navigation, while the default App keeps Users in Settings. Only the Hub template receives Hub roles, disables public sign-up, and omits ordinary App Settings, workflows, notifications, and example plugins.
+
+## 0.1.0-beta.11
+
+### Minor Changes
+
+- d29d1fe: Add an independent Examples application template based on Default, with a localized examples homepage, article management, initial data, and registered capability examples. Add the `examples` template alias to create-app and include the template in release version synchronization.
+
+### Patch Changes
+
+- c033168: Ignore root-level `.agent-annotations/` in generated applications, including when a template provides its own ignore file.
+
+## 0.1.0-beta.10
+
+### Minor Changes
+
+- 90a4903: Add Microsoft SQL Server support through Knex and the `tedious` driver, including connection configuration, Collection Builder and Query behavior, Schema Inspector introspection, real Docker integration tests, generated-application driver installation, and template runtime packaging.
+- 90a4903: Add Oracle Database support through the `oracledb` Thin driver, including connection configuration, Collection Builder and Query behavior, Schema Inspector introspection, real Docker integration tests, generated-application driver installation, and template runtime packaging.
+
 ## 0.1.0-beta.9
 
 ### Minor Changes

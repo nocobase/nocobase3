@@ -1,3 +1,5 @@
+import { PageContainer } from './components/page-container.js';
+import { PageHeader } from './components/page-header.js';
 import type { ComponentType, ReactElement, ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { getAISettingsTabs } from './ai-settings.js';
@@ -43,42 +45,41 @@ export function AISettingsShell({
     getActiveAISettingsTabKey(location.pathname, location.search);
 
   return (
-    <div className='min-h-full bg-background text-foreground'>
-      <header className='border-b bg-background px-4 pt-5 sm:px-6 lg:px-8'>
-        <h1 className='text-2xl font-semibold tracking-tight'>
-          {t('AI Employee')}
-        </h1>
-        <nav
-          aria-label={t('AI settings')}
-          className='mt-4 flex gap-1 overflow-x-auto'
-        >
-          {getAISettingsTabs().map((tab) => {
-            const active = resolvedActiveTabKey === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type='button'
-                aria-current={active ? 'page' : undefined}
-                className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${active ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-                onClick={() => {
-                  if (active) return;
-                  if (onTabChange) {
-                    onTabChange(tab.key);
-                    return;
-                  }
-                  void navigate(aiSettingsPath, {
-                    state: { aiSettingsTab: tab.key },
-                  });
-                }}
-              >
-                {t(tab.labelKey)}
-              </button>
-            );
-          })}
-        </nav>
-      </header>
-      {children}
-    </div>
+    <PageContainer>
+      <PageHeader
+        title={t('AI Employee')}
+        description={t('Manage AI employees, LLM services, and MCP services.')}
+      />
+      <nav
+        aria-label={t('AI settings')}
+        className='flex gap-1 overflow-x-auto border-b'
+      >
+        {getAISettingsTabs().map((tab) => {
+          const active = resolvedActiveTabKey === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type='button'
+              aria-current={active ? 'page' : undefined}
+              className={`whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${active ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+              onClick={() => {
+                if (active) return;
+                if (onTabChange) {
+                  onTabChange(tab.key);
+                  return;
+                }
+                void navigate(aiSettingsPath, {
+                  state: { aiSettingsTab: tab.key },
+                });
+              }}
+            >
+              {t(tab.labelKey)}
+            </button>
+          );
+        })}
+      </nav>
+      <div>{children}</div>
+    </PageContainer>
   );
 }
 

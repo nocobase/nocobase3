@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { PLUGIN_CAPABILITIES } from '../src/lib/capabilities.ts';
 import { formatHelp, parseCreatePluginArgs } from '../src/lib/flags.ts';
 
 describe('parseCreatePluginArgs', () => {
@@ -44,6 +45,29 @@ describe('parseCreatePluginArgs', () => {
         empty: true,
       },
     );
+  });
+
+  /**
+   * `all` is an alias rather than a capability, so it is expanded at parse time. Carrying it through would leave a
+   * value in `capabilities` that nothing downstream recognizes.
+   */
+  it('expands --with all to every capability', () => {
+    const parsed = parseCreatePluginArgs(['audit-log', '--with', 'all']);
+
+    expect(parsed.flags.capabilities).toEqual([...PLUGIN_CAPABILITIES]);
+    expect(parsed.flags.capabilities).not.toContain('all');
+  });
+
+  it('does not duplicate a capability named alongside all', () => {
+    const parsed = parseCreatePluginArgs([
+      'audit-log',
+      '--with',
+      'database',
+      '--with',
+      'all',
+    ]);
+
+    expect(parsed.flags.capabilities).toEqual([...PLUGIN_CAPABILITIES]);
   });
 
   it('allows help and version without a plugin name or capability', () => {

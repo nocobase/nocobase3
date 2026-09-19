@@ -1,12 +1,10 @@
+import { useTranslation } from '@nocobase/i18n/client';
 import { Download, Eye, Trash2 } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 
-import type {
-  FileListProps,
-  FileRecord,
-} from '@nocobase/app-plugin-file/client/types';
+import type { FileListProps, FileRecord } from '../types';
 import { Button } from '@/components/ui/button';
-import { publicDownloadUrl, resolveSafeFileUrl } from '../lib/file-url';
+import { resolveSafeFileUrl } from '../lib/file-url';
 import { FilePreviewDialog } from './file-preview-dialog';
 import { FileThumbnail } from './file-thumbnail';
 
@@ -18,25 +16,34 @@ function triggerDownload(url: string, filename: string): void {
   link.click();
 }
 
-export function FileList({
-  client,
-  files,
-  onPreview,
-  onDownload,
-  onRemove,
-  onError,
-  labels,
-  emptyState,
-}: FileListProps): ReactElement {
+export function FileList(inputProps: FileListProps): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-file');
+  const {
+    files,
+    onPreview,
+    onDownload,
+    onRemove,
+    onError,
+    labels,
+    emptyState,
+  } = inputProps;
+
   const [previewIndex, setPreviewIndex] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const previewLabel = labels?.preview ?? 'Preview';
-  const downloadLabel = labels?.download ?? 'Download';
-  const removeLabel = labels?.remove ?? 'Remove';
+  const previewLabel =
+    labels?.preview ?? t('files.preview', { defaultValue: 'Preview' });
+  const downloadLabel =
+    labels?.download ?? t('files.download', { defaultValue: 'Download' });
+  const removeLabel =
+    labels?.remove ?? t('files.remove', { defaultValue: 'Remove' });
 
   if (!files.length)
     return (
-      <div role='status'>{emptyState ?? labels?.empty ?? 'No files.'}</div>
+      <div role='status'>
+        {emptyState ??
+          labels?.empty ??
+          t('files.empty', { defaultValue: 'No files.' })}
+      </div>
     );
 
   const downloadFile = (file: FileRecord): void => {
@@ -45,15 +52,24 @@ export function FileList({
       return;
     }
     void (async () => {
-      const raw = file.public
-        ? publicDownloadUrl(file.contentUrl)
-        : (await client.createAccessUrl(file.id)).url;
+      const raw = file.contentUrl;
       const url = raw ? resolveSafeFileUrl(raw) : undefined;
-      if (!url) throw new Error('File URL is not allowed.');
+      if (!url)
+        throw new Error(
+          t('urlNotAllowed', {
+            defaultValue: 'File URL is not allowed.',
+          }),
+        );
       triggerDownload(url, file.filename);
     })().catch((error: unknown) => {
       onError?.(
-        error instanceof Error ? error : new Error('File download failed.'),
+        error instanceof Error
+          ? error
+          : new Error(
+              t('downloadFailed', {
+                defaultValue: 'File download failed.',
+              }),
+            ),
       );
     });
   };
@@ -74,7 +90,7 @@ export function FileList({
                 {file.filename}
               </div>
               <div className='text-sm text-muted-foreground'>
-                {file.mimeType} · {file.public ? 'Public' : 'Private'}
+                {file.mimeType}
               </div>
             </div>
             <div className='flex shrink-0 items-center gap-1'>
@@ -119,7 +135,6 @@ export function FileList({
         ))}
       </ul>
       <FilePreviewDialog
-        client={client}
         files={files}
         initialIndex={previewIndex}
         open={previewOpen}

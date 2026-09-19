@@ -92,7 +92,6 @@ describe('notification test sending', () => {
       queue,
       logger: createLogger({ level: 'silent' }),
       config: {
-        test: { enabled: true },
         channels: [
           {
             type: 'email',
@@ -135,6 +134,8 @@ describe('notification test sending', () => {
       });
     const send = vi.spyOn(manager, 'send').mockResolvedValue({
       notificationId: 'test-1',
+      idempotencyKey: 'notification-test:test-1',
+      deduplicated: false,
       status: 'pending',
       deliveries: [],
     });
@@ -149,6 +150,7 @@ describe('notification test sending', () => {
     );
 
     expect(send).toHaveBeenCalledWith({
+      idempotencyKey: expect.stringMatching(/^notification-test:/),
       to: { type: 'email', address: 'safe@example.com' },
       channels: ['email'],
       routing: { email: { providers: { provider: 'primary' } } },
@@ -179,7 +181,7 @@ describe('notification test sending', () => {
       database: {} as DatabaseManager,
       queue,
       logger: createLogger({ level: 'silent' }),
-      config: { channels: [], test: { enabled: true } },
+      config: { channels: [] },
       store,
     });
 

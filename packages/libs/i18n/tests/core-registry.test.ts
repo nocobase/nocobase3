@@ -131,6 +131,42 @@ describe('I18nRegistry', () => {
     expect(registry.getAvailableLocales()).toEqual(['en-US', 'zh-CN']);
   });
 
+  describe('namespace locales', () => {
+    it('reports the locales one namespace declares', () => {
+      const registry = new I18nRegistry();
+      registry.register('@acme/app', workflowLocales);
+      registry.register('@acme/plugin', {
+        'en-US': () => Promise.resolve({ default: {} }),
+        'ja-JP': () => Promise.resolve({ default: {} }),
+      });
+
+      expect(registry.getNamespaceLocales('@acme/app')).toEqual([
+        'en-US',
+        'zh-CN',
+      ]);
+    });
+
+    it('reports nothing for a namespace that was never registered', () => {
+      const registry = new I18nRegistry();
+
+      expect(registry.getNamespaceLocales('@acme/app')).toEqual([]);
+    });
+
+    it('includes locales added by a later registration of the same namespace', () => {
+      const registry = new I18nRegistry();
+      registry.register('@acme/app', workflowLocales);
+      registry.register('@acme/app', {
+        'ja-JP': () => Promise.resolve({ default: {} }),
+      });
+
+      expect(registry.getNamespaceLocales('@acme/app')).toEqual([
+        'en-US',
+        'zh-CN',
+        'ja-JP',
+      ]);
+    });
+  });
+
   describe('fallback chain', () => {
     it('goes through the application namespace to the base package', () => {
       const registry = new I18nRegistry();

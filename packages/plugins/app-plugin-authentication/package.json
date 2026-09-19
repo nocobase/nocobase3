@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-authentication",
   "displayName": "Authentication App Plugin",
   "description": "Authentication plugin for NocoBase applications.",
-  "version": "0.1.0-beta.6",
+  "version": "0.1.0-beta.17",
   "type": "module",
   "sideEffects": false,
   "prettier": "@nocobase/dev-config/prettier",
@@ -28,27 +28,11 @@
       "types": "./client/plugin.ts",
       "import": "./client/plugin.ts"
     },
-    "./client/routes": {
-      "types": "./client/routes.ts",
-      "import": "./client/routes.ts"
-    },
-    "./client/route-contracts": {
-      "types": "./client/route-contracts.ts",
-      "import": "./client/route-contracts.ts"
-    },
     "./client/actions": {
       "types": "./client/actions/index.ts",
       "import": "./client/actions/index.ts"
     },
-    "./client/ui": {
-      "types": "./client/ui/index.ts",
-      "import": "./client/ui/index.ts"
-    },
-    "./package.json": "./package.json",
-    "./server/audit": {
-      "types": "./server/audit.ts",
-      "import": "./server/audit.ts"
-    }
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "exports": {
@@ -68,56 +52,30 @@
         "types": "./dist/client/plugin.d.ts",
         "import": "./dist/client/plugin.js"
       },
-      "./client/routes": {
-        "types": "./dist/client/routes.d.ts",
-        "import": "./dist/client/routes.js"
-      },
-      "./client/route-contracts": {
-        "types": "./dist/client/route-contracts.d.ts",
-        "import": "./dist/client/route-contracts.js"
-      },
       "./client/actions": {
         "types": "./dist/client/actions/index.d.ts",
         "import": "./dist/client/actions/index.js"
       },
-      "./client/ui": {
-        "types": "./dist/client/ui/index.d.ts",
-        "import": "./dist/client/ui/index.js"
-      },
-      "./package.json": "./package.json",
-      "./server/audit": {
-        "types": "./dist/server/audit.d.ts",
-        "import": "./dist/server/audit.js"
-      }
+      "./package.json": "./package.json"
     },
     "access": "public"
   },
   "files": [
     "dist",
-    "registry",
-    "registry.config.json",
-    "public/r"
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "skills"
   ],
-  "nocobase": {
-    "registry": {
-      "items": {
-        "auth-ui": "./registry/auth-ui"
-      }
-    }
-  },
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
-    "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json",
+    "build": "pnpm clean && tsc -p tsconfig.json && tsc -p tsconfig.migrations.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.migrations.json --noEmit",
     "test": "vitest run",
-    "registry:build": "node ../../../scripts/registry.mjs build --package .",
-    "registry:materialize": "node ../../../scripts/registry.mjs materialize --package .",
-    "prepack": "pnpm registry:build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm registry:build && pnpm build",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
     "fix": "pnpm lint:fix && pnpm format"
   },
   "peerDependencies": {
@@ -125,11 +83,11 @@
     "@nocobase/app-server": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "@refinedev/core": "^5.0.0",
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "react-router": "^7.0.0",
+    "@nocobase/caching": "workspace:^"
   },
   "dependencies": {
-    "@nocobase/caching": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "better-auth": "catalog:",
@@ -141,6 +99,7 @@
     "@nocobase/app-client": "workspace:*",
     "@nocobase/app-server": "workspace:*",
     "@nocobase/db": "workspace:*",
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@nocobase/service-provider": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
@@ -148,7 +107,6 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "better-sqlite3": "catalog:",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "eslint": "catalog:",
@@ -162,6 +120,6 @@
     "tw-animate-css": "^1.2.5",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "@nocobase/app-plugin-audit": "workspace:*"
+    "react-router": "catalog:"
   }
 }

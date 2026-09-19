@@ -156,6 +156,7 @@ function includeTemplateFile(
   ) {
     return capabilities.registry;
   }
+  if (relativePath.startsWith('cli/')) return capabilities.cli;
   if (relativePath.startsWith('skills/')) return capabilities.skills;
   return true;
 }
@@ -191,6 +192,11 @@ function replacementEntries(
   context: PluginTemplateContext,
 ): readonly (readonly [string, string])[] {
   return [
+    [
+      '__NOCOBASE_CLI_DESCRIPTION_LITERAL__',
+      literal(`Commands contributed by ${context.packageName}.`),
+    ],
+    ['__NOCOBASE_CLI_TOPIC_LITERAL__', literal(context.shortName)],
     ['__NOCOBASE_COLLECTION_NAME_LITERAL__', literal(context.collectionName)],
     ['__NOCOBASE_DESCRIPTION__', context.description],
     ['__NOCOBASE_DISPLAY_NAME__', jsonStringContent(context.displayName)],
@@ -317,6 +323,8 @@ async function renderManifest(
       import: compiled,
     };
   };
+  if (capabilities.cli)
+    addExport('./cli', './cli/index.ts', './dist/cli/index.js');
   if (serverPlugin)
     addExport('./server', './server/index.ts', './dist/server/index.js');
   if (capabilities.server.serviceProviders)
@@ -361,7 +369,9 @@ async function renderManifest(
   publishExports['./package.json'] = './package.json';
 
   const scripts: Record<string, string> = {
-    build: 'tsc -p tsconfig.json',
+    build: capabilities.database
+      ? 'tsc -p tsconfig.json && nocobase-db-manifests'
+      : 'tsc -p tsconfig.json',
     typecheck: 'tsc -p tsconfig.json --noEmit',
     test: 'vitest run --passWithNoTests',
     lint: 'eslint . --max-warnings 0',
@@ -407,9 +417,10 @@ async function renderManifest(
   // — service tokens, React contexts, the queue's job registry — is declared as a peer and never installed by the
   // plugin itself. The matching devDependency pins this repository's copy for development and tests, which the wide
   // peer range deliberately does not. See AGENTS.md, "Depending on Identity-Sensitive Packages".
+  // Declared once. pnpm resolves a `workspace:` peer to this repository's copy without a devDependency, so the
+  // second declaration would only be another line to keep in step.
   const addRuntimePeer = (packageName: string): void => {
     peerDependencies[packageName] = 'workspace:^';
-    devDependencies[packageName] = 'workspace:*';
   };
 
   if (capabilities.client.locales || capabilities.server.locales)
@@ -423,21 +434,27 @@ async function renderManifest(
     addRuntimePeer('@nocobase/service-provider');
   if (capabilities.server.jobs) addRuntimePeer('@nocobase/queue');
   if (clientPlugin) addRuntimePeer('@nocobase/app-client');
+  if (capabilities.cli) {
+    addRuntimePeer('@nocobase/nb3-cli');
+    // `@oclif/core` is a peer for a related but distinct reason from module identity: one shared version, so help
+    // rendering and flag parsing behave the same in the plugin and in the application assembling its commands. The
+    // range is explicit rather than `workspace:^` because whoever installs this plugin is outside this repository.
+    peerDependencies['@oclif/core'] = '^4.14.0';
+  }
   if (react) peerDependencies.react = '^19.0.0';
 
-  if (serverPlugin || !browserCode) devDependencies['@types/node'] = 'catalog:';
-  if (react) {
-    devDependencies['@types/react'] = 'catalog:';
-    devDependencies.react = 'catalog:';
-  }
+  if (serverPlugin || capabilities.cli || !browserCode)
+    devDependencies['@types/node'] = 'catalog:';
+  // `@types/react` is not a peer, so it stays. `react` itself is declared once, as a peer.
+  if (react) devDependencies['@types/react'] = 'catalog:';
   if (capabilities.registry) {
-    devDependencies.shadcn = '^4.13.1';
+    devDependencies.shadcn = 'catalog:';
     devDependencies.tailwindcss = 'catalog:';
-    devDependencies['tw-animate-css'] = '^1.2.5';
+    devDependencies['tw-animate-css'] = 'catalog:';
   }
 
+  // Compiled plugins resolve resources from baseDir inside dist; only that runtime tree is published.
   const files = ['dist', 'README.md', 'CHANGELOG.md'];
-  if (capabilities.database) files.push('database');
   if (capabilities.skills) files.push('skills');
   if (capabilities.registry)
     files.push(
@@ -511,11 +528,14 @@ function renderTsconfig(capabilities: PluginCapabilities): string {
     ...(capabilities.database ? ['database/**/*.ts'] : []),
     ...(serverPlugin ? ['server/**/*.ts'] : []),
     ...(browserCode ? ['client/**/*.ts', 'client/**/*.tsx'] : []),
+    // Compiled alongside the server: `exports['./cli']` publishes `./dist/cli/index.js`, so leaving it out of the
+    // build would publish an entry that resolves to nothing.
+    ...(capabilities.cli ? ['cli/**/*.ts'] : []),
   ];
   return `${JSON.stringify(
     {
       extends:
-        browserCode && !serverPlugin
+        browserCode && !serverPlugin && !capabilities.cli
           ? '@nocobase/dev-config/tsconfig/client-library.json'
           : '@nocobase/dev-config/tsconfig/server-library.json',
       compilerOptions,
@@ -586,7 +606,7 @@ function renderServerPlugin(
   ]
     .filter(Boolean)
     .join('\n');
-  return `import { defineServerPlugin, type AppServerPlugin } from '@nocobase/app-server/plugins';\n${imports ? `\n${imports}\n` : ''}\nconst ${context.moduleName}Plugin: AppServerPlugin = defineServerPlugin({\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName}Plugin;\n`;
+  return `import path from 'node:path';\n\nimport { defineServerPlugin, type AppServerPlugin } from '@nocobase/app-server/plugins';\n${imports ? `\n${imports}\n` : ''}\nconst ${context.moduleName}Plugin: AppServerPlugin = defineServerPlugin({\n  baseDir: path.resolve(import.meta.dirname, '..'),\n  packageName: ${literal(context.packageName)},\n${entries}\n});\n\nexport default ${context.moduleName}Plugin;\n`;
 }
 
 function renderPluginTest(
@@ -628,6 +648,7 @@ function renderReadme(
     capabilities.client.serviceProviders && 'client.service-providers',
     capabilities.client.reactProviders && 'client.react-providers',
     capabilities.client.locales && 'client.locales',
+    capabilities.cli && 'cli',
     capabilities.registry && 'registry',
     capabilities.skills && 'skills',
   ].filter(Boolean);

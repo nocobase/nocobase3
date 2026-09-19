@@ -4,15 +4,24 @@ import path from 'node:path';
 import { CommandFailedError, runCommand } from './run-command.ts';
 
 /**
- * v3 packages are published to the self-hosted registry rather than the public npm, and `@beta` is the only channel
- * carrying v3 releases so far. Switch to a stable range once the first stable version ships.
+ * v3 packages are published to the self-hosted registry rather than the public npm. Drop this default once they are
+ * published to the public registry as well.
  *
  * Note this is the registry the *template* is downloaded from. It is unrelated to the registry that served this
  * package itself, which `pnpm create` resolves before any of this code runs.
  */
 export const DEFAULT_REGISTRY = 'https://npm.nocobase.ai';
 
-/** Product identity, independent of the initialization capabilities a template declares. */
+/**
+ * What a template needs scaffolding around it, which is not the same for every template.
+ *
+ * An `app` owns a database: it is asked which dialect to use, gets that driver added to its manifest, and has the
+ * connection written to `config.yml`. A `hub` owns none of that — it is a Portal host that proxies an upstream
+ * NocoBase API, configured through `.env` — so running it through the app flow would leave it with a `config.yml` it
+ * never reads and a database driver it never loads.
+ *
+ * The kind belongs to the template rather than to the flag, so `--template hub` and `--template ./packages/templates/app-template-hub` are scaffolded identically.
+ */
 export type TemplateKind = 'app' | 'hub';
 
 export interface TemplateAlias {
@@ -33,6 +42,7 @@ export interface TemplateAlias {
  */
 export const TEMPLATE_ALIASES: Readonly<Record<string, TemplateAlias>> = {
   default: { kind: 'app', packageName: '@nocobase/app-template-default' },
+  examples: { kind: 'app', packageName: '@nocobase/app-template-examples' },
   hub: { kind: 'hub', packageName: '@nocobase/app-template-hub' },
 };
 
@@ -51,22 +61,6 @@ export const TEMPLATE_TAGS: readonly string[] = ['latest', 'beta'];
  * template. `latest` is the newest published version today, and the right default once stable versions exist.
  */
 export const DEFAULT_TEMPLATE_TAG = 'latest';
-
-export function isTemplateTag(value: string): boolean {
-  return TEMPLATE_TAGS.includes(value.trim());
-}
-
-export function parseTemplateTag(value: string): string {
-  const tag = value.trim();
-
-  if (!isTemplateTag(tag)) {
-    throw new Error(
-      `Unknown template tag "${value}". Expected one of: ${TEMPLATE_TAGS.join(', ')}.`,
-    );
-  }
-
-  return tag;
-}
 
 export interface ResolveTemplateSourceOptions {
   /** Channel a named template resolves to. Ignored for a package specifier or a local path. */
@@ -147,8 +141,6 @@ export interface ResolvedTemplate {
   version: string;
   /** `nocobase.templateKind` as the template declared it, if it declared one. */
   kind?: string;
-  /** Opt-in to the existing full-stack App initialization contract. */
-  scaffoldProfile?: 'app-v1';
 }
 
 export interface DownloadTemplateOptions {
@@ -205,16 +197,9 @@ async function findTarball(directory: string): Promise<string> {
   return path.join(directory, tarball);
 }
 
-export function parseScaffoldProfile(value: unknown): 'app-v1' | undefined {
-  if (value === undefined || value === 'app-v1') return value;
-  throw new Error(
-    'Unsupported nocobase.scaffoldProfile. Expected "app-v1" or an omitted field. Use a compatible template and create-app version.',
-  );
-}
-
 async function readTemplateManifest(
   directory: string,
-): Promise<Omit<ResolvedTemplate, 'directory'>> {
+): Promise<{ name: string; version: string; kind?: string }> {
   const manifestPath = path.join(directory, 'package.json');
   let raw: string;
 
@@ -229,14 +214,13 @@ async function readTemplateManifest(
   const manifest = JSON.parse(raw) as {
     name?: string;
     version?: string;
-    nocobase?: { templateKind?: string; scaffoldProfile?: unknown };
+    nocobase?: { templateKind?: string };
   };
 
   return {
     name: manifest.name ?? 'unknown',
     version: manifest.version ?? '0.0.0',
     kind: manifest.nocobase?.templateKind,
-    scaffoldProfile: parseScaffoldProfile(manifest.nocobase?.scaffoldProfile),
   };
 }
 

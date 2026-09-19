@@ -1,13 +1,17 @@
-import { createAppClient, type AppClient } from '@nocobase/app-client';
+import {
+  createApiClient,
+  resolveAppUrl,
+  type ApiClient,
+} from '@nocobase/app-client';
 
-let workflowClient: AppClient | undefined;
+let workflowClient: ApiClient | undefined;
 
-export function configureWorkflowClient(appClient: AppClient): AppClient {
-  workflowClient = appClient;
-  return appClient;
+export function configureWorkflowClient(api: ApiClient): ApiClient {
+  workflowClient = api;
+  return api;
 }
 
-export function getWorkflowClient(): AppClient {
-  workflowClient ??= createAppClient();
+export function getWorkflowClient(): ApiClient {
+  workflowClient ??= createApiClient({ baseURL: resolveAppUrl('/api') });
   return workflowClient;
 }

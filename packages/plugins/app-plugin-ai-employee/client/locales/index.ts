@@ -11,7 +11,14 @@ const locales: LocaleLoaders = {
 
 export default locales;
 
-export function useT(): (key: string) => string {
+export function useT(): (
+  key: string,
+  options?: Record<string, unknown>,
+) => string {
   const { t } = useTranslation(packageMetadata.name);
-  return useCallback((key: string) => t(key, { defaultValue: key }), [t]);
+  return useCallback(
+    (key: string, options: Record<string, unknown> = {}) =>
+      t(key, { ...options, defaultValue: key }),
+    [t],
+  );
 }

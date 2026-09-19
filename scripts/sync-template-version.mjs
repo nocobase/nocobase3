@@ -26,6 +26,7 @@ const repoRoot = path.resolve(
 const TARGETS = [
   'packages/templates/app-template-default',
   'packages/templates/app-template-hub',
+  'packages/templates/app-template-examples',
 ];
 
 const checkOnly = process.argv.includes('--check');

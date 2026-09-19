@@ -1,8 +1,10 @@
+import { bindWorkflowLogger } from '../../engine/logger.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { NODE_RUN_STATUS } from '../../engine/constants.js';
+import { EXECUTION_REASON, NODE_RUN_STATUS } from '../../engine/constants.js';
+import { asIdFilter, serializeJson } from '../../engine/utils.js';
 import { createNodeExpression } from '../definition.js';
 import type {
   ConfigIssue,
@@ -20,6 +22,7 @@ import {
   type WorkflowInstructionResult,
 } from '../base.js';
 import { logRunExecution } from '../../engine/inspector.js';
+import type { WorkflowRunServices } from '../../engine/run-services.js';
 
 export type WorkflowRunJsonValue =
   | null
@@ -31,30 +34,16 @@ export type WorkflowRunJsonValue =
 
 export type WorkflowRunArgs = Record<string, unknown>;
 
-/**
- * Everything a run script gets besides its declared `args`.
- *
- * D5: exactly three members. `transaction` is not provided and no field is
- * reserved for it — a script that needs a transaction opens one through
- * `runtime.app` and owns its boundary.
- */
-export interface WorkflowRunRuntime {
-  /**
-   * The application instance.
-   *
-   * Still `unknown` after T5: the repository has no `Application` (or equivalent)
-   * type to point at — `app-host` exposes a registry and a runtime record, not an
-   * application object — so anything narrower here would be invented rather than
-   * observed. It is tightened when an application type actually exists.
-   */
-  readonly app: unknown;
+/** Execution-scoped capabilities passed to a Workflow run module. */
+export interface WorkflowRunOptions {
+  readonly services: WorkflowRunServices;
   readonly signal: AbortSignal;
   readonly logger: WorkflowLogger;
 }
 
 export type WorkflowRunFunction = (
   args: unknown,
-  runtime: WorkflowRunRuntime,
+  options: WorkflowRunOptions,
 ) => unknown;
 
 export interface WorkflowRunModule {
@@ -236,7 +225,8 @@ export function assertWorkflowRunResult(
  * resources, config and result validation, argument resolution, and exception
  * mapping. It does not compile TypeScript or let a module drive the state
  * machine: returning `{ status: 'failed' }` is ordinary business data, never a
- * nodeRun status. There is no `resume()` — a run node can never be PENDING.
+ * nodeRun status. Scripts execute after the processor yields and resume the
+ * persisted node attempt when they complete.
  */
 export class RunInstruction extends WorkflowInstruction<RunConfig> {
   static readonly type: 'run' = 'run';
@@ -254,10 +244,81 @@ export class RunInstruction extends WorkflowInstruction<RunConfig> {
     return runConfigIssues(config);
   }
 
-  async run(): Promise<WorkflowInstructionResult> {
+  async run(): Promise<null> {
+    if (!this.processor.resumeNode) {
+      throw new Error('Run nodes require a dispatcher resume callback');
+    }
+    this.processor.defer(async () => {
+      const abort = this.processor.createBackgroundAbortHandle();
+      let result: WorkflowInstructionResult;
+      try {
+        abort.throwIfAborted();
+        result = await this.execute(abort.signal);
+        abort.throwIfAborted();
+      } catch (error) {
+        this.processor.logger.error(
+          `Instruction "run" failed for node "${this.node.key}"`,
+          { error, nodeId: this.node.id, nodeKey: this.node.key },
+        );
+        result = {
+          status: abort.signal.aborted
+            ? NODE_RUN_STATUS.ABORTED
+            : NODE_RUN_STATUS.ERROR,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      } finally {
+        abort.dispose();
+      }
+      const saved = await this.processor.store.nodeRuns.updateMany({
+        filter: {
+          id: asIdFilter(this.nodeRun.id),
+          status: NODE_RUN_STATUS.PENDING,
+        },
+        values: {
+          status: result.status,
+          result: serializeJson(result.result ?? null),
+          error: result.error ?? null,
+          meta: serializeJson({ runCompletion: true }),
+          finishedAt: new Date().toISOString(),
+        },
+      });
+      if (saved.updatedCount === 0) return;
+      await this.processor.resumeNode?.(this.nodeRun.id);
+    });
+    return null;
+  }
+
+  async resume(): Promise<WorkflowInstructionResult | null> {
+    if (
+      this.nodeRun.status === NODE_RUN_STATUS.PENDING ||
+      !isRecord(this.nodeRun.meta) ||
+      this.nodeRun.meta.runCompletion !== true ||
+      !this.input ||
+      !('id' in this.input) ||
+      String(this.input.id) !== String(this.nodeRun.id)
+    )
+      return null;
+    if (this.nodeRun.status === NODE_RUN_STATUS.ABORTED) {
+      const expired =
+        this.processor.execution.expiresAt != null &&
+        new Date(this.processor.execution.expiresAt).getTime() <= Date.now();
+      this.processor.abortExecution(
+        expired ? EXECUTION_REASON.TIMEOUT : undefined,
+      );
+    }
+    return {
+      status: this.nodeRun.status,
+      result: this.nodeRun.result,
+      ...(this.nodeRun.error == null ? {} : { error: this.nodeRun.error }),
+    };
+  }
+
+  private async execute(
+    signal: AbortSignal,
+  ): Promise<WorkflowInstructionResult> {
     const config = readRunConfig(this.config);
     const args = this.processor.getParsedValue(config.args ?? {}, this.node.id);
-    const signal = this.signal;
+
     const module = await loadRunModule(
       this.processor.workflowResourceRoot,
       config.module,
@@ -266,11 +327,21 @@ export class RunInstruction extends WorkflowInstruction<RunConfig> {
     const startedAt = performance.now();
     let result: unknown;
     try {
-      result = await module.run(args, {
-        app: this.processor.app,
+      signal.throwIfAborted();
+      if (!this.processor.services) {
+        throw new Error(
+          `Run node "${this.node.key}" has no application services bound to it`,
+        );
+      }
+      const options: WorkflowRunOptions = Object.freeze({
+        services: this.processor.services,
         signal,
-        logger: this.processor.logger,
+        logger: bindWorkflowLogger(this.processor.logger, {
+          nodeId: this.node.id,
+          nodeKey: this.node.key,
+        }),
       });
+      result = await module.run(args, options);
       logRunExecution(this.processor.logger, {
         workflowId: this.processor.workflow.id,
         executionId: this.processor.execution.id,

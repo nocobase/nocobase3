@@ -15,14 +15,10 @@ const templateName = JSON.parse(
 ).name as string;
 
 /**
- * Sources `create-app` rewrites the template's package name in, mirroring `PACKAGE_NAME_SOURCES` in
+ * Sources present in this template that `create-app` rewrites, from `PACKAGE_NAME_SOURCES` in
  * `packages/tools/create-app/src/lib/scaffold.ts`.
  */
-const REWRITTEN_SOURCES = [
-  'client/runtime.ts',
-  'client/service-provider.ts',
-  'server/providers/app-example.ts',
-];
+const REWRITTEN_SOURCES = ['client/runtime.ts', 'client/service-provider.ts'];
 
 /** Source trees shipped to a generated application, per the `files` field. */
 const SHIPPED_SOURCE_DIRECTORIES = ['client', 'server', 'database', 'scripts'];

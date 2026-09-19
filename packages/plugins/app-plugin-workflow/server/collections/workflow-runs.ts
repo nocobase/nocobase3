@@ -8,6 +8,7 @@ export function defineWorkflowRuns(
   collection.bigInt('id').primary().autoIncrement().notNull();
   collection
     .belongsTo('workflow', WORKFLOW_COLLECTIONS.workflows)
+    .targetKey('id')
     .foreignKey('workflowId')
     .foreignKeyType('bigInt')
     .notNull()
@@ -17,6 +18,7 @@ export function defineWorkflowRuns(
   collection.string('eventKey').notNull().unique({ mode: 'index' });
   collection
     .hasMany('nodeRuns', WORKFLOW_COLLECTIONS.nodeRuns)
+    .sourceKey('id')
     .foreignKey('workflowRunId')
     .onDelete('cascade');
   collection.json('input').notNull().defaultTo({});
@@ -26,15 +28,21 @@ export function defineWorkflowRuns(
   collection.bigInt('parentRunId');
   collection.json('stack');
   collection.json('output');
-  collection.datetime('startedAt');
-  collection.datetime('finishedAt');
-  collection.datetime('expiresAt');
-  collection.datetime('createdAt').notNull();
+  // These are instants, not wall clocks, so they are `datetimeTz`: it is the
+  // only logical type whose value survives a driver that decodes timestamps
+  // itself. The Repository is what applies that per dialect — see
+  // `server/collections/store.ts`.
+  collection.datetimeTz('startedAt');
+  collection.datetimeTz('finishedAt');
+  collection.datetimeTz('expiresAt');
+  collection.datetimeTz('createdAt').notNull();
   collection.boolean('manually').notNull().defaultTo(false);
   collection.string('reason');
-  collection.json('auditContext');
+  collection.string('sourceType');
+  collection.string('sourceId');
 
   collection.index(['dispatched', 'id']);
   collection.index(['status', 'expiresAt']);
   collection.index(['parentRunId', 'status']);
+  collection.index(['sourceType', 'sourceId']);
 }

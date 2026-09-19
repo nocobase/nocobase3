@@ -1,4 +1,5 @@
-import type { Application } from '../application/index.js';
+import type { AppRuntimeContext } from './definition.js';
+import { Application, type ApplicationConfig } from '../application/index.js';
 import { onceAsync } from './lifecycle.js';
 import type { AppLifecycle } from './types.js';
 
@@ -12,5 +13,17 @@ export async function startApplicationInScope(
     onceAsync(() => app.shutdown()),
   );
   await app.start();
+  return app;
+}
+
+/** Create the application without starting services or registering contributions. */
+export function createAppFromRuntime(runtime: AppRuntimeContext): Application {
+  const app = new Application<ApplicationConfig>({
+    config: runtime.config,
+    mode: runtime.mode,
+    paths: runtime.paths,
+    runtimeLogging: runtime.scope.logging,
+  });
+  runtime.app = app;
   return app;
 }

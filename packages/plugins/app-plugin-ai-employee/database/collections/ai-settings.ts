@@ -7,11 +7,11 @@ export function createAISettingsCollection(
     'aiSettings',
     (c) => {
       c.json('options', { defaultValue: { storage: 'local' } }).notNull();
-      c.string('defaultLLMService').nullable();
+      c.string('defaultLlmService').nullable();
       c.string('defaultModel').nullable();
       c.datetime('createdAt').nullable();
       c.datetime('updatedAt').nullable();
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

@@ -1,6 +1,13 @@
+import { I18nRuntime } from '@nocobase/i18n';
+import { createI18nMiddleware } from '@nocobase/i18n/server';
+import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createNotificationRouter } from '../server/router.js';
+import {
+  createNotificationRouter,
+  NOTIFICATION_NAMESPACE,
+  notificationServerLocales,
+} from '../server/index.js';
 
 describe('notification router', () => {
   it('lists redacted notification details', async () => {
@@ -16,7 +23,7 @@ describe('notification router', () => {
         deliveries: [],
       },
     ]);
-    const router = createNotificationRouter({
+    const router = await localizedRouter({
       logs: { listDetails, get: vi.fn(async () => undefined) },
     });
 
@@ -40,7 +47,7 @@ describe('notification router', () => {
     const get = vi.fn(async (id: string) =>
       id === details.log.id ? details : undefined,
     );
-    const router = createNotificationRouter({
+    const router = await localizedRouter({
       logs: { listDetails: vi.fn(async () => []), get },
     });
 
@@ -51,7 +58,27 @@ describe('notification router', () => {
     expect(await found.json()).toEqual({ data: details });
     expect(missing.status).toBe(404);
     expect(await missing.json()).toEqual({
-      error: 'Notification log not found.',
+      error: {
+        code: 'NOTIFICATION_LOG_NOT_FOUND',
+        message: 'Notification log not found.',
+        ns: NOTIFICATION_NAMESPACE,
+        key: 'errors.logNotFound',
+      },
     });
   });
 });
+
+async function localizedRouter(
+  options: Parameters<typeof createNotificationRouter>[0],
+): Promise<Hono> {
+  const runtime = new I18nRuntime({
+    defaultLocale: 'en-US',
+    locales: ['en-US', 'zh-CN'],
+  });
+  runtime.registerNamespace(NOTIFICATION_NAMESPACE, notificationServerLocales);
+  await runtime.init();
+  const router = new Hono();
+  router.use('*', createI18nMiddleware(runtime));
+  router.route('/', createNotificationRouter(options));
+  return router;
+}

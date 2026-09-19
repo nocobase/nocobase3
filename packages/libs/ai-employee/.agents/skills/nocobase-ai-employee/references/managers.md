@@ -113,7 +113,7 @@ Registration defaults include backend execution and `ASK` permission unless expl
 
 ## Skills Manager
 
-Use when skill content comes from an application service rather than `SKILLS.md`:
+Use when skill content comes from an application service rather than `SKILL.md`:
 
 ```ts
 await ai.skillsManager.registerSkills({
@@ -270,7 +270,6 @@ A capability plugin can attach optional implementations:
 ```ts
 deps.ai.features.enableFeatures({
   knowledgeBase: knowledgeBaseFeature,
-  vectorDatabase: vectorDatabaseFeature,
 });
 ```
 

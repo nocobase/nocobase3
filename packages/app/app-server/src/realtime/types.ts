@@ -1,4 +1,7 @@
-import type { AppWebSocket, AppWebSocketMessageData } from '../websocket.js';
+import type {
+  AppWebSocket,
+  AppWebSocketMessageData,
+} from '@nocobase/app-websocket';
 import {
   createServiceToken,
   type ServiceToken,
@@ -77,6 +80,8 @@ export interface RealtimeService {
     context?: RealtimeConnectionContext,
   ): RealtimeConnection;
   disconnect(connection: RealtimeConnection): void;
+  /** Closes every active connection authenticated as the given user. */
+  disconnectUser(userId: string): number;
   subscribe(
     connection: RealtimeConnection,
     topic: string,

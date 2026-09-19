@@ -1,9 +1,14 @@
 import { createHash } from 'node:crypto';
+import {
+  readTaskManifest,
+  resolveTaskChecksum,
+  type TaskManifest,
+} from './manifest.js';
 import type { Dirent } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { isDefinedMigration } from './define.js';
+import { isDefinedMigration } from './internal/marker.js';
 import type {
   LoadedMigration,
   LoadMigrationsOptions,
@@ -19,6 +24,7 @@ export const DEFAULT_MIGRATION_EXTENSIONS = [
 ] as const;
 export const DEFAULT_MIGRATION_PACKAGE_NAME = 'app';
 
+/** Loads, validates, and deterministically orders migration definitions from configured sources. */
 export async function loadMigrations(
   options: LoadMigrationsOptions,
 ): Promise<LoadedMigration[]> {
@@ -31,6 +37,7 @@ export async function loadMigrations(
   return migrations.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** Loads migration definitions without executing them. */
 export async function validateMigrations(
   options: string | LoadMigrationsOptions,
 ): Promise<LoadedMigration[]> {
@@ -43,6 +50,7 @@ async function loadMigrationSource(
   source: MigrationSource,
 ): Promise<LoadedMigration[]> {
   const directory = resolve(source.directory);
+  const manifest = await readTaskManifest(directory);
   const entries = await readMigrationDirectory(directory);
   const extensions = new Set(source.extensions ?? DEFAULT_MIGRATION_EXTENSIONS);
   const files = entries
@@ -58,6 +66,9 @@ async function loadMigrationSource(
         source.packageName,
         join(directory, fileName),
         fileName,
+        manifest,
+        source.parameters,
+        source.configuration,
       ),
     );
   }
@@ -76,6 +87,10 @@ function normalizeMigrationSources(
 
   if (options.sources !== undefined) {
     return options.sources.map((source) => ({
+      parameters: normalizeParameters(source.parameters),
+      configuration: source.configuration?.map((entry) =>
+        Object.freeze({ ...entry }),
+      ),
       packageName: validatePackageName(source.packageName),
       directory: validateDirectory(source.directory),
       extensions: source.extensions ?? options.extensions,
@@ -126,21 +141,28 @@ async function loadMigrationFile(
   packageName: string,
   filePath: string,
   fileName: string,
+  manifest: TaskManifest | undefined,
+  parameters?: Readonly<Record<string, string>>,
+  configuration?: readonly Readonly<Record<string, unknown>>[],
 ): Promise<LoadedMigration> {
   const [source, fileStat] = await Promise.all([
     readFile(filePath, 'utf8'),
     stat(filePath),
   ]);
-  const checksum = createMigrationChecksum(source);
+  const checksums = resolveTaskChecksum(filePath, source, manifest);
   const migration = await importMigration(filePath, fileStat.mtimeMs);
   validateMigrationDefinition(migration, filePath, fileName);
 
   return {
     packageName,
-    name: migration.name,
+    configuration,
+    name: parameters
+      ? `${migration.name}_${createHash('sha256').update(JSON.stringify(parameters)).digest('hex')}`
+      : migration.name,
+    ...(parameters ? { parameters } : {}),
     filePath,
     fileName,
-    checksum,
+    ...checksums,
     migration,
   };
 }
@@ -176,6 +198,12 @@ function validateMigrationDefinition(
   if (value.name !== expectedName) {
     throw new Error(
       `Migration file ${filePath} has name "${value.name}", but file name requires "${expectedName}".`,
+    );
+  }
+
+  if (value.shouldRun !== undefined && typeof value.shouldRun !== 'function') {
+    throw new Error(
+      `Migration "${value.name}" shouldRun must be a function when provided.`,
     );
   }
 
@@ -234,10 +262,6 @@ function migrationNameFromFileName(fileName: string): string {
   return basename(fileName, extname(fileName));
 }
 
-function createMigrationChecksum(source: string): string {
-  return createHash('sha256').update(source).digest('hex');
-}
-
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -250,4 +274,19 @@ function isValidTransactionMode(value: unknown): boolean {
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
+}
+
+function normalizeParameters(
+  parameters: Readonly<Record<string, string>> | undefined,
+): Readonly<Record<string, string>> | undefined {
+  if (parameters === undefined) return undefined;
+  const entries = Object.entries(parameters).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  if (entries.some(([, value]) => typeof value !== 'string')) {
+    throw new Error('Migration source parameters must be strings.');
+  }
+  return entries.length
+    ? Object.freeze(Object.fromEntries(entries))
+    : undefined;
 }

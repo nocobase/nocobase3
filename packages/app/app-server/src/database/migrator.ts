@@ -13,6 +13,7 @@ import type { AppDatabaseMigrationConfig } from './types.js';
 
 export interface AppMigrator {
   latest(): Promise<AppMigrationRunResult>;
+  fresh(): Promise<AppMigrationRunResult>;
   rollback(): Promise<AppMigrationRollbackResult>;
 }
 
@@ -49,6 +50,20 @@ export function createAppMigrator(
         return skippedMigrationResult();
       }
 
+      return completedRunResult(await createDatabaseMigrator(options).latest());
+    },
+
+    async fresh(): Promise<AppMigrationRunResult> {
+      const connection = options.database.connection(options.connection);
+      await connection.resetManagedSchema();
+      if (!hasMigrationDirectory(options)) {
+        return {
+          status: 'completed',
+          batch: 0,
+          executed: [],
+          skipped: [],
+        };
+      }
       return completedRunResult(await createDatabaseMigrator(options).latest());
     },
 

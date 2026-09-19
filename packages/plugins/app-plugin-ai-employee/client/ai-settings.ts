@@ -21,6 +21,11 @@ const coreTabs: readonly AISettingsTabDefinition[] = [
     labelKey: 'LLM Service',
     pageLoader: () => import('./pages/llm-service-page.js'),
   },
+  {
+    key: 'mcp',
+    labelKey: 'MCP',
+    pageLoader: () => import('./pages/mcp-page.js'),
+  },
 ];
 const contributedTabs = new Map<string, AISettingsTabDefinition>();
 let cachedTabs: readonly AISettingsTabDefinition[] = coreTabs;

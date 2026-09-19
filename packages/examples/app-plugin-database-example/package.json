@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-database-example",
   "displayName": "Database Example App Plugin",
   "description": "Example app plugin with a migration and seed.",
-  "version": "0.1.0-beta.4",
+  "version": "0.1.0-beta.6",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -29,7 +29,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "lint": "eslint . --max-warnings 0",
@@ -40,8 +40,6 @@
     "fix": "pnpm lint:fix && pnpm format"
   },
   "devDependencies": {
-    "@nocobase/app-server": "workspace:*",
-    "@nocobase/db": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",

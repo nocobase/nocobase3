@@ -1,3 +1,4 @@
+import sqlite from '@nocobase/db-sqlite';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -262,11 +263,15 @@ export async function createRuntimeFixture(
 ): Promise<RuntimeFixture> {
   await fs.mkdir(path.dirname(dbPath), { recursive: true });
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: dbPath } },
   });
-  for (const schema of workflowCollectionSchemas) {
-    await database.builder().createCollection(schema.name, schema.define);
-  }
+  await database.builder().createCollections(
+    workflowCollectionSchemas.map(({ name, define }) => ({
+      name,
+      definition: define,
+    })),
+  );
   const workflowIds: Record<string, WorkflowId> = {};
   const runIds: Record<string, WorkflowId> = {};
   for (const seed of workflowSeeds[profile]) {
@@ -480,6 +485,7 @@ export async function openRuntimeFixture(
   dbPath: string,
 ): Promise<RuntimeFixture> {
   const database = createDatabaseManager({
+    drivers: { sqlite },
     connections: { main: { dialect: 'sqlite', filename: dbPath } },
   });
   return { dbPath, database, workflowIds: {}, runIds: {} };

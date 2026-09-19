@@ -4,8 +4,43 @@ import { describe, expect, it } from 'vitest';
 import { createLogger, type DestinationStream } from '@nocobase/logging';
 
 import { requestLogger } from '../src/logging/index.js';
+import {
+  requestLoggingMiddleware,
+  loggingToken,
+} from '../src/logging/index.js';
+import { ServiceContainer } from '@nocobase/service-provider';
+import type { Logging } from '@nocobase/logging';
+import type { AppPluginApplication } from '../src/plugins/index.js';
 
 describe('requestLogger', () => {
+  it('logs only API requests in the application middleware', async () => {
+    const output = createMemoryDestination();
+    const router = new Hono();
+    const container = new ServiceContainer();
+    container.instance(loggingToken, {
+      getLogger: () => createLogger({}, output),
+    } as unknown as Logging);
+    requestLoggingMiddleware.register(router, {
+      container,
+      appName: 'main',
+    } as AppPluginApplication);
+    router.get('*', (context) => context.text('ok'));
+    for (const path of [
+      '/hub',
+      '/assets/app.js',
+      '/apiary',
+      '/api/healthz',
+      '/api',
+      '/api/users',
+    ]) {
+      await router.request(path);
+    }
+    expect(output.records().map((record) => record.msg)).toEqual([
+      'GET /api 200 completed',
+      'GET /api/users 200 completed',
+    ]);
+  });
+
   it('logs request input and successful response output', async () => {
     const output = createMemoryDestination();
     const router = new Hono();
@@ -13,7 +48,7 @@ describe('requestLogger', () => {
       '*',
       requestLogger({
         app: 'main',
-        logger: createLogger({}, output),
+        logger: createLogger({ level: 'debug' }, output),
       }),
     );
     router.get('/users/:id', (context) => context.json({ ok: true }));
@@ -28,7 +63,7 @@ describe('requestLogger', () => {
 
     expect(output.records()).toEqual([
       expect.objectContaining({
-        level: 30,
+        level: 20,
         app: 'main',
         req: {
           method: 'GET',
@@ -39,7 +74,7 @@ describe('requestLogger', () => {
             'x-request-source': 'cli',
           },
         },
-        msg: 'request started',
+        msg: 'GET /users/42 started',
       }),
       expect.objectContaining({
         level: 30,
@@ -52,7 +87,7 @@ describe('requestLogger', () => {
         },
         res: expect.objectContaining({ status: 200 }),
         durationMs: expect.any(Number),
-        msg: 'request completed',
+        msg: 'GET /users/42 200 completed',
       }),
     ]);
   });
@@ -71,23 +106,29 @@ describe('requestLogger', () => {
       throw new Error('failed');
     });
 
-    await router.request('/missing');
+    await router.request('/missing?reason=unknown', {
+      headers: { 'user-agent': 'test', authorization: 'secret' },
+    });
     await router.request('/error');
 
     const completed = output
       .records()
-      .filter((record) => record.msg !== 'request started');
+      .filter((record) => record.res !== undefined);
     expect(completed).toEqual([
       expect.objectContaining({
         level: 40,
+        req: expect.objectContaining({
+          query: { reason: 'unknown' },
+          headers: { 'user-agent': 'test' },
+        }),
         res: expect.objectContaining({ status: 404 }),
-        msg: 'request completed',
+        msg: 'GET /missing 404 completed',
       }),
       expect.objectContaining({
         level: 50,
         res: expect.objectContaining({ status: 500 }),
         err: expect.objectContaining({ message: 'failed' }),
-        msg: 'request failed',
+        msg: 'GET /error 500 failed',
       }),
     ]);
   });

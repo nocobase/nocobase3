@@ -1,21 +1,11 @@
 import path from 'node:path';
-import {
-  defaultDatabaseConfig,
-  driverFor,
-  driverNeedsBuild,
-  needsConnectionDetails,
-  parseDialect,
-  type DatabaseDialect,
-  type DatabaseConfig,
-} from './lib/database.ts';
 import { buildConfigFile } from './lib/config-file.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
 import {
   installDependencies,
-  syncPluginSkills,
+  syncSkills,
   verifyDriver,
 } from './lib/install.ts';
-import { addDriverDependency } from './lib/manifest.ts';
 import { ensureAllowBuilds } from './lib/pnpm-workspace.ts';
 import {
   cancel,
@@ -24,13 +14,13 @@ import {
   note,
   outro,
   promptAppName,
-  promptDialect,
   PromptCancelledError,
   spinner,
 } from './lib/prompts.ts';
 import {
   assertTargetIsUsable,
   assertValidAppName,
+  readConfigExample,
   removeDirectory,
   scaffoldFromTemplate,
 } from './lib/scaffold.ts';
@@ -40,6 +30,7 @@ import {
   isTemplateAlias,
   resolveTemplateKind,
   resolveTemplateSource,
+  type TemplateKind,
 } from './lib/template.ts';
 import { buildHubEnvFile, readEnvExample } from './lib/hub.ts';
 
@@ -88,13 +79,6 @@ export async function createApp(options: CreateAppOptions): Promise<number> {
   }
 }
 
-/** Resolves the dialect from `--db-dialect`, falling back to the one prompt this command asks. */
-async function resolveDialect(input: ParsedInput): Promise<DatabaseDialect> {
-  const flag = input.flags['db-dialect'];
-
-  return flag === undefined ? promptDialect() : parseDialect(flag);
-}
-
 async function run(input: ParsedInput): Promise<void> {
   // A name settles what is being created without downloading anything. A package specifier or a local path does not,
   // and guessing would put the wrong word in front of the user for the whole run, so the introduction stays neutral
@@ -137,37 +121,30 @@ async function run(input: ParsedInput): Promise<void> {
     throw error;
   }
 
-  // Identity and initialization capabilities are independent and come from the downloaded template.
+  // Settled against the downloaded manifest, because a package specifier or a local path only reveals what it is once
+  // it is on disk.
   const kind = resolveTemplateKind(input.flags.template, {
     name: template.name,
     nocobase: { templateKind: template.kind },
   });
 
-  let database: DatabaseConfig;
+  // Read before the template directory is removed below.
+  const configExample = await readConfigExample(template.directory);
+  const envExample =
+    kind === 'hub' ? await readEnvExample(template.directory) : undefined;
+
+  // A hub is also configured through the environment, because the path it is served under and the API it proxies are
+  // deployment facts rather than application settings. Everything else it shares with an app: it owns a database, it
+  // registers plugins, and it needs the secrets that only `config.yml` can carry.
+  const extraFiles: Record<string, string> = {
+    'config.yml': buildConfigFile({ example: configExample }),
+  };
+
+  if (kind === 'hub') {
+    extraFiles['.env'] = buildHubEnvFile({ example: envExample, name });
+  }
+
   try {
-    if (kind === 'hub' && template.scaffoldProfile === undefined) {
-      if (input.flags['db-dialect'] !== undefined) {
-        log.warn(
-          '--db-dialect is ignored because this Hub template does not declare the app-v1 scaffold profile.',
-        );
-      }
-
-      await createHub({ input, name, targetDirectory, template });
-      return;
-    }
-
-    database = defaultDatabaseConfig(await resolveDialect(input));
-    const extraFiles: Record<string, string> = {
-      'config.yml': buildConfigFile({ database }),
-    };
-    if (kind === 'hub') {
-      extraFiles['.env'] = buildHubEnvFile({
-        example: await readEnvExample(template.directory),
-        name,
-      });
-      extraFiles[path.join('app-dist', '.gitkeep')] = '';
-    }
-
     await scaffoldFromTemplate({
       name,
       targetDirectory,
@@ -178,93 +155,12 @@ async function run(input: ParsedInput): Promise<void> {
     await removeDirectory(template.directory);
   }
 
-  const driver = driverFor(database.dialect);
-  await addDriverDependency(targetDirectory, driver);
   await ensureAllowBuilds(targetDirectory);
 
-  const dialect = database.dialect;
-  if (kind === 'hub') {
-    log.info(
-      'Created a full-stack Hub. Identity and mount settings were written to .env.',
-    );
-  }
-
-  log.success(`Created ${name} using ${dialect} (${driver}).`);
+  log.success(`Created ${name} from ${template.name}@${template.version}.`);
 
   if (!input.flags.install) {
-    finish(name, { installed: false, dialect });
-    return;
-  }
-
-  const install = spinner();
-  install.start('Installing dependencies with pnpm');
-
-  try {
-    await installDependencies({ directory: targetDirectory, driver, registry });
-    install.stop('Installed dependencies.');
-  } catch (error) {
-    install.stop('Installing dependencies failed.');
-    log.warn((error as Error).message);
-    finish(name, { installed: false, dialect }, 'Finished with errors.');
-    return;
-  }
-
-  if (driverNeedsBuild(driver)) {
-    const verification = await verifyDriver(targetDirectory, driver);
-
-    if (verification.rebuilt) {
-      log.info(`Compiled the native addon for ${driver}.`);
-    } else if (!verification.ok && verification.reason) {
-      log.warn(verification.reason);
-    }
-  }
-
-  // Runs only after the install, because the sync reads the plugins out of `node_modules`.
-  const skills = spinner();
-  skills.start('Synchronizing plugin skills');
-
-  const synchronized = await syncPluginSkills(targetDirectory);
-
-  if (synchronized.ok) {
-    skills.stop('Synchronized plugin skills.');
-  } else {
-    skills.stop('Synchronizing plugin skills failed.');
-    log.warn(synchronized.reason ?? 'Could not synchronize plugin skills.');
-  }
-
-  finish(name, { installed: true, dialect });
-}
-
-interface CreateHubOptions {
-  input: ParsedInput;
-  name: string;
-  targetDirectory: string;
-  template: { directory: string; name: string; version: string };
-}
-
-/** Preserves initialization for Hub templates without the full-stack App profile. */
-async function createHub(options: CreateHubOptions): Promise<void> {
-  const { input, name, targetDirectory, template } = options;
-  const registry =
-    input.flags.registry ?? process.env.NOCOBASE_REGISTRY ?? DEFAULT_REGISTRY;
-
-  const envExample = await readEnvExample(template.directory);
-  await scaffoldFromTemplate({
-    name,
-    targetDirectory,
-    templateDirectory: template.directory,
-    extraFiles: {
-      '.env': buildHubEnvFile({ example: envExample, name }),
-      [path.join('app-dist', '.gitkeep')]: '',
-    },
-  });
-
-  await ensureAllowBuilds(targetDirectory);
-
-  log.success(`Created hub ${name} from ${template.name}@${template.version}.`);
-
-  if (!input.flags.install) {
-    finishHub(name, { installed: false });
+    finish(name, { installed: false, kind });
     return;
   }
 
@@ -277,68 +173,74 @@ async function createHub(options: CreateHubOptions): Promise<void> {
   } catch (error) {
     install.stop('Installing dependencies failed.');
     log.warn((error as Error).message);
-    finishHub(name, { installed: false }, 'Finished with errors.');
+    finish(name, { installed: false, kind }, 'Finished with errors.');
     return;
   }
 
-  finishHub(name, { installed: true });
-}
+  const verification = await verifyDriver(targetDirectory);
 
-/** Prints the existing build/start instructions for a legacy Hub template. */
-function finishHub(
-  name: string,
-  state: { installed: boolean },
-  message = 'Done.',
-): void {
-  const steps = [`cd ${name}`];
-
-  if (!state.installed) {
-    steps.push('pnpm install');
+  if (verification.rebuilt) {
+    log.info('Compiled the native addon for the database driver.');
+  } else if (!verification.ok && verification.reason) {
+    log.warn(verification.reason);
   }
 
-  steps.push('pnpm build', 'pnpm start');
+  // Runs only after the install, because the sync reads NocoBase packages out of `node_modules`.
+  const skills = spinner();
+  skills.start('Synchronizing NocoBase package skills');
 
-  note(steps.join('\n'), 'Next steps');
+  const synchronized = await syncSkills(targetDirectory);
 
-  log.info(
-    'Hub settings were written to .env. This template does not declare App database initialization.',
-  );
+  if (synchronized.ok) {
+    skills.stop('Synchronized NocoBase package skills.');
+  } else {
+    skills.stop('Synchronizing NocoBase package skills failed.');
+    log.warn(
+      synchronized.reason ?? 'Could not synchronize NocoBase package skills.',
+    );
+  }
 
-  outro(message);
+  finish(name, { installed: true, kind });
 }
 
 /**
  * Prints what the user has to do next, in the order they have to do it.
  *
- * Editing `config.yml` is a step rather than a trailing remark, because for postgres and mysql it is the one thing
- * standing between a generated project and a running one: the file holds stock credentials pointing at localhost, so
- * `pnpm dev` fails on connection until it is filled in. SQLite needs no server and its generated defaults already
- * work, so there the file is only worth mentioning.
+ * Nothing has to be edited first. A generated project starts on the SQLite connection its own
+ * `server/config/database.ts` declares, and `config.yml` already carries the secrets that file cannot supply, so the
+ * database is a change the user makes when they want a different one rather than a step standing between them and a
+ * running application.
+ *
+ * A hub has to be built before it can be started, unlike an app whose `pnpm dev` compiles as it serves.
  */
 function finish(
   name: string,
-  state: { installed: boolean; dialect: DatabaseDialect },
+  state: { installed: boolean; kind: TemplateKind },
   message = 'Done.',
 ): void {
-  const mustEditConfig = needsConnectionDetails(state.dialect);
   const steps = [`cd ${name}`];
-
-  if (mustEditConfig) {
-    steps.push(`edit config.yml — set your ${state.dialect} connection`);
-  }
 
   if (!state.installed) {
     steps.push('pnpm install');
   }
 
-  steps.push('pnpm dev');
+  if (state.kind === 'hub') {
+    steps.push('pnpm build', 'pnpm start');
+  } else {
+    steps.push('pnpm dev');
+  }
 
   note(steps.join('\n'), 'Next steps');
 
   log.info(
-    mustEditConfig
-      ? `config.yml contains default ${state.dialect} connection values. Update them before starting the app.`
-      : 'Database settings were written to config.yml, and the defaults work as they are.',
+    [
+      'config.yml was generated from config.example.yml, with generated secrets. It is gitignored.',
+      'The application runs on SQLite. To use another database, register its dialect in',
+      'server/config/database.ts, add the matching @nocobase/db-* package, and point the connection at it.',
+      ...(state.kind === 'hub'
+        ? ['Hub settings, including the API it proxies, are in .env.']
+        : []),
+    ].join('\n'),
   );
 
   outro(message);

@@ -14,6 +14,39 @@
 import { execFileSync } from 'node:child_process';
 
 const AGGREGATE_PATTERN = /^release(-beta)?\/\d{4}-\d{2}-\d{2}\.\d+$/u;
+// GitHub rejects bodies over 125,000 characters. Leave room below that limit;
+// UTF-16 length also conservatively counts non-BMP characters twice.
+export const RELEASE_BODY_LIMIT = 120_000;
+
+export function fitReleaseNotes(header, sections) {
+  const render = (bodies, notice = '') =>
+    `${header}${notice}\n\n${bodies.join('\n\n')}\n`;
+  const bodies = sections.map(({ full }) => full);
+  const full = render(bodies);
+  if (full.length <= RELEASE_BODY_LIMIT) return full;
+
+  const notice =
+    '\n\n_Some long package entries are linked to their full changelogs to fit GitHub’s release body limit._';
+  // Replace whole sections, largest savings first, so Markdown stays intact and
+  // the remaining entries keep their original order and complete content.
+  const candidates = sections
+    .map(({ full, compact }, index) => ({
+      index,
+      compact,
+      savings: full.length - compact.length,
+    }))
+    .filter(({ savings }) => savings > 0)
+    .sort((left, right) => right.savings - left.savings);
+  let length = full.length + notice.length;
+  for (const { index, compact, savings } of candidates) {
+    bodies[index] = compact;
+    length -= savings;
+    if (length <= RELEASE_BODY_LIMIT) return render(bodies, notice);
+  }
+  throw new Error(
+    `Release notes exceed ${RELEASE_BODY_LIMIT} characters even with compact changelog links`,
+  );
+}
 
 function git(args) {
   return execFileSync('git', args, {
@@ -151,6 +184,46 @@ export function resolveDirectories(commit, directories, { cwd } = {}) {
   return byName;
 }
 
+// Changesets can repeat a commit once per dependency change. Collapse each
+// generated run into one summary, keeping every distinct commit and leaving
+// the following dependency/version list attached to that summary.
+export function deduplicateDependencyUpdates(section) {
+  const output = [];
+  const commits = new Set();
+  let fence;
+  const flush = () => {
+    if (commits.size === 0) return;
+    output.push(`- Updated dependencies ${[...commits].join(', ')}`);
+    commits.clear();
+  };
+
+  for (const line of section.split('\n')) {
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(line);
+    if (fence) {
+      if (
+        marker &&
+        marker[1][0] === fence[0] &&
+        marker[1].length >= fence.length &&
+        marker[2].trim() === ''
+      ) {
+        fence = undefined;
+      }
+      output.push(line);
+      continue;
+    }
+    if (marker) fence = marker[1];
+    const update = /^- Updated dependencies (\[[\da-f]+\])$/u.exec(line);
+    if (update) {
+      commits.add(update[1]);
+    } else {
+      flush();
+      output.push(line);
+    }
+  }
+  flush();
+  return output.join('\n');
+}
+
 export function renderReleaseNotes(tag) {
   const { batch, channel } = parseAggregateTag(tag);
   // The aggregate tag and the release branch share a name while a release is in
@@ -188,7 +261,7 @@ export function renderReleaseNotes(tag) {
     ...packages.map((pkg) => `| \`${pkg.name}\` | \`${pkg.version}\` |`),
   ];
 
-  for (const pkg of packages) {
+  const sections = packages.map((pkg) => {
     const directory = directories.get(pkg.name);
     const changelog = directory
       ? gitOrUndefined(['show', `${commit}:packages/${directory}/CHANGELOG.md`])
@@ -196,13 +269,20 @@ export function renderReleaseNotes(tag) {
     const section = changelog
       ? extractChangelogSection(changelog, pkg.version)
       : undefined;
-    lines.push('', `## \`${pkg.name}@${pkg.version}\``, '');
-    lines.push(
-      section ?? '_No changelog entry was recorded for this version._',
-    );
-  }
+    const heading = `## \`${pkg.name}@${pkg.version}\``;
+    const full = `${heading}\n\n${section ? deduplicateDependencyUpdates(section) : '_No changelog entry was recorded for this version._'}`;
+    const changelogUrl = directory
+      ? `https://github.com/nocobase/nocobase3/blob/${commit}/packages/${directory}/CHANGELOG.md#${pkg.version.replaceAll('.', '')}`
+      : undefined;
+    return {
+      full,
+      compact: changelogUrl
+        ? `${heading}\n\n[Full changelog for this version](${changelogUrl})`
+        : full,
+    };
+  });
 
-  return `${lines.join('\n')}\n`;
+  return fitReleaseNotes(lines.join('\n'), sections);
 }
 
 export function formatPackageList(tag) {

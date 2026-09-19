@@ -1,4 +1,5 @@
 import { createMiddleware } from 'langchain';
+import type { AgentMiddleware } from 'langchain';
 import type { AgentProviders, PreparedAgentContext } from '../types.js';
 import { conversationMiddleware } from './conversation.js';
 import { skillToolBindingMiddleware } from './skill-tools.js';
@@ -13,42 +14,45 @@ const namedNoopMiddleware = (name: string) => createMiddleware({ name });
 export function buildStandardAgentMiddleware(
   providers: AgentProviders,
   prepared: PreparedAgentContext,
-) {
+): AgentMiddleware[] {
   const { features } = providers;
   return [
-    features.messageNormalization
-      ? namedNoopMiddleware('MessageNormalizationMiddleware')
-      : namedNoopMiddleware('MessageNormalizationMiddleware'),
     features.contextEnrichment
       ? namedNoopMiddleware('ContextEnrichmentMiddleware')
       : namedNoopMiddleware('ContextEnrichmentMiddleware'),
     features.skills
-      ? skillToolBindingMiddleware(providers.tools, {
-          baseToolNames: Array.from(prepared.baseToolNames),
-        })
+      ? skillToolBindingMiddleware(prepared.discoveredTools)
       : namedNoopMiddleware('SkillToolBindingMiddleware'),
     features.tools && features.toolInteraction
       ? toolInteractionMiddleware(
-          providers.conversation,
-          providers.tools,
-          prepared.sourceTools,
+          providers.context.currentConversation(),
+          prepared.discoveredTools.tools,
         )
       : namedNoopMiddleware('ToolInteractionMiddleware'),
     features.tools && features.toolCallStatus
-      ? toolCallStatusMiddleware(providers.conversation)
+      ? toolCallStatusMiddleware(
+          providers.conversation,
+          providers.context.currentConversation(),
+          providers.logger,
+        )
       : namedNoopMiddleware('ToolCallStatusMiddleware'),
     features.conversationPersistence
-      ? conversationMiddleware(providers, {
-          providerName: prepared.providerName,
-          provider: prepared.provider,
-          llmService: prepared.llmService,
-          model: prepared.model,
-          messageId: prepared.metadata.messageId as string | undefined,
-          agentThread: prepared.thread,
-        })
+      ? conversationMiddleware(
+          providers,
+          {
+            providerName: prepared.providerName,
+            provider: prepared.provider,
+            llmService: prepared.llmService,
+            model: prepared.model,
+            messageId: prepared.metadata.messageId as string | undefined,
+            agentThread: prepared.thread,
+            toolMap: prepared.discoveredTools.tools,
+          },
+          providers.logger,
+        )
       : namedNoopMiddleware('ConversationMiddleware'),
     features.toolCallSanitizer
-      ? toolCallSanitizerMiddleware({ logger: providers.conversation.logger })
+      ? toolCallSanitizerMiddleware({ logger: providers.logger })
       : namedNoopMiddleware('ToolCallSanitizerMiddleware'),
   ];
 }

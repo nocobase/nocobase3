@@ -12,6 +12,7 @@ import type {
   ForeignKeyConstraintDefinition,
   IndexDefinition,
   NamingOptions,
+  OptimisticLockDefinition,
   PrimaryConstraintDefinition,
   QueryViewDefinition,
   ReferentialAction,
@@ -29,15 +30,6 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     indexes: [],
     constraints: [],
   };
-
-  tableName(name: string): this {
-    this.definition.tableName = name;
-    return this;
-  }
-
-  mapToTable(name: string): this {
-    return this.tableName(name);
-  }
 
   naming(options: NamingOptions): this {
     this.definition.naming = { ...(this.definition.naming ?? {}), ...options };
@@ -59,13 +51,22 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     return this;
   }
 
+  optimisticLock(field: string): this {
+    const optimisticLock: OptimisticLockDefinition = {
+      field,
+      strategy: 'increment',
+    };
+    this.definition.optimisticLock = optimisticLock;
+    return this;
+  }
+
   field(field: AnyFieldDefinition): FieldDefinitionBuilder {
     const builder = new FluentFieldDefinitionBuilder(this, field);
     this.pushField(builder);
     return builder;
   }
 
-  increments(name = 'id'): FieldDefinitionBuilder {
+  increments(name: string): FieldDefinitionBuilder {
     return this.field({
       name,
       type: 'increments',
@@ -95,6 +96,25 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     return this.field({ name, type: 'string', ...options });
   }
 
+  char(
+    name: string,
+    options: Partial<FieldDefinition> & { length: number },
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'char' });
+  }
+
+  enum(
+    name: string,
+    options: Partial<FieldDefinition> & { values: readonly string[] },
+  ): FieldDefinitionBuilder {
+    return this.field({
+      ...options,
+      name,
+      type: 'enum',
+      values: [...options.values],
+    });
+  }
+
   text(
     name: string,
     options: Partial<FieldDefinition> = {},
@@ -121,6 +141,41 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
     options: Partial<FieldDefinition> = {},
   ): FieldDefinitionBuilder {
     return this.field({ name, type: 'datetime', ...options });
+  }
+
+  float(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'float' });
+  }
+
+  double(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'double' });
+  }
+
+  date(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'date' });
+  }
+
+  time(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'time' });
+  }
+
+  datetimeTz(
+    name: string,
+    options: Partial<FieldDefinition> = {},
+  ): FieldDefinitionBuilder {
+    return this.field({ ...options, name, type: 'datetimeTz' });
   }
 
   json(
@@ -244,6 +299,9 @@ export class FluentCollectionDefinitionBuilder implements CollectionDefinitionBu
       constraints: this.definition.constraints?.map((constraint) => ({
         ...constraint,
       })),
+      optimisticLock: this.definition.optimisticLock
+        ? { ...this.definition.optimisticLock }
+        : undefined,
     });
   }
 
@@ -271,6 +329,16 @@ export class FluentCollectionAlterBuilder
     addConstraints: [],
     dropConstraints: [],
   };
+
+  override optimisticLock(field: string): this {
+    this.changes.optimisticLock = { field, strategy: 'increment' };
+    return this;
+  }
+
+  clearOptimisticLock(): this {
+    this.changes.optimisticLock = null;
+    return this;
+  }
 
   override primary(
     fields: string | string[],
@@ -459,15 +527,6 @@ export class FluentFieldDefinitionBuilder implements FieldDefinitionBuilder {
     return this;
   }
 
-  columnName(name: string): this {
-    this.definition.columnName = name;
-    return this;
-  }
-
-  mapToColumn(name: string): this {
-    return this.columnName(name);
-  }
-
   title(title: string): this {
     this.definition.title = title;
     return this;
@@ -524,18 +583,6 @@ export class FluentRelationFieldBuilder
   ) {
     super(collection, definition);
     this.definition = definition;
-  }
-
-  override columnName(): never {
-    throw new Error(
-      'Relation fields do not support columnName(). Define a local foreign key field and reference it with foreignKey().',
-    );
-  }
-
-  override mapToColumn(): never {
-    throw new Error(
-      'Relation fields do not support mapToColumn(). Define a local foreign key field and reference it with foreignKey().',
-    );
   }
 
   override references(): never {

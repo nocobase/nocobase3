@@ -16,6 +16,7 @@ export interface DatabaseCapabilities {
 export interface SchemaAdapter {
   dialect?: string;
   capabilities?: DatabaseCapabilities;
+  assertExecutable?(operations: SchemaOperation[]): void;
   execute(operations: SchemaOperation[]): Promise<void>;
   compile?(operations: SchemaOperation[]): Promise<string[]>;
 }

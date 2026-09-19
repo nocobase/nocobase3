@@ -1,17 +1,45 @@
-import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/index.js';
-import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import { CollectionBuilder } from '../../../src/collection/builder/builder.js';
+import type { BuilderExecOptions } from '../../../src/index.js';
 import { RecordingSchemaAdapter } from './helpers.js';
 
 describe('CollectionBuilder apply and dryRun', () => {
+  it('does not expose a metadata synchronization switch', () => {
+    expectTypeOf<
+      Extract<keyof BuilderExecOptions, 'syncMetadata'>
+    >().toEqualTypeOf<never>();
+  });
+
+  it.each([
+    { syncMetadata: false, dryRun: false },
+    { syncMetadata: true, dryRun: false },
+    { syncMetadata: false, dryRun: true },
+  ])('rejects removed execution options %j before DDL', async (options) => {
+    const adapter = new RecordingSchemaAdapter();
+    const builder = new CollectionBuilder({ schemaAdapter: adapter });
+
+    // JavaScript callers and existing options objects can bypass excess-property checks.
+    await expect(
+      builder.createCollection(
+        'orders',
+        (collection) => {
+          collection.increments('id');
+          collection.json('payload');
+        },
+        options,
+      ),
+    ).rejects.toThrow('CollectionBuilder no longer supports syncMetadata');
+
+    expect(adapter.executed).toEqual([]);
+    await expect(builder.hasCollection('orders')).resolves.toBe(false);
+  });
+
   it('does not execute schema operations or metadata sync during dryRun', async () => {
     const adapter = new RecordingSchemaAdapter([
       'alter table orders add column paid_at timestamp',
     ]);
-    const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
       schemaAdapter: adapter,
-      metadataStore,
     });
 
     const result = await builder.apply(
@@ -35,15 +63,12 @@ describe('CollectionBuilder apply and dryRun', () => {
     expect(result.sql).toEqual([
       'alter table orders add column paid_at timestamp',
     ]);
-    expect(await metadataStore.getCollection('orders')).toBeUndefined();
   });
 
-  it('executes schema operations and syncs metadata by default', async () => {
+  it('executes schema operations by default', async () => {
     const adapter = new RecordingSchemaAdapter();
-    const metadataStore = new InMemoryCollectionMetadataStore();
     const builder = new CollectionBuilder({
       schemaAdapter: adapter,
-      metadataStore,
     });
 
     await builder.apply([
@@ -68,10 +93,6 @@ describe('CollectionBuilder apply and dryRun', () => {
       table: {
         name: 'orders',
       },
-    });
-    expect(await metadataStore.getCollection('orders')).toMatchObject({
-      name: 'orders',
-      fields: [{ name: 'id' }],
     });
   });
 

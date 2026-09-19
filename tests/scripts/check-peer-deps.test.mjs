@@ -53,31 +53,28 @@ test('reports an identity-sensitive package listed under dependencies', () => {
   assert.match(violations[0].message, /must be a peerDependency/u);
 });
 
-test('accepts an identity-sensitive package declared as a peer with a matching devDependency', () => {
+test('accepts an identity-sensitive package declared as a peer', () => {
   const violations = findViolations({
     name: '@nocobase/app-plugin-example',
     peerDependencies: { '@nocobase/app-server': 'workspace:^' },
-    devDependencies: { '@nocobase/app-server': 'workspace:*' },
   });
 
   assert.deepEqual(violations, []);
 });
 
-// Without the devDependency, development and tests float across the wide peer range instead of pinning this
-// repository's copy.
-test('reports a workspace peer that has no devDependency', () => {
-  const violations = findViolations({
+// A matching devDependency is neither required nor rejected. pnpm resolves a `workspace:^` peer to this
+// repository's copy on its own, so the second declaration changed nothing and is no longer asked for.
+test('accepts a workspace peer whether or not a devDependency accompanies it', () => {
+  const withDev = findViolations({
     name: '@nocobase/app-plugin-example',
     peerDependencies: { '@nocobase/app-server': 'workspace:^' },
+    devDependencies: { '@nocobase/app-server': 'workspace:*' },
   });
 
-  assert.equal(violations.length, 1);
-  assert.equal(violations[0].kind, 'missing-dev');
+  assert.deepEqual(withDev, []);
 });
 
-// Third-party peers such as react usually resolve through another dependency, so demanding a direct devDependency for
-// each one would report noise rather than a defect.
-test('does not demand a devDependency for third-party peers', () => {
+test('accepts a third-party peer', () => {
   const violations = findViolations({
     name: '@nocobase/app-plugin-example',
     peerDependencies: { react: '^19.0.0' },

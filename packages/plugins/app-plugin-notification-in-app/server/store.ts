@@ -1,11 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import {
-  databaseTime,
-  timestamp,
-  optionalTimestamp,
-  databaseTimezone,
-} from './database-time.js';
-import type { DatabaseDialect, DatabaseManager, Row } from '@nocobase/db';
+import type { DatabaseManager, Row } from '@nocobase/db';
 import type { InAppItem, InAppMessage } from './types.js';
 
 export interface InAppPageCursor {
@@ -132,15 +126,12 @@ interface ItemRow extends Row {
   title?: string;
   body: string;
   actionUrl?: string;
-  readAt?: string | Date | null;
-  createdAt: string | Date;
-  updatedAt: string | Date;
+  readAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export class DatabaseInAppStore implements InAppStore {
-  private time<T extends string | null | undefined>(value: T): T | Date {
-    return databaseTime(value, this.database.connection().dialect);
-  }
   constructor(private readonly database: DatabaseManager) {}
   async deliver(input: {
     readonly deliveryId: string;
@@ -164,7 +155,7 @@ export class DatabaseInAppStore implements InAppStore {
       await this.database
         .query()
         .insertInto<ItemRow>('notificationInAppItems')
-        .values(toRow(item, this.database.connection().dialect))
+        .values(toRow(item))
         .execute();
     } catch (error) {
       const existing = await this.database
@@ -173,11 +164,7 @@ export class DatabaseInAppStore implements InAppStore {
         .selectAll()
         .where('deliveryId', '=', input.deliveryId)
         .executeTakeFirst<ItemRow>();
-      if (existing)
-        return fromRow(
-          existing,
-          await databaseTimezone(this.database.connection()),
-        );
+      if (existing) return fromRow(existing);
       throw error;
     }
     return item;
@@ -200,27 +187,24 @@ export class DatabaseInAppStore implements InAppStore {
     if (input.before)
       query = query.where((builder) =>
         builder.or([
-          builder('createdAt', '<', this.time(input.before?.createdAt)),
+          builder('createdAt', '<', input.before?.createdAt),
           builder.and([
-            builder('createdAt', '=', this.time(input.before?.createdAt)),
+            builder('createdAt', '=', input.before?.createdAt),
             builder('id', '<', input.before?.id),
           ]),
         ]),
       );
-    const timezone = await databaseTimezone(this.database.connection());
-    return (await query.execute<ItemRow>()).map((row) =>
-      fromRow(row, timezone),
-    );
+    return (await query.execute<ItemRow>()).map(fromRow);
   }
   async countUnread(userId: string): Promise<number> {
     const rows = await this.database
       .query()
       .selectFrom<ItemRow>('notificationInAppItems')
-      .selectAll()
+      .select(({ fn }) => [fn.countAll<number>().as('count')])
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
-      .execute<ItemRow>();
-    return rows.length;
+      .executeTakeFirst<{ count: number | string }>();
+    return Number(rows?.count ?? 0);
   }
   async update(input: {
     readonly id: string;
@@ -244,19 +228,13 @@ export class DatabaseInAppStore implements InAppStore {
         .where('userId', '=', input.userId)
         .execute();
       return result.deletedCount === 1
-        ? {
-            ...fromRow(
-              current,
-              await databaseTimezone(this.database.connection()),
-            ),
-            updatedAt: now,
-          }
+        ? { ...fromRow(current), updatedAt: now }
         : undefined;
     }
     const set =
       input.action === 'read'
-        ? { readAt: this.time(now), updatedAt: this.time(now) }
-        : { readAt: null, updatedAt: this.time(now) };
+        ? { readAt: now, updatedAt: now }
+        : { readAt: null, updatedAt: now };
     const result = await this.database
       .query()
       .updateTable<ItemRow>('notificationInAppItems')
@@ -271,17 +249,15 @@ export class DatabaseInAppStore implements InAppStore {
       .selectAll()
       .where('id', '=', input.id)
       .executeTakeFirst<ItemRow>();
-    return row
-      ? fromRow(row, await databaseTimezone(this.database.connection()))
-      : undefined;
+    return row ? fromRow(row) : undefined;
   }
   async markAllRead(userId: string): Promise<number> {
     const result = await this.database
       .query()
       .updateTable<ItemRow>('notificationInAppItems')
       .set({
-        readAt: this.time(new Date().toISOString()),
-        updatedAt: this.time(new Date().toISOString()),
+        readAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       .where('userId', '=', userId)
       .where('readAt', 'is', null)
@@ -293,7 +269,7 @@ export class DatabaseInAppStore implements InAppStore {
 export function createInAppStore(database?: DatabaseManager): InAppStore {
   return database ? new DatabaseInAppStore(database) : new MemoryInAppStore();
 }
-function fromRow(row: ItemRow, timezone?: string): InAppItem {
+function fromRow(row: ItemRow): InAppItem {
   return {
     id: row.id,
     deliveryId: row.deliveryId,
@@ -302,12 +278,12 @@ function fromRow(row: ItemRow, timezone?: string): InAppItem {
     title: row.title,
     body: row.body,
     actionUrl: row.actionUrl,
-    readAt: optionalTimestamp(row.readAt, timezone),
-    createdAt: timestamp(row.createdAt, timezone),
-    updatedAt: timestamp(row.updatedAt, timezone),
+    readAt: row.readAt ?? undefined,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
   };
 }
-function toRow(item: InAppItem, dialect: DatabaseDialect): ItemRow {
+function toRow(item: InAppItem): ItemRow {
   return {
     id: item.id,
     deliveryId: item.deliveryId,
@@ -316,9 +292,9 @@ function toRow(item: InAppItem, dialect: DatabaseDialect): ItemRow {
     title: item.title,
     body: item.body,
     actionUrl: item.actionUrl,
-    readAt: databaseTime(item.readAt, dialect),
-    createdAt: databaseTime(item.createdAt, dialect),
-    updatedAt: databaseTime(item.updatedAt, dialect),
+    readAt: item.readAt,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
   };
 }
 

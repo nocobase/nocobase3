@@ -1,3 +1,4 @@
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import {
   Card,
   CardContent,
@@ -26,6 +27,10 @@ const isBusinessEmployee = (username: string) =>
   !['nathan', 'dara'].includes(username.toLowerCase());
 
 export function PageContextPromptGenerator() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const { employees } = useAI();
   const availableEmployees = employees.filter((employee) =>
     isBusinessEmployee(employee.username),
@@ -163,11 +168,19 @@ Implementation requirements
     <div className='grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]'>
       <Card className='gap-0 py-0'>
         <CardHeader className='border-b py-4'>
-          <CardTitle>Scene settings</CardTitle>
+          <CardTitle>
+            {translateDemo('demo.sceneSettings', {
+              defaultValue: 'Scene settings',
+            })}
+          </CardTitle>
         </CardHeader>
         <CardContent className='space-y-5 py-5'>
           <div className='space-y-2'>
-            <Label htmlFor='context-generator-scene-title'>Scene title</Label>
+            <Label htmlFor='context-generator-scene-title'>
+              {translateDemo('demo.sceneTitle', {
+                defaultValue: 'Scene title',
+              })}
+            </Label>
             <Input
               id='context-generator-scene-title'
               value={sceneTitle}
@@ -176,7 +189,9 @@ Implementation requirements
           </div>
           <div className='space-y-2'>
             <Label htmlFor='context-generator-scene-brief'>
-              Business scene
+              {translateDemo('demo.businessScene', {
+                defaultValue: 'Business scene',
+              })}
             </Label>
             <Textarea
               id='context-generator-scene-brief'
@@ -187,7 +202,11 @@ Implementation requirements
           </div>
 
           <div className='space-y-2'>
-            <Label>AI employee</Label>
+            <Label>
+              {translateDemo('demo.aiEmployee', {
+                defaultValue: 'AI employee',
+              })}
+            </Label>
             <Select
               value={employeeUsername}
               onValueChange={(value) => value && setEmployeeUsername(value)}
@@ -209,7 +228,9 @@ Implementation requirements
           </div>
 
           <div className='space-y-2'>
-            <Label htmlFor='context-generator-task-title'>Task title</Label>
+            <Label htmlFor='context-generator-task-title'>
+              {translateDemo('demo.taskTitle', { defaultValue: 'Task title' })}
+            </Label>
             <Input
               id='context-generator-task-title'
               value={taskTitle}
@@ -217,7 +238,11 @@ Implementation requirements
             />
           </div>
           <div className='space-y-2'>
-            <Label htmlFor='context-generator-task-message'>Task message</Label>
+            <Label htmlFor='context-generator-task-message'>
+              {translateDemo('demo.taskMessage', {
+                defaultValue: 'Task message',
+              })}
+            </Label>
             <Textarea
               id='context-generator-task-message'
               value={taskMessage}
@@ -227,9 +252,13 @@ Implementation requirements
           </div>
           <label className='flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5'>
             <span>
-              <span className='block text-sm font-medium'>Auto send</span>
+              <span className='block text-sm font-medium'>
+                {translateDemo('demo.autoSend', { defaultValue: 'Auto send' })}
+              </span>
               <span className='block text-xs text-muted-foreground'>
-                Otherwise fill the composer for review.
+                {translateDemo('demo.sceneAutoSendHint', {
+                  defaultValue: 'Otherwise fill the composer for review.',
+                })}
               </span>
             </span>
             <Switch
@@ -240,13 +269,19 @@ Implementation requirements
           </label>
           {pattern === 'manual' ? (
             <p className='-mt-3 text-xs leading-5 text-muted-foreground'>
-              Manual Pick keeps the message in the composer so context can be
-              selected before sending.
+              {translateDemo('demo.manualPickHint', {
+                defaultValue:
+                  'Manual Pick keeps the message in the composer so context can be selected before sending.',
+              })}
             </p>
           ) : null}
 
           <div className='space-y-2'>
-            <Label>Context integration</Label>
+            <Label>
+              {translateDemo('demo.contextIntegration', {
+                defaultValue: 'Context integration',
+              })}
+            </Label>
             <Select
               value={pattern}
               onValueChange={(value) =>
@@ -257,17 +292,37 @@ Implementation requirements
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value='shortcut'>Shortcut task</SelectItem>
-                <SelectItem value='preset'>Conversation preset task</SelectItem>
-                <SelectItem value='scope'>Scope inheritance</SelectItem>
-                <SelectItem value='manual'>Manual Pick</SelectItem>
+                <SelectItem value='shortcut'>
+                  {translateDemo('demo.shortcutTask', {
+                    defaultValue: 'Shortcut task',
+                  })}
+                </SelectItem>
+                <SelectItem value='preset'>
+                  {translateDemo('demo.conversationPresetTask', {
+                    defaultValue: 'Conversation preset task',
+                  })}
+                </SelectItem>
+                <SelectItem value='scope'>
+                  {translateDemo('demo.scopeInheritance', {
+                    defaultValue: 'Scope inheritance',
+                  })}
+                </SelectItem>
+                <SelectItem value='manual'>
+                  {translateDemo('demo.manualPick', {
+                    defaultValue: 'Manual Pick',
+                  })}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-1'>
             <div className='space-y-2'>
-              <Label htmlFor='context-generator-id'>Context id</Label>
+              <Label htmlFor='context-generator-id'>
+                {translateDemo('demo.contextId', {
+                  defaultValue: 'Context id',
+                })}
+              </Label>
               <Input
                 id='context-generator-id'
                 value={contextId}
@@ -275,7 +330,11 @@ Implementation requirements
               />
             </div>
             <div className='space-y-2'>
-              <Label htmlFor='context-generator-title'>Context title</Label>
+              <Label htmlFor='context-generator-title'>
+                {translateDemo('demo.contextTitle', {
+                  defaultValue: 'Context title',
+                })}
+              </Label>
               <Input
                 id='context-generator-title'
                 value={contextTitle}
@@ -285,7 +344,11 @@ Implementation requirements
           </div>
 
           <div className='space-y-2'>
-            <Label>Page capability</Label>
+            <Label>
+              {translateDemo('demo.pageCapability', {
+                defaultValue: 'Page capability',
+              })}
+            </Label>
             <Select
               value={capability}
               onValueChange={(value) =>
@@ -296,12 +359,20 @@ Implementation requirements
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value='context'>Context only</SelectItem>
+                <SelectItem value='context'>
+                  {translateDemo('demo.contextOnly', {
+                    defaultValue: 'Context only',
+                  })}
+                </SelectItem>
                 <SelectItem value='form-filler'>
-                  Built-in Form filler
+                  {translateDemo('demo.formFiller', {
+                    defaultValue: 'Built-in Form filler',
+                  })}
                 </SelectItem>
                 <SelectItem value='custom-tool'>
-                  Custom frontend Tool
+                  {translateDemo('demo.frontendTool', {
+                    defaultValue: 'Custom frontend Tool',
+                  })}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -310,7 +381,11 @@ Implementation requirements
           {capability === 'custom-tool' ? (
             <div className='space-y-4 rounded-lg border p-3'>
               <div className='space-y-2'>
-                <Label htmlFor='context-generator-tool-name'>Tool name</Label>
+                <Label htmlFor='context-generator-tool-name'>
+                  {translateDemo('demo.toolName', {
+                    defaultValue: 'Tool name',
+                  })}
+                </Label>
                 <Input
                   id='context-generator-tool-name'
                   value={toolName}
@@ -319,7 +394,9 @@ Implementation requirements
               </div>
               <div className='space-y-2'>
                 <Label htmlFor='context-generator-tool-action'>
-                  Business action
+                  {translateDemo('demo.businessAction', {
+                    defaultValue: 'Business action',
+                  })}
                 </Label>
                 <Textarea
                   id='context-generator-tool-action'
@@ -329,7 +406,9 @@ Implementation requirements
                 />
               </div>
               <div className='space-y-2'>
-                <Label>Permission</Label>
+                <Label>
+                  {translateDemo('Permission', { defaultValue: 'Permission' })}
+                </Label>
                 <Select
                   value={toolPermission}
                   onValueChange={(value) =>
@@ -351,8 +430,13 @@ Implementation requirements
       </Card>
 
       <PromptCard
-        title='Complete page context scene prompt'
-        description='Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene.'
+        title={translateDemo('demo.scenePrompt', {
+          defaultValue: 'Complete page context scene prompt',
+        })}
+        description={translateDemo('demo.scenePromptHint', {
+          defaultValue:
+            'Copy this prompt to generate the business page, AI interaction, context binding, and working conversation as one complete scene.',
+        })}
         prompt={prompt}
       />
     </div>

@@ -17,12 +17,12 @@ vi.mock('../client/components/notification-in-app-inbox.js', () => ({
 import NotificationInAppDevPage from '../client/dev/notification-in-app-page.js';
 
 describe('in-app notification development page', () => {
-  it('uses the standard surface page spacing', () => {
+  it('uses the default responsive PageContainer spacing', () => {
     render(<NotificationInAppDevPage />);
 
     const page = screen
       .getByRole('heading', { name: 'Message center' })
       .closest('section');
-    expect(page).toHaveClass('px-6', 'py-10');
+    expect(page).toHaveClass('w-full', 'space-y-6', 'p-6', 'md:p-8');
   });
 });

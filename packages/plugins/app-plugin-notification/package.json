@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification",
   "displayName": "Notification App Plugin",
   "description": "Provides the application notification runtime, storage, delivery, and logs.",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.11",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -32,11 +32,7 @@
       "types": "./client/routes.ts",
       "import": "./client/routes.ts"
     },
-    "./package.json": "./package.json",
-    "./server/audit": {
-      "types": "./server/audit.ts",
-      "import": "./server/audit.ts"
-    }
+    "./package.json": "./package.json"
   },
   "nocobase": {
     "registry": {
@@ -74,15 +70,12 @@
         "types": "./dist/client/routes.d.ts",
         "import": "./dist/client/routes.js"
       },
-      "./package.json": "./package.json",
-      "./server/audit": {
-        "types": "./dist/server/audit.d.ts",
-        "import": "./dist/server/audit.js"
-      }
+      "./package.json": "./package.json"
     }
   },
   "files": [
     "dist",
+    "CHANGELOG.md",
     "README.md",
     "docs",
     "skills",
@@ -92,7 +85,7 @@
   ],
   "scripts": {
     "clean": "node ./scripts/clean-dist.mjs",
-    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
+    "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json && nocobase-db-manifests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "registry:build": "node ../../../scripts/registry.mjs build --package .",
@@ -119,30 +112,24 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/queue": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
+    "lucide-react": "catalog:",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "catalog:"
   },
   "devDependencies": {
-    "@nocobase/app-client": "workspace:*",
-    "@nocobase/app-plugin-authentication": "workspace:*",
-    "@nocobase/app-plugin-authorization": "workspace:*",
-    "@nocobase/app-server": "workspace:*",
-    "@nocobase/db": "workspace:*",
+    "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
-    "@nocobase/i18n": "workspace:*",
-    "@nocobase/queue": "workspace:*",
-    "@nocobase/service-provider": "workspace:*",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "eslint": "catalog:",
-    "lucide-react": "^0.487.0",
     "prettier": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/db-mysql": "workspace:*",
+    "@nocobase/db-oracle": "workspace:*"
   }
 }

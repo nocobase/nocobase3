@@ -2,9 +2,6 @@
 // client/plugins.ts; it keeps every implementation entry behind a dynamic import, so importing this module costs the
 // application only the descriptor.
 export { default } from './plugin.js';
-
-export {
-  ClientAccessResolvers,
-  clientAccessResolversToken,
-} from './access-resolvers.js';
-export type { ClientAccessResolver } from './access-resolvers.js';
+export * from './authorization-client.js';
+export * from './tokens.js';
+export { useAuthorizationRevision } from './use-authorization-revision.js';

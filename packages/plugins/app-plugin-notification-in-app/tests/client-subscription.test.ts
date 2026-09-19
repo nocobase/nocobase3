@@ -1,9 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  AppClient,
-  RealtimeClient,
-  RealtimeListener,
-} from '@nocobase/app-client';
+import type { RealtimeClient, RealtimeListener } from '@nocobase/app-client';
 
 import { IN_APP_NOTIFICATION_REALTIME_TOPIC } from '../shared/realtime.js';
 import {
@@ -29,10 +25,10 @@ describe('in-app notification Client subscription', () => {
         openListener = listener;
         return unsubscribeOpen;
       }),
-      refreshSession: vi.fn(),
+      reconnect: vi.fn(),
+      onError: vi.fn(),
       close: vi.fn(),
     };
-    const client = createClient(realtime);
     const target: InboxFocusTarget = {
       addEventListener: vi.fn((_type, listener) => {
         focusListener = listener;
@@ -41,7 +37,7 @@ describe('in-app notification Client subscription', () => {
     };
     const refresh = vi.fn();
 
-    const cleanup = subscribeToInboxInvalidations(client, target, refresh);
+    const cleanup = subscribeToInboxInvalidations(realtime, target, refresh);
 
     openListener?.();
     eventListener?.({
@@ -67,11 +63,3 @@ describe('in-app notification Client subscription', () => {
     expect(unsubscribeOpen).toHaveBeenCalledOnce();
   });
 });
-
-function createClient(realtime: RealtimeClient): AppClient {
-  return {
-    realtime,
-    request: vi.fn(),
-    stream: vi.fn(),
-  };
-}

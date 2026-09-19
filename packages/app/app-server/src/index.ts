@@ -1,6 +1,5 @@
 export * from './application/index.js';
 export * from './config/index.js';
-export * from './core-configs.js';
 export * from './database/index.js';
 export * from './caching/index.js';
 export * from './drive/index.js';
@@ -17,4 +16,3 @@ export * from './router/index.js';
 export * from './runtime/index.js';
 export * from './spa/index.js';
 export * from './support/index.js';
-export * from './websocket.js';

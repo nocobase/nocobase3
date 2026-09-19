@@ -7,7 +7,4 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { Context } from '@nocobase/actions';
-import { defineTools } from '@nocobase/ai-employee';
-
 export const IGNORE = true;

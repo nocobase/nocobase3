@@ -1,4 +1,5 @@
 import { databaseManagerToken } from '@nocobase/db';
+import { userAdministrationServiceToken } from '@nocobase/app-plugin-authentication';
 import { notificationExtensionRegistryToken } from '@nocobase/app-plugin-notification';
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -55,9 +56,16 @@ export class InAppNotificationProvider<
     if (!container.has(notificationExtensionRegistryToken)) return;
     const registry = container.resolve(notificationExtensionRegistryToken);
     const store = container.resolve(inAppNotificationStoreToken);
-    registry
-      .registerChannel(createInAppChannelDefinition())
-      .registerProvider('in-app', createDatabaseProviderDefinition({ store }));
+    const users = container.resolve(userAdministrationServiceToken);
+    registry.registerChannel(createInAppChannelDefinition()).registerProvider(
+      'in-app',
+      createDatabaseProviderDefinition({
+        store,
+        async recipientExists(userId) {
+          return Boolean(await users.get(userId));
+        },
+      }),
+    );
   }
 
   public override shutdown(): Promise<void> {

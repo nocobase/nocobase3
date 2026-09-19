@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { DatabaseManager, QueryAdapter, Row } from '@nocobase/db';
+import type { DatabaseManager } from '@nocobase/db';
 import type { Knex } from 'knex';
-import { WORKFLOW_COLLECTIONS } from '../collections/names.js';
+import { workflowStoreOf, type WorkflowStore } from '../collections/store.js';
 import type { WorkflowFlatIr } from '../instructions/definition.js';
 import {
   computeWorkflowArtifactDigest,
@@ -16,7 +16,7 @@ import {
 } from './source-materializer.js';
 import { validateWorkflowFlatIrTopology } from '../engine/node-results.js';
 import type { WorkflowId } from '../engine/types.js';
-import { asId } from '../engine/utils.js';
+import { asId, asIdFilter } from '../engine/utils.js';
 
 export interface WorkflowPublishLock {
   release(): Promise<void>;
@@ -28,7 +28,7 @@ export interface WorkflowPublisherOptions {
   beforeRegister?: (digest: string) => void | Promise<void>;
   afterMaterialize?: (
     workflowId: WorkflowId,
-    query: QueryAdapter,
+    store: WorkflowStore,
   ) => void | Promise<void>;
   onWorkflowUpdated?: (workflowId: WorkflowId) => void | Promise<void>;
 }
@@ -42,6 +42,12 @@ export interface WorkflowDistArtifact {
   digest: string;
   directory: string;
   workflow: WorkflowArtifactDefinition;
+  /**
+   * Where the definition was found. `source` only occurs in development, where
+   * the loader compiles `server/workflows` directly and the directory is the
+   * source package rather than a committed Artifact.
+   */
+  origin?: 'dist' | 'source';
 }
 export interface WorkflowDeploymentSyncResult extends WorkflowPublishResult {
   imported: boolean;
@@ -68,7 +74,8 @@ export class WorkflowPublisher {
 
   async activate(workflowId: WorkflowId): Promise<void> {
     await this.options.database.transaction(
-      (connection) => activateWorkflowSource(connection.query, workflowId),
+      (connection) =>
+        activateWorkflowSource(workflowStoreOf(connection), workflowId),
       this.options.connectionName,
     );
     await this.options.onWorkflowUpdated?.(workflowId);
@@ -85,12 +92,12 @@ export class WorkflowPublisher {
           .where({ key: artifact.key })
           .forUpdate()
           .select('id');
-        const revisions = await connection.query
-          .selectFrom(WORKFLOW_COLLECTIONS.workflows)
-          .selectAll()
-          .where('key', '=', artifact.key)
-          .orderBy('id', 'desc')
-          .execute<Row>();
+        const store = workflowStoreOf(connection);
+        const revisions = await store.workflows.findMany({
+          filter: { key: artifact.key },
+          sort: (sort) => sort.field('id').desc(),
+          select: (select) => select.fields('id', 'hash'),
+        });
         const same = revisions.find((row) => row.hash === artifact.digest);
         if (same)
           return {
@@ -105,14 +112,11 @@ export class WorkflowPublisher {
             filePath: artifact.directory,
             ir: built,
           },
-          connection.query,
+          store,
         );
-        await this.options.afterMaterialize?.(
-          materialized.workflowId,
-          connection.query,
-        );
+        await this.options.afterMaterialize?.(materialized.workflowId, store);
         await this.validateMaterialization(
-          connection.query,
+          store,
           materialized.workflowId,
           built,
         );
@@ -127,24 +131,24 @@ export class WorkflowPublisher {
   }
 
   private async validateMaterialization(
-    query: QueryAdapter,
+    store: WorkflowStore,
     workflowId: WorkflowId,
     expected: WorkflowFlatIr,
   ): Promise<void> {
-    const rows = await query
-      .selectFrom(WORKFLOW_COLLECTIONS.nodes)
-      .select([
-        'key',
-        'title',
-        'type',
-        'config',
-        'upstreamKey',
-        'downstreamKey',
-        'branchKey',
-      ])
-      .where('workflowId', '=', workflowId)
-      .orderBy('id')
-      .execute<Row>();
+    const rows = await store.nodes.findMany({
+      filter: { workflowId: asIdFilter(workflowId) },
+      sort: (sort) => sort.field('id').asc(),
+      select: (select) =>
+        select.fields(
+          'key',
+          'title',
+          'type',
+          'config',
+          'upstreamKey',
+          'downstreamKey',
+          'branchKey',
+        ),
+    });
     if (rows.length !== expected.nodes.length)
       throw new Error(
         `Materialized workflow ${String(workflowId)} node count mismatch`,
@@ -229,7 +233,13 @@ export async function discoverWorkflowDistArtifacts(
       throw new Error(
         `Workflow "${keyEntry.name}" Artifact at "${directory}" bytes do not match its digest`,
       );
-    artifacts.push({ key: keyEntry.name, digest, directory, workflow });
+    artifacts.push({
+      key: keyEntry.name,
+      digest,
+      directory,
+      workflow,
+      origin: 'dist',
+    });
   }
   return artifacts;
 }

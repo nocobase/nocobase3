@@ -4,7 +4,6 @@
 // node_modules at run time, so an upgraded plugin leaves a stale copy behind
 // until something re-runs the sync. Tying the two together means the upgrade
 // path has no second step to forget.
-import path from 'node:path';
 
 import { detectPackageManager } from './package-manager.ts';
 import { readAppPackage, resolveRegisteredPluginNames } from './skills-sync.ts';
@@ -56,10 +55,7 @@ export async function planPluginUpdate({
   plugins?: readonly string[];
 }): Promise<PluginUpdatePlan> {
   const applicationPackage = await readAppPackage(appRoot);
-  const registered = resolveRegisteredPluginNames(
-    applicationPackage,
-    path.join(appRoot, 'package.json'),
-  );
+  const registered = await resolveRegisteredPluginNames(appRoot);
 
   const packageNames =
     plugins.length > 0 ? normalizePluginPackageNames(plugins) : registered;

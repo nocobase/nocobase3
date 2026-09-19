@@ -1,12 +1,12 @@
 import { fake } from '@boringnode/queue/drivers/fake_adapter';
-import { KnexAdapter } from '@boringnode/queue/drivers/knex_adapter';
 import { redis } from '@boringnode/queue/drivers/redis_adapter';
 import { sync } from '@boringnode/queue/drivers/sync_adapter';
 import type {
   AdapterFactory,
   QueueManagerConfig,
 } from '@boringnode/queue/types';
-import type { Knex } from 'knex';
+
+import { createDatabaseQueueAdapterFactory } from './database-adapter.js';
 
 import type {
   AppQueueConfig,
@@ -112,15 +112,11 @@ async function createDatabaseAdapterFactory(
   const databaseConnection = await options.database.connect(
     connection.connection,
   );
-  const client = await databaseConnection.client<Knex>();
-
-  return () =>
-    new KnexAdapter({
-      connection: client,
-      tableName: connection.table,
-      schedulesTableName: connection.schedulesTable,
-      ownsConnection: false,
-    });
+  return createDatabaseQueueAdapterFactory({
+    connection: databaseConnection,
+    tableName: connection.table,
+    schedulesTableName: connection.schedulesTable,
+  });
 }
 
 function mapQueues(

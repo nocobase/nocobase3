@@ -7,14 +7,17 @@
 // `@nocobase/app-plugin-workflow` shipped exactly that: `server/loader/source-parser.ts` imports `typescript`, which
 // was a devDependency, so a built application crashed on start with `Cannot find package 'typescript'`.
 //
-// Client code is the opposite and is deliberately not checked. It is bundled by the consuming application's Vite
-// build, which resolves those imports at build time and inlines them, so nothing needs to resolve them again at
-// runtime. Declaring them as `dependencies` does not help the bundle and does actively cost something: the same
-// walk over `dependencies` that builds `dist/package.json` drags every one of them into the server deployment, where
-// it is installed and never required. `lucide-react` and `@xyflow/react` alone were 44 MB of exactly that.
+// Client code fails the same way, one step later. A plugin's `client/` is not bundled by the plugin — `build` is
+// `tsc`, so `dist/client/*.js` keeps its bare imports and the consuming application's Vite build resolves them.
+// That application installed the plugin from a registry and has only what the published manifest declares, so a
+// client import left in `devDependencies` fails there with `Could not resolve "…"`. `sonner` and `@xyflow/react`
+// both shipped that way.
 //
-// So the rule this enforces is narrow on purpose: server imports belong in `dependencies`, and client-only packages
-// belong in `devDependencies`. See AGENTS.md, "Declaring Dependencies by How They Are Used".
+// Neither failure reproduces here: a workspace install links every devDependency into the plugin's own
+// `node_modules`, so both resolve in development and fail only once installed from a registry.
+//
+// So the rule is one question: does someone outside this repository resolve this import? See AGENTS.md,
+// "Declaring Dependencies by How They Are Used".
 //
 // Only value imports count. `import type` and type-only named bindings are erased before anything runs.
 import { readFile, readdir, stat } from 'node:fs/promises';
@@ -48,10 +51,8 @@ const SKIPPED_DIRECTORIES = new Set([
   'fixtures',
   '__tests__',
   '__fixtures__',
-  // Bundled by the consuming application's Vite build, so its imports are resolved and inlined there and never
-  // resolved again at runtime. `registry` goes further still: it is shadcn-style source copied into an application
-  // and compiled against that application's own `react` and `@/` alias, which the plugin cannot resolve at all.
-  'client',
+  // `registry` is shadcn-style source copied into an application and compiled there against that application's own
+  // `react` and `@/` alias, which the plugin cannot resolve at all. `client` is checked — see below.
   'registry',
 ]);
 
@@ -66,7 +67,7 @@ const SKIPPED_DIRECTORIES = new Set([
  * generated from exactly one source root, and reading TypeScript keeps `import type` distinguishable from a value
  * import, which the compiled output no longer is.
  */
-const DIST_SOURCE_ROOTS = ['src', 'server', 'database', 'runtime'];
+const DIST_SOURCE_ROOTS = ['src', 'server', 'client', 'database', 'runtime'];
 
 function publishedDirectories(manifest, entries) {
   const files = manifest.files ?? [];

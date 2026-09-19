@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/index.js';
-import { InMemoryCollectionMetadataStore } from '../../../src/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/builder.js';
+import type { CollectionDefinitionInput } from '../../../src/collection/types.js';
 
 describe('CollectionBuilder createCollection', () => {
+  it('tracks collection existence after executed operations', async () => {
+    const builder = new CollectionBuilder();
+    const definition: CollectionDefinitionInput = {
+      fields: [{ name: 'id', type: 'increments' }],
+    };
+
+    await expect(builder.hasCollection('orders')).resolves.toBe(false);
+
+    await builder.createCollection('previewOrders', definition, {
+      dryRun: true,
+    });
+    await expect(builder.hasCollection('previewOrders')).resolves.toBe(false);
+
+    await builder.createCollection('orders', definition);
+    await expect(builder.hasCollection('orders')).resolves.toBe(true);
+
+    await builder.dropCollection('orders');
+    await expect(builder.hasCollection('orders')).resolves.toBe(false);
+  });
+
   it('creates a collection from fluent input', async () => {
     const builder = new CollectionBuilder();
 
@@ -10,12 +30,16 @@ describe('CollectionBuilder createCollection', () => {
       'orders',
       (collection) => {
         collection.dbSchema('public');
-        collection.tableName('sales_orders');
+        collection.naming({ tablePrefix: 'sales_' });
         collection.title('Orders');
         collection.description('Customer purchase orders.');
+        collection.integer('version').notNull();
+        collection.optimisticLock('version');
         collection.bigInt('id').primary().autoIncrement();
         collection
           .belongsTo('customer', 'customers')
+          .targetKey('id')
+          .foreignKeyType('bigInt')
           .foreignKey('customerId')
           .index();
         collection.decimal('amount', { precision: 12, scale: 2 }).notNull();
@@ -29,10 +53,16 @@ describe('CollectionBuilder createCollection', () => {
         name: 'orders',
         definition: {
           db: { schema: 'public' },
-          tableName: 'sales_orders',
+          naming: { tablePrefix: 'sales_' },
           title: 'Orders',
           description: 'Customer purchase orders.',
+          optimisticLock: { field: 'version', strategy: 'increment' },
           fields: [
+            {
+              name: 'version',
+              type: 'integer',
+              nullable: false,
+            },
             {
               name: 'id',
               type: 'bigInt',
@@ -44,6 +74,8 @@ describe('CollectionBuilder createCollection', () => {
               type: 'belongsTo',
               target: 'customers',
               foreignKey: 'customerId',
+              targetKey: 'id',
+              foreignKeyType: 'bigInt',
               index: true,
             },
             {
@@ -74,6 +106,7 @@ describe('CollectionBuilder createCollection', () => {
         name: 'sales_orders',
         db: { schema: 'public' },
         columns: [
+          { name: 'version', type: 'integer', nullable: false },
           { name: 'id', type: 'bigInt' },
           { name: 'customer_id', type: 'bigInt' },
           { name: 'amount', type: 'decimal', precision: 12, scale: 2 },
@@ -82,9 +115,96 @@ describe('CollectionBuilder createCollection', () => {
     });
   });
 
-  it('creates a collection from object input and syncs metadata by default', async () => {
-    const metadataStore = new InMemoryCollectionMetadataStore();
-    const builder = new CollectionBuilder({ metadataStore });
+  it('does not duplicate a relation index when the foreign-key field is indexed explicitly', async () => {
+    const builder = new CollectionBuilder();
+
+    const result = await builder.createCollection(
+      'productBarcodes',
+      (collection) => {
+        collection.string('productId');
+        collection
+          .belongsTo('product', 'products')
+          .targetKey('id')
+          .foreignKey('productId')
+          .foreignKeyType('string')
+          .index();
+        collection.index('productId');
+      },
+      { dryRun: true },
+    );
+
+    expect(result.schemaOperations?.[0]).toMatchObject({
+      type: 'createTable',
+      table: {
+        indexes: [
+          {
+            columns: ['product_id'],
+            name: 'idx_product_barcodes_product_id',
+          },
+        ],
+      },
+    });
+    expect(
+      (result.schemaOperations?.[0] as { table: { indexes: unknown[] } }).table
+        .indexes,
+    ).toHaveLength(1);
+  });
+
+  it('still indexes a relation that only a composite index covers', async () => {
+    const builder = new CollectionBuilder();
+
+    const result = await builder.createCollection(
+      'productBarcodes',
+      (collection) => {
+        collection.string('productId');
+        collection.datetime('scannedAt');
+        collection
+          .belongsTo('product', 'products')
+          .targetKey('id')
+          .foreignKey('productId')
+          .foreignKeyType('string')
+          .index();
+        collection.index(['productId', 'scannedAt']);
+      },
+      { dryRun: true },
+    );
+
+    // Only a single-column index on the relation's own foreign key stands in for the automatic one. A composite index
+    // leaves it in place, even when the composite already leads with that column as this one does, because whether the
+    // composite serves a lookup on the relation depends on the column staying leftmost and the collection is free to
+    // reorder it. The cost is a redundant index; the alternative is silently losing the index on a foreign key.
+    const indexes = (
+      result.schemaOperations?.[0] as {
+        table: { indexes: readonly { columns: string[] }[] };
+      }
+    ).table.indexes;
+    expect(indexes.map((index) => index.columns)).toEqual([
+      ['product_id'],
+      ['product_id', 'scanned_at'],
+    ]);
+  });
+
+  it('rejects conflicting physical index names before schema execution', async () => {
+    const builder = new CollectionBuilder();
+
+    await expect(
+      builder.createCollection(
+        'orders',
+        (collection) => {
+          collection.string('customerId');
+          collection.string('status');
+          collection.index('customerId', { name: 'orders_lookup' });
+          collection.index('status', { name: 'orders_lookup' });
+        },
+        { dryRun: true },
+      ),
+    ).rejects.toThrow(
+      'Collection "orders" defines conflicting physical indexes with the same name "orders_lookup".',
+    );
+  });
+
+  it('creates a collection from object input', async () => {
+    const builder = new CollectionBuilder();
 
     const result = await builder.createCollection('orders', {
       title: 'Orders',
@@ -124,13 +244,23 @@ describe('CollectionBuilder createCollection', () => {
         ],
       },
     });
-    expect(await metadataStore.getCollection('orders')).toMatchObject({
-      name: 'orders',
-      title: 'Orders',
-      fields: [
-        { name: 'id', type: 'increments' },
-        { name: 'amount', title: 'Amount' },
-      ],
+  });
+
+  it('rejects invalid optimistic lock definitions before execution', async () => {
+    const builder = new CollectionBuilder();
+
+    await expect(
+      builder.createCollection('orders', (collection) => {
+        collection.string('version').notNull();
+        collection.optimisticLock('version');
+      }),
+    ).rejects.toMatchObject({
+      code: 'COLLECTION_RESOLUTION_FAILED',
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'COLLECTION_OPTIMISTIC_LOCK_INVALID',
+        }),
+      ]),
     });
   });
 

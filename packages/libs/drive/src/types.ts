@@ -31,7 +31,6 @@ export type AppDriveDiskConfig = FsDriveDiskConfig | S3DriveDiskConfig;
 export interface AppDriveConfig {
   default: string;
   disks: Record<string, AppDriveDiskConfig>;
-  links: Record<string, string>;
 }
 
 export type NocoBaseDriveDisk = Disk;

@@ -43,7 +43,7 @@ The exception is what most mistakes come from: a component a plugin exports for 
 
 1. Find the package that owns the text. Application text goes in `client/locales/`; a plugin's text goes in that plugin's `client/locales/`.
 2. Add the key to `en-US.ts`. The structure is written once: the type is derived from the value with `LocaleResource<typeof enUS>`, and other locales are annotated with it, which is what makes a typo a compile error.
-3. Add the translation to every other locale file. A missing key falls back rather than breaking, so this can lag, but `pnpm i18n:check` will report it.
+3. Add the translation to every other locale file. A missing key falls back rather than breaking, so this can lag, and `typecheck` reports it.
 4. Render it with `useTranslation` from `@nocobase/i18n/client`.
 
 ```tsx
@@ -54,6 +54,42 @@ t('actions.save');
 ```
 
 Keys nest and are addressed with dots: `t('trigger.types.schedule')`.
+
+## Naming translation keys
+
+Use short semantic keys that describe the purpose of the text and stay valid when its wording changes. Use lower camelCase within each segment and dots for useful feature or context groups, such as `files.uploadFailed` or `demo.pageDescription`. A small namespace may use `title` directly. Do not use complete English sentences as keys or merely convert a sentence into camelCase.
+
+| Purpose              | Prefer                        | Avoid                                       |
+| -------------------- | ----------------------------- | ------------------------------------------- |
+| Page heading         | `orders.title`                | `Order list`                                |
+| Empty state          | `orders.empty`                | `orders.noOrdersHaveBeenCreatedYet`         |
+| Upload error         | `files.uploadFailed`          | `File upload failed.`                       |
+| Demo explanation     | `demo.pageDescription`        | `This page demonstrates the plugin.`        |
+| Action versus status | `actions.open`, `status.open` | Sharing `open` just because both say “Open” |
+
+Follow existing semantic groups and reuse keys only for the same meaning and translation context. Prefer nested objects for new groups; do not restructure existing flat dotted keys or rename unrelated keys solely for consistency. Keep the package name in the namespace, not repeated inside each key.
+
+Variables belong in translated values, not in keys. i18next plural suffixes `_one` and `_other` are exceptions to camelCase:
+
+```ts
+// client/locales/en-US.ts; mirror these keys in the other locales.
+const enUS = {
+  files: { uploadFailed: 'Could not upload {{name}}.' },
+  selection: {
+    count_one: '{{count}} item selected',
+    count_other: '{{count}} items selected',
+  },
+};
+```
+
+```tsx
+const NS = '@acme/app-plugin-files';
+const { t } = useTranslation(NS);
+t('files.uploadFailed', { name: file.name });
+t('selection.count', { count: selectedItems.length });
+```
+
+Keep keys stable when only wording changes. A key rename must update all locales, callers, route navigation/breadcrumb titles, and dynamic lookups together. Preserve custom labels and unknown server messages as fallback text. Type checking checks locale shape; review key naming separately.
 
 ## Naming a namespace
 
@@ -110,7 +146,7 @@ Without `i18nNs`, the label is treated as literal text and rendered as-is.
    };
    ```
 
-3. Add the locale to the application's `server/config/i18n.ts`, or to `APP_LOCALES`. A language present in the files but absent from that list is unreachable.
+3. Add the locale to the application's own `client/locales/index.ts` and, when translating server content, `server/locales/index.ts`. Keeping both lists aligned is recommended. A client-only language can still be selected: the server uses English and the application shows an informational toast. Those files decide each side's offered languages; a plugin supplies translations rather than adding languages to the picker.
 
 Do this in every package that ships locales, or the new language shows a mix: packages that have it translated, and packages falling back to English.
 
@@ -142,10 +178,12 @@ Overrides apply after every namespace has registered, so the application always 
 # Verification
 
 ```bash
-pnpm i18n:check                                    # keys a locale is missing
-pnpm --filter <package> typecheck                  # a key absent from the interface
-pnpm --filter @nocobase/app-template-default test  # if application text changed
+pnpm typecheck                    # a key absent from the interface
+pnpm nocobase app i18n:check      # a language declared on only one side
+pnpm test                         # if application text changed
 ```
+
+Run these from the application. Inside this monorepo the equivalents are `pnpm --filter <package> typecheck` and `pnpm i18n:check`, which reads every `locales/` directory under `packages/`.
 
 Then switch language in the running application and confirm the new text follows. A string that does not change is still a literal somewhere.
 

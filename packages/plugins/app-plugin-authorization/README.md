@@ -18,11 +18,19 @@ The plugin currently provides:
   `nocobase` user.
 - a separate Default Pages Permission Set, so page access can be changed without
   changing administrator capabilities.
+- protected Permission Sets whose owner plugin controls which generic
+  definition and assignment operations remain available;
+- atomic replacement of one application's assignment scope without changing a
+  user's unrelated Permission Sets;
+- a public Client service token and Realtime cache invalidation for individual
+  user assignments and grants shared by all authenticated users.
 
 Every authenticated client route is authorized as `page:<route name>/access`
 unless the route declares an explicit authorization resource. Removing the
 corresponding page grant therefore blocks direct navigation as well as hiding
 the navigation entry.
+
+Explicit domain checks use `access: { resource: 'type:id', action: 'action' }`, for example `hub.app:*` with `upload-release`. These checks preserve the resource type, identifier, and action. Plain resource names continue to check `page:<name>/access`; `authorization.settings.<id>` retains its administration action mapping. The permission snapshot only controls client visibility; the server must still enforce record ownership and operation permissions.
 
 The plugin provider resolves the shared database capability and registers the
 authorization instance in the service container:

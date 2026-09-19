@@ -1,12 +1,21 @@
-import { createMigrationContext } from './context.js';
+import { upgradeTaskChecksums } from './checksum-history.js';
+import { assertManagedSchema } from '../database/schema-management.js';
+import type { Knex } from 'knex';
+import {
+  createMigrationConnection,
+  createMigrationContext,
+} from './internal/context.js';
 import {
   DEFAULT_MIGRATION_TABLE,
   deleteMigrationHistoryRecord,
   ensureMigrationTable,
   readMigrationHistory,
   recordMigrationCompleted,
-} from './history.js';
-import { DEFAULT_MIGRATION_LOCK_TABLE, withMigrationLock } from './lock.js';
+} from './internal/history.js';
+import {
+  DEFAULT_MIGRATION_LOCK_TABLE,
+  withMigrationLock,
+} from './internal/lock.js';
 import { loadMigrations } from './loader.js';
 import type {
   CreateMigratorOptions,
@@ -17,11 +26,23 @@ import type {
   MigrationRunResult,
 } from './types.js';
 
+/** Executes and rolls back ordered migrations for one database connection. */
 export interface Migrator {
+  /** Applies every pending migration. */
   latest(): Promise<MigrationRunResult>;
+  /** Applies pending migrations through the named migration, inclusive. */
+  upTo(name: string): Promise<MigrationRunResult>;
+  /** Rolls back the most recently applied migration batch. */
   rollback(): Promise<MigrationRollbackResult>;
+  /**
+   * Migrations already applied on the connection, oldest first. Reads only:
+   * a connection without a history table yields an empty list rather than
+   * getting one created.
+   */
+  history(): Promise<MigrationHistoryRecord[]>;
 }
 
+/** Creates a migration runner backed by the supplied database manager. */
 export function createMigrator(options: CreateMigratorOptions): Migrator {
   return new DefaultMigrator(options);
 }
@@ -30,13 +51,34 @@ class DefaultMigrator implements Migrator {
   constructor(private readonly options: CreateMigratorOptions) {}
 
   async latest(): Promise<MigrationRunResult> {
+    return this.runPendingMigrations();
+  }
+
+  async upTo(name: string): Promise<MigrationRunResult> {
+    if (typeof name !== 'string' || name.trim() === '') {
+      throw new Error('Migration target name must be a non-empty string.');
+    }
+    return this.runPendingMigrations(name);
+  }
+
+  private async runPendingMigrations(
+    targetName?: string,
+  ): Promise<MigrationRunResult> {
     const connection = this.options.database.connection(
       this.options.connection,
     );
+    assertManagedSchema(
+      {
+        connectionName: connection.name,
+        mode: connection.schemaManagement,
+      },
+      targetName === undefined ? 'migration.latest' : 'migration.upTo',
+    );
     const migrations = await loadMigrations(this.options);
+    const selectedMigrations = selectMigrations(migrations, targetName);
     const migrationConnection = createMigrationContext(connection).connection;
 
-    return withMigrationLock(
+    const result = await withMigrationLock(
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
@@ -56,19 +98,41 @@ class DefaultMigrator implements Migrator {
           history,
           participatingPackageNames(this.options),
         );
+        await upgradeTaskChecksums(
+          migrationConnection,
+          this.options.tableName ?? DEFAULT_MIGRATION_TABLE,
+          migrations,
+          history,
+        );
 
         const appliedNames = new Set(history.map((record) => record.name));
-        const pending = migrations.filter(
+        const pending = selectedMigrations.filter(
           (migration) => !appliedNames.has(migration.name),
         );
-        const skipped = migrations
+        const skipped = selectedMigrations
           .filter((migration) => appliedNames.has(migration.name))
           .map((migration) => migration.name);
-        const batch =
-          pending.length > 0 ? nextBatch(history) : currentBatch(history);
+        let batch = currentBatch(history);
         const executed: string[] = [];
 
         for (const migration of pending) {
+          if (migration.migration.shouldRun) {
+            const shouldRun = await migration.migration.shouldRun({
+              ...createMigrationContext(connection),
+              parameters: migration.parameters,
+              configuration: migration.configuration,
+            });
+            if (typeof shouldRun !== 'boolean') {
+              throw new Error(
+                `Migration "${migration.name}" shouldRun must return a boolean.`,
+              );
+            }
+            if (!shouldRun) {
+              skipped.push(migration.name);
+              continue;
+            }
+          }
+          batch = nextBatch(history);
           await this.runUpMigration(connection, migration, batch);
           executed.push(migration.name);
         }
@@ -76,16 +140,36 @@ class DefaultMigrator implements Migrator {
         return { batch, executed, skipped };
       },
     );
+    if (result.executed.length > 0) connection.collections.invalidate();
+    return result;
+  }
+
+  async history(): Promise<MigrationHistoryRecord[]> {
+    const connection = this.options.database.connection(
+      this.options.connection,
+    );
+    const tableName = this.options.tableName ?? DEFAULT_MIGRATION_TABLE;
+    const migrationConnection = createMigrationConnection(connection);
+    const knex = await migrationConnection.client<Knex>();
+    if (!(await knex.schema.hasTable(tableName))) return [];
+    return readMigrationHistory(migrationConnection, tableName);
   }
 
   async rollback(): Promise<MigrationRollbackResult> {
     const connection = this.options.database.connection(
       this.options.connection,
     );
+    assertManagedSchema(
+      {
+        connectionName: connection.name,
+        mode: connection.schemaManagement,
+      },
+      'migration.rollback',
+    );
     const migrations = await loadMigrations(this.options);
     const migrationConnection = createMigrationContext(connection).connection;
 
-    return withMigrationLock(
+    const result = await withMigrationLock(
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
@@ -104,6 +188,12 @@ class DefaultMigrator implements Migrator {
           migrations,
           history,
           participatingPackageNames(this.options),
+        );
+        await upgradeTaskChecksums(
+          migrationConnection,
+          this.options.tableName ?? DEFAULT_MIGRATION_TABLE,
+          migrations,
+          history,
         );
 
         const batch = currentBatch(history);
@@ -137,6 +227,8 @@ class DefaultMigrator implements Migrator {
         return { batch, rolledBack };
       },
     );
+    if (result.rolledBack.length > 0) connection.collections.invalidate();
+    return result;
   }
 
   private async runUpMigration(
@@ -146,7 +238,11 @@ class DefaultMigrator implements Migrator {
   ): Promise<void> {
     const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
-      const context = createMigrationContext(connection);
+      const context = {
+        ...createMigrationContext(connection),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       const startedAt = Date.now();
       await loaded.migration.up(context);
       await recordMigrationCompleted(context.connection, {
@@ -161,7 +257,11 @@ class DefaultMigrator implements Migrator {
     }
 
     await connection.transaction(async (trxConnection) => {
-      const context = createMigrationContext(trxConnection);
+      const context = {
+        ...createMigrationContext(trxConnection),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       const startedAt = Date.now();
       await loaded.migration.up(context);
       await recordMigrationCompleted(context.connection, {
@@ -181,7 +281,11 @@ class DefaultMigrator implements Migrator {
   ): Promise<void> {
     const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
-      const context = createMigrationContext(connection);
+      const context = {
+        ...createMigrationContext(connection),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       await loaded.migration.down?.(context);
       await deleteMigrationHistoryRecord(context.connection, {
         tableName: this.options.tableName,
@@ -191,7 +295,11 @@ class DefaultMigrator implements Migrator {
     }
 
     await connection.transaction(async (trxConnection) => {
-      const context = createMigrationContext(trxConnection);
+      const context = {
+        ...createMigrationContext(trxConnection),
+        parameters: loaded.parameters,
+        configuration: loaded.configuration,
+      };
       await loaded.migration.down?.(context);
       await deleteMigrationHistoryRecord(context.connection, {
         tableName: this.options.tableName,
@@ -199,6 +307,21 @@ class DefaultMigrator implements Migrator {
       });
     });
   }
+}
+
+function selectMigrations(
+  migrations: LoadedMigration[],
+  targetName?: string,
+): LoadedMigration[] {
+  if (targetName === undefined) return migrations;
+
+  const targetIndex = migrations.findIndex(
+    (migration) => migration.name === targetName,
+  );
+  if (targetIndex === -1) {
+    throw new Error(`Migration target "${targetName}" was not found.`);
+  }
+  return migrations.slice(0, targetIndex + 1);
 }
 
 function validateAppliedMigrationHistory(
@@ -222,7 +345,11 @@ function validateAppliedMigrationHistory(
         `Executed migration "${record.name}" is missing from migration sources. Package: "${record.packageName}".`,
       );
     }
-    if (record.checksum !== migration.checksum) {
+    if (
+      record.checksum !== migration.checksum &&
+      (record.packageName !== migration.packageName ||
+        record.checksum !== migration.legacyChecksum)
+    ) {
       throw new Error(
         `Executed migration "${record.name}" checksum changed. Package: "${record.packageName}".`,
       );

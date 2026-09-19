@@ -142,7 +142,9 @@ describe('AI Employee Registry contract', () => {
     }
     expect(source).not.toContain(portalSdkPackage);
     expect(source).toContain("from '@nocobase/app-client'");
-    expect(source).toContain('createRequestPath(`${resource}:${action}`');
+    expect(source).toContain(
+      'createRequestOptions(`${resource}:${action}`, options)',
+    );
   });
 
   it('keeps every relative import inside the item root', () => {

@@ -1,37 +1,49 @@
 import {
-  ClientAccessResolvers,
-  clientAccessResolversToken,
-} from './access-resolvers.js';
-import { appApiClientToken, ClientApplication } from '@nocobase/app-client';
+  apiClientToken,
+  ClientApplication,
+  realtimeClientToken,
+} from '@nocobase/app-client';
 import type { AppClientRefineConfig } from '@nocobase/app-client';
 import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import { configureAuthorizationClient } from './runtime.js';
+import { authorizationClientToken } from './tokens.js';
+import {
+  AUTHORIZATION_GLOBAL_PERMISSIONS_CHANGED_TOPIC,
+  AUTHORIZATION_PERMISSIONS_CHANGED_TOPIC,
+} from '../shared.js';
 
 export class AuthorizationServiceProvider extends ServiceProvider<ClientApplication> {
   public readonly name: string = '@nocobase/app-plugin-authorization/client';
+  private unsubscribePermissionsChanged?: () => void;
+  private unsubscribeGlobalPermissionsChanged?: () => void;
+  private unsubscribeRealtimeOpen?: () => void;
 
   public override register(): void {
-    this.app.container.instance(
-      clientAccessResolversToken,
-      new ClientAccessResolvers(),
+    this.app.container.singleton(authorizationClientToken, (resolver) =>
+      configureAuthorizationClient(resolver.resolve(apiClientToken)),
     );
   }
 
   public override boot(): Promise<void> {
-    const resolvers = this.app.container.resolve(clientAccessResolversToken);
-    const authz = configureAuthorizationClient(
-      this.app.container.resolve(appApiClientToken),
-    );
+    const authz = this.app.container.resolve(authorizationClientToken);
     const accessControlProvider: NonNullable<
       AppClientRefineConfig['accessControlProvider']
     > = {
       async can({ resource, action }) {
         if (!resource) return { can: false };
-        const custom = await resolvers.resolve(resource, action);
-        if (custom !== undefined) return custom;
         if (resource === 'authorization') return { can: true };
+        // Explicit type:id resources preserve the declared domain action.
+        const separator = resource.indexOf(':');
+        if (separator > 0) {
+          const type = resource.slice(0, separator);
+          const id = resource.slice(separator + 1);
+          return {
+            can: Boolean(id) && (await authz.can({ type, id }, action)),
+          };
+        }
+
         if (resource.startsWith('authorization.settings.')) {
           return {
             can: await authz.can(
@@ -49,6 +61,32 @@ export class AuthorizationServiceProvider extends ServiceProvider<ClientApplicat
       },
     };
     this.app.refine.setAccessControlProvider(accessControlProvider);
+    const realtime = this.app.container.resolve(realtimeClientToken);
+    this.unsubscribePermissionsChanged = realtime.subscribe(
+      AUTHORIZATION_PERMISSIONS_CHANGED_TOPIC,
+      () => {
+        authz.invalidatePermissions();
+      },
+    );
+    this.unsubscribeGlobalPermissionsChanged = realtime.subscribe(
+      AUTHORIZATION_GLOBAL_PERMISSIONS_CHANGED_TOPIC,
+      () => {
+        authz.invalidatePermissions();
+      },
+    );
+    this.unsubscribeRealtimeOpen = realtime.onOpen(() => {
+      authz.invalidatePermissions();
+    });
+    return Promise.resolve();
+  }
+
+  public override shutdown(): Promise<void> {
+    this.unsubscribePermissionsChanged?.();
+    this.unsubscribePermissionsChanged = undefined;
+    this.unsubscribeGlobalPermissionsChanged?.();
+    this.unsubscribeGlobalPermissionsChanged = undefined;
+    this.unsubscribeRealtimeOpen?.();
+    this.unsubscribeRealtimeOpen = undefined;
     return Promise.resolve();
   }
 }

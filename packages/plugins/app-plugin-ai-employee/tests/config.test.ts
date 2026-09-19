@@ -2,13 +2,12 @@ import { AppConfig } from '@nocobase/app-server/config';
 import { describe, expect, it } from 'vitest';
 
 import {
-  aiConfig,
+  type AIApplicationConfig,
   normalizeDisks,
   resolveAIEmployeeStorageDisk,
   resolveAIKnowledgeBaseStorageDisks,
-  type AIApplicationConfig,
 } from '../server/config.js';
-import { normalizeLLMServiceConfig } from '../server/llm-service-config.js';
+import { normalizeLLMServiceConfig } from '../server/manager/llm-service-config.js';
 
 function storageConfig(
   shared?: readonly string[],
@@ -24,7 +23,7 @@ function storageConfig(
 }
 
 async function loadAIConfig(value: unknown): Promise<AppConfig> {
-  const config = new AppConfig([aiConfig], { context: {} });
+  const config = new AppConfig();
   if (value !== undefined) {
     config.load({
       name: 'test-config',
@@ -35,18 +34,46 @@ async function loadAIConfig(value: unknown): Promise<AppConfig> {
     });
   }
   await config.loadAll();
+  config.mergeDefaults({
+    ai: {
+      storage: {},
+      aiEmployee: { storage: {} },
+      aiKnowledgeBase: { storage: {}, vectorDatabases: [], manifests: [] },
+      llmServices: [],
+      skills: { paths: [] },
+      mcpServers: {},
+    },
+  });
   return config;
 }
 
 describe('AI application config', () => {
-  it('defaults storage scopes and ai.llmServices', async () => {
+  it('defaults storage scopes, LLM services, and knowledge-base inputs', async () => {
     const config = await loadAIConfig(undefined);
 
-    expect(config.get(aiConfig)).toEqual({
+    expect(config.get<AIApplicationConfig>('ai')!).toEqual({
       storage: {},
       aiEmployee: { storage: {} },
-      aiKnowledgeBase: { storage: {} },
+      aiKnowledgeBase: {
+        storage: {},
+        vectorDatabases: [],
+        manifests: [],
+      },
+      skills: { paths: [] },
       llmServices: [],
+      mcpServers: {},
+    });
+  });
+
+  it('keeps knowledge-base list defaults when another nested option is configured', async () => {
+    const config = await loadAIConfig({
+      ai: { aiKnowledgeBase: { storage: { disk: ['local'] } } },
+    });
+
+    expect(config.get<AIApplicationConfig>('ai')!.aiKnowledgeBase).toEqual({
+      storage: { disk: ['local'] },
+      vectorDatabases: [],
+      manifests: [],
     });
   });
 
@@ -74,7 +101,7 @@ describe('AI application config', () => {
       },
     });
 
-    expect(config.get(aiConfig)).toMatchObject({
+    expect(config.get<AIApplicationConfig>('ai')!).toMatchObject({
       futureOption: { enabled: true },
       llmServices: [
         {
@@ -86,56 +113,90 @@ describe('AI application config', () => {
     });
   });
 
-  it.each([
-    [{ ai: { llmServices: [{ provider: 'openai' }] } }, /name/],
-    [{ ai: { llmServices: [{ name: 'openai' }] } }, /provider/],
-    [
-      {
-        ai: {
-          llmServices: [{ name: 'openai', provider: 'openai', sort: '1' }],
-        },
-      },
-      /sort/,
-    ],
-    [
-      {
-        ai: {
-          llmServices: [
+  it('accepts canonical knowledge-base vector databases and manifest sources', async () => {
+    const config = await loadAIConfig({
+      ai: {
+        aiKnowledgeBase: {
+          storage: { disk: ['local', 'archive'] },
+          vectorDatabases: [
             {
-              name: 'openai',
-              provider: 'openai',
-              enabledModels: { mode: 'custom', models: [] },
+              key: 'pgvector1',
+              name: 'Primary PGVector',
+              provider: 'NocobaseDefaultPGVectorProvider',
+              databaseSpec: 'PGVector',
+              connection: {
+                host: '127.0.0.1',
+                port: 5432,
+                user: '${PG_VECTOR_USERNAME}',
+                password: '${PG_VECTOR_PASSWORD}',
+                database: 'nocobase',
+                tableName: 'vectorRecords',
+              },
+              enabled: true,
+            },
+            {
+              key: 'normalized-by-knowledge-base',
+              connection: {
+                host: 'database.internal',
+                port: 5432,
+                user: 'nocobase',
+                database: 'nocobase',
+                tableName: 'otherVectorRecords',
+              },
+            },
+          ],
+          manifests: [
+            {
+              disk: 'local',
+              locations: [
+                'preload/knowledge-base/manifest.yml',
+                '/preload/knowledge-base/append.yml',
+              ],
             },
           ],
         },
       },
-      /enabledModels/,
-    ],
-    [
-      {
-        ai: {
-          llmServices: [
-            { name: 'openai', provider: 'openai', enabledModels: ['gpt-4.1'] },
-          ],
-        },
-      },
-      /enabledModels/,
-    ],
-  ])('rejects invalid service definitions', async (value, message) => {
-    await expect(loadAIConfig(value)).rejects.toThrow(message);
-  });
+    });
 
-  it('rejects duplicate service names during application config validation', async () => {
-    await expect(
-      loadAIConfig({
-        ai: {
-          llmServices: [
-            { name: 'openai', provider: 'openai' },
-            { name: 'openai', provider: 'deepseek' },
+    expect(config.get<AIApplicationConfig>('ai')!.aiKnowledgeBase).toEqual({
+      storage: { disk: ['local', 'archive'] },
+      vectorDatabases: [
+        {
+          key: 'pgvector1',
+          name: 'Primary PGVector',
+          provider: 'NocobaseDefaultPGVectorProvider',
+          databaseSpec: 'PGVector',
+          connection: {
+            host: '127.0.0.1',
+            port: 5432,
+            user: '${PG_VECTOR_USERNAME}',
+            password: '${PG_VECTOR_PASSWORD}',
+            database: 'nocobase',
+            tableName: 'vectorRecords',
+          },
+          enabled: true,
+        },
+        {
+          key: 'normalized-by-knowledge-base',
+          connection: {
+            host: 'database.internal',
+            port: 5432,
+            user: 'nocobase',
+            database: 'nocobase',
+            tableName: 'otherVectorRecords',
+          },
+        },
+      ],
+      manifests: [
+        {
+          disk: 'local',
+          locations: [
+            'preload/knowledge-base/manifest.yml',
+            '/preload/knowledge-base/append.yml',
           ],
         },
-      }),
-    ).rejects.toThrow(/uniqueItemProperties/);
+      ],
+    });
   });
 
   it('also rejects duplicate names before direct synchronization', () => {

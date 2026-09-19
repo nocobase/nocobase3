@@ -8,8 +8,10 @@ import type { LLMServiceEntity } from '../../repository/index.js';
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { LLMServiceManager } from '../llm-service/types.js';
-import { getRecommendedModels } from './recommended-models.js';
+import {
+  normalizeEnabledModelsConfig,
+  type LLMServiceManager,
+} from '../llm-service/types.js';
 import type {
   EnabledLLMModel,
   EnabledLLMService,
@@ -37,7 +39,6 @@ export class LLMProviderManager {
     supportedModel: SupportedModel[];
     supportWebSearch: boolean;
     webSearchModels?: string[];
-    recommendedModels: EnabledLLMModel[];
   }> {
     return Array.from(this.llmProviders.entries()).map(
       ([
@@ -49,7 +50,6 @@ export class LLMProviderManager {
         supportedModel: supportedModel ?? [SupportedModel.LLM],
         supportWebSearch: supportWebSearch ?? false,
         webSearchModels,
-        recommendedModels: getRecommendedModels(name),
       }),
     );
   }
@@ -107,36 +107,7 @@ export class LLMProviderManager {
   }
 
   private getEnabledModels(service: LLMServiceEntity): EnabledLLMModel[] {
-    const raw = service.enabledModels;
-    if (Array.isArray(raw)) {
-      if (!raw.length) return getRecommendedModels(service.provider);
-      return raw
-        .filter(
-          (id): id is string => typeof id === 'string' && Boolean(id.trim()),
-        )
-        .map((id) => ({ label: id.trim(), value: id.trim() }));
-    }
-    if (!raw || typeof raw !== 'object') {
-      return getRecommendedModels(service.provider);
-    }
-    if (raw.mode === 'recommended') {
-      return getRecommendedModels(service.provider);
-    }
-    if (raw.mode !== 'provider' && raw.mode !== 'custom') {
-      return getRecommendedModels(service.provider);
-    }
-    const seen = new Set<string>();
-    return raw.models.flatMap((model) => {
-      if (!model || typeof model.value !== 'string') return [];
-      const value = model.value.trim();
-      if (!value || seen.has(value)) return [];
-      seen.add(value);
-      const label =
-        typeof model.label === 'string' && model.label.trim()
-          ? model.label.trim()
-          : value;
-      return [{ label, value }];
-    });
+    return normalizeEnabledModelsConfig(service.enabledModels).models;
   }
 
   async createEmbedding(

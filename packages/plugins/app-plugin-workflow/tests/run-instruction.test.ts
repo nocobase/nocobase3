@@ -4,13 +4,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { DatabaseManager } from '@nocobase/db';
+import {
+  createServiceToken,
+  ServiceContainer,
+} from '@nocobase/service-provider';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  EXECUTION_REASON,
   EXECUTION_STATUS,
   NODE_RUN_STATUS,
 } from '../server/engine/constants.js';
 import Dispatcher from '../server/engine/dispatcher.js';
+import type { WorkflowQueueTask } from '../server/engine/types.js';
+import { ConditionInstruction } from '../server/instructions/condition/instruction.js';
 import type { WorkflowInstructionClass } from '../server/instructions/base.js';
 import {
   assertWorkflowRunResult,
@@ -20,11 +27,14 @@ import {
 import { buildWorkflowArtifact } from '../build/artifact-builder.js';
 import { LocalWorkflowArtifactStore } from '../server/loader/artifact-store.js';
 import { pendingInstruction } from './fixtures/instructions.js';
+import { createWorkflowRunServices } from '../server/engine/run-services.js';
+import { asIdFilter } from '../server/engine/utils.js';
 import {
   createTestDatabase,
   createTestWorkflow,
   findRun,
   listNodeRuns,
+  testStore,
 } from './helpers.js';
 
 const SOURCE_ROOT = fileURLToPath(
@@ -33,7 +43,8 @@ const SOURCE_ROOT = fileURLToPath(
 const OUTSIDE_ROOT = fileURLToPath(
   new URL('./fixtures/outside', import.meta.url),
 );
-const app = { name: 'test-app' };
+const container = new ServiceContainer();
+const services = createWorkflowRunServices(container);
 const roots: string[] = [];
 
 function runInstructions(): Map<string, WorkflowInstructionClass> {
@@ -88,12 +99,13 @@ describe('run instruction', () => {
       database,
       instructions: runInstructions(),
       resolveWorkflowResourceRoot: () => Promise.resolve(resourceRoot),
-      app,
+      services,
     });
     await dispatcher.trigger(workflow, context, {
       eventKey: key,
       manually: true,
     });
+    await dispatcher.drain();
     const execution = await findRun(database, key);
     return {
       status: execution.status,
@@ -150,12 +162,10 @@ describe('run instruction', () => {
         },
       ],
     });
-    await database
-      .query()
-      .updateTable('workflows')
-      .set({ hash: v1Hash })
-      .where('id', '=', workflow.id)
-      .execute();
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(workflow.id) },
+      values: { hash: v1Hash },
+    });
     workflow.hash = v1Hash;
     const dispatcher = new Dispatcher({
       database,
@@ -167,7 +177,7 @@ describe('run instruction', () => {
         execution.hash
           ? store.materialize(execution.workflowKey, execution.hash)
           : Promise.resolve(null),
-      app,
+      services,
     });
 
     await dispatcher.trigger(
@@ -176,24 +186,23 @@ describe('run instruction', () => {
       { eventKey: 'pinned', manually: true },
     );
     const execution = await findRun(database, 'pinned');
-    const pending = await database
-      .query()
-      .selectFrom('workflowNodeRuns')
-      .select(['id'])
-      .where('workflowRunId', '=', execution.id)
-      .where('nodeKey', '=', 'hold')
-      .executeTakeFirstOrThrow();
-    await database
-      .query()
-      .updateTable('workflows')
-      .set({ hash: v2Hash })
-      .where('id', '=', workflow.id)
-      .execute();
+    const pending = await testStore(database).nodeRuns.findOne({
+      filter: {
+        workflowRunId: asIdFilter(execution.id),
+        nodeKey: 'hold',
+      },
+      select: (select) => select.fields('id'),
+    });
+    await testStore(database).workflows.updateMany({
+      filter: { id: asIdFilter(workflow.id) },
+      values: { hash: v2Hash },
+    });
     await dispatcher.dispatch({
       executionId: execution.id,
       nodeRunId: pending.id as number,
     });
 
+    await dispatcher.drain();
     await expect(
       listNodeRuns(database, execution.id as number),
     ).resolves.toEqual([
@@ -239,45 +248,83 @@ describe('run instruction', () => {
     expect(invalid.nodeRuns[0].error).toMatch(/BigInt/);
   });
 
-  it('passes the processor application, signal, and logger to the module', async () => {
+  it('passes services, signal, and contextual logger in frozen options', async () => {
     const { nodeRuns } = await runSingleNode(
-      'runtime',
-      { module: './runtime' },
+      'services',
+      { module: './services' },
       {
-        './runtime':
-          'export const run = (_args, runtime) => ({ app: runtime.app.name, signal: runtime.signal instanceof AbortSignal, logger: typeof runtime.logger.info });',
+        './services':
+          'export const run = (_args, options) => ({ keys: Object.keys(options).sort(), frozen: Object.isFrozen(options), serviceKeys: Object.keys(options.services).sort(), servicesFrozen: Object.isFrozen(options.services), signal: options.signal instanceof AbortSignal, logger: typeof options.logger.info });',
       },
     );
     expect(nodeRuns[0].result).toEqual({
-      app: 'test-app',
+      keys: ['logger', 'services', 'signal'],
+      frozen: true,
+      serviceKeys: ['has', 'resolve'],
+      servicesFrozen: true,
       signal: true,
       logger: 'function',
     });
   });
 
-  it('keeps abort semantics while the module is awaiting', async () => {
+  it('resolves application services by their original tokens', () => {
+    const token = createServiceToken<{ readonly value: string }>(
+      '@nocobase/app-plugin-workflow/tests/service',
+    );
+    const bound = { value: 'resolved' };
+    const testContainer = new ServiceContainer();
+    testContainer.instance(token, bound);
+
+    const runServices = createWorkflowRunServices(testContainer);
+
+    expect(runServices.has(token)).toBe(true);
+    expect(runServices.resolve(token)).toBe(bound);
+    expect(runServices).not.toHaveProperty('instance');
+    expect(runServices).not.toHaveProperty('singleton');
+  });
+
+  it('aborts a 5s Run node when the workflow timeout is 2s', async () => {
     const resourceRoot = await createArtifactRoot({
       './slow':
-        'export const run = (_args, runtime) => new Promise((resolve, reject) => { runtime.signal.addEventListener("abort", () => reject(runtime.signal.reason), { once: true }); setTimeout(resolve, 2000); });',
+        'import { setTimeout as sleep } from "node:timers/promises"; export const run = async (_args, options) => { await sleep(5000, undefined, { signal: options.signal }); return "finished"; };',
     });
     const workflow = await createTestWorkflow(database, {
       key: 'aborted',
-      options: { timeout: 0.05 },
+      options: { timeout: 2 },
       nodes: [{ key: 'run', type: 'run', config: { module: './slow' } }],
     });
     const dispatcher = new Dispatcher({
       database,
       instructions: runInstructions(),
       resolveWorkflowResourceRoot: () => Promise.resolve(resourceRoot),
+      services,
     });
+    const startedAt = performance.now();
     await dispatcher.trigger(
       workflow,
       {},
       { eventKey: 'aborted', manually: true },
     );
-    expect((await findRun(database, 'aborted')).status).toBe(
-      EXECUTION_STATUS.ABORTED,
-    );
+    await dispatcher.drain();
+    const elapsedMs = performance.now() - startedAt;
+    const execution = await findRun(database, 'aborted');
+
+    expect(execution).toMatchObject({
+      status: EXECUTION_STATUS.ABORTED,
+      reason: EXECUTION_REASON.TIMEOUT,
+    });
+    await expect(
+      listNodeRuns(database, execution.id as number),
+    ).resolves.toEqual([
+      {
+        nodeKey: 'run',
+        status: NODE_RUN_STATUS.ABORTED,
+        result: null,
+        error: 'The operation was aborted',
+      },
+    ]);
+    expect(elapsedMs).toBeGreaterThanOrEqual(1_500);
+    expect(elapsedMs).toBeLessThan(4_000);
   });
 
   it('logs metadata without args or result values', async () => {
@@ -299,6 +346,7 @@ describe('run instruction', () => {
       database,
       instructions: runInstructions(),
       resolveWorkflowResourceRoot: () => Promise.resolve(resourceRoot),
+      services,
       logger: { debug: vi.fn(), info, warn: vi.fn(), error: vi.fn() },
     });
     await dispatcher.trigger(
@@ -306,6 +354,7 @@ describe('run instruction', () => {
       {},
       { eventKey: 'safe-log', manually: true },
     );
+    await dispatcher.drain();
     const serialized = JSON.stringify(info.mock.calls);
     expect(serialized).toContain('durationMs');
     expect(serialized).not.toContain('hidden');
@@ -331,12 +380,14 @@ describe('run instruction', () => {
       database,
       instructions: runInstructions(),
       resolveWorkflowResourceRoot: () => Promise.resolve(SOURCE_ROOT),
+      services,
     });
     await dispatcher.trigger(
       workflow,
       { id: 1 },
       { eventKey: 'source', manually: true },
     );
+    await dispatcher.drain();
     const execution = await findRun(database, 'source');
     expect(
       (await listNodeRuns(database, execution.id as number))[0].result,
@@ -364,6 +415,7 @@ describe('run instruction', () => {
         {},
         { eventKey: 'escaped', manually: true },
       );
+      await dispatcher.drain();
       expect((await findRun(database, 'escaped')).status).toBe(
         EXECUTION_STATUS.ERROR,
       );
@@ -386,6 +438,7 @@ describe('run instruction', () => {
       {},
       { eventKey: 'unbound', manually: true },
     );
+    await dispatcher.drain();
     const execution = await findRun(database, 'unbound');
     expect(execution.status).toBe(EXECUTION_STATUS.ERROR);
     expect(
@@ -393,8 +446,133 @@ describe('run instruction', () => {
     ).toMatch(/no workflow resource root/);
   });
 
-  it('cannot suspend', () => {
-    expect(RunInstruction.prototype.resume).toBeUndefined();
+  it('publishes completion for the same attempt and resumes a condition branch', async () => {
+    const resourceRoot = await createArtifactRoot({
+      './value': 'export function run() { return 42; }',
+    });
+    const workflow = await createTestWorkflow(database, {
+      key: 'queued-branch',
+      nodes: [
+        {
+          key: 'condition',
+          type: 'condition',
+          config: {},
+          downstreamKey: 'after',
+        },
+        {
+          key: 'run',
+          type: 'run',
+          config: { module: './value' },
+          upstreamKey: 'condition',
+          branchKey: 'yes',
+        },
+        { key: 'after', type: 'pending', upstreamKey: 'condition' },
+      ],
+    });
+    const tasks: WorkflowQueueTask[] = [];
+    const dispatcher = new Dispatcher({
+      database,
+      instructions: new Map<string, WorkflowInstructionClass>([
+        ['run', RunInstruction],
+        ['condition', ConditionInstruction],
+        ['pending', pendingInstruction],
+      ]),
+      resolveWorkflowResourceRoot: () => Promise.resolve(resourceRoot),
+      services,
+      queue: {
+        publish: async (task) => {
+          tasks.push(task);
+        },
+      },
+    });
+    await dispatcher.trigger(
+      workflow,
+      {},
+      { eventKey: 'queued-branch', manually: true },
+    );
+    await dispatcher.drain();
+    const execution = await findRun(database, 'queued-branch');
+    expect(execution.status).toBe(EXECUTION_STATUS.STARTED);
+    expect(await listNodeRuns(database, execution.id)).toEqual([
+      { nodeKey: 'condition', status: NODE_RUN_STATUS.PENDING, result: true },
+      { nodeKey: 'run', status: NODE_RUN_STATUS.RESOLVED, result: 42 },
+    ]);
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      executionId: execution.id,
+      nodeRunId: expect.anything(),
+    });
+    await dispatcher.dispatch(tasks[0]);
+    await dispatcher.dispatch(tasks[0]);
+    expect(await listNodeRuns(database, execution.id)).toEqual([
+      { nodeKey: 'condition', status: NODE_RUN_STATUS.RESOLVED, result: true },
+      { nodeKey: 'run', status: NODE_RUN_STATUS.RESOLVED, result: 42 },
+      { nodeKey: 'after', status: NODE_RUN_STATUS.PENDING, result: null },
+    ]);
+  });
+
+  it('yields before invoking code and resumes downstream with its result', async () => {
+    const release = Promise.withResolvers<void>();
+    const info = vi.fn();
+    const resourceRoot = await createArtifactRoot({
+      './slow':
+        'export async function run(args, { services, logger }) { logger.info("started"); await services.resolve(); return args; }',
+      './next': 'export function run(args) { return args; }',
+    });
+    const workflow = await createTestWorkflow(database, {
+      key: 'yield',
+      nodes: [
+        {
+          key: 'run',
+          type: 'run',
+          config: { module: './slow', args: { id: 7 } },
+          downstreamKey: 'next',
+        },
+        {
+          key: 'next',
+          type: 'run',
+          config: {
+            module: './next',
+            args: { previous: '{{$nodeResults.run.id}}' },
+          },
+          upstreamKey: 'run',
+        },
+      ],
+    });
+    const resolve = vi.fn(() => release.promise);
+    const dispatcher = new Dispatcher({
+      database,
+      instructions: runInstructions(),
+      resolveWorkflowResourceRoot: () => Promise.resolve(resourceRoot),
+      services: { has: () => true, resolve: <T>() => resolve() as T },
+      logger: { debug: vi.fn(), info, warn: vi.fn(), error: vi.fn() },
+    });
+    await dispatcher.trigger(
+      workflow,
+      {},
+      { eventKey: 'yield', manually: true },
+    );
+    expect(resolve).not.toHaveBeenCalled();
+    const execution = await findRun(database, 'yield');
+    expect(execution.status).toBe(EXECUTION_STATUS.STARTED);
+    expect(await listNodeRuns(database, execution.id)).toEqual([
+      { nodeKey: 'run', status: NODE_RUN_STATUS.PENDING, result: null },
+    ]);
+    release.resolve();
+    await dispatcher.drain();
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect((await findRun(database, 'yield')).status).toBe(
+      EXECUTION_STATUS.RESOLVED,
+    );
+    expect(await listNodeRuns(database, execution.id)).toEqual([
+      { nodeKey: 'run', status: NODE_RUN_STATUS.RESOLVED, result: { id: 7 } },
+      {
+        nodeKey: 'next',
+        status: NODE_RUN_STATUS.RESOLVED,
+        result: { previous: 7 },
+      },
+    ]);
+    expect(dispatcher.idle).toBe(true);
   });
 });
 

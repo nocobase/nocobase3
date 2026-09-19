@@ -1,6 +1,3 @@
-import { captureWorkflowHttpRun } from '../audit-internal.js';
-import { EXECUTION_STATUS } from '../engine/constants.js';
-import { BadRequestError } from '../errors.js';
 import { Hono } from 'hono';
 
 import { parseStatus, readInput, readPage, toPageResponse } from './helpers.js';
@@ -34,24 +31,12 @@ export function createWorkflowRunRoutes(
   );
 
   routes.post('/workflows/:id/run', async (c) => {
-    const enqueue = c.req.query('enqueue');
-    if (enqueue !== undefined && enqueue !== 'true' && enqueue !== 'false')
-      throw new BadRequestError('Invalid workflow enqueue option');
     const data = await workflowRuns.run(
       c.req.param('id'),
       await readInput(c.req.raw),
-      {
-        eventKey: c.req.header('event-key') ?? undefined,
-        ...(enqueue === 'true' ? { enqueueOnly: true } : {}),
-      },
+      { eventKey: c.req.header('event-key') ?? undefined },
     );
-    await captureWorkflowHttpRun(c, String(data.id));
-    const terminal =
-      data.status === EXECUTION_STATUS.RESOLVED ||
-      data.status === EXECUTION_STATUS.FAILED ||
-      data.status === EXECUTION_STATUS.ERROR ||
-      data.status === EXECUTION_STATUS.ABORTED;
-    return c.json({ data }, enqueue === 'true' && !terminal ? 202 : 200);
+    return c.json({ data });
   });
 
   return routes;

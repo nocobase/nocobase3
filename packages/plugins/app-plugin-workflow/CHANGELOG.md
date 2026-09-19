@@ -1,5 +1,369 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.18
+
+### Minor Changes
+
+- 26ac480: Add code-defined Cron scheduling with timezone support, transactional synchronization, and stable schedule identities. Applications and plugins register schedules with `SchedulerService.defineSchedule(definition)` and execution targets with `registerTarget()` during provider registration or boot.
+
+  Route scheduled jobs and workers through the application's configured logical queue, with an adapter-neutral schedule store. Keep the upstream queue dependency unmodified and store queue and scheduler timestamps compatibly with their adapters while preserving absolute instants.
+
+  Move queue storage migrations from Scheduler into the queue library, which resolves configured database connections and physical tables. Assemble these sources centrally in app-server for startup and CLI commands, rejecting overlapping active queue tables before execution. Support immutable target parameters, shared migration history and locks, upstream-compatible physical schemas, and read-only execution conditions that leave skipped migrations unapplied.
+
+  Track idempotent occurrences through the target's final outcome, including asynchronous Workflow completion and recovery with stable run references. Target registration returns a completion-reporting handle scoped to that target; long-running executions can report completion without a fixed scheduler observation timeout.
+
+  Provide an authorized, read-only schedule management page and API with paginated schedules, trigger counts, execution history, and separate schedule and execution statuses. Register `pnpm nocobase schedule sync` as a global CLI command and integrate it into all application templates.
+
+  Include application examples for custom task targets and scheduled Workflows, and agent guidance for schedule definition, target selection, asynchronous execution, diagnostics, and recovery.
+
+  Keep the database manifest CLI entry available before compilation so fresh workspace installs link the command required by package builds.
+
+  Declare the OpenTelemetry dependencies referenced by the upstream queue declarations so consumers can typecheck published Server APIs without enabling tracing or skipping library checks.
+
+### Patch Changes
+
+- Updated dependencies [d4ca00e]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.0
+  - @nocobase/queue@0.1.0-beta.5
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/nb3-cli@1.0.0-beta.9
+
+## 0.1.0-beta.17
+
+### Patch Changes
+
+- 6acf3bc: Use plugin-owned PageContainer components to unify settings page width, spacing, and responsive padding across database exploration, user management, API keys, workflows, and notification logs.
+
+  Use plugin-owned PageHeader components for consistent titles, descriptions, and page actions while preserving permission checks and workflow detail navigation.
+
+  Preserve spacing below workflow tabs and wrap workflow list filters and actions on narrow screens.
+
+  Restore spacing between workflow detail back links and headings, and keep execution duration cells aligned when table rows grow.
+
+- 89955c5: Upgrade better-sqlite3 to ^13.0.3 and keep its dependency declaration in @nocobase/db-sqlite only. Remove redundant test dependencies from consumers so they use the same SQLite driver as applications.
+
+  Preserve the bundled musl binary when building applications for Alpine Linux.
+
+- Updated dependencies [89955c5]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+
+## 0.1.0-beta.16
+
+### Patch Changes
+
+- 7c0ec03: Document custom workflow Instruction APIs with a complete checker, artifact build, and asynchronous runtime registration example. Clarify command entry points and use config.yml in workflow skill configuration guidance.
+- 7c0ec03: Recommend filling in workflow node descriptions to explain their operations and business purpose in the workflow authoring skill.
+
+## 0.1.0-beta.15
+
+### Patch Changes
+
+- 63db898: Move concrete database connection types into their owning dialect packages and keep the core connection contract independent of installed dialects. Import `SqliteConnectionConfig`, `PostgresConnectionConfig`, `MysqlConnectionConfig`, `OracleConnectionConfig`, and `MssqlConnectionConfig` from the corresponding `@nocobase/db-<dialect>` package instead of `@nocobase/db`.
+
+  `ConnectionConfig` and the default `DatabaseConfig` and `AppDatabaseConfig` now describe the common runtime contract. For strict configuration checking, supply a concrete connection type or use `DatabaseConfigFromDrivers` and `AppDatabaseConfigFromDrivers`. The core also exports `DriverConnectionConfig` and `ConnectionConfigFromDrivers` for reusable driver inference. Preserve mutually exclusive host and socket targets in MySQL and OceanBase configuration and factory options.
+
+- a60decd: Require an explicit absolute baseDir for Server plugins and resolve migrations, seeds, jobs, and package metadata from the loaded plugin copy. Generate and validate database task manifests during builds so TypeScript and JavaScript share source checksums, with verified legacy JavaScript history conversion and synchronized plugin scaffolding and application templates.
+- 1a85a86: Add breadcrumb labels to plugin routes so nested pages show their navigation path.
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [63db898]
+- Updated dependencies [a60decd]
+- Updated dependencies [1a85a86]
+- Updated dependencies [1c70f60]
+- Updated dependencies [63db898]
+  - @nocobase/app-server@1.0.0-beta.15
+  - @nocobase/db@1.0.0-beta.7
+  - @nocobase/app-plugin-authentication@0.1.0-beta.14
+  - @nocobase/app-client@1.0.0-beta.16
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/queue@0.1.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/nb3-cli@1.0.0-beta.7
+
+## 0.1.0-beta.14
+
+### Minor Changes
+
+- f17f3a6: Provide editable TypeScript defaults for application modules, assembled by the runtime before services start. Module factories receive the runtime with application paths and plugin metadata; deployment files and environment variables override defaults, and configuration reload preserves code defaults.
+
+  Keep deployment settings in YAML examples and reserve explicit environment overrides for secrets and startup integration. Simplify application configuration loading, merging and reload subscriptions.
+
+  Align client configuration assembly with the server: runtime merges application TypeScript defaults beneath public configuration before services start. Client inspection reports the application configuration entry.
+
+- 027d13d: Let a candidate workflow revision be read before it is enabled
+
+  A deployed Artifact only becomes a revision row when something enables or runs it, and `revisions()` listed rows. So the version picker on a workflow's page offered only the revision already running, and the candidate revision reported next to it as `pendingArtifact` had no entry at all: the only way to see what the new version contained was to press "Enable new version", which is precisely the decision the reading was meant to inform.
+
+  `revisions()` now also returns any deployed Artifact for that key with no row yet, addressed by its Artifact hash with a null id and a null version. Reading one writes nothing — `GET /workflows/<hash>` already resolves an unmaterialized Artifact from discovery — so a candidate revision can be opened, read, and left alone.
+
+  The picker on the page follows: it lists the candidate as "Unpublished" and loads its options with the definition rather than when the picker is opened, because a native select renders its options as the popup opens and options arriving later stay invisible until the next open. A revision another revision has superseded is marked as not the running version and offers "Enable this version" in place of the enable/disable switch, which describes swapping the running version rather than turning the workflow off and on. The "New version available" badge in the workflow list links to the candidate as well.
+
+  `GET /workflows/<hash>` for an unmaterialized Artifact also reports the execution count for its key, which it previously reported as zero while every other revision of the same workflow reported the real count.
+
+- 72ed008: Store run and node-run timestamps as instants, so durations stop reporting a whole time-zone offset
+
+  Every timestamp on a run and a node run was declared `datetime`, the zone-free type, while the engine wrote UTC instants through `database.query()` — the query builder, which is deliberately not Collection metadata aware and hands values straight to the driver. On PostgreSQL the offset was dropped on the way in and a `Date` was rebuilt in the host's zone on the way out, so a value moved by the host offset on every round trip; on MySQL the write was rejected outright.
+
+  `startedAt` was written, read back, and written again when the node finished, while `finishedAt` was written fresh, so the pair ended up a full host offset apart and a node that ran for three milliseconds reported about 28800 seconds.
+
+  The columns are now `datetimeTz`, and the engine persists through Repositories instead of the query builder. That is the layer that reads Collection metadata, so it already knows what `datetimeTz` costs on each database and formats these columns at the SQL boundary — no driver decodes a timestamp in either direction. A run's instants are consequently written and read as canonical `YYYY-MM-DDTHH:mm:ss.sssZ` strings on every dialect, with no dialect branch in the plugin and no connection option a deployment has to set.
+
+  A migration converts the columns, reading the existing zone-free values as the UTC they were written as. It cannot repair history: on an affected PostgreSQL deployment a node run's stored `startedAt` already carries an extra offset that nothing recorded, so runs from before the upgrade keep their reported duration. Runs created afterwards are correct.
+
+  Two fixes came with the move. A node run is now read back from the insert that wrote it rather than by re-selecting the newest row for that node, which two processes running the same execution could get wrong. And the per-workflow and per-revision execution counters are upserts with a database-side increment rather than a read followed by a write, so concurrent triggers of one workflow can no longer lose a count.
+
+### Patch Changes
+
+- 027d13d: Render boolean workflow parameters with a Switch in the parameter settings dialog.
+- ceb356b: Fix published package metadata and database test driver registration.
+- 027d13d: 将工作流管理页面调整为“工作流”和“执行记录”两个 Tab，并保留自动化分组菜单入口。
+- 027d13d: Clarify that Run node timeout options are not enforced independently and document the supported workflow-level timeout.
+- 027d13d: Convert the workflow and execution-record list pages to standard table layouts for clearer, more consistent list interactions.
+- 0867612: 完善 Workflow Skill，补充自定义 Instruction（发邮件节点）的完整注册、检查、Artifact 构建与运行示例，并统一 workflow check 命令和 config.yml 配置说明。
+- 027d13d: Style workflow list refresh actions as standard outline buttons for clearer feedback.
+- 027d13d: Move the workflow list's new-version tag below the workflow name.
+- Updated dependencies [ceb356b]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [f17f3a6]
+- Updated dependencies [43d25b4]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [590861e]
+- Updated dependencies [e11b855]
+- Updated dependencies [72ed008]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [e11b855]
+- Updated dependencies [ceb356b]
+- Updated dependencies [40e2d49]
+- Updated dependencies [590861e]
+- Updated dependencies [ceb356b]
+- Updated dependencies [bf0f05b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [c960d07]
+- Updated dependencies [c960d07]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+- Updated dependencies [ceb356b]
+  - @nocobase/app-server@1.0.0-beta.11
+  - @nocobase/app-client@1.0.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.11
+  - @nocobase/db@1.0.0-beta.5
+  - @nocobase/logging@0.1.0-beta.4
+  - @nocobase/nb3-cli@1.0.0-beta.7
+
+## 0.1.0-beta.13
+
+### Minor Changes
+
+- e9f796d: Register the Artifact build as a CLI hook instead of relying on the application's build script
+
+  `pnpm build` and `pnpm dev` pick up the workflow Artifact build from this plugin, so an application gets it by installing the plugin rather than by carrying the step in its own scripts. The commands and their output are unchanged.
+
+- aa7420a: Load workflow definitions from source in development instead of from built Artifacts.
+
+  A development server previously saw only what `nocobase workflow build` had written to `dist/server/workflows`, so `pnpm dev` ran that build on every start and an edited `workflow.ts` needed a manual rebuild and a restart before it could be listed, enabled, or triggered. The loader now compiles the workflow source root on demand whenever the runtime is not production, skipping the work while the tree is unchanged, and the plugin no longer registers a `beforeDev` CLI hook, so `pnpm dev` runs no workflow build. The `afterServerBuild` hook is unchanged: a deployment still reads committed Artifacts.
+
+  The definition it produces is what a build produces: the same schema validation, semantic validation, flat IR compilation, resource collection, and content-addressed digest, so the revision enabled in development is the revision the build later ships. What it drops is `ts.createProgram`, which the application's own typecheck already covers, and the disposable evaluation process a server running under a TypeScript loader does not need — together the difference between seconds and milliseconds. Development validates against the instruction set the engine executes with rather than the core set alone, and a key that exists only under `dist/server/workflows` is still offered, with source winning for a key present in both. A production runtime is unchanged: it reads built Artifacts and never loads the compilation path.
+
+  Starting a run no longer requires an Artifact store entry in development. The engine has always resolved development run modules from the source package and never from the store, so the store was the wrong precondition there; it is now the source package that must be present, and production still requires the committed Artifact for the revision's digest.
+
+  `nocobase workflow check <package> --ir` prints the compiled flat IR, the definition an Artifact carries, for reading a workflow outside a running server.
+
+### Patch Changes
+
+- Updated dependencies [a009e2d]
+- Updated dependencies [e9f796d]
+  - @nocobase/app-server@1.0.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.13
+  - @nocobase/i18n@1.0.0-beta.3
+  - @nocobase/nb3-cli@1.0.0-beta.6
+
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- eb3bc38: Align catalog-managed peer dependency ranges with the workspace catalog.
+- Updated dependencies [e3fa827]
+- Updated dependencies [c3e02bf]
+- Updated dependencies [0a3fa83]
+- Updated dependencies [1d042c0]
+  - @nocobase/app-server@1.0.0-beta.9
+  - @nocobase/app-plugin-authentication@0.1.0-beta.10
+  - @nocobase/app-client@1.0.0-beta.12
+  - @nocobase/db@1.0.0-beta.4
+
+## 0.1.0-beta.11
+
+### Patch Changes
+
+- 52d1107: Resolve the shared UI packages through the workspace catalog: `@base-ui/react`, `class-variance-authority`, `clsx`, `lucide-react`, `shadcn`, `tailwind-merge`, and `tw-animate-css`.
+
+  Every package already agreed on one version for each of these — the catalog is what keeps them agreeing. A range edited in one manifest and not the others would otherwise put two copies of a UI primitive into an application's bundle, which is the kind of drift nothing reports until a component behaves differently depending on which plugin rendered it.
+
+  Peer dependencies use `catalog:` too. `pnpm pack` resolves it before publishing, so a consumer still reads an ordinary range.
+
+- 52d1107: Declare the packages each plugin's browser code imports as peer dependencies, so an application that installs the plugin can resolve them while a server deployment installs none of them.
+
+  A plugin's `client/` is not bundled by the plugin: `build` is `tsc`, so `dist/client/*.js` keeps its bare imports and the consuming application's Vite build resolves them. That application has only what the published manifest declares, and npm does not publish `devDependencies` — so a client import declared only there fails with `Could not resolve "…"`. `sonner` and `@xyflow/react` both shipped that way. Ten of these plugins appeared to work only because `app-template-default` happened to declare the same package for its own use; `@nocobase/app-plugin-hub`'s CodeMirror imports had no such coincidence and were unresolvable wherever it was installed.
+
+  Peer dependencies are what satisfy both sides. An application installs one shared copy, and a deployment — which sets `autoInstallPeers: false` — installs none, so packages a server never requires stay out of it. Each keeps a matching devDependency so the workspace still resolves it and the version used here stays pinned. None is marked `optional`: an optional peer is not auto-installed anywhere, including in the application that needs it.
+
+  `create-plugin` emits the same shape and its generated `AGENTS.md` teaches it, so a plugin created tomorrow declares its browser packages as peers rather than repeating the mistake.
+
+- 52d1107: Declare each peer dependency once, dropping the devDependency that used to accompany it.
+
+  The pairing was required on the grounds that a peer range is wide enough for development to drift off this repository's copy. It is not: pnpm installs a peer and links it into the plugin's own `node_modules`, resolving `workspace:^` to the same package `workspace:*` would. A plugin with the devDependency removed still links, typechecks, builds, and tests against it — verified against a clean install with every plugin's `node_modules` deleted first.
+
+  What remained was a second declaration that changed nothing and had to be kept in step with the first. `pnpm peers:check` no longer asks for it, and `create-plugin` no longer emits it.
+
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+- Updated dependencies [52d1107]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.9
+
+## 0.1.0-beta.10
+
+### Minor Changes
+
+- 008969c: Contribute Workflow check and build commands through the application's unified `nocobase workflow` CLI topic, including structured JSON output, and register the commands in both application templates.
+
+### Patch Changes
+
+- 435e0df: Keep workflow management status aligned with the current runtime revision when a newer Artifact is deployed, and expose the pending Artifact separately for explicit enablement.
+- 5723210: Refine the published Workflow Skill to select durable business lifecycles precisely, separate orchestration from typed business code, document public recovery and custom Instruction validation boundaries, and cover implicit Skill selection in isolated evaluations.
+- Updated dependencies [d29d1fe]
+- Updated dependencies [ec576ba]
+- Updated dependencies [67907ec]
+- Updated dependencies [5281fd1]
+  - @nocobase/app-server@1.0.0-beta.8
+  - @nocobase/nb3-cli@1.0.0-beta.5
+  - @nocobase/drive@0.1.0-beta.4
+  - @nocobase/app-plugin-authentication@0.1.0-beta.8
+  - @nocobase/app-client@1.0.0-beta.11
+  - @nocobase/db@1.0.0-beta.3
+  - @nocobase/i18n@1.0.0-beta.2
+  - @nocobase/queue@0.1.0-beta.3
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.9
+
+### Patch Changes
+
+- 9536bf5: Restore the client dependencies an installed application needs to bundle the workflow canvas and the Sonner-backed notification provider. A plugin's `client/` is compiled by the consuming application's Vite build and its `dist/client` keeps bare imports intact, so a package declared only as a `devDependency` is absent once the plugin is installed from the registry rather than linked from this workspace: `pnpm dev` failed with `Could not resolve "@xyflow/react"` and `Could not resolve "sonner"`. Move `@xyflow/react` back into the workflow plugin's `dependencies`, and declare `sonner` in both application templates.
+- Updated dependencies [0e9505a]
+- Updated dependencies [9536bf5]
+- Updated dependencies [9536bf5]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.8
+  - @nocobase/drive@0.1.0-beta.3
+  - @nocobase/app-client@1.0.0-beta.11
+
+## 0.1.0-beta.8
+
+### Minor Changes
+
+- db6685f: Replace the run module's Application runtime access with execution options containing a read-only service resolver, abort signal, and contextual logger, so scripts can consume public application services without accessing or mutating the Application container.
+
+### Patch Changes
+
+- 90a4903: Replace the composite application transport with application-owned `ApiClient` and `RealtimeClient` services. Client plugins, examples, and application templates now use object-style HTTP request options through the shared API client, while realtime subscriptions resolve their dedicated WebSocket client.
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [a864497]
+- Updated dependencies [a864497]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+- Updated dependencies [90a4903]
+  - @nocobase/db@1.0.0-beta.3
+  - @nocobase/app-server@1.0.0-beta.7
+  - @nocobase/app-client@1.0.0-beta.10
+  - @nocobase/app-plugin-authentication@0.1.0-beta.7
+
 ## 0.1.0-beta.7
 
 ### Patch Changes

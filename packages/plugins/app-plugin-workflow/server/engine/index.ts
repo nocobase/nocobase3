@@ -15,9 +15,21 @@ export * from './parameters.js';
 export * from './value-resolver.js';
 export { createTimeoutReaper } from './timeout-reaper.js';
 export type { TimeoutReaper, TimeoutReaperOptions } from './timeout-reaper.js';
-export { loadNodeRun, loadRun, loadWorkflow } from './utils.js';
+export {
+  asId,
+  asIdFilter,
+  loadNodeRun,
+  loadRun,
+  loadWorkflow,
+  nowInstant,
+  serializeJson,
+} from './utils.js';
 export { projectRunNodeInspector, logRunExecution } from './inspector.js';
 export type {
   RunExecutionLogFields,
   RunNodeInspectorProjection,
 } from './inspector.js';
+export {
+  createWorkflowRunServices,
+  type WorkflowRunServices,
+} from './run-services.js';

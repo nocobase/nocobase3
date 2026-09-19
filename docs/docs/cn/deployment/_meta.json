@@ -1,0 +1,27 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "部署"
+  },
+  {
+    "type": "file",
+    "name": "configuration",
+    "label": "线上配置"
+  },
+  {
+    "type": "file",
+    "name": "standalone",
+    "label": "打包和运行"
+  },
+  {
+    "type": "file",
+    "name": "docker",
+    "label": "用 Docker 部署"
+  },
+  {
+    "type": "file",
+    "name": "hub",
+    "label": "Hub"
+  }
+]

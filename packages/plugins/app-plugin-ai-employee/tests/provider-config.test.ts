@@ -1,6 +1,9 @@
-import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
+import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { cachingToken } from '@nocobase/app-server/caching';
-import { driveConfig, driveManagerToken } from '@nocobase/app-server/drive';
+import {
+  type AppDriveConfig,
+  driveManagerToken,
+} from '@nocobase/app-server/drive';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -11,10 +14,18 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { aiEmployeeConfig, type AIEmployeeConfig } from '../server/config.js';
-import { AIEmployeeProvider } from '../server/providers/ai-employee.js';
-import { aiManagerToken } from '../server/tokens.js';
-import { CollectionRepositoryFactory } from '../server/repository/database/factory.js';
+import { type AIEmployeeConfig } from '../server/config.js';
+import {
+  AIEmployeeProvider,
+  aiManagerToken,
+} from '../server/provider/ai-employee.js';
+import { aiConversationsManagerToken } from '../server/manager/ai-conversations-manager.js';
+import { managerFactoryToken } from '../server/factory/manager-factory.js';
+import {
+  RepositoryFactory,
+  repositoryFactoryToken,
+} from '../server/factory/repository-factory.js';
+import { serviceFactoryToken } from '../server/factory/service-factory.js';
 import { createTestAppDeps } from './app/test-app-deps.js';
 
 const providers: AIEmployeeProvider[] = [];
@@ -28,6 +39,42 @@ afterEach(async () => {
 });
 
 describe('AIEmployeeProvider application config', () => {
+  it('registers private factories and the conversation manager lazily', async () => {
+    const { provider, container } = await createProvider(() => ({ ai: {} }));
+    provider.register();
+
+    expect(container.has(repositoryFactoryToken)).toBe(true);
+    expect(container.has(managerFactoryToken)).toBe(true);
+    expect(container.has(serviceFactoryToken)).toBe(true);
+    expect(container.has(aiConversationsManagerToken)).toBe(true);
+    expect(container.resolveIfCreated(repositoryFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(managerFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(serviceFactoryToken)).toBeUndefined();
+    expect(
+      container.resolveIfCreated(aiConversationsManagerToken),
+    ).toBeUndefined();
+
+    await provider.shutdown();
+
+    expect(container.resolveIfCreated(repositoryFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(managerFactoryToken)).toBeUndefined();
+    expect(container.resolveIfCreated(serviceFactoryToken)).toBeUndefined();
+    expect(
+      container.resolveIfCreated(aiConversationsManagerToken),
+    ).toBeUndefined();
+  });
+
+  it('resolves the public conversation manager from the container', async () => {
+    const { provider, container } = await createProvider(() => ({ ai: {} }));
+    provider.register();
+
+    const manager = container.resolve(aiConversationsManagerToken);
+
+    expect(manager).toBe(
+      container.resolve(managerFactoryToken).aiConversationsManager,
+    );
+  });
+
   it('migrates initial config into the database while preserving matching user state', async () => {
     const deps = createTestAppDeps();
     databases.push(deps.database);
@@ -37,9 +84,9 @@ describe('AIEmployeeProvider application config', () => {
       packageName: '@nocobase/app-plugin-ai-employee',
       directory: new URL('../database/migrations', import.meta.url).pathname,
     }).latest();
-    const repositories = new CollectionRepositoryFactory(
-      deps.database.connection(),
-    );
+    const repositories = new RepositoryFactory({
+      connection: deps.database.connection(),
+    });
     await repositories.llmServices.create({
       values: {
         name: 'openai',
@@ -61,7 +108,7 @@ describe('AIEmployeeProvider application config', () => {
         title: 'Obsolete',
         provider: 'openai',
         options: {},
-        enabledModels: { mode: 'recommended', models: [] },
+        enabledModels: { mode: 'provider', models: [] },
         modelOptions: {},
         enabled: true,
         sort: 0,
@@ -96,7 +143,7 @@ describe('AIEmployeeProvider application config', () => {
       title: 'Configured title',
       provider: 'openai',
       options: { apiKey: 'configured' },
-      enabled: 1,
+      enabled: true,
       enabledModels: {
         mode: 'custom',
         models: [{ label: 'User model', value: 'user-model' }],
@@ -128,7 +175,7 @@ describe('AIEmployeeProvider application config', () => {
     const manager = container.resolve(aiManagerToken).llmServiceManager;
     await expect(manager.getLLMService('openai')).resolves.toMatchObject({
       title: 'Initial OpenAI',
-      enabled: 0,
+      enabled: false,
     });
 
     await manager.registerLLMService(
@@ -162,7 +209,7 @@ describe('AIEmployeeProvider application config', () => {
     await expect(manager.getLLMService('openai')).resolves.toMatchObject({
       title: 'Reloaded OpenAI',
       options: { apiKey: 'reloaded' },
-      enabled: 1,
+      enabled: true,
       enabledModels: {
         mode: 'custom',
         models: [{ label: 'user-model', value: 'user-model' }],
@@ -212,7 +259,7 @@ describe('AIEmployeeProvider application config', () => {
     await config.reload();
 
     await expect(manager.getLLMService('openai')).resolves.toMatchObject({
-      enabled: 1,
+      enabled: true,
       enabledModels: {
         mode: 'custom',
         models: [{ label: 'Second model', value: 'second-model' }],
@@ -240,15 +287,26 @@ async function createProvider(
     }).latest();
   }
 
-  const paths = createConfigPaths({ rootDir: process.cwd() });
-  const config = new AppConfig([aiEmployeeConfig, driveConfig], {
-    context: { paths } as never,
-  });
+  const paths = createAppPaths({ rootDir: process.cwd() });
+  const config = new AppConfig();
   config.load({
     name: 'test-ai-config',
     read: async () => ({ kind: 'map', value: readConfig() }),
   });
   await config.loadAll();
+  config.mergeDefaults({
+    ai: { llmServices: [] },
+    drive: {
+      default: 'local',
+      disks: {
+        local: {
+          driver: 'fs',
+          location: paths.storage(),
+          visibility: 'private',
+        },
+      },
+    },
+  });
 
   const container = new ServiceContainer();
   container.instance(databaseManagerToken, deps.database);
@@ -258,7 +316,7 @@ async function createProvider(
   container.instance(loggingToken, deps.logging);
   container.instance(
     driveManagerToken,
-    createDriveManager(config.get(driveConfig)),
+    createDriveManager(config.get<AppDriveConfig>('drive')!),
   );
   const app: AppPluginApplication = {
     appName: 'main',

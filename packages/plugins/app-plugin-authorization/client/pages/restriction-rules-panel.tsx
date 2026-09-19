@@ -1,3 +1,5 @@
+import { messageKey } from '../lib/message-key.js';
+import { useTranslation } from '@nocobase/i18n/client';
 import { Button, Input } from '../components/ui.js';
 import {
   useCallback,
@@ -30,13 +32,13 @@ import { getAuthorizationClient } from '../runtime.js';
 
 const authz = getAuthorizationClient();
 
-export function RestrictionRulesPanel({
-  options,
-  users,
-}: {
+export function RestrictionRulesPanel(inputProps: {
   options: AuthorizationOptions;
   users: readonly AuthorizationUser[];
 }): ReactElement {
+  const { t } = useTranslation('@nocobase/app-plugin-authorization');
+  const { options, users } = inputProps;
+
   const [rules, setRules] = useState<readonly RestrictionRule[]>([]);
   const [draft, setDraft] = useState<RestrictionRule>();
   const [originalKey, setOriginalKey] = useState<string>();
@@ -109,24 +111,40 @@ export function RestrictionRulesPanel({
     <>
       {error ? <ErrorBox value={error} /> : null}
       <div className='rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900'>
-        Restriction rules only narrow existing access. They never grant
-        permission on their own.
+        {t('restrictionNotice', {
+          defaultValue:
+            'Restriction rules only narrow existing access. They never grant permission on their own.',
+        })}
       </div>
       <ManagementTable>
         <ManagementToolbar
           search={search}
           onSearch={setSearch}
-          actionLabel='New restriction rule'
+          actionLabel={t('newRestrictionRule', {
+            defaultValue: 'New restriction rule',
+          })}
           onAction={() => edit()}
         />
         <table className='w-full min-w-[56rem] text-left text-sm'>
           <thead className='border-b bg-muted/30 text-xs text-muted-foreground uppercase'>
             <tr>
-              <th className='px-5 py-3 font-medium'>Rule</th>
-              <th className='px-5 py-3 font-medium'>Applies to</th>
-              <th className='px-5 py-3 font-medium'>Resource</th>
-              <th className='px-5 py-3 font-medium'>Restricted actions</th>
-              <th className='px-5 py-3 font-medium'>Allowed scope</th>
+              <th className='px-5 py-3 font-medium'>
+                {t('rule', { defaultValue: 'Rule' })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('appliesTo', { defaultValue: 'Applies to' })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('resourceLabel', { defaultValue: 'Resource' })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('restrictedActions', {
+                  defaultValue: 'Restricted actions',
+                })}
+              </th>
+              <th className='px-5 py-3 font-medium'>
+                {t('allowedScope', { defaultValue: 'Allowed scope' })}
+              </th>
               <th className='w-20 px-5 py-3' />
             </tr>
           </thead>
@@ -139,28 +157,32 @@ export function RestrictionRulesPanel({
                     className='font-medium text-primary hover:underline'
                     onClick={() => edit(rule)}
                   >
-                    {rule.title || humanize(rule.key)}
+                    {rule.title || humanize(t, rule.key)}
                   </button>
                   <p className='text-xs text-muted-foreground'>
                     {rule.reason || rule.key}
                   </p>
                 </td>
-                <td className='px-5 py-4'>{subjectLabel(rule, users)}</td>
+                <td className='px-5 py-4'>{subjectLabel(t, rule, users)}</td>
                 <td className='px-5 py-4'>{resourceLabel(options, rule)}</td>
                 <td className='px-5 py-4'>
-                  {rule.actions.map((item) => humanize(item.action)).join(', ')}
+                  {rule.actions
+                    .map((item) => humanize(t, item.action))
+                    .join(', ')}
                 </td>
-                <td className='px-5 py-4'>{scopeLabel(rule)}</td>
+                <td className='px-5 py-4'>{scopeLabel(t, rule)}</td>
                 <td className='px-5 py-4 text-right'>
                   <Button size='sm' variant='ghost' onClick={() => edit(rule)}>
-                    Edit
+                    {t('edit', { defaultValue: 'Edit' })}
                   </Button>
                 </td>
               </tr>
             ))}
             {visibleRules.length === 0 ? (
               <EmptyTableRow colSpan={6}>
-                No restriction rules match your search.
+                {t('noRestrictionRules', {
+                  defaultValue: 'No restriction rules match your search.',
+                })}
               </EmptyTableRow>
             ) : null}
           </tbody>
@@ -168,8 +190,18 @@ export function RestrictionRulesPanel({
       </ManagementTable>
       {draft ? (
         <SidePanel
-          title={originalKey ? 'Edit restriction rule' : 'New restriction rule'}
-          description='Limit the effective record scope for an audience.'
+          title={
+            originalKey
+              ? t('editRestrictionRule', {
+                  defaultValue: 'Edit restriction rule',
+                })
+              : t('newRestrictionRule', {
+                  defaultValue: 'New restriction rule',
+                })
+          }
+          description={t('restrictionRuleDescription', {
+            defaultValue: 'Limit the effective record scope for an audience.',
+          })}
           onClose={() => setDraft(undefined)}
           wide
           scrollable={false}
@@ -184,14 +216,16 @@ export function RestrictionRulesPanel({
               <>
                 {originalKey ? (
                   <Button variant='outline' onClick={() => void remove()}>
-                    Delete rule
+                    {t('deleteRule', { defaultValue: 'Delete rule' })}
                   </Button>
                 ) : null}
                 <Button variant='outline' onClick={() => setDraft(undefined)}>
-                  Cancel
+                  {t('cancel', { defaultValue: 'Cancel' })}
                 </Button>
                 <Button onClick={() => void save()}>
-                  Save restriction rule
+                  {t('saveRestrictionRule', {
+                    defaultValue: 'Save restriction rule',
+                  })}
                 </Button>
               </>
             }
@@ -199,13 +233,18 @@ export function RestrictionRulesPanel({
             {editorTab === 'rule' ? (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Rule details</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('ruleDetails', { defaultValue: 'Rule details' })}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Name the rule and choose the collection to restrict.
+                    {t('restrictionRuleDetailsHint', {
+                      defaultValue:
+                        'Name the rule and choose the collection to restrict.',
+                    })}
                   </p>
                 </div>
                 <div className='grid gap-4 sm:grid-cols-2'>
-                  <Field label='Rule name'>
+                  <Field label={t('ruleName', { defaultValue: 'Rule name' })}>
                     <Input
                       value={draft.title ?? ''}
                       onChange={(event) =>
@@ -213,7 +252,12 @@ export function RestrictionRulesPanel({
                       }
                     />
                   </Field>
-                  <Field label='Key' hint='Stable identifier used by APIs.'>
+                  <Field
+                    label={t('key', { defaultValue: 'Key' })}
+                    hint={t('keyHint', {
+                      defaultValue: 'Stable identifier used by APIs.',
+                    })}
+                  >
                     <Input
                       required
                       disabled={Boolean(originalKey)}
@@ -250,9 +294,14 @@ export function RestrictionRulesPanel({
             {editorTab === 'assignments' ? (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Assignments</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('assignments', { defaultValue: 'Assignments' })}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Choose who is subject to this restriction.
+                    {t('restrictionAudienceHint', {
+                      defaultValue:
+                        'Choose who is subject to this restriction.',
+                    })}
                   </p>
                 </div>
                 <SubjectsEditor
@@ -260,7 +309,7 @@ export function RestrictionRulesPanel({
                   value={draft.subjects}
                   onChange={(subjects) => setDraft({ ...draft, subjects })}
                 />
-                <Field label='Reason'>
+                <Field label={t('reason', { defaultValue: 'Reason' })}>
                   <Input
                     value={draft.reason ?? ''}
                     onChange={(event) =>
@@ -273,9 +322,14 @@ export function RestrictionRulesPanel({
             {editorTab === 'access' ? (
               <section className='space-y-5'>
                 <div>
-                  <h3 className='text-base font-semibold'>Allowed scope</h3>
+                  <h3 className='text-base font-semibold'>
+                    {t('allowedScope', { defaultValue: 'Allowed scope' })}
+                  </h3>
                   <p className='mt-1 text-sm text-muted-foreground'>
-                    Set the maximum record scope independently for each action.
+                    {t('restrictionActionsHint', {
+                      defaultValue:
+                        'Set the maximum record scope independently for each action.',
+                    })}
                   </p>
                 </div>
                 <ActionScopesEditor
@@ -353,34 +407,52 @@ function resourceLabel(
   );
 }
 function subjectLabel(
+  t: ReturnType<typeof useTranslation>['t'],
   rule: RestrictionRule,
   users: readonly AuthorizationUser[],
 ): string {
   const subject = rule.subjects[0];
   if (!subject || subject.type === 'authenticated')
-    return 'All signed-in users';
+    return t('allSignedInUsers', { defaultValue: 'All signed-in users' });
   return (
-    users.find((user) => user.id === subject.id)?.name ?? `User ${subject.id}`
+    users.find((user) => user.id === subject.id)?.name ??
+    t('userFallback', { id: subject.id, defaultValue: `User ${subject.id}` })
   );
 }
-function scopeLabel(rule: RestrictionRule): string {
+function scopeLabel(
+  t: ReturnType<typeof useTranslation>['t'],
+  rule: RestrictionRule,
+): string {
   return rule.actions
-    .map((item) => `${humanize(item.action)}: ${accessScopeLabel(item.scope)}`)
+    .map(
+      (item) =>
+        `${humanize(t, item.action)}: ${accessScopeLabel(t, item.scope)}`,
+    )
     .join(' · ');
 }
 function accessScopeLabel(
+  t: ReturnType<typeof useTranslation>['t'],
   scope: import('../authorization-client.js').AccessScope,
 ): string {
-  if (scope.type === 'all') return 'All records';
-  if (scope.type === 'ids') return `${scope.ids.length} selected records`;
+  if (scope.type === 'all')
+    return t('allRecords', { defaultValue: 'All records' });
+  if (scope.type === 'ids')
+    return t('counts.selectedRecords', {
+      count: scope.ids.length,
+      defaultValue: `${scope.ids.length} selected records`,
+    });
   const key =
     typeof scope.recordAccess === 'string'
       ? scope.recordAccess
       : scope.recordAccess.key;
-  return humanize(key);
+  return humanize(t, key);
 }
-function humanize(value: string): string {
-  return value
+function humanize(
+  t: ReturnType<typeof useTranslation>['t'],
+  value: string,
+): string {
+  const label = value
     .replace(/[._-]+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return t(messageKey(label), { defaultValue: label });
 }

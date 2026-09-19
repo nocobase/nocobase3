@@ -1,7 +1,8 @@
 import type { ServiceToken } from '@nocobase/service-provider';
 import { useContext } from 'react';
 
-import type { ClientApplication } from './application.js';
+import type { ApiClient } from '@nocobase/api-client';
+import { apiClientToken, type ClientApplication } from './application.js';
 import { ClientApplicationContext } from './application-context.js';
 
 export function useClientApplication(): ClientApplication {
@@ -16,4 +17,8 @@ export function useClientApplication(): ClientApplication {
 
 export function useService<T>(token: ServiceToken<T>): T {
   return useClientApplication().services.resolve(token);
+}
+
+export function useApiClient(): ApiClient {
+  return useService(apiClientToken);
 }

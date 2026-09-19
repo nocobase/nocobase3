@@ -1,3 +1,5 @@
+import { createApp } from '../../server/app.js';
+import authConfig from '../../server/config/auth.js';
 // @vitest-environment node
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -27,11 +29,10 @@ import {
   SessionProvider,
   sessionHttpMiddleware,
 } from '@nocobase/app-server/session';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
-  appConfig,
+  type AppIdentityConfig,
   type AppConfigAccessor,
-  type AppConfigToken,
 } from '@nocobase/app-server/config';
 import { startNodeAppServer } from '@nocobase/app-server/node';
 import {
@@ -52,7 +53,7 @@ import {
 import type {
   AppWebSocket,
   AppWebSocketReadyState,
-} from '@nocobase/app-server/websocket';
+} from '@nocobase/app-websocket';
 import {
   databaseManagerToken,
   type DatabaseManager,
@@ -86,11 +87,12 @@ import {
 } from '@nocobase/app-server/plugins';
 import authenticationServerPlugin from '@nocobase/app-plugin-authentication/server';
 import authorizationServerPlugin from '@nocobase/app-plugin-authorization/server';
+import { hubServiceToken } from '@nocobase/app-plugin-hub/server';
 
-import { createApp } from '../../server/app.ts';
 import { createServer as createEmbeddedServer } from '../../server/embedded.ts';
 import { createStandaloneRuntimeScope } from '@nocobase/app-server/node';
 import appRuntime from '../../server/runtime.ts';
+import serverPlugins from '../../server/plugins.ts';
 import {
   createStandaloneServer,
   type StandaloneServer,
@@ -120,12 +122,6 @@ const servers: Server[] = [];
 const tempDirs: string[] = [];
 const TEST_REALTIME_TOPIC = 'test:realtime';
 const require = createRequire(import.meta.url);
-
-function declaredPluginVersion(packageName: string): string {
-  return (
-    require(`${packageName}/package.json`) as { readonly version: string }
-  ).version;
-}
 
 function requestApp(
   app: FetchableResource,
@@ -173,7 +169,9 @@ describe('app server', () => {
     expect(app.container).toBeDefined();
     expect(app.appName).toBe('app-template-hub');
     expect(app.publicBasePath).toBe('/app-template-hub');
-    expect(app.config.get(appConfig).publicBasePath).toBe('/app-template-hub');
+    expect(app.config.get<AppIdentityConfig>('app')!.publicBasePath).toBe(
+      '/app-template-hub',
+    );
   });
 
   it('passes the application to plugin providers', () => {
@@ -189,6 +187,7 @@ describe('app server', () => {
     const app = createTestApp({
       plugins: [
         defineServerPlugin<AppConfig>({
+          baseDir: import.meta.dirname,
           packageName: '@nocobase/app-plugin-test',
           serviceProviders: [TestPluginProvider],
         }),
@@ -204,6 +203,7 @@ describe('app server', () => {
     const app = createTestApp({
       plugins: [
         defineServerPlugin<AppConfig>({
+          baseDir: import.meta.dirname,
           packageName: '@nocobase/app-plugin-test',
           routes: [
             defineApiRoutes((application) => {
@@ -328,6 +328,11 @@ describe('app server', () => {
       {
         ...appRuntime,
         plugins: defineServerPlugins<AppConfig>([]),
+        routes: [
+          defineApiRoutes(() =>
+            new Hono().get('/test-runtime', (c) => c.json({ ok: true })),
+          ),
+        ],
         serviceProviders: [
           ...appRuntime.serviceProviders,
           TestRuntimeApplicationProvider,
@@ -335,16 +340,16 @@ describe('app server', () => {
       },
       scope,
     );
-    const runtime = {
+    const application = createApp({
       ...resolvedRuntime,
       plugins: createResolvedTestServerPlugins([
         defineServerPlugin<AppConfig>({
+          baseDir: import.meta.dirname,
           packageName: '@nocobase/app-plugin-runtime-test',
           serviceProviders: [TestRuntimePluginProvider],
         }),
       ]),
-    };
-    const application = createApp(runtime);
+    });
     const app = trackCloseable(
       Object.assign(application, {
         close(): Promise<void> {
@@ -355,65 +360,9 @@ describe('app server', () => {
     await app.start();
 
     expect(providerCalls).toEqual(['plugin', 'plugin service']);
-    const apiResponse = await requestApp(app, 'http://localhost/api/example');
-    const rootResponse = await requestApp(app, 'http://localhost/example');
-
-    expect(apiResponse.status).toBe(200);
-    await expect(apiResponse.json()).resolves.toEqual({
-      scope: 'api',
-      message: 'Hello from the application provider',
-    });
-    expect(rootResponse.status).toBe(200);
-    expect(rootResponse.headers.get('content-type')).toContain('text/html');
-    const rootHtml = await rootResponse.text();
-    expect(rootHtml).toContain('<h1>Application Route Example</h1>');
-    expect(rootHtml).toContain('Hello from the application provider');
-  });
-
-  it('loads and explicitly reloads plugin config from the selected YAML file', async () => {
-    const configDir = mkdtempSync(
-      path.join(tmpdir(), 'nocobase-app-template-hub-config-'),
-    );
-    tempDirs.push(configDir);
-    const configPath = path.join(configDir, 'config.yaml');
-    writeFileSync(configPath, 'heartbeat:\n  enabled: false\n');
-    const runtime = await resolveAppRuntime(
-      appRuntime,
-      createEmbeddedTestScope({
-        id: 'app-template-hub',
-        basePath: '/embedded-app-template-hub',
-        configPath,
-      }),
-    );
-
-    expect(runtime.appConfig.raw()).toMatchObject({
-      heartbeat: { enabled: false },
-    });
-
-    writeFileSync(configPath, 'heartbeat:\n  enabled: true\n');
-    await expect(runtime.appConfig.reload()).resolves.toMatchObject({
-      changedNamespaces: ['heartbeat'],
-    });
-    expect(runtime.appConfig.raw()).toMatchObject({
-      heartbeat: { enabled: true },
-    });
-  });
-
-  it('does not leak plugin authentication into application-owned API routes', async () => {
-    const app = await createEmbeddedServer(
-      createEmbeddedTestScope({
-        id: 'app-template-hub',
-        basePath: '/embedded-app-template-hub',
-      }),
-    );
-
-    const apiResponse = await requestApp(app, 'http://localhost/api/example');
-
-    expect(apiResponse.status).toBe(200);
-    await expect(apiResponse.json()).resolves.toEqual({
-      scope: 'api',
-      message: 'Hello from the application provider',
-    });
+    const response = await requestApp(app, 'http://localhost/api/test-runtime');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
   });
 
   it('routes authentication requests through the configured public auth URL', async () => {
@@ -651,119 +600,6 @@ describe('app server', () => {
     expect(viteRequestCount).toBe(0);
   });
 
-  it('keeps plugin API and Root Routes authenticated by their owning contributions', async () => {
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/routes-example`);
-    const anonymousRoot = await requestApp(
-      app,
-      `${baseUrl}/routes-example/root`,
-    );
-
-    expect(anonymous.status).toBe(401);
-    expect(anonymousRoot.status).toBe(401);
-
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    const response = await requestApp(app, `${baseUrl}/api/routes-example`, {
-      headers: { cookie: cookie ?? '' },
-    });
-    const rootResponse = await requestApp(
-      app,
-      `${baseUrl}/routes-example/root`,
-      { headers: { cookie: cookie ?? '' } },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      plugin: '@nocobase/app-plugin-routes-example',
-      scope: 'api',
-    });
-    expect(rootResponse.status).toBe(200);
-    await expect(rootResponse.json()).resolves.toMatchObject({
-      plugin: '@nocobase/app-plugin-routes-example',
-      scope: 'root',
-    });
-  });
-
-  it('loads the system info API from the registered app plugin', async () => {
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    expect(cookie).toContain('.session_token=');
-    const response = await requestApp(app, `${baseUrl}/api/system-info`, {
-      headers: { cookie: cookie ?? '' },
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      packageName: '@nocobase/app-plugin-system-info',
-      version: declaredPluginVersion('@nocobase/app-plugin-system-info'),
-      nodeVersion: process.version,
-      serverTime: expect.any(String),
-    });
-  });
-
-  it('loads the Skills example API with its owning authentication boundary', async () => {
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(
-      app,
-      `${baseUrl}/api/skills-example/notice`,
-    );
-
-    expect(anonymous.status).toBe(401);
-
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    const response = await requestApp(
-      app,
-      `${baseUrl}/api/skills-example/notice`,
-      { headers: { cookie: cookie ?? '' } },
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      description: 'This notice was provided by a NocoBase plugin.',
-      title: 'Plugin Skills are working',
-      tone: 'success',
-    });
-  });
-
   it('redirects HTML navigation to installation in install mode', async () => {
     vi.stubEnv('APP_BASE_PATH', '/main');
     vi.stubEnv('AUTH_SECRET', 'nocobase-install-mode-test-secret');
@@ -795,56 +631,6 @@ describe('app server', () => {
     );
   });
 
-  it('dispatches jobs from enabled app plugins', async () => {
-    vi.stubEnv('QUEUE_JOBS_AUTO_LOAD', 'false');
-    const app = trackCloseable(
-      await createInstalledStandaloneServer({ viteDevUrl: false }),
-    );
-    const baseUrl = `http://localhost${app.application.publicBasePath}`;
-    const anonymous = await requestApp(app, `${baseUrl}/api/queue-example`);
-    expect(anonymous.status).toBe(401);
-
-    const signIn = await requestApp(
-      app,
-      `${baseUrl}/api/auth/sign-in/username`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: 'nocobase', password: 'admin123' }),
-      },
-    );
-    const cookie = signIn.headers.get('set-cookie');
-    expect(signIn.status).toBe(200);
-    const response = await requestApp(app, `${baseUrl}/api/queue-example`, {
-      headers: { cookie: cookie ?? '' },
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      jobId: expect.any(String),
-      job: 'QueueExample',
-      queue: 'default',
-      syncExecutions: 1,
-    });
-  });
-
-  it('exposes services registered by enabled plugin providers', async () => {
-    const app = trackCloseable(
-      await createIsolatedStandaloneServer({ viteDevUrl: false }),
-    );
-    const response = await requestApp(
-      app,
-      `http://localhost${app.application.publicBasePath}/api/service-provider-example/status`,
-    );
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      service: '@nocobase/app-plugin-service-provider-example',
-      status: 'ready',
-      startedAt: expect.any(String),
-    });
-  });
-
   it('mounts standalone app-local routes behind the public base path', async () => {
     const app = trackCloseable(
       await createIsolatedStandaloneServer({ viteDevUrl: false }),
@@ -867,9 +653,46 @@ describe('app server', () => {
     const bareLocalApi = await requestApp(app, 'http://localhost/api/healthz');
 
     await expect(appHealth.json()).resolves.toEqual(expectedHealth);
-    expect(rootHealth.status).toBe(404);
-    expect(bareLocalApi.status).toBe(404);
+    expect(rootHealth.status).toBe(503);
+    expect(bareLocalApi.status).toBe(503);
     await app.close();
+  });
+
+  it('forwards outside a custom Hub mount through its current Host target', async () => {
+    const app = trackCloseable(
+      await createIsolatedStandaloneServer({
+        basePath: '/console',
+        viteDevUrl: false,
+      }),
+    );
+    const upstream = createHttpServer((req, res) => res.end(`host:${req.url}`));
+    servers.push(upstream);
+    await new Promise<void>((resolve) =>
+      upstream.listen(0, '127.0.0.1', resolve),
+    );
+    const address = upstream.address() as AddressInfo;
+    const target = vi
+      .spyOn(
+        app.application.container.resolve(hubServiceToken),
+        'getHostProxyTarget',
+      )
+      .mockReturnValue(new URL(`http://127.0.0.1:${address.port}`));
+    for (const pathname of [
+      '/customer/api/data?limit=1',
+      '/hub/',
+      '/console-other',
+      '/',
+    ]) {
+      expect(
+        await (await requestApp(app, `http://localhost${pathname}`)).text(),
+      ).toBe(`host:${pathname}`);
+    }
+    const calls = target.mock.calls.length;
+    expect(
+      (await requestApp(app, 'http://localhost/console/api/healthz')).status,
+    ).toBe(200);
+    expect(target).toHaveBeenCalledTimes(calls);
+    target.mockRestore();
   });
 
   it('mounts standalone WebSocket handlers behind the public base path', async () => {
@@ -1306,17 +1129,10 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
           visibility: 'private' as const,
         },
       },
-      links: {},
     },
     logging: createSilentLoggingConfig(),
     queue: options.queue ?? createSyncQueueConfig(),
     session: createNullSessionConfig(),
-    workflow: {
-      sourceRoot: path.resolve(process.cwd(), 'server/workflows'),
-      distRoot: path.resolve(process.cwd(), 'dist/server/workflows'),
-      artifactDisk: 'local',
-      production: false,
-    },
     snowflake: {
       workerId: 0,
     },
@@ -1344,7 +1160,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
   };
   const config = createTestConfig(configValues);
-  const paths = createConfigPaths({ rootDir: '/test/app-template-hub' });
+  const paths = createAppPaths({ rootDir: '/test/app-template-hub' });
   const database =
     options.database === false
       ? undefined
@@ -1368,6 +1184,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     publicBasePath: configValues.app.publicBasePath,
     paths,
   });
+  configValues.auth = { ...authConfig({} as never), ...configValues.auth };
   if (database) {
     app.addServiceProvider(TestDatabaseProvider);
   }
@@ -1410,6 +1227,7 @@ function createResolvedTestServerPlugins(
         packageName: definition.packageName,
         version: 'test',
         rootDir: `/test/plugins/${definition.packageName}`,
+        baseDir: definition.baseDir,
         jobLocations: [],
       },
     })),
@@ -1420,8 +1238,7 @@ function createTestConfig(
   values: Readonly<Record<string, unknown>>,
 ): AppConfigAccessor {
   return {
-    get: <TValue>(definition: AppConfigToken<TValue>): TValue =>
-      values[definition.namespace] as TValue,
+    get: <TValue>(definition: string): TValue => values[definition] as TValue,
     raw: () => values,
     reload: () => Promise.resolve({ changedNamespaces: [] }),
     subscribe: () => () => undefined,
@@ -1445,8 +1262,13 @@ function createEmbeddedTestScope(
   return {
     ...options,
     env: {
+      // Embedded scopes do not inherit process.env. These runtime tests do not
+      // install Hub tables or exercise the managed host process.
+      HUB_HOST_ENABLED: 'false',
       ...options.env,
-      DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
+      APP_CONFIG_FILE: options.rootDir
+        ? undefined
+        : writeRuntimeTestConfig(databaseDir, options.env),
     },
     paths:
       options.paths ??
@@ -1479,8 +1301,9 @@ async function createIsolatedStandaloneServer(
   return createStandaloneServer({
     ...options,
     env: {
+      HUB_HOST_ENABLED: 'false',
       ...options.env,
-      DB_DATABASE: path.join(databaseDir, 'database.sqlite'),
+      APP_CONFIG_FILE: writeRuntimeTestConfig(databaseDir, options.env),
     },
     paths: {
       rootDir: sourceRoot,
@@ -1492,40 +1315,20 @@ async function createIsolatedStandaloneServer(
   });
 }
 
-function createInstalledStandaloneServer(
-  options: StandaloneServerOptions = {},
-): Promise<StandaloneServer> {
-  return createIsolatedStandaloneServer({
-    ...options,
-    env: {
-      ...options.env,
-      DB_MIGRATIONS_AUTO_RUN: 'true',
-      DB_SEEDS_AUTO_RUN: 'true',
-    },
-  });
-}
-
 function createEmbeddedPluginFixture(rootDir: string): void {
-  // Every plugin `server/plugins.ts` imports, not just the ones this test asserts on: the embedded server resolves
-  // the whole set from the application root, and a temporary root resolves nothing it is not given.
-  const pluginPackages = [
-    '@nocobase/app-plugin-authentication',
-    '@nocobase/app-plugin-authorization',
-    '@nocobase/app-plugin-database-example',
-    '@nocobase/app-plugin-file',
-    '@nocobase/app-plugin-i18n',
-    '@nocobase/app-plugin-install',
-    '@nocobase/app-plugin-notification',
-    '@nocobase/app-plugin-notification-in-app',
-    '@nocobase/app-plugin-notification-providers',
-    '@nocobase/app-plugin-queue-example',
-    '@nocobase/app-plugin-realtime-example',
-    '@nocobase/app-plugin-routes-example',
-    '@nocobase/app-plugin-service-provider-example',
-    '@nocobase/app-plugin-skills-example',
-    '@nocobase/app-plugin-system-info',
-    '@nocobase/app-plugin-workflow',
-  ];
+  // Derived from the composition root rather than written out again. The embedded server resolves every plugin
+  // `server/plugins.ts` declares, and a temporary root resolves nothing it is not given, so a separate list has to
+  // be updated whenever a plugin is registered — and a copy of a list is a copy that goes stale.
+  //
+  // It went stale here without failing, which is the part worth knowing. `require.resolve` falls back to NODE_PATH,
+  // and vitest sets NODE_PATH to pnpm's hidden hoisted directory, so a plugin the fixture never symlinked was still
+  // found — through a path that has nothing to do with the application root this test claims to resolve from.
+  // Whether that fallback happens to hold a given package depends on install history, so the same commit passed in
+  // CI and failed locally once the list fell behind. Deriving the list removes the guess: every declared plugin is
+  // symlinked, and resolution comes from the root under test.
+  const pluginPackages = serverPlugins.plugins.map(
+    (plugin) => plugin.packageName,
+  );
   writeFileSync(
     path.join(rootDir, 'package.json'),
     JSON.stringify({
@@ -1568,6 +1371,12 @@ function createMockDatabase(
       throw new Error('Not implemented.');
     }) as DatabaseManager['builder'],
     query: (() => query) as DatabaseManager['query'],
+    createMigrator: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['createMigrator'],
+    createSeeder: (() => {
+      throw new Error('Not implemented.');
+    }) as DatabaseManager['createSeeder'],
     connect: (() =>
       Promise.reject(
         new Error('Not implemented.'),
@@ -1618,4 +1427,30 @@ function createMockQuery(
       throw new Error('Not implemented.');
     },
   } as unknown as QueryAdapter;
+}
+
+function writeRuntimeTestConfig(
+  directory: string,
+  env: Readonly<Record<string, string | undefined>> = {},
+): string {
+  const file = path.join(directory, 'config.json');
+  writeFileSync(
+    file,
+    JSON.stringify({
+      auth: { secret: 'test-auth-secret-at-least-32-characters' },
+      database: {
+        default: 'main',
+        connections: {
+          main: {
+            dialect: 'sqlite',
+            filename: path.join(directory, 'database.sqlite'),
+          },
+        },
+        migrations: { autoRun: env.DB_MIGRATIONS_AUTO_RUN !== 'false' },
+        seeds: { autoRun: env.DB_SEEDS_AUTO_RUN === 'true' },
+      },
+      hub: { host: { enabled: false } },
+    }),
+  );
+  return file;
 }

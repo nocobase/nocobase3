@@ -32,9 +32,11 @@ import {
 } from '@nocobase/app-plugin-workflow';
 ```
 
-Only use Instruction classes exported by an installed plugin and registered in the target application's build-time and runtime instruction registries. The workflow plugin currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`.
+Use Instruction classes exported by an installed plugin or defined in the application, and register the same classes in the target application's build-time and runtime instruction registries. The workflow plugin currently exports `ConditionInstruction`, `RunInstruction`, and `TerminateInstruction`.
 
 ## Complete current example
+
+For reusable custom node contracts or missing process-control semantics, read [Custom Instructions](custom-instructions.md) before authoring the DSL. It includes a complete example with public imports, asynchronous Provider registration, checker contracts, and isolated Artifact output.
 
 Create all of these files; the DSL alone is not a complete package:
 
@@ -43,8 +45,8 @@ server/workflows/quotation-decision/
 ├── workflow.ts
 └── server/
     ├── calculate-risk.ts
-    ├── record-decision.ts
-    └── request-approval.ts
+    ├── flag-for-manual-review.ts
+    └── record-routing-outcome.ts
 ```
 
 `workflow.ts`:
@@ -107,9 +109,9 @@ const workflow: WorkflowSourceAst = defineWorkflow({
     }).branch({
       yes: [
         RunInstruction.create({
-          key: 'requestApproval',
+          key: 'flagForManualReview',
           config: {
-            module: './server/request-approval',
+            module: './server/flag-for-manual-review',
             args: { quotationId: '{{$input.quotationId}}' },
           },
         }),
@@ -117,10 +119,10 @@ const workflow: WorkflowSourceAst = defineWorkflow({
       no: [],
     }),
     RunInstruction.create({
-      key: 'recordDecision',
+      key: 'recordRoutingOutcome',
       config: {
-        module: './server/record-decision',
-        args: { approved: '{{$nodeResults.needsApproval}}' },
+        module: './server/record-routing-outcome',
+        args: { needsManualReview: '{{$nodeResults.needsApproval}}' },
       },
     }),
   ],
@@ -131,7 +133,7 @@ export default workflow;
 
 Bind the `defineWorkflow()` result to a `const` annotated `WorkflowSourceAst` and default-export that binding. The application's server tsconfig enables `isolatedDeclarations`, and its `server/**/*.ts` include covers `workflow.ts`, so a bare `export default defineWorkflow({ ... })` fails `pnpm typecheck` with `error TS9037: Default exports can't be inferred with --isolatedDeclarations.` The annotated binding keeps the explicit `WorkflowSourceAst` type in the module's own declaration and compiles cleanly.
 
-The common successor `recordDecision` runs after either branch returns. Empty branches are accepted for readability and omitted from the canonical AST.
+The common successor `recordRoutingOutcome` runs after either branch returns. Empty branches are accepted for readability and omitted from the canonical AST. `flagForManualReview` performs one background business action; it does not wait for a person, receive an approval result, or resume the workflow later.
 
 `server/calculate-risk.ts`:
 
@@ -148,9 +150,9 @@ interface CalculateRiskArgs {
 
 export const run: WorkflowRunFunction = (
   rawArgs: unknown,
-  runtime,
+  options,
 ): WorkflowRunJsonValue => {
-  runtime.signal.throwIfAborted();
+  options.signal.throwIfAborted();
   const args = rawArgs as CalculateRiskArgs;
   if (typeof args.quotationId !== 'string' || typeof args.amount !== 'number') {
     throw new Error('quotationId and amount are required.');
@@ -159,40 +161,43 @@ export const run: WorkflowRunFunction = (
 };
 ```
 
-`server/request-approval.ts`:
+`server/flag-for-manual-review.ts`:
 
 ```ts
 import type { WorkflowRunFunction } from '@nocobase/app-plugin-workflow';
 
 export const run: WorkflowRunFunction = async (
   rawArgs: unknown,
-  runtime,
+  options,
 ): Promise<null> => {
-  runtime.signal.throwIfAborted();
+  options.signal.throwIfAborted();
   const quotationId = (rawArgs as { quotationId?: unknown }).quotationId;
   if (typeof quotationId !== 'string')
     throw new Error('quotationId is required.');
-  // Call an idempotent application service through runtime.app here.
-  runtime.logger.info('Approval requested');
+  // Resolve business services with options.services using the owning plugin's
+  // original public token; the service operation must be idempotent.
+  options.logger.info('Quotation flagged for manual review', { quotationId });
   return null;
 };
 ```
 
-`server/record-decision.ts`:
+`server/record-routing-outcome.ts`:
 
 ```ts
 import type { WorkflowRunFunction } from '@nocobase/app-plugin-workflow';
 
 export const run: WorkflowRunFunction = async (
   rawArgs: unknown,
-  runtime,
+  options,
 ): Promise<null> => {
-  runtime.signal.throwIfAborted();
-  const needsApproval = (rawArgs as { approved?: unknown }).approved;
-  if (typeof needsApproval !== 'boolean')
-    throw new Error('approved must be boolean.');
-  // Persist by a stable business id; retries may execute this script again.
-  runtime.logger.info('Decision recorded');
+  options.signal.throwIfAborted();
+  const needsManualReview = (rawArgs as { needsManualReview?: unknown })
+    .needsManualReview;
+  if (typeof needsManualReview !== 'boolean')
+    throw new Error('needsManualReview must be boolean.');
+  // Persist through a service resolved from options.services by a stable
+  // business id; repeated attempts must not duplicate the business effect.
+  options.logger.info('Routing outcome recorded', { needsManualReview });
   return null;
 };
 ```
@@ -207,25 +212,28 @@ From `packages/templates/app-template-default` (or the corresponding initialized
 2. Check the DSL source:
 
    ```bash
-   pnpm exec workflow check server/workflows/<stable-key>
+   pnpm nocobase workflow check server/workflows/<stable-key>
    ```
 
-   Expect `Workflow check passed: ... (<n> nodes)`. This is only the five-phase DSL/IR check described below.
+   Expect `Workflow check passed: ... (<n> nodes)`. This is only the five-phase DSL/IR check described below. Add `--ir` to print the compiled flat IR instead, which is the definition an Artifact would carry.
 
-3. Build the complete Workflow Artifacts:
+3. Run the target application's typecheck and focused tests for every `run` module and application service. Cover representative branches, result shapes, cancellation where relevant, and business idempotency for side effects. A passing DSL check does not prove this behavior.
+4. Run the target application's normal server build, then build the complete Workflow Artifacts:
 
    ```bash
-   pnpm exec workflow build
+   pnpm nocobase workflow build
    ```
 
    The normal `pnpm build` also invokes this step. The standalone command scans every direct Workflow package and replaces the configured Artifact output tree, so do not point `--dist-root` at source or an unrelated directory.
 
-4. Verify `dist/server/workflows/<stable-key>/<digest>/workflow.json` and the package-relative run modules. Development artifacts contain `.ts`; production artifacts contain the default server build's `.js` at the same relative paths. The digest is the deployed hash used by management concurrency checks.
-5. Start the application/runtime and invoke by the DSL package directory key after obtaining the bound runtime. Do not assume Artifact build itself writes database definitions.
-6. If the Artifact has no synchronized id, first-enable with its deployed hash: `enable(hash)` or `POST /api/workflows/<hash>/enable`. Synchronized definitions use their database id.
-7. Read/update administrator input overrides only if needed, and read them back.
-8. Invoke business events by resolving `workflowServiceToken` from `app.container` and calling `workflowRuntime.trigger(key, input, options?)`, explicitly handling both `accepted` and `skipped`. Use the authenticated management `run` route only for an authorized manual run of an explicitly selected definition revision; it may be historical or disabled without changing enablement.
-9. For an accepted trigger, wait for asynchronous persistence, then inspect the run, all relevant node attempts, and selected redacted payload/log records.
+   A running development server does not need this. It compiles the workflow source root on demand and produces the same content-addressed digest, so an edited definition is already listed and enableable there without a build and without a restart. Build to produce a deployable Artifact or to verify what a deployment will receive, not to see a change in development.
+
+5. Verify `dist/server/workflows/<stable-key>/<digest>/workflow.json` and the package-relative run modules. Development artifacts contain `.ts`; production artifacts contain the default server build's `.js` at the same relative paths. The digest is the deployed hash used by management concurrency checks.
+6. Only when runtime mutation is authorized, start an isolated application/runtime and invoke by the DSL package directory key after obtaining the bound runtime. Do not assume Artifact build itself writes database definitions.
+7. If the Artifact has no synchronized id, first-enable with its deployed hash: `enable(hash)` or `POST /api/workflows/<hash>/enable`. Synchronized definitions use their database id.
+8. Read/update administrator input overrides only if needed, and read them back.
+9. Invoke business events by resolving `workflowServiceToken` from `app.container` and calling `workflowRuntime.trigger(key, input, options?)`, explicitly handling both `accepted` and `skipped`. Use the authenticated management `run` route only for an authorized manual run of an explicitly selected definition revision; it may be historical or disabled without changing enablement.
+10. For an accepted trigger, resolve the run by event key, inspect relevant node attempts and payload/log records, and verify the observable business effects by their stable identities. Execution remains asynchronous even though the ordinary trigger path creates the run before returning.
 
 Keep those stages separate: source check does not prove run-entry buildability; Artifact build does not enable a definition; enablement does not invoke it.
 
@@ -281,7 +289,7 @@ Use an exact template such as `{{$parameters.approvalLimit}}` or JSON Logic `{ v
 - Keep node keys stable across revisions. Titles/descriptions may change; keys connect history, diagnostics, and result references.
 - Only call `.branch()` on a branching node, and only use branch names declared by that instruction contract.
 
-Every node source has `key`, optional `title`/`description`, required `config`, optional `options: { timeout }`, and optional `result`. `timeout` must be a finite positive number. Config is an instruction-owned namespace; never flatten config fields onto the node.
+Every node source has `key`, optional `title`, recommended `description`, required `config`, and optional `result`. Usually fill in `description` to explain the node's operation and business purpose, including relevant inputs, outputs, or side effects when helpful. The schema permits omitting it, but authoring guidance recommends providing these details so readers can understand the node beyond its short title. Node-level timeout is not currently enforced by the runtime; configure a workflow-level timeout instead. Config is an instruction-owned namespace; never flatten config fields onto the node.
 
 ## Condition nodes
 
@@ -348,19 +356,19 @@ type Result = { score: number };
 
 export const run: WorkflowRunFunction = async (
   rawArgs,
-  runtime,
+  options,
 ): Promise<WorkflowRunJsonValue> => {
+  options.signal.throwIfAborted();
   const args = rawArgs as Args;
-  runtime.signal.throwIfAborted();
   const result: Result = { score: args.quotationId.length };
-  runtime.logger.info('Risk calculated');
+  options.logger.info('Risk calculated');
   return result;
 };
 ```
 
-The actual public function currently receives `args: unknown` and runtime with exactly `app`, `signal`, and `logger`. It returns/awaits an unknown value, but runtime accepts only JSON-storable results. `undefined` becomes `null`; BigInt, functions, symbols, non-finite numbers, circular values, and class instances fail. A return like `{ status: 'failed' }` is ordinary successful business data. Throw to mark execution error. Scripts cannot choose branches, suspend, resume, or drive the processor state machine.
+The processor leaves the node `PENDING` and yields before executing its module in the background. Completion saves the result and resumes the workflow; downstream nodes run only after completion. This is process-local asynchronous execution, not a durable job or a separate worker thread. The public function receives `args: unknown` and options with exactly `services`, `signal`, and `logger`. `services` is a read-only application service resolver with `has(token)` and `resolve(token)`: import each service owner's original public token and do not recreate a same-named token. The resolver cannot register or replace application services. `signal` is the current Workflow abort signal, and `logger` is already bound to the current Workflow execution context. The function returns/awaits an unknown value, but runtime accepts only JSON-storable results. `undefined` becomes `null`; BigInt, functions, symbols, non-finite numbers, circular values, and class instances fail. A return like `{ status: 'failed' }` is ordinary successful business data. Throw to mark execution error. Scripts cannot choose branches, suspend, resume, or drive the processor state machine.
 
-Honor `runtime.signal` in cancellable I/O. Keep secrets out of args/results/logs. Make external side effects idempotent using business identifiers because workflow retries/reruns may call the script again.
+Honor `options.signal` in cancellable I/O and use service-owned timeout options where available. Keep secrets out of args, results, logs, and service inputs that may be logged. Make external side effects idempotent using business identifiers because workflow retries/reruns may call the script again.
 
 ## Variables and templates
 
@@ -395,8 +403,10 @@ Visibility is lexical and tree-based. A node may reference declared results from
 Run the installed plugin's actual checker before load/build:
 
 ```bash
-pnpm exec workflow check <package-or-workflow.ts>
+pnpm nocobase workflow check <package-or-workflow.ts>
 ```
+
+This CLI uses the workflow plugin's core `condition`, `run`, and `terminate` contracts. If the workflow uses an Instruction supplied by another installed plugin, the application must call the public `checkWorkflowPackage()`/`buildApplicationWorkflows()` APIs from its own checker/build entry and pass the same Instruction contracts registered at runtime. A default CLI pass cannot validate an application-specific Instruction, and the default CLI rejecting that node does not prove the installed extension is invalid.
 
 The checker performs, in order:
 
@@ -425,7 +435,7 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 
 - No legacy YAML, `trigger`, `start`, node map, numeric branch, or edge-list syntax.
 - `workflow.ts` binds `defineWorkflow()` to a const annotated with the exported `WorkflowSourceAst` type and default-exports that binding; it never default-exports a bare call expression, which fails the application's `isolatedDeclarations` typecheck (`TS9037`).
-- Import only Instruction classes exported by installed plugins and registered by the application.
+- Import Instruction classes through installed plugins' public exports or application-owned modules, and register them with the application.
 - No invented nodes/operators/config fields.
 - All objects and evaluated helpers produce JSON-only values.
 - Input root is `object`; extra fields are deliberately allowed or rejected.
@@ -435,3 +445,5 @@ Rebuild twice from unchanged sources when determinism is in doubt and compare th
 - Every run script is static, named-exported, abort-aware, and idempotent.
 - Every referenced run result has an accurate, lexically visible schema.
 - The real five-phase checker passes, then the Artifact build preserves the workflow package's runtime resources at their package-relative paths.
+
+Workflow diagnostics use the application logging service with source `workflow` and workflow, execution, and node identities where available. They share `storage/logs/app.<UTC-date>.<part>.log` by default. Set `logging.loggers.workflow.file.name: workflow` to separate them. The message-first logger passed to run modules adapts to this service; diagnostic output is not copied into the database node execution `log` field. Execution status, result, and error records remain business data.

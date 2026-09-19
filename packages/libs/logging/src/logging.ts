@@ -1,6 +1,12 @@
 import { symbols, type DestinationStream } from 'pino';
 
 import { createDefaultLoggingConfig } from './config.js';
+import {
+  createLogOutput,
+  reportLoggingFailure,
+  type LoggerFileOptions,
+  type LogOutputOptions,
+} from './output.js';
 import { createLogger } from './logger.js';
 import type { Logger, LoggerConfig, LoggingConfig } from './types.js';
 
@@ -10,25 +16,49 @@ interface ClosableDestinationStream extends DestinationStream {
   end(): void;
   off(event: 'close', listener: () => void): this;
   off(event: 'error', listener: (error: Error) => void): this;
+  off(event: 'finish', listener: () => void): this;
   once(event: 'close', listener: () => void): this;
   once(event: 'error', listener: (error: Error) => void): this;
+  once(event: 'finish', listener: () => void): this;
 }
 
 export class Logging {
+  private readonly outputs: LogOutputOptions;
   private readonly defaultLogger: string;
   private readonly defaultConfig: LoggerConfig;
-  private readonly loggerConfigs: Readonly<Record<string, LoggerConfig>>;
+  private readonly loggerConfigs: Readonly<
+    Record<string, LoggerConfig & { file?: LoggerFileOptions }>
+  >;
   private readonly loggers = new Map<string, Logger>();
   private readonly transportLoggers = new Set<Logger>();
   private readonly transportStreams = new Set<ClosableDestinationStream>();
+  private readonly destinations = new Map<
+    string,
+    ReturnType<typeof createLogOutput>
+  >();
   private closePromise: Promise<void> | undefined;
 
   constructor(config: LoggingConfig = createDefaultLoggingConfig()) {
     const {
       default: defaultLogger = 'system',
+      pretty,
+      file,
+      console: consoleOutput,
       loggers = {},
       ...defaultConfig
     } = config;
+    if (config.default !== undefined)
+      reportLoggingFailure(
+        'logging.default is deprecated; use getLogger(name) explicitly',
+      );
+    if (pretty !== undefined)
+      reportLoggingFailure('logging.pretty is deprecated; use console.pretty');
+    this.outputs = {
+      file,
+      console:
+        consoleOutput ??
+        (pretty === undefined ? undefined : { enabled: pretty, pretty }),
+    };
     this.defaultLogger = defaultLogger;
     this.defaultConfig = defaultConfig;
     this.loggerConfigs = loggers;
@@ -40,12 +70,38 @@ export class Logging {
       return existing;
     }
 
-    const config = resolveLoggerConfig(
-      this.defaultConfig,
-      this.loggerConfigs[name],
-      name,
-    );
-    const logger = createLogger(config).child({ logger: name });
+    const { file: fileOverride, ...override } = this.loggerConfigs[name] ?? {};
+    const config = resolveLoggerConfig(this.defaultConfig, override, name);
+    let destination: ReturnType<typeof createLogOutput> | undefined;
+    if (config.transport && (this.outputs.file || this.outputs.console))
+      reportLoggingFailure(
+        'Explicit logging transport owns output; file and console settings are ignored',
+      );
+    if (!config.transport && (this.outputs.file || this.outputs.console)) {
+      const file = {
+        ...this.outputs.file,
+        ...(fileOverride?.directory === undefined
+          ? {}
+          : { directory: fileOverride.directory }),
+        ...(fileOverride?.name === undefined
+          ? {}
+          : { name: fileOverride.name }),
+        enabled:
+          this.outputs.file?.enabled !== false &&
+          fileOverride?.enabled !== false,
+      };
+      const key = JSON.stringify([file, this.outputs.console]);
+      destination = this.destinations.get(key);
+      if (!destination) {
+        destination = createLogOutput({ ...this.outputs, file });
+        this.destinations.set(key, destination);
+      }
+    }
+    const logger = createLogger(config, destination).child({ logger: name });
+    if (destination) {
+      this.transportLoggers.add(logger);
+      this.transportStreams.add(destination);
+    }
     if (config.transport) {
       this.transportLoggers.add(logger);
       this.transportStreams.add(resolveClosableStream(logger));
@@ -115,11 +171,14 @@ function closeTransportStream(
     const cleanup = (): void => {
       stream.off('close', handleClose);
       stream.off('error', handleError);
+      stream.off('finish', handleFinish);
     };
-    const handleClose = (): void => {
+    const handleDone = (): void => {
       cleanup();
       resolve();
     };
+    const handleClose = handleDone;
+    const handleFinish = handleDone;
     const handleError = (error: Error): void => {
       cleanup();
       reject(error);
@@ -127,6 +186,7 @@ function closeTransportStream(
 
     stream.once('close', handleClose);
     stream.once('error', handleError);
+    stream.once('finish', handleFinish);
     try {
       stream.end();
     } catch (error) {

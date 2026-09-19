@@ -1,21 +1,24 @@
 import { useGo } from '@refinedev/core';
 import { ServiceProvider } from '@nocobase/service-provider';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { type ReactElement } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { type ReactElement, type ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  appApiClientToken,
+  apiClientToken,
   ClientApplication,
+  realtimeClientToken,
   type ClientApplicationRenderConfigFactory,
 } from '../src/application.js';
+import { useApiClient } from '../src/index.js';
+import { ClientApplicationContext } from '../src/application-context.js';
 import { AppClientRoot } from '../src/app-client.js';
 import {
   createAppClientConfig,
   defineAppClientRenderConfig,
   normalizeAppClientBasename,
 } from '../src/config.js';
-import { defineAppRoutes, defineClientPlugins } from '../src/plugins.js';
+import { defineClientPlugins } from '../src/plugins.js';
 import { defineAppRuntime, resolveAppRuntime } from '../src/runtime/index.js';
 
 function RouterConsumer(): ReactElement {
@@ -39,7 +42,7 @@ async function createTestApplication(
   const runtime = await resolveAppRuntime(
     defineAppRuntime({
       packageName: '@example/app',
-      config: createAppClientConfig,
+      createAppConfig: createAppClientConfig,
       serviceProviders: [TestProvider],
       plugins: defineClientPlugins([]),
     }),
@@ -50,6 +53,103 @@ async function createTestApplication(
 }
 
 describe('app client', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('resolves the current application API client and preserves its identity', async () => {
+    const first = await createTestApplication(() =>
+      defineAppClientRenderConfig({}),
+    );
+    const second = await createTestApplication(() =>
+      defineAppClientRenderConfig({}),
+    );
+    let current = first;
+    const wrapper = ({ children }: { children: ReactNode }): ReactElement => (
+      <ClientApplicationContext.Provider value={current}>
+        {children}
+      </ClientApplicationContext.Provider>
+    );
+    const { result, rerender, unmount } = renderHook(() => useApiClient(), {
+      wrapper,
+    });
+    try {
+      expect(result.current).toBe(first.services.resolve(apiClientToken));
+      rerender();
+      expect(result.current).toBe(first.services.resolve(apiClientToken));
+      current = second;
+      rerender();
+      expect(result.current).toBe(second.services.resolve(apiClientToken));
+      expect(result.current).not.toBe(first.services.resolve(apiClientToken));
+    } finally {
+      unmount();
+      await first.shutdown();
+      await second.shutdown();
+    }
+  });
+
+  it('requires application context for useApiClient', () => {
+    expect(() => renderHook(() => useApiClient())).toThrow(
+      'useClientApplication() must be used inside AppClientRoot.',
+    );
+  });
+
+  it.each([
+    [{}, 'wss://ui.example.com/main/ws'],
+    [
+      { baseURL: 'https://api.example.com/apps/demo/api/' },
+      'wss://api.example.com/apps/demo/ws',
+    ],
+    [{ baseURL: '/apps/demo/api' }, 'wss://ui.example.com/apps/demo/ws'],
+    [
+      { baseURL: '/apps/demo/api', realtimeURL: '/custom/realtime' },
+      'wss://ui.example.com/custom/realtime',
+    ],
+    [
+      { realtimeURL: 'wss://events.example.com/socket' },
+      'wss://events.example.com/socket',
+    ],
+  ])(
+    'resolves the realtime service endpoint from API config %j',
+    async (api, expected) => {
+      const urls: string[] = [];
+      class MockWebSocket {
+        public static readonly CONNECTING = 0;
+        public static readonly OPEN = 1;
+        public readonly readyState = MockWebSocket.CONNECTING;
+        public constructor(url: string) {
+          urls.push(url);
+        }
+        public close(): void {}
+      }
+      vi.stubGlobal('WebSocket', MockWebSocket);
+      vi.stubGlobal('window', {
+        APP_BASE_PATH: '/main/',
+        location: {
+          href: 'https://ui.example.com/main/',
+          origin: 'https://ui.example.com',
+        },
+      });
+      const runtime = await resolveAppRuntime(
+        defineAppRuntime({
+          packageName: '@example/app',
+          createAppConfig: createAppClientConfig,
+          plugins: defineClientPlugins([]),
+        }),
+        { rawConfig: { api } },
+      );
+      const app = new ClientApplication({
+        runtime,
+        createRenderConfig: () => ({ routes: null }),
+      });
+      await app.start();
+      expect(urls).toHaveLength(0);
+      app.services
+        .resolve(realtimeClientToken)
+        .subscribe('test:topic', vi.fn());
+      expect(urls).toEqual([expected]);
+      await app.shutdown();
+    },
+  );
+
   it('normalizes router basenames', () => {
     expect(normalizeAppClientBasename(undefined)).toBeUndefined();
     expect(normalizeAppClientBasename('/')).toBeUndefined();
@@ -114,86 +214,55 @@ describe('app client', () => {
     const app = await createTestApplication(() =>
       defineAppClientRenderConfig({ routes: null }),
     );
-    const client = app.services.resolve(appApiClientToken);
-    const close = vi.spyOn(client.realtime!, 'close');
+    expect(app.services.resolve(apiClientToken)).toBeDefined();
+    const realtime = app.services.resolve(realtimeClientToken);
+    const close = vi.spyOn(realtime, 'close');
 
     await app.shutdown();
 
     expect(close).toHaveBeenCalledOnce();
   });
 
-  it('requires an auth provider when a route requires authentication', async () => {
+  it('synchronizes the document locale before rendering and until shutdown', async () => {
+    const element = document.documentElement;
+    const previousLanguage = element.lang;
+    const previousDirection = element.dir;
+    vi.stubGlobal('localStorage', { getItem: () => null });
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
-        routes: defineAppRoutes([
-          {
-            name: 'home',
-            path: '/',
-            auth: 'required',
-            componentLoader: async () => ({ default: RouterConsumer }),
-          },
-          {
-            name: 'login',
-            path: '/login',
-            auth: 'guest',
-            componentLoader: async () => ({ default: RouterConsumer }),
-          },
-        ]),
+        createAppConfig: createAppClientConfig,
         plugins: defineClientPlugins([]),
+        locales: {
+          'en-US': async () => ({ title: 'Application' }),
+          'ar-SA': async () => ({ title: 'التطبيق' }),
+        },
       }),
+      { rawConfig: { i18n: { defaultLocale: 'ar-SA' } } },
     );
     const app = new ClientApplication({
       runtime,
       createRenderConfig: () => ({ routes: null }),
     });
 
-    await expect(app.start()).rejects.toThrow(
-      'Client Application routes requiring authentication need an auth provider.',
-    );
-  });
+    try {
+      await app.start();
+      expect(element.lang).toBe('ar-SA');
+      expect(element.dir).toBe('rtl');
 
-  it('requires a guest login route when authenticated routes are enabled', async () => {
-    class AuthProviderService extends ServiceProvider<ClientApplication> {
-      public readonly name: string = '@example/auth';
+      await runtime.i18n.changeLanguage('en-US');
+      expect(element.lang).toBe('en-US');
+      expect(element.dir).toBe('ltr');
 
-      public override boot(): Promise<void> {
-        this.app.refine.setAuthProvider({
-          check: vi.fn(),
-          getIdentity: vi.fn(),
-          login: vi.fn(),
-          logout: vi.fn(),
-          onError: vi.fn(),
-        });
-        return Promise.resolve();
-      }
+      await app.shutdown();
+      element.lang = 'after-shutdown';
+      await runtime.i18n.changeLanguage('ar-SA');
+      expect(element.lang).toBe('after-shutdown');
+    } finally {
+      await app.shutdown();
+      element.lang = previousLanguage;
+      element.dir = previousDirection;
     }
-
-    const runtime = await resolveAppRuntime(
-      defineAppRuntime({
-        packageName: '@example/app',
-        config: createAppClientConfig,
-        serviceProviders: [AuthProviderService],
-        routes: defineAppRoutes([
-          {
-            name: 'home',
-            path: '/',
-            auth: 'required',
-            componentLoader: async () => ({ default: RouterConsumer }),
-          },
-        ]),
-        plugins: defineClientPlugins([]),
-      }),
-    );
-    const app = new ClientApplication({
-      runtime,
-      createRenderConfig: () => ({ routes: null }),
-    });
-
-    await expect(app.start()).rejects.toThrow(
-      'Client Application routes requiring authentication need a guest /login route.',
-    );
   });
 
   it('requires startup before rendering and shuts providers down in reverse order', async () => {
@@ -229,7 +298,7 @@ describe('app client', () => {
     const runtime = await resolveAppRuntime(
       defineAppRuntime({
         packageName: '@example/app',
-        config: createAppClientConfig,
+        createAppConfig: createAppClientConfig,
         serviceProviders: [createProvider('first'), createProvider('second')],
         plugins: defineClientPlugins([]),
       }),

@@ -6,6 +6,11 @@ const zhCN: NotificationResource = {
     logs: '通知日志',
   },
   logs: {
+    deliveryOperations: '投递操作',
+    recipeDescription: '跟踪各渠道的交接和服务提供方的每次尝试。',
+    redacted: '消息正文、接收者和租约令牌已隐去。',
+    providerAttempts: '服务提供方尝试记录',
+
     eyebrow: '通知',
     title: '通知日志',
     description:
@@ -39,12 +44,13 @@ const zhCN: NotificationResource = {
   test: {
     title: '发送测试通知',
     description:
-      '选择渠道和服务商后发送。消息会投递给指定收件人，并记录在下方日志中。',
+      '选择通知方式后发送。消息会投递给指定收件人，并记录在下方日志中。',
     close: '关闭测试通知对话框',
     loadingProviders: '正在加载已配置的服务商…',
     noProviders: '没有已启用的服务商配置。',
-    channelProvider: '渠道和服务商',
-    selectProvider: '选择渠道和服务商',
+    channelProvider: '通知方式',
+    selectProvider: '选择通知方式',
+    singleProviderLabel: '{{channel}}（{{provider}}）',
     recipient: '收件人',
     userIdPlaceholder: '用户 ID',
     emailHelp: '接收本次测试的邮箱地址。',

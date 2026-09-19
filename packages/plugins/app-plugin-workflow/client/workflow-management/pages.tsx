@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNotification } from '@refinedev/core';
 import type { Translator } from '@nocobase/i18n';
@@ -11,6 +13,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu.js';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select.js';
 import {
   Dialog,
   DialogContent,
@@ -35,6 +44,14 @@ import type {
   WorkflowRunRecord,
 } from './types.js';
 import { WorkflowCanvas } from './workflow-canvas.js';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from './ui/table.js';
 import { WORKFLOW_SETTING_PATHS } from '../route-contracts.js';
 import { WORKFLOW_NS } from '../namespace.js';
 import './workflow-canvas.css';
@@ -45,6 +62,34 @@ function workflowPath(workflowId: string): string {
 
 function workflowRunPath(runId: string): string {
   return `${WORKFLOW_SETTING_PATHS.workflowRuns}/${encodeURIComponent(runId)}`;
+}
+
+function WorkflowTabs({
+  active,
+  onChange,
+}: {
+  active: 'workflows' | 'runs';
+  onChange: (value: 'workflows' | 'runs') => void;
+}): React.ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
+  return (
+    <nav aria-label={t('nav.automation')} className='workflow-tabs'>
+      <button
+        className={active === 'workflows' ? 'active' : ''}
+        type='button'
+        onClick={() => onChange('workflows')}
+      >
+        {t('nav.flow')}
+      </button>
+      <button
+        className={active === 'runs' ? 'active' : ''}
+        type='button'
+        onClick={() => onChange('runs')}
+      >
+        {t('nav.runs')}
+      </button>
+    </nav>
+  );
 }
 
 function statusLabel(status: number | null, t: Translator): string {
@@ -100,22 +145,50 @@ function WorkflowStatusSwitch({
   label: string;
   onCheckedChange: (checked: boolean) => void;
 }): React.ReactElement {
-  const { t } = useTranslation(WORKFLOW_NS);
   return (
-    <span className='workflow-status-switch'>
-      <Switch
-        aria-label={label}
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        size='labeled'
-      />
-      <span aria-hidden='true' className='workflow-status-switch-label'>
-        <span className='workflow-status-switch-on'>{t('status.on')}</span>
-        <span className='workflow-status-switch-off'>{t('status.off')}</span>
-      </span>
-    </span>
+    <Switch
+      aria-label={label}
+      checked={checked}
+      onCheckedChange={onCheckedChange}
+      size='default'
+    />
   );
 }
+
+function WorkflowPagination({
+  pagination,
+  onPageChange,
+}: {
+  pagination: { page: number; pageSize: number; total: number };
+  onPageChange: (page: number) => void;
+}): React.ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
+  const pageCount = Math.ceil(pagination.total / pagination.pageSize);
+  return (
+    <nav className='workflow-pagination' aria-label={t('pagination.label')}>
+      <span>
+        {t('pagination.page', { page: pagination.page, total: pageCount })}
+      </span>
+      <div>
+        <button
+          type='button'
+          disabled={pagination.page <= 1}
+          onClick={() => onPageChange(pagination.page - 1)}
+        >
+          {t('pagination.previous')}
+        </button>
+        <button
+          type='button'
+          disabled={pagination.page >= pageCount}
+          onClick={() => onPageChange(pagination.page + 1)}
+        >
+          {t('pagination.next')}
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 function formatTime(value?: string | null, locale?: string): string {
   return value
     ? new Intl.DateTimeFormat(locale, {
@@ -247,7 +320,7 @@ function useAsync<T>(load: () => Promise<T>): {
   };
 }
 
-function InputDialog({
+export function InputDialog({
   workflow,
   onClose,
 }: {
@@ -274,27 +347,40 @@ function InputDialog({
           {Object.entries(workflow.parametersSchema).map(([key, item]) => (
             <label className='workflow-parameter-field' key={key}>
               <span>{item.title ?? key}</span>
-              <input
-                placeholder={
-                  item.default === undefined
-                    ? t('common.notSet')
-                    : displayInputValue(item.default)
-                }
-                value={
-                  Object.hasOwn(values, key)
-                    ? displayInputValue(values[key])
-                    : ''
-                }
-                onChange={(event) =>
-                  setValues((current) => ({
-                    ...current,
-                    [key]:
-                      item.type === 'number'
-                        ? Number(event.target.value)
-                        : event.target.value,
-                  }))
-                }
-              />
+              {item.type === 'boolean' ? (
+                <Switch
+                  checked={
+                    Object.hasOwn(values, key)
+                      ? values[key] === true
+                      : item.default === true
+                  }
+                  onCheckedChange={(checked) =>
+                    setValues((current) => ({ ...current, [key]: checked }))
+                  }
+                />
+              ) : (
+                <input
+                  placeholder={
+                    item.default === undefined
+                      ? t('common.notSet')
+                      : displayInputValue(item.default)
+                  }
+                  value={
+                    Object.hasOwn(values, key)
+                      ? displayInputValue(values[key])
+                      : ''
+                  }
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      [key]:
+                        item.type === 'number'
+                          ? Number(event.target.value)
+                          : event.target.value,
+                    }))
+                  }
+                />
+              )}
               {item.description ? <small>{item.description}</small> : null}
             </label>
           ))}
@@ -315,7 +401,7 @@ function InputDialog({
     </Dialog>
   );
 }
-function ManualRunDialog({
+export function ManualRunDialog({
   workflow,
   onClose,
   onExecuted,
@@ -326,6 +412,7 @@ function ManualRunDialog({
 }): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
   const { open } = useNotification();
+  const [running, setRunning] = useState(false);
   const workflowId = workflow.id ?? workflow.hash;
   if (!workflowId) throw new Error(t('workflows.runMissingIdentifier'));
   const properties = contextProperties(workflow.inputSchema);
@@ -339,6 +426,8 @@ function ManualRunDialog({
     ),
   );
   const run = (): void => {
+    if (running) return;
+    setRunning(true);
     const input = Object.fromEntries(
       Object.entries(values).filter(
         ([, value]) => value !== undefined && value !== '',
@@ -356,10 +445,11 @@ function ManualRunDialog({
           message: t('workflows.runFailed'),
           description: cause instanceof Error ? cause.message : String(cause),
         }),
-      );
+      )
+      .finally(() => setRunning(false));
   };
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && !running && onClose()}>
       <DialogContent size='md'>
         <DialogHeader>
           <DialogTitle>{t('manualRun.title')}</DialogTitle>
@@ -429,12 +519,18 @@ function ManualRunDialog({
             <button
               className='workflow-button workflow-button-outline'
               type='button'
+              disabled={running}
               onClick={onClose}
             >
               {t('common.cancel')}
             </button>
-            <button className='workflow-button' type='submit'>
-              {t('common.run')}
+            <button
+              className='workflow-button'
+              type='submit'
+              disabled={running}
+              aria-busy={running}
+            >
+              {running ? t('common.running') : t('common.run')}
             </button>
           </DialogFooter>
         </form>
@@ -542,6 +638,7 @@ function WorkflowRow({
   const { open } = useNotification();
   const identifier = item.id ?? item.hash;
   if (!identifier) return null;
+  const pendingArtifact = item.pendingArtifact;
   const execute = (): void => {
     setRunning(true);
     void workflowApi
@@ -566,12 +663,27 @@ function WorkflowRow({
   };
   return (
     <>
-      <li>
-        <div className='workflow-row-main'>
-          <Link to={workflowPath(identifier)}>{item.title ?? item.key}</Link>
-          <span aria-hidden='true' className='workflow-row-separator'>
-            ·
-          </span>
+      <TableRow>
+        <TableCell>
+          <div className='workflow-row-main'>
+            <div className='workflow-row-title'>
+              <Link to={workflowPath(identifier)}>
+                {item.title ?? item.key}
+              </Link>
+              {pendingArtifact ? (
+                <Link
+                  className='workflow-pending-version-link'
+                  to={workflowPath(pendingArtifact.hash)}
+                >
+                  <Badge className='workflow-version-tag pending'>
+                    {t('workflows.newVersionAvailable')}
+                  </Badge>
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        </TableCell>
+        <TableCell className='workflow-table-run-count-cell'>
           {item.executed > 0 ? (
             <button
               type='button'
@@ -587,59 +699,62 @@ function WorkflowRow({
               {t('common.runCount', { count: 0 })}
             </span>
           )}
-        </div>
-        <div className='workflow-row-actions'>
-          <label className='workflow-switch'>
-            <WorkflowStatusSwitch
-              checked={item.enabled}
-              label={t(
-                item.enabled
-                  ? 'actions.disableWorkflow'
-                  : 'actions.enableWorkflow',
-                { title: item.title ?? item.key },
-              )}
-              onCheckedChange={(enabled) => {
-                const update = enabled
-                  ? workflowApi.enable(identifier)
-                  : workflowApi.status(identifier, false);
-                void update.then((next) => {
-                  onChange(next);
-                  onReload();
-                });
-              }}
-            />
-          </label>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <button
-                  aria-label={t('actions.more')}
-                  className='workflow-row-menu-trigger'
-                  type='button'
-                >
-                  ···
-                </button>
-              }
-            />
-            <DropdownMenuContent
-              align='end'
-              className='workflow-row-menu-content'
-            >
-              <DropdownMenuItem
-                disabled={!item.hasParameters}
-                onClick={() =>
-                  void workflowApi.workflow(identifier).then(setSettings)
+        </TableCell>
+        <TableCell className='workflow-table-status-cell'>
+          <WorkflowStatusSwitch
+            checked={item.enabled}
+            label={t(
+              item.enabled
+                ? 'actions.disableWorkflow'
+                : 'actions.enableWorkflow',
+              { title: item.title ?? item.key },
+            )}
+            onCheckedChange={(enabled) => {
+              const update = enabled
+                ? workflowApi.enable(identifier)
+                : workflowApi.status(identifier, false);
+              void update.then((next) => {
+                onChange(next);
+                onReload();
+              });
+            }}
+          />
+        </TableCell>
+        <TableCell className='workflow-table-actions-cell'>
+          <div className='workflow-row-actions'>
+            {running ? <span role='status'>{t('common.running')}</span> : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    aria-label={t('actions.more')}
+                    className='workflow-row-menu-trigger'
+                    type='button'
+                  >
+                    ···
+                  </button>
                 }
+              />
+              <DropdownMenuContent
+                align='end'
+                className='workflow-row-menu-content'
               >
-                {t('actions.parameterSettings')}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={running} onClick={execute}>
-                {running ? t('common.running') : t('common.run')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </li>
+                <DropdownMenuItem
+                  disabled={!item.hasParameters}
+                  onClick={() =>
+                    void workflowApi.workflow(identifier).then(setSettings)
+                  }
+                >
+                  {t('actions.parameterSettings')}
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={running} onClick={execute}>
+                  {running ? t('common.running') : t('common.run')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </TableCell>
+      </TableRow>
       {runs ? (
         <ExecutionDialog
           runs={runs}
@@ -665,66 +780,107 @@ export function WorkflowListPage(): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
   const detail = useOutlet();
   const [items, setItems] = useState<WorkflowListRecord[] | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+  });
   const [query, setQuery] = useState('');
   const [enabled, setEnabled] = useState('');
-  const load = (): void => {
-    const params = new URLSearchParams();
-    if (query) params.set('q', query);
-    if (enabled) params.set('enabled', enabled);
-    void workflowApi.workflows(params.size ? `?${params}` : '').then(setItems);
-  };
-  useEffect(load, [query, enabled]);
+  const [activeTab, setActiveTab] = useState<'workflows' | 'runs'>('workflows');
+  const load = useCallback(
+    (nextPage: number): void => {
+      const params = new URLSearchParams();
+      if (query) params.set('q', query);
+      if (enabled) params.set('enabled', enabled);
+      params.set('page', String(nextPage));
+      params.set('pageSize', String(pagination.pageSize));
+      void workflowApi.workflowPage(`?${params}`).then((result) => {
+        setItems(result.data);
+        setPagination(result.meta);
+      });
+    },
+    [enabled, pagination.pageSize, query],
+  );
+  useEffect(() => load(1), [load]);
   if (detail) return detail;
   return (
-    <main className='workflow-page'>
-      <h1 className='text-2xl font-semibold tracking-tight'>
-        {t('workflows.title')}
-      </h1>
-      <section className='workflow-list-card'>
-        <header className='workflow-list-header'>
-          <div className='workflow-filter-bar'>
-            <input
-              aria-label={t('filters.searchWorkflowTitle')}
-              placeholder={t('filters.searchWorkflowTitle')}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <select
-              aria-label={t('filters.workflowStatus')}
-              value={enabled}
-              onChange={(event) => setEnabled(event.target.value)}
+    <PageContainer className='workflow-page'>
+      <PageHeader title={t('workflows.title')} />
+      <WorkflowTabs active={activeTab} onChange={setActiveTab} />
+      {activeTab === 'runs' ? (
+        <WorkflowRunListPage embedded />
+      ) : (
+        <section className='workflow-list-card'>
+          <header className='workflow-list-header'>
+            <div className='workflow-filter-bar'>
+              <input
+                aria-label={t('filters.searchWorkflowTitle')}
+                placeholder={t('filters.searchWorkflowTitle')}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              <select
+                aria-label={t('filters.workflowStatus')}
+                value={enabled}
+                onChange={(event) => setEnabled(event.target.value)}
+              >
+                <option value=''>{t('filters.allStatuses')}</option>
+                <option value='true'>{t('status.enabled')}</option>
+                <option value='false'>{t('status.disabled')}</option>
+              </select>
+            </div>
+            <button
+              className='workflow-button workflow-button-outline'
+              type='button'
+              onClick={() => load(pagination.page)}
             >
-              <option value=''>{t('filters.allStatuses')}</option>
-              <option value='true'>{t('status.enabled')}</option>
-              <option value='false'>{t('status.disabled')}</option>
-            </select>
-          </div>
-          <button type='button' onClick={load}>
-            {t('common.refresh')}
-          </button>
-        </header>
-        <ul className='workflow-list'>
-          {items?.map((item) => (
-            <WorkflowRow
-              key={item.id ?? item.hash ?? item.key}
-              item={item}
-              onReload={load}
-              onChange={(next) =>
-                setItems(
-                  (current) =>
-                    current?.map((candidate) =>
-                      candidate.key === next.key ? next : candidate,
-                    ) ?? null,
-                )
-              }
+              {t('common.refresh')}
+            </button>
+          </header>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('tables.workflow')}</TableHead>
+                <TableHead>{t('tables.runCount')}</TableHead>
+                <TableHead>{t('tables.status')}</TableHead>
+                <TableHead>{t('tables.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items?.map((item) => (
+                <WorkflowRow
+                  key={item.id ?? item.hash ?? item.key}
+                  item={item}
+                  onReload={() => load(pagination.page)}
+                  onChange={(next) =>
+                    setItems(
+                      (current) =>
+                        current?.map((candidate) =>
+                          candidate.key === next.key ? next : candidate,
+                        ) ?? null,
+                    )
+                  }
+                />
+              ))}
+              {items?.length === 0 ? (
+                <TableRow>
+                  <TableCell className='workflow-list-empty' colSpan={4}>
+                    {t('common.noData')}
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+          {pagination.total > pagination.pageSize ? (
+            <WorkflowPagination
+              pagination={pagination}
+              onPageChange={(page) => load(page)}
             />
-          ))}
-          {items?.length === 0 ? (
-            <li className='workflow-list-empty'>{t('common.noData')}</li>
           ) : null}
-        </ul>
-      </section>
-    </main>
+        </section>
+      )}
+    </PageContainer>
   );
 }
 
@@ -732,16 +888,22 @@ export function WorkflowDetailPage(): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
   const { workflowId = '' } = useParams();
   const navigate = useNavigate();
+  const { open } = useNotification();
+  const [running, setRunning] = useState(false);
   const loadWorkflow = useCallback(
     () => workflowApi.workflow(workflowId),
     [workflowId],
   );
+  const loadRevisions = useCallback(
+    () => workflowApi.revisions(workflowId),
+    [workflowId],
+  );
   const loaded = useAsync(loadWorkflow);
-  const [revisionState, setRevisionState] = useState<{
-    workflowId: string;
-    items: WorkflowDetailRecord[] | null;
-    loading: boolean;
-  }>(() => ({ workflowId: '', items: null, loading: false }));
+  // Loaded with the definition rather than when the picker is opened. A native
+  // select renders its options as the popup opens, so options that arrive while
+  // it is open stay invisible until the next open -- and the candidate revision
+  // is the one option someone opens this picker to find.
+  const revisionList = useAsync(loadRevisions);
   const [dialog, setDialog] = useState<'parameters' | 'manual' | null>(null);
   const [selectedNodeKey, setSelectedNodeKey] = useState<string | null>(null);
   const [runs, setRuns] = useState<WorkflowRunRecord[] | null>(null);
@@ -751,63 +913,97 @@ export function WorkflowDetailPage(): React.ReactElement {
     [workflow],
   );
   if (!workflow || !source)
-    return <main>{loaded.error ?? t('workflows.loading')}</main>;
+    return (
+      <PageContainer>{loaded.error ?? t('workflows.loading')}</PageContainer>
+    );
   const identifier = workflow.id ?? workflow.hash;
-  if (!identifier) return <main>{t('workflows.missingIdentifier')}</main>;
+  if (!identifier)
+    return <PageContainer>{t('workflows.missingIdentifier')}</PageContainer>;
   const enabled = workflow.enabled;
+  const pendingArtifact = workflow.pendingArtifact;
   const hasInput =
     Object.keys(contextProperties(workflow.inputSchema)).length > 0;
-  const revisions =
-    revisionState.workflowId === workflowId ? revisionState.items : null;
-  const revisionsLoading =
-    revisionState.workflowId === workflowId && revisionState.loading;
+  const revisions = revisionList.value;
+  // Enabling a revision that another revision has superseded swaps the version
+  // the workflow runs, which is not what an enable/disable switch says it does.
+  // A definition that has never been enabled has no current revision at all,
+  // and keeps the switch the list page shows for it.
+  const supersededRevision =
+    workflow.version != null &&
+    workflow.current !== true &&
+    (revisions ?? []).some((item) => item.current === true);
   const selectedNode = workflow.nodes.find(
     (node) => node.key === selectedNodeKey,
   );
-  const loadRevisions = (): void => {
-    if (revisions || revisionsLoading) return;
-    setRevisionState({ workflowId, items: null, loading: true });
-    void workflowApi
-      .revisions(workflowId)
-      .then((items) => setRevisionState({ workflowId, items, loading: false }))
-      .catch(() =>
-        setRevisionState({ workflowId, items: null, loading: false }),
-      );
+  const enableRevision = (target: string): void => {
+    void workflowApi.enable(target).then((next) => {
+      const nextIdentifier = next.id ?? next.hash ?? identifier;
+      if (nextIdentifier === workflowId) {
+        loaded.reload();
+        revisionList.reload();
+        return;
+      }
+      void navigate(workflowPath(nextIdentifier), { replace: true });
+    });
   };
   return (
-    <main className='workflow-page'>
-      <Link to={WORKFLOW_SETTING_PATHS.workflows}>{t('workflows.back')}</Link>
-      <div className='workflow-title-row'>
-        <div>
-          <h1 className='text-2xl font-semibold tracking-tight'>
-            {workflow.title ?? workflow.key}
-          </h1>
-          <p>{workflow.description || t('workflows.noDescription')}</p>
-        </div>
+    <PageContainer className='workflow-page'>
+      <div>
+        <Link to={WORKFLOW_SETTING_PATHS.workflows}>{t('workflows.back')}</Link>
       </div>
+      <PageHeader
+        title={workflow.title ?? workflow.key}
+        description={workflow.description || t('workflows.noDescription')}
+      />
       <section className='workflow-canvas-card'>
         <header className='workflow-canvas-header'>
           <div className='workflow-canvas-header-leading'>
+            {running ? <span role='status'>{t('common.running')}</span> : null}
             <label>
               {t('workflows.version')}{' '}
-              <select
+              <Select
                 value={identifier}
-                onPointerDown={loadRevisions}
-                onFocus={loadRevisions}
-                onChange={(event) =>
-                  void navigate(workflowPath(event.target.value))
+                onValueChange={(value) =>
+                  value && void navigate(workflowPath(value))
                 }
               >
-                {(revisions ?? [workflow]).map((item) => (
-                  <option
-                    key={item.id ?? item.hash ?? item.key}
-                    value={item.id ?? item.hash ?? item.key}
-                  >
-                    {item.version ?? t('common.unpublished')}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className='min-w-28'>
+                  <SelectValue>
+                    <span className={workflow.version ? '' : 'italic'}>
+                      {workflow.version ?? t('common.unpublished')}
+                    </span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {(revisions ?? [workflow]).map((item) => (
+                    <SelectItem
+                      key={item.id ?? item.hash ?? item.key}
+                      value={item.id ?? item.hash ?? item.key}
+                    >
+                      <span
+                        aria-hidden='true'
+                        className='workflow-version-current-marker'
+                      >
+                        {item.current === true ? '>' : ''}
+                      </span>
+                      <span className={item.version ? '' : 'italic'}>
+                        {item.version ?? t('common.unpublished')}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
+            {pendingArtifact ? (
+              <Link
+                className='workflow-pending-version-link'
+                to={workflowPath(pendingArtifact.hash)}
+              >
+                <Badge className='workflow-version-tag pending'>
+                  {t('workflows.newVersionAvailable')}
+                </Badge>
+              </Link>
+            ) : null}
             <div className='workflow-execution-summary'>
               {workflow.executed > 0 ? (
                 <button
@@ -824,33 +1020,38 @@ export function WorkflowDetailPage(): React.ReactElement {
             </div>
           </div>
           <div className='canvas-header-actions'>
-            <label className='workflow-switch'>
-              <WorkflowStatusSwitch
-                checked={enabled}
-                label={t(
-                  enabled
-                    ? 'actions.disableWorkflow'
-                    : 'actions.enableWorkflow',
-                  { title: workflow.title ?? workflow.key },
-                )}
-                onCheckedChange={(checked) => {
-                  void (
-                    checked
-                      ? workflowApi.enable(identifier)
-                      : workflowApi.status(identifier, false)
-                  ).then((next) => {
-                    const nextIdentifier = next.id ?? next.hash ?? identifier;
-                    if (nextIdentifier !== workflowId) {
-                      void navigate(workflowPath(nextIdentifier), {
-                        replace: true,
-                      });
-                      return;
-                    }
-                    loaded.reload();
-                  });
-                }}
-              />
-            </label>
+            {supersededRevision ? (
+              <button
+                className='workflow-button workflow-button-outline'
+                type='button'
+                onClick={() => enableRevision(identifier)}
+              >
+                {t('actions.enableThisVersion')}
+              </button>
+            ) : (
+              <>
+                <label className='workflow-switch'>
+                  <WorkflowStatusSwitch
+                    checked={enabled}
+                    label={t(
+                      enabled
+                        ? 'actions.disableWorkflow'
+                        : 'actions.enableWorkflow',
+                      { title: workflow.title ?? workflow.key },
+                    )}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        enableRevision(identifier);
+                        return;
+                      }
+                      void workflowApi
+                        .status(identifier, false)
+                        .then(() => loaded.reload());
+                    }}
+                  />
+                </label>
+              </>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -874,16 +1075,31 @@ export function WorkflowDetailPage(): React.ReactElement {
                   {t('actions.parameterSettings')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={!workflow.id && !workflow.hash}
-                  onClick={() =>
-                    hasInput
-                      ? setDialog('manual')
-                      : void workflowApi
-                          .execute(identifier, {}, createWorkflowEventKey())
-                          .then((run) => navigate(workflowRunPath(run.id)))
-                  }
+                  disabled={running || (!workflow.id && !workflow.hash)}
+                  onClick={() => {
+                    if (hasInput) {
+                      setDialog('manual');
+                      return;
+                    }
+                    if (running) return;
+                    setRunning(true);
+                    void workflowApi
+                      .execute(identifier, {}, createWorkflowEventKey())
+                      .then((run) => navigate(workflowRunPath(run.id)))
+                      .catch((cause: unknown) =>
+                        open?.({
+                          type: 'error',
+                          message: t('workflows.runFailed'),
+                          description:
+                            cause instanceof Error
+                              ? cause.message
+                              : String(cause),
+                        }),
+                      )
+                      .finally(() => setRunning(false));
+                  }}
                 >
-                  {t('actions.runManually')}
+                  {running ? t('common.running') : t('actions.runManually')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -919,87 +1135,131 @@ export function WorkflowDetailPage(): React.ReactElement {
           onClose={() => setRuns(null)}
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }
 
-export function WorkflowRunListPage(): React.ReactElement {
+export function WorkflowRunListPage({
+  embedded = false,
+}: { embedded?: boolean } = {}): React.ReactElement {
   const { i18n, t } = useTranslation(WORKFLOW_NS);
   const detail = useOutlet();
   const [items, setItems] = useState<WorkflowRunRecord[] | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 20,
+    total: 0,
+  });
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
-  const load = (): void => {
-    const params = new URLSearchParams();
-    if (query) params.set('workflowTitle', query);
-    if (status) params.set('status', status);
-    void workflowApi.runs(params.size ? `?${params}` : '').then(setItems);
-  };
-  useEffect(load, [query, status]);
+  const load = useCallback(
+    (nextPage: number): void => {
+      const params = new URLSearchParams();
+      if (query) params.set('workflowTitle', query);
+      if (status) params.set('status', status);
+      params.set('page', String(nextPage));
+      params.set('pageSize', String(pagination.pageSize));
+      void workflowApi.runPage(`?${params}`).then((result) => {
+        setItems(result.data);
+        setPagination(result.meta);
+      });
+    },
+    [pagination.pageSize, query, status],
+  );
+  useEffect(() => load(1), [load]);
   if (detail) return detail;
-  return (
-    <main className='workflow-page'>
-      <h1 className='text-2xl font-semibold tracking-tight'>
-        {t('runs.title')}
-      </h1>
-      <section className='workflow-list-card'>
-        <header className='workflow-list-header'>
-          <div className='workflow-filter-bar'>
-            <input
-              aria-label={t('filters.filterWorkflowTitle')}
-              placeholder={t('filters.filterWorkflowTitle')}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-            <select
-              aria-label={t('filters.runStatus')}
-              value={status}
-              onChange={(event) => setStatus(event.target.value)}
-            >
-              <option value=''>{t('filters.allStatuses')}</option>
-              <option value='0'>{t('status.running')}</option>
-              <option value='1'>{t('status.resolved')}</option>
-              <option value='-1'>{t('status.failed')}</option>
-              <option value='-2'>{t('status.error')}</option>
-            </select>
-          </div>
-          <button type='button' onClick={load}>
-            {t('common.refresh')}
-          </button>
-        </header>
-        <ul className='workflow-list workflow-run-list'>
+  const content = (
+    <section className='workflow-list-card'>
+      <header className='workflow-list-header'>
+        <div className='workflow-filter-bar'>
+          <input
+            aria-label={t('filters.filterWorkflowTitle')}
+            placeholder={t('filters.filterWorkflowTitle')}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <select
+            aria-label={t('filters.runStatus')}
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            <option value=''>{t('filters.allStatuses')}</option>
+            <option value='0'>{t('status.running')}</option>
+            <option value='1'>{t('status.resolved')}</option>
+            <option value='-1'>{t('status.failed')}</option>
+            <option value='-2'>{t('status.error')}</option>
+          </select>
+        </div>
+        <button
+          className='workflow-button workflow-button-outline'
+          type='button'
+          onClick={() => load(pagination.page)}
+        >
+          {t('common.refresh')}
+        </button>
+      </header>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>{t('tables.workflow')}</TableHead>
+            <TableHead>{t('tables.status')}</TableHead>
+            <TableHead>{t('tables.triggeredAt')}</TableHead>
+            <TableHead>{t('tables.duration')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {items?.map((run) => (
-            <li key={run.id}>
-              <Link className='execution-item' to={workflowRunPath(run.id)}>
-                <div>
-                  <span className='execution-item-title'>
-                    <span className='execution-run-id'>#{run.id}</span>{' '}
-                    <span className='execution-workflow-title'>
-                      {run.workflowTitle ?? run.workflowKey}
-                    </span>
+            <TableRow key={run.id}>
+              <TableCell>
+                <Link
+                  className='execution-item-title'
+                  to={workflowRunPath(run.id)}
+                >
+                  <span className='execution-run-id'>#{run.id}</span>{' '}
+                  <span className='execution-workflow-title'>
+                    {run.workflowTitle ?? run.workflowKey}
                   </span>
-                  <span className='execution-item-time'>
-                    {formatTime(
-                      run.startedAt ?? run.createdAt,
-                      i18n.resolvedLanguage,
-                    )}
-                  </span>
-                </div>
-                <div className='execution-item-meta'>
-                  <WorkflowRunStatusTag status={run.status} />
-                  <span>
-                    {t('common.duration', { duration: duration(run) })}
-                  </span>
-                </div>
-              </Link>
-            </li>
+                </Link>
+              </TableCell>
+              <TableCell>
+                <WorkflowRunStatusTag status={run.status} />
+              </TableCell>
+              <TableCell className='execution-item-time'>
+                {formatTime(
+                  run.startedAt ?? run.createdAt,
+                  i18n.resolvedLanguage,
+                )}
+              </TableCell>
+              <TableCell>
+                <div className='execution-item-meta'>{duration(run)}</div>
+              </TableCell>
+            </TableRow>
           ))}
           {items?.length === 0 ? (
-            <li className='workflow-list-empty'>{t('common.noData')}</li>
+            <TableRow>
+              <TableCell className='workflow-list-empty' colSpan={4}>
+                {t('common.noData')}
+              </TableCell>
+            </TableRow>
           ) : null}
-        </ul>
-      </section>
-    </main>
+        </TableBody>
+      </Table>
+      {pagination.total > pagination.pageSize ? (
+        <WorkflowPagination
+          pagination={pagination}
+          onPageChange={(page) => load(page)}
+        />
+      ) : null}
+    </section>
+  );
+  return embedded ? (
+    content
+  ) : (
+    <PageContainer className='workflow-page'>
+      <PageHeader title={t('workflows.title')} />
+      <WorkflowTabs active='runs' onChange={() => undefined} />
+      {content}
+    </PageContainer>
   );
 }
 
@@ -1025,7 +1285,11 @@ export function WorkflowRunDetailPage(): React.ReactElement {
     [workflow.value],
   );
   if (!run || !workflow.value || !source)
-    return <main>{state.error ?? workflow.error ?? t('runs.loading')}</main>;
+    return (
+      <PageContainer>
+        {state.error ?? workflow.error ?? t('runs.loading')}
+      </PageContainer>
+    );
   const nodes = run.nodeRuns ?? [];
   const graph = projectWorkflowGraph(source);
   const selectedNode = workflow.value.nodes.find(
@@ -1034,18 +1298,20 @@ export function WorkflowRunDetailPage(): React.ReactElement {
   const title = selectedNode?.title ?? nodeRun?.nodeKey;
   const description = selectedNode?.description ?? null;
   return (
-    <main className='workflow-page'>
-      <Link to={WORKFLOW_SETTING_PATHS.workflowRuns}>{t('runs.back')}</Link>
-      <div className='workflow-title-row'>
-        <div>
-          <h1 className='text-2xl font-semibold tracking-tight'>
+    <PageContainer className='workflow-page'>
+      <div>
+        <Link to={workflowPath(run.workflowId)}>{t('workflows.back')}</Link>
+      </div>
+      <PageHeader
+        title={
+          <>
             {run.workflowTitle ?? run.workflowKey}
             <span className='workflow-run-title-version'>
               {run.workflowVersion ?? t('common.unpublished')}
             </span>
-          </h1>
-        </div>
-      </div>
+          </>
+        }
+      />
       <section className='workflow-canvas-card'>
         <header className='workflow-canvas-header workflow-run-detail-header'>
           <span className='workflow-run-triggered-at'>
@@ -1084,6 +1350,6 @@ export function WorkflowRunDetailPage(): React.ReactElement {
           onClose={() => setInputOpen(false)}
         />
       ) : null}
-    </main>
+    </PageContainer>
   );
 }

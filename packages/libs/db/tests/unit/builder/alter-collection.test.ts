@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/builder.js';
 
 describe('CollectionBuilder alterCollection', () => {
   it('collects fluent alter operations', async () => {
@@ -151,7 +151,13 @@ describe('CollectionBuilder alterCollection', () => {
       ],
     });
     expect(dropConstraint.schemaOperations?.[0]).toMatchObject({
-      operations: [{ type: 'dropConstraint', name: 'uk_orders_paid_at' }],
+      operations: [
+        {
+          type: 'dropConstraint',
+          name: 'uk_orders_paid_at',
+          constraintType: undefined,
+        },
+      ],
     });
   });
 
@@ -159,15 +165,8 @@ describe('CollectionBuilder alterCollection', () => {
     const builder = new CollectionBuilder();
 
     await builder.createCollection('users', {
-      tableName: 'app_users',
-      fields: [
-        {
-          name: 'userId',
-          type: 'integer',
-          columnName: 'user_pk',
-          primaryKey: true,
-        },
-      ],
+      naming: { tablePrefix: 'app_' },
+      fields: [{ name: 'userId', type: 'integer', primaryKey: true }],
     });
     await builder.createCollection('orders', {
       fields: [{ name: 'id', type: 'increments', primaryKey: true }],
@@ -176,7 +175,7 @@ describe('CollectionBuilder alterCollection', () => {
     const result = await builder.alterCollection(
       'orders',
       (collection) => {
-        collection.bigInt('createdById').columnName('creator_id');
+        collection.bigInt('createdById');
         collection
           .belongsTo('createdBy', 'users')
           .foreignKey('createdById')
@@ -193,25 +192,25 @@ describe('CollectionBuilder alterCollection', () => {
         expect.objectContaining({
           type: 'addColumn',
           column: expect.objectContaining({
-            name: 'creator_id',
+            name: 'created_by_id',
             type: 'bigInt',
           }),
         }),
         expect.objectContaining({
           type: 'addIndex',
           index: expect.objectContaining({
-            columns: ['creator_id'],
-            name: 'idx_orders_creator_id',
+            columns: ['created_by_id'],
+            name: 'idx_orders_created_by_id',
           }),
         }),
         expect.objectContaining({
           type: 'addConstraint',
           constraint: expect.objectContaining({
             type: 'foreignKey',
-            columns: ['creator_id'],
+            columns: ['created_by_id'],
             references: {
               table: 'app_users',
-              columns: ['user_pk'],
+              columns: ['user_id'],
             },
           }),
         }),
@@ -222,5 +221,47 @@ describe('CollectionBuilder alterCollection', () => {
         { type: 'addColumn', column: { name: 'created_by_id' } },
       ]),
     });
+  });
+
+  it('deduplicates relation indexes added through field and collection definitions', async () => {
+    const builder = new CollectionBuilder();
+
+    await builder.createCollection('orders', {
+      fields: [{ name: 'id', type: 'increments', primaryKey: true }],
+    });
+
+    const result = await builder.alterCollection(
+      'orders',
+      (collection) => {
+        collection.string('productId');
+        collection
+          .belongsTo('product', 'products')
+          .foreignKey('productId')
+          .targetKey('id')
+          .foreignKeyType('string')
+          .index();
+        collection.index('productId');
+      },
+      { dryRun: true },
+    );
+
+    const schemaOperation = result.schemaOperations?.[0];
+    expect(schemaOperation?.type).toBe('alterTable');
+    if (!schemaOperation || schemaOperation.type !== 'alterTable') {
+      throw new Error('Expected an alterTable schema operation.');
+    }
+    expect(
+      schemaOperation.operations.filter(
+        (operation) => operation.type === 'addIndex',
+      ),
+    ).toEqual([
+      {
+        type: 'addIndex',
+        index: {
+          columns: ['product_id'],
+          name: 'idx_orders_product_id',
+        },
+      },
+    ]);
   });
 });

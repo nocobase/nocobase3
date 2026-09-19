@@ -104,6 +104,34 @@ describe('createI18nMiddleware', () => {
     await expect(response.json()).resolves.toMatchObject({ locale: 'en-US' });
   });
 
+  it('honors explicit English fallback even when only Chinese is offered', async () => {
+    const runtime = new I18nRuntime({ defaultLocale: 'zh-CN' });
+    runtime.registerApplicationNamespace(APP, {
+      'zh-CN': () => Promise.resolve({ default: { greeting: '你好' } }),
+    });
+    runtime.registerNamespace(PLUGIN, {
+      'en-US': () => Promise.resolve({ default: { greeting: 'Hello' } }),
+      'zh-CN': () => Promise.resolve({ default: { greeting: '你好' } }),
+    });
+    await runtime.init();
+    expect(runtime.getLocales()).toEqual(['zh-CN']);
+    const app = createApp(runtime, { locale: 'en-US' });
+    app.get('/plugin', (context) =>
+      context.json({
+        locale: getRequestLocale(context),
+        message: getRequestTranslator(context, PLUGIN)('greeting'),
+      }),
+    );
+
+    const response = await app.request('/plugin', {
+      headers: { 'Accept-Language': 'zh-CN' },
+    });
+    await expect(response.json()).resolves.toEqual({
+      locale: 'en-US',
+      message: 'Hello',
+    });
+  });
+
   it('works with no session middleware mounted', async () => {
     const app = createApp(await createRuntime());
 

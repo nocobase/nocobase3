@@ -4,23 +4,31 @@
 #   Public origin used for callbacks and redirects in production.
 #   publicOrigin: https://apps.example.com
 
+# The language the application starts in, for the browser and the server alike. Which languages it offers follows
+# from the files in client/locales and server/locales, not from configuration.
+# i18n:
+#   defaultLocale: zh-CN
+
 # Values under client are public and embedded in the SPA HTML.
 client:
   app:
     title: NocoBase
+    # Defaults apply only when no valid browser-local choice is saved.
+    # defaultColorScheme: system # light | dark | system
+    # defaultTheme: compact # ID from client/theme/theme-presets.ts
 
 auth:
   # Generate a unique secret, for example with: openssl rand -hex 32
-  # secret: replace-with-a-unique-secret
+  secret: replace-with-a-unique-secret
   emailAndPassword:
     enabled: true
     autoSignIn: false
   session:
     storeSessionInDatabase: true
 
-# session:
-#   # Use the same generated value as auth.secret, or another unique secret.
-#   secret: replace-with-a-unique-secret
+session:
+  # Use the same generated value as auth.secret, or another unique secret.
+  secret: replace-with-a-unique-secret
 
 notification:
   channels:
@@ -28,7 +36,7 @@ notification:
       enabled: true
       providers:
         - type: database
-          name: primary
+          name: default
 
     # Uncomment and configure this channel to send email notifications.
     # - type: email
@@ -55,13 +63,11 @@ notification:
     #   providers:
     #     - type: feishu-webhook
     #       name: feishu
-    #       target: default
     #       webhookUrl: https://open.feishu.cn/open-apis/bot/v2/hook/replace-me
     #       secret: replace-with-the-feishu-secret
     #
     #     - type: dingtalk-webhook
     #       name: dingtalk
-    #       target: default
     #       webhookUrl: https://oapi.dingtalk.com/robot/send?access_token=replace-me
     #       secret: replace-with-the-dingtalk-secret
 
@@ -87,12 +93,46 @@ database:
       dialect: sqlite
       database: database.sqlite
       debug: false
-  migrations:
-    autoRun: true
-  seeds:
-    autoRun: true
+      # For Oracle, use dialect: oracle and replace database with serviceName: FREEPDB1.
+      # For SQL Server, use dialect: mssql and configure encrypt and trustServerCertificate.
+      schemaManagement: managed
+      migrations:
+        autoRun: true
+      seeds:
+        autoRun: true
+    # Additional managed databases use database/<connectionName>/{migrations,seeds}.
+    # analytics:
+    #   dialect: postgres
+    #   host: localhost
+    #   database: analytics
+    #   username: postgres
+    #   password: ${ANALYTICS_DB_PASSWORD}
+    #   schemaManagement: managed
+    #   migrations:
+    #     autoRun: false
+    #   seeds:
+    #     autoRun: false
+    # Existing external databases require a runtime metadataStore and do not run tasks.
 
 snowflake:
   # Assign a unique worker ID to each concurrently running instance.
   workerId: 0
   epoch: 1605024000
+
+# File logging is independent of terminal formatting.
+logging:
+  level: info
+  file:
+    enabled: true
+    retentionDays: 7
+    name: app
+    maxFileSizeMB: 10
+    maxTotalSizeMB: 500
+  loggers:
+    request:
+      file:
+        name: request
+  console:
+    enabled: true
+    # Set true for human-readable terminal output.
+    pretty: false

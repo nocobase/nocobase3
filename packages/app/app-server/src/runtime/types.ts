@@ -1,6 +1,8 @@
+import type { AppRuntimeLogging } from '../logging/config.js';
 import type { EnvMap } from '../config/index.js';
+import type { AppConfigAccessor } from '../config/index.js';
 import type { ApplicationFetchHandler } from '../application/index.js';
-import type { AppWebSocketHandler } from '../websocket.js';
+import type { AppWebSocketHandler } from '@nocobase/app-websocket';
 
 export type AppDisposer = () => void | Promise<void>;
 
@@ -13,13 +15,12 @@ export interface AppServer {
   websocket?: AppWebSocketHandler;
 }
 
-export interface AppPathOptions {
-  readonly rootDir: string;
-  readonly serverDir: string;
-  readonly databaseDir?: string;
-  readonly clientDir?: string;
-  readonly storageDir?: string;
+export interface AppInstance extends AppServer {
+  readonly config: AppConfigAccessor;
 }
+
+export type { AppPathOptions, AppPaths } from '../config/paths.js';
+import type { AppPathOptions } from '../config/paths.js';
 
 /**
  * The host-owned runtime boundary passed to an application factory.
@@ -29,6 +30,7 @@ export interface AppPathOptions {
  * provide the information available in their respective runtime modes.
  */
 export interface AppScope extends AppLifecycle {
+  readonly logging?: AppRuntimeLogging;
   readonly mode?: 'embedded' | 'standalone';
   readonly id: string;
   readonly appName?: string;
@@ -44,7 +46,7 @@ export interface AppScope extends AppLifecycle {
   readonly dataDir?: string;
   /** Optional configuration file path supplied by the host. */
   readonly configPath?: string;
-  /** Fully resolved environment supplied by the host when available. */
+  /** Explicit configuration environment. Embedded Apps default to an empty map. */
   readonly env?: EnvMap;
   /** Fully resolved application paths supplied by the host when available. */
   readonly paths?: AppPathOptions;

@@ -14,7 +14,7 @@ import {
   inspectAppClient,
   parseInspectAppClientArgs,
   selectAppClientInspection,
-} from '../../scripts/inspect-client.mjs';
+} from '../../cli/dev-commands/inspect-client-impl.mjs';
 
 async function createInspectionApp(pluginsSource?: string): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
@@ -45,6 +45,33 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
 }
 
 describe('client inspection', () => {
+  it('inspects nested page routes without loading their components', async () => {
+    const appRoot = await createInspectionApp(`
+      const page = async () => { throw new Error('must not load pages'); };
+      export default { plugins: [{
+        packageName: '@example/nested', config: [], serviceProviders: [],
+        reactProviders: [], routeComponentOverrides: [], options: {},
+        routes: [{ parent: 'app', routes: [{
+          name: 'parent', path: '/parent', componentLoader: page,
+          children: [{ name: 'child', path: 'child', componentLoader: page }],
+        }] }],
+      }], routeComponentOverrides: [] };
+    `);
+    const inspection = await inspectAppClient({ appRoot });
+    expect(inspection.routes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: '@example/nested:parent',
+          path: '/parent',
+        }),
+        expect.objectContaining({
+          id: '@example/nested:child',
+          path: '/parent/child',
+        }),
+      ]),
+    );
+  });
+
   it('parses the static Client contribution types', () => {
     expect(
       parseInspectAppClientArgs(['--type', 'react-providers', '--json']),
@@ -85,38 +112,28 @@ describe('client inspection', () => {
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:login',
+        id: '@nocobase/app-template-default:login',
         path: '/login',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:register',
+        id: '@nocobase/app-template-default:register',
         path: '/register',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:forgot-password',
+        id: '@nocobase/app-template-default:forgot-password',
         path: '/forgot-password',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-plugin-authentication:reset-password',
+        id: '@nocobase/app-template-default:reset-password',
         path: '/reset-password',
       },
       {
         auth: 'guest',
         id: '@nocobase/app-plugin-install:install',
         path: '/install',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-notification-provider:demo',
-        path: '/notification-provider',
-      },
-      {
-        auth: 'required',
-        id: '@nocobase/app-plugin-routes-example:index',
-        path: '/routes-example',
       },
       {
         auth: 'required',
@@ -130,8 +147,8 @@ describe('client inspection', () => {
       },
       {
         auth: 'required',
-        id: '@nocobase/app-plugin-system-info:index',
-        path: '/system-info',
+        id: '@nocobase/app-plugin-scheduler:schedule-detail',
+        path: '/settings/automation/schedules/:scheduleId',
       },
     ]);
     expect(
@@ -139,12 +156,13 @@ describe('client inspection', () => {
     ).toEqual([
       { id: '@nocobase/app-template-default:theme', order: 1 },
       {
-        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
       },
+      { id: '@nocobase/app-plugin-authorization:authorization', order: 3 },
       {
-        id: '@nocobase/app-plugin-routes-example:routes-example',
-        order: 3,
+        id: '@nocobase/app-plugin-notification-provider:notification-host',
+        order: 4,
       },
     ]);
     expect(
@@ -156,11 +174,10 @@ describe('client inspection', () => {
       { packageName: '@nocobase/app-template-default', order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
-      { packageName: '@nocobase/app-plugin-i18n', order: 4 },
-      { packageName: '@nocobase/app-plugin-notification-provider', order: 5 },
-      { packageName: '@nocobase/app-plugin-workflow', order: 6 },
-      { packageName: '@nocobase/app-plugin-notification', order: 7 },
-      { packageName: '@nocobase/app-plugin-audit', order: 8 },
+      { packageName: '@nocobase/app-plugin-notification-provider', order: 4 },
+      { packageName: '@nocobase/app-plugin-workflow', order: 5 },
+      { packageName: '@nocobase/app-plugin-notification', order: 6 },
+      { packageName: '@nocobase/app-plugin-file', order: 7 },
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
@@ -225,7 +242,6 @@ describe('client inspection', () => {
       }
       const plugin = {
         packageName: '@example/client-plugin',
-        config: [],
         serviceProviders: [ExampleProvider],
         locales: {
           'en-US': async () => {
@@ -274,7 +290,6 @@ describe('client inspection', () => {
       globalThis.__clientLocalesOnlyCalls = { lifecycle: 0, locale: 0, route: 0 };
       const plugin = {
         packageName: '@example/client-locales-only-inspection',
-        config: [],
         serviceProviders: [],
         locales: {
           'en-US': async () => {
@@ -324,7 +339,10 @@ describe('client inspection', () => {
         [
           'exec',
           'tsx',
-          './scripts/inspect-client.mjs',
+          './cli/index.ts',
+          'app',
+          'inspect',
+          'client',
           '--type',
           'settings',
           '--json',

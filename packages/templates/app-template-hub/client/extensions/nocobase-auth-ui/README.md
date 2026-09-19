@@ -1,31 +1,50 @@
 # NocoBase Authentication UI
 
-Application-owned authentication presentation backed by the authentication
-plugin. The authentication plugin owns protocol, session state, route identity,
-headless actions and internal fallback forms. This Registry item owns the final
-forms, branding, layout and page composition, and overrides only the plugin
-route component loaders.
+Application-owned authentication UI backed by
+`@nocobase/app-plugin-authentication`.
 
-The canonical recipe is published by `@nocobase/app-plugin-authentication`.
-Once materialized, files under `client/extensions/nocobase-auth-ui` are
-application-owned source code and may be edited freely. Upgrades should be
-reviewed as a three-way merge; plugin internals must not be copied into the
-installed extension.
+This registry item is preinstalled into application templates at:
 
-## Edit map
+```text
+client/extensions/nocobase-auth-ui/
+```
 
-| Task                                     | File                                  |
-| ---------------------------------------- | ------------------------------------- |
-| Logo or product name                     | `components/auth-brand.tsx`           |
-| Columns, spacing, or shared layout       | `components/auth-layout.tsx`          |
-| Marketing copy or artwork                | `components/auth-marketing-panel.tsx` |
-| Form fields, validation, and form layout | `forms/*-form.tsx`                    |
-| Page title, links, or form composition   | `pages/*-page.tsx`                    |
-| Route-to-page component mapping          | `extension.ts`                        |
+After materialization, the files belong to the application and may be edited
+freely. The item includes the page layout, form tabs, SSO button group, four
+password forms, branding and marketing panel. The application composes each
+authentication route directly with `AuthLayout`:
 
-Use `AuthLink` from the plugin's `client/ui` entry for NocoBase SPA navigation.
-The four password forms in `forms/` are application-owned and use the plugin's
-stable `client/actions` hooks. They may be changed or replaced with captcha,
-social login, organization fields, or application-specific validation. Do not
-import plugin-internal fallback forms. Do not add duplicate `/login`, `/register`,
-`/forgot-password`, or `/reset-password` routes.
+```tsx
+<AuthLayout
+  logo={<AuthBrand light={<YourLightLogo />} dark={<YourDarkLogo />} />}
+  forms={[
+    { id: 'password', label: 'Password', content: <PasswordLoginForm /> },
+    { id: 'ldap', label: 'LDAP', content: <YourLdapForm /> },
+  ]}
+  sso={
+    <AuthSsoButtons
+      providers={[
+        { id: 'google', label: 'Google', onClick: signInWithGoogle },
+        { id: 'github', label: 'GitHub', onClick: signInWithGitHub },
+      ]}
+    />
+  }
+  marketing={<YourMarketingPanel />}
+  title='Welcome back'
+  description='Sign in with your username or email and password.'
+/>
+```
+
+Use `form` for one form, or `forms` for multiple authentication methods. The
+`forms` prop renders an accessible tab switcher, so an application can combine
+password, LDAP, passkey, or other application-owned forms in one page. Each
+provided form renders its own standard navigation and status footer.
+`AuthSsoButtons` renders any number of SSO providers below the forms. The
+application owns route declarations, branding, SSO actions, and marketing
+content; a custom form can replace a built-in form and its footer.
+
+The authentication plugin remains responsible for the auth client, session
+state, guards, providers, and headless actions. Forms should use the plugin's
+stable `client/actions` export; page routes and links belong to the application
+that installs this item. Do not import plugin-internal components or add another
+copy of shadcn primitives.

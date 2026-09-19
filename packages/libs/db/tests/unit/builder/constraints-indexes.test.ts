@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CollectionBuilder } from '../../../src/index.js';
+import { CollectionBuilder } from '../../../src/collection/builder/builder.js';
 
 describe('CollectionBuilder constraints and indexes', () => {
   it('keeps constraints and indexes as separate DSL concepts', async () => {
@@ -99,9 +99,8 @@ describe('CollectionBuilder constraints and indexes', () => {
     const result = await builder.createCollection(
       'referencesExample',
       (collection) => {
-        collection.tableName('references_example');
         collection
-          .integer('companyId', { columnName: 'company_id' })
+          .integer('companyId')
           .references({ collection: 'company', field: 'companyId' });
       },
       { dryRun: true },

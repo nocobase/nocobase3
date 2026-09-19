@@ -41,6 +41,7 @@ function names(): string[] {
 describe('ALLOWED_BUILDS', () => {
   it('covers the packages a generated app needs to build', () => {
     expect(names()).toContain('better-sqlite3');
+    expect(names()).toContain('oracledb');
     expect(names()).toContain('esbuild');
   });
 
@@ -83,6 +84,7 @@ describe('buildAllowBuildsYaml', () => {
       buildAllowBuildsYaml([{ name: '@scope/native-addon', allowed: true }]),
     ).toContain("  '@scope/native-addon': true");
     expect(buildAllowBuildsYaml()).toContain('  better-sqlite3: true');
+    expect(buildAllowBuildsYaml()).toContain('  oracledb: true');
   });
 
   it('produces nothing for an empty list', () => {

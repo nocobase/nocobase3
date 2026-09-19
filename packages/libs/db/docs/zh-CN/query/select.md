@@ -1,3 +1,8 @@
+---
+title: Query select 查询
+description: 使用 selectFrom、select、selectAll、分页和终止方法读取记录，并说明别名和结果字段命名规则。
+---
+
 # select 查询
 
 `selectFrom()` 创建查询，`select()` 决定返回列。
@@ -16,7 +21,7 @@ await db
 
 ## alias
 
-别名使用 Kysely 风格的 `as` 字符串。V1 不支持对象映射。
+别名使用 Kysely 风格的 `as` 字符串。当前 API 不支持对象映射。
 
 ```ts
 const rows = await db
@@ -53,7 +58,7 @@ const rows = await db
 const rows = await db.query().selectFrom('orders').selectAll().execute();
 ```
 
-如果启用了 `underscored: true`，`selectAll()` 会把未显式命名的下划线字段映射回驼峰。更完整的结果 key 规则见 [命名归一化](./naming.md)。
+`selectAll()` 会把未显式命名的下划线字段映射回驼峰。更完整的结果 key 规则见 [命名归一化](./naming.md)。
 
 ## 终止方法
 

@@ -1,3 +1,4 @@
+import type { AppRuntimeContext } from './runtime/index.js';
 import type { RefineProps } from '@refinedev/core';
 import type { ComponentType, PropsWithChildren, ReactNode } from 'react';
 
@@ -11,8 +12,9 @@ export type AppClientConfigPrimitive = string | number | boolean | null;
 
 export type AppClientConfigValue =
   | AppClientConfigPrimitive
-  | readonly AppClientConfigValue[]
-  | AppClientConfigMap;
+  | undefined
+  | object
+  | ((...args: never[]) => unknown);
 
 export interface AppClientConfigMap {
   readonly [key: string]: AppClientConfigValue;
@@ -23,17 +25,11 @@ export interface AppClientConfig {
   get<T>(path: string, defaultValue: T): T;
   has(path: string): boolean;
   raw(): AppClientConfigMap;
-}
-
-export interface AppClientConfigContribution {
-  readonly namespace: string;
-  readonly defaults?: AppClientConfigMap;
-  readonly validate?: (config: AppClientConfig) => void | Promise<void>;
+  mergeDefaults(values: AppClientConfigMap): void;
 }
 
 export interface AppClientConfigContext {
   readonly rawConfig: unknown;
-  readonly configs: readonly AppClientConfigContribution[];
 }
 
 export type AppClientConfigFactory = (
@@ -50,42 +46,11 @@ export interface AppClientRenderConfig {
   readonly routes: ReactNode;
 }
 
-export function defineAppClientConfig(
-  contribution: AppClientConfigContribution,
-): AppClientConfigContribution {
-  const namespace = normalizeConfigPath(contribution.namespace);
-  return Object.freeze({
-    ...contribution,
-    namespace,
-    defaults:
-      contribution.defaults === undefined
-        ? undefined
-        : freezeConfigMap(cloneConfigMap(contribution.defaults)),
-  });
-}
-
-export async function createAppClientConfig(
+export function createAppClientConfig(
   context: AppClientConfigContext,
-): Promise<AppClientConfig> {
+): AppClientConfig {
   const rawConfig = assertConfigMap(context.rawConfig, 'Client config');
-  let resolved: AppClientConfigMap = {};
-
-  for (const contribution of context.configs) {
-    if (contribution.defaults === undefined) {
-      continue;
-    }
-    resolved = mergeConfigMaps(
-      resolved,
-      mountConfig(contribution.namespace, contribution.defaults),
-    );
-  }
-  resolved = mergeConfigMaps(resolved, rawConfig);
-
-  const config = new ReadonlyAppClientConfig(resolved);
-  for (const contribution of context.configs) {
-    await contribution.validate?.(config);
-  }
-  return config;
+  return new ResolvedAppClientConfig(rawConfig);
 }
 
 export function defineAppClientRenderConfig(
@@ -110,11 +75,22 @@ export function normalizeAppClientBasename(
   return `/${normalized.replace(/^\/+|\/+$/g, '')}`;
 }
 
-class ReadonlyAppClientConfig implements AppClientConfig {
-  private readonly value: AppClientConfigMap;
+class ResolvedAppClientConfig implements AppClientConfig {
+  private value: AppClientConfigMap;
+  private defaults: AppClientConfigMap;
+  private readonly overrides: AppClientConfigMap;
 
-  public constructor(value: AppClientConfigMap) {
-    this.value = freezeConfigMap(cloneConfigMap(value));
+  public constructor(overrides: AppClientConfigMap) {
+    this.defaults = {};
+    this.overrides = cloneConfigMap(overrides);
+    this.value = freezeConfigMap(cloneConfigMap(overrides));
+  }
+
+  public mergeDefaults(values: AppClientConfigMap): void {
+    this.defaults = mergeConfigMaps(this.defaults, values);
+    this.value = freezeConfigMap(
+      mergeConfigMaps(this.defaults, this.overrides),
+    );
   }
 
   public get<T>(path: string): T | undefined;
@@ -250,29 +226,9 @@ function freezeConfigValue(value: AppClientConfigValue): AppClientConfigValue {
   } else if (isConfigMap(value)) {
     Object.values(value).forEach((item) => freezeConfigValue(item));
   }
-  return Object.freeze(value);
-}
-
-function mountConfig(
-  namespace: string,
-  defaults: AppClientConfigMap,
-): AppClientConfigMap {
-  if (!namespace) {
-    return defaults;
-  }
-  const root: Record<string, AppClientConfigValue> = {};
-  let target = root;
-  const segments = namespace.split('.');
-  segments.forEach((segment, index) => {
-    if (index === segments.length - 1) {
-      target[segment] = defaults;
-      return;
-    }
-    const child: Record<string, AppClientConfigValue> = {};
-    target[segment] = child;
-    target = child;
-  });
-  return root;
+  return isConfigMap(value) || isConfigArray(value)
+    ? Object.freeze(value)
+    : value;
 }
 
 function mergeConfigMaps(
@@ -290,4 +246,26 @@ function mergeConfigMaps(
         : cloneConfigValue(value);
   }
   return merged;
+}
+
+export type AppConfigFactory<T extends object = object> = (
+  runtime: AppRuntimeContext,
+) => T;
+
+export function defineAppConfig<T extends object>(
+  factory: AppConfigFactory<T>,
+): AppConfigFactory<T> {
+  return factory;
+}
+
+export function defaultAppConfigs<T extends Record<string, AppConfigFactory>>(
+  configs: T,
+): AppConfigFactory<{ [K in keyof T]: ReturnType<T[K]> }> {
+  return (runtime) =>
+    Object.fromEntries(
+      Object.entries(configs).map(([key, configure]) => [
+        key,
+        configure(runtime),
+      ]),
+    ) as { [K in keyof T]: ReturnType<T[K]> };
 }

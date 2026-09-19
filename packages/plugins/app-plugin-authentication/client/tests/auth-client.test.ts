@@ -1,42 +1,42 @@
-import type { AppClient } from '@nocobase/app-client';
+import { usernameClient } from 'better-auth/client/plugins';
 import { describe, expect, it, vi } from 'vitest';
-
 import { createAuthClient } from '../auth-client.js';
 
-describe('AuthClient', () => {
-  it('sends a JSON body when signing out', async () => {
-    const request = vi.fn<AppClient['request']>().mockResolvedValue(undefined);
-    const refreshSession = vi.fn();
+describe('native authentication client', () => {
+  it('uses the configured public URL and username plugin', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(Response.json({ token: 'token', user: { id: '1' } }));
     const client = createAuthClient({
-      client: { request, realtime: { refreshSession } } as AppClient,
+      baseURL: 'https://example.com/main/api/auth',
+      plugins: [usernameClient({ displayUsername: false })],
+      fetchOptions: { customFetchImpl: fetch },
     });
-
-    await client.signOut();
-
-    expect(request).toHaveBeenCalledWith('auth/sign-out', {
+    await client.signIn.username({ username: 'alice', password: 'password' });
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      'https://example.com/main/api/auth/sign-in/username',
+    );
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({
       method: 'POST',
-      body: '{}',
+      body: JSON.stringify({ username: 'alice', password: 'password' }),
     });
-    expect(refreshSession).toHaveBeenCalledOnce();
   });
-
-  it('sends a reset password request with the token', async () => {
-    const request = vi.fn<AppClient['request']>().mockResolvedValue(undefined);
+  it('propagates native errors when requested', async () => {
     const client = createAuthClient({
-      client: {
-        request,
-        realtime: { refreshSession: vi.fn() },
-      } as AppClient,
+      baseURL: 'https://example.com/api/auth',
+      fetchOptions: {
+        customFetchImpl: async () =>
+          Response.json({ message: 'Invalid credentials' }, { status: 401 }),
+      },
     });
-
-    await client.resetPassword('new-password', 'reset-token');
-
-    expect(request).toHaveBeenCalledWith('auth/reset-password', {
-      method: 'POST',
-      body: JSON.stringify({
-        newPassword: 'new-password',
-        token: 'reset-token',
-      }),
+    await expect(
+      client.signIn.email(
+        { email: 'alice@example.com', password: 'wrong' },
+        { throw: true },
+      ),
+    ).rejects.toMatchObject({
+      status: 401,
+      error: { message: 'Invalid credentials' },
     });
   });
 });

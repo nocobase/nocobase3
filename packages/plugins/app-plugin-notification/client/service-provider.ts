@@ -1,4 +1,4 @@
-import { appApiClientToken, ClientApplication } from '@nocobase/app-client';
+import { apiClientToken, ClientApplication } from '@nocobase/app-client';
 import type { ClientServiceProviderConstructor } from '@nocobase/app-client/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
@@ -8,7 +8,7 @@ export class NotificationServiceProvider extends ServiceProvider<ClientApplicati
   public readonly name: string = '@nocobase/app-plugin-notification/client';
 
   public override boot(): Promise<void> {
-    configureNotificationClient(this.app.container.resolve(appApiClientToken));
+    configureNotificationClient(this.app.container.resolve(apiClientToken));
     return Promise.resolve();
   }
 }

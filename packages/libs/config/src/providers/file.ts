@@ -27,8 +27,8 @@ export function fileProvider(
       } catch (error) {
         if (options.optional && isMissingFileError(error)) {
           return {
-            kind: 'bytes',
-            value: new TextEncoder().encode('{}'),
+            kind: 'map',
+            value: {},
           };
         }
         throw error;

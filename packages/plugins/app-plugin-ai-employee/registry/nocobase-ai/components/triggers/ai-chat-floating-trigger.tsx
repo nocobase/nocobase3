@@ -4,7 +4,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import { Bot } from 'lucide-react';
+import { NocoBaseAIChatIcon } from '../../shared/icons/nocobase-ai-chat-icon.js';
 import { cn } from '../../shared/utils.js';
 import {
   useAI,
@@ -186,8 +186,11 @@ export function AIChatFloatingTrigger({
         onPointerDown={(event) => event.stopPropagation()}
         onClick={openChat}
       >
-        <span className='flex size-full items-center justify-center overflow-hidden rounded-lg bg-primary text-primary-foreground'>
-          <Bot className='size-5' aria-hidden='true' />
+        <span className='flex size-full items-center justify-center overflow-hidden rounded-lg'>
+          <NocoBaseAIChatIcon
+            className='size-full object-contain'
+            aria-hidden='true'
+          />
         </span>
         {unreadCount > 0 ? (
           <span className='absolute -top-1.5 -right-1.5 z-10 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-4 font-semibold text-white ring-2 ring-background'>

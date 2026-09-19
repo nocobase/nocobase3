@@ -25,6 +25,6 @@ export function createAIToolMessageCollection(
       c.datetime('updatedAt').nullable();
       c.primary('id', { name: 'pk_ai_tool_messages' });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

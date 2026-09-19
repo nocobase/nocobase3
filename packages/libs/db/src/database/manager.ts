@@ -1,18 +1,61 @@
-import type { CollectionBuilder } from '../collection/builder/index.js';
-import { InMemoryCollectionMetadataStore } from '../metadata/index.js';
-import type { QueryAdapter } from '../query/index.js';
-import type { DatabaseConfig } from './config.js';
+import type { CollectionBuilder } from '../collection/builder/builder.js';
+import type { ConnectionCollections } from '../collection/registry/types.js';
+import { createMigrator, type Migrator } from '../migration/migrator.js';
+import type { DatabaseMigratorOptions } from '../migration/types.js';
+import type { QueryAdapter } from '../query/types.js';
+import type { Repository, RepositoryRecord } from '../repository/types.js';
+import { createSeeder, type Seeder } from '../seed/seeder.js';
+import type { DatabaseSeederOptions } from '../seed/types.js';
+import type {
+  AnyConnectionConfig,
+  CollectionMetadataStoreConfig,
+  DatabaseConfig,
+  ExtensibleDatabaseConfig,
+} from './config.js';
+import type { CollectionMetadataStore } from '../metadata/document-store.js';
+import { DirectoryCollectionMetadataStore } from '../metadata/directory-document-store.js';
+import type {
+  ConnectionConfig,
+  DatabaseDriverDefinition,
+  DatabaseDriverRegistration,
+} from './config.js';
 import type { DatabaseConnection } from './connection.js';
 import { DefaultConnectionFactory, type ConnectionFactory } from './factory.js';
-import { KnexConnectionAdapter } from './drivers/knex/index.js';
-import { registerConnectionOwner } from './transaction.js';
+import { KnexConnectionAdapter } from './internal/knex/adapter.js';
 
+/**
+ * Application-level entry to every named connection.
+ *
+ * Besides `connection()`, the Manager mirrors the four Connection handles that
+ * work in logical Collection and Field names — `builder`, `query`,
+ * `repository` and `collections` — each taking the connection name as its last
+ * parameter and returning the very object the Connection holds. Nothing else is
+ * mirrored: `schema`, `schemaInspector` and `collectionMetadata` work in
+ * physical names or write supplemental metadata, and stay on the Connection.
+ */
 export interface DatabaseManager {
   connection(name?: string): DatabaseConnection;
   /** Collection schema and metadata builder. Uses Collection and Field logical names. */
   builder(name?: string): CollectionBuilder;
-  /** Database-layer query builder. Does not read Collection metadata or columnName mappings. */
+  /** Database-layer query builder. Does not read Collection metadata or collection table prefixes. */
   query(name?: string): QueryAdapter;
+  /**
+   * Resolved Collections of one connection, by logical name. Same object as
+   * `connection(name).collections`, so its cache is shared with every Builder,
+   * Repository and Migration on that connection: `invalidate()` and
+   * `refresh()` affect all of them.
+   */
+  collections(name?: string): ConnectionCollections;
+  repository<
+    TRecord extends object = RepositoryRecord,
+    TCreate extends object = Partial<TRecord>,
+    TUpdate extends object = Partial<TRecord>,
+  >(
+    collection: string,
+    connection?: string,
+  ): Repository<TRecord, TCreate, TUpdate>;
+  createMigrator(options: DatabaseMigratorOptions): Migrator;
+  createSeeder(options: DatabaseSeederOptions): Seeder;
 
   connect(name?: string): Promise<DatabaseConnection>;
 
@@ -26,7 +69,20 @@ export interface DatabaseManager {
   destroy(): Promise<void>;
 }
 
-export function createDatabaseManager(config: DatabaseConfig): DatabaseManager {
+export class CollectionMetadataStoreRequiredError extends Error {
+  readonly code = 'COLLECTION_METADATA_STORE_REQUIRED' as const;
+
+  constructor(readonly connection: string) {
+    super(
+      `External database connection "${connection}" requires an explicit Collection Metadata Store.`,
+    );
+    this.name = 'CollectionMetadataStoreRequiredError';
+  }
+}
+
+export function createDatabaseManager<
+  TConnection extends AnyConnectionConfig = ConnectionConfig,
+>(config: ExtensibleDatabaseConfig<TConnection>): DatabaseManager {
   return new DefaultDatabaseManager(
     config,
     new DefaultConnectionFactory({
@@ -56,15 +112,25 @@ export class DefaultDatabaseManager implements DatabaseManager {
       throw new Error(`Database connection "${name}" is not configured.`);
     }
 
+    const resolvedConnectionConfig = resolveConnectionDriver(
+      connectionConfig,
+      this.config.drivers,
+      name,
+    );
+    const metadataStore = resolveMetadataStore(
+      resolvedConnectionConfig.metadataStore ?? this.config.metadataStore,
+    );
+    if (
+      resolvedConnectionConfig.schemaManagement === 'external' &&
+      !metadataStore
+    ) {
+      throw new CollectionMetadataStoreRequiredError(name);
+    }
     const connection = this.factory.create({
       name,
-      config: connectionConfig,
-      metadataStore:
-        connectionConfig.metadataStore ??
-        this.config.metadataStore ??
-        new InMemoryCollectionMetadataStore(),
+      config: resolvedConnectionConfig,
+      metadataStore,
     });
-    registerConnectionOwner(connection, this);
     this.connections.set(name, connection);
     return connection;
   }
@@ -75,6 +141,31 @@ export class DefaultDatabaseManager implements DatabaseManager {
 
   query(name?: string): QueryAdapter {
     return this.connection(name).query;
+  }
+
+  collections(name?: string): ConnectionCollections {
+    return this.connection(name).collections;
+  }
+
+  repository<
+    TRecord extends object = RepositoryRecord,
+    TCreate extends object = Partial<TRecord>,
+    TUpdate extends object = Partial<TRecord>,
+  >(
+    collection: string,
+    connection?: string,
+  ): Repository<TRecord, TCreate, TUpdate> {
+    return this.connection(connection).repository<TRecord, TCreate, TUpdate>(
+      collection,
+    );
+  }
+
+  createMigrator(options: DatabaseMigratorOptions): Migrator {
+    return createMigrator({ ...options, database: this });
+  }
+
+  createSeeder(options: DatabaseSeederOptions): Seeder {
+    return createSeeder({ ...options, database: this });
   }
 
   async connect(name?: string): Promise<DatabaseConnection> {
@@ -121,4 +212,94 @@ export class DefaultDatabaseManager implements DatabaseManager {
     }
     return name;
   }
+}
+
+/**
+ * A store is either an instance or its declarative form. Telling them apart by
+ * the presence of `initialize` rather than by a `type` field keeps a custom
+ * store that happens to carry a `type` property from being mistaken for
+ * configuration.
+ */
+function resolveMetadataStore(
+  value: CollectionMetadataStore | CollectionMetadataStoreConfig | undefined,
+): CollectionMetadataStore | undefined {
+  if (value === undefined) return undefined;
+  if (typeof (value as CollectionMetadataStore).initialize === 'function') {
+    return value as CollectionMetadataStore;
+  }
+  const config = value as CollectionMetadataStoreConfig;
+  switch (config.type) {
+    case 'directory':
+      return new DirectoryCollectionMetadataStore({
+        directory: config.directory,
+      });
+    default:
+      throw new Error(
+        `Unknown Collection metadata store type "${String((config as { type?: unknown }).type)}".`,
+      );
+  }
+}
+
+function resolveConnectionDriver(
+  connection: ConnectionConfig,
+  drivers: Record<string, DatabaseDriverRegistration> | undefined,
+  name: string,
+): ConnectionConfig {
+  const supplied = connection.databaseDriver;
+  const registeredValue = drivers?.[connection.dialect];
+  const registered = resolveDriverDefinition(
+    registeredValue,
+    connection.dialect,
+  );
+  if (supplied && supplied.dialect !== connection.dialect) {
+    throw new Error(
+      `Database connection "${name}" uses dialect "${connection.dialect}" but its driver is for "${supplied.dialect}".`,
+    );
+  }
+  if (supplied && registered && supplied !== registered) {
+    throw new Error(
+      `Database connection "${name}" provides a driver that conflicts with the registered "${connection.dialect}" driver.`,
+    );
+  }
+  const driver = supplied ?? registered;
+  return driver ? { ...connection, databaseDriver: driver } : connection;
+}
+
+function resolveDriverDefinition(
+  value: DatabaseDriverRegistration | undefined,
+  expectedDialect: string,
+): DatabaseDriverDefinition | undefined {
+  if (!value) return undefined;
+  const candidate = value as DatabaseDriverRegistration & {
+    driver?: DatabaseDriverDefinition;
+  };
+  const isFactory =
+    typeof candidate === 'function' &&
+    typeof candidate.driver === 'object' &&
+    candidate.driver !== null;
+  const driver = isFactory ? candidate.driver : value;
+
+  if (
+    typeof driver !== 'object' ||
+    driver === null ||
+    typeof driver.dialect !== 'string'
+  ) {
+    throw new Error(
+      `Invalid database driver registration for dialect "${expectedDialect}". Expected a driver descriptor or a dialect factory.`,
+    );
+  }
+  if (driver.dialect !== expectedDialect) {
+    throw new Error(
+      `Database driver registration for dialect "${expectedDialect}" points to dialect "${driver.dialect}".`,
+    );
+  }
+  if (
+    isFactory &&
+    (candidate.dialect !== expectedDialect || candidate.driver !== driver)
+  ) {
+    throw new Error(
+      `Database driver factory for dialect "${expectedDialect}" has inconsistent dialect metadata.`,
+    );
+  }
+  return driver;
 }

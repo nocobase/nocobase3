@@ -8,6 +8,7 @@ import ts from 'typescript';
 import type { WorkflowSourceAst } from '../server/instructions/definition.js';
 
 import { WorkflowSourceCheckError } from './source-issues.js';
+import { isWorkflowSourceAst } from './source-serialization.js';
 
 export interface ParsedWorkflowSource {
   ast: WorkflowSourceAst;
@@ -73,16 +74,6 @@ export function typecheckWorkflowSource(
         diagnostic.file?.fileName === path.resolve(filePath),
     )
     .map((diagnostic) => diagnosticIssue(filePath, diagnostic));
-}
-
-function isWorkflowSourceAst(value: unknown): value is WorkflowSourceAst {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    typeof (value as { title?: unknown }).title === 'string' &&
-    Array.isArray((value as { nodes?: unknown }).nodes)
-  );
 }
 
 function evaluationIssue(

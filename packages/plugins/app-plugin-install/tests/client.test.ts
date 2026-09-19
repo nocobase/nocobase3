@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import reactProviders from '../client/react-providers.js';
 import routes from '../client/routes.js';
+import installPlugin from '../client/plugin.js';
+import clientLocales from '../client/locales/index.js';
 import { resolveInstalledDestination } from '../client/pages/install-navigation.js';
 
 describe('@nocobase/app-plugin-install client', () => {
@@ -19,5 +21,13 @@ describe('@nocobase/app-plugin-install client', () => {
   it('redirects completed installation to home and later visits to login', () => {
     expect(resolveInstalledDestination(true)).toBe('/');
     expect(resolveInstalledDestination(false)).toBe('/login');
+  });
+
+  it('registers English and Chinese client translations', () => {
+    expect(installPlugin().locales).toBe(clientLocales);
+    expect(clientLocales).toMatchObject({
+      'en-US': expect.any(Function),
+      'zh-CN': expect.any(Function),
+    });
   });
 });

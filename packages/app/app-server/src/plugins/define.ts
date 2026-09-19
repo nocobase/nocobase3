@@ -1,4 +1,5 @@
-import type { AppConfigContribution } from '../config/index.js';
+import path from 'node:path';
+
 import type {
   AppServerPlugin,
   AppServerPluginDefinition,
@@ -12,9 +13,18 @@ export function defineServerPlugin<TConfig = object>(
 ): AppServerPlugin<TConfig> {
   const packageName = normalizePackageName(definition.packageName);
 
+  if (
+    typeof definition.baseDir !== 'string' ||
+    !path.isAbsolute(definition.baseDir)
+  ) {
+    throw new Error(
+      `Server plugin "${packageName}" requires an absolute baseDir. Set baseDir relative to the declaring module with import.meta.dirname.`,
+    );
+  }
+
   return Object.freeze({
     packageName,
-    config: Object.freeze(normalizeConfigDefinitions(definition.config)),
+    baseDir: path.normalize(definition.baseDir),
     serviceProviders: Object.freeze([...(definition.serviceProviders ?? [])]),
     routes: Object.freeze([...(definition.routes ?? [])]),
     database: definition.database
@@ -46,22 +56,6 @@ export function defineServerPlugins(
   }
 
   return Object.freeze({ plugins: Object.freeze([...plugins]) });
-}
-
-function normalizeConfigDefinitions(
-  value:
-    | AppConfigContribution<never>
-    | readonly AppConfigContribution<never>[]
-    | undefined,
-): readonly AppConfigContribution<never>[] {
-  if (value === undefined) return [];
-  return isConfigDefinitionArray(value) ? [...value] : [value];
-}
-
-function isConfigDefinitionArray(
-  value: AppConfigContribution<never> | readonly AppConfigContribution<never>[],
-): value is readonly AppConfigContribution<never>[] {
-  return Array.isArray(value);
 }
 
 function normalizePackageName(packageName: string): string {

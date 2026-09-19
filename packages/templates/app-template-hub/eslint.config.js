@@ -6,7 +6,6 @@ export default createPortalConfig({
     '.extension-state/**',
     'client-old/**',
     'public/r/**',
-    'public/storage/**',
     'storage/**',
   ],
 });

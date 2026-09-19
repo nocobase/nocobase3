@@ -1,10 +1,9 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import type { MigrationSource, SeedSource } from '@nocobase/db';
 
-import type { AppDatabaseConfig } from '../database/index.js';
+import type { AppDatabaseTaskContributions } from '../database/index.js';
 import type {
   AppServerPlugin,
   AppServerPlugins,
@@ -12,15 +11,8 @@ import type {
   ResolvedAppServerPlugins,
 } from './types.js';
 
-const require = createRequire(import.meta.url);
-
 export interface ResolveAppServerPluginsOptions {
   readonly defaultAppPackageName?: string;
-}
-
-export interface ResolvedAppPluginDatabaseConfig {
-  readonly database: AppDatabaseConfig;
-  readonly plugins: readonly ResolvedAppPlugin[];
 }
 
 export function resolveAppServerPlugins(
@@ -38,56 +30,20 @@ export function resolveAppServerPlugins(
         : (options.defaultAppPackageName ?? 'app'),
     plugins: serverPlugins.plugins.map((definition) => ({
       definition,
-      metadata: resolvePlugin(rootDir, definition),
+      metadata: resolvePlugin(definition),
     })),
   };
 }
 
-export function resolveAppPluginDatabaseConfig(
-  rootDir: string,
-  database: AppDatabaseConfig,
-  serverPlugins: AppServerPlugins,
-  options: ResolveAppServerPluginsOptions = {},
-): ResolvedAppPluginDatabaseConfig {
-  const resolved = resolveAppServerPlugins(rootDir, serverPlugins, options);
-  return createAppPluginDatabaseConfig(database, resolved);
-}
-
-export function createAppPluginDatabaseConfig(
-  database: AppDatabaseConfig,
+/** The application identity and plugin task sources that database planning needs. */
+export function createAppDatabaseTaskContributions(
   resolved: ResolvedAppServerPlugins,
-): ResolvedAppPluginDatabaseConfig {
+): AppDatabaseTaskContributions {
   const plugins = resolved.plugins.map((plugin) => plugin.metadata);
-  const appMigrationSource: MigrationSource = {
-    packageName: resolved.appPackageName,
-    directory: database.migrations.directory,
-  };
-  const appSeedSource: SeedSource | undefined = database.seeds
-    ? {
-        packageName: resolved.appPackageName,
-        directory: database.seeds.directory,
-      }
-    : undefined;
-
   return {
-    plugins,
-    database: {
-      ...database,
-      migrations: {
-        ...database.migrations,
-        packageName: resolved.appPackageName,
-        sources: [appMigrationSource, ...createPluginMigrationSources(plugins)],
-      },
-      seeds: database.seeds
-        ? {
-            ...database.seeds,
-            packageName: resolved.appPackageName,
-            sources: appSeedSource
-              ? [appSeedSource, ...createPluginSeedSources(plugins)]
-              : undefined,
-          }
-        : undefined,
-    },
+    appPackageName: resolved.appPackageName,
+    migrations: createPluginMigrationSources(plugins),
+    seeds: createPluginSeedSources(plugins),
   };
 }
 
@@ -127,11 +83,19 @@ export function createPluginJobLocations(
   return plugins.flatMap((plugin) => plugin.jobLocations);
 }
 
-function resolvePlugin(
-  rootDir: string,
-  definition: AppServerPlugin,
-): ResolvedAppPlugin {
-  const packageJsonPath = resolvePackageJson(rootDir, definition.packageName);
+function resolvePlugin(definition: AppServerPlugin): ResolvedAppPlugin {
+  if (
+    typeof definition.baseDir !== 'string' ||
+    !path.isAbsolute(definition.baseDir)
+  ) {
+    throw new Error(
+      `Server plugin "${definition.packageName}" requires an absolute baseDir.`,
+    );
+  }
+  const packageJsonPath = resolvePackageJson(
+    definition.baseDir,
+    definition.packageName,
+  );
   const packageJson = readJson(packageJsonPath);
   const packageRoot = path.dirname(packageJsonPath);
 
@@ -140,18 +104,19 @@ function resolvePlugin(
     version:
       typeof packageJson.version === 'string' ? packageJson.version : 'unknown',
     rootDir: packageRoot,
+    baseDir: definition.baseDir,
     migrationsDirectory: resolveOptionalDirectoryPath(
-      packageRoot,
+      definition.baseDir,
       definition.database?.migrations,
     ),
     seedsDirectory: resolveOptionalDirectoryPath(
-      packageRoot,
+      definition.baseDir,
       definition.database?.seeds,
     ),
     jobLocations: Object.freeze(
       (definition.queue?.jobs ?? []).flatMap((configuredPath) => {
         const resolvedPath = resolveOptionalDirectoryPath(
-          packageRoot,
+          definition.baseDir,
           configuredPath,
         );
         return resolvedPath ? [createJobLocation(resolvedPath)] : [];
@@ -162,48 +127,50 @@ function resolvePlugin(
 
 function createJobLocation(resolvedPath: string): string {
   return statSync(resolvedPath).isDirectory()
-    ? path.join(resolvedPath, '**/{!(*.d).ts,*.js,!(*.d).mts,*.mjs}')
+    ? path.join(resolvedPath, '**/*.{ts,js,mts,mjs}')
     : resolvedPath;
 }
 
 function resolveOptionalDirectoryPath(
-  packageRoot: string,
+  baseDir: string,
   configuredPath: string | undefined,
 ): string | undefined {
   if (!configuredPath) {
     return undefined;
   }
   validatePackagePath(configuredPath);
-  const relativePath = configuredPath.slice(2);
-  const candidates = [
-    path.resolve(packageRoot, relativePath),
-    path.resolve(packageRoot, 'dist', relativePath),
-  ];
-  return candidates.find((candidate) => existsSync(candidate));
+  const resolvedPath = path.resolve(baseDir, configuredPath);
+  return existsSync(resolvedPath) ? resolvedPath : undefined;
 }
 
 function validatePackagePath(configuredPath: string): void {
   if (
     !configuredPath.startsWith('./') ||
     configuredPath === './' ||
+    configuredPath.includes('//') ||
     configuredPath.includes('\\') ||
     configuredPath.split('/').includes('..')
   ) {
     throw new Error(
-      `Server plugin path "${configuredPath}" must be a safe package-relative path beginning with "./".`,
+      `Server plugin path "${configuredPath}" must be a safe baseDir-relative path beginning with "./".`,
     );
   }
 }
 
-function resolvePackageJson(rootDir: string, packageName: string): string {
-  try {
-    return require.resolve(`${packageName}/package.json`, {
-      paths: [rootDir, path.join(rootDir, 'dist')],
-    });
-  } catch {
-    throw new Error(
-      `Configured server plugin "${packageName}" could not be resolved from ${rootDir}.`,
-    );
+function resolvePackageJson(baseDir: string, packageName: string): string {
+  let directory = baseDir;
+  while (true) {
+    const candidate = path.join(directory, 'package.json');
+    if (existsSync(candidate) && readJson(candidate).name === packageName) {
+      return candidate;
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) {
+      throw new Error(
+        `Server plugin "${packageName}" has no matching package.json above baseDir "${baseDir}".`,
+      );
+    }
+    directory = parent;
   }
 }
 

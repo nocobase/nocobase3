@@ -130,10 +130,31 @@ describe('bundled capability templates', () => {
 
   /**
    * The agent-facing documentation is part of the foundation rather than a capability, because the dependency rule it
-   * carries applies to every plugin. A plugin generated without it reintroduces the mistake it exists to prevent:
-   * browser packages declared as `dependencies`, which the application bundles anyway and then installs a second
-   * time into a server deployment that never requires them.
+   * carries applies to every plugin. A plugin generated without it reintroduces one of two mistakes: a client
+   * package left in `devDependencies`, which npm does not publish, so the installing application cannot resolve
+   * it — or one declared as a `dependency`, which installs a browser package into every server deployment.
    */
+  it('emits a CLI entry and one command for the cli capability', async () => {
+    const files = await listTemplateFiles(
+      DEFAULT_TEMPLATE_DIRECTORY,
+      undefined,
+      normalizePluginCapabilities(['cli']),
+    );
+
+    expect(files).toContain('cli/index.ts');
+    expect(files).toContain('cli/info.ts');
+  });
+
+  it('omits the CLI entry when the capability is not selected', async () => {
+    const files = await listTemplateFiles(
+      DEFAULT_TEMPLATE_DIRECTORY,
+      undefined,
+      normalizePluginCapabilities(['server.routes']),
+    );
+
+    expect(files.some((file) => file.startsWith('cli/'))).toBe(false);
+  });
+
   it('always emits the agent documentation, with CLAUDE.md deferring to AGENTS.md', async () => {
     const files = await listTemplateFiles(
       DEFAULT_TEMPLATE_DIRECTORY,
@@ -158,7 +179,10 @@ describe('bundled capability templates', () => {
     expect(agents).toContain('dependencies');
     expect(agents).toContain('devDependencies');
     expect(agents).toContain('peerDependencies');
-    expect(agents).toContain('bundled by the application');
+    // The client row is the one a generated plugin gets wrong by default, so assert the rule it carries rather
+    // than any one destination's wording.
+    expect(agents).toContain('Why the client row is different');
+    expect(agents).toContain('autoInstallPeers');
   });
 
   it.each(

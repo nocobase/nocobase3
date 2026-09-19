@@ -1,5 +1,61 @@
 # @nocobase/nb3-cli
 
+## 1.0.0-beta.9
+
+### Patch Changes
+
+- 6e15911: Register all application plugins as production dependencies so they reach deployments, migrate legacy development declarations, and preserve declared version ranges when registering existing plugins.
+
+  Document plugin dependency placement and migration in the shared application development Skill.
+
+## 1.0.0-beta.8
+
+### Minor Changes
+
+- d86f6aa: Synchronize agent skills from direct NocoBase package dependencies with the new skills:sync command while preserving plugin:skills:sync compatibility, and share application development and upgrade skills through @nocobase/app-skills across all application templates.
+
+  Add package:remove to uninstall a NocoBase dependency and clean up its synchronized skills and ownership records, reusing plugin unregistration for plugin packages. Document the removal workflow in application templates and the shared development and upgrade skills.
+
+## 1.0.0-beta.7
+
+### Patch Changes
+
+- bf0f05b: Replace the `plugin update --plugin` flag with an optional plugin name argument, supporting full package names and short names while preserving updates of all registered plugins when no name is supplied.
+
+  Document the positional plugin update command, version-range behavior, and Skills synchronization in all three application templates' README, agent guidelines, and development Skill.
+
+## 1.0.0-beta.6
+
+### Minor Changes
+
+- e9f796d: Let a plugin register commands for an application's build and dev runs
+
+  A plugin declares `buildHooks` and `devHooks` on `defineCliPlugin`, and the new `nocobase plugin cli-hooks` command reports what the registered plugins ask for. An application's `pnpm build` and `pnpm dev` read that list and run the commands, so a step belonging to a plugin no longer has to be written into every application's build script.
+
+  Build stages are `beforeBuild`, `afterClientBuild`, `afterServerBuild`, and `afterBuild`, named for what exists in `dist` when the hook runs. `pnpm dev` has one stage, `beforeDev`, because it starts concurrent long-running processes rather than finishing steps.
+
+  A plugin contributing hooks alone is now valid: `commands` is optional, and declaring neither commands nor hooks warns rather than throwing.
+
+## 1.0.0-beta.5
+
+### Major Changes
+
+- ec576ba: Let plugins contribute commands to an application's CLI, and rename the bin to `nocobase`.
+
+  An application now has a `cli/` composition root beside `client/` and `server/`. Its `cli/index.ts` calls `runAppCli()` from `@nocobase/nb3-cli/runtime`, which assembles one command tree from three sources: the built-in plugin management commands under `plugin`, the application's own commands under `app`, and each registered plugin's commands under the topic that plugin declares. `pnpm nocobase` runs it.
+
+  A plugin contributes commands by exporting a `./cli` entry that calls `defineCliPlugin()` with a topic and a map of oclif `Command` subclasses. `@nocobase/app-plugin-cli-example` is the reference implementation. `@oclif/core` is a peer dependency of such a plugin so that the plugin and the application share one copy, which is what keeps help rendering and flag parsing consistent.
+
+  `plugin register`, `plugin unregister`, and `plugin inspect` maintain `cli/plugins.ts` the same way they already maintain `client/plugins.ts` and `server/plugins.ts`, keyed on whether the plugin exports `./cli`. An application without TypeScript degrades to printed instructions for that file exactly as it does for the other two.
+
+  `cli/` is compiled into `dist`, so a deployed application runs the same commands with `node ./cli/index.js`. The application's own `migrate` and `seed` are now commands rather than separate scripts, and `pnpm migrate` / `pnpm seed` dispatch through the CLI — the script names are unchanged. A command that cannot work in a deployment goes in `cli/dev-commands/`, which the build excludes; client inspection lives there because it needs Vite and the browser client. `server:config` was removed outright.
+
+  Two breaking changes come with this. The bin is `nocobase` rather than `nb3`, and the five plugin commands moved from `app plugin *` to the top-level `plugin *`, which frees the `app` topic for the commands an application writes itself. The `pnpm plugin:*` script names are unchanged, so anything invoking those scripts is unaffected.
+
+### Patch Changes
+
+- 67907ec: Remove the duplicate application plugin registry from package.json. Discover registered plugins from explicit Client, Server, and CLI composition roots for CLI updates, Skills synchronization, and development watches, and package server dependencies from compiled imports. Preserve legacy metadata cleanup during unregistration.
+
 ## 1.0.0-beta.4
 
 ### Major Changes

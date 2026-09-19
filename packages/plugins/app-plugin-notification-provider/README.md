@@ -35,3 +35,5 @@ Register the plugin in an application package:
 
 With the default App base path, open `/main/notification-provider` after
 signing in. The page can trigger success, error, and undoable notifications.
+
+Applications that only need notifications can register `notificationProvider({ demo: false })` in `client/plugins.ts`. This omits the demo route while retaining the Refine notification provider and global Sonner host. The default preserves the existing demo route.

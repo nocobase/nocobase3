@@ -1,8 +1,25 @@
+import {
+  apiClientToken,
+  ClientApplicationContext,
+  type ClientApplication,
+} from '@nocobase/app-client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { Refine, type AuthProvider } from '@refinedev/core';
-import { fireEvent, render, screen } from '@testing-library/react';
+import {
+  AuthenticationProvider,
+  authenticationClientToken,
+} from '@nocobase/app-plugin-authentication/client';
+import {
+  AuthorizationClient,
+  authorizationClientToken,
+} from '@nocobase/app-plugin-authorization/client';
+import {
+  Refine,
+  type AuthProvider,
+  type AccessControlProvider,
+} from '@refinedev/core';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
-import { MemoryRouter } from 'react-router';
+import { Outlet, MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRouter } from '../../client/routing/app-router.tsx';
@@ -32,19 +49,136 @@ describe('application shell', () => {
       'aria-current',
       'page',
     );
+    expect(
+      screen.getByRole('complementary', { name: 'Application navigation' }),
+    ).toHaveClass(
+      'bg-sidebar',
+      'text-sidebar-foreground',
+      'border-sidebar-border',
+    );
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveClass(
+      'bg-sidebar-primary',
+      'text-sidebar-primary-foreground',
+      'focus-visible:ring-sidebar-ring',
+    );
     // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).toHaveAttribute('title', 'Alice');
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
     expect(
-      screen.getByRole('button', { name: /Switch to .* theme/ }),
-    ).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
+      screen.queryByRole('link', { name: 'Settings' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('AI builds freely.')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'NocoBase' })).toHaveAttribute(
+      'href',
+      'https://www.nocobase.com',
+    );
     expect(screen.getByText('Default Template v0.0.0')).toBeVisible();
     expect(
-      screen.getByRole('heading', { name: 'App client is ready' }),
+      await screen.findByRole('heading', { name: 'App client is ready' }),
     ).toBeVisible();
+  });
+
+  it.each([true, false])(
+    'shows the Settings entry only when a page is accessible (%s)',
+    async (allowed) => {
+      const can = vi.fn(async ({ resource }: { resource?: string }) => ({
+        can: resource !== 'preferences' || allowed,
+      }));
+      renderApplication('/', createAuthProvider(true), [], {
+        accessControlProvider: { can },
+        settingsRouteTree: [
+          createRoute(
+            'preferences',
+            '/settings/preferences',
+            'required',
+            () => <h2>Preferences</h2>,
+            'plugin',
+            'Preferences',
+            true,
+          ),
+        ],
+      });
+      await screen.findByRole('heading', { name: 'App client is ready' });
+      await waitFor(() =>
+        expect(can).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resource: 'preferences',
+            action: 'access',
+          }),
+        ),
+      );
+      if (allowed) {
+        expect(
+          await screen.findByRole('link', { name: 'Settings' }),
+        ).toBeVisible();
+      } else {
+        expect(
+          screen.queryByRole('link', { name: 'Settings' }),
+        ).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it('renders nested pages through manual outlets and selects the nearest menu ancestor', async () => {
+    const child = createRoute('detail', '/orders/42', 'required', () => (
+      <h3>Order detail</h3>
+    ));
+    const parent = {
+      ...createRoute('orders', '/orders', 'required', () => (
+        <>
+          <h2>Orders layout</h2>
+          <Outlet />
+        </>
+      )),
+      navigation: { title: 'Orders' },
+      children: [child],
+    };
+    renderApplication('/orders/42', createAuthProvider(true), [parent]);
+    expect(await screen.findByText('Order detail')).toBeVisible();
+    expect(screen.getByText('Orders layout')).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Orders' }).querySelector('svg'),
+    ).toBeNull();
+    expect(screen.getByRole('link', { name: 'Orders' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('keeps a parent page link clickable independently of its menu disclosure', async () => {
+    const child = {
+      ...createRoute('reports', '/orders/reports', 'required', () => (
+        <h3>Reports page</h3>
+      )),
+      navigation: { title: 'Reports' },
+    };
+    const parent = {
+      ...createRoute('orders', '/orders', 'required', () => (
+        <>
+          <h2>Orders layout</h2>
+          <Outlet />
+        </>
+      )),
+      navigation: { title: 'Orders' },
+      children: [child],
+    };
+    renderApplication('/orders', createAuthProvider(true), [parent]);
+    expect(await screen.findByRole('link', { name: 'Orders' })).toHaveAttribute(
+      'href',
+      '/orders',
+    );
+    const toggle = screen.getByRole('button', { name: 'Orders' });
+    fireEvent.click(toggle);
+    expect(
+      screen.queryByRole('link', { name: 'Reports' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Orders' })).toBeVisible();
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('link', { name: 'Reports' }));
+    expect(await screen.findByText('Reports page')).toBeVisible();
+    expect(screen.getByText('Orders layout')).toBeVisible();
   });
 
   it('collapses and expands the desktop navigation', async () => {
@@ -92,9 +226,7 @@ describe('application shell', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Application navigation' }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Switch to .* theme/ }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
   });
 });
 
@@ -102,46 +234,82 @@ function renderApplication(
   initialEntry: string,
   authProvider: AuthProvider,
   routes: readonly AppClientRegisteredRoute[] = [],
+  options: {
+    readonly accessControlProvider?: AccessControlProvider;
+    readonly settingsRouteTree?: readonly AppClientRegisteredRoute[];
+  } = {},
 ): void {
   const clientRoutes = [
     createRoute('home', '/', 'required', HomePage, 'application'),
     ...routes,
   ];
+  const authenticated =
+    (authProvider as TestAuthProvider).authenticated ?? true;
+  const authClient = createTestAuthClient(authenticated);
+  const authorizationClient = new AuthorizationClient({
+    request: vi.fn(),
+  } as never);
+  const apiClient = {
+    request: vi.fn().mockResolvedValue({
+      fallback: false,
+      locale: 'en-US',
+      requestedLocale: 'en-US',
+    }),
+  };
+  const app = {
+    runtime: { settingsRouteTree: options.settingsRouteTree ?? [] },
+    services: {
+      resolve: (token: unknown) => {
+        if (token === apiClientToken) return apiClient;
+        if (token === authenticationClientToken) return authClient;
+        if (token === authorizationClientToken) return authorizationClient;
+        throw new Error(`Unexpected service token: ${String(token)}`);
+      },
+    },
+  } as unknown as ClientApplication;
   render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <AppThemeProvider>
-        <Refine
-          authProvider={authProvider}
-          dataProvider={{
-            getList: vi.fn(),
-            getMany: vi.fn(),
-            getOne: vi.fn(),
-            create: vi.fn(),
-            createMany: vi.fn(),
-            update: vi.fn(),
-            updateMany: vi.fn(),
-            deleteOne: vi.fn(),
-            deleteMany: vi.fn(),
-            getApiUrl: vi.fn(),
-            custom: vi.fn(),
-          }}
-          options={{ disableTelemetry: true }}
-        >
-          <AppRouter
-            clientDevRouteGroups={[]}
-            clientDevRoutes={[]}
-            clientRoutes={clientRoutes}
-            clientSettingGroups={[]}
-            clientSettings={[]}
-          />
-        </Refine>
-      </AppThemeProvider>
-    </MemoryRouter>,
+    <ClientApplicationContext.Provider value={app}>
+      <AuthenticationProvider>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <AppThemeProvider>
+            <Refine
+              accessControlProvider={options.accessControlProvider}
+              authProvider={authProvider}
+              dataProvider={{
+                getList: vi.fn(),
+                getMany: vi.fn(),
+                getOne: vi.fn(),
+                create: vi.fn(),
+                createMany: vi.fn(),
+                update: vi.fn(),
+                updateMany: vi.fn(),
+                deleteOne: vi.fn(),
+                deleteMany: vi.fn(),
+                getApiUrl: vi.fn(),
+                custom: vi.fn(),
+              }}
+              options={{ disableTelemetry: true }}
+            >
+              <AppRouter
+                devRouteTree={[]}
+                clientRoutes={clientRoutes}
+                settingsRouteTree={options.settingsRouteTree ?? []}
+              />
+            </Refine>
+          </AppThemeProvider>
+        </MemoryRouter>
+      </AuthenticationProvider>
+    </ClientApplicationContext.Provider>,
   );
 }
 
-function createAuthProvider(authenticated: boolean): AuthProvider {
+interface TestAuthProvider extends AuthProvider {
+  readonly authenticated: boolean;
+}
+
+function createAuthProvider(authenticated: boolean): TestAuthProvider {
   return {
+    authenticated,
     check: async () => ({ authenticated }),
     getIdentity: async () =>
       authenticated
@@ -157,12 +325,33 @@ function createAuthProvider(authenticated: boolean): AuthProvider {
   };
 }
 
+function createTestAuthClient(authenticated: boolean) {
+  return {
+    getSession: vi.fn().mockResolvedValue({
+      data: authenticated
+        ? {
+            session: null,
+            user: {
+              email: 'alice@example.com',
+              id: '1',
+              image: null,
+              name: 'Alice',
+            },
+          }
+        : null,
+    }),
+    signOut: vi.fn().mockResolvedValue({ data: null }),
+  };
+}
+
 function createRoute(
   name: string,
   path: string,
   auth: AppClientRegisteredRoute['auth'],
   Component: ComponentType,
   source: AppClientRegisteredRoute['source'] = 'plugin',
+  navigationTitle?: string,
+  protectedRoute: boolean = false,
 ): AppClientRegisteredRoute {
   const packageName =
     source === 'application'
@@ -170,12 +359,15 @@ function createRoute(
       : '@nocobase/app-plugin-test';
   return {
     auth,
+    ...(name === 'home' ? { navigation: { title: 'Home' } } : {}),
     componentLoader: async () => ({ default: Component }),
     id: `${packageName}:${name}`,
     name,
     packageName,
     path,
     source,
+    ...(navigationTitle ? { navigation: { title: navigationTitle } } : {}),
+    ...(protectedRoute ? { access: { resource: name, action: 'access' } } : {}),
   };
 }
 

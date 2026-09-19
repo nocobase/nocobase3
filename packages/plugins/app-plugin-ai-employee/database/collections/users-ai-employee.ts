@@ -18,6 +18,6 @@ export function createUsersAIEmployeeCollection(
         onDelete: 'cascade',
       });
     },
-    { ifNotExists: true, syncMetadata: false },
+    { ifNotExists: true },
   );
 }

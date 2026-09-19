@@ -12,24 +12,24 @@ keywords: 'NocoBase,通知日志,Delivery,Attempt,Provider'
 
 Notification 汇总状态包括：
 
-| 状态         | 含义                                         |
-| ------------ | -------------------------------------------- |
-| `pending`    | 所有 Delivery 仍在等待执行。                 |
-| `processing` | 至少一条 Delivery 正在准备、提交或等待重试。 |
-| `completed`  | 所有 Delivery 都已被 Provider 接受。         |
-| `partial`    | 已结束的 Delivery 中同时存在成功和失败。     |
-| `failed`     | 所有 Delivery 都已失败，并且没有等待重试。   |
-| `unknown`    | 至少一次 Provider 提交的结果无法确认。       |
+| 状态         | 含义                                                             |
+| ------------ | ---------------------------------------------------------------- |
+| `pending`    | 所有 Delivery 仍在等待执行。                                     |
+| `processing` | 至少一条 Delivery 已开始处理，或正在等待执行、准备、提交或重试。 |
+| `completed`  | 所有 Delivery 都已被 Provider 接受。                             |
+| `partial`    | 已结束的 Delivery 中同时存在成功和失败。                         |
+| `failed`     | 所有 Delivery 都已失败，并且没有等待重试。                       |
+| `unknown`    | 至少一次 Provider 提交的结果无法确认。                           |
 
 Delivery 还会出现 `preparing`、`submitting` 和 `accepted`。其中：
 
 - `preparing`——正在校验接收人并生成 Provider 消息
 - `submitting`——正在调用 Provider
-- `accepted`——Provider 已接受本次提交
+- `accepted`——Provider 已接受提交请求
 - `failed`——投递失败；如果存在 `nextRunAt`，会在该时间后重试
 - `unknown`——消息可能已经被 Provider 接受，不会自动重试
 
-`accepted` 不等于终端用户已经阅读，也不保证供应商最终送达。遇到 `unknown` 时，应先查询供应商记录，再决定是否重新发送。
+`accepted` 不等于终端用户已经阅读，也不保证供应商最终送达。遇到 `unknown` 时，应先查询供应商记录。所有手工重试都必须填写原因；Provider 幂等能力仍有效时可安全重试，否则调用 `retryDelivery()` 即表示接受可能重复发送的风险，原因中应记录判断依据和业务决定。
 
 ## 查看 Attempt
 
@@ -74,9 +74,15 @@ router 本身不添加宿主认证。挂载时需要在外层添加认证 middle
 
 Settings Contribution 与 `GET /api/notifications/logs` 使用同一个权限资源。Settings Center 会在页面加载前检查权限，服务端也会拒绝没有访问权限的请求。
 
-页面右上角的 **发送测试通知** 会列出当前启用的 Channel 和 Provider。选择站内信时可以填写接收用户 ID，留空则发送给当前用户；选择 Email 时需要填写接收邮箱；IM 测试发送到所选 Webhook 所属群聊，不需要另填接收人。点击弹窗底部的 **发送** 后，页面调用通知核心插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。
+日志接口错误使用稳定的结构化响应：`error.code` 供客户端判断错误，
+`error.message` 是按请求语言生成的消息，`error.ns`、`error.key` 和可选的
+`error.params` 允许客户端重新翻译。没有页面权限时返回
+`NOTIFICATION_LOGS_FORBIDDEN`，日志不存在时返回
+`NOTIFICATION_LOG_NOT_FOUND`。
 
-测试能力受服务端 `notification.test.enabled` 控制，并要求 `notification:test` 的 `send` 权限。默认应用模板只通过 `config.yml` 中的 `notification.test.enabled` 显式开启；未开启、无权限或没有可用 Provider 时，页面不会显示测试按钮。
+页面右上角的 **发送测试通知** 会列出当前启用的通知方式。只有一个 Provider 时，选项使用面向用户的名称，例如 **站内信（系统内置）**，不显示 `default`、`database` 等内部标识；同一渠道存在多个 Provider 时，才显示配置名称以便区分。选择站内信时可以填写接收用户 ID，留空则发送给当前用户；选择 Email 时需要填写接收邮箱；IM 测试发送到所选 Webhook 所属群聊，不需要另填接收人。点击弹窗底部的 **发送** 后，页面调用通知核心插件的测试接口，通过常规 `NotificationManager` 发送真实消息，并自动刷新日志。
+
+**发送测试通知**按钮始终显示。目标接口只返回安全的 Channel、Provider 和表单字段元数据；没有可用 Provider 或目标加载失败时，弹窗会显示具体状态。服务端仅在提交测试消息时检查 `notification:test` 的 `send` 权限。
 
 ## 可选的应用自有页面
 

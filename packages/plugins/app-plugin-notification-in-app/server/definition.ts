@@ -96,10 +96,10 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
       return {
         type: 'in-app',
         resolveRecipient(input: {
-          readonly recipient: NotificationRecipient;
+          readonly recipient?: NotificationRecipient;
         }): InAppRecipient | undefined {
           const { recipient } = input;
-          return recipient.type === 'user'
+          return recipient?.type === 'user'
             ? { userId: recipient.id }
             : undefined;
         },
@@ -137,17 +137,34 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
 
 export function createDatabaseProviderDefinition(options: {
   readonly store: InAppStore;
+  readonly recipientExists: (userId: string) => Promise<boolean>;
 }): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
     type: 'database',
-    label: inAppNotificationText('test.providers.database', 'Database'),
+    capabilities: {
+      idempotency: { supported: true },
+    },
+    label: inAppNotificationText('test.providers.builtIn', 'Built-in'),
     async createProvider(context, config) {
       const { store } = options;
       return {
         name: config.name,
         type: 'database',
+        capabilities: {
+          idempotency: { supported: true },
+        },
         async send({ message }) {
           try {
+            if (!(await options.recipientExists(message.recipient.userId))) {
+              return {
+                status: 'failed',
+                disposition: 'never',
+                error: {
+                  category: 'recipient',
+                  message: 'In-app notification recipient does not exist.',
+                },
+              };
+            }
             await store.deliver({
               deliveryId: message.deliveryId,
               notificationId: message.notificationId,

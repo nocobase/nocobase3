@@ -33,7 +33,10 @@ export const IDENTITY_SENSITIVE_PACKAGES = new Map([
     '@nocobase/app-server',
     'exports the service tokens every server plugin resolves against',
   ],
-  ['@nocobase/app-client', 'exports React contexts and appApiClientToken'],
+  [
+    '@nocobase/app-client',
+    'exports React contexts plus identity-keyed API and realtime client tokens',
+  ],
   ['@nocobase/app-portal-sdk', 'exports the nocobaseClient module singleton'],
   ['@nocobase/i18n', 'exports React contexts for the i18n runtime'],
   [
@@ -60,19 +63,16 @@ export function reasonFor(packageName) {
 /**
  * Violations for a single manifest.
  *
- * A peer on a workspace package is also declared as a devDependency. Not for resolution — pnpm links a `workspace:`
- * peer whether or not it is one — but because the peer range is deliberately wide (`workspace:^` publishes as
- * `^1.0.0`) while development and tests should run against the copy in this repository. `workspace:*` pins that. The
- * pairing also keeps each declaration honest about its audience: the peer is the published contract, the devDependency
- * never leaves the repository.
+ * One rule: an identity-sensitive package is a peer, never a dependency, so an application provides exactly one copy.
  *
- * Third-party peers such as `react` are exempt. They usually resolve through another dependency, and demanding a
- * direct devDependency for each one would report noise rather than a defect.
+ * A matching devDependency used to be required alongside each workspace peer, on the grounds that the peer range is
+ * wide enough for development to drift off this repository's copy. It does not: pnpm resolves a `workspace:^` peer to
+ * the package in this repository, the same as `workspace:*` would, and a plugin with the devDependency removed still
+ * links, typechecks, builds, and tests against it. The rule asked for a second declaration that changed nothing, so
+ * every peer — workspace or third-party — is now declared once.
  */
 export function findViolations(manifest) {
   const dependencies = Object.keys(manifest.dependencies ?? {});
-  const peerDependencies = manifest.peerDependencies ?? {};
-  const devDependencies = manifest.devDependencies ?? {};
   const violations = [];
 
   for (const dependency of dependencies) {
@@ -82,16 +82,6 @@ export function findViolations(manifest) {
       kind: 'should-be-peer',
       dependency,
       message: `"${dependency}" must be a peerDependency, not a dependency — ${reasonFor(dependency)}`,
-    });
-  }
-
-  for (const dependency of Object.keys(peerDependencies)) {
-    if (!dependency.startsWith('@nocobase/')) continue;
-    if (dependency in devDependencies) continue;
-    violations.push({
-      kind: 'missing-dev',
-      dependency,
-      message: `"${dependency}" is a peerDependency but has no matching devDependency, so development and tests float across the peer range instead of using this repository's copy`,
     });
   }
 

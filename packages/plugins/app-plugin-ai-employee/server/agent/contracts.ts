@@ -1,12 +1,29 @@
+import type { DataServices } from '../service/data-contracts.js';
 import type {
   AIEmployeeEntity,
   AIMessageInput,
+  AgentToolCallResult,
   UserDecision,
 } from '@nocobase/ai-employee';
-import type { FrontendToolManifest } from '../ai-employees/common/frontend-tools.js';
-import type { ModelRef } from '../ai-employees/ai-employee.js';
-import type { CreateAIConversationParams } from '../ai-employees/ai-conversations.js';
+import type { FrontendToolManifest } from './context/ai-employee/common/frontend-tool-contracts.js';
+import type { ModelRef } from '../types.js';
+import type { ConversationStreamTarget } from '../types.js';
+import type { CreateAIConversationParams } from '../manager/ai-conversations-manager.js';
 import type { AIConversationEntity } from '../repository/ai-conversation.js';
+
+export interface ConversationExecution {
+  readonly sessionId?: string;
+  readonly messageId?: string;
+  readonly messages?: readonly AIMessageInput[];
+  readonly model?: ModelRef;
+  readonly webSearch?: boolean;
+  readonly important?: string;
+  readonly frontendTools?: readonly unknown[];
+  readonly toolCallResults?: readonly AgentToolCallResult[];
+  readonly streamTarget?: ConversationStreamTarget;
+  readonly abortSignal?: AbortSignal;
+  readonly timezone?: string;
+}
 
 export interface AgentUserDecisionResult {
   interruptId?: string;
@@ -60,6 +77,7 @@ export interface AgentFrontendToolService {
 }
 
 export interface AppAgentServices {
+  data: DataServices;
   aiEmployees: AgentEmployeeService;
   aiConversations: AgentConversationService;
   builtIn: AgentBuiltInService;

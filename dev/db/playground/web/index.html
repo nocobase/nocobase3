@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@nocobase/db Commerce Playground</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">DB</span>
+          <div>
+            <strong>Commerce</strong>
+            <small>@nocobase/db playground</small>
+          </div>
+        </div>
+        <nav id="navigation">
+          <button class="nav-item active" data-page="dashboard">
+            <span>01</span>Dashboard
+          </button>
+          <button class="nav-item" data-page="orders">
+            <span>02</span>Orders
+          </button>
+          <button class="nav-item" data-page="products">
+            <span>03</span>Products
+          </button>
+          <p class="nav-label">External CRM</p>
+          <button class="nav-item" data-page="customers">
+            <span>04</span>Customers
+          </button>
+          <button class="nav-item" data-page="contacts">
+            <span>05</span>Contacts
+          </button>
+          <p class="nav-label">Developer tools</p>
+          <button class="nav-item" data-page="database">
+            <span>06</span>Database Inspector
+          </button>
+        </nav>
+        <div class="connection-legend">
+          <div><i class="dot managed"></i>Main · managed</div>
+          <div><i class="dot external"></i>CRM · external</div>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="page-eyebrow">Managed + external</p>
+            <h1 id="page-title">Dashboard</h1>
+          </div>
+          <div class="topbar-actions">
+            <span id="connection-status" class="status-pill">Connecting…</span>
+            <button class="button secondary" id="refresh-button">
+              Refresh
+            </button>
+            <button class="button primary" id="primary-action">
+              New order
+            </button>
+          </div>
+        </header>
+
+        <section id="page-content" class="page-content" aria-live="polite">
+          <div class="loading">Loading playground…</div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="dialog">
+      <form method="dialog" id="dialog-form">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow" id="dialog-eyebrow">Create</p>
+            <h2 id="dialog-title">New record</h2>
+          </div>
+          <button
+            class="icon-button"
+            type="button"
+            data-close-dialog
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <div id="dialog-fields" class="form-grid"></div>
+        <p id="dialog-error" class="form-error hidden"></p>
+        <div class="dialog-actions">
+          <button class="button secondary" type="button" data-close-dialog>
+            Cancel
+          </button>
+          <button class="button primary" id="dialog-submit" value="default">
+            Save
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

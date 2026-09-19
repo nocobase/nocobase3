@@ -46,6 +46,12 @@ afterEach(() => {
 
 describe('DeepSeek protocol contract', () => {
   it('freezes the official model protocol and web-search capability matrix', () => {
+    expect(DEEPSEEK_MODEL_CAPABILITIES['deepseek-flash'].protocol).toBe(
+      'responses',
+    );
+    expect(
+      DEEPSEEK_MODEL_CAPABILITIES['deepseek-flash'].supportsWebSearch,
+    ).toBe(true);
     expect(DEEPSEEK_MODEL_CAPABILITIES['deepseek-v4-flash'].protocol).toBe(
       'responses',
     );
@@ -224,42 +230,45 @@ describe('DeepSeek final client routing', () => {
     });
   });
 
-  it('sends V4 Flash through Responses with the DeepSeek web_search tool', async () => {
-    process.env.SERVER_REQUEST_WHITELIST = 'api.deepseek.com';
-    const provider = new DeepSeekProvider({
-      ...createApp({ apiKey: 'test-key' }),
-      modelOptions: {
-        model: 'deepseek-v4-flash',
-        builtIn: { webSearch: true },
-        _reasoning: { mode: 'off' },
-      },
-    });
-    const create = vi.fn(async (request: unknown) => ({ request }));
-    const responses = (
-      provider.chatModel as unknown as {
-        responses: {
-          client: unknown;
-          completionWithRetry: (
-            request: OpenAI.Responses.ResponseCreateParamsNonStreaming,
-          ) => Promise<unknown>;
-        };
-      }
-    ).responses;
-    responses.client = { responses: { create } };
+  it.each(['deepseek-flash', 'deepseek-v4-flash'] as const)(
+    'sends %s through Responses with the DeepSeek web_search tool',
+    async (model) => {
+      process.env.SERVER_REQUEST_WHITELIST = 'api.deepseek.com';
+      const provider = new DeepSeekProvider({
+        ...createApp({ apiKey: 'test-key' }),
+        modelOptions: {
+          model,
+          builtIn: { webSearch: true },
+          _reasoning: { mode: 'off' },
+        },
+      });
+      const create = vi.fn(async (request: unknown) => ({ request }));
+      const responses = (
+        provider.chatModel as unknown as {
+          responses: {
+            client: unknown;
+            completionWithRetry: (
+              request: OpenAI.Responses.ResponseCreateParamsNonStreaming,
+            ) => Promise<unknown>;
+          };
+        }
+      ).responses;
+      responses.client = { responses: { create } };
 
-    await responses.completionWithRetry({
-      model: 'deepseek-v4-flash',
-      input: 'hello',
-      tools: provider.resolveTools([]) as OpenAI.Responses.Tool[],
-      stream: false,
-    });
+      await responses.completionWithRetry({
+        model,
+        input: 'hello',
+        tools: provider.resolveTools([]) as OpenAI.Responses.Tool[],
+        stream: false,
+      });
 
-    expect(create).toHaveBeenCalledOnce();
-    expect(create.mock.calls[0][0]).toMatchObject({
-      reasoning: { effort: 'none' },
-      tools: [{ type: 'web_search' }],
-    });
-  });
+      expect(create).toHaveBeenCalledOnce();
+      expect(create.mock.calls[0][0]).toMatchObject({
+        reasoning: { effort: 'none' },
+        tools: [{ type: 'web_search' }],
+      });
+    },
+  );
 
   it('converts native DeepSeek Responses reasoning and web-search stream events through LangChain', async () => {
     process.env.SERVER_REQUEST_WHITELIST = 'api.deepseek.com';

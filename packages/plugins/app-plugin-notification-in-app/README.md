@@ -45,6 +45,12 @@ the authoritative inbox state.
 Every operation resolves the authenticated user and constrains reads and
 writes to that user. Invalid pagination, cursor, JSON, or mutation input returns
 `400`; unauthenticated requests return `401`; invalid CSRF returns `403`.
+Notification-owned failures use a stable `error.code/message/ns/key/params`
+envelope. The normal App composition localizes `message`; custom hosts register
+the exported `IN_APP_NOTIFICATION_NAMESPACE` and
+`inAppNotificationServerLocales` with their `I18nRuntime`, then mount the
+request i18n middleware before this router. Authentication middleware keeps its
+own error contract.
 
 ## Client inbox page
 
@@ -71,3 +77,7 @@ pnpm --filter @nocobase/app-plugin-notification-in-app typecheck
 pnpm --filter @nocobase/app-plugin-notification-in-app test
 pnpm --filter @nocobase/app-plugin-notification-in-app build
 ```
+
+### Recipient validation
+
+Final delivery checks that the recipient exists through Authentication’s user administration service. Missing recipients fail with category `recipient` and disposition `never`, without an inbox write or realtime event. User lookup errors remain retryable storage failures. Custom hosts using `createDatabaseProviderDefinition` must provide `recipientExists(userId): Promise<boolean>` backed by their user directory.

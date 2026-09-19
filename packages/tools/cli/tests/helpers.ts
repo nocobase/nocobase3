@@ -1,7 +1,10 @@
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Config } from '@oclif/core';
+
+import { assembleCli } from '../src/runtime/assemble.ts';
+import { builtinCommands, builtinTopics } from '../src/runtime/builtin.ts';
+import { setResolvedCommands } from '../src/runtime/command-store.ts';
 
 export const packageRoot: string = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -9,17 +12,32 @@ export const packageRoot: string = path.resolve(
 );
 
 /**
- * Loads the CLI the same way `bin/run.js` does in development, by pointing oclif at the TypeScript sources rather than
- * at `dist`. Tests therefore exercise the command tree they can see in `src`, with no build step in between.
+ * Loads the CLI through the same assembly the runner uses, against the TypeScript sources rather than `dist`. Tests
+ * therefore exercise the command tree an application actually gets, with no build step in between.
  */
 export async function loadTestConfig(): Promise<Config> {
-  const pjson = JSON.parse(
-    readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),
-  );
-  pjson.oclif.commands = './src/commands';
-  pjson.oclif.helpClass = './src/help/runtime-help.ts';
+  const { commands, topics } = assembleCli({ builtinCommands, builtinTopics });
+  setResolvedCommands(commands);
 
-  return Config.load({ pjson, root: packageRoot });
+  return Config.load({
+    pjson: {
+      name: '@nocobase/nb3-cli',
+      version: '0.0.0',
+      oclif: {
+        bin: 'nocobase',
+        dirname: 'nocobase',
+        topicSeparator: ' ',
+        helpClass: './src/help/runtime-help.ts',
+        topics,
+        commands: {
+          strategy: 'explicit',
+          identifier: 'default',
+          target: './src/runtime/registry.ts',
+        },
+      },
+    },
+    root: packageRoot,
+  });
 }
 
 export interface RunResult {

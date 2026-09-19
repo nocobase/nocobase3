@@ -1,3 +1,5 @@
+import { messageKey } from '../../lib/message-key.js';
+import { useTranslation as useDemoTranslation } from '@nocobase/i18n/client';
 import {
   AIChatCompact,
   AIChatWindow,
@@ -95,6 +97,10 @@ export function PromptGenerator() {
 }
 
 function PromptGeneratorContent() {
+  const { t: translateDemo } = useDemoTranslation(
+    '@nocobase/app-plugin-ai-employee',
+  );
+
   const { id: chatId, addWorkContext, focusComposer } = useAIChatBase();
   const { registeredCount, startPicking } = useAIPageElementPicker();
   const [target, setTarget] = useState("the current page's main content area");
@@ -109,7 +115,9 @@ function PromptGeneratorContent() {
     if (capabilities.pageElement) {
       actions.push({
         key: 'pick-page-element',
-        label: 'Pick page element',
+        label: translateDemo('demo.pickPageElement', {
+          defaultValue: 'Pick page element',
+        }),
         icon: <MousePointer2 />,
         disabled: registeredCount === 0,
         onClick: () =>
@@ -125,7 +133,7 @@ function PromptGeneratorContent() {
     if (capabilities.webSearch) {
       actions.push({
         key: 'web-search',
-        label: 'Web search',
+        label: translateDemo('demo.webSearch', { defaultValue: 'Web search' }),
         icon: <Globe2 />,
       });
     }
@@ -138,6 +146,7 @@ function PromptGeneratorContent() {
     focusComposer,
     registeredCount,
     startPicking,
+    translateDemo,
   ]);
 
   const updateCapability = (key: keyof PromptCapabilities, value: boolean) => {
@@ -285,27 +294,39 @@ Implementation requirements:
     <div className='grid items-start gap-5 xl:grid-cols-[360px_minmax(0,1fr)]'>
       <Card className='gap-0 py-0'>
         <CardHeader className='border-b py-4'>
-          <CardTitle className='text-base'>Describe the integration</CardTitle>
+          <CardTitle className='text-base'>
+            {translateDemo('demo.integrationTitle', {
+              defaultValue: 'Describe the integration',
+            })}
+          </CardTitle>
           <p className='text-xs leading-5 text-muted-foreground'>
-            Choose where chat belongs and which capabilities the target page
-            needs.
+            {translateDemo('demo.integrationHint', {
+              defaultValue:
+                'Choose where chat belongs and which capabilities the target page needs.',
+            })}
           </p>
         </CardHeader>
         <CardContent className='space-y-5 p-4'>
           <div className='space-y-2'>
             <label className='text-xs font-medium' htmlFor='ai-chat-target'>
-              Target page or region
+              {translateDemo('demo.targetRegion', {
+                defaultValue: 'Target page or region',
+              })}
             </label>
             <Input
               id='ai-chat-target'
               value={target}
               onChange={(event) => setTarget(event.target.value)}
-              placeholder='e.g. the ticket detail page'
+              placeholder={translateDemo('demo.targetPlaceholder', {
+                defaultValue: 'e.g. the ticket detail page',
+              })}
             />
           </div>
 
           <div className='space-y-2'>
-            <div className='text-xs font-medium'>Placement</div>
+            <div className='text-xs font-medium'>
+              {translateDemo('demo.placement', { defaultValue: 'Placement' })}
+            </div>
             <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-1'>
               {placements.map((option) => (
                 <button
@@ -316,10 +337,14 @@ Implementation requirements:
                   onClick={() => setPlacement(option.value)}
                 >
                   <span className='block text-sm font-medium'>
-                    {option.label}
+                    {translateDemo(messageKey(option.label), {
+                      defaultValue: option.label,
+                    })}
                   </span>
                   <span className='mt-0.5 block text-xs leading-5 text-muted-foreground'>
-                    {option.description}
+                    {translateDemo(messageKey(option.description), {
+                      defaultValue: option.description,
+                    })}
                   </span>
                 </button>
               ))}
@@ -328,7 +353,11 @@ Implementation requirements:
 
           {placement === 'side-panel' ? (
             <div className='space-y-2'>
-              <div className='text-xs font-medium'>Side panel width</div>
+              <div className='text-xs font-medium'>
+                {translateDemo('demo.sidePanelWidth', {
+                  defaultValue: 'Side panel width',
+                })}
+              </div>
               <Select
                 value={panelWidth}
                 onValueChange={(value) => value && setPanelWidth(value)}
@@ -338,7 +367,11 @@ Implementation requirements:
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value='400'>400px</SelectItem>
-                  <SelectItem value='450'>450px · NocoBase default</SelectItem>
+                  <SelectItem value='450'>
+                    {translateDemo('demo.panelWidthDefault', {
+                      defaultValue: '450px · NocoBase default',
+                    })}
+                  </SelectItem>
                   <SelectItem value='520'>520px</SelectItem>
                 </SelectContent>
               </Select>
@@ -346,7 +379,11 @@ Implementation requirements:
           ) : null}
 
           <div className='space-y-2'>
-            <div className='text-xs font-medium'>Message presentation</div>
+            <div className='text-xs font-medium'>
+              {translateDemo('demo.messagePresentation', {
+                defaultValue: 'Message presentation',
+              })}
+            </div>
             <Select
               value={messagePresentation}
               onValueChange={(value) =>
@@ -361,16 +398,26 @@ Implementation requirements:
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value='transcript'>Full transcript</SelectItem>
+                <SelectItem value='transcript'>
+                  {translateDemo('demo.fullTranscript', {
+                    defaultValue: 'Full transcript',
+                  })}
+                </SelectItem>
                 <SelectItem value='compact-history-dialog'>
-                  Compact + history dialog
+                  {translateDemo('demo.compactHistory', {
+                    defaultValue: 'Compact + history dialog',
+                  })}
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className='space-y-1 border-t pt-4'>
-            <div className='mb-2 text-xs font-medium'>Capabilities</div>
+            <div className='mb-2 text-xs font-medium'>
+              {translateDemo('demo.capabilities', {
+                defaultValue: 'Capabilities',
+              })}
+            </div>
             {(Object.keys(capabilities) as Array<keyof PromptCapabilities>).map(
               (key) => (
                 <label
@@ -378,7 +425,11 @@ Implementation requirements:
                   className='flex items-center justify-between gap-4 py-1.5 text-sm'
                 >
                   <span className='min-w-0'>
-                    <span className='block'>{capabilityLabel(key)}</span>
+                    <span className='block'>
+                      {translateDemo(messageKey(capabilityLabel(key)), {
+                        defaultValue: capabilityLabel(key),
+                      })}
+                    </span>
                   </span>
                   <Switch
                     size='sm'
@@ -398,13 +449,22 @@ Implementation requirements:
         <Card className='gap-0 overflow-hidden py-0'>
           <div className='flex items-center justify-between border-b px-4 py-3'>
             <div>
-              <div className='text-sm font-medium'>Capabilities preview</div>
+              <div className='text-sm font-medium'>
+                {translateDemo('demo.capabilitiesPreview', {
+                  defaultValue: 'Capabilities preview',
+                })}
+              </div>
               <div className='text-xs text-muted-foreground'>
-                The selected controls are rendered on the real AIChatWindow.
+                {translateDemo('demo.capabilitiesHint', {
+                  defaultValue:
+                    'The selected controls are rendered on the real AIChatWindow.',
+                })}
               </div>
             </div>
             <code className='rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground'>
-              {placementLabel(placement)}
+              {translateDemo(messageKey(placementLabel(placement)), {
+                defaultValue: placementLabel(placement),
+              })}
             </code>
           </div>
           <div className='flex justify-center bg-muted/20 p-3 sm:p-4'>
@@ -413,8 +473,13 @@ Implementation requirements:
         </Card>
 
         <PromptOutput
-          title='Generated implementation prompt'
-          description='Updates from the selected page, placement, and capabilities.'
+          title={translateDemo('demo.generatedImplementationPrompt', {
+            defaultValue: 'Generated implementation prompt',
+          })}
+          description={translateDemo('demo.promptHint', {
+            defaultValue:
+              'Updates from the selected page, placement, and capabilities.',
+          })}
           prompt={prompt}
           promptClassName='max-h-[760px] min-h-[520px]'
         />

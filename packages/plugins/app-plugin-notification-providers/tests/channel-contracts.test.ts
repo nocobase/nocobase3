@@ -39,7 +39,7 @@ describe('first-batch Channel contracts', () => {
     });
   });
 
-  it('converts IM test fields using the selected server-side target', () => {
+  it('converts IM test fields without a recipient', () => {
     const adapter = createImChannelDefinition().test;
     expect(
       adapter?.toSendInput({
@@ -49,16 +49,14 @@ describe('first-batch Channel contracts', () => {
         providerConfig: {
           type: 'feishu-webhook',
           name: 'primary',
-          target: 'ops-alerts',
         },
       }),
     ).toEqual({
-      to: { type: 'target', id: 'ops-alerts' },
       content: { title: 'Test', body: 'Hello' },
     });
   });
 
-  it('resolves configured Provider targets for the IM Channel', async () => {
+  it('resolves an omitted recipient directly to the selected IM Provider', async () => {
     const resolveUserTarget = vi.fn(async () => ({
       provider: { name: 'primary', type: 'feishu-webhook' },
     }));
@@ -68,22 +66,15 @@ describe('first-batch Channel contracts', () => {
     }).createChannel(context, {
       type: 'im',
       enabled: true,
-      providers: [{ ...provider, target: 'default' }],
+      providers: [provider],
     });
     await expect(
       channel.resolveRecipient?.({
-        recipient: { type: 'target', id: 'default' },
         provider,
       }),
     ).resolves.toEqual({
       provider,
     });
-    await expect(
-      channel.resolveRecipient?.({
-        recipient: { type: 'target', id: 'other' },
-        provider,
-      }),
-    ).resolves.toBeUndefined();
     await expect(
       channel.resolveRecipient?.({
         recipient: { type: 'user', id: 'user-1' },
@@ -95,17 +86,16 @@ describe('first-batch Channel contracts', () => {
     expect(resolveUserTarget).toHaveBeenCalledWith('user-1', provider);
   });
 
-  it('resolves the configured recipient for each Provider being prepared', async () => {
+  it('resolves each selected Provider when no recipient is supplied', async () => {
     const provider = { name: 'dingtalk', type: 'dingtalk-webhook' };
     const channel = await createImChannelDefinition().createChannel(context, {
       type: 'im',
       enabled: true,
-      providers: [{ ...provider, target: 'default' }],
+      providers: [provider],
     });
 
     await expect(
       channel.resolveRecipient?.({
-        recipient: { type: 'target', id: 'default' },
         provider,
       }),
     ).resolves.toEqual({ provider });

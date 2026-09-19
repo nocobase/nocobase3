@@ -50,4 +50,20 @@ describe('workflow server runtime boundary', () => {
     expect(packageMetadata.peerDependencies).not.toHaveProperty('esbuild');
     expect(packageMetadata.devDependencies).not.toHaveProperty('esbuild');
   });
+
+  it('keeps the compiler out of development source discovery', async () => {
+    // `WorkflowLoader` imports this module dynamically when the runtime is not
+    // production, so unlike the rest of `build/` it does execute inside a
+    // running server. It must not drag in TypeScript, which is an optional peer
+    // and the reason a build takes seconds rather than milliseconds.
+    const graph = await runtimeModuleGraph(
+      path.join(pluginRoot, 'build/dev-source.ts'),
+    );
+    const sources = await Promise.all(
+      [...graph].map((file) => fs.readFile(file, 'utf8')),
+    );
+    expect(sources.join('\n')).not.toMatch(
+      /(?:from|import\s*\()\s*['"](?:esbuild|typescript)['"]/,
+    );
+  });
 });
