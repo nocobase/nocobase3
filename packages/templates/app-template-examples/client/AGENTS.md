@@ -31,3 +31,7 @@ This directory is the application's browser client. Read the application's root 
 Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. Use `pnpm client:inspect` when a contribution does not appear where you expect — it reports composition, not correctness.
 
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `.agents/skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
+
+## Layout containers
+
+`components/layout-header.tsx` and `components/layout-sidebar.tsx` are presentation containers accepting ordinary children. Each of `AppShell`, `SettingsLayout`, and `DevLayout` owns its arrangement, sidebar state, permission queries and route rendering. Keep menus, branding, action visibility and page redirects out of the containers. Supply an accessible sidebar label and a mobile close button from the owning layout. Sidebar contents own their scroll regions and their collapsed presentation; the container never rewrites children.

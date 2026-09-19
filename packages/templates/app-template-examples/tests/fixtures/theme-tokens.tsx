@@ -10,7 +10,7 @@ import {
   PopoverContent,
   PopoverTitle,
 } from '../../client/components/ui/popover';
-import { AppSidebar } from '../../client/shell/app-sidebar';
+import { LayoutSidebar } from '../../client/components/layout-sidebar';
 import { AppThemeProvider, ThemeSettings } from '../../client/theme';
 import '../../client/styles.css';
 
@@ -24,11 +24,17 @@ export default function Fixture() {
       <AppThemeProvider>
         <Refine options={{ disableTelemetry: true }}>
           <div className='flex min-h-svh'>
-            <AppSidebar
-              desktopCollapsed={collapsed}
+            <LayoutSidebar
+              aria-label='Fixture sidebar'
+              desktopState={collapsed ? 'collapsed' : 'expanded'}
               mobileOpen={mobileOpen}
-              onCloseMobile={() => setMobileOpen(false)}
-            />
+              onMobileOpenChange={setMobileOpen}
+            >
+              <Button onClick={() => setMobileOpen(false)}>
+                Close sidebar
+              </Button>
+              <Input aria-label='Sidebar content' />
+            </LayoutSidebar>
             <main className='min-w-0 flex-1 space-y-6 p-6'>
               <div className='flex flex-wrap gap-2'>
                 <ThemeSettings />
