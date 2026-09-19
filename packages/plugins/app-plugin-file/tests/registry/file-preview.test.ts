@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isSafeImagePreview,
   resolveFilePreviewKind,
+  resolveOfficeOpenXmlFormat,
   resolveOfficeEmbedUrl,
 } from '../../registry/component-ui/lib/file-preview.js';
 import type { FileRecord } from '../../client/index.js';
@@ -18,7 +19,7 @@ function fileRecord(overrides: Partial<FileRecord> = {}): FileRecord {
     ext: 'bin',
     createdAt: '2026-08-27T00:00:00.000Z',
     updatedAt: '2026-08-27T00:00:00.000Z',
-    contentUrl: '/uploads/files/file-1.bin',
+    contentUrl: '/api/files/file-1/content',
     ...overrides,
   };
 }
@@ -35,7 +36,7 @@ describe('file preview resolution', () => {
 
   it.each([
     ['application/msword', 'report.bin'],
-    ['application/octet-stream', 'report.docx'],
+    ['application/octet-stream', 'report.doc'],
     ['application/vnd.oasis.opendocument.text', 'report.bin'],
     ['application/octet-stream', 'report.odt'],
     ['application/octet-stream', 'report.ott'],
@@ -44,6 +45,45 @@ describe('file preview resolution', () => {
     expect(resolveFilePreviewKind(fileRecord({ mimeType, filename }))).toBe(
       'office',
     );
+  });
+
+  it.each([
+    ['application/octet-stream', 'REPORT.DOCX', 'docx'],
+    [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; charset=binary',
+      'report.bin',
+      'xlsx',
+    ],
+    [
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'report.bin',
+      'pptx',
+    ],
+  ] as const)(
+    'recognizes browser-rendered OOXML from %s and %s',
+    (mimeType, filename, format) => {
+      const file = fileRecord({ mimeType, filename });
+      expect(resolveOfficeOpenXmlFormat(file)).toBe(format);
+      expect(resolveFilePreviewKind(file)).toBe('ooxml');
+    },
+  );
+
+  it('uses the OOXML filename extension when MIME metadata is generic or stale', () => {
+    expect(
+      resolveOfficeOpenXmlFormat(
+        fileRecord({ filename: 'report.docx', mimeType: 'application/msword' }),
+      ),
+    ).toBe('docx');
+  });
+
+  it('keeps a legacy Office extension on the Office Online path', () => {
+    const file = fileRecord({
+      filename: 'report.doc',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    expect(resolveOfficeOpenXmlFormat(file)).toBeUndefined();
+    expect(resolveFilePreviewKind(file)).toBe('office');
   });
 
   it('keeps active content unsupported even with a previewable extension', () => {

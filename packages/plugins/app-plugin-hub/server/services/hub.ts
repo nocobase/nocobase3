@@ -955,7 +955,10 @@ export class DefaultHubService implements HubService {
             'IDEMPOTENCY_CONFLICT',
             409,
           );
-        return this.getDeployment(appId, String(existing.deploymentId));
+        return {
+          ...(await this.getDeployment(appId, String(existing.deploymentId))),
+          reused: true,
+        };
       }
       await this.requireNoPendingDeployment(appId);
       const release = await this.getRelease(appId, input.releaseId);
@@ -1007,12 +1010,15 @@ export class DefaultHubService implements HubService {
               'IDEMPOTENCY_CONFLICT',
               409,
             );
-          return this.getDeployment(appId, String(winner.deploymentId));
+          return {
+            ...(await this.getDeployment(appId, String(winner.deploymentId))),
+            reused: true,
+          };
         }
         throw error;
       }
       this.schedule(deployment);
-      return deployment;
+      return { ...deployment, reused: false };
     });
   }
 

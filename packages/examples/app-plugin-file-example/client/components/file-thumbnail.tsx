@@ -15,6 +15,7 @@ function icon(file: FileRecord): ReactElement {
   if (isSafeImage(file))
     return <FileImage aria-hidden='true' className={className} />;
   switch (previewKind(file)) {
+    case 'ooxml':
     case 'pdf':
     case 'text':
       return <FileText aria-hidden='true' className={className} />;

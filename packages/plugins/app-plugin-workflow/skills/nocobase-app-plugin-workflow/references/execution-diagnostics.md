@@ -67,7 +67,7 @@ For `QUEUEING`:
 For `STARTED`:
 
 - Check latest node status and timestamps.
-- `PENDING` may be valid for a branching/resumable instruction; `run` itself never intentionally stays pending.
+- `PENDING` is expected while a `run` script executes in the background. The processor yields before invoking the script, then resumes the same node attempt with its saved result or error. Background scripts are process-local; a process crash does not automatically replay them.
 - Compare workflow timeout/reaper behavior, abort signal handling, and external I/O.
 - Look for a crashed worker leaving stale started state and timeout-reaper recovery evidence.
 

@@ -124,6 +124,8 @@ export const createPortalViteConfig: (
     const sharedConfig: UserConfig = {
       root,
       plugins: [react(), tailwindcss()],
+      // Preserve import.meta.url-based WASM asset paths in the OOXML viewers.
+      optimizeDeps: { exclude: ['@silurus/ooxml'] },
       build: {
         outDir: 'dist/client',
         rollupOptions: {

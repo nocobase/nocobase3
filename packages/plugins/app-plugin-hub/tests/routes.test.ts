@@ -347,9 +347,12 @@ describe('@nocobase/app-plugin-hub API routes', () => {
   });
 
   it('accepts deployments asynchronously', async () => {
+    const createdAt = new Date('2026-09-18T07:00:00.000Z');
     const deploy = vi.fn<HubService['deploy']>().mockResolvedValue({
       id: 'deployment-1',
       status: 'queued',
+      reused: true,
+      createdAt,
     } as never);
     const router = await apiRoutes.createRouter(
       createApplication('administrator', {
@@ -368,6 +371,15 @@ describe('@nocobase/app-plugin-hub API routes', () => {
     });
 
     expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({
+      data: {
+        id: 'deployment-1',
+        operationId: 'deployment-1',
+        status: 'queued',
+        reused: true,
+        createdAt: createdAt.toISOString(),
+      },
+    });
     expect(deploy).toHaveBeenCalledWith('customer', {
       releaseId: 'release-1',
       config: { mode: 'external' },

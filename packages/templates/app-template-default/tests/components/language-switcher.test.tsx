@@ -161,7 +161,13 @@ describe('LanguageSwitcher', () => {
 
     await waitFor(() => expect(runtime.getLocale()).toBe('zh-CN'));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
-    expect(screen.getByRole('menuitem', { name: /语言\s*中文/ })).toBeVisible();
+    await waitFor(() =>
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole('button', { name: 'Account' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: /语言\s*中文/ }),
+    );
     expect(
       await screen.findByRole('menuitemradio', { name: '中文' }),
     ).toBeChecked();
@@ -169,7 +175,7 @@ describe('LanguageSwitcher', () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
-  it('keeps the control pending and shows an informational notice when the server falls back', async () => {
+  it('closes while synchronization is pending and reports server fallback', async () => {
     const { app, runtime } = await createRuntime(['en-US', 'zh-CN']);
     const user = userEvent.setup();
     let resolveRequest: ((response: Response) => void) | undefined;
@@ -191,9 +197,8 @@ describe('LanguageSwitcher', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(runtime.getLocale()).toBe('zh-CN');
     expect(readStoredLocale()).toBe('zh-CN');
-    expect(screen.getByRole('menuitemradio', { name: '中文' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
+    await waitFor(() =>
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
     );
     if (!resolveRequest) throw new Error('Locale request did not start.');
     resolveRequest(createServerResponse(true));
@@ -201,8 +206,9 @@ describe('LanguageSwitcher', () => {
     await waitFor(() =>
       expect(toast.info).toHaveBeenCalledWith(FALLBACK_NOTICE),
     );
+    await user.click(screen.getByRole('button', { name: 'Account' }));
     expect(
-      screen.getByRole('menuitemradio', { name: '中文' }),
+      await screen.findByRole('menuitem', { name: /语言\s*中文/ }),
     ).not.toHaveAttribute('aria-disabled');
     expect(toast.error).not.toHaveBeenCalled();
     await user.keyboard('{Escape}{Escape}');
@@ -257,8 +263,10 @@ describe('LanguageSwitcher', () => {
     await user.keyboard('{ArrowDown}{Enter}');
     expect(runtime.getLocale()).toBe('zh-CN');
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
-    expect(screen.getByRole('menuitemradio', { name: '中文' })).toBeChecked();
-    await user.keyboard('{Escape}{Escape}');
+    expect(readStoredLocale()).toBe('zh-CN');
+    await waitFor(() =>
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
+    );
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Account' })).toHaveFocus(),
     );

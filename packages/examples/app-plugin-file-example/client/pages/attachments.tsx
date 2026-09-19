@@ -81,6 +81,18 @@ export default function AttachmentsPage(): ReactElement {
         description={`${t('description')} ${t('apiHint')}`}
         title={t('title')}
       />
+      <section
+        aria-label={t('officePreviewTitle')}
+        className='rounded-xl border bg-card p-4 text-card-foreground'
+      >
+        <h2 className='font-medium'>{t('officePreviewTitle')}</h2>
+        <p className='mt-2 text-sm text-muted-foreground'>
+          {t('officePreviewDescription')}
+        </p>
+        <p className='mt-2 text-xs text-muted-foreground'>
+          {t('officePreviewLimits')}
+        </p>
+      </section>
       <FileUploadField
         repository={repository}
         labels={labels}

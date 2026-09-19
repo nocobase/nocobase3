@@ -2,6 +2,8 @@
 
 The UI is shadcn/ui primitives, composed into application components, styled with Tailwind semantic tokens.
 
+For icon buttons in the page's top-right header, read [header action interactions](header-actions.md) before adding or changing an entry. It defines when to use a tooltip versus a hover panel and how to preserve the components' default dismissal behavior.
+
 ## Page container
 
 When creating a page or writing a page component, wrap its content in `PageContainer` imported from `@/components/page-container`. This is the shared page container: it renders a `section` and owns full width, vertical spacing, and responsive padding (`w-full space-y-6 p-6 md:p-8`). Use it instead of hand-writing an outer `div`, `main`, or `section` with page padding. Keep these defaults so pages use the same spacing; change shared page spacing in the component rather than overriding it separately on each page.

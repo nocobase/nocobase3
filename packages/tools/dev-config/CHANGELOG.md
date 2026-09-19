@@ -1,5 +1,15 @@
 # @nocobase/dev-config
 
+## 0.1.0-beta.9
+
+### Patch Changes
+
+- 5f92529: Render DOCX, XLSX, and PPTX locally in the editable file Registry components using lazily loaded OOXML viewers and existing content URLs. Preserve legacy Office Online fallback and viewer WASM asset paths in Portal development. Existing applications must merge the updated Registry source and install its declared dependency.
+
+  Correct the file Skill read-field policy for queried records used by Registry UI, and document viewer installation, Vite configuration, content authentication boundaries, and preview verification.
+
+  Demonstrate browser-local DOCX, XLSX, and PPTX previews in the file and order attachment examples, with local-network requirements and download-only legacy format guidance.
+
 ## 0.1.0-beta.8
 
 ### Patch Changes

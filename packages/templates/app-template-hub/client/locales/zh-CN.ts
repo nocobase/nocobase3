@@ -79,6 +79,7 @@ const zhCN: AppResource = {
     emptyDescription: '没有已启用的插件提供你有权访问的设置页面。',
   },
   dev: {
+    componentExamples: '组件示例',
     title: '开发工具',
     emptyTitle: '暂无可用开发工具',
     emptyDescription: '没有已启用的插件提供你有权访问的开发页面。',

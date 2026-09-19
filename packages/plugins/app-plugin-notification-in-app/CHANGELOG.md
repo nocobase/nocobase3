@@ -1,5 +1,34 @@
 # @nocobase/app-plugin-notification-in-app
 
+## 0.2.0-beta.14
+
+### Patch Changes
+
+- 78e3c42: Migrate inbox timestamps to timezone-aware datetime fields so stored UTC notifications can be read and marked as read without temporal validation errors.
+
+  Validate recipient existence at final in-app delivery and reject missing users with a non-retryable recipient error. Custom database Provider factories must supply a recipient existence resolver.
+
+  Show an end-of-list message when the inbox has no more notifications to load.
+
+  Load the next inbox page automatically near the bottom, with duplicate-request protection and cancellation when filters or refreshed data change.
+
+  Keep the channel badge aligned with the title and collapse long message bodies to three lines with expand and collapse controls.
+
+- Updated dependencies [e0c4b3d]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [00362cf]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+  - @nocobase/db@1.0.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.19
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/app-plugin-notification@0.1.0-beta.12
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.2.0-beta.13
 
 ### Patch Changes
