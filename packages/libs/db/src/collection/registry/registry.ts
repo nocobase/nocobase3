@@ -83,6 +83,16 @@ export class CollectionRegistry
     return (await this.getResolution(name))?.collection;
   }
 
+  /** Resolve Query's relative table identifiers without treating them as logical names. */
+  async getForQuery(name: string): Promise<CollectionDefinition | undefined> {
+    const index = await this.namingIndex();
+    const tableName = new DefaultNamingStrategy(
+      this.options.naming,
+    ).collectionToTableName(name);
+    const identity = index.resolvePhysicalCollection({ tableName });
+    return identity ? this.get(identity.name) : undefined;
+  }
+
   async getPhysical(
     name: string,
   ): Promise<PhysicalCollectionSchema | undefined> {

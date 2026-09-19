@@ -57,6 +57,65 @@ describe('DatabaseManager', () => {
     }
   });
 
+  it.each(['', 'app_'])(
+    'resolves Query relative table names with prefix %s while keeping Collection reads strict',
+    async (tablePrefix) => {
+      const db = createTestDatabase({
+        metadataStore: new InMemoryCollectionMetadataStore(),
+        connections: {
+          main: {
+            dialect: 'sqlite',
+            filename: ':memory:',
+            naming: { tablePrefix },
+          },
+        },
+      });
+      try {
+        await db
+          .builder()
+          .createCollection('scheduleDefinitions', (collection) => {
+            collection.string('id', { primaryKey: true });
+            collection.json('targetConfig');
+            collection.boolean('enabled');
+            collection.datetime('createdAt');
+          });
+        await db
+          .query()
+          .insertInto('schedule_definitions')
+          .values({
+            id: 'one',
+            targetConfig: { kind: 'test' },
+            enabled: true,
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+          })
+          .execute();
+        await expect(
+          db
+            .query()
+            .selectFrom('schedule_definitions as schedules')
+            .selectAll()
+            .execute(),
+        ).resolves.toMatchObject([
+          { id: 'one', targetConfig: { kind: 'test' } },
+        ]);
+        await db
+          .query()
+          .updateTable('schedule_definitions')
+          .set({ targetConfig: { kind: 'updated' } })
+          .where('id', '=', 'one')
+          .execute();
+        await expect(
+          db.query().selectFrom('scheduleDefinitions').selectAll().execute(),
+        ).resolves.toMatchObject([{ targetConfig: { kind: 'updated' } }]);
+        await expect(
+          db.collections().get('schedule_definitions'),
+        ).rejects.toThrow('scheduleDefinitions');
+      } finally {
+        await db.destroy();
+      }
+    },
+  );
+
   it('rejects physical aliases instead of dropping logical field metadata', async () => {
     const db = createTestDatabase({
       metadataStore: new InMemoryCollectionMetadataStore(),
