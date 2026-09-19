@@ -5,11 +5,11 @@ import { useTranslation } from '@nocobase/i18n/client';
 import { Button } from '../../../components/ui/button.js';
 import { useHubAppPage } from '../app-page.js';
 
-function Command({
-  command,
+function CopyableText({
+  text,
   label,
 }: {
-  readonly command: string;
+  readonly text: string;
   readonly label: string;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
@@ -22,7 +22,7 @@ function Command({
   }, [copied]);
   const copy = async (): Promise<void> => {
     try {
-      await navigator.clipboard.writeText(command);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setFailed(false);
     } catch {
@@ -33,7 +33,7 @@ function Command({
     <div>
       <div className='flex items-center gap-3 rounded-lg bg-muted px-3 py-2'>
         <pre className='min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-sm leading-6'>
-          <code>{command}</code>
+          <code>{text}</code>
         </pre>
         <Button
           aria-label={label}
@@ -52,10 +52,10 @@ function Command({
         {failed
           ? t('development.copyFailed', {
               defaultValue:
-                'Could not copy. Select and copy the command manually.',
+                'Could not copy. Select and copy the text manually.',
             })
           : copied
-            ? t('development.copied', { defaultValue: 'Command copied' })
+            ? t('development.copied', { defaultValue: 'Copied' })
             : ''}
       </span>
     </div>
@@ -129,10 +129,25 @@ export default function DevelopmentPage(): ReactElement {
                       'Run this command where you keep your source projects.',
                   })}
                 </p>
-                <Command
-                  command={`npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app ${app.app.id}`}
+                <CopyableText
+                  text={`pnpm create @nocobase/app ${app.app.id}`}
                   label={t('development.copyCommand', {
                     defaultValue: 'Copy create-app command',
+                  })}
+                />
+                <p className='text-sm text-muted-foreground'>
+                  {t('development.agentDescription', {
+                    defaultValue:
+                      'Next, hand the project to your AI Agent and let it start building. To build a CRM application, for example, send it this:',
+                  })}
+                </p>
+                <CopyableText
+                  text={t('development.agentPrompt', {
+                    defaultValue:
+                      'Build a CRM application based on this NocoBase 3 project template.',
+                  })}
+                  label={t('development.copyPrompt', {
+                    defaultValue: 'Copy example prompt',
                   })}
                 />
                 <p className='text-sm text-muted-foreground'>
@@ -164,8 +179,8 @@ export default function DevelopmentPage(): ReactElement {
                   'Run in your project directory. The archive is saved to storage/dist.tar.gz.',
               })}
             </p>
-            <Command
-              command='pnpm build --tar'
+            <CopyableText
+              text='pnpm build --tar'
               label={t('development.copyBuild', {
                 defaultValue: 'Copy build command',
               })}
