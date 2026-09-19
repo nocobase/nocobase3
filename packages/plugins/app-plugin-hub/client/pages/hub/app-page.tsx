@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
 import { useApiClient, ApiClientError, useService } from '@nocobase/app-client';
 import { authorizationClientToken } from '@nocobase/app-plugin-authorization/client';
@@ -65,7 +66,9 @@ interface HubAppPageContextValue {
   };
   readonly onRelease: (id: string) => void;
   readonly onDeploymentPage: (page: number) => void;
-  readonly onDeploy: () => void;
+  readonly onDeploy: (releaseId?: string) => void;
+  readonly releasesCollapsed: boolean;
+  readonly onReleasesCollapsed: (collapsed: boolean) => void;
   readonly onRollback: (deploymentId: string) => void;
   readonly onUpload: () => void;
   readonly onSaveConfiguration: (content: string) => void;
@@ -122,9 +125,11 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   });
   const [deploymentsLoading, setDeploymentsLoading] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [deploymentHistoryVersion, setDeploymentHistoryVersion] = useState(0);
   const [refreshing, setRefreshing] = useState<'auto' | 'manual' | null>(null);
   const refreshInFlightRef = useRef(false);
   const [selectedReleaseId, setSelectedReleaseId] = useState<string>();
+  const [releasesCollapsed, setReleasesCollapsed] = useState(false);
   const [deploymentReleaseId, setDeploymentReleaseId] = useState<string>();
   const [rollbackDeploymentId, setRollbackDeploymentId] = useState<string>();
   const [deploymentMode, setDeploymentMode] = useState<ConfigMode>('file');
@@ -212,7 +217,8 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     { path: `${appPath.pathname}/:tab/*`, end: true },
     location.pathname,
   );
-  const tabParam = tabMatch?.params.tab;
+  const tabParam =
+    tabMatch?.params.tab === 'releases' ? 'deployments' : tabMatch?.params.tab;
   const activeTab = DETAIL_TABS.includes(tabParam as DetailTab)
     ? (tabParam as DetailTab)
     : undefined;
@@ -291,41 +297,51 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   const panelVersion =
     activeTab === 'deployments' || configTab ? 0 : refreshVersion;
   useEffect(() => {
-    if (!panelDetail || !activeTab) return;
+    if (
+      !panelDetail ||
+      !activeTab ||
+      !capabilitiesReady ||
+      activeTab === 'resources'
+    )
+      return;
     let cancelled = false;
     // Refresh deployment rows in place; only a tab/page change needs a skeleton.
     const key = `${appId}:${activeTab}:${deploymentPage}:${panelVersion}`;
     const load = async (): Promise<void> => {
       if (activeTab === 'deployments') {
-        setDeploymentsLoading(true);
-        try {
+        if (capabilities['read-release']) {
           const response = await client.request<
-            ApiResponse<{
-              readonly items: readonly DeploymentRecord[];
-              readonly page: number;
-              readonly pageSize: number;
-              readonly total: number;
-            }>
-          >({
-            path: `hub/apps/${appId}/deployments`,
-            query: { page: deploymentPage, pageSize: 20 },
-          });
+            ApiResponse<readonly ReleaseRecord[]>
+          >({ path: `hub/apps/${appId}/releases` });
           if (cancelled) return;
-          setDeployments(response.data.items);
-          setDeploymentPagination({
-            page: response.data.page,
-            pageSize: response.data.pageSize,
-            total: response.data.total,
-          });
-        } finally {
-          if (!cancelled) setDeploymentsLoading(false);
+          setReleases(response.data);
         }
-      } else if (activeTab === 'releases') {
-        const response = await client.request<
-          ApiResponse<readonly ReleaseRecord[]>
-        >({ path: `hub/apps/${appId}/releases` });
-        if (!cancelled) setReleases(response.data);
-      } else if (activeTab === 'configuration' || activeTab === 'resources') {
+        if (capabilities['read-deployment']) {
+          setDeploymentsLoading(true);
+          try {
+            const response = await client.request<
+              ApiResponse<{
+                readonly items: readonly DeploymentRecord[];
+                readonly page: number;
+                readonly pageSize: number;
+                readonly total: number;
+              }>
+            >({
+              path: `hub/apps/${appId}/deployments`,
+              query: { page: deploymentPage, pageSize: 20 },
+            });
+            if (cancelled) return;
+            setDeployments(response.data.items);
+            setDeploymentPagination({
+              page: response.data.page,
+              pageSize: response.data.pageSize,
+              total: response.data.total,
+            });
+          } finally {
+            if (!cancelled) setDeploymentsLoading(false);
+          }
+        }
+      } else if (activeTab === 'configuration') {
         const config = await fetchConfig(appId);
         if (cancelled) return;
         setConfigMode(config.mode);
@@ -341,9 +357,12 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     };
   }, [
     activeTab,
+    capabilities,
+    capabilitiesReady,
     appId,
     client,
     deploymentPage,
+    deploymentHistoryVersion,
     fetchConfig,
     refreshVersion,
     reportError,
@@ -486,7 +505,10 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   }
 
   const explicitTabInvalid =
-    !isParentEntry && (!activeTab || !availableTabs.includes(activeTab));
+    !isParentEntry &&
+    (!activeTab ||
+      !availableTabs.includes(activeTab) ||
+      (tabMatch?.params.tab === 'releases' && !capabilities['read-release']));
   if (explicitTabInvalid) {
     return (
       <div className='space-y-4 py-8'>
@@ -515,11 +537,13 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     configMode,
     configContent,
     selectedReleaseId,
+    releasesCollapsed,
+    onReleasesCollapsed: setReleasesCollapsed,
     release: selectedRelease,
     deploymentPagination,
     onRelease: setSelectedReleaseId,
     onDeploymentPage: setDeploymentPage,
-    onDeploy: () => {
+    onDeploy: (releaseId) => {
       setBusy(true);
       setError(undefined);
       void Promise.all([
@@ -531,9 +555,10 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         .then(([response, config]) => {
           setReleases(response.data);
           // Deploying moves forward, so default to the newest upload rather than the release already running. The
-          // list is newest first. An explicit choice made in the Releases tab still wins; the running release is only
+          // list is newest first. A release chosen from a row or uploaded in this workspace wins; the running release is only
           // the fallback when nothing has been uploaded at all.
           const targetId =
+            releaseId ??
             selectedReleaseId ??
             response.data[0]?.id ??
             selectedApp.deployment.desiredReleaseId;
@@ -563,7 +588,11 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
         }),
       ])
         .then(([config, release]) => {
-          setReleases([release.data]);
+          setReleases((previous) =>
+            previous.some((item) => item.id === release.data.id)
+              ? previous
+              : [...previous, release.data],
+          );
           setDeploymentReleaseId(target.releaseId);
           setDeploymentMode(target.config.mode);
           setDeploymentContent('');
@@ -739,7 +768,9 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
             void perform(async () => {
               if (!deploymentReleaseId || deploymentMode === 'managed') return;
               const endpoint = rollbackDeploymentId ? 'rollback' : 'deploy';
-              await client.request<ApiResponse<{ id: string }>>({
+              const response = await client.request<
+                ApiResponse<{ id: string }>
+              >({
                 path: `hub/apps/${appId}/${endpoint}`,
                 method: 'POST',
                 json: {
@@ -754,10 +785,15 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
                   },
                 },
               });
+              setDeploymentHistoryVersion((value) => value + 1);
               setSelectedReleaseId(deploymentReleaseId);
               setDeployOpen(false);
               setRollbackDeploymentId(undefined);
-              await navigate(`${appPath.pathname}/deployments`);
+              setReleasesCollapsed(true);
+              await navigate({
+                pathname: `${appPath.pathname}/deployments${capabilities['read-deployment'] ? `/${response.data.id}/logs` : ''}`,
+                search: location.search,
+              });
               setDeploymentPage(1);
             })
           }
@@ -774,8 +810,24 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
               if (!artifact) return;
               const uploaded = await uploadArtifact(client, appId, artifact);
               setSelectedReleaseId(uploaded.id);
+              setReleases((previous) => [
+                uploaded,
+                ...previous.filter((item) => item.id !== uploaded.id),
+              ]);
+              setReleasesCollapsed(false);
               setArtifact(undefined);
               setUploadOpen(false);
+              toast.success(
+                t(
+                  capabilities.deploy &&
+                    capabilities['read-release'] &&
+                    capabilities['read-config'] &&
+                    capabilities['read-config-template']
+                    ? 'releases.uploaded'
+                    : 'releases.uploadedOnly',
+                ),
+                { position: 'top-right', duration: 4000 },
+              );
             })
           }
         />

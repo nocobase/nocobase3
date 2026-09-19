@@ -158,11 +158,11 @@ const enUS = {
     createTitle: 'Create application',
     createDescription: 'Create a stable identity before deploying a release.',
     applicationName: 'Application name',
-    applicationNamePlaceholder: 'Customer portal',
+    applicationNamePlaceholder: 'Enter application name',
     applicationId: 'Application ID',
     applicationIdHint:
-      'Auto-generated and editable; globally unique and fixed after creation.',
-    applicationIdPlaceholder: 'customer-portal',
+      'Required. Use letters, numbers, hyphens, or underscores; cannot start with __. Must be globally unique and cannot be changed after creation.',
+    applicationIdPlaceholder: 'Enter application ID',
     create: 'Create application',
   },
   detail: {
@@ -177,8 +177,8 @@ const enUS = {
     onFirstVisit: 'On first visit',
     updated: 'Updated {{date}}',
     tabs: {
-      logs: 'Logs',
-      deployments: 'Deployments',
+      logs: 'Runtime logs',
+      deployments: 'Releases & deployments',
       releases: 'Releases',
       development: 'Development',
       resources: 'Resources',
@@ -313,9 +313,26 @@ const enUS = {
     },
   },
   releases: {
-    title: 'Releases',
-    description:
-      'Upload and inspect immutable release artifacts for this application.',
+    uploadedOnly: 'Upload complete.',
+    expand: 'Expand releases',
+    collapse: 'Collapse releases',
+    uploadedAt: 'Uploaded',
+    size: 'Size',
+    deploy: 'Deploy',
+    deployVersion: 'Deploy v{{version}}',
+    latestUpload: 'Latest upload',
+    uploaded:
+      'Upload complete. Choose Deploy on the uploaded release to continue.',
+    reusable:
+      'Each release can be deployed multiple times. Every deployment has its own record.',
+    showAll: 'View all {{count}} releases',
+    showLess: 'Show fewer releases',
+    firstTitle: 'Upload your first release to get started',
+    firstDescription:
+      'Upload a built artifact, confirm its configuration, then deploy and follow the logs.',
+
+    title: 'Release artifacts',
+    description: 'Upload a new artifact or deploy an existing release again.',
     upload: 'Upload release',
     noReleases: 'No releases uploaded',
     active: 'Active',
@@ -498,6 +515,7 @@ const enUS = {
     remove: 'Remove application',
   },
   development: {
+    openWorkspace: 'Go to Releases & deployments',
     buildTitle: 'Build the release',
     projectSource: 'Project source',
     prepareTitle: 'Prepare your project',
@@ -526,7 +544,7 @@ const enUS = {
     buildTarget:
       'Building for another machine? Match the Hub host with --target and --node-version. See pnpm build --help for options.',
     uploadDescription:
-      'Upload storage/dist.tar.gz in Releases. Then choose Deploy in Deployments to select the release and review its configuration.',
+      'Upload storage/dist.tar.gz in Releases & deployments. Then choose Deploy on the release and review its configuration.',
     openReleases: 'Go to Releases',
     deployDescription:
       'Uploading does not start the application. Visit it after deployment succeeds.',

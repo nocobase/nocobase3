@@ -36,10 +36,7 @@ export function createHubRoutes(
             {
               name: 'hub-app-deployments',
               path: 'deployments',
-              authz: {
-                resource: { type: 'hub.app', id: '*' },
-                action: 'read-deployment',
-              },
+              // The combined page gates each section by its own capability.
               componentLoader: () =>
                 import('./pages/hub/tabs/deployments-page.js'),
               children: [

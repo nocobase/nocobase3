@@ -57,10 +57,13 @@ export function visibleHubDetailTabs(
     ...(!state.hasReleases && capabilities['upload-release']
       ? (['development'] as const)
       : []),
-    ...(capabilities['read-release'] ? (['releases'] as const) : []),
-    ...(capabilities['read-deployment'] ? (['deployments'] as const) : []),
+    ...(capabilities['read-release'] ||
+    capabilities['read-deployment'] ||
+    capabilities['upload-release']
+      ? (['deployments'] as const)
+      : []),
     ...(capabilities['read-log'] ? (['logs'] as const) : []),
-    ...(capabilities['read-config'] ? (['resources'] as const) : []),
+    // Resources is unfinished; keep its implementation out of the public tab set.
     ...(state.deployed && capabilities['read-config']
       ? (['configuration'] as const)
       : []),
@@ -75,11 +78,7 @@ export function defaultHubDetailTab(
   capabilities: HubCapabilities,
 ): DetailTab | undefined {
   const visible = visibleHubDetailTabs(state, capabilities);
-  const preferred = state.deployed
-    ? 'deployments'
-    : state.hasReleases
-      ? 'releases'
-      : 'development';
+  const preferred = 'deployments';
   return visible.includes(preferred) ? preferred : visible[0];
 }
 

@@ -56,10 +56,10 @@ describe('@nocobase/app-plugin-hub', () => {
 
     expect(
       visibleHubDetailTabs({ hasReleases: true, deployed: true }, permissions),
-    ).toEqual(['releases', 'deployments']);
+    ).toEqual(['deployments']);
   });
 
-  it('shows Resources and settings only when their actions are granted', () => {
+  it('hides unfinished Resources while keeping authorized Configuration and Settings', () => {
     const permissions = {
       ...emptyHubCapabilities(),
       'read-release': true,
@@ -70,13 +70,7 @@ describe('@nocobase/app-plugin-hub', () => {
 
     expect(
       visibleHubDetailTabs({ hasReleases: true, deployed: true }, permissions),
-    ).toEqual([
-      'releases',
-      'deployments',
-      'resources',
-      'configuration',
-      'settings',
-    ]);
+    ).toEqual(['deployments', 'configuration', 'settings']);
   });
 
   it('chooses lifecycle defaults independently of display order and respects access', () => {
@@ -88,10 +82,10 @@ describe('@nocobase/app-plugin-hub', () => {
     };
     expect(
       defaultHubDetailTab({ hasReleases: false, deployed: false }, permissions),
-    ).toBe('development');
+    ).toBe('deployments');
     expect(
       defaultHubDetailTab({ hasReleases: true, deployed: false }, permissions),
-    ).toBe('releases');
+    ).toBe('deployments');
     expect(
       defaultHubDetailTab({ hasReleases: true, deployed: true }, permissions),
     ).toBe('deployments');
@@ -100,13 +94,13 @@ describe('@nocobase/app-plugin-hub', () => {
         { hasReleases: true, deployed: true },
         { ...permissions, 'read-deployment': false },
       ),
-    ).toBe('releases');
+    ).toBe('deployments');
     expect(
       defaultHubDetailTab(
         { hasReleases: false, deployed: false },
         { ...permissions, 'upload-release': false },
       ),
-    ).toBe('releases');
+    ).toBe('deployments');
     expect(
       defaultHubDetailTab(
         { hasReleases: true, deployed: true },
