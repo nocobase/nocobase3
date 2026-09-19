@@ -9,6 +9,7 @@ const REBUILD_TIMEOUT_MS = 5 * 60 * 1000;
 export interface InstallOptions {
   directory: string;
   registry?: string;
+  onOutput?: (chunk: string) => void;
 }
 
 /** Installs the generated project's dependencies. */
@@ -25,6 +26,7 @@ export async function installDependencies(
     await runCommand('pnpm', args, {
       cwd: options.directory,
       timeoutMs: INSTALL_TIMEOUT_MS,
+      onOutput: options.onOutput,
     });
   } catch (error) {
     if (error instanceof CommandFailedError) {

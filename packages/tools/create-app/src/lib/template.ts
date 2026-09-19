@@ -15,10 +15,7 @@ export const DEFAULT_REGISTRY = 'https://npm.nocobase.ai';
 /**
  * What a template needs scaffolding around it, which is not the same for every template.
  *
- * An `app` owns a database: it is asked which dialect to use, gets that driver added to its manifest, and has the
- * connection written to `config.yml`. A `hub` owns none of that — it is a Portal host that proxies an upstream
- * NocoBase API, configured through `.env` — so running it through the app flow would leave it with a `config.yml` it
- * never reads and a database driver it never loads.
+ * Both apps and hubs own a database and receive config.yml. Hubs also receive deployment settings in .env.
  *
  * The kind belongs to the template rather than to the flag, so `--template hub` and `--template ./packages/templates/app-template-hub` are scaffolded identically.
  */

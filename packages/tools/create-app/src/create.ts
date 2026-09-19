@@ -1,5 +1,11 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { buildConfigFile } from './lib/config-file.ts';
+import {
+  configureDatabase,
+  resolveDialectDependency,
+  type Dialect,
+} from './lib/dialects.ts';
 import { formatHelp, parseInput, type ParsedInput } from './lib/flags.ts';
 import {
   installDependencies,
@@ -15,7 +21,6 @@ import {
   outro,
   promptAppName,
   PromptCancelledError,
-  spinner,
 } from './lib/prompts.ts';
 import {
   assertTargetIsUsable,
@@ -27,10 +32,8 @@ import {
 import {
   DEFAULT_REGISTRY,
   downloadTemplate,
-  isTemplateAlias,
   resolveTemplateKind,
   resolveTemplateSource,
-  type TemplateKind,
 } from './lib/template.ts';
 import { buildHubEnvFile, readEnvExample } from './lib/hub.ts';
 
@@ -40,208 +43,197 @@ export interface CreateAppOptions {
   binary: string;
 }
 
-/**
- * Runs the whole flow and returns a process exit code.
- *
- * Returning rather than calling `process.exit` keeps the function testable and lets the caller flush output first.
- */
+interface CreateResult {
+  status: 'success' | 'error';
+  stage: 'input' | 'download' | 'scaffold' | 'install' | 'verify' | 'complete';
+  directory?: string;
+  dialect?: Dialect;
+  projectCreated: boolean;
+  dependenciesInstalled: boolean;
+  databaseConnectionVerified: false;
+  configurationRequired?: boolean;
+  configFile?: string;
+  configPath?: string;
+  nextCommands?: string[];
+  message?: string;
+  warnings: string[];
+}
+
+/** One result on stdout in JSON mode; human progress uses stderr in that mode. */
+function writeJson(result: unknown): void {
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+}
+
 export async function createApp(options: CreateAppOptions): Promise<number> {
   let input: ParsedInput;
-
+  const result: CreateResult = {
+    status: 'error',
+    stage: 'input',
+    projectCreated: false,
+    dependenciesInstalled: false,
+    databaseConnectionVerified: false,
+    warnings: [],
+  };
   try {
     input = await parseInput(options.argv);
   } catch (error) {
-    process.stderr.write(`${(error as Error).message}\n`);
+    result.message = (error as Error).message;
+    if (options.argv.includes('--json')) writeJson(result);
+    else process.stderr.write(`${result.message}\n`);
     return 2;
   }
-
-  if (input.flags.help) {
-    process.stdout.write(`${formatHelp(options.binary)}\n`);
+  if (input.flags.help || input.flags.version) {
+    const value = input.flags.help
+      ? formatHelp(options.binary)
+      : options.version;
+    if (input.flags.json)
+      writeJson({
+        status: 'success',
+        [input.flags.help ? 'help' : 'version']: value,
+      });
+    else process.stdout.write(`${value}\n`);
     return 0;
   }
-
-  if (input.flags.version) {
-    process.stdout.write(`${options.version}\n`);
-    return 0;
-  }
-
+  result.dialect = input.flags.dialect;
+  const progress = (message: string): void => {
+    if (input.flags.json) process.stderr.write(`${message}\n`);
+    else log.info(message);
+  };
   try {
-    await run(input);
+    if (input.flags.json && !input.directory)
+      throw new Error('DIRECTORY is required with --json.');
+    if (!input.flags.json) intro('Create a NocoBase project');
+    await run(input, result, progress);
+    result.status = 'success';
+    result.stage = 'complete';
+    if (input.flags.json) writeJson(result);
+    else {
+      note(
+        [
+          `cd ${input.directory ?? path.basename(result.directory ?? '')}`,
+          ...(result.configurationRequired
+            ? [
+                'Edit database.connections.main in config.yml with actual connection settings; prepare the target database.',
+              ]
+            : []),
+          ...(result.nextCommands ?? []),
+        ].join('\n'),
+        'Next steps',
+      );
+      outro('Done.');
+    }
     return 0;
   } catch (error) {
-    if (error instanceof PromptCancelledError) {
-      cancel('Cancelled.');
-      return 130;
-    }
-
-    cancel((error as Error).message);
-    return 1;
+    result.message = (error as Error).message;
+    if (result.stage === 'install') result.nextCommands = ['pnpm install'];
+    if (input.flags.json) writeJson(result);
+    else
+      cancel(
+        `${result.message}${result.projectCreated ? `\nProject files are in ${result.directory}.` : ''}${result.stage === 'install' ? '\nRun pnpm install inside the project to retry.' : ''}`,
+      );
+    return error instanceof PromptCancelledError
+      ? 130
+      : result.stage === 'input'
+        ? 2
+        : 1;
   }
 }
 
-async function run(input: ParsedInput): Promise<void> {
-  // A name settles what is being created without downloading anything. A package specifier or a local path does not,
-  // and guessing would put the wrong word in front of the user for the whole run, so the introduction stays neutral
-  // until the template itself says which it is.
-  const named = isTemplateAlias(input.flags.template)
-    ? resolveTemplateKind(input.flags.template)
-    : undefined;
-
-  intro(
-    named === 'hub'
-      ? 'Create a NocoBase hub'
-      : named === 'app'
-        ? 'Create a NocoBase app'
-        : 'Create a NocoBase project',
-  );
-
+async function run(
+  input: ParsedInput,
+  result: CreateResult,
+  progress: (message: string) => void,
+): Promise<void> {
   const name = input.directory ?? (await promptAppName());
   assertValidAppName(name);
-
   const targetDirectory = path.resolve(process.cwd(), name);
+  result.directory = targetDirectory;
   await assertTargetIsUsable(targetDirectory);
-
-  // The template registry is separate from the one that served this package: `pnpm create` resolved that before any of
-  // this code ran, while the template is fetched here and defaults to the self-hosted registry carrying v3.
   const registry =
     input.flags.registry ?? process.env.NOCOBASE_REGISTRY ?? DEFAULT_REGISTRY;
-  const templateSource = resolveTemplateSource(input.flags.template, {
+  const source = resolveTemplateSource(input.flags.template, {
     tag: input.flags['template-tag'],
   });
-
-  const download = spinner();
-  download.start(`Downloading ${templateSource}`);
-
-  let template;
+  result.stage = 'download';
+  progress(`Downloading ${source}`);
+  const template = await downloadTemplate({ registry, source });
+  result.stage = 'scaffold';
   try {
-    template = await downloadTemplate({ registry, source: templateSource });
-    download.stop(`Downloaded ${template.name}@${template.version}`);
-  } catch (error) {
-    download.stop('Could not download the template.');
-    throw error;
-  }
-
-  // Settled against the downloaded manifest, because a package specifier or a local path only reveals what it is once
-  // it is on disk.
-  const kind = resolveTemplateKind(input.flags.template, {
-    name: template.name,
-    nocobase: { templateKind: template.kind },
-  });
-
-  // Read before the template directory is removed below.
-  const configExample = await readConfigExample(template.directory);
-  const envExample =
-    kind === 'hub' ? await readEnvExample(template.directory) : undefined;
-
-  // A hub is also configured through the environment, because the path it is served under and the API it proxies are
-  // deployment facts rather than application settings. Everything else it shares with an app: it owns a database, it
-  // registers plugins, and it needs the secrets that only `config.yml` can carry.
-  const extraFiles: Record<string, string> = {
-    'config.yml': buildConfigFile({ example: configExample }),
-  };
-
-  if (kind === 'hub') {
-    extraFiles['.env'] = buildHubEnvFile({ example: envExample, name });
-  }
-
-  try {
+    const kind = resolveTemplateKind(input.flags.template, {
+      name: template.name,
+      nocobase: { templateKind: template.kind },
+    });
+    const example = await readConfigExample(template.directory);
+    const configured = configureDatabase(
+      example ?? '',
+      input.flags.dialect,
+      name,
+    );
+    const extraFiles: Record<string, string> = {
+      'config.yml': buildConfigFile({ example: configured }),
+    };
+    if (kind === 'hub')
+      extraFiles['.env'] = buildHubEnvFile({
+        example: await readEnvExample(template.directory),
+        name,
+      });
+    const manifest = JSON.parse(
+      await readFile(path.join(template.directory, 'package.json'), 'utf8'),
+    ) as { dependencies?: Record<string, string> };
+    const additionalDependencies = await resolveDialectDependency(
+      manifest.dependencies ?? {},
+      input.flags.dialect,
+      registry,
+    );
     await scaffoldFromTemplate({
       name,
       targetDirectory,
       templateDirectory: template.directory,
       extraFiles,
+      additionalDependencies,
     });
+    result.projectCreated = true;
+    await ensureAllowBuilds(targetDirectory);
+    result.configurationRequired = input.flags.dialect !== 'sqlite';
+    result.configFile = path.join(targetDirectory, 'config.yml');
+    result.configPath = 'database.connections.main';
+    result.nextCommands =
+      kind === 'hub' ? ['pnpm build', 'pnpm start'] : ['pnpm dev'];
+    result.message = result.configurationRequired
+      ? 'Edit database.connections.main in config.yml with actual connection settings and prepare the target database before starting.'
+      : 'SQLite is ready to use after dependencies are installed.';
+    progress(`Created ${name} using ${input.flags.dialect}. ${result.message}`);
   } finally {
     await removeDirectory(template.directory);
   }
-
-  await ensureAllowBuilds(targetDirectory);
-
-  log.success(`Created ${name} from ${template.name}@${template.version}.`);
-
   if (!input.flags.install) {
-    finish(name, { installed: false, kind });
+    result.nextCommands?.unshift('pnpm install');
     return;
   }
-
-  const install = spinner();
-  install.start('Installing dependencies with pnpm');
-
-  try {
-    await installDependencies({ directory: targetDirectory, registry });
-    install.stop('Installed dependencies.');
-  } catch (error) {
-    install.stop('Installing dependencies failed.');
-    log.warn((error as Error).message);
-    finish(name, { installed: false, kind }, 'Finished with errors.');
-    return;
-  }
-
+  result.stage = 'install';
+  progress('Installing dependencies with pnpm');
+  await installDependencies({
+    directory: targetDirectory,
+    registry,
+    onOutput: (chunk) => {
+      process.stderr.write(chunk);
+    },
+  });
+  result.dependenciesInstalled = true;
+  result.stage = 'verify';
   const verification = await verifyDriver(targetDirectory);
-
-  if (verification.rebuilt) {
-    log.info('Compiled the native addon for the database driver.');
-  } else if (!verification.ok && verification.reason) {
-    log.warn(verification.reason);
-  }
-
-  // Runs only after the install, because the sync reads NocoBase packages out of `node_modules`.
-  const skills = spinner();
-  skills.start('Synchronizing NocoBase package skills');
-
-  const synchronized = await syncSkills(targetDirectory);
-
-  if (synchronized.ok) {
-    skills.stop('Synchronized NocoBase package skills.');
-  } else {
-    skills.stop('Synchronizing NocoBase package skills failed.');
-    log.warn(
-      synchronized.reason ?? 'Could not synchronize NocoBase package skills.',
+  if (verification.rebuilt)
+    progress('Compiled the native addon for the database driver.');
+  if (!verification.ok)
+    throw new Error(
+      verification.reason ?? 'Database driver verification failed.',
     );
+  progress('Synchronizing NocoBase package skills');
+  const synchronized = await syncSkills(targetDirectory);
+  if (!synchronized.ok) {
+    const warning =
+      synchronized.reason ?? 'Could not synchronize NocoBase package skills.';
+    result.warnings.push(warning);
+    progress(warning);
   }
-
-  finish(name, { installed: true, kind });
-}
-
-/**
- * Prints what the user has to do next, in the order they have to do it.
- *
- * Nothing has to be edited first. A generated project starts on the SQLite connection its own
- * `server/config/database.ts` declares, and `config.yml` already carries the secrets that file cannot supply, so the
- * database is a change the user makes when they want a different one rather than a step standing between them and a
- * running application.
- *
- * A hub has to be built before it can be started, unlike an app whose `pnpm dev` compiles as it serves.
- */
-function finish(
-  name: string,
-  state: { installed: boolean; kind: TemplateKind },
-  message = 'Done.',
-): void {
-  const steps = [`cd ${name}`];
-
-  if (!state.installed) {
-    steps.push('pnpm install');
-  }
-
-  if (state.kind === 'hub') {
-    steps.push('pnpm build', 'pnpm start');
-  } else {
-    steps.push('pnpm dev');
-  }
-
-  note(steps.join('\n'), 'Next steps');
-
-  log.info(
-    [
-      'config.yml was generated from config.example.yml, with generated secrets. It is gitignored.',
-      'The application runs on SQLite. To use another database, register its dialect in',
-      'server/config/database.ts, add the matching @nocobase/db-* package, and point the connection at it.',
-      ...(state.kind === 'hub'
-        ? ['Hub settings, including the API it proxies, are in .env.']
-        : []),
-    ].join('\n'),
-  );
-
-  outro(message);
 }

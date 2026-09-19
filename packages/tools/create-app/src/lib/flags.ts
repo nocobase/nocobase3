@@ -1,3 +1,4 @@
+import { DIALECTS, type Dialect } from './dialects.ts';
 import { Args, Flags } from '@oclif/core';
 import { parse } from '@oclif/core/parser';
 import {
@@ -20,6 +21,16 @@ export const CREATE_ARGS = {
 };
 
 export const CREATE_FLAGS = {
+  dialect: Flags.string({
+    options: [...DIALECTS],
+    default: 'sqlite',
+    description: `Main database dialect: ${DIALECTS.join(', ')} (default: sqlite). Edit connection settings in config.yml before starting.`,
+  }),
+  json: Flags.boolean({
+    default: false,
+    description:
+      'Output a final JSON result without interactive prompts. Requires DIRECTORY.',
+  }),
   install: Flags.boolean({
     allowNo: true,
     default: true,
@@ -51,6 +62,8 @@ export const CREATE_FLAGS = {
 export interface ParsedInput {
   directory?: string;
   flags: {
+    dialect: Dialect;
+    json: boolean;
     install: boolean;
     template: string;
     'template-tag': string;
@@ -93,6 +106,7 @@ export function formatHelp(binary: string): string {
     'EXAMPLES',
     `  $ ${binary} crm`,
     `  $ ${binary} crm --no-install`,
+    `  $ ${binary} crm --dialect postgres --json`,
     `  $ ${binary} crm --template=hub`,
     `  $ ${binary} crm --template-tag=beta`,
     '',
@@ -101,6 +115,6 @@ export function formatHelp(binary: string): string {
     '  Override it with --registry, or set the NOCOBASE_REGISTRY environment variable.',
     '',
     "  config.yml is generated from the template's config.example.yml, with generated secrets.",
-    '  The application starts on SQLite; change the database in server/config/database.ts.',
+    '  Use --dialect to choose a database, then edit its connection settings in config.yml.',
   ].join('\n');
 }

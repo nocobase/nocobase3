@@ -4645,6 +4645,9 @@ importers:
       '@oclif/core':
         specifier: 'catalog:'
         version: 4.14.0
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.0
     devDependencies:
       '@nocobase/dev-config':
         specifier: workspace:*
