@@ -1,5 +1,5 @@
 import type { Auth } from '@nocobase/app-plugin-authentication';
-import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
+import type { Authorization } from '@nocobase/app-plugin-authorization';
 import type { Logger } from '@nocobase/logging';
 import { Hono } from 'hono';
 
@@ -25,7 +25,7 @@ export * from './contracts.js';
 
 export interface CreateAIEmployeeRoutesOptions {
   readonly authentication: Auth;
-  readonly authorization: AppAuthorization;
+  readonly authorization: Authorization;
   readonly services: ServiceFactory;
   readonly logger: Logger;
 }

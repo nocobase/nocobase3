@@ -15,48 +15,69 @@ test('groups employees, conversations, and standalone services as sibling pages'
             name: 'ai',
             path: '/ai',
             navigation: { title: 'AI Employees' },
-            access: { resource: 'ai.settings', action: 'read' },
+            authz: {
+              resource: { type: 'page', id: 'ai.settings' },
+              action: 'access',
+            },
             componentLoader: expect.any(Function),
           },
           {
             name: 'aiSkills',
             path: '/ai/skills',
             navigation: { title: 'Skills' },
-            access: { resource: 'ai.settings', action: 'read' },
+            authz: {
+              resource: { type: 'page', id: 'ai.settings' },
+              action: 'access',
+            },
             componentLoader: expect.any(Function),
           },
           {
             name: 'aiTools',
             path: '/ai/tools',
             navigation: { title: 'tools.title' },
-            access: { resource: 'ai.settings', action: 'read' },
+            authz: {
+              resource: { type: 'page', id: 'ai.settings' },
+              action: 'access',
+            },
             componentLoader: expect.any(Function),
           },
           {
             name: 'aiConversations',
             path: '/ai/conversations',
             navigation: { title: 'Conversations' },
-            access: { resource: 'ai.settings', action: 'read' },
+            authz: {
+              resource: { type: 'page', id: 'ai.settings' },
+              action: 'access',
+            },
             componentLoader: expect.any(Function),
           },
           {
             name: 'aiLLMServices',
             path: '/ai/llm-services',
             navigation: { title: 'LLM services' },
-            access: { resource: 'ai.settings', action: 'read' },
+            authz: {
+              resource: { type: 'page', id: 'ai.settings' },
+              action: 'access',
+            },
             componentLoader: expect.any(Function),
           },
           {
             name: 'aiMCPServices',
             path: '/ai/mcp-services',
             navigation: { title: 'MCP services' },
-            access: { resource: 'ai.settings', action: 'read' },
+            authz: {
+              resource: { type: 'page', id: 'ai.settings' },
+              action: 'access',
+            },
             componentLoader: expect.any(Function),
           },
           {
             name: 'aiSettings',
             path: '/ai/settings',
-            access: { resource: 'ai.settings', action: 'read' },
+            authz: {
+              resource: { type: 'page', id: 'ai.settings' },
+              action: 'access',
+            },
             componentLoader: expect.any(Function),
           },
         ],
@@ -93,12 +114,12 @@ test('resolves the AI navigation group without changing page URLs or identities'
     },
   ]);
   expect(
-    resolved.settings.map(({ id, path, title, navigation, access }) => ({
+    resolved.settings.map(({ id, path, title, navigation, authz }) => ({
       id,
       path,
       title,
       navigation,
-      access,
+      authz,
     })),
   ).toEqual([
     {
@@ -106,49 +127,70 @@ test('resolves the AI navigation group without changing page URLs or identities'
       path: '/settings/ai',
       title: 'AI Employees',
       navigation: true,
-      access: { resource: 'ai.settings', action: 'read' },
+      authz: {
+        resource: { type: 'page', id: 'ai.settings' },
+        action: 'access',
+      },
     },
     {
       id: 'aiSkills',
       path: '/settings/ai/skills',
       title: 'Skills',
       navigation: true,
-      access: { resource: 'ai.settings', action: 'read' },
+      authz: {
+        resource: { type: 'page', id: 'ai.settings' },
+        action: 'access',
+      },
     },
     {
       id: 'aiTools',
       path: '/settings/ai/tools',
       title: 'tools.title',
       navigation: true,
-      access: { resource: 'ai.settings', action: 'read' },
+      authz: {
+        resource: { type: 'page', id: 'ai.settings' },
+        action: 'access',
+      },
     },
     {
       id: 'aiConversations',
       path: '/settings/ai/conversations',
       title: 'Conversations',
       navigation: true,
-      access: { resource: 'ai.settings', action: 'read' },
+      authz: {
+        resource: { type: 'page', id: 'ai.settings' },
+        action: 'access',
+      },
     },
     {
       id: 'aiLLMServices',
       path: '/settings/ai/llm-services',
       title: 'LLM services',
       navigation: true,
-      access: { resource: 'ai.settings', action: 'read' },
+      authz: {
+        resource: { type: 'page', id: 'ai.settings' },
+        action: 'access',
+      },
     },
     {
       id: 'aiMCPServices',
       path: '/settings/ai/mcp-services',
       title: 'MCP services',
       navigation: true,
-      access: { resource: 'ai.settings', action: 'read' },
+      authz: {
+        resource: { type: 'page', id: 'ai.settings' },
+        action: 'access',
+      },
     },
     {
       id: 'aiSettings',
       path: '/settings/ai/settings',
       title: 'aiSettings',
       navigation: false,
-      access: { resource: 'ai.settings', action: 'read' },
+      authz: {
+        resource: { type: 'page', id: 'ai.settings' },
+        action: 'access',
+      },
     },
   ]);
 });

@@ -30,7 +30,6 @@ import type {
 } from '../types.js';
 import { ResourceActionError, sendStreamError } from '../types.js';
 import type {
-  AIConversationEntity,
   AIMessageEntity,
   AIToolMessageEntity,
 } from '../repository/index.js';
