@@ -1,3 +1,5 @@
+import { resolveDatabaseConfig } from '../database/resolve-config.js';
+import type { AppDatabaseConfig } from '../database/types.js';
 import type { AppConfigFactory } from '../config/index.js';
 import type { ConfigMap } from '@nocobase/config';
 import { AppConfig } from '../config/index.js';
@@ -105,6 +107,27 @@ export async function resolveAppRuntime(
   };
   if (definition.defaultConfigs) {
     runtime.config.mergeDefaults(definition.defaultConfigs(runtime));
+  }
+  const database = runtime.config.get<AppDatabaseConfig>('database');
+  if (database && database.default !== 'none') {
+    const resolvedDatabase = await resolveDatabaseConfig(database);
+    runtime.config.mergeDefaults({
+      database: {
+        drivers: resolvedDatabase.drivers,
+        connections: Object.fromEntries(
+          Object.entries(resolvedDatabase.connections)
+            .filter(
+              ([name, connection]) =>
+                connection.databaseDriver &&
+                !database.connections[name].databaseDriver,
+            )
+            .map(([name, connection]) => [
+              name,
+              { databaseDriver: connection.databaseDriver },
+            ]),
+        ),
+      },
+    });
   }
   return runtime;
 }

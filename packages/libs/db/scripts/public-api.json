@@ -52,6 +52,7 @@
         "parseColumnDefault",
         "rawRows",
         "ref",
+        "resolveDatabaseDriver",
         "serializeCollectionArtifact",
         "serializeCollectionArtifactManifest",
         "sqliteAffinity",

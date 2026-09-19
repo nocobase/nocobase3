@@ -207,13 +207,50 @@
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/db-dameng": "workspace:*",
+    "@nocobase/db-kingbase": "workspace:*",
+    "@nocobase/db-oceanbase": "workspace:*"
   },
   "peerDependencies": {
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/db": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
-    "@nocobase/queue": "workspace:^"
+    "@nocobase/queue": "workspace:^",
+    "@nocobase/db-sqlite": "workspace:^",
+    "@nocobase/db-mysql": "workspace:^",
+    "@nocobase/db-postgres": "workspace:^",
+    "@nocobase/db-mssql": "workspace:^",
+    "@nocobase/db-oracle": "workspace:^",
+    "@nocobase/db-dameng": "workspace:^",
+    "@nocobase/db-kingbase": "workspace:^",
+    "@nocobase/db-oceanbase": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@nocobase/db-sqlite": {
+      "optional": true
+    },
+    "@nocobase/db-mysql": {
+      "optional": true
+    },
+    "@nocobase/db-postgres": {
+      "optional": true
+    },
+    "@nocobase/db-mssql": {
+      "optional": true
+    },
+    "@nocobase/db-oracle": {
+      "optional": true
+    },
+    "@nocobase/db-dameng": {
+      "optional": true
+    },
+    "@nocobase/db-kingbase": {
+      "optional": true
+    },
+    "@nocobase/db-oceanbase": {
+      "optional": true
+    }
   }
 }

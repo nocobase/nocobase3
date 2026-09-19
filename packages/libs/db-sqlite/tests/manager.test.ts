@@ -29,6 +29,16 @@ function createTestDatabase(config: DatabaseConfig<SqliteConnectionConfig>) {
 }
 
 describe('DatabaseManager', () => {
+  it('keeps core manager construction synchronous and requires explicitly registered drivers', () => {
+    const db = createDatabaseManager({
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    expect(db).not.toBeInstanceOf(Promise);
+    expect(() => db.connection()).toThrow(
+      'Database dialect "sqlite" is not registered.',
+    );
+  });
+
   it('refreshes a warmed naming index when a transaction creates an underscored collection', async () => {
     const db = createTestDatabase({
       metadataStore: new InMemoryCollectionMetadataStore(),
@@ -178,18 +188,6 @@ describe('DatabaseManager', () => {
     } finally {
       await db.destroy();
     }
-  });
-
-  it('requires an explicitly registered dialect package', () => {
-    const db = createDatabaseManager({
-      connections: {
-        main: { dialect: 'sqlite', filename: ':memory:' },
-      },
-    });
-
-    expect(() => db.connection()).toThrow(
-      'Database dialect "sqlite" is not registered. Install and register the corresponding @nocobase/db-sqlite package.',
-    );
   });
 
   it('returns lazy builder, query, and connection handles for the default connection', async () => {
@@ -1110,7 +1108,7 @@ describe('DatabaseManager', () => {
       },
     });
     expect(() => invalidDialect.connection()).toThrow(
-      'Database dialect "custom" is not registered. Install and register the corresponding @nocobase/db-custom package.',
+      'Database dialect "custom" is not registered. Install and explicitly register the corresponding driver in database.drivers.',
     );
 
     const unsupportedUrl = createTestDatabase({

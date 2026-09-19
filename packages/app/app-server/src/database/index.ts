@@ -1,3 +1,8 @@
+export {
+  resolveDatabaseConfig,
+  type DatabaseConfigInput,
+  type ResolvedDatabaseConfig,
+} from './resolve-config.js';
 export { defineAppDatabaseConfig } from './define-app-database-config.js';
 export {
   createAppDatabaseManager,

@@ -30,7 +30,7 @@ export function resolveKnexConnectionConfig<TConfig extends ConnectionConfig>(
 
   if (!dialectDriver) {
     throw new Error(
-      `Database dialect "${config.dialect}" is not registered. Install and register the corresponding @nocobase/db-${config.dialect} package.`,
+      `Database dialect "${config.dialect}" is not registered. Install and explicitly register the corresponding driver in database.drivers.`,
     );
   }
   if (dialectDriver.dialect !== config.dialect) {

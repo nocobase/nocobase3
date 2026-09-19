@@ -627,12 +627,21 @@ importers:
       '@nocobase/api-client':
         specifier: workspace:*
         version: link:../../libs/api-client
+      '@nocobase/db-dameng':
+        specifier: workspace:*
+        version: link:../../libs/db-dameng
+      '@nocobase/db-kingbase':
+        specifier: workspace:*
+        version: link:../../libs/db-kingbase
       '@nocobase/db-mssql':
         specifier: workspace:*
         version: link:../../libs/db-mssql
       '@nocobase/db-mysql':
         specifier: workspace:*
         version: link:../../libs/db-mysql
+      '@nocobase/db-oceanbase':
+        specifier: workspace:*
+        version: link:../../libs/db-oceanbase
       '@nocobase/db-oracle':
         specifier: workspace:*
         version: link:../../libs/db-oracle
