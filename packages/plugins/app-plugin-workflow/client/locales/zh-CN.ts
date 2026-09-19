@@ -109,6 +109,11 @@ const zhCN: WorkflowResource = {
     unserializable: '[无法序列化的值]',
   },
   canvas: {
+    controls: '画布控件',
+    zoomIn: '放大',
+    zoomOut: '缩小',
+    fitView: '适应视图',
+
     start: '开始',
     end: '结束',
     condition: '条件',

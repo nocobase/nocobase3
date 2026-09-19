@@ -377,7 +377,9 @@ function Overview({
           {item.inactiveReason ? (
             <DefinitionRow
               label={t('page.details.inactiveReason')}
-              value={item.inactiveReason}
+              value={t(`page.reasons.${item.inactiveReason}`, {
+                defaultValue: item.inactiveReason,
+              })}
             />
           ) : null}
         </dl>
@@ -391,7 +393,9 @@ function Overview({
           />
           <DefinitionRow
             label={t('page.details.targetType')}
-            value={item.targetType}
+            value={t(`page.targets.${item.targetType}`, {
+              defaultValue: item.targetType,
+            })}
           />
           {item.targetSummary.description ? (
             <DefinitionRow
@@ -468,7 +472,9 @@ function Triggers({
                     />
                     {item.reason ? (
                       <p className='mt-1 max-w-xs text-xs text-muted-foreground'>
-                        {item.reason}
+                        {t(`page.reasons.${item.reason}`, {
+                          defaultValue: item.reason,
+                        })}
                       </p>
                     ) : null}
                   </td>

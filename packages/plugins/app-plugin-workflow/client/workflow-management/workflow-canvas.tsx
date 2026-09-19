@@ -473,6 +473,12 @@ export function WorkflowCanvas({
       {ready ? (
         <>
           <ReactFlow
+            ariaLabelConfig={{
+              'controls.ariaLabel': t('canvas.controls'),
+              'controls.zoomIn.ariaLabel': t('canvas.zoomIn'),
+              'controls.zoomOut.ariaLabel': t('canvas.zoomOut'),
+              'controls.fitView.ariaLabel': t('canvas.fitView'),
+            }}
             className={`workflow-canvas-viewport${viewportReady ? ' ready' : ''}`}
             nodes={nodes}
             edges={edges}
