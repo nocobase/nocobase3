@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import { LanguageSwitcher } from '@/shell/language-switcher';
+import { LanguageSwitcher } from '@/layouts/components/language-switcher';
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), error: vi.fn() },

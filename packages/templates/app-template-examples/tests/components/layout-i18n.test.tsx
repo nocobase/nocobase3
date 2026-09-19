@@ -12,8 +12,10 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import locales from '../../client/locales/index.js';
-import { AppHeader } from '../../client/shell/app-header.js';
-import { AppSidebar } from '../../client/shell/app-sidebar.js';
+import { AppLayout } from '../../client/layouts/app-layout.js';
+vi.mock('@nocobase/app-plugin-i18n/client', () => ({
+  useSyncServerLocale: () => {},
+}));
 import { SettingsLayout } from '../../client/layouts/settings-layout.js';
 import { DevLayout } from '../../client/layouts/dev-layout.js';
 
@@ -21,7 +23,12 @@ vi.mock('../../client/routing/client-route.js', () => ({
   ClientRoute: () => <p>Preferences content</p>,
 }));
 vi.mock('../../client/theme/index.js', () => ({ ThemeSettings: () => null }));
-vi.mock('../../client/shell/user-menu.js', () => ({ UserMenu: () => null }));
+vi.mock('../../client/layouts/components/user-menu.js', () => ({
+  UserMenu: () => null,
+}));
+vi.mock('../../client/components/notification-button', () => ({
+  NotificationButton: () => null,
+}));
 vi.mock('../../client/routing/route-navigation.js', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('../../client/routing/route-navigation.js')
@@ -45,6 +52,11 @@ const route: AppClientRegisteredRoute = {
 };
 
 async function setup(children: ReactNode, path = '/') {
+  vi.stubGlobal('matchMedia', () => ({
+    matches: true,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  }));
   const runtime = new I18nRuntime({
     defaultLocale: 'en-US',
     locales: ['en-US', 'zh-CN'],
@@ -67,21 +79,7 @@ async function setup(children: ReactNode, path = '/') {
 
 describe('shell translations', () => {
   it('updates header, footer, tooltips and accessible labels without remounting', async () => {
-    const runtime = await setup(
-      <>
-        <AppHeader
-          desktopSidebarCollapsed={false}
-          onOpenSidebar={vi.fn()}
-          onToggleDesktopSidebar={vi.fn()}
-        />
-        <AppSidebar
-          routes={[]}
-          desktopCollapsed={false}
-          mobileOpen={false}
-          onCloseMobile={vi.fn()}
-        />
-      </>,
-    );
+    const runtime = await setup(<AppLayout routes={[]} />);
     expect(screen.getByText('AI application workspace')).toBeVisible();
     expect(screen.getByText('AI builds freely.')).toBeVisible();
     await act(() => runtime.changeLanguage('zh-CN'));

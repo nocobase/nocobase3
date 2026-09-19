@@ -135,7 +135,7 @@ A navigable page normally changes `client/routes.ts`, its page component, and `c
 
 ## Putting the page in a breadcrumb trail
 
-The owning layout supplies the route tree: `AppShell` for business pages, and `SurfaceLayout` for Settings and Dev pages. `StandalonePageLayout` does not currently supply one, so breadcrumbs there render nothing.
+The owning layout supplies the route tree: `AppLayout` for business pages, `SettingsLayout` for Settings pages, and `DevLayout` for Dev pages. `StandalonePageLayout` does not currently supply one, so breadcrumbs there render nothing.
 
 `navigation` controls menu entries; `breadcrumb` independently supplies a trail title. Declare both when a route belongs in both. Breadcrumb titles are static translation keys resolved in the owning package's namespace and are allowed on parameterized paths.
 
@@ -184,7 +184,7 @@ Authentication pages are application routes: `/login`, `/register`, `/forgot-pas
 
 ## Where rendering lives
 
-`client/routing/` renders resolved routes, checks access, and handles loading and error states. `client/layouts/` holds the settings and dev shells. `client/shell/` is the authenticated application chrome.
+`client/routing/` renders resolved routes, checks access, and handles loading and error states. `client/layouts/` holds the App, Settings and Dev layouts; `client/layouts/components/` holds their shared containers, navigation, branding and account controls. Each layout owns its permissions and route rendering; shared header and sidebar containers render ordinary children.
 
 Do not declare product routes in any of them. They render routes; `client/routes.ts` declares them.
 

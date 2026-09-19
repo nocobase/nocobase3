@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { expect, it, vi } from 'vitest';
 
-import { AppShell } from '../../client/shell/app-shell.js';
+import { AppLayout } from '../../client/layouts/app-layout.js';
 import { Breadcrumbs } from '../../client/components/breadcrumbs.js';
 
 vi.mock('@nocobase/app-plugin-i18n/client', async (importOriginal) => ({
@@ -18,9 +18,21 @@ vi.mock('@nocobase/i18n/client', () => ({
       options?.defaultValue ?? key,
   }),
 }));
-vi.mock('../../client/shell/app-header.js', () => ({ AppHeader: () => null }));
-vi.mock('../../client/shell/app-sidebar.js', () => ({
-  AppSidebar: () => null,
+vi.mock('@nocobase/app-client', async (original) => ({
+  ...(await original<typeof import('@nocobase/app-client')>()),
+  useClientApplication: () => ({ runtime: { settingsRouteTree: [] } }),
+}));
+vi.mock('../../client/routing/route-navigation.js', async (original) => ({
+  ...(await original<
+    typeof import('../../client/routing/route-navigation.js')
+  >()),
+  useRouteNavigation: () => ({ items: [], denied: new Set(), loading: false }),
+}));
+vi.mock('../../client/layouts/components/layout-sidebar.js', () => ({
+  LayoutSidebar: () => null,
+}));
+vi.mock('../../client/layouts/components/header-actions.js', () => ({
+  HeaderActions: () => null,
 }));
 
 it('provides business route breadcrumbs to its outlet without an outer provider', () => {
@@ -47,7 +59,7 @@ it('provides business route breadcrumbs to its outlet without an outer provider'
   render(
     <MemoryRouter initialEntries={['/orders/42']}>
       <Routes>
-        <Route element={<AppShell routes={routes} />}>
+        <Route element={<AppLayout routes={routes} />}>
           <Route path='/orders/:id' element={<Breadcrumbs />} />
         </Route>
       </Routes>

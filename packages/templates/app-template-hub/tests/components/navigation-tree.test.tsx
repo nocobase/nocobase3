@@ -8,7 +8,7 @@ import {
   routeKey,
   type RouteNavigationItem,
 } from '../../client/routing/route-navigation.js';
-import { NavigationTree } from '../../client/shell/app-sidebar.js';
+import { NavigationTree } from '../../client/layouts/components/navigation-tree.js';
 
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
