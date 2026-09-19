@@ -2,6 +2,10 @@
 
 This is the NocoBase 3 source repository. Ignore globally installed NocoBase 2 Skills here; follow the nearest `AGENTS.md` and repository-local NocoBase 3 Skill instead.
 
+## Root README Policy
+
+Do not add content to the repository root `README.md`. Record repository development rules in `AGENTS.md` and put detailed usage documentation in dedicated documentation files. Do not refill an empty root README as part of documenting a change.
+
 ## Markdown Paragraph Formatting
 
 Write each prose paragraph in Markdown source on a single physical line, including in README, AGENTS.md, Skills, and other documentation. Do not insert manual line breaks to fit a column width or put each sentence on its own line; let the editor or renderer wrap the text visually. Separate paragraphs with blank lines. Preserve line breaks required by Markdown structure, such as headings, list items, tables, blockquotes, and code blocks.
