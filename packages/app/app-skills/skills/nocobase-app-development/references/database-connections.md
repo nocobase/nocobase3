@@ -181,3 +181,5 @@ With explicit `drivers`, no manual connection union, `typeof drivers` annotation
 With multiple connections, TypeScript may omit suggestions inside an empty `dialect: ''` value. Enter the dialect name to receive its field suggestions; unregistered dialects and invalid fields are still rejected by type checking.
 
 Application server builds retain declaration emission with `isolatedDeclarations: false`, allowing direct default exports of configuration factory calls. The helper returns the common `AppConfigFactory<AppDatabaseConfig>` contract; its result does not expose the inferred concrete driver types. Library packages retain isolated declaration checking. `AppDatabaseConfigFromDrivers` remains available for explicit annotations outside the helper.
+
+Application templates do not declare `@nocobase/db-sqlite` as a default dependency. `create-app` adds the official driver selected by `--dialect`, including SQLite when the flag is omitted. When running a template directly instead of using `create-app`, explicitly install the driver required by its database configuration before deployment.

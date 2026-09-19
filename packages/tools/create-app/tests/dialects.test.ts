@@ -130,6 +130,23 @@ describe('driver dependency contract', () => {
       { timeoutMs: 60_000 },
     );
   });
+  it.each(DIALECTS)(
+    'adds %s when the template declares no driver',
+    async (dialect) => {
+      const packageName = `@nocobase/db-${dialect}`;
+      vi.mocked(runCommand).mockResolvedValue({
+        stdout: JSON.stringify({ [packageName]: '^2.0.0' }),
+        stderr: '',
+      });
+      expect(
+        await resolveDialectDependency(
+          { '@nocobase/app-server': '^4.0.0' },
+          dialect,
+          'registry',
+        ),
+      ).toEqual({ [packageName]: '^2.0.0' });
+    },
+  );
   it('rejects an unknown compatibility contract', async () => {
     vi.mocked(runCommand).mockResolvedValue({ stdout: '{}', stderr: '' });
     await expect(

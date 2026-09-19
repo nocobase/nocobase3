@@ -199,7 +199,6 @@
     "@nocobase/app-server": "workspace:^",
     "@nocobase/config": "workspace:^",
     "@nocobase/db": "workspace:^",
-    "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/snowflake": "workspace:^",

@@ -210,7 +210,6 @@
     "@nocobase/db-mysql": "workspace:^",
     "@nocobase/db-oracle": "workspace:^",
     "@nocobase/db-postgres": "workspace:^",
-    "@nocobase/db-sqlite": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
     "@nocobase/service-provider": "workspace:^",
     "@nocobase/snowflake": "workspace:^",
