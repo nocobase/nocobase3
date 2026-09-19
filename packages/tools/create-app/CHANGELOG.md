@@ -1,5 +1,16 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.17
+
+### Minor Changes
+
+- fe564d9: Support database selection with --dialect and non-interactive structured output with --json. Generate local database connection settings, install compatible drivers, and guide agents through configuration before startup.
+
+### Patch Changes
+
+- fe564d9: Default generated applications to verifyDepsBeforeRun: false so running development, build, or startup scripts does not implicitly install dependencies. Document explicit installation after dependency changes and preserve template-provided settings.
+- fe564d9: Classify occupied target directories as scaffold failures, select main for existing SQLite configurations, and explicitly report the limited scope of native dependency verification for other dialects.
+
 ## 0.1.0-beta.16
 
 ### Patch Changes

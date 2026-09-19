@@ -1,5 +1,76 @@
 # @nocobase/app-plugin-notification
 
+## 0.1.0-beta.13
+
+### Patch Changes
+
+- 64b3fdb: Separate authorization services from application integration: the library provides decisions, permission-set and access-rule services, store contracts and handlers; the application plugin owns database adapters, migrations, identities and management UI.
+
+  Add configurable root and default permission sets, protected-set metadata, transaction-bound service APIs, and integration with user management and Hub roles. Add database authorization for explicitly registered collections through Repository policies, plus a runnable example plugin.
+
+  Provide a permission-set workspace with routed editing and user assignments, nested resource groups, field and record-scope controls, and a permission inspector. Localize management UI and request-specific resource labels. Application routes may declare signed-in access without a page grant.
+
+  Migration ownership changes inline the existing table definitions in the application plugin. This changes the checksums of previously executed migrations; upgrade compatibility must be resolved before deploying to an existing database.
+
+- 64b3fdb: Separate business resource declarations from underlying handler registration through `resourceTypes`. Remove transitional registration aliases and legacy title decoding. Store rule record IDs directly in each action's JSON, preserving independent named scopes without auxiliary record tables. Initialize the sales example and Hub permission titles directly in their final form, without development-version upgrade scripts.
+- 64b3fdb: Remove Refine from client authorization checks. Use `AuthorizationClient.can({ resource, action })` instead of the removed two-argument signature, and import `useCan` from `@nocobase/app-plugin-authorization/client`. Migrate page guards, navigation, and notification visibility while preserving session isolation and realtime permission invalidation.
+
+  Remove the Refine access-control configuration and legacy global authorization client accessors. Resolve the application-owned client through `useAuthorizationClient()` or `authorizationClientToken`. Settings actions now revoke stale access immediately; route checks no longer bypass the authorization page or translate Refine CRUD action names.
+
+  Unify route authorization under `authz: 'skip' | { resource: { type, id }, action }`. Normalize default rules during registration and share them across page guards, navigation, permission discovery, and inspection. Remove the legacy `access` field and string resource adapter.
+
+  Limit settings action checks to the actions each page uses, keep the permission-set action helper internal, and avoid rebuilding navigation twice when selecting a route.
+
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [fe564d9]
+- Updated dependencies [fe564d9]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/app-plugin-authorization@0.2.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.21
+  - @nocobase/queue@0.1.0-beta.7
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.12
 
 ### Patch Changes
