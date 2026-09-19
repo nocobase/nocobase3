@@ -1,5 +1,62 @@
 # @nocobase/app-server
 
+## 1.0.0-beta.20
+
+### Minor Changes
+
+- e9da3c2: Resolve installed official database drivers asynchronously from application configuration before provider registration or standalone database tasks. Configure only the needed dialects and install their optional peer packages in application dependencies. Preserve explicit driver registrations and synchronous core manager APIs; direct core consumers continue to register drivers explicitly. Standard development and test loaders require no synchronous ESM compatibility configuration.
+
+### Patch Changes
+
+- Updated dependencies [c84bfe8]
+- Updated dependencies [e9da3c2]
+- Updated dependencies [e9da3c2]
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/db-postgres@0.1.0-beta.2
+  - @nocobase/db-kingbase@0.1.0-beta.2
+  - @nocobase/db-dameng@0.1.0-beta.2
+  - @nocobase/db-mssql@0.1.0-beta.1
+  - @nocobase/db-mysql@0.1.0-beta.2
+  - @nocobase/db-oceanbase@0.1.0-beta.1
+  - @nocobase/db-oracle@0.1.0-beta.2
+  - @nocobase/db-sqlite@0.1.0-beta.2
+
+## 1.0.0-beta.19
+
+### Minor Changes
+
+- e13ed84: Organize Hub storage by ownership, add explicit managed revision and log directories, retain legacy layouts, and provide an offline migration preview and copy workflow. Keep standalone Hub data outside build output and place template build archives under storage/exports with matching publishing defaults.
+- e13ed84: Persist per-deployment phase and failure logs and expose application runtime logs in Hub with scoped access, incremental reading, retention, and independent file and console outputs.
+
+  Unify runtime logging configuration and source routing, merge default outputs into app files, connect workflow diagnostics with execution identities, and preserve legacy configuration and historical log readability.
+
+  Enforce hosted capture policy, declare the Host server runtime peer, merge paged source logs chronologically with bounded opaque cursors, and preserve correlation and error details when truncating oversized records. Handle expired scans explicitly in the Hub viewer and downloads.
+
+  Route HTTP request logs to separate request files by default in all application templates.
+
+- e13ed84: Unify application directory fields and path helpers in AppPaths, shared by configuration factories, runtime and Application. Replace ConfigPaths and runtime.configPaths with AppPaths and runtime.paths, and construct applications through createAppFromRuntime so Host logging policy and the runtime application reference are wired consistently.
+
+  Standalone applications declare their deployment root separately from their code root. Configuration and default persistent storage use that deployment root in both source and compiled execution. Explicit storage paths take precedence over HUB_STORAGE_DIR, and embedded applications retain Host-provided volumes.
+
+  Standardize Hub storage and expanded releases on the hub, host and apps layout, remove legacy layout detection and offline storage migration commands, and replace appDeploymentsDir with appRevisionsDir. Expanded releases use appRevisionsDir/<appId>/<sha256>; standalone discovery records the selected revision. Consumers must update removed path and storage APIs and configure existing data locations explicitly before adopting this release. Rebuild application artifacts with the updated runtime and templates.
+
+### Patch Changes
+
+- e13ed84: Preserve structured workflow context alongside queued run return values when integrating scheduled execution. Route terminal observer failures and registered queue jobs through application loggers while retaining committed workflow outcomes.
+- e13ed84: Make development logs concise and application-scoped while retaining structured file diagnostics. Route configuration and authentication diagnostics through application logging, reduce routine startup and request noise, distinguish optional AI Skill directories from missing configured paths, and align development console settings across templates. Document that deployed applications need rebuilding to adopt the current logging protocol.
+- 00362cf: Restore colored log levels in the development terminal. Replacing the pino-pretty transport with `console.pretty` dropped the ANSI escapes, so INFO, WARN and ERROR lost the colors developers had in v2. Pretty output colors the level label again, using the previous palette, and only when it helps: `console.color` decides when set, otherwise a terminal check applies, `NO_COLOR` disables the escapes, `FORCE_COLOR` requests them, and piped or captured output stays plain. Structured console output, journals and log files still never contain escapes. Applications pass an explicit `logging.console.color` (or `hub.logging.apps.console.color`) through to the logging library. A managed App Host child inherits a pipe and cannot see the terminal its output is relayed to, so the supervisor requests `FORCE_COLOR` for it when the environment states no preference, and captured child output drops terminal escape sequences so the Hub log viewer keeps showing readable text.
+- Updated dependencies [e0c4b3d]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [00362cf]
+- Updated dependencies [e13ed84]
+  - @nocobase/queue@0.1.0-beta.6
+  - @nocobase/db@1.0.0-beta.10
+  - @nocobase/logging@0.1.0-beta.5
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 1.0.0-beta.18
 
 ### Minor Changes

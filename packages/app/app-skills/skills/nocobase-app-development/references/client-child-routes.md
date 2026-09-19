@@ -211,7 +211,7 @@ Follow this order:
 1. Add the child route.
 2. Decide where the owning page renders `<Outlet />`.
 3. Render the child with `RouteDialog` or `RouteDrawer`.
-4. Use `useRouteOverlay()` to close it.
+4. Use `useRouteOverlay()` in a descendant component rendered inside that overlay to close it.
 5. Add `beforeClose` when closing needs confirmation.
 
 ### 1. Add a child route
@@ -282,10 +282,22 @@ Both components accept `title` (required), `description`, `children`, `footer`, 
 
 ### 4. Close the overlay
 
-Use `useRouteOverlay()` inside the overlay page or its descendants:
+Call `useRouteOverlay()` only in a descendant component rendered inside the `RouteDialog` or `RouteDrawer` being closed, including a component passed as `footer`. The provider is inside the overlay wrapper. The page component that returns the wrapper is outside that provider and must not call the hook for that overlay.
+
+Keep the wrapper in the page and put the hook in a separate component, rendered as JSX:
 
 ```tsx
+import { RouteDialog } from '@/components/route-dialog';
 import { useRouteOverlay } from '@/components/use-route-overlay';
+import { Button } from '@/components/ui/button';
+
+export default function OrderEditPage() {
+  return (
+    <RouteDialog title='Edit order' footer={<Actions />}>
+      <p>Edit the order here.</p>
+    </RouteDialog>
+  );
+}
 
 function Actions() {
   const { close, isClosing } = useRouteOverlay();
@@ -303,6 +315,24 @@ function Actions() {
   );
 }
 ```
+
+The same rule applies to a form that closes after saving: put the hook in the form component rendered inside the overlay. Render `<Actions />`, not `Actions()`, so React runs the hook under the provider.
+
+Incorrect: calling the hook in the component that creates the wrapper does not read that wrapper's context:
+
+```tsx
+function OrderEditPage() {
+  // WRONG: this component is outside the provider created below.
+  const { isClosing } = useRouteOverlay();
+  return (
+    <RouteDialog title='Edit order'>
+      <Button disabled={isClosing}>Save</Button>
+    </RouteDialog>
+  );
+}
+```
+
+Without an ancestor overlay, this throws `useRouteOverlay must be used inside RouteDialog or RouteDrawer`. In a nested overlay, it can silently read the parent overlay's context instead, so calling `close()` would close the wrong layer. Context follows React component ancestry, not the source file or the DOM location of a portal.
 
 The default close target is the parent route. It preserves the current query string and uses route-relative navigation. Use `closeTo` only for a different explicit target. Do not use `navigate(-1)` as the normal close implementation because a directly loaded child may have no meaningful history entry.
 
@@ -331,7 +361,7 @@ Returning `false` keeps the overlay open. The guard applies to the close button,
 - If the overlay has child routes, does it render its own `<Outlet />`?
 - Is `RouteDialog` or `RouteDrawer` selected for the interaction?
 - Is `breadcrumb` left undeclared, since an overlay is not a destination?
-- Is `useRouteOverlay()` used for closing, with rejection handled?
+- Is `useRouteOverlay()` called in a descendant component inside the intended overlay, rather than the page component returning its wrapper, with close rejection handled?
 - Is `beforeClose` present when unsaved state needs protection?
 - Do direct URLs, refresh, query strings, browser back/forward, and nested overlays behave correctly?
 

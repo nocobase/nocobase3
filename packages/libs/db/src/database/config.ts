@@ -36,7 +36,7 @@ export interface ExtensibleDatabaseConfig<
   TConnection extends AnyConnectionConfig = AnyConnectionConfig,
 > {
   default?: string;
-  /** Database drivers available to connections that use declarative configs. */
+  /** Explicit driver factories or descriptors used by the synchronous manager. */
   drivers?: Record<string, DatabaseDriverRegistration>;
   connections: Record<string, TConnection>;
   metadataStore?: CollectionMetadataStore | CollectionMetadataStoreConfig;

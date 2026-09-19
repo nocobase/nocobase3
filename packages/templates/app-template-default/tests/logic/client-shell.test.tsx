@@ -57,10 +57,10 @@ describe('application shell', () => {
       'text-sidebar-primary-foreground',
       'focus-visible:ring-sidebar-ring',
     );
-    // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
+    // The account menu exposes user details in its panel without a native tooltip.
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
-    ).toHaveAttribute('title', 'Alice');
+    ).not.toHaveAttribute('title');
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
     expect(
       screen.queryByRole('link', { name: 'Settings' }),

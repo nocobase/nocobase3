@@ -209,3 +209,5 @@ The current public service and management routes do not expose node rerun or fai
 Resolve `@nocobase/app-plugin-workflow/server` through the project's package manager and inspect its installed declarations when verifying the runtime and route exports. Keep application calls on public package exports rather than importing plugin-internal file paths.
 
 For extension criteria, the public API, and a complete checker/build/Provider example, read [Custom Instructions](custom-instructions.md).
+
+Manual management execution returns the persisted run (including its ID) before waiting for node completion. Navigate to that run immediately; acceptance does not imply success. The runtime tracks background manual execution and drains it on shutdown.

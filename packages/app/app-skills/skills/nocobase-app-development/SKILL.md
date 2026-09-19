@@ -76,6 +76,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Create a page, write a page component, configure routes or navigation               | [client pages and routes](references/client-pages-and-routes.md) |
 | Add child pages, page Tabs, Dialogs, or Drawers using child routes; add menu groups | [child routes and overlays](references/client-child-routes.md)   |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode    | [components and styling](references/components-and-styling.md)   |
+| Add or change top-right header buttons, tooltips, menus, or configuration panels    | [header action interactions](references/header-actions.md)       |
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it        | [server routes](references/server-routes.md)                     |
 | Call an API from the frontend using the application's HTTP client                   | [client API requests](references/client-api.md)                  |
 | Query or write data, resolve the database, work with transactions                   | [database and data access](references/database-and-data.md)      |

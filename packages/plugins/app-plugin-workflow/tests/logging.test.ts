@@ -45,6 +45,7 @@ it('persists run-module logs and errors with execution identities without copyin
       {},
       { eventKey: 'logged-run', manually: true },
     );
+    await dispatcher.drain();
     await logging.close();
     const execution = await findRun(database, 'logged-run');
     const records = await readJournal(path.join(root, 'logs'), {

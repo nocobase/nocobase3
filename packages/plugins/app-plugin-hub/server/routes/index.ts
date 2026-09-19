@@ -535,6 +535,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
             id: deployment.id,
             operationId: deployment.id,
             status: deployment.status,
+            // A reused operation was created by an earlier request, so the App may be running
+            // another Release by now. Clients must not read it as "this Release is live".
+            reused: deployment.reused === true,
+            createdAt: deployment.createdAt,
           };
         },
         202,

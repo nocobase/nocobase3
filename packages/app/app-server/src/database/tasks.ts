@@ -1,16 +1,18 @@
+import { resolveDatabaseConfig } from './resolve-config.js';
 import {
   planAppRuntimeDatabaseTasks,
   type AppRuntimeDatabaseTaskPlanOptions,
   type AppDatabaseTask,
   type AppDatabaseTaskKind,
 } from './plan.js';
-import type { DatabaseDriverRegistration, DatabaseManager } from '@nocobase/db';
+import {
+  resolveDatabaseDriver,
+  type DatabaseDriverRegistration,
+  type DatabaseManager,
+} from '@nocobase/db';
 
 import type { AppPaths } from '../config/index.js';
-import {
-  createAppDatabaseManager,
-  resolveAppDatabaseDriver,
-} from './manager.js';
+import { createAppDatabaseManager } from './manager.js';
 import { createAppMigrator, type AppMigrationRunResult } from './migrator.js';
 import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
@@ -137,18 +139,24 @@ export async function runAppDatabaseTasks(
   if (options.fresh && options.kind !== 'migrations') {
     throw new Error('--fresh is only supported for migrations.');
   }
+  config = await resolveDatabaseConfig({
+    ...config,
+    drivers: { ...config.drivers, ...drivers },
+  });
   const plan = planAppRuntimeDatabaseTasks(config, [options.kind], options);
   if (!plan.length) return { ok: true, status: 'not-configured', results: [] };
   if (options.fresh) {
     for (const task of plan) {
       if (task.skipReason) continue;
       const connection = config.connections[task.connection];
-      const driver =
-        connection?.databaseDriver ??
-        resolveAppDatabaseDriver(connection?.dialect ?? '', {
-          ...config.drivers,
-          ...drivers,
-        });
+      const driver = resolveDatabaseDriver(
+        {
+          dialect: connection.dialect,
+          databaseDriver: connection.databaseDriver,
+        },
+        { ...config.drivers, ...drivers },
+        task.connection,
+      );
       if (!driver?.resetManagedSchema) {
         throw new Error(
           `Database driver for connection "${task.connection}" does not support managed schema reset.`,

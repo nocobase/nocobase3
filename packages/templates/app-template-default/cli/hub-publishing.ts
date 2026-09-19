@@ -332,6 +332,10 @@ export async function publishToHub(
       operationId: data.operationId,
       operationStatus: data.status,
       idempotencyKey: requestKey,
+      ...(data.reused === true ? { reused: true } : {}),
+      ...(typeof data.createdAt === 'string' && data.createdAt
+        ? { deploymentCreatedAt: data.createdAt }
+        : {}),
     };
   }
   // Reusing an operation confirms its identity, not that it can still succeed.
@@ -370,6 +374,16 @@ export async function publishToHub(
       }
     }
   }
+  // A reused operation is history: this command did not deploy anything now, and the App may be
+  // running another Release. Reusing a retry identity is deliberate, so this warns rather than fails.
+  if (
+    result.reused === true &&
+    (operation === 'deploy' || options.deploy === true)
+  )
+    result.warning =
+      operation === 'deploy'
+        ? 'Hub reused an earlier deployment for this Release and configuration; nothing was deployed now. Pass a new --idempotency-key to deploy again.'
+        : 'Hub reused an existing Release and its deployment; nothing was deployed now. Pass a new --idempotency-key to publish again.';
   return result;
 }
 

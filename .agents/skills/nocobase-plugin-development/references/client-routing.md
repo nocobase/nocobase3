@@ -152,6 +152,14 @@ Use `useResolvedPath('.')` and `matchPath({ path: parentPath.pathname, end: true
 
 For full navigation, breadcrumb, and page access contracts, read [pages, routes, and menus](../../../../packages/app/app-skills/skills/nocobase-app-development/references/client-pages-and-routes.md). Keep the declarations in the plugin's `client/routes.ts`. Refine resources support CRUD and do not create sidebar entries.
 
+## Route dialogs and drawers
+
+For URL-addressable dialogs and drawers, read the shared [child route overlay guide](../../../../packages/app/app-skills/skills/nocobase-app-development/references/client-child-routes.md#child-pages-shown-as-dialogs-or-drawers), including the complete closing example and incorrect usage. Keep route declarations in the plugin's `client/routes.ts` and place the owning page's `Outlet` explicitly.
+
+The guide's `@/components/route-dialog`, `@/components/route-drawer`, and `@/components/use-route-overlay` imports refer to App-owned template files, not public plugin APIs. Inspect the target plugin's existing components and declared dependencies before choosing imports; do not assume the host App's aliases are available in a compiled plugin. The overlay wrapper and hook must share the same React context instance: do not mix an App-owned wrapper with a separately copied hook, or vice versa.
+
+When using `useRouteOverlay()`, call it in a descendant component rendered inside the intended `RouteDialog` or `RouteDrawer`, including a component passed as `footer`, never in the page component that returns that wrapper. Render the descendant as JSX rather than calling it as a function. Outside the provider the hook throws; beneath another overlay it can instead read the parent context and close the wrong layer. Apply this placement rule to forms that close after saving as well as explicit close buttons.
+
 ## Replace a page without duplicating its Route
 
 When the App needs different UI for a plugin page, override only the component loader. Preserve the plugin's route identity, path, authentication, access, navigation, and children:

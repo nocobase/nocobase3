@@ -119,10 +119,13 @@ describe('generateAppCollectionsArtifact', () => {
     );
     await migrate(config, paths);
 
-    const result = await generateAppCollectionsArtifact(config, {
-      paths,
-      all: true,
-    });
+    const result = await generateAppCollectionsArtifact(
+      { ...config, drivers: undefined },
+      {
+        paths,
+        all: true,
+      },
+    );
     expect(result.results[0].error).toBeUndefined();
     expect(result.ok).toBe(true);
     expect(

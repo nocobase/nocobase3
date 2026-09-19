@@ -1,3 +1,4 @@
+import { resolveDatabaseConfig } from './resolve-config.js';
 import {
   mkdirSync,
   mkdtempSync,
@@ -116,6 +117,12 @@ export async function generateAppCollectionsArtifact(
   const names = selectConnections(config, options);
   if (names === undefined) {
     return { ok: true, status: 'not-configured', check, results: [] };
+  }
+  if (!options.database) {
+    config = await resolveDatabaseConfig({
+      ...config,
+      drivers: { ...config.drivers, ...options.drivers },
+    });
   }
   const database =
     options.database ??

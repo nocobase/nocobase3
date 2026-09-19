@@ -31,7 +31,7 @@ const examples = [
   { key: 'authorization', path: '/authorization-example', icon: ShieldCheck },
   { key: 'files', path: '/file-repository', icon: FolderOpen },
   { key: 'routes', path: '/routes-example', icon: BookOpen },
-  { key: 'workflows', path: '/settings/automation/workflows', icon: Workflow },
+  { key: 'workflows', path: '/settings/workflow/workflows', icon: Workflow },
 ] as const;
 
 export default function ExamplesHomePage(): ReactElement {

@@ -4,6 +4,9 @@ import type { ComponentProps, ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 import { WORKFLOW_NS } from '../../namespace.js';
 
+export const dialogCloseButtonClassName: string =
+  'inline-flex size-7 items-center justify-center rounded-lg border border-transparent text-sm font-medium transition-all outline-none hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
+
 function classes(...values: (string | undefined)[]): string {
   return values.filter(Boolean).join(' ');
 }
@@ -40,7 +43,7 @@ export interface DialogContentProps extends Omit<
   'className'
 > {
   readonly className?: string;
-  readonly size?: 'default' | 'md';
+  readonly size?: 'default' | 'md' | 'lg';
   readonly showCloseButton?: boolean;
 }
 
@@ -59,7 +62,11 @@ export function DialogContent({
         data-slot='dialog-content'
         className={classes(
           'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
-          size === 'md' ? 'sm:max-w-md' : 'sm:max-w-sm',
+          size === 'lg'
+            ? 'sm:max-w-3xl'
+            : size === 'md'
+              ? 'sm:max-w-md'
+              : 'sm:max-w-sm',
           className,
         )}
         {...props}
@@ -68,7 +75,10 @@ export function DialogContent({
         {showCloseButton ? (
           <DialogPrimitive.Close
             data-slot='dialog-close'
-            className='absolute top-2 right-2 inline-flex size-7 items-center justify-center rounded-lg border border-transparent text-sm font-medium transition-all outline-none hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+            className={classes(
+              'absolute top-2 right-2',
+              dialogCloseButtonClassName,
+            )}
           >
             <XIcon className='size-4' />
             <span className='sr-only'>{t('common.close')}</span>

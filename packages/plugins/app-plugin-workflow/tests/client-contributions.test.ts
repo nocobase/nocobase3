@@ -29,27 +29,28 @@ describe('workflow client contributions', () => {
 
     expect(settings?.routes[0]).toMatchObject({
       name: 'automation',
-      path: '/automation',
+
       navigation: { title: 'nav.automation' },
       children: [
         {
           name: 'workflows',
-          path: '/workflows',
+          path: '/workflow',
           navigation: { title: 'nav.workflows' },
         },
       ],
     });
+    expect(settings?.routes[0]).not.toHaveProperty('path');
     expect(settings?.routes[0]).toHaveProperty('navigation.icon');
     expect(settings?.routes[0].children?.[0]).toHaveProperty('navigation.icon');
     expect(appRoutes?.routes.map(({ name, path }) => ({ name, path }))).toEqual(
       [
         {
           name: 'workflow-detail',
-          path: '/settings/automation/workflows/:workflowId',
+          path: '/settings/workflow/workflows/:id',
         },
         {
           name: 'workflow-run-detail',
-          path: '/settings/automation/workflow-runs/:runId',
+          path: '/settings/workflow/runs/:id',
         },
       ],
     );

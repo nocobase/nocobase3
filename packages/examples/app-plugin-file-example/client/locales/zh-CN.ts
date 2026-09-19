@@ -1,4 +1,10 @@
 const messages: Record<string, string> = {
+  officePreviewTitle: 'Office 本地预览',
+  officePreviewDescription:
+    '在下方上传 DOCX、XLSX 或 PPTX 文件，然后点击预览。文档在浏览器内渲染，无需 Office Online 或外部预览服务；订单附件也支持相同预览。',
+  officePreviewLimits:
+    '内网可访问应用和文件服务时无需连接外网；不支持完全断网使用。此示例中的旧版 DOC、XLS、PPT 和 OpenDocument 文件仍需下载查看。',
+
   title: '附件',
   description:
     '上传单个或多个文件，并直接在页面内预览。文件记录通过 File Repository API 保存。',
@@ -25,7 +31,7 @@ const messages: Record<string, string> = {
   previewUnsupported: '该文件类型不支持内嵌预览，请下载查看。',
   previewFailed: '文件加载失败。',
 
-  navGroup: '文件仓库',
+  navGroup: 'File example',
   navAttachments: '附件',
   navProfiles: '员工头像',
   navOrders: '订单附件',

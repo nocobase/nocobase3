@@ -152,6 +152,7 @@ const zhCN: HubResource = {
     allApplications: '全部应用',
     visit: '访问',
     refreshStatus: '刷新状态',
+    refreshing: '刷新中…',
     release: '版本',
     notDeployed: '未部署',
     startup: '启动方式',
@@ -240,6 +241,8 @@ const zhCN: HubResource = {
     window: '页面保留最近 2,000 条匹配记录，下载可查看保留范围内的完整结果。',
   },
   deployments: {
+    statusRetrying: '状态更新暂时中断，正在自动重试…',
+    statusFinished: '部署或启动流程已结束，请查看最新状态和部署记录确认结果。',
     title: '部署',
     description:
       '每一行代表一次部署操作。回滚会使用选定的版本和配置创建新的部署。',
@@ -293,7 +296,10 @@ const zhCN: HubResource = {
     uploadTitle: '上传版本',
     uploadDescription:
       '上传构建好的应用制品，版本号和 config.example.yml 或 config.example.yaml 会自动识别。',
-    chooseArtifact: '选择 .tar.gz 版本制品',
+    chooseArtifact: '点击选择或拖拽 .tar.gz / .tgz 版本制品到这里',
+    dropArtifact: '松开以选择此制品',
+    selectionHint: '一次选择一个文件，确认后点击“上传版本”提交。',
+    invalidSelection: '请选择一个 .tar.gz 或 .tgz 文件。',
     uploading: '正在上传…',
     cancel: '取消',
   },
@@ -353,6 +359,21 @@ const zhCN: HubResource = {
     visibility: '可见性',
   },
   configuration: {
+    importConfig: '导入文件',
+    importDraftNotice:
+      '文件仅导入编辑器，检查并提交后才会生效。撤销导入也会丢弃导入后的编辑。',
+    undoImport: '撤销导入',
+    serverChanged: '服务器配置已更新，已保留你的未保存草稿。',
+    discardDraftWarning: '重新加载将丢弃未保存的修改，是否继续？',
+    discardAndReload: '放弃草稿并重新加载',
+    reloadServerConfig: '重新加载服务器配置',
+    importError:
+      '请选择非空、UTF-8 编码且不超过 1 MiB 的 .yml 或 .yaml 文件，内容须为有效的 YAML 对象。',
+    replaceDraft: '导入将覆盖已编辑的草稿，是否继续？',
+    confirmImport: '替换草稿',
+    importWarning:
+      '部署前请确认目标数据库：部署可能执行数据库迁移。版本包必须包含对应数据库驱动；localhost、路径和环境变量均以部署环境为准。撤销导入也会丢弃导入后的编辑。',
+    importedFrom: '导入自 {{name}} · 可编辑',
     title: '配置',
     description: '此应用使用的配置来源。',
     configFile: '配置文件',
@@ -381,7 +402,7 @@ const zhCN: HubResource = {
     secretWarning:
       'config.yml 可能包含密钥。Hub 会为此应用保存完整文件，获得授权的管理员可以查看其内容。',
     secretAutoGeneration:
-      '如果未填写 auth.secret，首次使用配置文件部署时 Hub 会自动生成唯一密钥，后续部署会继续复用该密钥。',
+      '使用配置文件部署时，Hub 会为缺失、空白或示例占位的 auth.secret 和已配置的 session.secret 自动生成安全随机密钥，并优先复用已有密钥；保留自定义值。未单独配置 session 时沿用运行时的密钥回退机制。外部配置不由 Hub 补全。',
     noSourceChanges: '配置来源未变更',
     continue: '继续',
     review: '检查',
@@ -442,6 +463,10 @@ const zhCN: HubResource = {
     createTitle: '新建项目',
     createDescription: '在存放源代码项目的目录中运行：',
     copyCommand: '复制 create-app 命令',
+    agentDescription:
+      '接着你就可以让你的 AI Agent 开始开发你的应用了。比如你想做一个 CRM 应用，就可以跟它说：',
+    agentPrompt: '帮我基于这个 NocoBase 3 项目模板，创建一个 CRM 应用。',
+    copyPrompt: '复制示例提示词',
     footer: '进入生成的目录，完成本地初始化和开发后再构建。',
     existingTitle: '已有项目',
     existingDescription:
@@ -456,8 +481,8 @@ const zhCN: HubResource = {
     openReleases: '前往版本',
     deployDescription: '上传不会启动应用，请在部署成功后再访问。',
     openDeployments: '前往部署',
-    copyFailed: '复制失败，请手动选择并复制命令。',
-    copied: '命令已复制',
+    copyFailed: '复制失败，请手动选择并复制。',
+    copied: '已复制',
   },
   roles: {
     title: '角色权限',

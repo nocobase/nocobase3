@@ -83,6 +83,7 @@ const enUS = {
       'No enabled plugin contributes a settings page you have access to.',
   },
   dev: {
+    componentExamples: 'Component examples',
     title: 'Dev tools',
     emptyTitle: 'No dev tools available',
     emptyDescription:
@@ -101,7 +102,7 @@ const enUS = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    themes: { default: 'Default', compact: 'Compact' },
+    themes: { default: 'Spacious', compact: 'Compact' },
   },
   app: {
     title: 'NocoBase',

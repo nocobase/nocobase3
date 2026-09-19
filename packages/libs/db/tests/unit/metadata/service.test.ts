@@ -11,6 +11,34 @@ import {
 } from '../../../src/metadata/service.js';
 
 describe('CollectionMetadataService', () => {
+  it.each(['replace', 'remove'] as const)(
+    'invalidates names when field-only documents enter or leave the store via %s',
+    async (method) => {
+      const fixture = createService();
+      await fixture.service.replaceDocument({
+        version: 1,
+        name: 'invoice_files',
+        fields: { id: { type: 'uuid' } },
+      });
+      expect(fixture.invalidator.invalidate).toHaveBeenLastCalledWith({
+        collections: ['invoice_files'],
+        namingIndex: true,
+      });
+      if (method === 'replace') {
+        await fixture.service.replaceDocument({
+          version: 1,
+          name: 'invoice_files',
+        });
+      } else {
+        await fixture.service.removeDocument('invoice_files');
+      }
+      expect(fixture.invalidator.invalidate).toHaveBeenLastCalledWith({
+        collections: ['invoice_files'],
+        namingIndex: true,
+      });
+    },
+  );
+
   it('creates, patches, clears, and removes empty documents with Store CAS', async () => {
     const fixture = createService();
 
@@ -204,7 +232,7 @@ describe('CollectionMetadataService', () => {
     await fixture.service.removeRelation('orders', 'customer');
     expect(fixture.invalidator.invalidate).toHaveBeenCalledWith({
       collections: ['orders', 'accounts', 'accountOrders'],
-      namingIndex: false,
+      namingIndex: true,
     });
   });
 

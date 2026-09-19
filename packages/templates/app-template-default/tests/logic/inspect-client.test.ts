@@ -101,6 +101,20 @@ describe('client inspection', () => {
       packageName: '@nocobase/app-template-default',
     });
     expect(inspection.consistent).toBe(true);
+    expect(inspection.settings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'workflows',
+          path: '/settings/workflow',
+          groupId: 'automation',
+        }),
+        expect.objectContaining({
+          id: 'schedules',
+          path: '/settings/schedules',
+          groupId: 'automation',
+        }),
+      ]),
+    );
     expect(inspection.issues).toEqual([]);
     expect(
       inspection.routes.map(({ auth, id, path }) => ({ auth, id, path })),
@@ -138,17 +152,17 @@ describe('client inspection', () => {
       {
         auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-detail',
-        path: '/settings/automation/workflows/:workflowId',
+        path: '/settings/workflow/workflows/:id',
       },
       {
         auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
-        path: '/settings/automation/workflow-runs/:runId',
+        path: '/settings/workflow/runs/:id',
       },
       {
         auth: 'required',
         id: '@nocobase/app-plugin-scheduler:schedule-detail',
-        path: '/settings/automation/schedules/:scheduleId',
+        path: '/settings/schedules/:scheduleId',
       },
     ]);
     expect(

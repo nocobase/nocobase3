@@ -3,7 +3,10 @@ export {
   CollectionMetadataStoreRequiredError,
   createDatabaseManager,
 } from './database/manager.js';
+export { upsertPhysicalRow } from './database/upsert-physical-row.js';
+export type { UpsertPhysicalRowOptions } from './database/upsert-physical-row.js';
 export { databaseManagerToken } from './database/token.js';
+export { resolveDatabaseDriver } from './database/resolve-driver.js';
 export { defineDatabase } from './database/config.js';
 export { SchemaManagementNotAllowedError } from './database/schema-management.js';
 export type {

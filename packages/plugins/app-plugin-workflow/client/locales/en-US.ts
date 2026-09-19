@@ -8,6 +8,7 @@ const enUS = {
     runs: 'Execution records',
   },
   common: {
+    back: 'Back',
     cancel: 'Cancel',
     save: 'Save',
     refresh: 'Refresh',
@@ -23,6 +24,7 @@ const enUS = {
     runCount_other: '{{count}} runs',
   },
   status: {
+    notExecuted: 'Not executed',
     queued: 'Queued',
     running: 'Running',
     resolved: 'Resolved',
@@ -94,6 +96,8 @@ const enUS = {
     triggeredAt: 'Triggered at {{time}}',
   },
   inspector: {
+    notExecuted:
+      'This node was not executed in this run, so no result is available.',
     label: 'Workflow inspector',
     overview: 'Workflow overview',
     selectNode: 'Select a node to inspect it.',
@@ -111,10 +115,16 @@ const enUS = {
     unserializable: '[Unserializable value]',
   },
   canvas: {
+    controls: 'Canvas controls',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    fitView: 'Fit view',
+
     start: 'Start',
     end: 'End',
     condition: 'Condition',
     terminate: 'Terminate',
+    terminates: 'Workflow terminates here',
     run: 'Run',
     emptyBranch: 'Empty branch',
     yes: 'Yes',
@@ -126,6 +136,8 @@ const enUS = {
     verticalLayout: 'Vertical layout',
     fitting: 'Fitting workflow to the viewport…',
     layingOut: 'Laying out workflow…',
+    fullscreen: 'Enter fullscreen',
+    exitFullscreen: 'Exit fullscreen',
   },
   pages: {
     list: {

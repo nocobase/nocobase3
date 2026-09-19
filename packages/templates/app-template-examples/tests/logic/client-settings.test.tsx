@@ -123,15 +123,14 @@ describe('settings centre', () => {
     expect(
       await screen.findByRole('button', { name: 'Appearance' }),
     ).toBeVisible();
-    // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
+    // The account menu exposes user details in its panel without a native tooltip.
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
-    ).toHaveAttribute('title', 'Alice');
+    ).not.toHaveAttribute('title');
     expect(screen.getByRole('link', { name: 'Settings' })).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Dev tools' })).toHaveAttribute(
-      'href',
-      '/dev',
-    );
+    expect(
+      screen.getByRole('link', { name: 'Component examples' }),
+    ).toHaveAttribute('href', '/dev');
     expect(
       screen.getAllByRole('link', { name: 'Back to app' })[0],
     ).toHaveAttribute('href', '/');
@@ -162,7 +161,9 @@ describe('settings centre', () => {
     );
 
     expect(await screen.findByText('Playground page')).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Dev tools' })).toBeVisible();
+    expect(
+      screen.getByRole('link', { name: 'Component examples' }),
+    ).toBeVisible();
     expect(
       screen.queryByRole('link', { name: 'Settings' }),
     ).not.toBeInTheDocument();

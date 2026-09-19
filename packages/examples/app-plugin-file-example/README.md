@@ -69,9 +69,15 @@ await profiles.updateOne({
 
 这套表和路由仅是示例，不是核心插件的默认约定。业务应用可只启用核心插件，使用自己的 collection、disk、accessPath 和 actions。
 
-## 预览
+## Preview
 
-页面自带一个精简预览弹窗（`client/components/file-preview-dialog.tsx`）：图片、音频、视频直接使用 `contentUrl`；PDF 与文本先 `fetch` 成 blob／文本再展示，因为内容路由始终发送 `Content-Disposition: attachment`。HTML、SVG、XML 等活跃内容不内嵌预览，只提供下载。需要更完整的预览（Markdown、Office、缩略图等）时，按核心插件 Skill 的说明安装 `component-ui` Registry 组件。
+The attachment page explains local Office preview and accepts DOCX, XLSX and PPTX uploads through the existing File Repository. Select Preview in the file list to render the document in the browser. Order attachments share the same viewer. Viewers load lazily, fetch `contentUrl` with same-origin credentials (omit credentials for cross-origin URLs), and require CORS for external content. No document content is sent to Office Online, and Google Fonts loading is disabled.
+
+The application and file service must remain reachable: this supports an internal network without internet access, not a fully disconnected browser. Deploy the application's JS and WASM assets locally. Use the updated `@nocobase/dev-config` Portal preset or add `@silurus/ooxml` to the existing Vite `optimizeDeps.exclude`. The example declares the viewer as a client peer dependency so installed consumers can build it.
+
+Images, audio and video use `contentUrl`; PDF and text are fetched before display because content routes return attachments. Active HTML/SVG/XML are not rendered inline. Legacy DOC/XLS/PPT and OpenDocument formats remain download-only in this example. Failed local Office previews show an error while the dialog retains its download link. For the full editable Registry UI, including Markdown and legacy Office Online fallback, follow the core file plugin Skill.
+
+Verify real DOCX/XLSX/PPTX files on the attachment and order pages, including switching/closing during loading, malformed files, CORS failures, and a served production build with external network requests blocked. Unit viewer mocks do not verify rendering fidelity.
 
 ## 范围与限制
 

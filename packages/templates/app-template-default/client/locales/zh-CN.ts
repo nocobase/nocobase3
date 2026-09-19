@@ -78,6 +78,7 @@ const zhCN: AppResource = {
     emptyDescription: '没有已启用的插件提供你有权访问的设置页面。',
   },
   dev: {
+    componentExamples: '组件示例',
     title: '开发工具',
     emptyTitle: '暂无可用开发工具',
     emptyDescription: '没有已启用的插件提供你有权访问的开发页面。',
@@ -94,7 +95,7 @@ const zhCN: AppResource = {
     light: '浅色',
     dark: '深色',
     system: '跟随系统',
-    themes: { default: '默认', compact: '紧凑' },
+    themes: { default: '宽松', compact: '紧凑' },
   },
   app: {
     title: 'NocoBase',

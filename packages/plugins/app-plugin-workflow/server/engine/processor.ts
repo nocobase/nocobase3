@@ -51,6 +51,7 @@ export interface ProcessorOptions {
   logger?: WorkflowLogger;
   environment?: Record<string, unknown> | (() => Record<string, unknown>);
   functions?: Record<string, (...args: unknown[]) => unknown>;
+  resumeNode?: (nodeRunId: WorkflowId) => Promise<void>;
   terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 }
 
@@ -99,9 +100,19 @@ export default class Processor {
     import('./run-services.js').WorkflowRunServices | undefined;
   readonly nodes: WorkflowNode[] = [];
   readonly nodesMap: Map<string, WorkflowNode> = new Map();
+  readonly resumeNode: ProcessorOptions['resumeNode'];
   readonly abortController: AbortController = new AbortController();
 
   lastSavedNodeRun: WorkflowNodeRun | null = null;
+  private readonly deferredTasks: Array<() => Promise<void>> = [];
+
+  defer(task: () => Promise<void>): void {
+    this.deferredTasks.push(task);
+  }
+
+  takeDeferredTasks(): Array<() => Promise<void>> {
+    return this.deferredTasks.splice(0);
+  }
 
   private readonly connectionName?: string;
   private readonly instructions: Map<string, WorkflowInstructionClass>;
@@ -118,6 +129,7 @@ export default class Processor {
   private readonly terminalObserver?: import('./types.js').WorkflowTerminalObserver;
 
   constructor(options: ProcessorOptions) {
+    this.resumeNode = options.resumeNode;
     this.database = options.database;
     this.connectionName = options.connectionName;
     this.workflow = options.workflow;
@@ -691,7 +703,9 @@ export default class Processor {
     options: ProcessorRunOptions = {},
   ): Promise<WorkflowNodeRun | null | undefined> {
     if (!(await this.shouldContinueExecution())) {
-      await this.exit();
+      await this.exit(
+        this.abortSignal.aborted ? NODE_RUN_STATUS.ABORTED : undefined,
+      );
       return null;
     }
 
@@ -749,33 +763,8 @@ export default class Processor {
       return savedNodeRun;
     }
 
-    if (
-      savedNodeRun.status === NODE_RUN_STATUS.RESOLVED ||
-      (savedNodeRun.status === NODE_RUN_STATUS.PENDING &&
-        result.nextKey != null)
-    ) {
-      const next =
-        result.nextKey === undefined
-          ? node.downstream
-          : result.nextKey == null
-            ? undefined
-            : this.nodesMap.get(result.nextKey);
-      if (result.nextKey != null && !next) {
-        const missing = await this.saveNodeRun(
-          {
-            nodeId: node.id,
-            nodeKey: node.key,
-            status: NODE_RUN_STATUS.ERROR,
-            error: `Downstream node "${result.nextKey}" was not found`,
-          },
-          savedNodeRun,
-        );
-        await this.exit(NODE_RUN_STATUS.ERROR);
-        return missing;
-      }
-      if (next) {
-        return this.run(next, savedNodeRun, options);
-      }
+    if (savedNodeRun.status === NODE_RUN_STATUS.RESOLVED && node.downstream) {
+      return this.run(node.downstream, savedNodeRun, options);
     }
     return this.end(node, savedNodeRun);
   }

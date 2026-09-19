@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { Hono } from 'hono';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import type { AppRouteContribution } from '@nocobase/app-server/router';
 import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager, databaseManagerToken } from '@nocobase/db';
@@ -79,7 +81,34 @@ try {
     await (await router.request(row.contentUrl)).text(),
     'invoice bytes',
   );
-  assert.equal((await files.findMany())[0]?.id, row.id);
+  const queried = (await files.findMany())[0];
+  assert.ok(queried);
+  assert.equal(queried.id, row.id);
+  assert.equal(queried.mimeType, 'text/plain');
+  assert.equal(queried.filename, 'invoice.txt');
+  assert.equal(queried.ext, 'txt');
+  assert.equal(queried.size, 13);
+  assert.ok(queried.createdAt);
+  assert.ok(queried.updatedAt);
+  assert.equal(queried.contentUrl, row.contentUrl);
+  // Exercise the installed UI with an actual query result, not the upload response.
+  const { resolveFilePreviewKind } = await import(
+    path.join(
+      process.cwd(),
+      'client/extensions/nocobase-file-component-ui/lib/file-preview.ts',
+    )
+  );
+  const { FileThumbnail } = await import(
+    path.join(
+      process.cwd(),
+      'client/extensions/nocobase-file-component-ui/components/file-thumbnail.tsx',
+    )
+  );
+  assert.equal(resolveFilePreviewKind(queried), 'text');
+  assert.match(
+    renderToStaticMarkup(createElement(FileThumbnail, { file: queried })),
+    /invoice\.txt/u,
+  );
   await db
     .builder()
     .createCollection('invoice_attachment_links', (collection) => {

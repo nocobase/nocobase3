@@ -67,6 +67,7 @@ export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
         },
       ]),
     );
+    const consoleColor = policyConsole?.color ?? config.console?.color;
     return {
       ...config,
       ...(policy ? { enabled: true, transport: undefined } : {}),
@@ -103,6 +104,7 @@ export class LoggingProvider extends ServiceProvider<AppPluginApplication> {
           config.console?.pretty ??
           config.pretty ??
           false,
+        ...(consoleColor === undefined ? {} : { color: consoleColor }),
       },
     };
   }

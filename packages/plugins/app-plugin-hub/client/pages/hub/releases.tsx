@@ -3,7 +3,14 @@ import { Badge } from '../../components/ui/badge.js';
 import { Button } from '../../components/ui/button.js';
 import { Input } from '../../components/ui/input.js';
 import { useTranslation } from '@nocobase/i18n/client';
-import { type ChangeEvent, type ReactElement } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type ReactElement,
+} from 'react';
 import type { AppDetail } from './types.js';
 import { Empty, AppDialog } from './shared.js';
 import { formatDate, formatBytes } from './utils.js';
@@ -103,6 +110,38 @@ export function UploadReleaseDialog({
   readonly onUpload: () => void;
 }): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-hub');
+  const [dragging, setDragging] = useState(false);
+  const dragDepthRef = useRef(0);
+  const [selectionError, setSelectionError] = useState(false);
+  const selectFiles = (files: FileList | readonly File[]): void => {
+    if (busy || files.length === 0) return;
+    const file = files[0];
+    if (files.length !== 1 || !file || !/\.(tar\.gz|tgz)$/i.test(file.name)) {
+      setSelectionError(true);
+      return;
+    }
+    setSelectionError(false);
+    onArtifact(file);
+  };
+  useEffect(() => {
+    // A file dropped beside the zone would otherwise leave the Hub to open or download it, losing this dialog, so
+    // every drop while it is open is claimed here and only the zone acts on one.
+    const claim = (event: Event): void => {
+      if (
+        carriesFiles(
+          (event as Event & { dataTransfer?: DataTransfer }).dataTransfer,
+        )
+      ) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener('dragover', claim);
+    document.addEventListener('drop', claim);
+    return () => {
+      document.removeEventListener('dragover', claim);
+      document.removeEventListener('drop', claim);
+    };
+  }, []);
   return (
     <AppDialog
       title={t('releases.uploadTitle', { defaultValue: 'Upload release' })}
@@ -124,27 +163,76 @@ export function UploadReleaseDialog({
         </>
       }
     >
-      <Button
-        className='h-auto min-h-28 w-full flex-col gap-2 border-dashed'
-        render={<label className='cursor-pointer' />}
-        variant='outline'
+      <label
+        className={`relative flex min-h-28 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm focus-within:ring-2 focus-within:ring-ring ${busy ? 'cursor-not-allowed opacity-50' : ''} ${dragging ? 'border-primary bg-primary/10' : 'border-border bg-background'}`}
+        onDragEnter={(event: DragEvent<HTMLElement>) => {
+          if (!carriesFiles(event.dataTransfer)) return;
+          event.preventDefault();
+          dragDepthRef.current += 1;
+          if (!busy) setDragging(true);
+        }}
+        onDragLeave={() => {
+          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+          if (dragDepthRef.current === 0) setDragging(false);
+        }}
+        onDragOver={(event: DragEvent<HTMLElement>) => {
+          if (!carriesFiles(event.dataTransfer)) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = busy ? 'none' : 'copy';
+          if (!busy) setDragging(true);
+        }}
+        onDrop={(event: DragEvent<HTMLElement>) => {
+          if (!carriesFiles(event.dataTransfer)) return;
+          event.preventDefault();
+          dragDepthRef.current = 0;
+          setDragging(false);
+          selectFiles(event.dataTransfer.files);
+        }}
       >
         <CloudUpload className='size-5' />
-        <span>
-          {artifact?.name ??
-            t('releases.chooseArtifact', {
-              defaultValue: 'Choose a .tar.gz release artifact',
-            })}
+        <span className='max-w-full break-all text-center'>
+          {dragging
+            ? t('releases.dropArtifact', {
+                defaultValue: 'Drop to select this artifact',
+              })
+            : (artifact?.name ??
+              t('releases.chooseArtifact', {
+                defaultValue: 'Click or drag a .tar.gz / .tgz artifact here',
+              }))}
         </span>
+        <span className='text-center text-xs text-muted-foreground'>
+          {t('releases.selectionHint', {
+            defaultValue:
+              'Select one file, then click Upload release to submit.',
+          })}
+        </span>
+        {/* Native pickers may reject compound .tar.gz filters. Validate names in
+            selectFiles for both picker and drop input instead. */}
         <Input
-          accept='.gz,.tgz,application/gzip'
-          className='sr-only'
-          onChange={(event: ChangeEvent<HTMLInputElement>) =>
-            onArtifact(event.target.files?.[0])
-          }
+          aria-label={t('releases.chooseArtifact', {
+            defaultValue: 'Click or drag a .tar.gz / .tgz artifact here',
+          })}
+          className='absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed'
+          disabled={busy}
+          onChange={(event: ChangeEvent<HTMLInputElement>) => {
+            if (event.target.files) selectFiles(event.target.files);
+            event.target.value = '';
+          }}
           type='file'
         />
-      </Button>
+      </label>
+      {selectionError && (
+        <p role='alert' className='mt-2 text-sm text-destructive'>
+          {t('releases.invalidSelection', {
+            defaultValue: 'Select exactly one .tar.gz or .tgz file.',
+          })}
+        </p>
+      )}
     </AppDialog>
   );
+}
+
+/** A drop only means an artifact when it carries files; text and links belong to the browser. */
+function carriesFiles(dataTransfer: DataTransfer | null | undefined): boolean {
+  return Boolean(dataTransfer?.types?.includes('Files'));
 }

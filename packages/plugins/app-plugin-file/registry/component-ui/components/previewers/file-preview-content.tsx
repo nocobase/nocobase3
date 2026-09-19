@@ -7,11 +7,14 @@ import remarkGfm from 'remark-gfm';
 
 import {
   resolveOfficeEmbedUrl,
+  resolveOfficeOpenXmlFormat,
   type FilePreviewKind,
 } from '../../lib/file-preview';
 import { Button } from '@/components/ui/button';
 import { resolveSafeFileUrl } from '../../lib/file-url';
 import { FileThumbnail } from '../file-thumbnail';
+
+import { OfficeOpenXmlPreview } from './office-open-xml-preview';
 
 const OFFICE_PREVIEW_TIMEOUT_MS = 15_000;
 
@@ -29,6 +32,21 @@ export function FilePreviewContent(
 ): ReactElement {
   const { t } = useTranslation('@nocobase/app-plugin-file');
   const { file, kind, url, text, error, onDownload } = inputProps;
+
+  const format =
+    kind === 'ooxml' ? resolveOfficeOpenXmlFormat(file) : undefined;
+  if (format) {
+    return (
+      <OfficeOpenXmlPreview
+        key={`${file.id}:${format}:${url ?? ''}:${error ?? ''}`}
+        file={file}
+        format={format}
+        url={url}
+        error={error}
+        onDownload={onDownload}
+      />
+    );
+  }
 
   if (kind === 'office') {
     return (

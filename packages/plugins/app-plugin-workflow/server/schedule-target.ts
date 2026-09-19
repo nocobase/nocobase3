@@ -85,7 +85,7 @@ export class WorkflowScheduleTarget implements ScheduleTargetType<WorkflowSchedu
     if (!row) return { targetLabel: config.workflowKey, state: 'missing' };
     return {
       targetLabel: row.title ?? row.key,
-      href: `/settings/automation/workflows/${encodeURIComponent(String(row.id))}`,
+      href: `/settings/workflow/workflows/${encodeURIComponent(String(row.id))}`,
       state: row.enabled ? 'ready' : 'disabled',
     };
   }
@@ -166,7 +166,7 @@ export class WorkflowScheduleTarget implements ScheduleTargetType<WorkflowSchedu
     readonly id: string;
   }): string | undefined {
     return reference.type === 'workflow-run'
-      ? `/settings/automation/workflow-runs/${encodeURIComponent(reference.id)}`
+      ? `/settings/workflow/runs/${encodeURIComponent(reference.id)}`
       : undefined;
   }
 

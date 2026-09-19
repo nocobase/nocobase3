@@ -112,7 +112,9 @@ export class CollectionMetadataService {
         expectedRevision: current.stored?.revision ?? null,
       });
     }
-    this.invalidate(documentInvalidation(document.name, previous, document));
+    this.invalidate(
+      documentInvalidation(document.name, previous, stored?.document),
+    );
     return stored;
   }
 
@@ -343,7 +345,11 @@ export class CollectionMetadataService {
         expectedRevision: current.stored?.revision ?? null,
       });
     }
-    this.invalidate(invalidation);
+    this.invalidate({
+      ...invalidation,
+      namingIndex:
+        invalidation.namingIndex || Boolean(current.stored) !== Boolean(stored),
+    });
     return stored;
   }
 
@@ -564,6 +570,7 @@ function documentInvalidation(
       ...relations.flatMap((relation) => relationCollections(relation)),
     ]),
     namingIndex:
+      Boolean(previous) !== Boolean(next) ||
       JSON.stringify(previous?.naming) !== JSON.stringify(next?.naming) ||
       previous?.title !== next?.title ||
       previous?.description !== next?.description,
