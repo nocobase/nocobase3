@@ -427,7 +427,9 @@ export function CreateDialog({
           </Button>
           {/* The button sits outside the form now that it is pinned, so `form` reassociates it. */}
           <Button
-            disabled={busy || !name.trim() || !/^[A-Za-z0-9_-]+$/.test(appId)}
+            disabled={
+              busy || !name.trim() || !/^(?!__)[A-Za-z0-9_-]+$/.test(appId)
+            }
             form={createAppFormId}
             type='submit'
           >
@@ -465,13 +467,13 @@ export function CreateDialog({
           required
           hint={t('page.applicationIdHint', {
             defaultValue:
-              'Required. Use letters, numbers, hyphens, or underscores. Must be globally unique and cannot be changed after creation.',
+              'Required. Use letters, numbers, hyphens, or underscores; cannot start with __. Must be globally unique and cannot be changed after creation.',
           })}
         >
           <Input
             className='h-10 font-mono'
             onChange={(event) => onAppId(event.target.value)}
-            pattern='[A-Za-z0-9_-]+'
+            pattern='(?!__)[A-Za-z0-9_-]+'
             placeholder={t('page.applicationIdPlaceholder', {
               defaultValue: 'Enter application ID',
             })}

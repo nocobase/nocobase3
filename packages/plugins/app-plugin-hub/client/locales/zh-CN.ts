@@ -145,7 +145,7 @@ const zhCN: HubResource = {
     applicationNamePlaceholder: '请输入应用名称',
     applicationId: '应用 ID',
     applicationIdHint:
-      '必填，仅支持字母、数字、连字符和下划线；全局唯一，创建后不可修改。',
+      '必填，仅支持字母、数字、连字符和下划线，不能以 __ 开头；全局唯一，创建后不可修改。',
     applicationIdPlaceholder: '请输入应用 ID',
     create: '创建应用',
   },

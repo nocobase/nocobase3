@@ -127,7 +127,7 @@ export function ApplicationsCatalog(): ReactElement {
     void navigate(`${parentPath.pathname}/${encodeURIComponent(appId)}`);
   };
   const createApp = async (): Promise<void> => {
-    if (!newAppName.trim() || !/^[A-Za-z0-9_-]+$/.test(newAppId) || busy)
+    if (!newAppName.trim() || !/^(?!__)[A-Za-z0-9_-]+$/.test(newAppId) || busy)
       return;
     setBusy(true);
     setError(undefined);

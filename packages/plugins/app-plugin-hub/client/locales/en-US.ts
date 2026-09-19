@@ -161,7 +161,7 @@ const enUS = {
     applicationNamePlaceholder: 'Enter application name',
     applicationId: 'Application ID',
     applicationIdHint:
-      'Required. Use letters, numbers, hyphens, or underscores. Must be globally unique and cannot be changed after creation.',
+      'Required. Use letters, numbers, hyphens, or underscores; cannot start with __. Must be globally unique and cannot be changed after creation.',
     applicationIdPlaceholder: 'Enter application ID',
     create: 'Create application',
   },

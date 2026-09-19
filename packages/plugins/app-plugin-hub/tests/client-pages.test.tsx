@@ -547,6 +547,18 @@ describe('Hub client pages', () => {
         screen.getByRole('button', { name: 'Create application' }),
       ).toBeDisabled();
       fireEvent.change(screen.getByLabelText(/Application ID/), {
+        target: { value: '__reserved' },
+      });
+      expect(
+        screen.getByRole('button', { name: 'Create application' }),
+      ).toBeDisabled();
+      fireEvent.submit(
+        screen.getByLabelText(/Application ID/).closest('form')!,
+      );
+      expect(
+        mocks.client.request.mock.calls.filter(([r]) => r.method === 'POST'),
+      ).toHaveLength(count);
+      fireEvent.change(screen.getByLabelText(/Application ID/), {
         target: { value: `tms-${count}` },
       });
       ids.push(
@@ -1133,16 +1145,13 @@ describe('Hub client pages', () => {
     expect(rows[1]).not.toHaveClass('bg-primary/5');
   });
 
-  it('collapses releases and opens the accepted deployment logs after submission', async () => {
+  it('refreshes history after acceptance even when the overview refresh fails', async () => {
     let accepted = false;
     mocks.client.request.mockImplementation(({ path }: { path: string }) => {
-      if (path === 'hub/apps/customer')
-        return Promise.resolve({
-          data: detail({
-            app: { ...detail().app, currentDeploymentId: null },
-            hasPendingDeployment: accepted,
-          }),
-        });
+      if (path === 'hub/apps/customer') {
+        if (accepted) return Promise.reject(new Error('Overview unavailable'));
+        return Promise.resolve({ data: detail() });
+      }
       if (path.endsWith('/deployments'))
         return Promise.resolve({
           data: { items: [], page: 1, pageSize: 20, total: 0 },
@@ -1207,6 +1216,13 @@ describe('Hub client pages', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
     expect(accepted).toBe(true);
+    await waitFor(() =>
+      expect(
+        mocks.client.request.mock.calls.filter(([r]) =>
+          r.path.endsWith('/deployments'),
+        ).length,
+      ).toBeGreaterThan(1),
+    );
     await screen.findByText('Automatic deployment logs');
     expect(screen.getByTestId('deploy-location')).toHaveTextContent(
       '/apps/customer/deployments/deployment-new/logs',
@@ -1335,6 +1351,50 @@ describe('Hub client pages', () => {
       'hub-visit-action-reason',
     );
   });
+  it.each(['read-config', 'read-config-template'])(
+    'hides Deploy without %s',
+    async (missing) => {
+      mocks.authorization.can.mockImplementation(
+        (_resource: unknown, action: string) =>
+          Promise.resolve(action !== missing),
+      );
+      mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+        if (path === 'hub/apps/customer')
+          return Promise.resolve({ data: detail() });
+        if (path.endsWith('/releases'))
+          return Promise.resolve({
+            data: [
+              {
+                id: 'release-1',
+                version: '1.0.0',
+                size: 1,
+                checksum: 'checksum',
+                createdAt: '2026-09-18T00:00:00Z',
+              },
+            ],
+          });
+        if (path.endsWith('/deployments'))
+          return Promise.resolve({
+            data: { items: [], total: 0, page: 1, pageSize: 20 },
+          });
+        throw new Error(`Unexpected request: ${path}`);
+      });
+      render(
+        <MemoryRouter initialEntries={['/apps/customer/deployments']}>
+          <Routes>
+            <Route path='/apps/:appId' element={<AppPage />}>
+              <Route path='deployments' element={<DeploymentsPage />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>,
+      );
+      await screen.findByText('checksum');
+      expect(
+        screen.queryByRole('button', { name: 'Deploy v1.0.0' }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it.each(['read-release', 'read-deployment', 'upload-release'])(
     'loads only authorized sections for %s',
     async (allowed) => {

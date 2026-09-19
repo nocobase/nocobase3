@@ -25,7 +25,11 @@ export default function DeploymentsPage(): ReactElement {
               app={context.app}
               canRead={capabilities['read-release']}
               canUpload={capabilities['upload-release']}
-              canDeploy={capabilities.deploy}
+              canDeploy={
+                capabilities.deploy &&
+                capabilities['read-config'] &&
+                capabilities['read-config-template']
+              }
               busy={context.busy}
               collapsed={context.releasesCollapsed}
               onCollapsed={context.onReleasesCollapsed}

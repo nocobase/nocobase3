@@ -125,6 +125,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
   });
   const [deploymentsLoading, setDeploymentsLoading] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [deploymentHistoryVersion, setDeploymentHistoryVersion] = useState(0);
   const [refreshing, setRefreshing] = useState<'auto' | 'manual' | null>(null);
   const refreshInFlightRef = useRef(false);
   const [selectedReleaseId, setSelectedReleaseId] = useState<string>();
@@ -361,6 +362,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
     appId,
     client,
     deploymentPage,
+    deploymentHistoryVersion,
     fetchConfig,
     refreshVersion,
     reportError,
@@ -783,6 +785,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
                   },
                 },
               });
+              setDeploymentHistoryVersion((value) => value + 1);
               setSelectedReleaseId(deploymentReleaseId);
               setDeployOpen(false);
               setRollbackDeploymentId(undefined);
@@ -816,7 +819,10 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
               setUploadOpen(false);
               toast.success(
                 t(
-                  capabilities.deploy && capabilities['read-release']
+                  capabilities.deploy &&
+                    capabilities['read-release'] &&
+                    capabilities['read-config'] &&
+                    capabilities['read-config-template']
                     ? 'releases.uploaded'
                     : 'releases.uploadedOnly',
                 ),
