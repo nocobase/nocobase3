@@ -1,5 +1,26 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.25
+
+### Patch Changes
+
+- e9da3c2: Resolve installed official database drivers asynchronously from application configuration before provider registration or standalone database tasks. Configure only the needed dialects and install their optional peer packages in application dependencies. Preserve explicit driver registrations and synchronous core manager APIs; direct core consumers continue to register drivers explicitly. Standard development and test loaders require no synchronous ESM compatibility configuration.
+- Updated dependencies [c210c51]
+- Updated dependencies [c84bfe8]
+- Updated dependencies [c210c51]
+- Updated dependencies [c210c51]
+- Updated dependencies [c210c51]
+- Updated dependencies [c210c51]
+- Updated dependencies [c210c51]
+- Updated dependencies [c210c51]
+- Updated dependencies [c210c51]
+- Updated dependencies [e9da3c2]
+- Updated dependencies [9628cdd]
+  - @nocobase/app-plugin-hub@0.1.0-beta.12
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/app-server@1.0.0-beta.20
+  - @nocobase/app-plugin-authorization@0.2.0-beta.14
+
 ## 1.0.0-beta.24
 
 ### Minor Changes

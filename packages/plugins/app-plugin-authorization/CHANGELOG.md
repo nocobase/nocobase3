@@ -1,5 +1,21 @@
 # @nocobase/app-plugin-authorization
 
+## 0.2.0-beta.14
+
+### Patch Changes
+
+- 9628cdd: Improve workflow and scheduler management pages with consistent layouts, filters, tables, and switches. Keep page layout and UI components local to their owning plugins, and align authorization pages with the same layout conventions.
+
+  Normalize workflow and execution URLs under `/settings/workflow` and scheduler URLs under `/settings/schedules`, retaining the automation menu group without adding it to URLs. Update scheduler target links and the examples homepage entry. Use bookmarkable workflow/run child routes, preserve queries and browser history, and link execution detail titles to their workflow.
+
+  Improve the workflow execution canvas with reorganized run controls, fullscreen viewing, terminal edge markers, direct empty-branch connections, and theme-aware styling. Unify node dialogs with consistent titles and close controls, collapsible descriptions, execution results and status colors, and explanatory states for unexecuted nodes.
+
+- Updated dependencies [c84bfe8]
+- Updated dependencies [e9da3c2]
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/app-server@1.0.0-beta.20
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+
 ## 0.2.0-beta.13
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @nocobase/app-skills
 
+## 0.0.2-beta.4
+
+### Patch Changes
+
+- e9da3c2: Resolve installed official database drivers asynchronously from application configuration before provider registration or standalone database tasks. Configure only the needed dialects and install their optional peer packages in application dependencies. Preserve explicit driver registrations and synchronous core manager APIs; direct core consumers continue to register drivers explicitly. Standard development and test loaders require no synchronous ESM compatibility configuration.
+
 ## 0.0.2-beta.3
 
 ### Patch Changes

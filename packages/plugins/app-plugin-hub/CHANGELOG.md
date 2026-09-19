@@ -1,5 +1,25 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- c210c51: Align deployment configuration headings with the comparison editor by reserving the same fixed-width change-control gutter between both columns.
+- c210c51: Keep refreshing pending deployments until completion, retry transient status failures with bounded backoff, and clarify automatic authentication and session secret initialization. Return to the deployment list after submission instead of opening logs automatically, and keep manually opened logs mounted during background refreshes.
+- c210c51: Show the create-app command without a package registry, and follow it with an example prompt that hands the created project to the user's AI Agent.
+- c210c51: Allow importing local YAML files from the configuration editor and deployment draft toolbar with validation, overwrite confirmation, undo, and environment warnings. Importing does not save, deploy, or change the active configuration until explicitly submitted.
+- c210c51: Preserve configuration drafts during deployment polling and require confirmation before replacing unsaved edits with updated server configuration.
+- c210c51: Show request-scoped feedback for automatic and manual status refreshes and prevent overlapping refresh requests without blocking unrelated page controls.
+- c210c51: Accept a dragged release artifact through a full-size native file input, highlight the drop zone, and explain that selecting a file requires a separate upload confirmation. Validate a single .tar.gz or .tgz file for both selection methods, prevent replacement during upload, and claim file drops that miss the zone so the browser does not open the artifact.
+- c210c51: Remove the native release file picker filter that can disable valid .tar.gz artifacts on macOS. Keep single-file extension validation for selected and dropped files, and require explicit upload submission.
+- Updated dependencies [c84bfe8]
+- Updated dependencies [e9da3c2]
+- Updated dependencies [9628cdd]
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/app-server@1.0.0-beta.20
+  - @nocobase/app-plugin-authorization@0.2.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+
 ## 0.1.0-beta.11
 
 ### Minor Changes
