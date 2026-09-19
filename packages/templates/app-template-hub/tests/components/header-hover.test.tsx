@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AppThemeProvider } from '../../client/theme/theme-provider';
 import { ThemeSettings } from '../../client/theme/theme-settings';
-import { UserMenu } from '../../client/shell/user-menu';
+import { UserMenu } from '../../client/layouts/components/user-menu';
 
 // Session requests belong to the authentication tests.
 vi.mock('@nocobase/app-plugin-authentication/client', () => ({
@@ -13,7 +13,7 @@ vi.mock('@nocobase/app-plugin-authentication/client', () => ({
   }),
 }));
 // Language selection has its own integration tests with the real i18n runtime.
-vi.mock('../../client/shell/language-switcher.js', () => ({
+vi.mock('../../client/layouts/components/language-switcher.js', () => ({
   LanguageSwitcher: () => null,
 }));
 

@@ -121,10 +121,10 @@ function runtimeDependencies(template) {
 }
 
 function sharedFrameworkSource(template, file) {
-  const source = readFileSync(path.join(template.directory, file), 'utf8');
+  let source = readFileSync(path.join(template.directory, file), 'utf8');
   if (
     template.kind === 'examples' &&
-    file === 'client/shell/header-actions.tsx'
+    file === 'client/layouts/components/header-actions.tsx'
   ) {
     // Examples owns the notification-center demonstration. Exclude only its
     // explicit entry; all shared header behavior must still match Default.
@@ -140,6 +140,46 @@ function sharedFrameworkSource(template, file) {
       );
       return shared.replace(addition, '');
     }, source);
+  }
+
+  // Keep product identity and Hub's deliberate menu order local while comparing the shared layout.
+  if (file === 'client/layouts/components/sidebar-footer.tsx') {
+    source = source
+      .replace("'Examples Template'", "'Default Template'")
+      .replace("'NocoBase Hub'", "'Default Template'");
+  }
+  if (
+    template.kind === 'hub' &&
+    file === 'client/layouts/components/app-brand.tsx'
+  ) {
+    source = source
+      .replace('AppBrand(props:', 'AppBrand(inputProps:')
+      .replace('= props;', '= inputProps;')
+      .replace(
+        /aria-label=\{t\('navigation.brandApps', \{\s*defaultValue: 'NocoBase applications',\s*\}\)\}/u,
+        "aria-label={t('navigation.brandHome', { defaultValue: 'NocoBase home' })}",
+      );
+  }
+  if (template.kind === 'hub' && file === 'client/layouts/app-layout.tsx') {
+    source = source
+      .replace('  type RouteNavigationItem,\n', '')
+      .replace(
+        'const { items, denied } = useRouteNavigation(routes);\n  const menuItems = orderHubNavigation(items);',
+        'const { items: menuItems, denied } = useRouteNavigation(routes);',
+      )
+      .replace("t('navigation.console',", "t('shell.workspace',")
+      .replace(
+        "defaultValue: 'Hub console'",
+        "defaultValue: 'AI application workspace'",
+      );
+    // The Hub client-shell suite verifies this product-specific sort order.
+    const helper = source.indexOf('\nconst HUB_NAVIGATION_PATHS');
+    assert.notEqual(
+      helper,
+      -1,
+      'Hub must retain its navigation ordering helper',
+    );
+    source = source.slice(0, helper).trimEnd() + '\n';
   }
 
   if (template.kind !== 'hub' || file !== 'server/standalone.ts') {
@@ -200,8 +240,8 @@ for (const template of templates) {
       for (const file of expected) {
         const relative = path.join(directory, file);
         assert.equal(
-          readFileSync(path.join(template.directory, relative), 'utf8'),
-          readFileSync(path.join(baseline.directory, relative), 'utf8'),
+          sharedFrameworkSource(template, relative),
+          sharedFrameworkSource(baseline, relative),
           `${template.kind}: ${relative}`,
         );
       }
@@ -215,7 +255,6 @@ for (const template of templates) {
       'server/app.ts',
       'server/embedded.ts',
       'server/standalone.ts',
-      'client/shell/header-actions.tsx',
     ]) {
       assert.equal(
         sharedFrameworkSource(template, file),

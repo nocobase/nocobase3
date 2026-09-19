@@ -41,7 +41,9 @@ describe('application shell', () => {
       addEventListener: vi.fn(),
       addListener: vi.fn(),
       dispatchEvent: vi.fn(),
-      matches: query === '(prefers-color-scheme: dark)',
+      matches:
+        query === '(prefers-color-scheme: dark)' ||
+        query === '(min-width: 768px)',
       media: query,
       onchange: null,
       removeEventListener: vi.fn(),
@@ -197,30 +199,37 @@ describe('application shell', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Collapse navigation' }),
     );
-    expect(sidebar).toHaveClass('md:w-16');
+    expect(sidebar).toHaveClass('w-16');
     expect(
       screen.getByRole('button', { name: 'Expand navigation' }),
     ).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand navigation' }));
-    expect(sidebar).toHaveClass('md:w-64');
+    expect(sidebar).toHaveClass('w-64');
   });
 
   it('opens and closes the mobile navigation without changing the route', async () => {
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
     renderApplication('/', true);
-    await screen.findByRole('navigation', { name: 'Application navigation' });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
-    expect(
-      screen.getByRole('complementary', { name: 'Application navigation' }),
-    ).toHaveClass('translate-x-0');
-
     fireEvent.click(
-      screen.getAllByRole('button', { name: 'Close navigation' })[1],
+      await screen.findByRole('button', { name: 'Open navigation' }),
     );
     expect(
-      screen.getByRole('complementary', { name: 'Application navigation' }),
-    ).toHaveClass('-translate-x-full');
+      await screen.findByRole('dialog', { name: 'Application navigation' }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Close navigation' }));
+    expect(
+      screen.queryByRole('dialog', { name: 'Application navigation' }),
+    ).toBeNull();
   });
 
   it('keeps guest pages outside the application shell', async () => {

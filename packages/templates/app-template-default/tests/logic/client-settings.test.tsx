@@ -22,7 +22,7 @@ import { MemoryRouter, Outlet, useParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppRouter } from '../../client/routing/app-router.tsx';
-import { HeaderActions } from '../../client/shell/header-actions.tsx';
+import { HeaderActions } from '../../client/layouts/components/header-actions.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
 function WorkflowDetailTestPage(): ReactElement {
@@ -35,7 +35,9 @@ describe('settings centre', () => {
       addEventListener: vi.fn(),
       addListener: vi.fn(),
       dispatchEvent: vi.fn(),
-      matches: query === '(prefers-color-scheme: dark)',
+      matches:
+        query === '(prefers-color-scheme: dark)' ||
+        query === '(min-width: 768px)',
       media: query,
       onchange: null,
       removeEventListener: vi.fn(),
@@ -86,8 +88,12 @@ describe('settings centre', () => {
     },
   );
 
-  it('shows the Settings entry from the application runtime without AppRouter', async () => {
-    renderApp(<HeaderActions />, '/', toRouteTree(SETTINGS, GROUPS));
+  it('shows the Settings entry when enabled by its layout', async () => {
+    renderApp(
+      <HeaderActions showSettings showDev />,
+      '/',
+      toRouteTree(SETTINGS, GROUPS),
+    );
 
     expect(
       await screen.findByRole('link', { name: 'Settings' }),
