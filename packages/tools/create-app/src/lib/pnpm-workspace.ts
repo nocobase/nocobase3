@@ -77,6 +77,14 @@ export const WORKSPACE_SETTINGS: readonly {
 }[] = [
   {
     comment: [
+      '# Install dependencies explicitly instead of during dev/build/start.',
+      '# create-app installs them initially; run pnpm install after changing dependencies.',
+    ],
+    key: 'verifyDepsBeforeRun',
+    value: 'false',
+  },
+  {
+    comment: [
       '# Skips re-auditing lockfile entries against the supply-chain policy on every install.',
       '# The check costs tens of seconds here and re-verifies versions the lockfile already pins;',
       '# newly resolved packages are still checked. Set to false if outside contributors edit the',

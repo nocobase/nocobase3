@@ -66,7 +66,9 @@ describe('Server plugin inspection', () => {
             baseDir: '/plugins/example',
             migrationsDirectory: '/plugins/example/database/migrations',
             seedsDirectory: '/plugins/example/database/seeds',
-            jobLocations: ['/plugins/example/server/jobs/**/*.{ts,js,mts,mjs}'],
+            jobLocations: [
+              '/plugins/example/server/jobs/**/!(*.d).{ts,js,mts,mjs}',
+            ],
           },
         },
       ],
@@ -177,7 +179,9 @@ describe('Server plugin inspection', () => {
             version: '1.0.0',
             rootDir: '/plugins/missing',
             baseDir: '/plugins/missing',
-            jobLocations: ['/plugins/missing/server/jobs/**/*.{ts,js,mts,mjs}'],
+            jobLocations: [
+              '/plugins/missing/server/jobs/**/!(*.d).{ts,js,mts,mjs}',
+            ],
           },
         },
       ],

@@ -37,6 +37,37 @@ afterEach(() => {
 });
 
 describe('standalone runtime server', () => {
+  it.each(['true', 'false'])(
+    'startup failure cleans resources and honors strict=%s',
+    async (value) => {
+      const previousExitCode = process.exitCode;
+      const exit = vi
+        .spyOn(process, 'exit')
+        .mockImplementation(() => undefined as never);
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const dispose = vi.fn();
+      try {
+        const standalone = defineStandaloneServer({
+          ...createStandaloneDefinition(createAppRoot(), '/main'),
+          createServer: async (scope) => {
+            scope.registerDisposer('test', dispose);
+            throw new Error('startup failed');
+          },
+        });
+        standalone.start({ env: { NOCOBASE_STRICT_STARTUP: value } });
+        await vi.waitFor(() => expect(errorLog).toHaveBeenCalled());
+        expect(dispose).toHaveBeenCalledOnce();
+        expect(process.exitCode).toBe(1);
+        if (value === 'true') expect(exit).toHaveBeenCalledWith(1);
+        else expect(exit).not.toHaveBeenCalled();
+      } finally {
+        process.exitCode = previousExitCode;
+        exit.mockRestore();
+        errorLog.mockRestore();
+      }
+    },
+  );
+
   it('applies proxy configuration through start as well as create', async () => {
     let started: nodeServer.ClosableNodeAppServer | undefined;
     const start = vi

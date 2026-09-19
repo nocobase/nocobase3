@@ -60,6 +60,19 @@ describe('application runtime definition', () => {
     );
   });
 
+  it.each(['true', 'false', undefined])(
+    'maps strict startup from the runtime environment: %s',
+    async (value) => {
+      const runtime = await resolveAppRuntime(createDefinition(), {
+        ...createScope(createAppRoot()),
+        env: { NOCOBASE_STRICT_STARTUP: value },
+      });
+      expect(createAppFromRuntime(runtime).strictStartup).toBe(
+        value === 'true',
+      );
+    },
+  );
+
   it('assembles configuration before application creation and preserves it on reload', async () => {
     let deploymentLabel: string | undefined = 'deployment';
     const callback = vi.fn();

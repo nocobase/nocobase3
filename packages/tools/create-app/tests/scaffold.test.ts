@@ -464,3 +464,23 @@ describe('gitignore handling', () => {
     expect(contents).toContain('/.env');
   });
 });
+
+describe('dialect dependencies', () => {
+  it('adds a selected driver without removing template dependencies', async () => {
+    const templateDirectory = await createTemplate();
+    const targetDirectory = await createTempDirectory();
+    await scaffoldFromTemplate({
+      templateDirectory,
+      targetDirectory,
+      name: 'crm',
+      additionalDependencies: { '@nocobase/db-postgres': '^2.0.0' },
+    });
+    const manifest = JSON.parse(
+      await readFile(path.join(targetDirectory, 'package.json'), 'utf8'),
+    ) as { dependencies: Record<string, string> };
+    expect(manifest.dependencies).toEqual({
+      knex: '^3.1.0',
+      '@nocobase/db-postgres': '^2.0.0',
+    });
+  });
+});

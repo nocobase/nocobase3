@@ -24,7 +24,7 @@ export interface BuildConfigFileOptions {
  * Only the secrets are filled in, because they are the one thing the example cannot ship: `auth.secret` has no safe
  * default, and an application without it starts in install mode on a secret regenerated every boot, which invalidates
  * every session on restart. Everything else the example already answers, including the database, which a generated
- * application changes in `server/config/database.ts` rather than here.
+ * application can override in `config.yml`. The caller applies the selected dialect before filling secrets.
  */
 export function buildConfigFile(options: BuildConfigFileOptions = {}): string {
   const secret = options.secret ?? generateAuthSecret();
