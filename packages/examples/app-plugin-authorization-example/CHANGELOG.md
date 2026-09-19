@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-authorization-example
 
+## 0.1.0-beta.1
+
+### Patch Changes
+
+- cbee7d8: Use consistent PageContainer and PageHeader layouts for the sales permission example pages and add a shield icon to their navigation group.
+
 ## 0.1.0-beta.0
 
 ### Minor Changes

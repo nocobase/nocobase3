@@ -1,5 +1,21 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.19
+
+### Patch Changes
+
+- f93f147: Remove the default SQLite driver dependency from application templates. Application creation supplies the database driver selected by --dialect, defaulting to SQLite.
+- Updated dependencies [cbee7d8]
+- Updated dependencies [c175bef]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+  - @nocobase/app-plugin-authorization-example@0.1.0-beta.1
+  - @nocobase/app-plugin-workflow@0.1.0-beta.22
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.18
+
 ## 0.1.0-beta.18
 
 ### Patch Changes
