@@ -23,6 +23,7 @@ import { HTTPException } from 'hono/http-exception';
 import { stream } from 'hono/streaming';
 
 import { defineApiRoutes, type AppApiRouteContribution } from './routes.js';
+import { getRepositoryRequestConstraints } from './repository-constraints.js';
 
 export type RepositoryApiAction =
   | 'findMany'
@@ -87,9 +88,12 @@ export interface DefineRepositoryApiRoutesOptions<P = unknown> {
    *
    * The application owns this: `app-server` does not know how a request is
    * authenticated. Returning `undefined` or `null` refuses the request with
-   * 403 rather than binding a Policy built from a principal that is not there.
+   * 403 rather than binding a Policy built from a principal that is not there,
+   * which is why the return type admits both.
    */
-  readonly principal?: (context: Context) => P | Promise<P>;
+  readonly principal?: (
+    context: Context,
+  ) => P | undefined | null | Promise<P | undefined | null>;
 }
 
 export interface RepositoryApiRoutesApplication {
@@ -273,7 +277,7 @@ export function defineRepositoryApiRoutes<P = unknown>(
               ),
           }),
           async (context) => {
-            const scoped =
+            let scoped =
               bound ??
               repository.withPolicy(
                 // Normalized before binding so the reference check runs on
@@ -287,6 +291,19 @@ export function defineRepositoryApiRoutes<P = unknown>(
                   ),
                 ) as RepositoryPolicy,
               );
+            for (const constraint of getRepositoryRequestConstraints(context)) {
+              if (
+                constraint.repository !== entry.name ||
+                constraint.action !== action ||
+                constraint.collection !== entry.collection ||
+                constraint.connection !== entry.connection
+              ) {
+                throw new HTTPException(403, {
+                  message: 'Repository authorization target mismatch',
+                });
+              }
+              scoped = scoped.narrow(constraint.policy);
+            }
             const input = await readInput(context, action, maxLimit);
             if (action === 'findMany' && acceptsRepositoryStream(context)) {
               return streamFindMany(context, scoped, input);
@@ -549,7 +566,7 @@ function fail(status: 400 | 403 | 415, code: string, message: string): never {
  */
 async function resolvePrincipal<P>(
   context: Context,
-  resolve: ((context: Context) => P | Promise<P>) | undefined,
+  resolve: DefineRepositoryApiRoutesOptions<P>['principal'],
 ): Promise<P> {
   const principal = await resolve?.(context);
   if (principal === undefined || principal === null) {

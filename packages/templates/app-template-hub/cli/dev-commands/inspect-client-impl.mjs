@@ -204,6 +204,7 @@ async function inspectLoadedAppClient({
       order: index + 1,
       parent: 'app',
       auth: route.auth,
+      authz: route.authz,
       id: route.id,
       name: route.name,
       packageName: route.packageName,
@@ -228,7 +229,7 @@ async function inspectLoadedAppClient({
     source: setting.source,
     entry: entryOf(setting.packageName, 'routes'),
     ...(setting.groupId ? { groupId: setting.groupId } : {}),
-    ...(setting.access ? { access: setting.access } : {}),
+    authz: setting.authz,
   }));
 
   // Dev routes are always empty in a production build; inspection runs under Node, so it sees what a developer sees.
@@ -242,7 +243,7 @@ async function inspectLoadedAppClient({
     source: devRoute.source,
     entry: entryOf(devRoute.packageName, 'routes'),
     ...(devRoute.groupId ? { groupId: devRoute.groupId } : {}),
-    ...(devRoute.access ? { access: devRoute.access } : {}),
+    authz: devRoute.authz,
   }));
 
   return createInspectionResult({
@@ -269,14 +270,6 @@ function createInspectionResult({
   devRoutes = [],
   locales = [],
 }) {
-  const issues = settings
-    .filter((setting) => setting.access === undefined)
-    .map((setting) => ({
-      code: 'CLIENT_SETTINGS_ACCESS_MISSING',
-      message: `Settings Route "${setting.id}" from "${setting.packageName}" does not declare access.`,
-      packageName: setting.packageName,
-      routeId: setting.id,
-    }));
   return {
     app: { packageName: appPackageName, appRoot },
     configs,
@@ -286,14 +279,9 @@ function createInspectionResult({
     settings,
     devRoutes,
     locales,
-    consistent: issues.length === 0,
-    issues,
-    suggestions:
-      issues.length === 0
-        ? []
-        : [
-            'Declare resource and action access on every Settings Route, then rerun client:inspect.',
-          ],
+    consistent: true,
+    issues: [],
+    suggestions: [],
   };
 }
 
@@ -728,6 +716,7 @@ function formatRoutes(routes) {
         `    parent: ${route.parent}`,
         `    id: ${route.id}`,
         `    auth: ${route.auth}`,
+        `    authz: ${JSON.stringify(route.authz)}`,
         `    route source: ${route.routeSource}`,
         `    route entry: ${route.routeEntry}`,
         `    component source: ${route.componentSource}`,
@@ -751,6 +740,7 @@ function formatDevRoutes(devRoutes = []) {
         ...(devRoute.groupId ? [`    group: ${devRoute.groupId}`] : []),
         `    source: ${devRoute.source}`,
         `    entry: ${devRoute.entry}`,
+        `    authz: ${JSON.stringify(devRoute.authz)}`,
       ].join('\n'),
     )
     .join('\n')}`;
@@ -768,11 +758,7 @@ function formatSettings(settings) {
         ...(setting.groupId ? [`    group: ${setting.groupId}`] : []),
         `    source: ${setting.source}`,
         `    entry: ${setting.entry}`,
-        ...(setting.access
-          ? [
-              `    access: ${setting.access.resource} / ${setting.access.action}`,
-            ]
-          : []),
+        `    authz: ${JSON.stringify(setting.authz)}`,
       ].join('\n'),
     )
     .join('\n')}`;

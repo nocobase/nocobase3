@@ -2,6 +2,10 @@
 
 Use this page to switch the application's database or add a connection. For schema changes read [migrations and seeds](migrations.md); for runtime queries read [database and data access](database-and-data.md).
 
+## Creating an application
+
+Use `pnpm create @nocobase/app <directory> --dialect <dialect> --json` for non-interactive creation. Supported dialects are `sqlite` (default), `postgres`, `mysql`, `mssql`, `oracle`, `dameng`, `kingbase`, and `oceanbase`. Creation writes the selected `database.connections.main` to `config.yml`, adds the required driver dependency, and runs `pnpm install` unless `--no-install` is supplied. Generated applications default to `verifyDepsBeforeRun: false` in `pnpm-workspace.yaml`; run `pnpm install` explicitly after changing dependencies or when creation used `--no-install`, before starting or building. Check the exit code and JSON result; if installation fails, retry `pnpm install` in the generated directory rather than recreating it. For non-SQLite databases, obtain the actual connection settings and edit `config.yml` directly, including the password; no database `.env` is needed. Prepare the target database before running the returned `nextCommands` (`pnpm dev` for apps; build/start for Hub). Do not treat successful scaffolding as verified database connectivity. Keep `config.yml` gitignored and do not expose its secrets in output.
+
 ## Configuration responsibilities
 
 Start by reading `server/config/database.ts` and the connection structure in `config.example.yml`. The template's default connection is `main` on SQLite. Preserve other connections and driver registrations when changing one connection.
@@ -177,3 +181,5 @@ With explicit `drivers`, no manual connection union, `typeof drivers` annotation
 With multiple connections, TypeScript may omit suggestions inside an empty `dialect: ''` value. Enter the dialect name to receive its field suggestions; unregistered dialects and invalid fields are still rejected by type checking.
 
 Application server builds retain declaration emission with `isolatedDeclarations: false`, allowing direct default exports of configuration factory calls. The helper returns the common `AppConfigFactory<AppDatabaseConfig>` contract; its result does not expose the inferred concrete driver types. Library packages retain isolated declaration checking. `AppDatabaseConfigFromDrivers` remains available for explicit annotations outside the helper.
+
+Application templates do not declare `@nocobase/db-sqlite` as a default dependency. `create-app` adds the official driver selected by `--dialect`, including SQLite when the flag is omitted. When running a template directly instead of using `create-app`, explicitly install the driver required by its database configuration before deployment.

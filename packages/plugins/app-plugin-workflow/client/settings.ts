@@ -16,7 +16,10 @@ const settings: AppClientSettingsRoutesContribution = defineSettingsRoutes([
         path: '/workflow',
         navigation: { title: 'nav.workflows', icon: WorkflowIcon },
         breadcrumb: { title: 'nav.workflows' },
-        access: { resource: 'workflow', action: 'access' },
+        authz: {
+          resource: { type: 'settings', id: 'workflow' },
+          action: 'read',
+        },
         componentLoader: () =>
           import('./workflow-management/pages.js').then(
             ({ WorkflowManagementPage }) => ({
@@ -27,7 +30,10 @@ const settings: AppClientSettingsRoutesContribution = defineSettingsRoutes([
           {
             name: 'workflow-flows',
             path: 'workflows',
-            access: { resource: 'workflow', action: 'access' },
+            authz: {
+              resource: { type: 'settings', id: 'workflow' },
+              action: 'read',
+            },
             componentLoader: () =>
               import('./workflow-management/pages.js').then(
                 ({ WorkflowListPage }) => ({ default: WorkflowListPage }),
@@ -36,7 +42,10 @@ const settings: AppClientSettingsRoutesContribution = defineSettingsRoutes([
           {
             name: 'workflow-runs',
             path: 'runs',
-            access: { resource: 'workflow', action: 'access' },
+            authz: {
+              resource: { type: 'settings', id: 'workflow' },
+              action: 'read',
+            },
             componentLoader: () =>
               import('./workflow-management/pages.js').then(
                 ({ WorkflowRunListPage }) => ({ default: WorkflowRunListPage }),

@@ -268,19 +268,25 @@ const routes = defineSettingsRoutes([
     name: 'audit-log',
     path: '/audit-log',
     navigation: { title: 'navigation.auditLog' },
-    access: { resource: 'audit.settings:page', action: 'read' },
+    authz: { resource: { type: 'audit.settings', id: 'page' }, action: 'read' },
     componentLoader: () => import('./pages/settings/index.js'),
     children: [
       {
         name: 'general',
         path: 'general',
-        access: { resource: 'audit.settings:general', action: 'read' },
+        authz: {
+          resource: { type: 'audit.settings', id: 'general' },
+          action: 'read',
+        },
         componentLoader: () => import('./pages/settings/general.js'),
       },
       {
         name: 'retention',
         path: 'retention',
-        access: { resource: 'audit.settings:retention', action: 'read' },
+        authz: {
+          resource: { type: 'audit.settings', id: 'retention' },
+          action: 'read',
+        },
         componentLoader: () => import('./pages/settings/retention.js'),
       },
     ],
@@ -350,7 +356,9 @@ async function loadAccessibleTabs(
   authorization: Pick<AuthorizationClient, 'can'>,
 ): Promise<readonly AuditSettingsTabDefinition[]> {
   const allowed = await Promise.all(
-    SETTINGS_TABS.map((tab) => authorization.can(tab.resource, tab.action)),
+    SETTINGS_TABS.map((tab) =>
+      authorization.can({ resource: tab.resource, action: tab.action }),
+    ),
   );
   return SETTINGS_TABS.filter((_tab, index) => allowed[index] === true);
 }
@@ -524,7 +532,7 @@ describe('AuditLogSettingsPage', () => {
 
   it('redirects the exact parent to the first accessible Tab and preserves its query', async () => {
     mocks.authorization.can.mockImplementation(
-      (resource: { readonly id: string }) =>
+      ({ resource }: { readonly resource: { readonly id: string } }) =>
         Promise.resolve(resource.id === 'retention'),
     );
 
@@ -553,4 +561,4 @@ describe('AuditLogSettingsPage', () => {
 });
 ```
 
-The host Route renderer remains responsible for enforcing each child's declared `access` before loading that child. Add a target App integration test for denied direct URLs because this focused component test intentionally exercises only the parent's selection and redirect behavior.
+The host Route renderer remains responsible for enforcing each child's declared `authz` before loading that child. Add a target App integration test for denied direct URLs because this focused component test intentionally exercises only the parent's selection and redirect behavior.

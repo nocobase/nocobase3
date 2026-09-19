@@ -18,9 +18,9 @@ describe('@nocobase/app-plugin-scheduler', () => {
                 name: 'schedules',
                 path: '/schedules',
                 navigation: { title: 'nav.schedules' },
-                access: {
-                  resource: 'scheduler.schedules',
-                  action: 'access',
+                authz: {
+                  resource: { type: 'settings', id: 'scheduler.schedules' },
+                  action: 'read',
                 },
               },
             ],
@@ -33,9 +33,9 @@ describe('@nocobase/app-plugin-scheduler', () => {
           {
             name: 'schedule-detail',
             path: '/settings/schedules/:scheduleId',
-            access: {
-              resource: 'scheduler.schedules',
-              action: 'access',
+            authz: {
+              resource: { type: 'settings', id: 'scheduler.schedules' },
+              action: 'read',
             },
           },
         ],

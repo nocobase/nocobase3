@@ -51,8 +51,6 @@ export function ApplicationsCatalog(): ReactElement {
   const [createOpen, setCreateOpen] = useState(false);
   const [newAppId, setNewAppId] = useState('');
   const [newAppName, setNewAppName] = useState('');
-  const [appIdEdited, setAppIdEdited] = useState(false);
-  const appIdSuffixRef = useRef('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ReadableError>();
 
@@ -129,6 +127,8 @@ export function ApplicationsCatalog(): ReactElement {
     void navigate(`${parentPath.pathname}/${encodeURIComponent(appId)}`);
   };
   const createApp = async (): Promise<void> => {
+    if (!newAppName.trim() || !/^(?!__)[A-Za-z0-9_-]+$/.test(newAppId) || busy)
+      return;
     setBusy(true);
     setError(undefined);
     try {
@@ -140,8 +140,6 @@ export function ApplicationsCatalog(): ReactElement {
       const appId = newAppId.trim();
       setNewAppId('');
       setNewAppName('');
-      setAppIdEdited(false);
-      appIdSuffixRef.current = '';
       setCreateOpen(false);
       goToApp(appId);
     } catch (reason) {
@@ -180,16 +178,7 @@ export function ApplicationsCatalog(): ReactElement {
           }}
           onView={setView}
           canCreate={capabilities.create}
-          onCreate={() => {
-            if (!appIdSuffixRef.current)
-              appIdSuffixRef.current = Array.from(
-                crypto.getRandomValues(new Uint8Array(4)),
-                (byte) => byte.toString(16).padStart(2, '0'),
-              ).join('');
-            if (!newAppId && !appIdEdited)
-              setNewAppId(`app-${appIdSuffixRef.current}`);
-            setCreateOpen(true);
-          }}
+          onCreate={() => setCreateOpen(true)}
           onSelect={goToApp}
           onPage={(page) => setPagination((current) => ({ ...current, page }))}
         />
@@ -199,22 +188,8 @@ export function ApplicationsCatalog(): ReactElement {
           busy={busy}
           appId={newAppId}
           name={newAppName}
-          onAppId={(value) => {
-            setAppIdEdited(true);
-            setNewAppId(value);
-          }}
-          onName={(value) => {
-            setNewAppName(value);
-            if (!appIdEdited) {
-              const prefix =
-                value
-                  .toLowerCase()
-                  .replace(/[^a-z0-9_-]+/g, '-')
-                  .replace(/^-+|-+$/g, '')
-                  .slice(0, 32) || 'app';
-              setNewAppId(`${prefix}-${appIdSuffixRef.current}`);
-            }
-          }}
+          onAppId={setNewAppId}
+          onName={setNewAppName}
           onClose={() => {
             if (!busy) setCreateOpen(false);
           }}

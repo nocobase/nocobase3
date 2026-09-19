@@ -1,7 +1,6 @@
 import { createApp } from '../../server/app.js';
 import authConfig from '../../server/config/auth.js';
 // @vitest-environment node
-import ArticlesProvider from '../../server/providers/articles.ts';
 import { articlesRoutes } from '../../server/routes/articles.ts';
 import { analyticsRoutes } from '../../server/routes/analytics.ts';
 import { externalCrmRoutes } from '../../server/routes/external-crm.ts';
@@ -342,9 +341,7 @@ describe('app server', () => {
             route !== numericExamplesRoutes,
         ),
         serviceProviders: [
-          ...appRuntime.serviceProviders.filter(
-            (provider) => provider !== ArticlesProvider,
-          ),
+          ...appRuntime.serviceProviders,
           TestRuntimeApplicationProvider,
         ],
       },

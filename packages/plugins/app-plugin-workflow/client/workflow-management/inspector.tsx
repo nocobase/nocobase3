@@ -45,7 +45,7 @@ export function WorkflowInspector({
         >
           {attempts.map((attempt, index) => (
             <option key={attempt.id} value={attempt.id}>
-              {index + 1} · {attempt.status}
+              {index + 1} · {runStatusLabel(attempt.status, t)}
             </option>
           ))}
         </select>

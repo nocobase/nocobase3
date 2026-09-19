@@ -27,6 +27,7 @@ const zhCN: WorkflowResource = {
     workflowFields: '工作流设置',
     details: '变更详情',
   },
+  authorization: { title: '工作流', read: '查看' },
   nav: {
     automation: '自动化',
     workflows: '工作流',
@@ -135,6 +136,11 @@ const zhCN: WorkflowResource = {
     unserializable: '[无法序列化的值]',
   },
   canvas: {
+    controls: '画布控件',
+    zoomIn: '放大',
+    zoomOut: '缩小',
+    fitView: '适应视图',
+
     start: '开始',
     end: '结束',
     condition: '条件',

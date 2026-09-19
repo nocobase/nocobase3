@@ -15,6 +15,8 @@ import {
 } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { resolveDevTrustedOrigins } from '../../scripts/dev/trusted-origins.mjs';
+
 import { createDevProxy, parseProxyTarget } from '../../scripts/dev/proxy.mjs';
 
 interface ReceivedRequest {
@@ -309,7 +311,12 @@ describe('remote development runner', () => {
     });
     expect(run.spawnDevProcess.mock.calls[1]?.[3]).toMatchObject({
       APP_SERVER_PORT: '13399',
+      BETTER_AUTH_TRUSTED_ORIGINS:
+        'http://localhost:13399,http://127.0.0.1:13399',
     });
+    expect(run.spawnDevProcess.mock.calls[0]?.[3]).not.toHaveProperty(
+      'BETTER_AUTH_TRUSTED_ORIGINS',
+    );
     expect(run.log).toHaveBeenCalledWith(
       '  Local:     http://127.0.0.1:13399/main/',
     );
@@ -607,6 +614,7 @@ async function runDevMode(
     {
       console: { error: vi.fn(), log },
       findAvailablePort,
+      resolveDevTrustedOrigins,
       watchConfigFiles: watch,
       resolveWatchEnvironment: async (env: Record<string, string>) => ({
         ...env,

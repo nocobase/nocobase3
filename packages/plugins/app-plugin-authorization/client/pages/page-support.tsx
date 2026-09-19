@@ -1,69 +1,97 @@
-import { PageContainer } from '../components/page-container.js';
-import { PageHeader } from '../components/page-header.js';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+} from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { localizeOptions } from '../components/localized-options.js';
 import type {
   AuthorizationOptions,
-  AuthorizationUser,
+  LocalizedText,
 } from '../authorization-client.js';
-import { getAuthorizationClient } from '../runtime.js';
-import { ErrorBox, errorMessage as message } from '../components/feedback.js';
-
-const authz = getAuthorizationClient();
+import { useAuthorizationClient } from '../use-authorization-client.js';
+import { errorMessage as message } from '../components/feedback.js';
+import { useAuthorizationTranslation } from '../i18n.js';
+import {
+  PageError,
+  PageForbidden,
+  PageLoading,
+} from '../components/page-shell.js';
+/** What a settings page knows before its options have arrived. */
+export interface AuthorizationPageData {
+  readonly options?: AuthorizationOptions;
+  readonly error?: string;
+  /** The options request was refused rather than failed. */
+  readonly forbidden?: boolean;
+  readonly reload: () => void;
+}
 
 // Shared by the independent Authorization settings pages.
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuthorizationPageData(
   optionsPath: string,
-  usersPath?: string,
-): {
-  options?: AuthorizationOptions;
-  users: readonly AuthorizationUser[];
-  error?: string;
-} {
-  const [options, setOptions] = useState<AuthorizationOptions>();
-  const [users, setUsers] = useState<readonly AuthorizationUser[]>([]);
-  const [error, setError] = useState<string>();
+): AuthorizationPageData {
+  const authz = useAuthorizationClient();
+  const t = useAuthorizationTranslation();
+  const [state, setState] = useState<{
+    options?: AuthorizationOptions<LocalizedText>;
+    error?: unknown;
+    forbidden?: boolean;
+  }>({});
+  const { t: translateOption } = useTranslation();
+  const options = useMemo(
+    () => state.options && localizeOptions(state.options, translateOption),
+    [state.options, translateOption],
+  );
+  const [attempt, setAttempt] = useState(0);
+  const reload = useCallback(() => {
+    setState({});
+    setAttempt((value) => value + 1);
+  }, []);
   useEffect(() => {
-    void Promise.all([
-      authz.loadOptions(optionsPath),
-      usersPath ? authz.loadUsers(usersPath) : Promise.resolve([]),
-    ]).then(
-      ([nextOptions, nextUsers]) => {
-        setOptions(nextOptions);
-        setUsers(nextUsers);
+    let active = true;
+    void authz.loadOptions(optionsPath).then(
+      (options) => {
+        if (active) setState({ options });
       },
-      (cause: unknown) => setError(message(cause)),
+      (cause: unknown) => {
+        if (active)
+          setState({
+            error: cause,
+            forbidden: status(cause) === 403,
+          });
+      },
     );
-  }, [optionsPath, usersPath]);
-  return { options, users, ...(error === undefined ? {} : { error }) };
+    return () => {
+      active = false;
+    };
+  }, [authz, attempt, optionsPath]);
+  return {
+    ...state,
+    options,
+    error: state.error === undefined ? undefined : message(t, state.error),
+    reload,
+  };
 }
 
-export function AuthorizationSettingsPage(inputProps: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  error?: string;
-  loading: boolean;
-  children: ReactNode;
-}): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-authorization');
-  const { eyebrow, title, description, error, loading, children } = inputProps;
-
-  return (
-    <PageContainer
-      header={
-        <PageHeader eyebrow={eyebrow} title={title} description={description} />
-      }
-    >
-      {error ? <ErrorBox value={error} /> : null}
-      {loading ? (
-        <div className='rounded-xl border bg-card p-8 text-sm text-muted-foreground shadow-sm'>
-          {t('loading', { defaultValue: 'Loading…' })}
-        </div>
-      ) : (
-        children
-      )}
-    </PageContainer>
+/** What a page shows while its options are loading, refused, or failed. */
+export function AuthorizationPageState({
+  error,
+  forbidden,
+  reload,
+}: AuthorizationPageData): ReactElement {
+  if (error === undefined) return <PageLoading />;
+  return forbidden === true ? (
+    <PageForbidden message={error} />
+  ) : (
+    <PageError message={error} onRetry={reload} />
   );
+}
+
+function status(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const value: unknown = Reflect.get(error, 'status');
+  return typeof value === 'number' ? value : undefined;
 }

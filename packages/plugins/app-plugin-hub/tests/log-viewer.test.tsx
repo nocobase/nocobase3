@@ -263,3 +263,51 @@ it('submits local date-time filters as ISO timestamps and clears them independen
     expect(query).toHaveProperty('until', until);
   });
 });
+
+it('labels numeric and textual log levels while retaining raw entry details', async () => {
+  const levels = [10, 20, 30, 40, 50, 60, 'info', 'WARN', '50', 35, 'custom'];
+  const labels = [
+    'TRACE',
+    'DEBUG',
+    'INFO',
+    'WARN',
+    'ERROR',
+    'FATAL',
+    'INFO',
+    'WARN',
+    'ERROR',
+    '35',
+    'CUSTOM',
+  ];
+  request.mockResolvedValue({
+    data: {
+      entries: levels.map((level, index) => ({
+        time: '2026-09-19',
+        level,
+        msg: `entry-${index}`,
+        logId: String(index),
+      })),
+      cursor: '',
+      available: true,
+      hasMore: false,
+      enabled: true,
+      status: 'succeeded',
+    },
+  });
+  const { container } = render(<LogViewer appId='app2' />);
+  await screen.findByText(/entry-10/, { selector: 'summary' });
+  const summaries = [...container.querySelectorAll('summary')];
+  levels.forEach((level, index) => {
+    const summary = summaries.find((element) =>
+      element.textContent?.endsWith(`entry-${index}`),
+    )!;
+    expect(summary).toHaveTextContent(`[${labels[index]}]`);
+    expect(summary.classList.contains('text-destructive')).toBe(
+      ['ERROR', 'FATAL'].includes(labels[index]!),
+    );
+    expect(
+      JSON.parse(summary.parentElement!.querySelector('pre')!.textContent!)
+        .level,
+    ).toBe(level);
+  });
+});

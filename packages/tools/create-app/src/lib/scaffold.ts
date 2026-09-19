@@ -187,6 +187,7 @@ export interface ScaffoldOptions {
   name: string;
   /** Extra files to write once the template is in place, keyed by path relative to the target. */
   extraFiles?: Record<string, string>;
+  additionalDependencies?: Record<string, string>;
 }
 
 /**
@@ -216,6 +217,15 @@ export async function scaffoldFromTemplate(
   const templateName = typeof manifest.name === 'string' ? manifest.name : '';
 
   manifest.name = name;
+  if (
+    options.additionalDependencies &&
+    Object.keys(options.additionalDependencies).length
+  ) {
+    manifest.dependencies = {
+      ...(manifest.dependencies as Record<string, string> | undefined),
+      ...options.additionalDependencies,
+    };
+  }
 
   // Records which template this application was generated from, because nothing else left in the manifest can say.
   // `name` has just become the application's own, and `nocobase.templateKind` is `app` for both Default and Examples,

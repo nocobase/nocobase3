@@ -1,30 +1,27 @@
-import { useTranslation } from '@nocobase/i18n/client';
+import { PermissionsPage } from '../components/page-shell.js';
+import { useAuthorizationTranslation } from '../i18n.js';
 import type { ReactElement } from 'react';
-import { PermissionSetsPanel } from './permission-sets-panel.js';
+import { useResourceOptions } from '../components/use-resource-options.js';
+import { PermissionSetsPanel } from './permission-sets/index.js';
 import {
-  AuthorizationSettingsPage,
+  AuthorizationPageState,
   useAuthorizationPageData,
 } from './page-support.js';
 
 export default function PermissionSetsPage(): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-authorization');
-
-  const { options, users, error } = useAuthorizationPageData(
-    'authz/permission-sets/options',
-    'authz/permission-sets/users',
-  );
+  const t = useAuthorizationTranslation();
+  const page = useAuthorizationPageData('authz/permission-sets/options');
+  const options = useResourceOptions(page.options);
   return (
-    <AuthorizationSettingsPage
-      eyebrow={t('authorization', { defaultValue: 'Authorization' })}
-      title={t('permissionSets', { defaultValue: 'Permission Sets' })}
-      description={t('permissionSetsDescription', {
-        defaultValue:
-          'Create reusable permission bundles and assign them to users.',
-      })}
-      error={error}
-      loading={!options}
+    <PermissionsPage
+      title={t('permissionSets.page.title')}
+      description={t('permissionSets.page.description')}
     >
-      {options ? <PermissionSetsPanel options={options} users={users} /> : null}
-    </AuthorizationSettingsPage>
+      {options ? (
+        <PermissionSetsPanel options={options} />
+      ) : (
+        <AuthorizationPageState {...page} />
+      )}
+    </PermissionsPage>
   );
 }

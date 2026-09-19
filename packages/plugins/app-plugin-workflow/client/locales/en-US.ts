@@ -27,6 +27,7 @@ const enUS = {
     workflowFields: 'Workflow settings',
     details: 'Change details',
   },
+  authorization: { title: 'Workflow', read: 'Read' },
   nav: {
     automation: 'Automation',
     workflows: 'Workflows',
@@ -141,6 +142,11 @@ const enUS = {
     unserializable: '[Unserializable value]',
   },
   canvas: {
+    controls: 'Canvas controls',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    fitView: 'Fit view',
+
     start: 'Start',
     end: 'End',
     condition: 'Condition',

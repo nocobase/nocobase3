@@ -15,10 +15,10 @@ export interface AuthorizationClientOptions {
 const authorization: AppClientPluginFactory<AuthorizationClientOptions> =
   defineClientPlugin({
     packageName: '@nocobase/app-plugin-authorization',
+    locales,
     serviceProviders,
     routes,
     reactProviders,
-    locales,
   });
 
 export default authorization;

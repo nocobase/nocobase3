@@ -5,7 +5,7 @@ import type {
   ServerApiKeySummary,
 } from '@nocobase/app-plugin-api-keys/server';
 import type { DatabaseManager, Row } from '@nocobase/db';
-import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
+import type { Authorization } from '@nocobase/app-plugin-authorization';
 import {
   createServiceToken,
   type ServiceToken,
@@ -28,7 +28,7 @@ export const hubApiKeyServiceToken: ServiceToken<HubApiKeyService> =
 export class HubApiKeyService {
   constructor(
     private readonly database: DatabaseManager,
-    private readonly authorization: AppAuthorization,
+    private readonly authorization: Authorization,
     private readonly apiKeys: ApiKeyService,
     private readonly encryptionSecret?: string,
   ) {}

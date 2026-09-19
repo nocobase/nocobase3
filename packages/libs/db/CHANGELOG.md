@@ -1,5 +1,19 @@
 # @nocobase/db
 
+## 1.0.0-beta.11
+
+### Minor Changes
+
+- e9da3c2: Resolve installed official database drivers asynchronously from application configuration before provider registration or standalone database tasks. Configure only the needed dialects and install their optional peer packages in application dependencies. Preserve explicit driver registrations and synchronous core manager APIs; direct core consumers continue to register drivers explicitly. Standard development and test loaders require no synchronous ESM compatibility configuration.
+
+### Patch Changes
+
+- c84bfe8: Reject collection reads whose input resolves to a different logical collection name, instead of silently omitting logical field metadata. Use the logical name for get, getResolution, and getPhysical; inspect physical table names through schemaInspector.getPhysicalCollection.
+
+  Refresh the collection naming index when metadata documents are created or removed, including field-only metadata, so explicitly declared underscored logical names remain valid during and after migrations.
+
+  Resolve Query relative table identifiers to their logical collection before loading field metadata, preserving snake_case table inputs, aliases, and connection prefixes without relaxing public Collection name validation.
+
 ## 1.0.0-beta.10
 
 ### Minor Changes

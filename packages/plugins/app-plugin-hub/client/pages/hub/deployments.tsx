@@ -116,8 +116,11 @@ export function Deployments({
     <div className='space-y-5'>
       <div className='flex flex-wrap items-start justify-between gap-3'>
         <div>
-          <h2 className='font-semibold'>
+          <h2 className='text-lg font-semibold'>
             {t('deployments.title', { defaultValue: 'Deployments' })}
+            <span className='ml-2 text-sm font-normal text-muted-foreground'>
+              {pagination.total}
+            </span>
           </h2>
           <p className='mt-1 text-sm text-muted-foreground'>
             {t('deployments.description', {
@@ -225,12 +228,6 @@ export function Deployments({
                   </TableCell>
                   <TableCell className='py-4'>
                     <DeploymentId value={deployment.id} />
-                    <Link
-                      className='ml-2 text-xs text-primary underline'
-                      to={`${deployment.id}/logs`}
-                    >
-                      {t('logs.view')}
-                    </Link>
                     <div className='mt-0.5 text-xs text-muted-foreground'>
                       {deployment.kind === 'rollback'
                         ? t('deployments.rolledBack', {
@@ -247,77 +244,86 @@ export function Deployments({
                   <TableCell className='whitespace-nowrap py-4 text-sm text-muted-foreground tabular-nums'>
                     {formatDateTime(deployment.createdAt, i18n.language)}
                   </TableCell>
-                  <TableCell className='w-20 py-4 text-right align-top'>
-                    {canRollback ? (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button
-                              aria-label={`${t('deployments.actions', {
-                                defaultValue: 'Actions',
-                              })} for deployment ${shortId(deployment.id)}${
-                                rowRollbackReason
-                                  ? `: ${t(`actions.${rowRollbackReason}`, {
-                                      defaultValue: rowRollbackReason,
-                                    })}`
-                                  : ''
-                              }`}
-                              className='size-8 text-muted-foreground'
-                              size='icon'
+                  <TableCell className='py-4 text-right align-top'>
+                    <div className='flex items-center justify-end gap-2'>
+                      <Link
+                        className='text-xs text-primary underline underline-offset-4'
+                        to={`${deployment.id}/logs`}
+                      >
+                        {t('logs.view')}
+                      </Link>
+
+                      {canRollback ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={
+                              <Button
+                                aria-label={`${t('deployments.actions', {
+                                  defaultValue: 'Actions',
+                                })} for deployment ${shortId(deployment.id)}${
+                                  rowRollbackReason
+                                    ? `: ${t(`actions.${rowRollbackReason}`, {
+                                        defaultValue: rowRollbackReason,
+                                      })}`
+                                    : ''
+                                }`}
+                                className='size-8 text-muted-foreground'
+                                size='icon'
+                                title={
+                                  rowRollbackReason
+                                    ? t(`actions.${rowRollbackReason}`, {
+                                        defaultValue: rowRollbackReason,
+                                      })
+                                    : t('deployments.actions', {
+                                        defaultValue: 'Actions',
+                                      })
+                                }
+                                variant='ghost'
+                              >
+                                <MoreHorizontal />
+                              </Button>
+                            }
+                          />
+                          <DropdownMenuContent align='end' className='w-40'>
+                            <DropdownMenuItem
+                              disabled={
+                                !rollbackState.enabled ||
+                                deployment.status !== 'succeeded' ||
+                                current
+                              }
                               title={
                                 rowRollbackReason
                                   ? t(`actions.${rowRollbackReason}`, {
                                       defaultValue: rowRollbackReason,
                                     })
-                                  : t('deployments.actions', {
-                                      defaultValue: 'Actions',
-                                    })
+                                  : undefined
                               }
-                              variant='ghost'
+                              aria-describedby={
+                                rowRollbackReason
+                                  ? `hub-rollback-${deployment.id}-reason`
+                                  : undefined
+                              }
+                              onClick={() => onRollback(deployment.id)}
                             >
-                              <MoreHorizontal />
-                            </Button>
-                          }
-                        />
-                        <DropdownMenuContent align='end' className='w-40'>
-                          <DropdownMenuItem
-                            disabled={
-                              !rollbackState.enabled ||
-                              deployment.status !== 'succeeded' ||
-                              current
-                            }
-                            title={
-                              rowRollbackReason
-                                ? t(`actions.${rowRollbackReason}`, {
+                              <RotateCcw />
+                              {t('deployments.rollback', {
+                                defaultValue: 'Roll back',
+                              })}
+                              {rowRollbackReason ? (
+                                <span
+                                  className='sr-only'
+                                  id={`hub-rollback-${deployment.id}-reason`}
+                                >
+                                  {t(`actions.${rowRollbackReason}`, {
                                     defaultValue: rowRollbackReason,
-                                  })
-                                : undefined
-                            }
-                            aria-describedby={
-                              rowRollbackReason
-                                ? `hub-rollback-${deployment.id}-reason`
-                                : undefined
-                            }
-                            onClick={() => onRollback(deployment.id)}
-                          >
-                            <RotateCcw />
-                            {t('deployments.rollback', {
-                              defaultValue: 'Roll back',
-                            })}
-                            {rowRollbackReason ? (
-                              <span
-                                className='sr-only'
-                                id={`hub-rollback-${deployment.id}-reason`}
-                              >
-                                {t(`actions.${rowRollbackReason}`, {
-                                  defaultValue: rowRollbackReason,
-                                })}
-                              </span>
-                            ) : null}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    ) : null}
+                                  })}
+                                </span>
+                              ) : null}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               );

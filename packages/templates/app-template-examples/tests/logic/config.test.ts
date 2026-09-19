@@ -6,6 +6,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import type { AuthorizationConfig } from '@nocobase/app-plugin-authorization/server';
 import { type AppIdentityConfig } from '@nocobase/app-server/config';
 import {
   planAppDatabaseTasks,
@@ -201,6 +202,17 @@ describe('application config', () => {
     });
 
     expect(runtime.config.get<AppIdentityConfig>('app')!.name).toBe('main');
+    const authorization =
+      runtime.config.get<AuthorizationConfig>('authorization')!;
+    expect(authorization.permissionSets).toEqual({
+      rootSet: 'root',
+      defaultSet: 'member',
+    });
+    expect(authorization.plugins?.map((plugin) => plugin.id)).toEqual([
+      'default-access',
+      'sharing-rules',
+      'restriction-rules',
+    ]);
     expect(runtime.config.get<CachingConfig>('caching')!.default).toBe(
       'memory',
     );

@@ -1,3 +1,4 @@
+import type { AuthorizationTitle } from './titles.js';
 import type {
   AuthorizationIdentity,
   AuthorizationSubject,
@@ -6,6 +7,8 @@ import type {
 } from './types.js';
 
 export interface AuthorizationGrantSource {
+  /** Display metadata supplied by the source, never used to determine access. */
+  title?: AuthorizationTitle;
   plugin: string;
   id: string;
 }
@@ -16,6 +19,7 @@ export interface AuthorizationPolicy {
 }
 
 export interface AuthorizationGrant {
+  origin?: { resource: ResourceRef; action: string; scopeKey?: string };
   source: AuthorizationGrantSource;
   resource: ResourceRef;
   action: string;
@@ -34,6 +38,10 @@ export interface ResolveAllAuthorizationGrantsInput {
   subjects?: readonly AuthorizationSubject[];
 }
 
+export type AuthorizationGrantsChangedListener = (
+  subject: AuthorizationSubject,
+) => void | Promise<void>;
+
 export interface AuthorizationGrantService {
   resolve(
     input: ResolveAuthorizationGrantsInput,
@@ -42,4 +50,8 @@ export interface AuthorizationGrantService {
     input: ResolveAllAuthorizationGrantsInput,
   ): Promise<readonly AuthorizationGrant[]>;
   scope?(identity: AuthorizationIdentity): AuthorizationGrantService;
+  /** True when the identity has unrestricted access and per-resource authorization is skipped. */
+  unrestricted?(identity: AuthorizationIdentity): Promise<boolean>;
+  /** Notifies when the grants a subject resolves to may have changed. */
+  onChange?(listener: AuthorizationGrantsChangedListener): () => void;
 }

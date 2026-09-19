@@ -21,6 +21,7 @@ if (command === 'config') {
   console.log(process.env.PNPM_CONFIG_REGISTRY);
 } else if (command === 'create') {
   fs.mkdirSync(path.join(process.argv[4], 'node_modules'), { recursive: true });
+  if (process.argv.includes('--json')) console.log(JSON.stringify({ status: 'success', dependenciesInstalled: true }));
 } else {
   if (process.cwd() !== path.join(state, 'crm')) throw new Error('Not in generated application');
   fs.appendFileSync(path.join(state, 'commands'), command + '\\n');
@@ -34,6 +35,7 @@ if (command === 'config') {
     if (scenario === 'build-fails') process.exit(9);
     fs.writeFileSync('built', 'yes');
   } else {
+    if (process.env.NOCOBASE_STRICT_STARTUP !== 'true') throw new Error('Strict startup must be enabled');
     if (command === 'start' && !fs.existsSync('built')) throw new Error('Start ran before build');
     if (scenario === command + '-exits') process.exit(7);
     const server = http.createServer((req, res) => {
@@ -50,6 +52,7 @@ if (command === 'config') {
     const listen = () => server.listen(command === 'dev' ? 0 : Number(process.env.APP_SERVER_PORT), '127.0.0.1', () => {
       fs.writeFileSync(path.join(state, command + '.pid'), String(process.pid));
       if (command === 'dev') {
+        if (scenario === 'job-load-fails') console.warn('Failed to load job from dispatch.d.ts: ReferenceError');
         console.log('App dev server ready');
         console.log('Local: http://127.0.0.1:' + server.address().port + basePath + '/');
       }
@@ -78,13 +81,13 @@ fi
 PATH="\${PATH#*:}" exec tail "$@"
 `;
 
-async function runSmoke(t, scenario, basePath = '/main') {
+async function runSmoke(t, scenario, basePath = '/main', extraArgs = []) {
   const workdir = fs.realpathSync(
     fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-script-test-')),
   );
   t.after(() => fs.rmSync(workdir, { recursive: true, force: true }));
-  const bin = path.join(workdir, 'bin');
-  fs.mkdirSync(bin);
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-script-bin-'));
+  t.after(() => fs.rmSync(bin, { recursive: true, force: true }));
   for (const tool of ['pnpm', 'npm']) {
     fs.writeFileSync(path.join(bin, tool), fakePnpm, { mode: 0o755 });
   }
@@ -107,6 +110,7 @@ async function runSmoke(t, scenario, basePath = '/main') {
       workdir,
       '--timeout',
       '3',
+      ...extraArgs,
     ],
     {
       env: {
@@ -169,6 +173,7 @@ test('keeps waiting for production readiness when the progress log is unavailabl
 
 for (const [scenario, commands, error] of [
   ['dev-exits', ['dev'], 'pnpm dev exited'],
+  ['job-load-fails', ['dev'], 'Job discovery failed'],
   ['build-fails', ['dev', 'build'], 'pnpm build failed'],
   ['start-exits', ['dev', 'build', 'start'], 'pnpm start exited'],
   ['unhealthy', ['dev', 'build', 'start'], 'pnpm start did not become ready'],
@@ -186,4 +191,14 @@ test('stops before dev when NocoBase package Skills cannot be synchronized', asy
   const result = await runSmoke(t, 'skills-fails');
   assert.equal(result.code, 8, result.output);
   assert.deepEqual(result.commands, ['skills:sync']);
+});
+
+test('verifies JSON creation with a selected dialect', async (t) => {
+  const result = await runSmoke(t, 'success', '/main', [
+    '--dialect',
+    'sqlite',
+    '--json',
+  ]);
+  assert.equal(result.code, 0, result.output);
+  assert.deepEqual(result.commands, ['skills:sync', 'dev', 'build', 'start']);
 });

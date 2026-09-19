@@ -1,4 +1,4 @@
-import type { AppAuthorization } from '@nocobase/app-plugin-authorization/server';
+import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization/server';
 import type {
   AgentContext,
   AgentState,
@@ -51,7 +51,7 @@ export interface CreateAgentContextOptions {
   readonly state?: Partial<AgentState>;
   readonly ai: AIManager;
   readonly database: DatabaseManager;
-  readonly authorization?: AppAuthorization;
+  readonly authorization?: AppAuthorizationService;
   readonly logger: Logger;
   readonly repositories: RepositoryFactory;
   readonly aiEmployeesManager: AIEmployeesManager;

@@ -71,8 +71,6 @@ const enUS = {
   'navigation.brandApps': 'NocoBase applications',
   'auth.passwordMismatch': "Passwords don't match.",
   'status.deniedDescription': 'You do not have permission to access {{label}}.',
-  'status.settingFailedDescription':
-    'Setting {{label}} from {{packageName}} could not be loaded.',
   'status.routeFailedDescription':
     'Route {{label}} from {{packageName}} could not be loaded.',
   shell: {
@@ -264,6 +262,11 @@ const enUS = {
       description:
         'Explore orders, line items and products in a connected business example.',
     },
+    authorization: {
+      title: 'Authorization',
+      description:
+        'Configure sales feature permissions and data scopes with default access, sharing and restriction rules.',
+    },
     files: {
       title: 'File management',
       description:
@@ -294,8 +297,7 @@ const enUS = {
     filter: 'Filter by status',
     search: 'Search titles…',
     loading: 'Loading articles…',
-    loadError:
-      'Unable to load articles. Check your connection and article permissions.',
+    loadError: 'Unable to load articles. Check your connection and try again.',
     retry: 'Try again',
     empty: 'No matching articles',
     emptyHint: 'Try another search or create your first article.',

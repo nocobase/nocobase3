@@ -118,10 +118,18 @@ export async function createStandaloneServer(
 }
 
 export function startServer(options: CreateStandaloneServerOptions): void {
+  const strictStartup =
+    createStandaloneRuntimeScope({
+      ...options,
+      deploymentRootDir:
+        options.deploymentRootDir ?? options.appRuntime.deploymentRootDir,
+    }).env.NOCOBASE_STRICT_STARTUP === 'true';
   const startPromise = startStandaloneServer(options);
   startPromise.catch((error) => {
     console.error(error);
     process.exitCode = 1;
+    // Startup has already disposed the scope. Do not retain leaked handles.
+    if (strictStartup) process.exit(1);
   });
 }
 

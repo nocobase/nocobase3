@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import ownershipMigration from '../database/migrations/202609160004_hub_app_ownership.js';
 import appTablesMigration from '../database/migrations/202609010001_create_hub_app_tables.js';
 import permissionSetsMigration from '../database/migrations/202609080001_create_hub_permission_sets.js';
-import administratorSeed from '../database/seeds/202609080001_assign_hub_administrator.js';
+import administratorSeed from '../database/seeds/202609080002_assign_hub_administrator.js';
 
 interface SqliteClient {
   readonly schema: {
@@ -373,6 +373,36 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     await migrate(permissionSetsMigration, 'up', database);
     await migrate(permissionSetsMigration, 'up', database);
 
+    const titles = await query
+      .selectFrom('authorizationPermissionSets')
+      .select(['key', 'title'])
+      .where('key', 'in', ['hub-administrator', 'hub-operator', 'hub-viewer'])
+      .orderBy('key', 'asc')
+      .execute();
+    expect(titles).toEqual([
+      {
+        key: 'hub-administrator',
+        title: JSON.stringify({
+          key: 'roles.names.hub-administrator',
+          ns: '@nocobase/app-plugin-hub',
+        }),
+      },
+      {
+        key: 'hub-operator',
+        title: JSON.stringify({
+          key: 'roles.names.hub-operator',
+          ns: '@nocobase/app-plugin-hub',
+        }),
+      },
+      {
+        key: 'hub-viewer',
+        title: JSON.stringify({
+          key: 'roles.names.hub-viewer',
+          ns: '@nocobase/app-plugin-hub',
+        }),
+      },
+    ]);
+
     const sets = await query
       .selectFrom('authorizationPermissionSets')
       .select(['key', 'grants'])
@@ -424,7 +454,7 @@ describe('@nocobase/app-plugin-hub database migration', () => {
     ).resolves.toEqual([]);
   });
 
-  it('assigns the initial system administrator after all seeds have run', async () => {
+  it('assigns the initial superuser after all seeds have run', async () => {
     await createAuthorizationTables(database);
     const query = database.connection().query;
     const now = new Date();
@@ -432,9 +462,9 @@ describe('@nocobase/app-plugin-hub database migration', () => {
       .insertInto('authorizationPermissionSets')
       .values([
         {
-          id: 'system-administrator',
-          key: 'system-administrator',
-          title: 'System administrator',
+          id: 'root',
+          key: 'root',
+          title: 'Root',
           grants: JSON.stringify([]),
           createdAt: now,
           updatedAt: now,
@@ -453,10 +483,10 @@ describe('@nocobase/app-plugin-hub database migration', () => {
       .insertInto('authorizationPermissionSetAssignments')
       .values([
         {
-          id: 'user:admin-1:system-administrator',
+          id: 'user:admin-1:root',
           subjectType: 'user',
           subjectId: 'admin-1',
-          permissionSetKey: 'system-administrator',
+          permissionSetKey: 'root',
           createdAt: now,
           updatedAt: now,
         },

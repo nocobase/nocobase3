@@ -42,6 +42,8 @@ both `create` and `assign-role`.
 5. Use `componentLoader` only to replace the page implementation. It does not
    change the route identity, mount, or path.
 
+The default `app` permission-set scope is supplied by Users whenever `permissionSetsToken` is available. Do not copy a user-roles Provider into an application. Set `users.permissionSets: false` to replace the default with an application-owned scope; Hub uses this setting.
+
 ## Add an application role scope
 
 Resolve `userRoleScopeRegistryToken` in an application or business plugin

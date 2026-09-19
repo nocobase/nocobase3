@@ -331,7 +331,7 @@ function contextProperties(
   };
   return candidate.properties ?? {};
 }
-function displayInputValue(value: unknown): string {
+function displayInputValue(value: unknown, fallback: string): string {
   if (value === null) return 'null';
   if (typeof value === 'string') return value;
   if (
@@ -345,7 +345,7 @@ function displayInputValue(value: unknown): string {
   try {
     return JSON.stringify(value);
   } catch {
-    return '[Unserializable value]';
+    return fallback;
   }
 }
 function useAsync<T>(load: () => Promise<T>): {
@@ -428,11 +428,17 @@ export function InputDialog({
                   placeholder={
                     item.default === undefined
                       ? t('common.notSet')
-                      : displayInputValue(item.default)
+                      : displayInputValue(
+                          item.default,
+                          t('inspector.unserializable'),
+                        )
                   }
                   value={
                     Object.hasOwn(values, key)
-                      ? displayInputValue(values[key])
+                      ? displayInputValue(
+                          values[key],
+                          t('inspector.unserializable'),
+                        )
                       : ''
                   }
                   onChange={(event) =>
@@ -557,11 +563,17 @@ export function ManualRunDialog({
                   placeholder={
                     item.default === undefined
                       ? t('common.notSet')
-                      : displayInputValue(item.default)
+                      : displayInputValue(
+                          item.default,
+                          t('inspector.unserializable'),
+                        )
                   }
                   value={
                     Object.hasOwn(values, key)
-                      ? displayInputValue(values[key])
+                      ? displayInputValue(
+                          values[key],
+                          t('inspector.unserializable'),
+                        )
                       : ''
                   }
                   onChange={(event) =>

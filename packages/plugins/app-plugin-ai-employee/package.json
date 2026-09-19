@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-ai-employee",
   "displayName": "AI Employee App Plugin",
   "description": "Database-backed AI employee runtime, routes, resources, and built-in employees for NocoBase Apps.",
-  "version": "0.1.0-beta.16",
+  "version": "0.1.0-beta.17",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -179,7 +179,8 @@
     "react-markdown": "^10.1.0",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@nocobase/app-plugin-authz-restriction-rules": "workspace:*"
   },
   "peerDependencies": {
     "@base-ui/react": "catalog:",
