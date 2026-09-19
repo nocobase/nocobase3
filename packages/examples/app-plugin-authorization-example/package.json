@@ -83,6 +83,7 @@
     "@nocobase/service-provider": "workspace:^",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
+    "lucide-react": "catalog:",
     "react": "^19.0.0",
     "tailwind-merge": "catalog:",
     "@nocobase/app-plugin-authz-default-access": "workspace:^",

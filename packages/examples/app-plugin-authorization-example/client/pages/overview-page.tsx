@@ -1,3 +1,5 @@
+import { PageContainer } from '../components/page-container.js';
+import { PageHeader } from '../components/page-header.js';
 import { useState, type ReactElement } from 'react';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { Button } from '../components/ui/button.js';
@@ -37,11 +39,8 @@ export default function OverviewPage(): ReactElement {
     }[];
   }>('context');
   return (
-    <main className='mx-auto max-w-5xl space-y-6 p-6'>
-      <header>
-        <h1 className='text-2xl font-semibold'>{t('sales.title')}</h1>
-        <p className='mt-2 text-muted-foreground'>{t('sales.intro')}</p>
-      </header>
+    <PageContainer>
+      <PageHeader title={t('sales.title')} description={t('sales.intro')} />
       <section className='space-y-3 rounded-xl border bg-card p-5'>
         <h2 className='font-semibold'>{t('teams.title')}</h2>
         <p className='text-sm text-muted-foreground'>{t('teams.coverage')}</p>
@@ -156,6 +155,6 @@ export default function OverviewPage(): ReactElement {
         )}
         {message && <p role='status'>{t(message)}</p>}
       </section>
-    </main>
+    </PageContainer>
   );
 }
