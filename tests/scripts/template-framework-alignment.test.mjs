@@ -261,7 +261,12 @@ for (const template of templates) {
     );
     assert.deepEqual(duplicates, []);
     assert.ok(dependencies['@nocobase/db']);
-    assert.ok(dependencies['@nocobase/db-sqlite']);
+    // create-app adds SQLite when selected; templates must not force its installation.
+    assert.equal(
+      dependencies['@nocobase/db-sqlite'],
+      undefined,
+      `${template.kind}: the SQLite driver must be supplied by create-app`,
+    );
     assert.equal(dependencies.hono, 'catalog:');
     assert.equal(devDependencies.hono, undefined);
     for (const [name, file] of runtimeDependencies(template)) {
