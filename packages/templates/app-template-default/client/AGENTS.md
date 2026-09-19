@@ -35,3 +35,5 @@ For UI styling, use the shared color, font, size, spacing, radius and shadow con
 ## Layout containers
 
 `layouts/components/layout-header.tsx` and `layouts/components/layout-sidebar.tsx` are presentation containers accepting ordinary children. Each of `AppLayout`, `SettingsLayout`, and `DevLayout` owns its arrangement, sidebar state, permission queries and route rendering. Keep menus, branding, action visibility and page redirects out of the containers. Supply an accessible sidebar label and a mobile close button from the owning layout. Sidebar contents own their scroll regions and their collapsed presentation; the container never rewrites children.
+
+In desktop icon mode, `NavigationTree` uses a shadcn Tooltip for leaf labels and a hover Popover for groups. Group popovers reuse the filtered navigation tree, retain parent-page links, and render nested groups inline. Mobile and expanded sidebars retain their inline navigation. Keep this behavior aligned across all application templates.
