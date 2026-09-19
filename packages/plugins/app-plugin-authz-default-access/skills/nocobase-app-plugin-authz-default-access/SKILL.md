@@ -41,7 +41,7 @@ Include this config under `authorization` in the App’s existing `defaultAppCon
 
 ## Service API
 
-Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` through `app.container.resolve(authorizationToken)` in the owning provider or route factory. Resource `quotes` and the custom `sales.public` strategy are defined in the main Skill’s bundled business workflow; import your own declaration module, not example package internals. Optional APIs are present only when configured; narrow the service before using one:
+Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` through `app.container.resolve(authorizationToken)` in the owning provider or route factory. Resource `quotes` and the custom `sales.prepared` strategy are defined in the main Skill’s bundled business workflow; import your own declaration module, not example package internals. Optional APIs are present only when configured; narrow the service before using one:
 
 ```ts
 import type { DefaultAccessAuthorizationApi } from '@nocobase/authorization/default-access';
@@ -60,8 +60,6 @@ await rules.set(
     .scope('edit', 'quotes', databaseScope('sales.prepared'))
     .build(),
 );
-const saved = await rules.get('resource', 'sales.quotes');
-await rules.delete('resource', 'sales.quotes');
 ```
 
 `set(rule)` replaces the definition for a resource; `get(resourceType, resourceId)` reads it; `list()` lists definitions; `delete(resourceType, resourceId)` clears it; `withTransaction(connection)` binds to a caller-owned transaction. A definition is `{ resource, actions: [{ action, scopeKey?, scope }] }`.

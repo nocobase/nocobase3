@@ -64,8 +64,6 @@ await rules.create(
     .reason('Proposal collaboration excludes confidential work')
     .build(),
 );
-const saved = await rules.get('public-proposals');
-await rules.delete('public-proposals');
 ```
 
 `create(rule)`, `update(key, rule)` (complete definition), `get(key)`, `list()`, `delete(key)` and `withTransaction(connection)`. A rule contains `{ key, title?, resource, subjects, reason?, actions: [{ action, scopeKey?, scope }] }`. Database scope values use `databaseScope(recordAccess)`; the strategy describes records still allowed.

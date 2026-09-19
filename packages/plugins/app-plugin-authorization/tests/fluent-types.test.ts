@@ -1,10 +1,11 @@
+import type { AppAuthorizationService } from '../server/index.js';
 import { it, expectTypeOf } from 'vitest';
 import { defineAuthorizationResource } from '@nocobase/authorization/core';
 import { defaultAccessRule } from '@nocobase/authorization/default-access';
 import type { DatabaseActionGrant } from '../server/database/model.js';
 import { defineDatabasePermission } from '../server/database/builders.js';
 
-function typeChecks() {
+function typeChecks(authz: AppAuthorizationService) {
   const invalidFields: DatabaseActionGrant = {
     // @ts-expect-error Grant fields accept a field list or '*', not directional objects.
     fields: { output: ['id'] },
@@ -35,6 +36,19 @@ function typeChecks() {
       .action('edit', (a) => a.grant('editable', read.update(['amount']))),
   );
   const reference = definition.reference();
+  authz.db.authorizeRepository({
+    repository: 'quotes',
+    resource: reference,
+    actions: { findMany: 'view', updateOne: 'edit' },
+  });
+  authz.db.authorizeRepository({
+    repository: 'quotes',
+    resource: reference,
+    actions: {
+      // @ts-expect-error The binding must name an action declared by the business resource.
+      updateOne: 'submit',
+    },
+  });
   reference.grant({ view: { visible: 'own' } });
   // @ts-expect-error Unknown action.
   reference.grant('submit');

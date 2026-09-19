@@ -23,6 +23,7 @@ import { HTTPException } from 'hono/http-exception';
 import { stream } from 'hono/streaming';
 
 import { defineApiRoutes, type AppApiRouteContribution } from './routes.js';
+import { getRepositoryRequestConstraints } from './repository-constraints.js';
 
 export type RepositoryApiAction =
   | 'findMany'
@@ -276,7 +277,7 @@ export function defineRepositoryApiRoutes<P = unknown>(
               ),
           }),
           async (context) => {
-            const scoped =
+            let scoped =
               bound ??
               repository.withPolicy(
                 // Normalized before binding so the reference check runs on
@@ -290,6 +291,19 @@ export function defineRepositoryApiRoutes<P = unknown>(
                   ),
                 ) as RepositoryPolicy,
               );
+            for (const constraint of getRepositoryRequestConstraints(context)) {
+              if (
+                constraint.repository !== entry.name ||
+                constraint.action !== action ||
+                constraint.collection !== entry.collection ||
+                constraint.connection !== entry.connection
+              ) {
+                throw new HTTPException(403, {
+                  message: 'Repository authorization target mismatch',
+                });
+              }
+              scoped = scoped.narrow(constraint.policy);
+            }
             const input = await readInput(context, action, maxLimit);
             if (action === 'findMany' && acceptsRepositoryStream(context)) {
               return streamFindMany(context, scoped, input);

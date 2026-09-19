@@ -94,7 +94,7 @@ export function registerSalesTeams(
 }
 ```
 
-Store the returned unregister callback in the owning provider and call it on shutdown. The object-style API is intentional: these callbacks form a service contract, not composable grant declarations.
+Store the returned unregister callback in the owning provider and call it on shutdown.
 
 The App middleware adds `authenticated:*` and resolves active memberships for authenticated users. User inspection uses the resolver too. Background jobs/tests that call `authz.for(identity)` must explicitly supply verified subjects; never trust client-submitted memberships. Direct inspection of a team describes the team itself, not the union of its users.
 

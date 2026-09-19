@@ -40,7 +40,7 @@ Put this in the application's authorization configuration and register each opti
 | `authz.db.collections.add(definition)`                                                                 | Opt a collection into authorization                                                                                             |
 | `authz.db.grant(name, definition)`, `db.scope(recordAccess)`                                           | JSON equivalents of `databaseGrant` / `databaseScope`                                                                           |
 | `authz.db.policyFor(collection, scope, operation?)`                                                    | Resolve all CRUD operations into a `RepositoryPolicy`                                                                           |
-| `authz.db.repositories(exposures)`                                                                     | Middleware plus `principal` and `repositories` for Repository API routes                                                        |
+| `authz.db.authorizeRepository({ repository, resource, actions })`                                      | Middleware binding Repository methods to typed business actions                                                                 |
 | `./client`: `useCan`, `useAuthorizationClient`, `authorizationClientToken`, `useAuthorizationRevision` | Session-aware visibility checks                                                                                                 |
 | `./client/management`, `./server/management`                                                           | Shared management components, options, subjects and request helpers for rule plugins                                            |
 
@@ -159,7 +159,7 @@ await repository.updateOne({ filter: { id }, values: input });
 
 The optional third argument `{ resource: 'sales.quotes', action: 'submit' }` restricts `policyFor` to one business operation's branch. Prefer the single composed decision when the operation spans multiple tables. Policies deny absent operations, constrain records in SQL and allow only granted fields/relations. Out-of-scope rows can surface as `RECORD_NOT_FOUND`; map repository errors consistently without leaking hidden records.
 
-For generated Repository APIs, declare static exposures with `resource: 'quotes'` and a static `policy`; pass them to `authz.db.repositories(exposures)`. Install authentication and the returned middleware on **every** exposed action, then pass its `principal` and `repositories` to `defineRepositoryApiRoutes`. It intersects the endpoint's static policy with user grants. An exposure without `resource` does not consult authorization; collections are never auto-registered by this helper.
+For generated Repository APIs, retain the normal `defineRepositoryApiRoutes` declaration and install `authz.db.authorizeRepository({ repository, resource: businessResource.reference(), actions: { findMany: 'view', updateOne: 'edit' } })` after authentication. It binds each endpoint to one business action and narrows its existing policy. See [complete Repository integration](skills/nocobase-app-plugin-authorization/references/repository-routes.md) for validation, response contracts and limits. Multi-scope operations require custom handlers.
 
 ## Record strategies and relations
 

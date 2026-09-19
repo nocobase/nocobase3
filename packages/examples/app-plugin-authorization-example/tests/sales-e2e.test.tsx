@@ -107,25 +107,34 @@ it('grants page entry separately while data rules govern real endpoints', async 
   expect(await ids('manager')).toEqual(['project-3']);
   expect(
     (
-      await fixture.request('assistant', 'sales/projects/project-2', {
-        notes: 'Not allowed',
+      await fixture.request('assistant', 'salesProjects:updateOne', {
+        filter: { id: 'project-2' },
+        values: {
+          notes: 'Not allowed',
+        },
       })
     ).status,
   ).toBe(403);
   expect(
     (
-      await fixture.request('engineer', 'sales/projects/project-2', {
-        notes: 'Updated',
+      await fixture.request('engineer', 'salesProjects:updateOne', {
+        filter: { id: 'project-2' },
+        values: {
+          notes: 'Updated',
+        },
       })
     ).status,
   ).toBe(200);
   expect(
     (
-      await fixture.request('engineer', 'sales/projects/project-4', {
-        notes: 'Secret',
+      await fixture.request('engineer', 'salesProjects:updateOne', {
+        filter: { id: 'project-4' },
+        values: {
+          notes: 'Secret',
+        },
       })
     ).status,
-  ).toBe(403);
+  ).toBe(404);
   expect(
     await authz
       .for({ principal: { type: 'user', id: fixture.users.assistant } })
@@ -331,15 +340,21 @@ it('saves one operation scope from the real editor without changing view or quot
   ]);
   expect(
     (
-      await fixture.request('assistant', 'sales/projects/project-1', {
-        notes: 'Saved from UI grant',
+      await fixture.request('assistant', 'salesProjects:updateOne', {
+        filter: { id: 'project-1' },
+        values: {
+          notes: 'Saved from UI grant',
+        },
       })
     ).status,
   ).toBe(200);
   expect(
     (
-      await fixture.request('assistant', 'sales/projects/project-2', {
-        notes: 'Regional edit independently allows this row',
+      await fixture.request('assistant', 'salesProjects:updateOne', {
+        filter: { id: 'project-2' },
+        values: {
+          notes: 'Regional edit independently allows this row',
+        },
       })
     ).status,
   ).toBe(200);
@@ -382,11 +397,14 @@ it('keeps all-region read separate from engineer edit, including direct reposito
   ]);
   expect(
     (
-      await fixture.request('engineer', 'sales/projects/project-3', {
-        notes: 'Cross-region',
+      await fixture.request('engineer', 'salesProjects:updateOne', {
+        filter: { id: 'project-3' },
+        values: {
+          notes: 'Cross-region',
+        },
       })
     ).status,
-  ).toBe(403);
+  ).toBe(404);
   const scope = authz.for({
     principal: { type: 'user', id: fixture.users.engineer },
   });
@@ -405,16 +423,22 @@ it('keeps all-region read separate from engineer edit, including direct reposito
 it('separates project editing, quote submission and delivery with server-side state transitions', async () => {
   expect(
     (
-      await fixture.request('engineer', 'sales/projects/project-2', {
-        title: 'Revised project',
-        notes: 'Qualified',
+      await fixture.request('engineer', 'salesProjects:updateOne', {
+        filter: { id: 'project-2' },
+        values: {
+          title: 'Revised project',
+          notes: 'Qualified',
+        },
       })
     ).status,
   ).toBe(200);
   expect(
     (
-      await fixture.request('engineer', 'sales/projects/project-2', {
-        ownerId: fixture.users.assistant,
+      await fixture.request('engineer', 'salesProjects:updateOne', {
+        filter: { id: 'project-2' },
+        values: {
+          ownerId: fixture.users.assistant,
+        },
       })
     ).status,
   ).toBe(400);
@@ -1147,18 +1171,24 @@ it('combines direct and inherited roles without removing direct access when a te
   expect(await ids('coordinator')).toEqual(['project-8']);
   expect(
     (
-      await fixture.request('coordinator', 'sales/projects/project-8', {
-        notes: 'Continue my own project',
+      await fixture.request('coordinator', 'salesProjects:updateOne', {
+        filter: { id: 'project-8' },
+        values: {
+          notes: 'Continue my own project',
+        },
       })
     ).status,
   ).toBe(200);
   expect(
     (
-      await fixture.request('coordinator', 'sales/projects/project-2', {
-        notes: 'Former team project',
+      await fixture.request('coordinator', 'salesProjects:updateOne', {
+        filter: { id: 'project-2' },
+        values: {
+          notes: 'Former team project',
+        },
       })
     ).status,
-  ).toBe(403);
+  ).toBe(404);
   expect((await fixture.request('proposal', 'sales/projects')).status).toBe(
     403,
   );
@@ -1236,18 +1266,24 @@ it('keeps four distinct job roles and restores direct-only duties after team rem
   expect(await ids('coordinator')).toEqual(['project-8']);
   expect(
     (
-      await fixture.request('coordinator', 'sales/projects/project-8', {
-        notes: 'Continue my own project',
+      await fixture.request('coordinator', 'salesProjects:updateOne', {
+        filter: { id: 'project-8' },
+        values: {
+          notes: 'Continue my own project',
+        },
       })
     ).status,
   ).toBe(200);
   expect(
     (
-      await fixture.request('coordinator', 'sales/projects/project-2', {
-        notes: 'Former team project',
+      await fixture.request('coordinator', 'salesProjects:updateOne', {
+        filter: { id: 'project-2' },
+        values: {
+          notes: 'Former team project',
+        },
       })
     ).status,
-  ).toBe(403);
+  ).toBe(404);
 });
 
 it('requires both scopes of the cross-region team handover', async () => {
@@ -1491,8 +1527,11 @@ it('retains the coordinator personal project when the shared team role is revoke
   expect(await ids('coordinator')).toEqual(['project-8']);
   expect(
     (
-      await fixture.request('coordinator', 'sales/projects/project-8', {
-        notes: 'Renewal plan',
+      await fixture.request('coordinator', 'salesProjects:updateOne', {
+        filter: { id: 'project-8' },
+        values: {
+          notes: 'Renewal plan',
+        },
       })
     ).status,
   ).toBe(200);

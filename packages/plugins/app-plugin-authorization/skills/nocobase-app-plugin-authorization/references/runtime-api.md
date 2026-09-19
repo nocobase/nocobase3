@@ -11,7 +11,7 @@ import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 const authz = app.container.resolve(authorizationToken);
 ```
 
-For an independent host/test, `createAppAuthorization({ database?, connection?, config?, onUserPermissionsChanged?, onAuthenticatedPermissionsChanged? })` creates the service. `database` supplies repository integration and `connection` supplies metadata/persistence. The normal application provider supplies both. `config.permissionSets` accepts `rootSet` and `defaultSet` names (defaults `root`, `member`); `config.plugins` lists optional rule factories. Permission sets, pages and database authorization are built in.
+The normal application provider creates the shared service with its database and persistence connection. `AuthorizationConfig.permissionSets` selects the platform root/default set names; business features leave those settings to the platform owner. `AuthorizationConfig.plugins` lists optional rule factories. Permission sets, pages and database authorization are built in.
 
 Optional rule factories and their configuration are documented only in their owning Skills. Follow [capability discovery](optional-capabilities.md) before adding one to the App; the main service does not imply those capabilities are installed.
 
@@ -40,7 +40,6 @@ Optional rule clients follow the same `plugin()` form, and their server default 
 | Export/surface                                                                                         | Purpose                                                                                                    |
 | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `./server`: `authorizationToken`, `permissionSetsToken`                                                | Resolve `AppAuthorizationService` or its permission-set service                                            |
-| `./server`: `createAppAuthorization`, `AuthorizationConfig`                                            | Host integration and configuration                                                                         |
 | Root or `./server`: `defineDatabasePermission`, `databaseGrant`, `databaseScope`                       | Portable typed declarations and JSON grant/scope helpers                                                   |
 | `authz.for(identity)`, `middleware()`, `guard(request)`                                                | Request identity and authorization; [Core API](core-api.md)                                                |
 | `authz.permissionSets`                                                                                 | Definition, assignment, protection and transaction APIs; [permission-set API](core-api.md#permission-sets) |
@@ -49,11 +48,9 @@ Optional rule clients follow the same `plugin()` form, and their server default 
 | `authz.db.collections.add(definition)`                                                                 | Opt a collection into authorization                                                                        |
 | `authz.db.grant(name, definition)`, `db.scope(recordAccess)`                                           | JSON equivalents of `databaseGrant` / `databaseScope`                                                      |
 | `authz.db.policyFor(collection, scope, operation?)`                                                    | Resolve all CRUD operations into a `RepositoryPolicy`                                                      |
-| `authz.db.repositories(exposures)`                                                                     | Middleware plus `principal` and `repositories` for Repository API routes                                   |
+| `authz.db.authorizeRepository({ repository, resource, actions })`                                      | Middleware binding Repository methods to typed business actions                                            |
 | `./client`: `useCan`, `useAuthorizationClient`, `authorizationClientToken`, `useAuthorizationRevision` | Session-aware visibility checks                                                                            |
 | `./client/management`, `./server/management`                                                           | Shared management components, options, subjects and request helpers for rule plugins                       |
-
-Server exports also expose `pages`, `DatabaseResourceAuthorizer`, `DatabaseCollectionRegistry`, `collectionResolver`, `condition`, `anyScope` and `scopeAst` for custom hosts/adapters. Ordinary business code should use declarations and policies instead of constructing adapters. Types are exported alongside these APIs; the exported TypeScript types supply the exact adapter interfaces.
 
 ## Declare a business operation
 
@@ -116,28 +113,7 @@ Every collection must be registered, including for unrestricted users. Registrat
 
 `.grant(key, permission, { title? })` creates a named action scope bound to the permission's collection. Read fields govern output; create/update fields govern input. Use explicit lists, `'*'` or `.allFields()`; delete has no fields. Include fields written by the server, such as timestamps, in the grant. A generated primary key is excluded from wildcard create fields. `.options(...recordAccessReferences)` narrows scope choices; `.default(reference)` sets a default. Omitting options exposes applicable registered strategies.
 
-```ts
-import { permissionSet } from '@nocobase/authorization/permissions';
-await authz.permissionSets.create(
-  permissionSet('sales-engineer')
-    .title('Sales engineer')
-    .grant(authz.pages.grant('sales.quotes', ['access']))
-    .grant(
-      quotes.reference().grant({
-        view: { quotes: 'allRecords' },
-        edit: { quotes: 'sales.prepared' },
-        submit: { quotes: 'sales.prepared', projects: 'sales.region' },
-      }),
-    )
-    .build(),
-);
-await authz.permissionSets.assign({
-  permissionSet: 'sales-engineer',
-  subject: { type: 'user', id: userId },
-});
-```
-
-Register the custom strategies from [the business workflow](business-module.md) before using this definition. Built-in owner/creator scopes require their matching columns; the example uses the quote preparer and project region instead. Assignment activates declarations. Page access and business actions are independent. The permission workspace edits business actions, their scopes and pages; fields and relation capabilities are declared in code.
+Use [code versus seeds](code-and-seeds.md) for the engineer permission-set declaration, initial persistence and runtime assignment. Use [record-access strategies](business-module.md#3-register-and-resolve-scopes) for its preparer and region scopes. Page access and business actions are independent; registration alone grants neither.
 
 ## Enforce the operation on the server
 
@@ -174,76 +150,17 @@ await repository.updateOne({ filter: { id }, values: input });
 
 The optional third argument `{ resource: 'sales.quotes', action: 'submit' }` restricts `policyFor` to one business operation's branch. Prefer the single composed decision when the operation spans multiple tables. Policies deny absent operations, constrain records in SQL and allow only granted fields/relations. Out-of-scope rows can surface as `RECORD_NOT_FOUND`; map repository errors consistently without leaking hidden records.
 
-For generated Repository APIs, declare static exposures with `resource: 'quotes'` and a static `policy`; pass them to `authz.db.repositories(exposures)`. Install authentication and the returned middleware on **every** exposed action, then pass its `principal` and `repositories` to `defineRepositoryApiRoutes`. It intersects the endpoint's static policy with user grants. An exposure without `resource` does not consult authorization; collections are never auto-registered by this helper.
+For generated Repository APIs, retain the normal `defineRepositoryApiRoutes` declaration and install `authz.db.authorizeRepository({ repository, resource: businessResource.reference(), actions: { findMany: 'view', updateOne: 'edit' } })` after authentication. It binds each endpoint to one business action and narrows its existing policy. See [complete Repository integration](repository-routes.md) for validation, response contracts and limits. Multi-scope operations require custom handlers.
 
-## Record strategies and relations
+## Add the feature-specific pieces
 
-```ts
-import { defineRecordAccess } from '@nocobase/authorization/core';
-import { buildFilter } from '@nocobase/repository-input';
-const prepared = defineRecordAccess('sales.prepared', (p) =>
-  p
-    .title('Prepared by me')
-    .resources({ type: 'database.collection', id: 'quotes' })
-    .resolve(({ principal }) =>
-      buildFilter((f) => f.string('preparedById').eq(principal.id)),
-    ),
-);
-authz.recordAccess.add(prepared);
-```
+Read only the references needed by the requirement:
 
-A strategy can use `.params<P>(schema)` for validated configuration and close over an application service for related-record lookup. Resolve from verified principal/membership data. Return a DB `FilterAst` for database strategies. Built-ins include `allRecords`, `recordsIOwn`, `recordsICreated` and `customFilter`; owner/creator policies accept `params.field`. `customFilter` uses a native DB filter, with direct scalar field conditions; relation traversal and JSON conditions are not supported by this authorization boundary.
-
-Relations are explicit capability trees:
-
-```ts
-const delivery = defineDatabasePermission((p) =>
-  p
-    .collection('orders')
-    .read((r) =>
-      r.fields('id').relation('team', (t) => t.fields('id', 'title')),
-    )
-    .update((w) =>
-      w
-        .relation('team', (t) =>
-          t.recordAccess('activeTeams').connect().disconnect(),
-        )
-        .relation('checks', (c) =>
-          c
-            .create((v) => v.fields('id', 'title'))
-            .update((v) => v.fields('title'))
-            .delete(),
-        )
-        .relation('collaborators', (c) =>
-          c.set((edge) => edge.through((through) => through.fields('note'))),
-        ),
-    ),
-);
-```
-
-Register `activeTeams` for the target collection before using it. Writes support create/update/upsert/connect/disconnect/set/delete; root create permits nested create/connect only. Upsert must grant both branches. Relation `recordAccess` applies to target rows: omitted means unrestricted targets within that explicitly granted relation; `[]` means no targets. Related records do not automatically inherit standalone target CRUD permissions or restrictions. Exclude direct foreign keys when association changes must go through relation policies. Static endpoint policies cannot restore missing relation grants. Because DB Policy has one scope per node, differing field/relation capabilities may conservatively intersect scopes. See [declaration details](fluent-registration.md).
-
-## Subjects and transactions
-
-Use `authz.subjects.define(type, { resolveFor, filterActive, administration })` for inherited team/department permissions. `resolveFor(principal)` returns current IDs; `filterActive(ids, transaction?)` filters disabled/deleted subjects. Registration returns cleanup for provider shutdown. The HTTP middleware and user inspector resolve these memberships. `authz.for(identity)` does not automatically resolve them.
-
-`administration` is `{ title, selection }`: `selection: { type: 'fixed', id }` describes a fixed audience; `type: 'collection'` implements `list({ search, page, pageSize }, { authz })` returning `{ items, total }` and `resolve(ids, { authz })` returning items. Items contain `{ id, title, description? }`. The calling management endpoint already checks its settings permission. If the directory has additional read permissions or row restrictions, enforce those in both callbacks; do not invent a separate directory permission when the entry permission is sufficient. Picker visibility does not grant assignment rights. Preserve stored unknown/unreadable subject IDs.
-
-Permission-set revocation/replacement uses the database Store's transaction and lock protocol to preserve a final active administrator. For user removal/disable flows, call `permissionSets.withTransaction(connection).assertSubjectRemovable(subject)` in the same transaction as the user mutation and notify through `notifyAssignmentsChanged(subject)` after commit. See the [transaction and protection API](core-api.md#permission-sets).
-
-## Client API and page access
-
-```tsx
-import { useCan } from '@nocobase/app-plugin-authorization/client';
-const { can, isPending, error, retry } = useCan({
-  resource: { type: 'resource', id: 'sales.quotes' },
-  action: 'submit',
-});
-```
-
-`useCan(request, { enabled?: boolean })` returns false while pending/failed, handles session changes and permission invalidation. Outside React, resolve `authorizationClientToken` and call `client.can(request)`; components use `useAuthorizationClient()`. `useAuthorizationRevision()` supports custom caches. Never retain a module-global client or reuse a snapshot across sessions.
-
-Client route declarations use `authz: { resource: { type: 'page', id: 'sales.quotes' }, action: 'access' }`. Page IDs are stable names, independent of URLs. `authz: 'skip'` skips that page's authorization check, not authentication or its server APIs. Navigation determines page display groups; backend business groups use `resourceGroups`. A page grant does not grant data access, and a business grant does not open a page.
+- [Record strategies](business-module.md#3-register-and-resolve-scopes) for ownership, regional membership and related-record scopes.
+- [Relation declarations](fluent-registration.md#relation-permissions) for target access, nested writes and join fields.
+- [Teams and administration](subjects-and-administration.md) for inheritance, selection and revocation.
+- [Client development](client-development.md) for pages, buttons, record eligibility and permission refresh.
+- [Request scopes and permission sets](core-api.md) for service methods and transaction ownership.
 
 ## Management HTTP API
 

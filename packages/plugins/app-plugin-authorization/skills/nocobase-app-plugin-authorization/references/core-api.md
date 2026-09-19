@@ -1,60 +1,8 @@
-# Core and permission-set API
+# Request scopes and permission-set services
 
-The App normally resolves `authorizationToken`; use the pure library factory only for a separate host or test.
+Resolve the existing `authorizationToken` in the application. This reference covers request evaluation and runtime assignment; use [runtime setup](runtime-api.md) for installation and [code versus seeds](code-and-seeds.md) for initial configuration. Do not construct a separate authorization engine for a business feature.
 
-## Exports
-
-| Import                                | Public capability                                                                                                                              |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@nocobase/authorization/core`        | `createAuthorization`, resource and record-access builders, registries, decisions, grants, constraints, identity middleware and route dispatch |
-| `@nocobase/authorization/permissions` | `permissionSets`, `permissionSet`, `PermissionSetsApi`, `PermissionSetStore`, protection errors                                                |
-
-The root export re-exports Core and the four rule/permission-set subpaths. Each rule factory requires its own `store`; the library does not supply a persistence adapter or management HTTP handlers. See the exported Store interfaces for the required methods and transaction handle type.
-
-## Create and evaluate
-
-```ts
-import { createAuthorization } from '@nocobase/authorization/core';
-import {
-  permissionSets,
-  permissionSet,
-} from '@nocobase/authorization/permissions';
-
-// store implements PermissionSetStore for your persistence backend.
-const authorization = createAuthorization({
-  plugins: [permissionSets({ store })],
-});
-authorization.resourceTypes.add({
-  resourceType: 'report',
-  async authorize(request, context) {
-    const grants = await context.grants.resolve({
-      principal: request.principal,
-      subjects: request.subjects,
-      resource: request.resource,
-      action: request.action,
-    });
-    return { effect: grants.length ? 'permit' : 'deny', reasons: [] };
-  },
-});
-await authorization.permissionSets.create(
-  permissionSet('report-reader')
-    .title('Report reader')
-    .grant({
-      resource: { type: 'report', id: 'sales' },
-      actions: [{ action: 'view' }],
-    })
-    .build(),
-);
-await authorization.permissionSets.assign({
-  permissionSet: 'report-reader',
-  subject: { type: 'user', id: 'alice' },
-});
-const scope = authorization.for({ principal: { type: 'user', id: 'alice' } });
-await scope.require({
-  resource: { type: 'report', id: 'sales' },
-  action: 'view',
-});
-```
+## Evaluate a request
 
 The principal is the authenticated actor; `subjects` adds verified memberships such as teams. The principal also participates in grant matching. Subject IDs are literals, including the `*` in `authenticated:*`; resource IDs can use `*` as a wildcard. A manually constructed `for(identity)` uses the supplied identity: resolve and include memberships yourself.
 
@@ -67,27 +15,6 @@ The principal is the authenticated actor; `subjects` adds verified memberships s
 | `permissions()`                            | Client visibility snapshot with `unrestricted` and permissions; not an executable data policy         |
 
 Create one scope per request. Its grant and constraint caches are shared by underlying composed checks; reuse that scope within the request, never across identities or requests. Execute conditional decisions only through the resource adapter that understands their conditions. Unknown types, invalid conditional decisions and handler failures deny access.
-
-## Registries and extension APIs
-
-| API                                                                    | Responsibility                                                                             |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `resourceTypes.add(handler)`                                           | Register a handler with `resourceType`, `authorize`, optional `authorizeUnrestricted`      |
-| `getResource(type).items.add(item)`                                    | Add flat resource metadata for that handler                                                |
-| `resourceGroups.add({ name, title, category? })`                       | Flat `business` or `administration` groups                                                 |
-| `resources.add(definition)`                                            | Declare user-facing operations, underlying grants and named scopes                         |
-| `defineAuthorizationResource(name, configure)`                         | Immutable typed resource builder; `.register(authz.resources)`, `.reference()`, `.build()` |
-| `defineRecordAccess(key, configure)` / `recordAccess.add(policy)`      | Define/register a reusable record-scope strategy                                           |
-| `subjects.define(type, definition)`                                    | Register `filterActive(ids, transaction?)` and `resolveFor(principal)`; returns cleanup    |
-| `subjects.resolveFor(principal)`                                       | Resolve active inherited subjects                                                          |
-| `use(middleware)` / `middleware()`                                     | Resolve HTTP identity, then attach request scope as `context.get('authz')`                 |
-| `guard(requestOrFactory)`                                              | Middleware using `require`; install identity middleware first                              |
-| `onGrantsChanged(listener)`                                            | Subscribe to grant-provider changes; returns unsubscribe                                   |
-| `routes.add(path, handler)` / `routes.list()` / `routes.handle(input)` | Dispatch plugin Fetch handlers; unmatched paths return `undefined`                         |
-| `permissions.handler({ request, authorization })`                      | Fetch handler for the current request's visibility snapshot                                |
-| `describe()`                                                           | Registered plugins, resource types and constraint resolvers                                |
-
-An `AuthorizationPlugin` supplies `id`, optional `authorizationApi` and `setup(authz)`. The host's optional `connection` is passed through to plugins. Grant providers resolve grants and may implement request scoping, unrestricted access and change subscriptions; constraint resolvers add scope constraints. Plugin extensions use the exported `AuthorizationPlugin`, `AuthorizationGrantService` and `AccessConstraintResolver` contracts. An unrestricted identity bypasses grants and rule constraints, but a resource handler's `authorizeUnrestricted` can still validate the resource/action and produce execution conditions.
 
 ## Permission sets
 
@@ -108,11 +35,11 @@ An `AuthorizationPlugin` supplies `id`, optional `authorizationApi` and `setup(a
 | `withTransaction(transaction)`                                                             | Bind all Store operations to a caller-owned transaction                   |
 | `onChange(listener)`, `notifyAssignmentsChanged(subject)`                                  | Subscribe/publish assignment invalidation                                 |
 
-`permissionSets({ store, rootSet, defaultSet })` optionally declares protected sets. `rootSet` accepts a key or `{ key, assignableTo?, requireActiveAssignment? }`; it permits assignment/revocation, grants unrestricted access and normally requires a remaining active assignment. `defaultSet` permits content updates. These options declare protection, not initial records or audience assignments. NocoBase's application plugin seeds/configures those separately.
+The App's platform integration protects root and member sets. Root grants unrestricted access, accepts user assignments and requires a remaining active assignment; member permits content updates. Business features create their own editable sets and leave platform protection and audience assignments to their owner.
 
 Generic HTTP management rejects changes to a protected key, even if content updates are allowed. Owner-side service calls are trusted and bypass generic `assertWritable` checks. `requireActiveAssignment` and `assignableTo` are enforced by assignment APIs. Relevant failures include `PermissionSetProtectedError`, `PermissionSetLastAssignmentError` and `PermissionSetSubjectNotAllowedError`.
 
-A Store implements `withTransaction(transaction)`; persistent Stores should implement `transaction(run)` and `lock(key)` for safe concurrent revocation. `revoke` and `replaceSubjectAssignments` then lock protected sets before reading assignments, check and write in one transaction, and notify after commit. `filterActive` must use the supplied transaction when checking subject validity. When binding an external transaction, the caller owns commit and notification:
+The application's permission-set service runs protected assignment changes in a database transaction and locks the protected set before checking remaining active assignments. Custom subject `filterActive` callbacks must use the supplied transaction. When a business mutation owns the transaction, bind the service to that connection and notify after commit:
 
 ```ts
 const subject = { type: 'user', id: userId };
@@ -124,7 +51,7 @@ await database.transaction(async (connection) => {
 await authorization.permissionSets.notifyAssignmentsChanged(subject);
 ```
 
-Never separate the removal check from the user mutation's transaction. A custom Store without transactional locking cannot promise safe concurrent last-administrator protection.
+Never separate the removal check from the user mutation's transaction. Use the App service's existing Store; replacing persistence is outside ordinary business feature development.
 
 ## Optional record-scope rules
 

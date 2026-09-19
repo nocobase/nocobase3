@@ -10,6 +10,10 @@ import {
 export * from './health.js';
 export * from './routes.js';
 export * from './repository-routes.js';
+export {
+  addRepositoryRequestConstraint,
+  type RepositoryRequestConstraint,
+} from './repository-constraints.js';
 
 /**
  * The HTTP router owned by an application.

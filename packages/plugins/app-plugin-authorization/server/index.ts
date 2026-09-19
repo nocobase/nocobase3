@@ -34,11 +34,6 @@ export {
   permissionSetsToken,
   type AppAuthorizationService,
 } from './tokens.js';
-export type {
-  RepositoryAuthorization,
-  RepositoryAuthorizationExposure,
-  RepositoryAuthorizationPrincipal,
-} from './repositories.js';
 export { AuthorizationProvider } from './providers/authorization.js';
 export { translateAuthorization, type OptionText } from './i18n.js';
 export { AUTHORIZATION_NAMESPACE } from '../shared.js';
@@ -56,3 +51,5 @@ export {
 } from './database/index.js';
 
 export * from './database/builders.js';
+
+export type { AuthorizeRepositoryOptions } from './authorize-repository.js';

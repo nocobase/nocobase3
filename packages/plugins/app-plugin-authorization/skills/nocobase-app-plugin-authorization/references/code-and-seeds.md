@@ -12,7 +12,7 @@ Application feature development registers and configures its own business resour
 
 For example, code declares Quote View/Edit/Submit and the preparer/region strategies. A seed creates the initial Sales engineer set and selects its pages, actions and scopes. An administrator can later change those grants, scopes and assignments in the backend without editing the seed. Changing what Submit does or which fields it may write requires a code change.
 
-## Decide who owns the change
+## Classify changes and deliver both parts
 
 | Change                                                                | Where it belongs                              | When it runs                         |
 | --------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------ |
@@ -27,7 +27,9 @@ For example, code declares Quote View/Edit/Submit and the preparer/region strate
 
 A resource declaration registers what the product can do; it grants nobody access. A permission-set declaration is a value; `.build()` does not save it. A seed persists initial configuration; it does not replace provider registration. Never create or overwrite permission sets on every provider boot.
 
-Write no authorization seed when the requirement is only a new operation administrators will grant themselves. Write one when a fresh installation must start with an agreed usable job configuration. User assignments require known identities and explicit intended responsibility; a new page does not justify assigning all users or changing `member`/`root`.
+Classify new and existing features by the requested behavior. Changing which records an existing strategy resolves, which fields an action can write, or how an endpoint enforces permission changes the model. Selecting an existing strategy and its supported parameters, granting an action to a job, or assigning a job to a user changes configuration. An existing action name does not prove its model already satisfies the requirement.
+
+When developing or changing the model, also complete its initial or adjusted permission configuration from the business responsibility matrix. For a fresh installation, provide seeds for the intended jobs, page/action grants, scopes, supported rules and known assignments, and apply them when installing that App. For an existing installation, use authorized services or a controlled data-change workflow to make the intended changes while preserving unrelated configuration. Do not leave this configuration as future administrator work unless the user explicitly requests model-only delivery. User assignments need known identities and intended responsibility; clarify missing recipients rather than assigning everyone or changing `member`/`root`.
 
 ## Share declarations, not runtime instances
 
@@ -64,7 +66,7 @@ For initial installation, a seed may write the documented persistence rows below
 ```ts
 import { defineSeed } from '@nocobase/db';
 import { encodeAuthorizationTitle } from '@nocobase/authorization/core';
-import { engineer } from '../seed-data/permission-sets.js';
+import { engineer } from '../../seed-data/permission-sets.js';
 
 export default defineSeed({
   name: '202609190001_sales_jobs',
@@ -92,7 +94,7 @@ export default defineSeed({
 });
 ```
 
-Place the file under the App's configured seed directory, usually `database/main/seeds/`; the seed name matches the filename. Ensure schema migrations for authorization and business collections have run, and explicitly order prerequisite installation data. Use the App's existing migration/seed commands. Do not run this code in a migration: migrations must describe fixed schema history and cannot import live business declarations.
+This example lives in `database/main/seeds/202609190001_sales_jobs.ts` and imports `database/seed-data/permission-sets.ts`. Adapt the path to the App's configured seed directory; the seed name matches the filename. Ensure schema migrations for authorization and business collections have run, and explicitly order prerequisite installation data. Use the App's existing migration/seed commands. Do not run this code in a migration: migrations must describe fixed schema history and cannot import live business declarations.
 
 ### Persist initial permission-set assignments
 
@@ -107,7 +109,7 @@ Use `encodeAuthorizationTitle` for permission-set titles, `JSON.stringify` for g
 
 Optional rule initialization belongs to the owning plugin Skill, including its tables, serialization and assignment format. Follow [capability discovery](optional-capabilities.md) first; if the matching Skill is absent, the App does not support that capability and implementing it requires separate development. Do not create optional-plugin tables or write speculative seed rows from this guide.
 
-The installed example's seed uses a domain bootstrap guard: if example sales membership data exists, it skips the whole bootstrap. It does not repair individual missing roles or assignments on rerun. Its practice reset restores only fixed business records and relationships, not authorization configuration. A production App should not copy the demo password/accounts or expose the reset route.
+Keep demonstration credentials, fixed fixture records and practice-reset routes out of production initialization.
 
 ## Runtime provisioning uses the public services
 
@@ -133,4 +135,4 @@ Use `withTransaction(connection)` for changes that must commit with another runt
 
 ## Existing installations
 
-Adding a scope implementation or field capability is a code change. Assigning that new action is a configuration decision. Do not assume editing a seed will update deployed installations, and do not reinterpret a persisted action/scope key for a different purpose. For a required upgrade, identify affected business configuration keys, preserve administrator choices and unrelated assignments, perform only the explicitly intended update and verify with ordinary users. Do not treat seed-created records as code-owned defaults that can be reapplied automatically.
+Adding or changing a scope implementation or field capability is a model change. Selecting its supported scope parameters or assigning its actions is a configuration change. Deliver both when the requirement needs both. Do not assume editing a seed will update deployed installations, and do not reinterpret a persisted action/scope key for a different purpose. For a required upgrade, identify affected business configuration keys, preserve administrator choices and unrelated assignments, perform only the explicitly intended update and verify with ordinary users. Do not treat seed-created records as code-owned defaults that can be reapplied automatically.

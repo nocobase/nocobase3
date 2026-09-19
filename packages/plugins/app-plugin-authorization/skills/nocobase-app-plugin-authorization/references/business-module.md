@@ -1,6 +1,6 @@
 # Build a business module with authorization
 
-Use a quote submission workflow as the reference: engineers prepare quotes; project responsibility determines whether they can submit them; proposal teams can receive explicit handovers. Orders later have delivery responsibilities. The same design applies to approvals, service tickets and project work. Source examples live in `@nocobase/app-plugin-authorization-example` in the source workspace; an installed App implements these patterns in its own feature files.
+Use a quote submission workflow as the reference: engineers prepare quotes; project responsibility determines whether they can submit them; proposal teams can receive explicit handovers. Orders have separate delivery responsibilities; submitting a quote does not create an order. The same design applies to approvals, service tickets and project work. Source examples live in `@nocobase/app-plugin-authorization-example` in the source workspace; an installed App implements these patterns in its own feature files.
 
 ## 1. Write the responsibility matrix
 
@@ -24,9 +24,9 @@ Keep portable declarations free of database queries so provisioning can reuse `r
 
 ## 3. Register and resolve scopes
 
-Resolve `authorizationToken` and the database in the owning provider. Register collections, independent pages, the `business` group and resource declarations there. Register custom record access with `authz.recordAccess.add`.
+Resolve `authorizationToken` and the database in the owning provider. Register collections, independent pages, the `sales` group with category `business` and resource declarations there. Register custom record access with `authz.recordAccess.add`.
 
-The following application-owned `server/sales-record-access.ts` implements the two strategies needed by the engineer set. Its migrations must define `quotes.preparedById`, `projects.region` and a trusted `salesMembers` table with user ID and region; membership is maintained by authorized business code. A direct preparer rule returns `buildFilter(f => f.string('preparedById').eq(principal.id))`. A regional rule derives project IDs from trusted membership data and filters the relevant table. Handle no memberships as no records; never turn an empty result into `allRecords`. Declare `.resources({ type: 'database.collection', id })` accurately and validate optional parameters through `.params(schema)`.
+The following application-owned `server/sales-record-access.ts` implements the two strategies needed by the engineer set. Its migrations must define `quotes.preparedById`, `projects.region` and a trusted `salesMembers` table with user ID and region; membership is maintained by authorized business code. A direct preparer rule returns `buildFilter(f => f.string('preparedById').eq(principal.id))`. A regional rule derives the user's region from trusted membership data and filters projects by that region. Handle no memberships as no records; never turn an empty result into `allRecords`. Declare `.resources({ type: 'database.collection', id })` accurately and validate optional parameters through `.params(schema)`.
 
 ```ts
 import { defineRecordAccess } from '@nocobase/authorization/core';
@@ -112,30 +112,75 @@ Reuse `recordsIOwn`/`recordsICreated` when the table has the corresponding colum
 
 Use an App-owned `defineApiRoutes` factory that creates a Hono router, resolves services, and installs authentication, authorization and input limits. Business code accepts the resolved policy rather than unrestricted repositories.
 
+The following service function accepts the current request scope. Its caller authenticates first, installs `authz.middleware()`, and calls `await submitQuote(database, c.var.authz, c.req.param('id'))`. Keep it in an App-owned module, then return the route's success response only after it resolves.
+
 ```ts
-const decision = await c.get('authz').authorize({
-  resource: { type: 'resource', id: 'sales.quotes' },
-  action: 'submit',
-});
-if (decision.effect === 'deny' || decision.conditions?.type !== 'resource')
-  return c.json({ code: 'FORBIDDEN' }, 403);
-const policies = decision.conditions.database;
-if (!policies?.quotes || !policies.projects)
-  return c.json({ code: 'FORBIDDEN' }, 403);
-// Bind both policies to the repositories used inside the business transaction.
+import type { AuthorizationScope } from '@nocobase/app-plugin-authorization';
+import type { DatabaseManager } from '@nocobase/db';
+import { HTTPException } from 'hono/http-exception';
+
+export async function submitQuote(
+  database: DatabaseManager,
+  scope: AuthorizationScope,
+  quoteId: string,
+): Promise<void> {
+  const decision = await scope.authorize({
+    resource: { type: 'resource', id: 'sales.quotes' },
+    action: 'submit',
+  });
+  const policies = decision.conditions?.database;
+  if (decision.effect === 'deny' || !policies?.quotes || !policies.projects)
+    throw new HTTPException(403, { message: 'Forbidden' });
+  const quotePolicy = policies.quotes;
+  const projectPolicy = policies.projects;
+
+  await database.transaction(async (connection) => {
+    const quotes = connection.repository('quotes').withPolicy(quotePolicy);
+    const quote = await quotes.findOne({ filter: { id: quoteId } });
+    if (!quote || typeof quote.projectId !== 'string')
+      throw new HTTPException(404, { message: 'Quote not found' });
+
+    const project = await connection
+      .repository('projects')
+      .withPolicy(projectPolicy)
+      .findOne({ filter: { id: quote.projectId } });
+    if (!project) throw new HTTPException(403, { message: 'Forbidden' });
+    if (quote.status !== 'draft')
+      throw new HTTPException(409, { message: 'Quote is no longer a draft' });
+    if (typeof quote.amount !== 'number' || quote.amount <= 0)
+      throw new HTTPException(400, {
+        message: 'A positive amount is required',
+      });
+
+    await quotes.updateOne({
+      // Preserve the parent and business state actually checked above.
+      filter: {
+        id: quoteId,
+        projectId: quote.projectId,
+        status: 'draft',
+        amount: quote.amount,
+      },
+      values: { status: 'submitted' },
+    });
+  });
+}
 ```
 
-Inside the transaction, find the quote with its policy, read that quote's actual project with the project policy, validate amount and draft state, then update with the quote policy and an expected-state filter. Do not fetch unrestricted data and filter it in JavaScript. Do not query only the parent ID supplied by the client. Do not call `require` or an aggregate `db.policyFor` after this decision; the composed result already includes all underlying checks and policies.
+The owning route maps repository denials to 403 and `RECORD_NOT_FOUND` to a non-disclosing 404 or state-conflict response. It preserves the explicit 400/403/404/409 outcomes above and does not expose database errors. A concurrent change that invalidates the update predicate must fail; never retry it as an unconditional write. If a workflow requires a parent state to remain unchanged until commit, add appropriate locking or version checks for that parent too; a transaction alone does not supply that guarantee.
 
-For collection CRUD without an operation boundary, use `db.policyFor` and bind the result. For Repository API routes, use `db.repositories`, static policies and named collection resources. Mount its middleware on all exposed actions. An endpoint policy is a maximum, not a source of grants.
+Do not fetch unrestricted data and filter it in JavaScript. Do not query only the parent ID supplied by the client. Do not call `require` or an aggregate `db.policyFor` after this decision; the composed result already includes all underlying checks and policies. Resolve authorization once per request and bind its results to the repositories on the transaction connection.
+
+For collection CRUD without an operation boundary, use `db.policyFor` and bind the result. For simple business Repository API routes, use [business-action middleware](repository-routes.md) while retaining static route policies. Mount it on all exposed actions. An endpoint policy is a maximum, not a source of grants.
 
 ## 5. Configure roles and scope rules
 
+Complete this configuration as part of delivering the permission feature, for both new modules and changes to existing ones. Determine which declarations need development and which existing configurations need adjustment from the responsibility matrix. Use installation seeds for a fresh App or authorized provisioning for an existing App; keep administrator-owned configuration editable and preserve unrelated choices.
+
 Create the engineer set with page access and quote actions separately. Configure edit with a preparer scope; submit with preparer and region scopes. Do not use project ownership as an edit default if that would reopen a colleague's quote.
 
-The following rule-based extensions require the corresponding installed Skills; follow [capability discovery](optional-capabilities.md) first. Without them, describe the missing capability as separate development rather than assuming the example configuration is available. Add default access only for an intentional baseline. Add sharing for the delegation exception: quote-7's edit and submit scopes plus its parent project's submit scope, assigned to the Proposal team. Sharing the quote does not automatically grant its parent or the submit action. Add restrictions for confidential records at the appropriate boundary; a collection restriction covers all operation branches when the invariant must apply everywhere.
+The following rule-based extensions require the corresponding installed Skills; follow [capability discovery](optional-capabilities.md) first. Without them, describe the missing capability as separate development rather than assuming the example configuration is available. Add default access only for an intentional baseline. Add sharing for the delegation exception: the delegated quote's edit and submit scopes plus its actual parent project's submit scope, assigned to the Proposal team. Sharing the quote does not automatically grant its parent or the submit action. Add restrictions for confidential records at the appropriate boundary; a collection restriction covers all operation branches when the invariant must apply everywhere.
 
-Use the three optional rule Skills for implementation. Follow [code declarations and seeds](code-and-seeds.md) for an executable permission-set declaration, persistence row shapes and initialization rules. The example skips its entire bootstrap once sales membership data exists; it does not repair deleted grants. Migrations contain schema operations only. Do not expose the example's practice-reset API in a real system.
+Use the three optional rule Skills for implementation. Follow [code declarations and seeds](code-and-seeds.md) for an executable permission-set declaration, persistence row shapes and initialization rules. Migrations contain schema operations only. Keep demonstration account creation and practice reset out of production features.
 
 ## 6. Relations and transitions
 

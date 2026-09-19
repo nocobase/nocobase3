@@ -51,7 +51,7 @@ All routes below are under `/api/authorization-example`, relative to the applica
 | ------------------------------------------------------- | -------------------------------------------------------------- |
 | `GET /context`                                          | Current roles and their direct/team sources                    |
 | `GET /sales/projects`, `/sales/quotes`, `/sales/orders` | Policy-filtered lists and operation eligibility                |
-| `POST /sales/projects/:id`                              | Edit allowed project details                                   |
+| `POST /salesProjects:updateOne`                         | Edit allowed project details                                   |
 | `POST /sales/quotes/:id`                                | Edit draft amount/notes                                        |
 | `POST /sales/quotes/:id/submit`                         | Submit an eligible quote after quote and project authorization |
 | `GET /sales/orders/:id/relations`                       | Read allowed order relations                                   |
@@ -94,3 +94,19 @@ Only active team targets are allowed. Team data, direct ownership/association fo
 5. As the direct and inherited delivery users, arrange eligible order relations and confirm delivery. Verify read-only users, inactive targets and protected fields are denied.
 
 Reset business state before repeating transitions and restore changed rule/assignment configuration. Verify using ordinary accounts and direct API requests as well as UI. The tests cover page/action separation, field and row boundaries, multi-scope sharing, restrictions, membership revocation, relation rollback, seed/reset behavior and migration reversal. Use the inspector to explain sources; it does not replace execution tests.
+
+## Route organization and Repository CRUD suitability
+
+`server/routes/index.ts` is the only route contribution: it resolves dependencies, installs authentication, authorization and the request body limit, mounts the internal routers and maps errors. Internal router factories are composed under this protected boundary; they are not independent public contributions. `practice.ts` owns context/reset, `lists.ts` owns the three enriched business lists, `projects.ts` owns generated project queries/editing with business-action middleware, `quotes.ts` owns editing/submission, and `orders.ts` owns delivery relations/confirmation. `mutations.ts` shares input validation and writable-record lookup; `errors.ts` preserves the HTTP error mapping. Declare each endpoint explicitly, including all three lists; keep authorization, business validation, writes and responses visually separated. Shared query helpers should not hide route/action selection behind a loop.
+
+| Existing endpoint            | Suitability for generated Repository CRUD                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Project edit                 | Uses generated `updateOne`, bound to project `edit`, with independent input validation                                                     |
+| Project/quote/order lists    | Custom presentation: include page navigation and per-record operation reasons; quote/order lists also include authorized project summaries |
+| Quote edit                   | Keep a business handler: draft-only validation and an expected-state update predicate                                                      |
+| Quote submit                 | Keep a business handler: consume both quote and actual parent-project policies, validate amount/state and conditionally update             |
+| Order relation read          | Custom presentation: returns current relations, permitted operations and scoped target options                                             |
+| Order relation write/deliver | Keep business handlers: state validation, relation policy enforcement or delivery-reference validation                                     |
+| Context/reset                | Demonstration-specific logic, not generic CRUD                                                                                             |
+
+The project router exposes POST `salesProjects:findMany`, `salesProjects:findOne`, `salesProjects:count` and `salesProjects:updateOne` through `defineRepositoryApiRoutes`; `authz.db.authorizeRepository` binds query methods to `view` and updates to `edit`. The existing GET list retains enriched display data. Project edit sends `{ filter: { id }, values }` and receives the Repository response; hidden targets return 404. Do not replace the existing enriched lists with raw Repository responses or use collection-aggregated grants for business operations. Read the main authorization Skill’s bundled `references/repository-routes.md` for a complete integration example. Multi-scope authorization remains explicit in business handlers.

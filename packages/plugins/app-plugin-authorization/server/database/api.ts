@@ -1,22 +1,24 @@
 import {
+  createBusinessRepositoryAuthorization,
+  type AuthorizeRepositoryOptions,
+} from '../authorize-repository.js';
+import type { MiddlewareHandler } from 'hono';
+import {
   databaseGrant,
   databaseScope,
   type DatabaseOperation,
 } from './builders.js';
 import { DatabaseCollectionRegistry } from './collection-registry.js';
 import type {
+  Authorization,
+  AuthorizationActions,
+  AuthorizationEnv,
   ResourceAuthorizationCheck,
   AuthorizationDecision,
   AuthorizationScope,
 } from '@nocobase/authorization/core';
-import type { Authorization } from '@nocobase/authorization/core';
 import type { PermissionGrant } from '@nocobase/authorization/permissions';
 import type { RepositoryPolicy } from '@nocobase/db';
-import {
-  createRepositoryAuthorization,
-  type RepositoryAuthorization,
-  type RepositoryAuthorizationExposure,
-} from '../repositories.js';
 import { UNRESTRICTED_ACCESS } from './authorizer.js';
 import type {
   DatabaseAccessScope,
@@ -35,9 +37,9 @@ export interface DatabaseApi {
     scope: AuthorizationScope,
     operation?: { resource: string; action: string },
   ): Promise<RepositoryPolicy>;
-  repositories(
-    exposures: readonly RepositoryAuthorizationExposure[],
-  ): RepositoryAuthorization;
+  authorizeRepository<A extends AuthorizationActions>(
+    options: AuthorizeRepositoryOptions<A>,
+  ): MiddlewareHandler<AuthorizationEnv>;
 }
 
 export interface DatabaseAuthorizationApi {
@@ -57,18 +59,14 @@ export class DatabaseAuthorizationService implements DatabaseApi {
     this.host = authz;
   }
 
-  /**
-   * Narrows Repository API policies for explicitly registered collections.
-   */
-  repositories(
-    exposures: readonly RepositoryAuthorizationExposure[],
-  ): RepositoryAuthorization {
-    if (!this.host) {
+  authorizeRepository<A extends AuthorizationActions>(
+    options: AuthorizeRepositoryOptions<A>,
+  ): MiddlewareHandler<AuthorizationEnv> {
+    if (!this.host)
       throw new Error(
         'Database authorization was not installed into an Authorization',
       );
-    }
-    return createRepositoryAuthorization(this.host, this, exposures);
+    return createBusinessRepositoryAuthorization(this.host, options);
   }
 
   grant(

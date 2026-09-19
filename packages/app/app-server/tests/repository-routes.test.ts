@@ -20,6 +20,7 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  addRepositoryRequestConstraint,
   defineRepositoryApiRoutes,
   type RepositoryApiActions,
   type DefineRepositoryApiRoutesOptions,
@@ -125,6 +126,103 @@ describe('Repository API routes', () => {
   afterEach(async () => {
     await database.destroy();
   });
+
+  it('intersects request constraints with static and principal policies without leaking between requests', async () => {
+    await database
+      .repository('orders')
+      .createOne({ values: { id: 'one', status: 'draft' } });
+    await database
+      .repository('orders')
+      .createOne({ values: { id: 'two', status: 'draft' } });
+    const guarded = new Hono();
+    guarded.use('*', async (c, next) => {
+      if (c.req.header('x-constrained')) {
+        addRepositoryRequestConstraint(c, {
+          repository: 'orders',
+          action: 'findMany',
+          collection: 'orders',
+          policy: {
+            create: false,
+            update: false,
+            delete: false,
+            read: { scope: { id: 'one' }, fields: ['id', 'status'] },
+          },
+        });
+        addRepositoryRequestConstraint(c, {
+          repository: 'orders',
+          action: 'findMany',
+          collection: 'orders',
+          policy: {
+            create: false,
+            update: false,
+            delete: false,
+            read: { scope: true, fields: ['id'] },
+          },
+        });
+      }
+      await next();
+    });
+    guarded.route(
+      '/',
+      await defineRepositoryApiRoutes({
+        principal: () => ({ user: 'alice' }),
+        repositories: [
+          {
+            name: 'orders',
+            policy: () => ({
+              create: false,
+              update: false,
+              delete: false,
+              read: { scope: true, fields: ['id', 'version'] },
+            }),
+            actions: { findMany: {} },
+          },
+        ],
+      }).createRouter({ container }),
+    );
+    const request = (constrained: boolean) =>
+      guarded.request('/orders:findMany', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(constrained ? { 'x-constrained': 'yes' } : {}),
+        },
+        body: '{}',
+      });
+    expect(await (await request(true)).json()).toEqual({
+      data: [{ id: 'one' }],
+    });
+    expect((await (await request(false)).json()).data).toHaveLength(2);
+  });
+
+  it.each([
+    { repository: 'other' },
+    { action: 'count' as const },
+    { collection: 'other' },
+    { connection: 'other' },
+  ])(
+    'refuses a request constraint for a different target: %j',
+    async (mismatch) => {
+      const guarded = new Hono();
+      guarded.use('*', async (c, next) => {
+        addRepositoryRequestConstraint(c, {
+          repository: 'catalog',
+          action: 'findOne',
+          collection: 'orders',
+          policy: open,
+          ...mismatch,
+        });
+        await next();
+      });
+      guarded.route('/', router);
+      const response = await guarded.request('/api/catalog:findOne', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filter: { id: 'one' } }),
+      });
+      expect(response.status).toBe(403);
+    },
+  );
 
   it('preserves precise numeric strings through HTTP filters, updates and errors', async () => {
     await database.builder().createCollection('balances', (c) => {

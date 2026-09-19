@@ -43,13 +43,12 @@ Include this config under `authorization` in the App’s existing `defaultAppCon
 
 ## Service API
 
-Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` through `app.container.resolve(authorizationToken)` in the owning provider or route factory. Resource `quotes` and the custom `sales.public` strategy are defined in the main Skill’s bundled business workflow; import your own declaration module, not example package internals. Optional APIs are present only when configured; narrow the service before using one:
+Resolve `authorizationToken` from `@nocobase/app-plugin-authorization/server` through `app.container.resolve(authorizationToken)` in the owning provider or route factory. Resource `quotes` and the team subject pattern are defined in the main Skill’s bundled references; import your own declaration module, not example package internals. Optional APIs are present only when configured; narrow the service before using one:
 
 ```ts
 import type { SharingRulesAuthorizationApi } from '@nocobase/authorization/sharing-rules';
 import type { DatabaseConnection } from '@nocobase/db';
 import { sharingRule } from '@nocobase/authorization/sharing-rules';
-import { databaseScope } from '@nocobase/app-plugin-authorization';
 
 if (!('sharingRules' in authz))
   throw new Error('Sharing rules is not configured');
@@ -67,13 +66,6 @@ await rules.create(
     .reason('Delegate this proposal to the team')
     .build(),
 );
-// A dynamic selection instead uses:
-const selection = {
-  type: 'policy' as const,
-  policy: databaseScope('sales.region'),
-};
-const saved = await rules.get('proposal-handover');
-await rules.delete('proposal-handover');
 ```
 
 `create(rule)`, `update(key, rule)` (complete definition), `get(key)`, `list()`, `delete(key)` and `withTransaction(connection)`. A rule contains `{ key, title?, resource, subjects, reason?, actions }`. Each action is `{ action, scopeKey?, selection }`, where selection is `{ type: 'records', ids }` or `{ type: 'policy', policy: databaseScope(recordAccess) }`. IDs are stored separately per action/scope. Use record selection for explicit IDs, not an ID policy disguised as a dynamic selection.

@@ -2,80 +2,24 @@
 
 Register simple page and Collection metadata with `authz.pages.add(...)` and `authz.db.collections.add(...)`. Define composed resources with `defineAuthorizationResource(name, configure)` from `@nocobase/authorization/core` and reusable data permissions with `defineDatabasePermission(configure)` from `@nocobase/app-plugin-authorization`. Both callbacks execute synchronously and return immutable builders; neither registers into an application, queries a database, or assigns permissions to a user.
 
-```ts
-import { buildFilter } from '@nocobase/repository-input';
-import { defineAuthorizationResource } from '@nocobase/authorization/core';
-import { permissionSet } from '@nocobase/authorization/permissions';
-import { defineDatabasePermission } from '@nocobase/app-plugin-authorization';
+Use the complete [quote resource declaration](runtime-api.md#declare-a-business-operation) as the starting point and [permission-set declaration](code-and-seeds.md#share-declarations-not-runtime-instances) to select its scopes. This reference adds builder semantics and relation capabilities.
 
-interface Quote {
-  id: string;
-  title: string;
-  amount: number;
-  preparedById: string;
-}
-const readQuotes = defineDatabasePermission((permission) =>
-  permission
-    .collection<Quote>('quotes')
-    .title('Quotes')
-    .read((read) => read.fields('id', 'title', 'amount')),
-);
-const quotesResource = defineAuthorizationResource('sales.quotes', (resource) =>
-  resource
-    .title('Quotes')
-    .group('sales')
-    .action('view', (action) =>
-      action.title('View').grant('quotes', readQuotes),
-    )
-    .action('edit', (action) =>
-      action.title('Edit').grant('quotes', readQuotes.update(['amount'])),
-    ),
-);
+The row type passed to `.collection<Row>(name)` supplies compile-time field checks, not another runtime schema. DB metadata remains authoritative. Collection registration defines which operations participate in authorization; the permission builder describes requested capabilities independently. The registered Collection action catalogue is enforced when authorizing requests.
 
-// In the application's Provider:
-authz.resourceGroups.add({ name: 'sales', title: 'Sales' });
-authz.pages.add({ name: 'sales.quotes', title: 'Quotes', actions: ['access'] });
-authz.db.collections.add({
-  name: 'quotes',
-  title: 'Quotes',
-  actions: ['read', 'update'],
-});
-quotesResource.register(authz.resources);
-
-// In permission-set declarations:
-const target = quotesResource.reference();
-const role = permissionSet('sales')
-  .grant({
-    resource: { type: 'page', id: 'sales.quotes' },
-    actions: [{ action: 'access' }],
-  })
-  .grant(
-    target.grant({
-      edit: {
-        quotes: { key: 'recordsIOwn', params: { field: 'preparedById' } },
-      },
-    }),
-  )
-  .build();
-```
-
-`Quote` supplies compile-time field checks, not another runtime schema. DB metadata remains authoritative. Collection registration defines which operations participate in authorization; the permission builder describes requested capabilities independently. The registered Collection action catalogue is enforced when authorizing requests.
-
-`grant(key, permission, { title? })` binds a reusable permission to one action's configuration key. The key maps to the existing persisted `scopeKey`; it does not change the permission's records or bind the original permission to an action. The title defaults to the permission's explicit title, or the collection name. Use a title override when one action has multiple roles for the same table. Different keys allow independent multi-table configuration. Repeated binding keys and database operations are rejected. Permissions and built snapshots remain independent when reused or mutated by a caller.
+`grant(key, permission, { title? })` binds a reusable permission to one action's configuration key. The key is persisted as `scopeKey` and identifies the scope selected for this action. The title defaults to the permission's explicit title, or the collection name. Use a title override when one action has multiple roles for the same table. Different keys allow independent multi-table configuration. Repeated binding keys and database operations are rejected. Permissions and built snapshots remain independent when reused or mutated by a caller.
 
 `read` describes output fields, while `create` and `update` describe input fields. `delete()` takes no fields. Use `'*'` or `.allFields()` explicitly for all fields. `.options(...recordAccessReferences)` restricts the selectable policies and preserves option-name inference through resource references; `.default(reference)` supplies a default selection. The references must apply to the selected collection. Omitting options leaves the dynamic record-access catalogue available.
 
 Define policies with `defineRecordAccess(key, configure)` from `@nocobase/authorization/core`, then register with `authz.recordAccess.add(policy)`. Use .resources({ type, id }) for applicability (id '*' covers one resource type), .params<P>(schema) for typed parameters, and .resolve(...) for evaluation. The context contains principal, resource, action and params; it contains no DB objects. Database policies directly use buildFilter from @nocobase/repository-input; the DB adapter validates the resulting FilterAst and converts it to executable Policy scope. Other resource plugins consume their own result types. Resolver functions are never stored in permission grants: .options(policy), .default(policy) and relation .recordAccess(policy) use policy references. Use stable policy keys because grants and rules persist their references.
-
-## Plugin contribution protocol
-
-Core's `AuthorizationActionBuilder.grant(contribution)` accepts `AuthorizationContribution<Selections>`, whose `build()` returns `{ grants, scopes? }`. The optional type-only `scopeSelections` carries named selections into resource references. Plugin permissions supporting named binding implement `BindableAuthorizationPermission`: `bind(key, metadata)` produces the contribution, and the optional type-only `recordAccessSelection` describes selectable values. Core never imports DB Policy or dispatches on database builder methods. Registration and request authorization remain explicit.
 
 ## Relation permissions
 
 Permission declarations own their types independently of DB Policy. Their fields, relations, operation names and through structures align with Policy. For example:
 
 ```ts
+import { buildFilter } from '@nocobase/repository-input';
+import { defineDatabasePermission } from '@nocobase/app-plugin-authorization';
+
 interface Order {
   id: string;
   title: string;
