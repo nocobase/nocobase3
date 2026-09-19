@@ -258,15 +258,22 @@ function TechnicalErrorDetails({
 export function Field({
   label,
   hint,
+  required = false,
   children,
 }: {
   readonly label: string;
   readonly hint?: string;
+  readonly required?: boolean;
   readonly children: ReactNode;
 }): ReactElement {
   return (
     <label className='mb-4 block text-sm font-medium'>
       {label}
+      {required ? (
+        <span aria-hidden='true' className='ml-1 text-destructive'>
+          *
+        </span>
+      ) : null}
       <span className='mt-2 block'>{children}</span>
       {hint ? (
         <span className='mt-1.5 block text-xs font-normal text-muted-foreground'>

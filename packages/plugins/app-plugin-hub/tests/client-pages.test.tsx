@@ -66,6 +66,7 @@ vi.mock('@nocobase/i18n/client', () => ({
   }),
 }));
 
+import { Releases } from '../client/pages/hub/releases.js';
 import AppPage from '../client/pages/hub/app-page.js';
 import DevelopmentPage from '../client/pages/hub/tabs/development-page.js';
 import DeploymentsPage from '../client/pages/hub/tabs/deployments-page.js';
@@ -192,7 +193,7 @@ const renderAppPage = (
           <Route index element={<div>Applications catalog</div>} />
           <Route path=':appId' element={<AppPage />}>
             <Route path='deployments' element={<DeploymentsTab />} />
-            <Route path='releases' element={<div>Releases tab</div>} />
+            <Route path='releases' element={<ReleasesPage />} />
             <Route path='development' element={<DevelopmentPage />} />
             <Route path='settings' element={<SettingsPage />} />
             <Route path='*' element={<div>Unknown tab</div>} />
@@ -262,6 +263,7 @@ describe('Hub client pages', () => {
         if (path.endsWith('/refresh')) return response;
         if (path === 'hub/apps/customer')
           return Promise.resolve({ data: detail() });
+        if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
         return Promise.resolve({
           data: { items: [], page: 1, pageSize: 20, total: 0 },
         });
@@ -305,6 +307,7 @@ describe('Hub client pages', () => {
       });
       mocks.client.request.mockImplementation(({ path }: { path: string }) => {
         if (path === 'hub/apps/customer') return response;
+        if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
         return Promise.resolve({
           data: { items: [], page: 1, pageSize: 20, total: 0 },
         });
@@ -357,6 +360,7 @@ describe('Hub client pages', () => {
             }),
           });
         }
+        if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
         return Promise.resolve({
           data: { items: [], page: 1, pageSize: 20, total: 0 },
         });
@@ -400,6 +404,7 @@ describe('Hub client pages', () => {
           data: detail({ hasPendingDeployment: true }),
         });
       }
+      if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
       return Promise.resolve({
         data: { items: [], page: 1, pageSize: 20, total: 0 },
       });
@@ -490,7 +495,9 @@ describe('Hub client pages', () => {
       method: 'PUT',
       json: { name: 'New name', activation: 'eager' },
     });
-    expect(screen.getByLabelText('Application name')).toHaveValue('New name');
+    expect(
+      screen.getByRole('textbox', { name: 'Application name', exact: true }),
+    ).toHaveValue('New name');
     expect(
       screen.getByRole('button', { name: 'Save settings' }),
     ).toBeDisabled();
@@ -506,11 +513,13 @@ describe('Hub client pages', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
     await screen.findByText('Could not save name');
-    expect(screen.getByLabelText('Application name')).toHaveValue('Draft name');
+    expect(
+      screen.getByRole('textbox', { name: 'Application name', exact: true }),
+    ).toHaveValue('Draft name');
     expect(screen.getByRole('button', { name: 'Save settings' })).toBeEnabled();
   });
 
-  it('generates different IDs for repeated application names', async () => {
+  it('requires a manually entered ID on every creation', async () => {
     mocks.client.request.mockImplementation(({ method }: { method?: string }) =>
       Promise.resolve(method === 'POST' ? { data: {} } : { data: page([]) }),
     );
@@ -520,8 +529,37 @@ describe('Hub client pages', () => {
       fireEvent.click(
         await screen.findByRole('button', { name: 'New application' }),
       );
-      fireEvent.change(screen.getByLabelText('Application name'), {
-        target: { value: 'TMS' },
+      fireEvent.change(
+        screen.getByRole('textbox', { name: 'Application name', exact: true }),
+        {
+          target: { value: 'TMS' },
+        },
+      );
+      expect(screen.getByLabelText(/Application ID/)).toHaveValue('');
+      expect(screen.getByLabelText(/Application ID/)).toBeRequired();
+      expect(
+        screen.getByRole('button', { name: 'Create application' }),
+      ).toBeDisabled();
+      fireEvent.change(screen.getByLabelText(/Application ID/), {
+        target: { value: '   ' },
+      });
+      expect(
+        screen.getByRole('button', { name: 'Create application' }),
+      ).toBeDisabled();
+      fireEvent.change(screen.getByLabelText(/Application ID/), {
+        target: { value: '__reserved' },
+      });
+      expect(
+        screen.getByRole('button', { name: 'Create application' }),
+      ).toBeDisabled();
+      fireEvent.submit(
+        screen.getByLabelText(/Application ID/).closest('form')!,
+      );
+      expect(
+        mocks.client.request.mock.calls.filter(([r]) => r.method === 'POST'),
+      ).toHaveLength(count);
+      fireEvent.change(screen.getByLabelText(/Application ID/), {
+        target: { value: `tms-${count}` },
       });
       ids.push(
         (screen.getByLabelText(/Application ID/) as HTMLInputElement).value,
@@ -541,7 +579,7 @@ describe('Hub client pages', () => {
     expect(ids[0]).not.toBe(ids[1]);
   });
 
-  it('generates editable IDs and reports conflicts above an open create dialog', async () => {
+  it('preserves manually entered IDs when names change and reports conflicts', async () => {
     const conflict = Object.assign(new Error('ID conflict'), {
       payload: {
         error: {
@@ -560,10 +598,13 @@ describe('Hub client pages', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'New application' }),
     );
-    const name = screen.getByLabelText('Application name');
+    const name = screen.getByRole('textbox', {
+      name: 'Application name',
+      exact: true,
+    });
     const id = screen.getByLabelText(/Application ID/);
     fireEvent.change(name, { target: { value: 'TMS' } });
-    expect((id as HTMLInputElement).value).toMatch(/^tms-[a-f0-9]{8}$/);
+    expect(id).toHaveValue('');
     fireEvent.change(id, { target: { value: 'tms' } });
     fireEvent.change(name, { target: { value: 'My TMS' } });
     expect(id).toHaveValue('tms');
@@ -823,18 +864,20 @@ describe('Hub client pages', () => {
     );
   });
 
-  it('opens Releases before the first deployment', async () => {
+  it('opens the combined workspace before the first deployment', async () => {
     renderAppPage(
       '/apps/customer',
       detail({ app: { ...detail().app, currentDeploymentId: null } }),
     );
-    expect(await screen.findByText('Releases tab')).toBeInTheDocument();
+    expect(await screen.findByText('Deployments tab')).toBeInTheDocument();
   });
 
-  it('keeps an explicit Releases URL for an already deployed application', async () => {
+  it('redirects an explicit Releases URL to the combined workspace', async () => {
     renderAppPage('/apps/customer/releases');
-    expect(await screen.findByText('Releases tab')).toBeInTheDocument();
-    expect(screen.queryByText('Deployments tab')).not.toBeInTheDocument();
+    expect(await screen.findByText('Deployments tab')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent(
+      '/apps/customer/deployments',
+    );
   });
 
   it('guides new and existing projects and links to Releases with the query intact', async () => {
@@ -844,7 +887,7 @@ describe('Hub client pages', () => {
       Object.create(navigator, { clipboard: { value: { writeText } } }),
     );
     renderAppPage(
-      '/apps/customer?filter=recent',
+      '/apps/customer/development?filter=recent',
       detail({
         hasReleases: false,
         app: { ...detail().app, currentDeploymentId: null },
@@ -884,14 +927,16 @@ describe('Hub client pages', () => {
       expect(writeText).toHaveBeenCalledWith('pnpm build --tar'),
     );
     expect(
-      screen.getByRole('link', { name: 'Go to Releases' }),
-    ).toHaveAttribute('href', '/apps/customer/releases?filter=recent');
-    fireEvent.click(screen.getByRole('link', { name: 'Go to Releases' }));
-    expect(await screen.findByText('Releases tab')).toBeInTheDocument();
+      screen.getByRole('link', { name: 'Go to Releases & deployments' }),
+    ).toHaveAttribute('href', '/apps/customer/deployments?filter=recent');
+    fireEvent.click(
+      screen.getByRole('link', { name: 'Go to Releases & deployments' }),
+    );
+    expect(await screen.findByText('Deployments tab')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'History back' }));
     expect(await screen.findByText('Existing project')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'History forward' }));
-    expect(await screen.findByText('Releases tab')).toBeInTheDocument();
+    expect(await screen.findByText('Deployments tab')).toBeInTheDocument();
   });
 
   it('reports clipboard failures and hides inaccessible onboarding destinations', async () => {
@@ -910,7 +955,7 @@ describe('Hub client pages', () => {
         ),
     );
     renderAppPage(
-      '/apps/customer',
+      '/apps/customer/development',
       detail({
         hasReleases: false,
         app: { ...detail().app, currentDeploymentId: null },
@@ -925,8 +970,8 @@ describe('Hub client pages', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('link', { name: 'Go to Releases' }),
-    ).not.toBeInTheDocument();
+      screen.queryByRole('link', { name: 'Go to Releases & deployments' }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: 'Go to Deployments' }),
     ).not.toBeInTheDocument();
@@ -940,14 +985,19 @@ describe('Hub client pages', () => {
       if (path === 'hub/apps/customer/releases') {
         return Promise.resolve({ data: [] });
       }
+      if (path.endsWith('/deployments'))
+        return Promise.resolve({
+          data: { items: [], page: 1, pageSize: 20, total: 0 },
+        });
       return Promise.reject(new Error(`Unexpected request: ${path}`));
     });
     render(
-      <MemoryRouter initialEntries={['/apps/customer/releases']}>
+      <MemoryRouter initialEntries={['/apps/customer/deployments']}>
         <Routes>
           <Route path='/apps'>
             <Route path=':appId' element={<AppPage />}>
               <Route path='releases' element={<ReleasesPage />} />
+              <Route path='deployments' element={<DeploymentsPage />} />
             </Route>
           </Route>
         </Routes>
@@ -1076,12 +1126,17 @@ describe('Hub client pages', () => {
     );
 
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Deploy release' }),
+      (
+        await screen.findAllByRole('button', { name: 'Deploy v1.0.0-beta.22' })
+      )[0]!,
     );
 
-    const rows = await screen.findAllByRole('button', {
-      name: /v1\.0\.0-beta\.22/,
-    });
+    const rows = await within(await screen.findByRole('dialog')).findAllByRole(
+      'button',
+      {
+        name: /v1\.0\.0-beta\.22/,
+      },
+    );
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveTextContent('release-2-ch');
     expect(rows[0]).toHaveTextContent('Latest');
@@ -1090,16 +1145,13 @@ describe('Hub client pages', () => {
     expect(rows[1]).not.toHaveClass('bg-primary/5');
   });
 
-  it('keeps the deployment list after first deployment without automatically opening logs', async () => {
+  it('refreshes history after acceptance even when the overview refresh fails', async () => {
     let accepted = false;
     mocks.client.request.mockImplementation(({ path }: { path: string }) => {
-      if (path === 'hub/apps/customer')
-        return Promise.resolve({
-          data: detail({
-            app: { ...detail().app, currentDeploymentId: null },
-            hasPendingDeployment: accepted,
-          }),
-        });
+      if (path === 'hub/apps/customer') {
+        if (accepted) return Promise.reject(new Error('Overview unavailable'));
+        return Promise.resolve({ data: detail() });
+      }
       if (path.endsWith('/deployments'))
         return Promise.resolve({
           data: { items: [], page: 1, pageSize: 20, total: 0 },
@@ -1140,7 +1192,7 @@ describe('Hub client pages', () => {
             <Route path='deployments' element={<DeploymentsPage />}>
               <Route
                 path=':deploymentId/logs'
-                element={<div>Unexpected automatic logs</div>}
+                element={<div>Automatic deployment logs</div>}
               />
             </Route>
           </Route>
@@ -1148,7 +1200,7 @@ describe('Hub client pages', () => {
       </MemoryRouter>,
     );
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Deploy release' }),
+      await screen.findByRole('button', { name: 'Deploy v1.0.0' }),
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
     await waitFor(() =>
@@ -1164,12 +1216,21 @@ describe('Hub client pages', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
     expect(accepted).toBe(true);
-    expect(screen.getByTestId('deploy-location')).toHaveTextContent(
-      '/apps/customer/deployments',
+    await waitFor(() =>
+      expect(
+        mocks.client.request.mock.calls.filter(([r]) =>
+          r.path.endsWith('/deployments'),
+        ).length,
+      ).toBeGreaterThan(1),
     );
+    await screen.findByText('Automatic deployment logs');
+    expect(screen.getByTestId('deploy-location')).toHaveTextContent(
+      '/apps/customer/deployments/deployment-new/logs',
+    );
+    expect(screen.getByText('Automatic deployment logs')).toBeInTheDocument();
     expect(
-      screen.queryByText('Unexpected automatic logs'),
-    ).not.toBeInTheDocument();
+      screen.getByRole('button', { name: 'releases.expand' }),
+    ).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('keeps manually opened logs mounted during pending deployment refreshes', async () => {
@@ -1180,6 +1241,7 @@ describe('Hub client pages', () => {
         return Promise.resolve({
           data: detail({ hasPendingDeployment: true }),
         });
+      if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
       return Promise.resolve({
         data: { items: [], page: 1, pageSize: 20, total: 0 },
       });
@@ -1288,5 +1350,248 @@ describe('Hub client pages', () => {
       'aria-describedby',
       'hub-visit-action-reason',
     );
+  });
+  it.each(['read-config', 'read-config-template'])(
+    'hides Deploy without %s',
+    async (missing) => {
+      mocks.authorization.can.mockImplementation(
+        (_resource: unknown, action: string) =>
+          Promise.resolve(action !== missing),
+      );
+      mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+        if (path === 'hub/apps/customer')
+          return Promise.resolve({ data: detail() });
+        if (path.endsWith('/releases'))
+          return Promise.resolve({
+            data: [
+              {
+                id: 'release-1',
+                version: '1.0.0',
+                size: 1,
+                checksum: 'checksum',
+                createdAt: '2026-09-18T00:00:00Z',
+              },
+            ],
+          });
+        if (path.endsWith('/deployments'))
+          return Promise.resolve({
+            data: { items: [], total: 0, page: 1, pageSize: 20 },
+          });
+        throw new Error(`Unexpected request: ${path}`);
+      });
+      render(
+        <MemoryRouter initialEntries={['/apps/customer/deployments']}>
+          <Routes>
+            <Route path='/apps/:appId' element={<AppPage />}>
+              <Route path='deployments' element={<DeploymentsPage />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>,
+      );
+      await screen.findByText('checksum');
+      expect(
+        screen.queryByRole('button', { name: 'Deploy v1.0.0' }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it.each(['read-release', 'read-deployment', 'upload-release'])(
+    'loads only authorized sections for %s',
+    async (allowed) => {
+      mocks.authorization.can.mockImplementation(
+        (_resource: unknown, action: string) =>
+          Promise.resolve(action === allowed),
+      );
+      mocks.client.request.mockImplementation(({ path }: { path: string }) => {
+        if (path === 'hub/apps/customer')
+          return Promise.resolve({ data: detail() });
+        if (path.endsWith('/releases')) return Promise.resolve({ data: [] });
+        if (path.endsWith('/deployments'))
+          return Promise.resolve({
+            data: { items: [], total: 0, page: 1, pageSize: 20 },
+          });
+        throw new Error(`Unexpected request: ${path}`);
+      });
+      render(
+        <MemoryRouter initialEntries={['/apps/customer/deployments']}>
+          <Routes>
+            <Route path='/apps/:appId' element={<AppPage />}>
+              <Route path='deployments' element={<DeploymentsPage />} />
+            </Route>
+          </Routes>
+        </MemoryRouter>,
+      );
+      if (allowed === 'read-deployment')
+        await screen.findByText('No deployments yet');
+      else await screen.findByRole('heading', { name: /Releases/ });
+      expect(
+        mocks.client.request.mock.calls.some(([r]) =>
+          r.path.endsWith('/releases'),
+        ),
+      ).toBe(allowed === 'read-release');
+      expect(
+        mocks.client.request.mock.calls.some(([r]) =>
+          r.path.endsWith('/deployments'),
+        ),
+      ).toBe(allowed === 'read-deployment');
+      expect(
+        Boolean(screen.queryByRole('button', { name: 'Upload release' })),
+      ).toBe(allowed === 'upload-release');
+      expect(
+        screen.queryByRole('button', { name: /^Deploy v/ }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it('redirects the legacy release page, preserves the query, and expands an uploaded release without deploying', async () => {
+    const notify = vi.spyOn(toast, 'success');
+    const release: ReleaseRecord = {
+      id: 'uploaded-1',
+      version: '2.0.0',
+      checksum: 'uploaded-checksum',
+      size: 20,
+      createdAt: '2026-09-19T00:00:00Z',
+      hasConfigTemplate: false,
+    };
+    let uploaded = false;
+    mocks.client.request.mockImplementation(
+      ({ path, method }: { path: string; method?: string }) => {
+        if (path === 'hub/apps/customer')
+          return Promise.resolve({ data: detail() });
+        if (path.endsWith('/releases')) {
+          if (method === 'POST') {
+            uploaded = true;
+            return Promise.resolve({ data: release });
+          }
+          return Promise.resolve({
+            data: uploaded
+              ? [release]
+              : [{ ...release, id: 'old', version: '1.0.0' }],
+          });
+        }
+        if (path.endsWith('/deployments'))
+          return Promise.resolve({
+            data: { items: [], total: 0, page: 1, pageSize: 20 },
+          });
+        throw new Error(`Unexpected request: ${path}`);
+      },
+    );
+    function Location(): ReactElement {
+      const location = useLocation();
+      return (
+        <output data-testid='legacy-location'>
+          {location.pathname}
+          {location.search}
+        </output>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={['/apps/customer/releases?filter=recent']}>
+        <Location />
+        <Routes>
+          <Route path='/apps/:appId' element={<AppPage />}>
+            <Route path='releases' element={<ReleasesPage />} />
+            <Route path='deployments' element={<DeploymentsPage />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'releases.collapse' }),
+    );
+    expect(screen.getByTestId('legacy-location')).toHaveTextContent(
+      '/apps/customer/deployments?filter=recent',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Deploy v1.0.0' }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Upload release' }));
+    fireEvent.change(
+      await screen.findByLabelText(
+        'Click or drag a .tar.gz / .tgz artifact here',
+      ),
+      { target: { files: [new File(['artifact'], 'dist.tar.gz')] } },
+    );
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Upload release',
+      }),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Deploy v2.0.0' }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'releases.collapse' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(notify).toHaveBeenCalledWith('releases.uploaded', {
+      position: 'top-right',
+      duration: 4000,
+    });
+    expect(
+      mocks.client.request.mock.calls.some(([r]) => r.path.endsWith('/deploy')),
+    ).toBe(false);
+  });
+  it('restores latest-upload emphasis from server data and clears it only when that release is active', () => {
+    const records: ReleaseRecord[] = ['newer', 'older'].map((id, index) => ({
+      id,
+      version: '1.0.0',
+      checksum: `${id}-checksum`,
+      size: 20,
+      createdAt: index === 0 ? '2026-09-19T00:00:00Z' : '2026-09-18T00:00:00Z',
+      hasConfigTemplate: false,
+    }));
+    const page = (active: string) => (
+      <Releases
+        app={{
+          ...detail(),
+          releases: records,
+          deployments: [],
+          deployment: { ...detail().deployment, observedReleaseId: active },
+        }}
+        canRead
+        canUpload
+        canDeploy
+        busy={false}
+        collapsed={false}
+        onCollapsed={vi.fn()}
+        onDeploy={vi.fn()}
+        onUpload={vi.fn()}
+      />
+    );
+    const first = render(page('older'));
+    const latestRow = () => screen.getByText('newer-checks').closest('tr')!;
+    expect(
+      within(latestRow()).getByText('releases.latestUpload'),
+    ).toBeInTheDocument();
+    expect(latestRow()).toHaveClass('bg-primary/5');
+    expect(within(latestRow()).getByRole('button')).toHaveClass('bg-primary');
+    first.unmount();
+    const refreshed = render(page('older'));
+    expect(latestRow()).toHaveClass('bg-primary/5');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    refreshed.rerender(page('newer'));
+    expect(latestRow()).not.toHaveClass('bg-primary/5');
+    expect(within(latestRow()).getByRole('button')).not.toHaveClass(
+      'bg-primary',
+    );
+    expect(
+      within(latestRow()).getByText('releases.active'),
+    ).toBeInTheDocument();
+    expect(
+      within(latestRow()).getByText('releases.latestUpload'),
+    ).toBeInTheDocument();
+    refreshed.rerender(page('older'));
+    expect(latestRow()).toHaveClass('bg-primary/5');
+  });
+  it('does not render or load the unfinished Resources tab even with configuration permission', async () => {
+    renderAppPage('/apps/customer/resources');
+    await screen.findByText('This application page is not available.');
+    expect(
+      screen.queryByRole('tab', { name: /Resources/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      mocks.client.request.mock.calls.some(([r]) => r.path.endsWith('/config')),
+    ).toBe(false);
   });
 });
