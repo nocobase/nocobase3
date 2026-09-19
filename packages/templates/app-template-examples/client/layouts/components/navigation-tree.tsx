@@ -302,7 +302,7 @@ function NavigationLink({
   if (!collapsed) return link;
   return (
     <Tooltip>
-      <TooltipTrigger render={link} aria-label={label} delay={100} />
+      <TooltipTrigger render={link} aria-label={label} delay={0} />
       <TooltipContent role='tooltip' side='right' sideOffset={8}>
         {label}
       </TooltipContent>

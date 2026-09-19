@@ -127,12 +127,12 @@ describe('collapsed navigation', () => {
     return onNavigate;
   }
 
-  it('shows a leaf label on hover and dismisses it on leave', async () => {
+  it('shows a leaf label immediately on hover and dismisses it on leave', async () => {
     const user = userEvent.setup();
     show({ route: page('Home'), children: [] });
     const link = screen.getByRole('link', { name: 'Home' });
     await user.hover(link);
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Home');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Home');
     expect(link).not.toHaveAttribute('title');
     await user.unhover(link);
     await waitFor(() =>
