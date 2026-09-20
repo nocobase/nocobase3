@@ -469,3 +469,43 @@ function createMockDatabaseManager(client: unknown = {}): DatabaseManager {
     destroy: vi.fn() as DatabaseManager['destroy'],
   };
 }
+
+describe('custom database task configuration readers', () => {
+  it.each(['migration', 'seed'] as const)(
+    'passes get-only readers through the direct %s factory',
+    async (kind) => {
+      const directory = mkdtempSync(path.join(tmpdir(), 'task-reader-'));
+      tempDirs.push(directory);
+      const runtimeConfig = {
+        get<T>(key: string): T | undefined {
+          if (key === '') throw new Error('Root lookup is unsupported');
+          return (
+            key === 'initialAdmin.username' ? 'custom-admin' : undefined
+          ) as T | undefined;
+        },
+      };
+      const options = {
+        database: createMockDatabaseManager(),
+        config: { directory, autoRun: true },
+        runtimeConfig,
+      };
+      const factory =
+        kind === 'migration'
+          ? createDatabaseMigratorMock
+          : createDatabaseSeederMock;
+      factory.mockImplementation(
+        ({ config }: { config: typeof runtimeConfig }) => {
+          expect(config.get('initialAdmin.username')).toBe('custom-admin');
+          expect(config.get('missing')).toBeUndefined();
+          return {
+            latest: async () => ({ executed: [], skipped: [], batch: 0 }),
+            run: async () => ({ executed: [], skipped: [] }),
+          };
+        },
+      );
+      if (kind === 'migration') await createAppMigrator(options).latest();
+      else await createAppSeeder(options).run();
+      expect(factory).toHaveBeenCalled();
+    },
+  );
+});

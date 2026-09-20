@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AppConfig } from '../src/config/index.js';
 import { snapshotDatabaseTaskConfig } from '../src/database/task-config.js';
 
@@ -13,6 +13,27 @@ describe('database task configuration', () => {
     value.username = 'mutated';
     expect(snapshot.get('initialAdmin.username')).toBe('original');
     expect(snapshot.get('missing')).toBeUndefined();
+    expect(Object.keys(snapshot)).toEqual(['get']);
+  });
+
+  it('preserves custom get-only readers without requesting an undocumented root key', () => {
+    const reader = {
+      username: 'custom',
+      get<T>(key: string): T | undefined {
+        if (!key) throw new Error('Root lookups are unsupported');
+        return (key === 'initialAdmin.username' ? this.username : undefined) as
+          T | undefined;
+      },
+    };
+    const get = vi.spyOn(reader, 'get');
+    const snapshot = snapshotDatabaseTaskConfig(
+      snapshotDatabaseTaskConfig(reader),
+    );
+    expect(get).not.toHaveBeenCalled();
+    expect(snapshot.get('initialAdmin.username')).toBe('custom');
+    expect(snapshot.get('missing')).toBeUndefined();
+    reader.username = 'updated';
+    expect(snapshot.get('initialAdmin.username')).toBe('updated');
     expect(Object.keys(snapshot)).toEqual(['get']);
   });
 
