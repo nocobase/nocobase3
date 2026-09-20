@@ -214,13 +214,13 @@ function TestNotificationDialog({
   const [success, setSuccess] = useState<string>();
 
   const channels = useMemo(
-    () => [...new Set((targets ?? []).map((item) => item.channel.type))],
+    () => [...new Set((targets ?? []).map((item) => item.channel.name))],
     [targets],
   );
   const providerCounts = useMemo(
     () =>
       (targets ?? []).reduce<Record<string, number>>((counts, item) => {
-        counts[item.channel.type] = (counts[item.channel.type] ?? 0) + 1;
+        counts[item.channel.name] = (counts[item.channel.name] ?? 0) + 1;
         return counts;
       }, {}),
     [targets],
@@ -233,7 +233,7 @@ function TestNotificationDialog({
     setSuccess(undefined);
     void notification
       .sendTest({
-        channel: selected.channel.type,
+        channel: selected.channel.name,
         provider: {
           name: selected.provider.name,
           type: selected.provider.type,
@@ -359,12 +359,12 @@ function TestNotificationDialog({
                   <optgroup
                     key={channel}
                     label={
-                      targets?.find((item) => item.channel.type === channel)
-                        ?.channel.label ?? channel
+                      targets?.find((item) => item.channel.name === channel)
+                        ?.channel.name ?? channel
                     }
                   >
                     {targets
-                      .filter((item) => item.channel.type === channel)
+                      .filter((item) => item.channel.name === channel)
                       .map((item) => (
                         <option
                           key={providerKey(item)}
@@ -372,7 +372,7 @@ function TestNotificationDialog({
                         >
                           {providerLabel(
                             item,
-                            providerCounts[item.channel.type] ?? 0,
+                            providerCounts[item.channel.name] ?? 0,
                             (channel, provider) =>
                               t('test.singleProviderLabel', {
                                 defaultValue: `${channel} (${provider})`,
@@ -474,7 +474,7 @@ function TestNotificationDialog({
 }
 
 function providerKey(item: NotificationTestTarget): string {
-  return `${item.channel.type}:${item.provider.name}:${item.provider.type}`;
+  return `${item.channel.name}:${item.provider.name}:${item.provider.type}`;
 }
 
 function providerLabel(
@@ -483,7 +483,10 @@ function providerLabel(
   formatSingleProvider: (channel: string, provider: string) => string,
 ): string {
   return providerCount === 1
-    ? formatSingleProvider(item.channel.label, item.provider.label)
+    ? formatSingleProvider(
+        `${item.channel.name} (${item.channel.label})`,
+        item.provider.label,
+      )
     : `${item.provider.name} (${item.provider.label})`;
 }
 
@@ -673,7 +676,7 @@ function DeliveryTable({
         <tbody>
           {deliveries.map((details) => {
             const presentation = providerPresentation(
-              details.delivery.channel,
+              details.delivery.channelName,
               details.delivery.providerName,
               details.delivery.providerType,
               targets,
@@ -733,7 +736,7 @@ function AttemptList({
     <div className='grid gap-1.5'>
       {details.attempts.map((attempt) => {
         const presentation = providerPresentation(
-          details.delivery.channel,
+          details.delivery.channelName,
           attempt.providerName,
           attempt.providerType,
           targets,
@@ -779,7 +782,7 @@ function providerPresentation(
 } {
   const target = targets?.find(
     (candidate) =>
-      candidate.channel.type === channel &&
+      candidate.channel.name === channel &&
       candidate.provider.name === providerName &&
       candidate.provider.type === providerType,
   );
@@ -787,15 +790,15 @@ function providerPresentation(
     return { channel, provider: providerName, detail: providerType };
   }
   const providerCount = targets?.filter(
-    (candidate) => candidate.channel.type === channel,
+    (candidate) => candidate.channel.name === channel,
   ).length;
   return providerCount === 1
     ? {
-        channel: target.channel.label,
+        channel: `${target.channel.name} (${target.channel.label})`,
         provider: target.provider.label,
       }
     : {
-        channel: target.channel.label,
+        channel: `${target.channel.name} (${target.channel.label})`,
         provider: target.provider.name,
         detail: target.provider.label,
       };

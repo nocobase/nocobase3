@@ -48,10 +48,12 @@ import type { NotificationConfig } from '@nocobase/app-plugin-notification';
 export const notificationConfig: NotificationConfig = {
   channels: [
     defineInAppChannelConfig({
+      name: 'in-app',
       enabled: true,
       providers: [{ type: 'database', name: 'default' }],
     }),
     defineEmailChannelConfig({
+      name: 'email',
       enabled: true,
       providers: [
         defineSmtpProviderConfig({
@@ -329,3 +331,5 @@ Registry 副本属于消费应用；站内信 Dev 页面属于插件 runtime，�
 - [配置通知 Provider](../../../app-plugin-notification-providers/docs/zh-CN/configuration.md)——配置 SMTP、Resend、飞书和钉钉
 - [发送通知](./sending.md)——使用 `NotificationManager.send()`
 - [通知日志](./logs.md)——查询 Delivery 和 Attempt
+
+每个 Channel 配置必须提供应用内唯一的 `name`。`type` 选择通道实现，可以重复；`name` 选择通道实例，发送时的 `channels`、`routing` 和 `channelOverrides` 都使用名称。Provider 名称只需在所属 Channel 内唯一。升级时执行数据库迁移，并将已有 Channel 的 `name` 设置为原 `type`，以便历史投递继续匹配。

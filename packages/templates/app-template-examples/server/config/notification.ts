@@ -9,6 +9,7 @@ const notification: AppConfigFactory<NotificationConfig> = defineAppConfig(
   (_runtime) => ({
     channels: [
       defineInAppChannelConfig({
+        name: 'in-app',
         enabled: true,
         providers: [{ type: 'database', name: 'default' }],
       }),

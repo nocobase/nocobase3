@@ -57,6 +57,13 @@ export class ChannelManager {
     return this.runtimes.has(type);
   }
 
+  type(name: string): string {
+    const runtime = this.runtimes.get(name);
+    if (!runtime)
+      throw new Error(`Notification Channel "${name}" is not enabled.`);
+    return runtime.channel.type;
+  }
+
   async resolveRecipient(
     type: string,
     recipient: NotificationRecipient | undefined,
@@ -137,9 +144,16 @@ export class ChannelManager {
     const stored = await this.options.store.getDelivery(deliveryId);
     if (!stored || !isRunnable(stored, await this.options.store.now()))
       return stored;
-    await this.options.resolveRuntime?.(stored.channel);
-    const runtime = this.runtimes.get(stored.channel);
-    if (!runtime || runtime.providers.length === 0) return undefined;
+    await this.options.resolveRuntime?.(stored.channelName);
+    const runtime = this.runtimes.get(stored.channelName);
+    if (!runtime || runtime.providers.length === 0)
+      throw new Error(
+        `Notification Channel "${stored.channelName}" is not enabled.`,
+      );
+    if (runtime.channel.type !== stored.channelType)
+      throw new Error(
+        `Notification Channel "${stored.channelName}" type has changed.`,
+      );
 
     const leaseToken = randomUUID();
     const claimed = await this.options.store.claimDelivery(
@@ -321,7 +335,8 @@ export class ChannelManager {
           event: 'notification.delivery.accepted',
           notificationId: current.notificationId,
           deliveryId: current.id,
-          channel: current.channel,
+          channelName: current.channelName,
+          channelType: current.channelType,
           provider: provider.name,
           providerType: provider.type,
           providerMessageId: result.providerMessageId,

@@ -81,3 +81,9 @@ pnpm --filter @nocobase/app-plugin-notification-in-app build
 ### Recipient validation
 
 Final delivery checks that the recipient exists through Authentication’s user administration service. Missing recipients fail with category `recipient` and disposition `never`, without an inbox write or realtime event. User lookup errors remain retryable storage failures. Custom hosts using `createDatabaseProviderDefinition` must provide `recipientExists(userId): Promise<boolean>` backed by their user directory.
+
+## Notification targets
+
+Pass `target: { type: 'route', path: '/topics/123' }` for application navigation. Do not include the deployment prefix: the inbox Router adds its basename. Pass `target: { type: 'url', url: 'https://example.com/main/topics/123' }` for a complete HTTP(S) link, opened through a native anchor in the current page. Query strings and fragments are supported. Without a target, no Open link is shown.
+
+Run the target-column migration before using the updated inbox. It adds nullable JSON storage; existing `actionUrl` values are ignored and never converted. The old column is left unused. For multi-channel sends, use channel overrides to provide an IM URL and include complete links in email bodies.

@@ -20,9 +20,9 @@ export interface EmailChannelDefinitionOptions {
   ) => Promise<string | undefined>;
 }
 
-export function defineEmailChannelConfig(
-  input: Omit<EmailChannelConfig, 'type'>,
-): EmailChannelConfig {
+export function defineEmailChannelConfig<const TName extends string>(
+  input: Omit<EmailChannelConfig, 'type' | 'name'> & { readonly name: TName },
+): EmailChannelConfig & { readonly name: TName } {
   return { type: 'email', ...input };
 }
 
@@ -140,4 +140,13 @@ function requiredContent(
 
 function isEmail(value: string): boolean {
   return value.length <= 320 && /^[^\s@]+@[^\s@]+$/.test(value);
+}
+
+declare module '@nocobase/app-plugin-notification' {
+  interface NotificationChannelSchemas {
+    email: {
+      readonly recipient: EmailRecipient;
+      readonly message: EmailMessage;
+    };
+  }
 }

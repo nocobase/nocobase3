@@ -50,7 +50,8 @@ export interface NotificationRetryAudit {
 export interface NotificationDeliveryDetails {
   readonly delivery: {
     readonly id: string;
-    readonly channel: string;
+    readonly channelName: string;
+    readonly channelType: string;
     readonly providerName: string;
     readonly providerType: string;
     readonly attemptCount: number;

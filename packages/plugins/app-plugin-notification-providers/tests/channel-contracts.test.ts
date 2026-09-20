@@ -9,6 +9,33 @@ const context = {
 };
 
 describe('first-batch Channel contracts', () => {
+  it('uses complete URL targets in IM and omits application-only routes', async () => {
+    const channel = await createImChannelDefinition().createChannel(context, {
+      name: 'alerts',
+      type: 'im',
+      enabled: true,
+      providers: [],
+    });
+    expect(
+      channel.render?.({
+        content: {
+          body: 'Review',
+          target: { type: 'route', path: '/topics/123' },
+        },
+      }),
+    ).toMatchObject({ text: 'Review', target: undefined });
+    expect(
+      channel.render?.({
+        content: {
+          body: 'Review',
+          target: { type: 'url', url: 'https://example.com/main/topics/123' },
+        },
+      }),
+    ).toMatchObject({
+      target: { type: 'url', url: 'https://example.com/main/topics/123' },
+    });
+  });
+
   it('converts safe Email test fields into normal send inputs', () => {
     const adapter = createEmailChannelDefinition().test;
     expect(adapter?.fields).toEqual(
@@ -25,7 +52,12 @@ describe('first-batch Channel contracts', () => {
           title: 'Test',
           body: 'Hello',
         },
-        channelConfig: { type: 'email', enabled: true, providers: [] },
+        channelConfig: {
+          name: 'email',
+          type: 'email',
+          enabled: true,
+          providers: [],
+        },
         providerConfig: {
           type: 'smtp',
           name: 'primary',
@@ -45,7 +77,7 @@ describe('first-batch Channel contracts', () => {
       adapter?.toSendInput({
         actor: { userId: 'user-1' },
         values: { title: 'Test', body: 'Hello' },
-        channelConfig: { type: 'im', enabled: true, providers: [] },
+        channelConfig: { name: 'im', type: 'im', enabled: true, providers: [] },
         providerConfig: {
           type: 'feishu-webhook',
           name: 'primary',
@@ -64,6 +96,7 @@ describe('first-batch Channel contracts', () => {
     const channel = await createImChannelDefinition({
       resolveUserTarget,
     }).createChannel(context, {
+      name: 'im',
       type: 'im',
       enabled: true,
       providers: [provider],
@@ -89,6 +122,7 @@ describe('first-batch Channel contracts', () => {
   it('resolves each selected Provider when no recipient is supplied', async () => {
     const provider = { name: 'dingtalk', type: 'dingtalk-webhook' };
     const channel = await createImChannelDefinition().createChannel(context, {
+      name: 'im',
       type: 'im',
       enabled: true,
       providers: [provider],

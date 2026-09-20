@@ -32,6 +32,7 @@ export interface ResendProviderConfig {
 }
 
 export interface EmailChannelConfig {
+  readonly name: string;
   readonly type: 'email';
   readonly enabled: boolean;
   readonly providers: readonly (SmtpProviderConfig | ResendProviderConfig)[];

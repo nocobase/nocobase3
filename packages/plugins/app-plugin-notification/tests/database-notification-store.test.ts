@@ -425,7 +425,8 @@ function createBundle(): NotificationLogBundle {
   const delivery: NotificationDeliveryRecord = {
     id: 'delivery-1',
     notificationId: 'notification-1',
-    channel: 'email',
+    channelName: 'email',
+    channelType: 'email',
     recipientSnapshot: { address: 'test@example.com' },
     messageSnapshot: { subject: 'Hello' },
     providerName: 'primary',

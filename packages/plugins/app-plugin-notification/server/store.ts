@@ -34,7 +34,8 @@ export interface NotificationLogRecord {
 export interface NotificationDeliveryRecord {
   readonly id: string;
   readonly notificationId: string;
-  readonly channel: string;
+  readonly channelName: string;
+  readonly channelType: string;
   readonly recipientSnapshot: object;
   readonly messageSnapshot: object;
   readonly providerName: string;
@@ -179,7 +180,8 @@ interface NotificationRow extends Row {
 interface DeliveryRow extends Row {
   id: string;
   notificationId: string;
-  channel: string;
+  channelName: string;
+  channelType: string;
   recipientSnapshot: object | string;
   messageSnapshot: object | string;
   providerName: string;
@@ -802,7 +804,7 @@ function fromLogRow(
 ): NotificationLogRecord {
   const messageSnapshot: Record<string, object> = {};
   for (const delivery of deliveries)
-    messageSnapshot[delivery.channel] = delivery.messageSnapshot;
+    messageSnapshot[delivery.channelName] = delivery.messageSnapshot;
   return {
     id: row.id,
     idempotencyKey: row.idempotencyKey ?? undefined,
@@ -824,7 +826,8 @@ function toDeliveryRow(record: NotificationDeliveryRecord): DeliveryRow {
   return {
     id: record.id,
     notificationId: record.notificationId,
-    channel: record.channel,
+    channelName: record.channelName,
+    channelType: record.channelType,
     recipientSnapshot: JSON.stringify(record.recipientSnapshot),
     messageSnapshot: JSON.stringify(record.messageSnapshot),
     providerName: record.providerName,
@@ -850,7 +853,8 @@ function fromDeliveryRow(row: DeliveryRow): NotificationDeliveryRecord {
   return {
     id: row.id,
     notificationId: row.notificationId,
-    channel: row.channel,
+    channelName: row.channelName,
+    channelType: row.channelType,
     recipientSnapshot: parseObject(row.recipientSnapshot, 'recipient'),
     messageSnapshot: parseObject(row.messageSnapshot, 'message'),
     providerName: row.providerName,

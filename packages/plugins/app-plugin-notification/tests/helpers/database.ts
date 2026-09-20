@@ -5,6 +5,8 @@ import migration from '../../database/migrations/202608190001_create_notificatio
 import idempotencyMigration from '../../database/migrations/202609080001_create_notification_idempotency.js';
 import instantMigration from '../../database/migrations/202609130001_notification_instant_columns.js';
 
+import namesMigration from '../../database/migrations/202609200001_notification_channel_names.js';
+
 export async function createNotificationTestDatabase(): Promise<DatabaseManager> {
   const database = createDatabaseManager({
     drivers: { sqlite },
@@ -28,6 +30,11 @@ export async function createNotificationTestDatabase(): Promise<DatabaseManager>
     connection,
   });
   await instantMigration.up({
+    builder: connection.builder,
+    query: connection.query,
+    connection,
+  });
+  await namesMigration.up({
     builder: connection.builder,
     query: connection.query,
     connection,

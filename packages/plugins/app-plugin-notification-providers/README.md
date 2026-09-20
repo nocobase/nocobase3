@@ -60,6 +60,7 @@ import {
 } from '@nocobase/app-plugin-notification-providers';
 
 const email = defineEmailChannelConfig({
+  name: 'email',
   enabled: true,
   providers: [
     defineSmtpProviderConfig({
@@ -94,6 +95,7 @@ import {
 } from '@nocobase/app-plugin-notification-providers';
 
 const email = defineEmailChannelConfig({
+  name: 'email',
   enabled: true,
   providers: [
     defineResendProviderConfig({
@@ -121,6 +123,7 @@ import {
 } from '@nocobase/app-plugin-notification-providers/im';
 
 const im = defineImChannelConfig({
+  name: 'im',
   enabled: true,
   providers: [
     defineFeishuWebhookProviderConfig({
@@ -148,6 +151,7 @@ import {
 } from '@nocobase/app-plugin-notification-providers/im';
 
 const im = defineImChannelConfig({
+  name: 'im',
   enabled: true,
   providers: [
     defineDingTalkWebhookProviderConfig({

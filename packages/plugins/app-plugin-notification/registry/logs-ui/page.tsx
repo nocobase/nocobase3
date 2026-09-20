@@ -329,7 +329,9 @@ function DeliveryTable(props: {
             <Fragment key={details.delivery.id}>
               <TableRow>
                 <TableCell>
-                  <Badge variant='outline'>{details.delivery.channel}</Badge>
+                  <Badge variant='outline'>
+                    {details.delivery.channelName}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   <div className='font-medium'>

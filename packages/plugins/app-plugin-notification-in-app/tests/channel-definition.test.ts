@@ -94,6 +94,7 @@ describe('In-app Channel common input', () => {
         actor: { userId: 'user-1' },
         values: { title: 'Test', body: 'Hello' },
         channelConfig: {
+          name: 'in-app',
           type: 'in-app',
           enabled: true,
           providers: [],
@@ -106,11 +107,59 @@ describe('In-app Channel common input', () => {
     });
   });
 
+  it('builds validated targets from test-send fields', async () => {
+    const adapter = createInAppChannelDefinition().test!;
+    const input = {
+      actor: { userId: 'u' },
+      channelConfig: {
+        name: 'in-app',
+        type: 'in-app' as const,
+        enabled: true,
+        providers: [],
+      },
+      providerConfig: { type: 'database', name: 'default' },
+    };
+    for (const [fields, target] of [
+      [
+        { route: '/topics/123?q=1#reply' },
+        { type: 'route', path: '/topics/123?q=1#reply' },
+      ],
+      [
+        { url: 'https://example.com/main/topics/123' },
+        { type: 'url', url: 'https://example.com/main/topics/123' },
+      ],
+    ] as const) {
+      expect(
+        await adapter.toSendInput({
+          ...input,
+          values: { title: 'Test', body: 'Body', ...fields },
+        }),
+      ).toMatchObject({ content: { target } });
+    }
+    expect(() =>
+      adapter.toSendInput({
+        ...input,
+        values: {
+          title: 'Test',
+          body: 'Body',
+          route: '/topic',
+          url: 'https://example.com',
+        },
+      }),
+    ).toThrow('Choose either');
+    expect(() =>
+      adapter.toSendInput({
+        ...input,
+        values: { title: 'Test', body: 'Body', url: 'javascript:alert(1)' },
+      }),
+    ).toThrow('Invalid notification target');
+  });
+
   it('resolves user recipients and renders content with overrides', async () => {
     const definition = createInAppChannelDefinition();
     const channel = await definition.createChannel(
       { logger: {} } as NotificationChannelContext,
-      { type: 'in-app', enabled: true, providers: [] },
+      { name: 'in-app', type: 'in-app', enabled: true, providers: [] },
     );
     const provider = { name: 'default', type: 'database' };
 
@@ -134,14 +183,14 @@ describe('In-app Channel common input', () => {
         content: {
           title: 'Approval complete',
           body: 'Review the result.',
-          actionUrl: '/approvals/1',
+          target: { type: 'url', url: 'https://example.com/approvals/1' },
         },
         override: { title: 'In-app title' },
       }),
     ).toEqual({
       title: 'In-app title',
       body: 'Review the result.',
-      actionUrl: '/approvals/1',
+      target: { type: 'url', url: 'https://example.com/approvals/1' },
     });
   });
 

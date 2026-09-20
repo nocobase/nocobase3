@@ -1,3 +1,4 @@
+import { validateNotificationTarget } from '../shared/target.js';
 import { randomUUID } from 'node:crypto';
 
 import { Hono } from 'hono';
@@ -131,12 +132,12 @@ export class NotificationManager<
   }
 
   activate(): void {
+    this.registry.validate(this.options.config);
     if (
       this.activated ||
       !this.options.config.channels.some((config) => config.enabled)
     )
       return;
-    this.registry.validate(this.options.config);
     this.options.queue.registerJob(this.queueJob);
     this.activated = true;
     this.reconcileJob.start();
@@ -152,7 +153,7 @@ export class NotificationManager<
   ): Promise<NotificationSendResult> {
     const target = this.resolveTestTarget(request);
     const channelConfig = this.options.config.channels.find(
-      (candidate) => candidate.type === request.channel && candidate.enabled,
+      (candidate) => candidate.name === request.channel && candidate.enabled,
     );
     const providerConfig = channelConfig?.providers.find(
       (candidate) =>
@@ -160,7 +161,7 @@ export class NotificationManager<
         candidate.type === request.provider.type &&
         candidate.enabled !== false,
     );
-    const definition = this.registry.channel(request.channel);
+    const definition = this.registry.channel(channelConfig?.type ?? '');
     if (!channelConfig || !providerConfig || !definition?.test) {
       throw notificationTestError(
         'NOTIFICATION_TEST_TARGET_UNAVAILABLE',
@@ -173,7 +174,7 @@ export class NotificationManager<
       channelConfig,
       providerConfig,
     });
-    const channel = target.channel.type as keyof TChannels & string;
+    const channel = target.channel.name as keyof TChannels & string;
     const routing = {
       [channel]: { providers: { provider: target.provider.name } },
     } as NotificationSendInput<TChannels>['routing'];
@@ -209,7 +210,7 @@ export class NotificationManager<
   ): NotificationTestTargetDescriptor {
     const target = this.listTestTargets().find(
       (candidate) =>
-        candidate.channel.type === request.channel &&
+        candidate.channel.name === request.channel &&
         candidate.provider.name === request.provider.name &&
         candidate.provider.type === request.provider.type,
     );
@@ -261,6 +262,7 @@ export class NotificationManager<
   }
 
   private async startInternal(): Promise<void> {
+    this.registry.validate(this.options.config);
     const enabledConfigs = this.options.config.channels.filter(
       (config) => config.enabled,
     );
@@ -288,7 +290,7 @@ export class NotificationManager<
       this.activate();
       await Promise.all(
         enabledConfigs.map(async (config): Promise<void> =>
-          this.ensureRuntime(config.type),
+          this.ensureRuntime(config.name),
         ),
       );
       await this.reconcile();
@@ -326,6 +328,7 @@ export class NotificationManager<
     input: NotificationSendInput<TChannels>,
   ): Promise<NotificationSendResult> {
     this.activate();
+    validateNotificationTarget(input.content.target);
     validateNotificationIdempotencyKey(input.idempotencyKey);
     const requestFingerprint = notificationRequestFingerprint(input);
     const existing = await this.store.getLogByIdempotencyKey(
@@ -455,7 +458,8 @@ export class NotificationManager<
         deliveries.push({
           id: randomUUID(),
           notificationId,
-          channel: target.channel,
+          channelName: target.channel,
+          channelType: this.channelManager.type(target.channel),
           recipientSnapshot: target.recipient,
           messageSnapshot: message,
           providerName: target.provider.name,
@@ -506,7 +510,7 @@ export class NotificationManager<
         sourceType: persisted.bundle.log.sourceType,
         deliveryCount: currentDeliveries.length,
         channels: [
-          ...new Set(currentDeliveries.map((delivery) => delivery.channel)),
+          ...new Set(currentDeliveries.map((delivery) => delivery.channelName)),
         ],
         deduplicated: persisted.outcome === 'existing',
       },
@@ -590,7 +594,11 @@ export class NotificationManager<
         `Notification Delivery "${input.deliveryId}" was not found.`,
       );
     }
-    await this.ensureRuntime(delivery.channel);
+    await this.ensureRuntime(delivery.channelName);
+    if (this.channelManager.type(delivery.channelName) !== delivery.channelType)
+      throw new Error(
+        `Notification Channel "${delivery.channelName}" type has changed.`,
+      );
     const decision = await this.retryDecision(delivery);
     if (delivery.status !== 'failed' && delivery.status !== 'unknown') {
       throw new NotificationDeliveryRetryError(
@@ -726,7 +734,8 @@ export class NotificationManager<
   ): Promise<NotificationDeliveryStatusSnapshot> {
     return {
       id: delivery.id,
-      channel: delivery.channel,
+      channelName: delivery.channelName,
+      channelType: delivery.channelType,
       provider: {
         name: delivery.providerName,
         type: delivery.providerType,
@@ -744,6 +753,17 @@ export class NotificationManager<
   private async retryDecision(
     delivery: NotificationDeliveryRecord,
   ): Promise<NotificationDeliveryRetryDecision> {
+    const config = this.options.config.channels.find(
+      (item) => item.name === delivery.channelName,
+    );
+    if (!config?.enabled || config.type !== delivery.channelType) {
+      return {
+        allowed: false,
+        mode: 'not_allowed',
+        reason:
+          'The original Channel instance is unavailable or its type has changed.',
+      };
+    }
     if (delivery.status === 'failed' && delivery.nextRunAt) {
       return {
         allowed: false,
@@ -770,7 +790,7 @@ export class NotificationManager<
     if (delivery.status === 'unknown') {
       const idempotency = delivery.providerIdempotency;
       const capabilities = this.channelManager.providerCapabilities(
-        delivery.channel,
+        delivery.channelName,
         { name: delivery.providerName, type: delivery.providerType },
       ).idempotency;
       if (
@@ -973,12 +993,13 @@ export class NotificationManager<
     return provider;
   }
 
-  private async createRuntime(type: string): Promise<void> {
+  private async createRuntime(name: string): Promise<void> {
     const config = this.options.config.channels.find(
-      (candidate) => candidate.type === type,
+      (candidate) => candidate.name === name,
     );
     if (!config?.enabled)
-      throw new Error(`Notification Channel "${type}" is not enabled.`);
+      throw new Error(`Notification Channel "${name}" is not enabled.`);
+    const type = config.type;
     const definition = this.registry.channel(type);
     if (!definition)
       throw new Error(
@@ -988,6 +1009,10 @@ export class NotificationManager<
       { logger: this.options.logger },
       config,
     );
+    if (channel.type !== type)
+      throw new Error(
+        `Notification Channel "${name}" runtime type must match "${type}".`,
+      );
     const providerContext = {
       logger: this.options.logger,
       now: (): Promise<string> => this.store.now(),
@@ -1037,11 +1062,12 @@ export class NotificationManager<
         throw new Error(
           `Enabled Channel "${type}" requires at least one enabled Provider.`,
         );
-      this.channelManager.register(type, { channel, providers });
+      this.channelManager.register(name, { channel, providers });
       this.options.logger.debug(
         {
           event: 'notification.channel.started',
-          channel: type,
+          channelName: name,
+          channelType: type,
           providers: providers.map((provider) => ({
             name: provider.name,
             type: provider.type,
@@ -1092,6 +1118,33 @@ function initialNotificationStatus(
   return 'pending';
 }
 
+export function createNotificationManager<
+  const TConfig extends
+    readonly import('./types.js').NotificationChannelConfig[],
+>(
+  options: Omit<
+    NotificationManagerOptions<
+      import('./types.js').ConfiguredNotificationChannels<TConfig>
+    >,
+    'config'
+  > & {
+    readonly config: Omit<
+      import('./types.js').NotificationConfig,
+      'channels'
+    > & { readonly channels: TConfig };
+  },
+): NotificationManager<
+  import('./types.js').ConfiguredNotificationChannels<TConfig>
+>;
+export function createNotificationManager<
+  TChannels extends {
+    readonly [
+      K in keyof TChannels
+    ]: import('./types.js').NotificationChannelSchema;
+  },
+>(
+  options: NotificationManagerOptions<TChannels>,
+): NotificationManager<TChannels>;
 export function createNotificationManager<
   TChannels extends {
     readonly [

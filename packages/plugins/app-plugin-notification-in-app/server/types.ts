@@ -1,7 +1,8 @@
+import type { NotificationTarget } from '@nocobase/app-plugin-notification';
 export interface InAppMessage {
   readonly title?: string;
   readonly body: string;
-  readonly actionUrl?: string;
+  readonly target?: NotificationTarget;
 }
 
 export interface InAppRecipient {
@@ -15,7 +16,7 @@ export interface InAppItem {
   readonly userId: string;
   readonly title?: string;
   readonly body: string;
-  readonly actionUrl?: string;
+  readonly target?: NotificationTarget;
   readonly readAt?: string;
   readonly createdAt: string;
   readonly updatedAt: string;

@@ -1,4 +1,8 @@
 import {
+  validateNotificationTarget,
+  type NotificationTarget,
+} from '@nocobase/app-plugin-notification';
+import {
   type NotificationChannelDefinition,
   type NotificationContent,
   type NotificationProviderIdentity,
@@ -13,7 +17,7 @@ export interface ImRecipient {
 export interface ImMessage {
   readonly text: string;
   readonly title?: string;
-  readonly actionUrl?: string;
+  readonly target?: Extract<NotificationTarget, { type: 'url' }>;
   readonly format?: 'text' | 'markdown';
   readonly payloads?: {
     readonly feishu?: object;
@@ -33,6 +37,7 @@ export interface ImProviderConfig {
 }
 
 export interface ImChannelConfig {
+  readonly name: string;
   readonly type: 'im';
   readonly enabled: boolean;
   readonly providers: readonly ImProviderConfig[];
@@ -45,9 +50,9 @@ export interface ImChannelDefinitionOptions {
   ) => Promise<ImRecipient | undefined>;
 }
 
-export function defineImChannelConfig(
-  input: Omit<ImChannelConfig, 'type'>,
-): ImChannelConfig {
+export function defineImChannelConfig<const TName extends string>(
+  input: Omit<ImChannelConfig, 'type' | 'name'> & { readonly name: TName },
+): ImChannelConfig & { readonly name: TName } {
   return { type: 'im', ...input };
 }
 
@@ -122,7 +127,10 @@ export function createImChannelDefinition(
           return {
             text: input.content.body,
             title: input.content.title,
-            actionUrl: input.content.actionUrl,
+            target:
+              input.content.target?.type === 'url'
+                ? input.content.target
+                : undefined,
             ...input.override,
           };
         },
@@ -137,7 +145,13 @@ export function createImChannelDefinition(
             );
           if (!input.message.text.trim() && !input.message.payloads)
             throw new Error('IM text or provider payload is required.');
-          return { recipient: input.recipient, content: input.message };
+          const target = validateNotificationTarget(input.message.target);
+          if (target?.type === 'route')
+            throw new Error('IM notifications require a full URL target.');
+          return {
+            recipient: input.recipient,
+            content: { ...input.message, target },
+          };
         },
       };
     },
@@ -145,7 +159,7 @@ export function createImChannelDefinition(
 }
 
 export function formatImText(message: ImMessage): string {
-  return [message.title, message.text, message.actionUrl]
+  return [message.title, message.text, message.target?.url]
     .filter((value): value is string => Boolean(value))
     .join('\n');
 }
@@ -155,4 +169,10 @@ function sameProvider(
   right: NotificationProviderIdentity,
 ): boolean {
   return left?.name === right.name && left.type === right.type;
+}
+
+declare module '@nocobase/app-plugin-notification' {
+  interface NotificationChannelSchemas {
+    im: { readonly recipient: ImRecipient; readonly message: ImMessage };
+  }
 }

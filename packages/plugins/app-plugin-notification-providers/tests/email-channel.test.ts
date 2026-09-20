@@ -12,7 +12,7 @@ describe('Email Channel common input', () => {
     const definition = createEmailChannelDefinition({ resolveUserEmail });
     const channel = await definition.createChannel(
       {} as NotificationChannelContext,
-      { type: 'email', enabled: true, providers: [] },
+      { name: 'email', type: 'email', enabled: true, providers: [] },
     );
 
     const provider = { name: 'primary', type: 'smtp' };

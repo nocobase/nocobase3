@@ -69,6 +69,7 @@ export class NotificationRegistry implements NotificationExtensionRegistry {
         return [
           {
             channel: {
+              name: channelConfig.name,
               type: channelConfig.type,
               label: test.label,
             },
@@ -106,7 +107,38 @@ export class NotificationRegistry implements NotificationExtensionRegistry {
   }
 
   validate(config: import('./types.js').NotificationConfig): void {
+    const channelNames = new Set<string>();
     for (const channelConfig of config.channels) {
+      if (
+        typeof channelConfig.name !== 'string' ||
+        !channelConfig.name ||
+        channelConfig.name.trim() !== channelConfig.name ||
+        channelConfig.name.length > 100
+      )
+        throw new Error(
+          'Notification Channel name must be non-empty, at most 100 characters, and have no surrounding whitespace.',
+        );
+      if (channelNames.has(channelConfig.name))
+        throw new Error(
+          `Notification Channel name "${channelConfig.name}" is duplicated.`,
+        );
+      channelNames.add(channelConfig.name);
+      const providerNames = new Set<string>();
+      for (const provider of channelConfig.providers) {
+        if (
+          typeof provider.name !== 'string' ||
+          !provider.name ||
+          provider.name.trim() !== provider.name
+        )
+          throw new Error(
+            `Provider name must be non-empty with no surrounding whitespace in Channel "${channelConfig.name}".`,
+          );
+        if (providerNames.has(provider.name))
+          throw new Error(
+            `Provider name "${provider.name}" is duplicated in Channel "${channelConfig.name}".`,
+          );
+        providerNames.add(provider.name);
+      }
       if (!channelConfig.enabled) continue;
       const channel = this.channel(channelConfig.type);
       if (!channel) {

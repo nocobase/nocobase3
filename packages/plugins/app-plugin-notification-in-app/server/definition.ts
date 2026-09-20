@@ -1,3 +1,4 @@
+import { validateNotificationTarget } from '@nocobase/app-plugin-notification';
 import {
   type NotificationContent,
   type NotificationChannelDefinition,
@@ -14,6 +15,7 @@ export interface InAppProviderConfig {
   readonly enabled?: boolean;
 }
 export interface InAppChannelConfig {
+  readonly name: string;
   readonly type: 'in-app';
   readonly enabled: boolean;
   readonly providers: readonly InAppProviderConfig[];
@@ -26,9 +28,9 @@ export interface PreparedInAppMessage {
   readonly content: InAppMessage;
 }
 
-export function defineInAppChannelConfig(
-  input: Omit<InAppChannelConfig, 'type'>,
-): InAppChannelConfig {
+export function defineInAppChannelConfig<const TName extends string>(
+  input: Omit<InAppChannelConfig, 'type' | 'name'> & { readonly name: TName },
+): InAppChannelConfig & { readonly name: TName } {
   return { type: 'in-app', ...input };
 }
 
@@ -78,17 +80,43 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
           ),
           maxLength: 2000,
         },
+        {
+          name: 'route',
+          label: inAppNotificationText(
+            'test.fields.route',
+            'Internal route (without deployment prefix)',
+          ),
+          type: 'text',
+          maxLength: 2000,
+        },
+        {
+          name: 'url',
+          label: inAppNotificationText('test.fields.url', 'Full HTTP(S) URL'),
+          type: 'text',
+          maxLength: 2000,
+        },
       ],
       toSendInput({ actor, values }) {
         const title = values.title?.trim();
         const body = values.body?.trim();
         if (!title || !body) throw new Error('Title and Message are required.');
+        const route = values.route?.trim();
+        const url = values.url?.trim();
+        if (route && url)
+          throw new Error('Choose either an internal route or a full URL.');
+        const target = validateNotificationTarget(
+          route
+            ? { type: 'route', path: route }
+            : url
+              ? { type: 'url', url }
+              : undefined,
+        );
         return {
           to: {
             type: 'user',
             id: values.recipient?.trim() || actor.userId,
           },
-          content: { title, body },
+          content: { title, body, ...(target ? { target } : {}) },
         };
       },
     },
@@ -110,7 +138,7 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
           return {
             title: input.content.title,
             body: input.content.body,
-            actionUrl: input.content.actionUrl,
+            target: input.content.target,
             ...input.override,
           };
         },
@@ -127,7 +155,10 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
             deliveryId: input.deliveryId,
             notificationId: input.notificationId,
             recipient: input.recipient,
-            content: input.message,
+            content: {
+              ...input.message,
+              target: validateNotificationTarget(input.message.target),
+            },
           };
         },
       };
@@ -187,4 +218,13 @@ export function createDatabaseProviderDefinition(options: {
       };
     },
   };
+}
+
+declare module '@nocobase/app-plugin-notification' {
+  interface NotificationChannelSchemas {
+    'in-app': {
+      readonly recipient: InAppRecipient;
+      readonly message: InAppMessage;
+    };
+  }
 }

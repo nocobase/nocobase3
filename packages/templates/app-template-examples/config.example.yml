@@ -32,14 +32,16 @@ session:
 
 notification:
   channels:
-    - type: in-app
+    - name: in-app
+      type: in-app
       enabled: true
       providers:
         - type: database
           name: default
 
     # Uncomment and configure this channel to send email notifications.
-    # - type: email
+    # - name: email
+    #   type: email
     #   enabled: true
     #   providers:
     #     - type: smtp
@@ -58,7 +60,8 @@ notification:
     #       from: NocoBase <notifications@example.com>
 
     # Uncomment and configure this channel to send IM notifications.
-    # - type: im
+    # - name: im
+    #   type: im
     #   enabled: true
     #   providers:
     #     - type: feishu-webhook

@@ -18,12 +18,12 @@ const result = await notification.send({
   content: {
     title: 'Approval required',
     body: 'Review the purchase request.',
-    actionUrl: `/approvals/${approval.id}`,
+    target: { type: 'route', path: `/approvals/${approval.id}` },
   },
 });
 ```
 
-Validate `actionUrl` as application-owned navigation before including it. The common content renderer maps `title`, `body`, and `actionUrl` to Channel messages. Use `channelOverrides` only for fields owned by a specific Channel, such as an Email subject or HTML body.
+Use `target: { type: 'route', path: '/topics/123' }` for in-app navigation without the deployment prefix, or `target: { type: 'url', url: 'https://example.com/main/topics/123' }` for a complete HTTP(S) link. In-app renders routes through React Router and URLs as native links. IM only includes URL targets; put full links in email bodies. Legacy `actionUrl` is ignored without conversion. The common content renderer maps `title`, `body`, and `target` to Channel messages. Use `channelOverrides` only for fields owned by a specific Channel, such as an Email subject or HTML body.
 
 ## Recipient rules
 
@@ -111,3 +111,5 @@ In a status snapshot, `retry.allowed` means the server accepts a manual retry re
 - Treat `accepted` as Provider acceptance only.
 - For `unknown`, check the Provider before any new send.
 - For external sends, confirm the intended business source recorded success/failure without duplicating the message.
+
+Use configured Channel names in `channels`, `routing`, and `channelOverrides`, not implementation types. The examples use names equal to their types for brevity; a Channel named `system-email` with type `email` must be addressed as `system-email`. A missing or disabled name must not fall back to another Channel with the same type.

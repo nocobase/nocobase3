@@ -91,3 +91,11 @@ pnpm --filter @nocobase/app-plugin-notification build
 The package-owned Agent Skill is under
 `skills/nocobase-app-plugin-notification`. Keep it synchronized with changes to
 public integration, sending, logs, retry, Channel, or Provider contracts.
+
+## Named Channel instances
+
+Every Channel configuration requires a non-empty `name` of at most 100 characters without surrounding whitespace, unique across enabled and disabled configurations. `type` selects the registered implementation; `name` selects the configured instance. Two email instances can use the same Provider name independently. Send using `channels: ['system-email']`, with `routing['system-email']` and `channelOverrides['system-email']`. Test sending also selects the Channel name.
+
+The Channel helpers preserve literal names. `createNotificationManager` infers configured names and maps their types through the extensible `NotificationChannelSchemas` interface to check message overrides. Custom Channel packages should augment that interface with their recipient and message schema. The runtime still validates configuration and recipients independently of TypeScript.
+
+Run migrations before upgrading. Existing delivery records are migrated from `channel` to `channelName` and `channelType`, initially both holding the old type. Set existing configuration names to their previous types to retain pending delivery and retry lookup. Renaming or removing an instance makes its historical deliveries unavailable for retry; changing its type is rejected. There is no type-based fallback. Rolling back the schema preserves the implementation type but discards custom instance names, so drain named deliveries before downgrade.

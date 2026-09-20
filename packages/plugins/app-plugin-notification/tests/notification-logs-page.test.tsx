@@ -61,7 +61,7 @@ describe('NotificationLogsPage', () => {
     notification.listLogs.mockResolvedValue([]);
     notification.listTestTargets.mockResolvedValue([
       {
-        channel: { type: 'in-app', label: 'In-app' },
+        channel: { name: 'in-app', type: 'in-app', label: 'In-app' },
         provider: {
           name: 'default',
           type: 'database',
@@ -83,7 +83,7 @@ describe('NotificationLogsPage', () => {
       target: { value: 'in-app:default:database' },
     });
 
-    expect(methodSelect).toHaveDisplayValue('In-app (Built-in)');
+    expect(methodSelect).toHaveDisplayValue('in-app (In-app) (Built-in)');
     expect(screen.queryByText(/default/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Database/)).not.toBeInTheDocument();
   });
@@ -102,7 +102,7 @@ describe('NotificationLogsPage', () => {
           {
             delivery: {
               id: 'delivery-1',
-              channel: 'email',
+              channelName: 'email',
               providerName: 'primary-smtp',
               providerType: 'smtp',
               attemptCount: 1,
@@ -143,7 +143,7 @@ describe('NotificationLogsPage', () => {
   it('shows user-facing labels for a single Provider in recent notifications', async () => {
     notification.listTestTargets.mockResolvedValue([
       {
-        channel: { type: 'in-app', label: 'In-app' },
+        channel: { name: 'in-app', type: 'in-app', label: 'In-app' },
         provider: {
           name: 'default',
           type: 'database',
@@ -165,7 +165,7 @@ describe('NotificationLogsPage', () => {
           {
             delivery: {
               id: 'delivery-1',
-              channel: 'in-app',
+              channelName: 'in-app',
               providerName: 'default',
               providerType: 'database',
               attemptCount: 1,
@@ -195,7 +195,7 @@ describe('NotificationLogsPage', () => {
       await screen.findByRole('button', { name: 'Expand notification' }),
     );
 
-    expect(await screen.findByText('In-app')).toBeInTheDocument();
+    expect(await screen.findByText('in-app (In-app)')).toBeInTheDocument();
     expect(screen.getAllByText('Built-in')).toHaveLength(2);
     expect(screen.queryByText('default')).not.toBeInTheDocument();
     expect(screen.queryByText('database')).not.toBeInTheDocument();
@@ -205,7 +205,7 @@ describe('NotificationLogsPage', () => {
     notification.listLogs.mockResolvedValue([]);
     notification.listTestTargets.mockResolvedValue([
       {
-        channel: { type: 'email', label: 'Email' },
+        channel: { name: 'system-email', type: 'email', label: 'Email' },
         provider: { name: 'smtp', type: 'smtp', label: 'SMTP' },
         fields: [
           {
@@ -246,12 +246,16 @@ describe('NotificationLogsPage', () => {
       name: 'Delivery method',
     });
     expect(providerSelect).toHaveDisplayValue('Select a delivery method');
-    expect(screen.getByRole('group', { name: 'Email' })).toBeInTheDocument();
-    fireEvent.change(providerSelect, { target: { value: 'email:smtp:smtp' } });
+    expect(
+      screen.getByRole('group', { name: 'system-email' }),
+    ).toBeInTheDocument();
+    fireEvent.change(providerSelect, {
+      target: { value: 'system-email:smtp:smtp' },
+    });
     expect(
       providerSelect.compareDocumentPosition(screen.getByLabelText('Title')),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(providerSelect).toHaveDisplayValue('Email (SMTP)');
+    expect(providerSelect).toHaveDisplayValue('system-email (Email) (SMTP)');
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     fireEvent.change(screen.getByRole('textbox', { name: 'Recipient' }), {
       target: { value: 'recipient@example.com' },
@@ -260,7 +264,7 @@ describe('NotificationLogsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Send' }));
 
     expect(notification.sendTest).toHaveBeenCalledWith({
-      channel: 'email',
+      channel: 'system-email',
       provider: { name: 'smtp', type: 'smtp' },
       values: {
         recipient: 'recipient@example.com',

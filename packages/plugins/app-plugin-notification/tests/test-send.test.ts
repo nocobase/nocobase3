@@ -48,6 +48,7 @@ describe('notification test sending', () => {
     const config = {
       channels: [
         {
+          name: 'email',
           type: 'email',
           enabled: true,
           providers: [
@@ -66,6 +67,7 @@ describe('notification test sending', () => {
     expect(registry.testTargets(config)).toEqual([
       {
         channel: {
+          name: 'email',
           type: 'email',
           label: notificationI18nText('test.channels.email', 'Email'),
         },
@@ -94,6 +96,7 @@ describe('notification test sending', () => {
       config: {
         channels: [
           {
+            name: 'email',
             type: 'email',
             enabled: true,
             providers: [{ type: 'smtp', name: 'primary' }],

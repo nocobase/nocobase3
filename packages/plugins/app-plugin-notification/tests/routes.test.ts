@@ -59,6 +59,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
     const targets = [
       {
         channel: {
+          name: 'email',
           type: 'email',
           label: notificationI18nText('test.channels.email', 'Email'),
         },
@@ -89,7 +90,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
     await expect(response.json()).resolves.toEqual({
       data: [
         {
-          channel: { type: 'email', label: 'Email' },
+          channel: { name: 'email', type: 'email', label: 'Email' },
           provider: { name: 'primary', type: 'smtp', label: 'SMTP' },
           fields: [{ name: 'recipient', label: 'Recipient', type: 'email' }],
         },

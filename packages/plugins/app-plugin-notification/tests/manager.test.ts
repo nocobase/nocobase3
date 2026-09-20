@@ -47,6 +47,7 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            name: 'email',
             type: 'email',
             enabled: true,
             providers: [
@@ -108,6 +109,7 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            name: 'email',
             type: 'email',
             enabled: true,
             providers: [
@@ -189,7 +191,8 @@ describe('NotificationManager registration', () => {
         expect.objectContaining({
           event: 'notification.delivery.accepted',
           notificationId: result.notificationId,
-          channel: 'email',
+          channelName: 'email',
+          channelType: 'email',
           provider: 'secondary',
         }),
         expect.objectContaining({
@@ -215,6 +218,7 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            name: 'im',
             type: 'im',
             enabled: true,
             providers: [
@@ -294,6 +298,7 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            name: 'im',
             type: 'im',
             enabled: true,
             providers: [
@@ -360,11 +365,11 @@ describe('NotificationManager registration', () => {
     expect(send).toHaveBeenCalledTimes(2);
     expect(result.deliveries).toEqual([
       expect.objectContaining({
-        channel: 'im',
+        channelName: 'im',
         provider: { name: 'feishu', type: 'feishu-webhook' },
       }),
       expect.objectContaining({
-        channel: 'im',
+        channelName: 'im',
         provider: { name: 'dingtalk', type: 'dingtalk-webhook' },
       }),
     ]);
@@ -408,6 +413,7 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            name: 'im',
             type: 'im',
             enabled: true,
             providers: [{ type: 'fake', name: 'primary' }],
@@ -478,11 +484,13 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            name: 'in-app',
             type: 'in-app',
             enabled: true,
             providers: [{ type: 'fake', name: 'primary' }],
           },
           {
+            name: 'email',
             type: 'email',
             enabled: true,
             providers: [{ type: 'fake', name: 'primary' }],
@@ -548,7 +556,7 @@ describe('NotificationManager registration', () => {
     expect(deliveries).toHaveLength(4);
     expect(
       deliveries.map((delivery) => [
-        delivery.channel,
+        delivery.channelName,
         delivery.recipientSnapshot,
         delivery.messageSnapshot,
       ]),
@@ -587,7 +595,7 @@ describe('NotificationManager registration', () => {
     expect(partialResult.status).toBe('partial');
     expect(partialDeliveries).toEqual([
       expect.objectContaining({
-        channel: 'in-app',
+        channelName: 'in-app',
         status: 'failed',
         lastError: {
           code: 'RECIPIENT_UNSUPPORTED',
@@ -597,7 +605,7 @@ describe('NotificationManager registration', () => {
         },
       }),
       expect.objectContaining({
-        channel: 'email',
+        channelName: 'email',
         status: 'accepted',
         recipientSnapshot: { address: 'alice@example.com' },
       }),
@@ -614,7 +622,7 @@ describe('NotificationManager registration', () => {
     expect(missingRecipientResult.status).toBe('failed');
     expect(missingRecipientResult.deliveries).toEqual([
       expect.objectContaining({
-        channel: 'email',
+        channelName: 'email',
         status: 'failed',
         error: {
           code: 'RECIPIENT_UNSUPPORTED',
@@ -627,7 +635,7 @@ describe('NotificationManager registration', () => {
       store.listDeliveries(missingRecipientResult.notificationId),
     ).resolves.toEqual([
       expect.objectContaining({
-        channel: 'email',
+        channelName: 'email',
         recipientSnapshot: {},
         lastError: {
           code: 'RECIPIENT_UNSUPPORTED',
@@ -646,7 +654,7 @@ describe('NotificationManager registration', () => {
     expect(failedResult.status).toBe('failed');
     expect(failedResult.deliveries).toEqual([
       expect.objectContaining({
-        channel: 'in-app',
+        channelName: 'in-app',
         status: 'failed',
         retry: {
           allowed: false,
@@ -655,7 +663,7 @@ describe('NotificationManager registration', () => {
         },
       }),
       expect.objectContaining({
-        channel: 'email',
+        channelName: 'email',
         status: 'failed',
         retry: {
           allowed: false,
@@ -680,6 +688,7 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            name: 'email',
             type: 'email',
             enabled: true,
             providers: [{ type: 'fake', name: 'primary' }],
@@ -767,6 +776,7 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            name: 'email',
             type: 'email',
             enabled: true,
             providers: [{ type: 'configured', name: 'primary' }],
@@ -818,6 +828,7 @@ describe('NotificationManager registration', () => {
       config: {
         channels: [
           {
+            name: 'email',
             type: 'email',
             enabled: true,
             providers: [{ type: 'fake', name: 'primary' }],
@@ -1444,6 +1455,7 @@ function createEmailManagerHarness(input: {
     config: {
       channels: [
         {
+          name: 'email',
           type: 'email',
           enabled: true,
           providers: [{ type: 'fake', name: 'primary' }],

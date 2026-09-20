@@ -1,3 +1,4 @@
+import type { NotificationTarget } from '../shared/target.js';
 import type { Logger } from '@nocobase/logging';
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
@@ -9,6 +10,23 @@ export interface NotificationChannelSchema {
   readonly recipient: object;
   readonly message: object;
 }
+
+/** Channel implementations extend this interface with their recipient/message schema. */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Public declaration-merging registry populated by Channel packages.
+export interface NotificationChannelSchemas {}
+
+type ChannelSchemaForType<T extends string> =
+  T extends keyof NotificationChannelSchemas
+    ? NotificationChannelSchemas[T] & NotificationChannelSchema
+    : NotificationChannelSchema;
+
+export type ConfiguredNotificationChannels<
+  T extends readonly NotificationChannelConfig[],
+> = {
+  [N in T[number]['name']]: ChannelSchemaForType<
+    Extract<T[number], { readonly name: N }>['type']
+  >;
+};
 
 export type NotificationChannelMap = Record<string, NotificationChannelSchema>;
 
@@ -44,7 +62,7 @@ export interface NotificationExtensionRegistry {
 export interface NotificationContent {
   readonly title?: string;
   readonly body: string;
-  readonly actionUrl?: string;
+  readonly target?: NotificationTarget;
 }
 
 export interface NotificationProviderIdentity {
@@ -102,6 +120,7 @@ export interface NotificationTestTargetDescriptor<
   TText = string | NotificationI18nText,
 > {
   readonly channel: {
+    readonly name: string;
     readonly type: string;
     readonly label: TText;
   };
@@ -212,7 +231,8 @@ export interface NotificationDeliveryRetryDecision {
 
 export interface NotificationDeliveryStatusSnapshot {
   readonly id: string;
-  readonly channel: string;
+  readonly channelName: string;
+  readonly channelType: string;
   readonly provider: NotificationProviderIdentity;
   readonly attemptCount: number;
   readonly status: NotificationDeliveryStatus;
@@ -268,6 +288,7 @@ export interface NotificationProviderConfig {
 }
 
 export interface NotificationChannelConfig {
+  readonly name: string;
   readonly type: string;
   readonly enabled: boolean;
   readonly providers: readonly NotificationProviderConfig[];
@@ -423,6 +444,7 @@ export interface NotificationProviderDefinition<
 
 export interface NotificationChannelDefinition<
   TConfig extends {
+    readonly name: string;
     readonly type: string;
     readonly enabled: boolean;
     readonly providers: readonly {

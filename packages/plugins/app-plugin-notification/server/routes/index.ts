@@ -174,6 +174,7 @@ function localizeTestTarget(
 ): NotificationTestTargetDescriptor<string> {
   return {
     channel: {
+      name: target.channel.name,
       type: target.channel.type,
       label: translateText(target.channel.label, t),
     },

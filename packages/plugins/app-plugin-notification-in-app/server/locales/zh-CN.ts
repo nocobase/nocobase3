@@ -14,6 +14,8 @@ const zhCN: InAppNotificationResource = {
     channels: { inApp: '站内信' },
     providers: { builtIn: '系统内置' },
     fields: {
+      route: '内部路由（不含部署前缀）',
+      url: '完整 HTTP(S) 链接',
       recipientUserId: '接收用户 ID',
       title: '标题',
       message: '消息',

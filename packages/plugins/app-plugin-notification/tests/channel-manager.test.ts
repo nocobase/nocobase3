@@ -62,6 +62,22 @@ describe('ChannelManager', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('rejects queued deliveries after the configured channel type changes', async () => {
+    const store = new FakeNotificationStore();
+    const delivery = await seed(store);
+    const send = vi.fn();
+    const manager = new ChannelManager({
+      store,
+      logger: createLogger({ level: 'silent' }),
+    });
+    manager.register('email', {
+      channel: { type: 'im', prepare: async ({ message }) => message },
+      providers: [{ name: 'primary', type: 'fake', send }],
+    });
+    await expect(manager.send(delivery.id)).rejects.toThrow('type has changed');
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('does not invoke another Provider when submission result is unknown', async () => {
     const store = new FakeNotificationStore();
     const delivery = await seed(store);
@@ -237,7 +253,8 @@ async function seed(
   const delivery: NotificationDeliveryRecord = {
     id: crypto.randomUUID(),
     notificationId: log.id,
-    channel: 'email',
+    channelName: 'email',
+    channelType: 'email',
     recipientSnapshot: { address: 'test@example.com' },
     messageSnapshot: { subject: 'Hello' },
     providerName: 'primary',

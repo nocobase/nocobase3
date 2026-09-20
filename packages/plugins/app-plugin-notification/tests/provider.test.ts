@@ -25,6 +25,7 @@ describe('@nocobase/app-plugin-notification provider', () => {
         get: () => ({
           channels: [
             {
+              name: 'email',
               type: 'email',
               enabled: true,
               providers: [{ type: 'fake', name: 'primary' }],

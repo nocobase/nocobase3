@@ -57,7 +57,7 @@ describe('@nocobase/app-plugin-notification client', () => {
 
   it('loads safe test targets and sends through the core test route', async () => {
     const target = {
-      channel: { type: 'im', label: 'IM' },
+      channel: { name: 'im', type: 'im', label: 'IM' },
       provider: {
         name: 'feishu',
         type: 'feishu-webhook',

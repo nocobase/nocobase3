@@ -26,7 +26,8 @@ SMTP 适合 Gmail、企业邮箱或自建邮件服务器：
 ```yaml
 notification:
   channels:
-    - type: email
+    - name: email
+      type: email
       enabled: true
       providers:
         - type: smtp
@@ -75,7 +76,8 @@ from: your-account@gmail.com
 ```yaml
 notification:
   channels:
-    - type: email
+    - name: email
+      type: email
       enabled: true
       providers:
         - type: resend
@@ -98,7 +100,8 @@ notification:
 ```yaml
 notification:
   channels:
-    - type: im
+    - name: im
+      type: im
       enabled: true
       providers:
         - type: feishu-webhook
@@ -116,7 +119,8 @@ notification:
 ```yaml
 notification:
   channels:
-    - type: im
+    - name: im
+      type: im
       enabled: true
       providers:
         - type: dingtalk-webhook
@@ -167,6 +171,7 @@ import type { NotificationConfig } from '@nocobase/app-plugin-notification';
 export const notificationConfig: NotificationConfig = {
   channels: [
     defineEmailChannelConfig({
+      name: 'email',
       enabled: true,
       providers: [
         defineSmtpProviderConfig({
@@ -185,6 +190,7 @@ export const notificationConfig: NotificationConfig = {
       ],
     }),
     defineImChannelConfig({
+      name: 'im',
       enabled: true,
       providers: [
         defineFeishuWebhookProviderConfig({

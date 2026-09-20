@@ -24,10 +24,12 @@ The application's `notification.channels` array is the source of enabled runtime
 const notification = {
   channels: [
     defineInAppChannelConfig({
+      name: 'in-app',
       enabled: true,
       providers: [{ type: 'database', name: 'default' }],
     }),
     defineEmailChannelConfig({
+      name: 'email',
       enabled: true,
       providers: [
         defineSmtpProviderConfig({

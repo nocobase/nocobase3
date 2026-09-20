@@ -35,7 +35,7 @@ const result = await notification.send({
   content: {
     title: '审批待处理',
     body: '你有一条新的审批任务。',
-    actionUrl: '/approvals/approval-2026-001',
+    target: { type: 'route', path: '/approvals/approval-2026-001' },
   },
 });
 ```
@@ -153,7 +153,7 @@ await notification.send({
   content: {
     title: '部署完成',
     body: '生产环境已经完成部署。',
-    actionUrl: 'https://example.com/deployments/42',
+    target: { type: 'url', url: 'https://example.com/deployments/42' },
   },
 });
 ```
