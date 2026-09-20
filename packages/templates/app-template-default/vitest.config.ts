@@ -21,8 +21,11 @@ export default createReactVitestConfig({
     root,
     server: {
       deps: {
-        // Transform the public Client surface so vi.mock applies, without duplicating the Server package's identity tokens.
-        inline: [/@nocobase\/app-plugin-authorization\/(?:dist\/)?client\//u],
+        // Transform the public Client surfaces so vi.mock applies, without duplicating the Server packages' identity tokens.
+        inline: [
+          /@nocobase\/app-plugin-authorization\/(?:dist\/)?client\//u,
+          /@nocobase\/app-plugin-notification-in-app\/(?:dist\/)?client\//u,
+        ],
       },
     },
     // A glob rather than a list of filenames. The list had to be edited by hand for every test added or removed and
