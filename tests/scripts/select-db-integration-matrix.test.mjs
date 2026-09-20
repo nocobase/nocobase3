@@ -240,6 +240,7 @@ test('the actual Quality gate only accepts successful tests or an explicitly pla
   const passing = {
     CHANGED_FILES_RESULT: 'success',
     VALIDATION_RESULT: 'success',
+    BUILD_RESULT: 'success',
     CREATE_APP_SMOKE_RESULT: 'success',
     DB_PLAN_RESULT: 'success',
     DB_SHOULD_RUN: 'true',
@@ -278,8 +279,17 @@ test('the actual Quality gate only accepts successful tests or an explicitly pla
   for (const job of [
     'CHANGED_FILES_RESULT',
     'VALIDATION_RESULT',
+    'BUILD_RESULT',
     'CREATE_APP_SMOKE_RESULT',
   ]) {
     assert.notEqual(run({ [job]: 'failure' }), 0);
   }
+  assert.notEqual(
+    run({
+      BUILD_RESULT: 'failure',
+      DB_SHOULD_RUN: 'false',
+      DB_INTEGRATION_RESULT: 'skipped',
+    }),
+    0,
+  );
 });
