@@ -187,6 +187,10 @@ The account menu language control in `client/layouts/components/language-switche
 
 ## Development file watching
 
+Changes to `.env` and `.env.local` (including creation, atomic replacement, and deletion) restart the full development run after its previous processes exit. The new run reloads environment files, ports, proxy settings, and startup hooks; explicit shell variables still take precedence. Use the newly printed URL if the port or base path changes. This also applies in proxy mode. `config.yml` changes restart only the local server. `NOCOBASE_STRICT_STARTUP=true` disables both automatic restarts.
+
+Tests that start auxiliary Vite servers must use an isolated temporary `cacheDir`, including when their fixture links the application's `node_modules`. Never delete or rewrite a running development server's dependency cache. See the shared application development Skill's `references/testing.md` for cache ownership and recovery.
+
 `pnpm dev` checks native file watching before starting its children. If watcher resources are exhausted or native events are unavailable, it uses polling for client and server hot updates and disables agent annotations for that run, with a warning. An explicit `CHOKIDAR_USEPOLLING=true` selects the same mode. Configuration files use stat polling so atomic saves and newly created files restart the server without native directory watchers.
 
 Vite must exclude the application's entire `dist/` tree from development file watching. Its default exclusion covers only `dist/client`; watching the compiled server and vendored packages can cause `EMFILE` after a build. Keep the exclusion scoped to this application so linked workspace dependencies, including their `dist/` files, still receive hot updates.
@@ -203,6 +207,8 @@ The development proxy adapts same-origin HTTP and WebSocket Origin headers to th
 
 ## The command line
 
+Shared `scripts/` behavior is implemented by the development dependency `@nocobase/app-tools`; local scripts pass the application root to its launcher. Development uses the single `scripts/dev.mjs` entry calling `runAppTool('dev', { rootDir })`; Vite imports proxy helpers directly from `@nocobase/app-tools/dev/proxy`. Standalone dependency retargeting and verification use `scripts/server-deps.mjs`; all other build utilities are internal to `app-tools`. Shared application commands are supplied by the production dependency `@nocobase/app-cli` through `cli/standard-commands.ts`. Keep application plugin registration, custom commands, and runtime composition local. Change shared behavior in those packages rather than copying implementations into the template; use application CLI hooks for local build and development extensions.
+
 `pnpm nocobase` runs this application's CLI. Built-in `plugin *` commands manage registered plugins, `package *` commands manage direct NocoBase package dependencies, `app *` is what this application writes for itself in `cli/commands/`, and each registered plugin contributes its own commands under a topic it declares — a workflow plugin's commands appear under `workflow`.
 
 ```bash
@@ -214,8 +220,6 @@ pnpm nocobase app i18n:check  # languages declared on only one side
 Add a command of your own as an oclif `Command` subclass in `cli/commands/`, then list it in `cli/commands/index.ts`; the key becomes its name under `app`. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command.
 
 `cli/` is compiled into `dist` alongside the server, so a deployed application runs the same commands with `node ./cli/index.js`. `pnpm migrate` and `pnpm seed` are these commands rather than separate scripts.
-
-A command that cannot work in a deployment belongs in `cli/dev-commands/` instead, which the build excludes — client inspection is there because it needs Vite and the browser client, and neither exists in `dist`. Put a command there rather than shipping one that fails the moment someone runs it.
 
 ## Plugins
 
@@ -326,8 +330,6 @@ pnpm build
 ```
 
 Add tests for what you changed: a route's authenticated, unauthenticated, and unauthorized responses; a migration's `up` and `down` against a real database; a page's actual behavior. Tests belong in `tests/`, or in `e2e/` when they need a real server. Never place a test beside the source it covers.
-
-`pnpm client:inspect` and `pnpm server:inspect` show what is wired when a contribution does not appear as expected. They report composition, not correctness — a clean inspection proves nothing about behavior or security.
 
 For creating or editing theme presets, read `.agents/skills/nocobase-app-development/references/themes.md` (from the application root).
 

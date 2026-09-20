@@ -13,8 +13,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { inspectAppClient } from '../../../templates/app-template-default/cli/dev-commands/inspect-client-impl.mjs';
-import { inspectAppServer } from '../../../templates/app-template-default/cli/dev-commands/inspect-server-impl.mjs';
 import type { PluginCapability } from '../../create-plugin/src/lib/capabilities.ts';
 import { createPlugin } from '../../create-plugin/src/lib/scaffold.ts';
 import { loadTestConfig, runCommand } from './helpers.ts';
@@ -127,15 +125,6 @@ async function createLoopFixture(
   return { appRoot, pluginRoot: generated.targetDirectory };
 }
 
-async function runAppInspector(
-  appRoot: string,
-  kind: 'client' | 'server',
-): Promise<Record<string, unknown>> {
-  return kind === 'client'
-    ? inspectAppClient({ appRoot })
-    : inspectAppServer({ appRoot });
-}
-
 describe('Agent plugin development loop', () => {
   it.each([
     ['client-only', ['client.routes', 'client.components'], true, false, false],
@@ -173,19 +162,6 @@ describe('Agent plugin development loop', () => {
         path.join(appRoot, 'package.json'),
         'utf8',
       );
-
-      if (expectsClient) {
-        await writeFile(
-          path.join(pluginRoot, 'client', 'routes.ts'),
-          `import { defineAppRoutes, defineSettingsRoutes, type AppClientRouteContribution } from '@nocobase/app-client/plugins';\n\nconst routes: readonly AppClientRouteContribution[] = [\n  defineAppRoutes([{ name: 'agent-loop', path: '/agent-loop', auth: 'required', componentLoader: async () => ({ default: () => null }) }]),\n  defineSettingsRoutes([{ name: 'agent-loop', path: '/agent-loop', navigation: { title: 'Agent loop' }, authz: { resource: { type: 'page', id: 'agent-loop.settings' }, action: 'access' }, componentLoader: async () => ({ default: () => null }) }]),\n];\n\nexport default routes;\n`,
-        );
-      }
-      if (expectsServer) {
-        await writeFile(
-          path.join(pluginRoot, 'server', 'routes', 'index.ts'),
-          `import type { AppPluginApplication } from '@nocobase/app-server/plugins';\nimport { defineApiRoutes, defineRootRoutes, type AppRouteContribution } from '@nocobase/app-server/router';\n\nconst unavailable = (): never => { throw new Error('Inspection must not execute Route factories.'); };\nconst routes: readonly AppRouteContribution<AppPluginApplication>[] = [defineRootRoutes(unavailable), defineApiRoutes(unavailable)];\n\nexport default routes;\n`,
-        );
-      }
 
       if (expectsSkill) {
         const sourceSkill = path.join(
@@ -291,48 +267,6 @@ describe('Agent plugin development loop', () => {
           issues: [],
         },
       });
-
-      if (expectsClient) {
-        const clientInspection = await runAppInspector(appRoot, 'client');
-        expect(clientInspection).toMatchObject({
-          consistent: true,
-          issues: [],
-          routes: [
-            {
-              packageName: '@nocobase/app-plugin-agent-loop',
-              parent: 'app',
-              path: '/agent-loop',
-            },
-          ],
-          settings: [
-            {
-              authz: {
-                resource: { type: 'page', id: 'agent-loop.settings' },
-                action: 'access',
-              },
-              packageName: '@nocobase/app-plugin-agent-loop',
-              parent: 'settings',
-              path: '/settings/agent-loop',
-            },
-          ],
-        });
-      }
-      if (expectsServer) {
-        const serverInspection = await runAppInspector(appRoot, 'server');
-        expect(serverInspection).toMatchObject({
-          issues: [],
-          routes: [
-            {
-              packageName: '@nocobase/app-plugin-agent-loop',
-              scope: 'root',
-            },
-            {
-              packageName: '@nocobase/app-plugin-agent-loop',
-              scope: 'api',
-            },
-          ],
-        });
-      }
 
       const repeated = await runCommand(config, 'plugin:register', [
         'agent-loop',

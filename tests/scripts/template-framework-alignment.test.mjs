@@ -227,7 +227,6 @@ for (const template of templates) {
   test(`${template.kind} keeps the shared build and CLI framework aligned with Default`, () => {
     for (const directory of [
       'scripts',
-      'cli/dev-commands',
       'client/routing',
       'client/layouts',
       'client/theme',
@@ -264,7 +263,6 @@ for (const template of templates) {
     }
     // Product-specific scripts need a documented exception; compare the shared contract in both directions.
     const exceptions = [
-      'pack:check', // Tarball names identify each template.
       'upload', // Hub publishing commands are implemented only by Default.
       'deploy',
       ...(template.kind === 'hub' ? ['test:e2e'] : []), // Hub has no AI plugin.

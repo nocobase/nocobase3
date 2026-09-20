@@ -1,0 +1,77 @@
+{
+  "name": "@nocobase/app-tools",
+  "version": "0.0.1",
+  "description": "Shared application development and build tools.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "prettier": "@nocobase/dev-config/prettier",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./dev/proxy": {
+      "types": "./src/scripts/dev/proxy.d.mts",
+      "import": "./src/scripts/dev/proxy.mjs",
+      "default": "./src/scripts/dev/proxy.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./dev/proxy": {
+        "types": "./dist/scripts/dev/proxy.d.mts",
+        "import": "./dist/scripts/dev/proxy.mjs",
+        "default": "./dist/scripts/dev/proxy.mjs"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nocobase/nocobase3.git",
+    "directory": "packages/tools/app-tools"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format:check": "prettier . --check",
+    "test": "vitest run",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "vitest": "catalog:",
+    "tsx": "catalog:"
+  },
+  "peerDependencies": {
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/nb3-cli": "workspace:^",
+    "vite": "catalog:"
+  },
+  "dependencies": {
+    "cross-spawn": "^7.0.6",
+    "typescript": "catalog:",
+    "tar": "^7.5.22",
+    "@nocobase/dev-config": "workspace:*"
+  }
+}

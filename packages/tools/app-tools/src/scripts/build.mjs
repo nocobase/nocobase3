@@ -1,0 +1,398 @@
+import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Help must work before dependencies are loaded, hooks run, or an existing dist is cleared.
+if (
+  process.argv
+    .slice(2)
+    .some((argument) => argument === '--help' || argument === '-h')
+) {
+  console.log(`Usage: pnpm build [options]
+
+Build the client, server, CLI, and production dependencies into dist/.
+
+Options:
+  -h, --help               Show this help and exit without building.
+  --target <target>        Deployment platform (default: current).
+                          Common targets: linux-x64, linux-arm64,
+                          linux-x64-musl, linux-arm64-musl,
+                          darwin-x64, darwin-arm64, win32-x64, win32-arm64.
+                          Linux without a suffix uses glibc; Alpine uses musl.
+  --node-version <major>   Target Node major for an explicit platform target.
+                          Known ABI mappings: 20, 22, 24, 26 (default: 24).
+                          current uses the running Node version and ABI.
+                          The application requires Node >=24.
+  --tar                   Also create storage/exports/dist.tar.gz containing dist/
+                          and config.example.yml after a successful build.
+
+Examples:
+  pnpm build
+  pnpm build --target linux-x64 --node-version 24
+  pnpm build --target=linux-arm64-musl --node-version=24 --tar
+
+Deployment metadata:
+  dist/package.json -> nocobase.buildTarget
+  Fields: platform, arch, libc (Linux only), nodeMajor, nodeAbi.
+  Use these with engines.node to check the deployment runtime.
+`);
+  process.exit(0);
+}
+
+const { generateDatabaseManifests } =
+  await import('@nocobase/dev-config/build/database-manifests');
+const { default: spawn } = await import('cross-spawn');
+const { readCliHooks, runHookStage } = await import('./utils/cli-hooks.mjs');
+
+const rootDir = path.resolve(process.env.NOCOBASE_TOOL_ROOT || process.cwd());
+const distDir = path.join(rootDir, 'dist');
+// Read rather than written as a literal: this script ships into generated applications, whose name is their own.
+const appPackageName = JSON.parse(
+  fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'),
+).name;
+
+function copyCollectionMetadata() {
+  const databaseDir = path.join(rootDir, 'database');
+  if (!fs.existsSync(databaseDir)) return;
+  let copied = 0;
+  for (const connection of fs.readdirSync(databaseDir, {
+    withFileTypes: true,
+  })) {
+    if (!connection.isDirectory()) continue;
+    const collectionsDir = path.join(
+      databaseDir,
+      connection.name,
+      'collections',
+    );
+    if (!fs.existsSync(collectionsDir)) continue;
+    for (const entry of fs.readdirSync(collectionsDir, {
+      withFileTypes: true,
+    })) {
+      if (
+        !entry.isDirectory() ||
+        entry.name.startsWith('.') ||
+        entry.name.startsWith('_')
+      )
+        continue;
+      const source = path.join(collectionsDir, entry.name, 'metadata.json');
+      if (!fs.existsSync(source)) continue;
+      const target = path.join(
+        distDir,
+        'database',
+        connection.name,
+        'collections',
+        entry.name,
+        'metadata.json',
+      );
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(source, target);
+      copied += 1;
+    }
+  }
+  console.log(
+    `Copied ${copied} Collection metadata file${copied === 1 ? '' : 's'} into dist/database`,
+  );
+}
+
+const envOutputPath = path.join(distDir, '.env');
+const serverEnvKeys = new Set([
+  'NODE_ENV',
+  'APP_BASE_PATH',
+  'APP_SERVER_HOST',
+  'APP_SERVER_PORT',
+  'APP_SERVER_START_LOG',
+  'API_CLIENT_STORAGE_PREFIX',
+  'API_CLIENT_STORAGE_TYPE',
+  'API_CLIENT_SHARE_TOKEN',
+  'DB_CONNECTION',
+  'DB_DATABASE',
+  'DB_DEBUG',
+  'DB_HOST',
+  'DB_PORT',
+  'DB_USERNAME',
+  'DB_PASSWORD',
+  'DB_CHARSET',
+  'DB_SSL',
+  'DB_SCHEMA',
+  'DB_MIGRATIONS_AUTO_RUN',
+  'DB_MIGRATIONS_TABLE',
+  'DB_MIGRATIONS_LOCK_TABLE',
+  'DB_SEEDS_AUTO_RUN',
+  'DB_SEEDS_TABLE',
+  'DB_SEEDS_LOCK_TABLE',
+  'QUEUE_CONNECTION',
+  'QUEUE_REDIS_PREFIX',
+  'QUEUE_DB_CONNECTION',
+  'QUEUE_TABLE',
+  'QUEUE_SCHEDULES_TABLE',
+  'QUEUE_WORKER_CONNECTION',
+  'QUEUE_WORKER_QUEUES',
+  'QUEUE_WORKER_CONCURRENCY',
+  'QUEUE_WORKER_IDLE_DELAY',
+  'QUEUE_WORKER_TIMEOUT',
+  'QUEUE_JOBS_AUTO_LOAD',
+  'QUEUE_JOBS_HOT_RELOAD',
+  'REDIS_HOST',
+  'REDIS_PORT',
+  'REDIS_USERNAME',
+  'REDIS_PASSWORD',
+  'REDIS_DB',
+  'REDIS_TLS',
+  'NOTIFICATION_PROVIDER_TEST_ENABLED',
+  'TEST_EMAIL_RECIPIENT',
+  'SMTP_HOST',
+  'SMTP_PORT',
+  'SMTP_SECURE',
+  'SMTP_USER',
+  'SMTP_PASSWORD',
+  'SMTP_FROM',
+  'SMTP_REPLY_TO',
+  'RESEND_API_KEY',
+  'RESEND_FROM',
+  'RESEND_REPLY_TO',
+  'FEISHU_WEBHOOK_URL',
+  'FEISHU_WEBHOOK_SECRET',
+  'DINGTALK_WEBHOOK_URL',
+  'DINGTALK_WEBHOOK_SECRET',
+  'WORKFLOW_ARTIFACT_DISK',
+]);
+
+const parseEnv = (content) => {
+  const parsed = {};
+  const linePattern =
+    /^\s*(?:export\s+)?([\w.-]+)\s*=\s*('(?:\\'|[^'])*'|"(?:\\"|[^"])*"|[^#\r\n]*)?\s*(?:#.*)?$/;
+
+  for (const line of content.split(/\r?\n/)) {
+    const match = line.match(linePattern);
+    if (!match) {
+      continue;
+    }
+
+    const [, key, rawValue = ''] = match;
+    const quote = rawValue[0];
+    let value = rawValue.trim();
+
+    if (
+      (quote === '"' || quote === "'") &&
+      value.endsWith(quote) &&
+      value.length >= 2
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    parsed[key] = value.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
+  }
+
+  return parsed;
+};
+
+const expandEnvValue = (value, env) =>
+  value.replace(/\\?\${?([A-Za-z_][A-Za-z0-9_]*)}?/g, (match, key) => {
+    if (match.startsWith('\\')) {
+      return match.slice(1);
+    }
+
+    return env[key] ?? '';
+  });
+
+const readEnvFiles = (files, baseEnv = {}) => {
+  const env = {};
+
+  for (const envFile of files) {
+    if (!fs.existsSync(envFile)) {
+      continue;
+    }
+
+    Object.assign(env, parseEnv(fs.readFileSync(envFile, 'utf8')));
+  }
+
+  const expansionEnv = { ...baseEnv, ...env };
+  for (const [key, value] of Object.entries(env)) {
+    env[key] = expandEnvValue(value, expansionEnv);
+    expansionEnv[key] = env[key];
+  }
+
+  return env;
+};
+
+const formatEnvValue = (value) => {
+  if (/^[A-Za-z0-9_./:@%+-]*$/.test(value)) {
+    return value;
+  }
+
+  return JSON.stringify(value);
+};
+
+// The same two files the server runtime loads through `loadStandaloneAppEnv`. Vite is handed this set too, so the
+// client and the server are built from one environment; nothing else may read `.env` files on its own.
+const applicationEnvFiles = [
+  path.join(rootDir, '.env'),
+  path.join(rootDir, '.env.local'),
+];
+
+const writeDistEnv = () => {
+  const env = readEnvFiles(applicationEnvFiles, process.env);
+  const entries = Object.entries(env).filter(([key]) => serverEnvKeys.has(key));
+
+  if (entries.length === 0) {
+    console.log('\n> Extract environment');
+    console.log(
+      'No supported server environment entries found; skipped dist/.env',
+    );
+    return;
+  }
+
+  fs.mkdirSync(distDir, { recursive: true });
+  const content = entries
+    .map(([key, value]) => `${key}=${formatEnvValue(value)}`)
+    .join('\n');
+
+  fs.writeFileSync(envOutputPath, `${content}\n`, { mode: 0o600 });
+
+  console.log('\n> Extract environment');
+  console.log(
+    `Generated ${path.relative(rootDir, envOutputPath)} from ${applicationEnvFiles
+      .filter((envFile) => fs.existsSync(envFile))
+      .map((envFile) => path.basename(envFile))
+      .join(', ')}`,
+  );
+};
+
+const run = (label, command, args, options = {}) => {
+  console.log(`\n> ${label}`);
+
+  const result = spawn.sync(command, args, {
+    cwd: options.cwd ?? rootDir,
+    env: options.env ?? process.env,
+    stdio: 'inherit',
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1);
+  }
+};
+
+// Read before anything is built, so a broken CLI assembly fails here rather than after several minutes of work.
+const { build: buildHooks } = readCliHooks(rootDir);
+
+fs.rmSync(distDir, { recursive: true, force: true });
+
+// After `dist` is cleared rather than before, so a hook may write into it. Clearing is the build's first step, and a
+// hook writing to a directory about to be deleted would succeed, leave nothing behind, and report nothing wrong.
+runHookStage(buildHooks, 'beforeBuild', run);
+
+run('Typecheck client', 'pnpm', ['exec', 'tsc']);
+run('Typecheck tooling', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.node.json']);
+// `vite.config.ts` reads only the environment it is given, so the `.env` files are resolved here with the process
+// environment taking precedence — the order `loadStandaloneAppEnv` applies on the server. Letting Vite read `.env`
+// files itself would also pick up `.env.production` and other mode files the server never loads, and the client would
+// be built for one `APP_BASE_PATH` while the server mounts at another.
+run('Build client', 'pnpm', ['exec', 'refine', 'build'], {
+  env: {
+    ...readEnvFiles(applicationEnvFiles, process.env),
+    ...process.env,
+  },
+});
+runHookStage(buildHooks, 'afterClientBuild', run);
+// `^...` selects every workspace package this one depends on, transitively, which is exactly the set whose `dist`
+// the steps below read. Spelling the set out by hand drifted instead: `@nocobase/config` was missing from the list
+// and a template built on its own failed at "Generate server package" with `Missing ../../libs/config/dist`.
+//
+// Only needed when a template is built alone. `pnpm -r build` already orders dependencies first, and it runs the two
+// templates concurrently — where each plugin's build clears its `dist` before tsc refills it, so one template can
+// observe the other's empty `dist` and fail with a misleading "Missing .../dist".
+//
+// In a generated application there is no workspace to select from, so pnpm matches nothing and exits successfully.
+if (process.env.NOCOBASE_SKIP_WORKSPACE_DEPENDENCY_BUILD !== '1') {
+  run('Build server workspace dependencies', 'pnpm', [
+    '--filter',
+    `${appPackageName}^...`,
+    'build',
+  ]);
+}
+run('Build server', 'pnpm', ['exec', 'tsc', '-p', 'tsconfig.server.json']);
+run('Rewrite server path aliases', 'pnpm', [
+  'exec',
+  'tsc-alias',
+  '-p',
+  'tsconfig.server.json',
+]);
+// tsc emits only TypeScript. An external connection reads its supplemental metadata from
+// `database/<connection>/collections/*/metadata.json` at runtime, so those files have to travel with the server or a
+// deployment resolves every external Collection without titles or relations and reports nothing wrong. Only
+// `metadata.json` is copied: `collection.json` and `schema.json` are derived output nothing reads back.
+copyCollectionMetadata();
+runHookStage(buildHooks, 'afterServerBuild', run);
+await generateDatabaseManifests({
+  sourceDir: path.join(rootDir, 'database'),
+  outputDir: path.join(distDir, 'database'),
+});
+
+writeDistEnv();
+run('Generate server package', 'node', [
+  fileURLToPath(
+    new URL('./utils/build-server-dist-package.mjs', import.meta.url),
+  ),
+]);
+// Installed with pnpm, matching the rest of this project, and run with `dist` as the working directory rather than
+// through `--dir`. pnpm resolves `allowBuilds` from the directory it runs in, and `utils/build-server-dist-package.mjs`
+// wrote a `pnpm-workspace.yaml` there carrying it. `--dir` leaves the process in the application root, where pnpm
+// reads the root's settings instead, finds the drivers undecided, and rewrites every entry in the generated file to
+// "set this to true or false" before stopping.
+//
+// `allowBuilds` is what lets the native driver compile. Without it the install still reports success and the failure
+// surfaces only on the deployed server, as a missing bindings file that names nothing pointing back here.
+//
+// `--no-lockfile` because `dist/package.json` is generated fresh on every build, and the tree is installed once at
+// deploy time from a manifest whose versions are already resolved. `--ignore-workspace` would defeat the point: it
+// makes pnpm skip the generated file as well. Nothing is needed to keep the install local — a directory holding a
+// `pnpm-workspace.yaml` is a pnpm root in its own right.
+run(
+  'Install server production dependencies',
+  'pnpm',
+  ['install', '--prod', '--no-lockfile'],
+  { cwd: distDir },
+);
+run('Materialize server dependency links', 'node', [
+  fileURLToPath(new URL('./utils/clean-dist-bin.mjs', import.meta.url)),
+]);
+// A `.node` binary is compiled for one platform, architecture, C library, and Node ABI at once, so an install run
+// here produces binaries for this machine. Defaults to this machine so `pnpm build && pnpm start` works; a
+// deployment build passes --target and --node-version.
+run('Retarget native modules', 'node', [
+  fileURLToPath(new URL('./utils/retarget-native.mjs', import.meta.url)),
+  ...process.argv.slice(2),
+]);
+// Removes type declarations, third-party source maps, and third-party documentation from the installed tree. Runs
+// after the native retarget, which installs platform packages of its own, and before verification, which reads
+// `dist/package.json` and package directories rather than any of the files removed here.
+run('Prune deployment artifacts', 'node', [
+  fileURLToPath(new URL('./utils/prune-dist-artifacts.mjs', import.meta.url)),
+]);
+// Fails the build when something the application's own server, database, or CLI code imports would not be usable
+// in a deployment. It runs against the installed tree rather than the manifest alone, because the question is not
+// whether a package is declared but whether the deployment install will actually fetch it. Catching it here costs
+// a build; the alternative is finding out from `Cannot find module` on a deployed server.
+run('Verify server dependencies', 'node', [
+  fileURLToPath(new URL('./utils/verify-server-deps.mjs', import.meta.url)),
+]);
+// Last, with the deployment tree complete and installed. A hook here sees what a deployment will see, and runs
+// before `--tar` so whatever it produces is packed with everything else.
+runHookStage(buildHooks, 'afterBuild', run);
+
+console.log(
+  '\nBuild complete: dist/client, dist/server, dist/cli, dist/.env, and dist/package.json',
+);
+
+// Opt-in, because the archive is only wanted when the build is being shipped somewhere, and packing several hundred
+// megabytes is a minute nobody building to run locally should pay. Matched exactly so it cannot be confused with
+// `--target`, which selects the platform the binaries are built for and is a different question entirely.
+if (process.argv.slice(2).includes('--tar')) {
+  run('Pack deployment archive', 'node', [
+    fileURLToPath(new URL('./utils/pack-dist.mjs', import.meta.url)),
+  ]);
+}
