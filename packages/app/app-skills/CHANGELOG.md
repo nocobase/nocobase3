@@ -1,5 +1,15 @@
 # @nocobase/app-skills
 
+## 0.0.2-beta.7
+
+### Patch Changes
+
+- 71d159c: Preinstall editable File Registry components and their OOXML client dependency in the Default template so applications can reuse authenticated DOCX, XLSX and PPTX previews. Clarify component reuse, dependency ownership and separate Skill/UI upgrade steps in the file and application development guidance.
+
+  Keep the shared file preview dialog wide on desktop and within the viewport on small screens, and normalize Date metadata in its refresh key for strict application linting.
+
+- 836014a: Synchronize the shared layout containers and AppLayout organization with Examples while preserving template branding and Hub navigation ordering. Update application guidance for the shared layout components and layout-owned permission checks.
+
 ## 0.0.2-beta.6
 
 ### Patch Changes

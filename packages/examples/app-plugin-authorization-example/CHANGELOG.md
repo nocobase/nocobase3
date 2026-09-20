@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-authorization-example
 
+## 0.1.0-beta.2
+
+### Patch Changes
+
+- 86c4d2c: Allow unfulfilled example orders to have a null delivery reference, fixing Oracle startup seeds and example data resets. Upgrade existing schemas with a new migration while retaining delivery-time validation. Rolling back requires filling any missing delivery references first.
+
 ## 0.1.0-beta.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-scheduler
 
+## 0.1.0-beta.4
+
+### Patch Changes
+
+- 4b3bcfe: Keep switch tracks and thumbs on the same theme spacing scale so compact themes preserve their proportions and checked alignment.
+
 ## 0.1.0-beta.3
 
 ### Patch Changes

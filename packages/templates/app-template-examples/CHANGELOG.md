@@ -1,5 +1,23 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.20
+
+### Patch Changes
+
+- 836014a: Extract reusable header and sidebar containers in the Examples template while keeping navigation permissions and route behavior in each layout. Add accessible mobile sidebar dismissal and preserve child state across collapse and visibility changes.
+
+  Organize layout components under `client/layouts/components` and rename the main application shell to `AppLayout`.
+
+- Updated dependencies [86c4d2c]
+- Updated dependencies [71d159c]
+- Updated dependencies [4b3bcfe]
+- Updated dependencies [4694f66]
+- Updated dependencies [4b3bcfe]
+  - @nocobase/app-plugin-authorization-example@0.1.0-beta.2
+  - @nocobase/app-plugin-file@0.1.0-beta.15
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.4
+  - @nocobase/app-plugin-workflow@0.1.0-beta.23
+
 ## 0.1.0-beta.19
 
 ### Patch Changes

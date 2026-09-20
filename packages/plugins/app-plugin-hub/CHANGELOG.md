@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.14
+
+### Patch Changes
+
+- e73837a: Generate and persist a session secret for Config file deployments and configuration publications even when the session section is omitted. Reuse existing secrets on subsequent operations and preserve custom values. Existing applications using a runtime-only session secret receive a stable secret on the next deployment or configuration publication, invalidating cookies encrypted with the previous secret.
+
 ## 0.1.0-beta.13
 
 ### Patch Changes

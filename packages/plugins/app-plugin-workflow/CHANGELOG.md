@@ -1,5 +1,17 @@
 # @nocobase/app-plugin-workflow
 
+## 0.1.0-beta.23
+
+### Patch Changes
+
+- 4694f66: Require meaningful descriptions for every node in workflow authoring guidance and update the DSL examples.
+
+  Suggest summarizing the latest DSL change and its reason in the workflow description, replacing any previous change note while preserving the workflow purpose.
+
+- 4b3bcfe: Use standard switch sizing, consolidate version comparison headings, center unobstructed connector bends, and restore blue new-version badges.
+- Updated dependencies [4b3bcfe]
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.4
+
 ## 0.1.0-beta.22
 
 ### Minor Changes
