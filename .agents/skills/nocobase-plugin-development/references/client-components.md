@@ -94,7 +94,25 @@ Generated shadcn source targets application source by default. Before treating i
 - Remove unused generated files and peer dependencies.
 - Keep CSS side effects explicit; use `sideEffects: false` only when every published module is genuinely free of import-time side effects.
 
-Use the shared theme contract for all plugin UI: [theme tokens](../../../../packages/app/app-skills/skills/nocobase-app-development/references/theme-tokens.md). Prefer its color, typography, spacing, radius, shadow, and motion utilities so plugin UI responds to the target App's theme.
+Use the shared theme contract for all plugin UI: [theme tokens](theme-tokens.md). Prefer its color, typography, spacing, radius, shadow, and motion utilities so plugin UI responds to the target App's theme.
+
+## Copy page and route components into the plugin
+
+When a plugin needs the template's page structure or route overlays, copy the required source into `<plugin>/client/components/` and maintain it as plugin-owned code. Reuse an existing plugin copy before adding another. These template files are source references, not runtime imports from the host App:
+
+| Need                     | Source to copy                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Page spacing             | [page-container.tsx](../../../../packages/templates/app-template-default/client/components/page-container.tsx)                                                                                                                                                                                                                                                                                                                                               |
+| Page heading and actions | [page-header.tsx](../../../../packages/templates/app-template-default/client/components/page-header.tsx)                                                                                                                                                                                                                                                                                                                                                     |
+| Route dialog or drawer   | [route-dialog.tsx](../../../../packages/templates/app-template-default/client/components/route-dialog.tsx), [route-drawer.tsx](../../../../packages/templates/app-template-default/client/components/route-drawer.tsx), [route-overlay.tsx](../../../../packages/templates/app-template-default/client/components/route-overlay.tsx), and [use-route-overlay.ts](../../../../packages/templates/app-template-default/client/components/use-route-overlay.ts) |
+
+Copy the overlay implementation and its hook together, retaining one plugin-local Context instance for both wrappers. Include only the wrappers needed by the feature. Resolve their transitive imports against plugin-owned shadcn primitives and utilities, including `ui/dialog`, `ui/button`, and `lib/utils`; generate missing primitives using the workflow above. Change internal imports to relative `.js` paths and add explicit declaration-safe types as described above. Declare imported Client runtime packages as peers. Keep these copies private unless an approved public export is required.
+
+Copy the components' translation keys into the plugin's own `client/locales/` resources and register the lazy locale manifest in its Client declaration; see [internationalization](i18n.md). In particular, `route-overlay.tsx` uses `actions.close`: supply this key in every supported plugin language (for example, `Close` in English and `关闭` in Chinese). Do not rely on the host App providing the same key. Under the plugin's own route, the copied overlay inherits the plugin namespace; if it is intentionally exported for another owner to render, bind that namespace explicitly as described in the internationalization guide.
+
+The page examples in this Skill assume these copies already exist. Nested pages adjust the relative path to the same plugin-owned components. The host App's private breadcrumb component is excluded from this copy workflow because it reads an App-owned route Context; do not copy that Context or import the host's routing internals.
+
+Verify copied components with the plugin's lint, typecheck, tests and build, then exercise them in the target App. For overlays, cover direct URLs, closing, nested Context ownership, keyboard interaction and unsaved-change guards.
 
 ## Compose business components
 
