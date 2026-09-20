@@ -259,6 +259,8 @@ describe('app migrator', () => {
       skipped: ['000_create_accounts'],
     });
     expect(createDatabaseMigratorMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database,
       connection: undefined,
       directory,
@@ -295,6 +297,8 @@ describe('app migrator', () => {
       rolledBack: ['001_create_users'],
     });
     expect(createDatabaseMigratorMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database: expect.any(Object),
       connection: 'tenant',
       directory,
@@ -341,6 +345,8 @@ describe('app migrator', () => {
       status: 'completed',
     });
     expect(createDatabaseMigratorMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database,
       connection: undefined,
       sources,
@@ -400,6 +406,8 @@ describe('app seeder', () => {
       skipped: ['000_create_roles'],
     });
     expect(createDatabaseSeederMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database,
       connection: 'tenant',
       directory,
@@ -433,6 +441,8 @@ describe('app seeder', () => {
 
     await expect(seeder.run()).resolves.toMatchObject({ status: 'completed' });
     expect(createDatabaseSeederMock).toHaveBeenCalledWith({
+      config: { get: expect.any(Function) },
+      container: expect.objectContaining({ resolve: expect.any(Function) }),
       database,
       connection: undefined,
       sources,

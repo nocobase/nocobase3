@@ -5,10 +5,11 @@ describe('application command factories', () => {
   it('keeps application contexts separate and does not resolve runtime during registration', () => {
     const loadRuntime = vi.fn();
     const first = createAppCommands({ rootDir: '/first', loadRuntime });
-    const second = createAppCommands(
-      { rootDir: '/second', loadRuntime },
-      { publishing: true },
-    );
+    const second = createAppCommands({
+      rootDir: '/second',
+      loadRuntime,
+      publishing: true,
+    });
     expect(first.info).not.toBe(second.info);
     expect(first).not.toHaveProperty('deploy');
     expect(second).toHaveProperty('deploy');

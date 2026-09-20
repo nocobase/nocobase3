@@ -1,3 +1,6 @@
+import { ServiceContainer } from '@nocobase/service-provider';
+import { SnowflakeIdGenerator } from '@nocobase/snowflake';
+import { idGeneratorToken } from '../src/id-generator/token.js';
 import type { ConnectionConfigFromDrivers } from '@nocobase/db';
 import {
   mkdirSync,
@@ -108,6 +111,47 @@ async function inspect(
 }
 
 describe('connection-bound application database tasks', () => {
+  it('injects application config into manual migration and seed execution', async () => {
+    const { config, paths, contributions } = fixture();
+    const runtimeConfig = new AppConfig();
+    await runtimeConfig.loadAll();
+    runtimeConfig.mergeDefaults({
+      initialAdmin: { username: 'configured-admin' },
+    });
+    const container = new ServiceContainer();
+    container.instance(
+      idGeneratorToken,
+      new SnowflakeIdGenerator({ workerId: 0 }),
+    );
+    for (const kind of ['migrations', 'seeds'] as const) {
+      const directory = paths.database(`main/${kind}`);
+      mkdirSync(directory, { recursive: true });
+      const define = kind === 'migrations' ? 'defineMigration' : 'defineSeed';
+      const callback = kind === 'migrations' ? 'up' : 'run';
+      writeFileSync(
+        path.join(directory, '001_config.ts'),
+        `
+        import { ${define}, databaseManagerToken } from '@nocobase/db';
+        import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+        export default ${define}({ name: '001_config', ${kind === 'migrations' ? 'irreversible: true,' : ''} async ${callback}({ config, container }) {
+          if (!container.resolve(idGeneratorToken).generateString()) throw new Error('missing IDs');
+          if (container.has(databaseManagerToken)) throw new Error('unrestricted container');
+          if (config.get('initialAdmin.username') !== 'configured-admin') throw new Error('config not injected');
+        } });
+      `,
+      );
+      const result = await runAppDatabaseTasks(config, {
+        kind,
+        paths,
+        contributions,
+        runtimeConfig,
+        container,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.results[0].executed).toEqual(['001_config']);
+    }
+  });
+
   it('prepares official drivers for standalone migration tasks', async () => {
     const { config, paths, contributions } = fixture();
     migration(paths.database('main/migrations'), '001_auto_driver', 'autoRows');

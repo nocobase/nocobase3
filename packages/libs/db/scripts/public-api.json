@@ -134,6 +134,7 @@
         "DatabaseRepositoryRuntimeStrategy",
         "DatabaseSchemaRuntimeStrategy",
         "DatabaseSeederOptions",
+        "DatabaseTaskConfig",
         "DateFilterOperators",
         "DecodedPhysicalCollectionCursor",
         "DeleteManyOptions",
