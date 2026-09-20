@@ -1,3 +1,4 @@
+import { useSidebarPreference } from './use-sidebar-preference.js';
 import { useSyncServerLocale } from '@nocobase/app-plugin-i18n/client';
 import { useState, type ReactElement } from 'react';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
@@ -30,7 +31,8 @@ export function AppLayout({
   // The browser decides what it renders; this tells the server the same language so its messages match.
   useSyncServerLocale();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] =
+    useSidebarPreference();
 
   const { t } = useTranslation();
   const { items: menuItems, denied } = useRouteNavigation(routes);

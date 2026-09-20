@@ -1,3 +1,4 @@
+import { useSidebarPreference } from './use-sidebar-preference.js';
 import { useTranslation } from '@nocobase/i18n/client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
 import { ArrowLeft, PanelLeft, X } from 'lucide-react';
@@ -48,7 +49,8 @@ export function DevLayout({
   };
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] =
+    useSidebarPreference();
   const { items: navEntries, loading, denied } = useRouteNavigation(routeTree);
   const settingsNavigation = useRouteNavigation(
     useClientApplication().runtime.settingsRouteTree,
