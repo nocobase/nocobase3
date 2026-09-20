@@ -236,7 +236,7 @@ describe('client inspection', () => {
         }),
         expect.objectContaining({
           id: 'aiConversations',
-          title: 'Conversations',
+          title: 'aiConversations',
           path: '/settings/ai/conversations',
           groupId: 'aiGroup',
         }),

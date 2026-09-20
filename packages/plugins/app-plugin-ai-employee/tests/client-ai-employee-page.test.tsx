@@ -124,9 +124,12 @@ afterEach(() => {
 });
 
 async function renderPage({ collapsed = true }: { collapsed?: boolean } = {}) {
-  const view = render(<AIEmployeePage />);
-  await screen.findByRole('heading', { name: 'Ellis' });
-  await screen.findByRole('switch', { name: 'Enabled' });
+  // Flush the list response, then the selected-employee effect and response.
+  // These mocks resolve immediately; their React commits must not race a
+  // findBy query's wall-clock deadline on a contended CI worker.
+  const view = await act(async () => render(<AIEmployeePage />));
+  expect(screen.getByRole('heading', { name: 'Ellis' })).toBeVisible();
+  expect(screen.getByRole('switch', { name: 'Enabled' })).toBeVisible();
   if (
     collapsed &&
     screen.queryByRole('button', { name: 'Collapse employee list' })
@@ -397,6 +400,8 @@ describe('AI employee list disclosure', () => {
   });
 
   it('aligns to the loading text until the selected identity card is available and reconnects on selection', async () => {
+    const listResponse = Promise.withResolvers<AIEmployeeRecord[]>();
+    mocks.list.mockReturnValueOnce(listResponse.promise);
     let resolveEmployee!: (employee: AIEmployeeRecord) => void;
     mocks.get.mockImplementation(
       () =>
@@ -404,8 +409,20 @@ describe('AI employee list disclosure', () => {
           resolveEmployee = resolve;
         }),
     );
-    render(<AIEmployeePage />);
-    const loading = await screen.findByText('Loading employee details…');
+    await act(async () => render(<AIEmployeePage />));
+    expect(screen.getByText('Loading AI employees…')).toBeVisible();
+    expect(mocks.get).not.toHaveBeenCalled();
+    await act(async () => listResponse.resolve(employees));
+    const loading = screen.getByText('Loading employee details…');
+    expect(loading).toBeVisible();
+    expect(mocks.get).toHaveBeenCalledExactlyOnceWith(
+      'ellis',
+      expect.any(AbortSignal),
+      mocks.api,
+    );
+    expect(
+      screen.queryByRole('heading', { name: 'Ellis' }),
+    ).not.toBeInTheDocument();
     toggleList();
     const toggle = screen.getByRole('button', { name: 'Expand employee list' });
     const divider = toggle.parentElement!;
