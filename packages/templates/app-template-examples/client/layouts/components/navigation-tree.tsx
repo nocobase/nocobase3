@@ -124,7 +124,7 @@ export function NavigationTree({
           }
           aria-label={label}
           aria-current={isSelected ? 'page' : undefined}
-          className={`flex w-full items-center justify-center gap-3 rounded-lg px-2 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${isSelected ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
+          className={`flex w-full items-center justify-center gap-3 rounded-lg px-2 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${selected ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
         >
           {icon ? (
             <NavigationIcon>{icon}</NavigationIcon>
