@@ -17,90 +17,10 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./start": {
-      "import": "./src/scripts/start.mjs",
-      "default": "./src/scripts/start.mjs"
-    },
-    "./build": {
-      "import": "./src/scripts/build.mjs",
-      "default": "./src/scripts/build.mjs"
-    },
-    "./utils/retarget-native": {
-      "import": "./src/scripts/utils/retarget-native.mjs",
-      "default": "./src/scripts/utils/retarget-native.mjs"
-    },
-    "./utils/server-deps": {
-      "import": "./src/scripts/utils/server-deps.mjs",
-      "default": "./src/scripts/utils/server-deps.mjs"
-    },
-    "./utils/verify-server-deps": {
-      "import": "./src/scripts/utils/verify-server-deps.mjs",
-      "default": "./src/scripts/utils/verify-server-deps.mjs"
-    },
-    "./utils/pack-dist": {
-      "import": "./src/scripts/utils/pack-dist.mjs",
-      "default": "./src/scripts/utils/pack-dist.mjs"
-    },
-    "./utils/workspace-packages": {
-      "import": "./src/scripts/utils/workspace-packages.mjs",
-      "default": "./src/scripts/utils/workspace-packages.mjs"
-    },
-    "./utils/clean-dist-bin": {
-      "import": "./src/scripts/utils/clean-dist-bin.mjs",
-      "default": "./src/scripts/utils/clean-dist-bin.mjs"
-    },
-    "./utils/cli-hooks": {
-      "import": "./src/scripts/utils/cli-hooks.mjs",
-      "default": "./src/scripts/utils/cli-hooks.mjs"
-    },
-    "./utils/prune-dist-artifacts": {
-      "import": "./src/scripts/utils/prune-dist-artifacts.mjs",
-      "default": "./src/scripts/utils/prune-dist-artifacts.mjs"
-    },
-    "./utils/build-server-dist-package": {
-      "import": "./src/scripts/utils/build-server-dist-package.mjs",
-      "default": "./src/scripts/utils/build-server-dist-package.mjs"
-    },
-    "./dev/config-watch": {
-      "import": "./src/scripts/dev/config-watch.mjs",
-      "default": "./src/scripts/dev/config-watch.mjs"
-    },
-    "./dev/plugin-watches": {
-      "import": "./src/scripts/dev/plugin-watches.mjs",
-      "default": "./src/scripts/dev/plugin-watches.mjs"
-    },
-    "./dev/run": {
-      "import": "./src/scripts/dev/run.mjs",
-      "default": "./src/scripts/dev/run.mjs"
-    },
-    "./dev/ports": {
-      "import": "./src/scripts/dev/ports.mjs",
-      "default": "./src/scripts/dev/ports.mjs"
-    },
     "./dev/proxy": {
       "types": "./src/scripts/dev/proxy.d.mts",
       "import": "./src/scripts/dev/proxy.mjs",
       "default": "./src/scripts/dev/proxy.mjs"
-    },
-    "./dev/trusted-origins": {
-      "import": "./src/scripts/dev/trusted-origins.mjs",
-      "default": "./src/scripts/dev/trusted-origins.mjs"
-    },
-    "./dev/index": {
-      "import": "./src/scripts/dev/index.mjs",
-      "default": "./src/scripts/dev/index.mjs"
-    },
-    "./dev/watch-environment": {
-      "import": "./src/scripts/dev/watch-environment.mjs",
-      "default": "./src/scripts/dev/watch-environment.mjs"
-    },
-    "./dev/supervisor": {
-      "import": "./src/scripts/dev/supervisor.mjs",
-      "default": "./src/scripts/dev/supervisor.mjs"
-    },
-    "./dev/readiness": {
-      "import": "./src/scripts/dev/readiness.mjs",
-      "default": "./src/scripts/dev/readiness.mjs"
     },
     "./package.json": "./package.json"
   },
@@ -112,110 +32,10 @@
         "import": "./dist/index.js",
         "default": "./dist/index.js"
       },
-      "./start": {
-        "types": "./dist/scripts/start.d.mts",
-        "import": "./dist/scripts/start.mjs",
-        "default": "./dist/scripts/start.mjs"
-      },
-      "./build": {
-        "types": "./dist/scripts/build.d.mts",
-        "import": "./dist/scripts/build.mjs",
-        "default": "./dist/scripts/build.mjs"
-      },
-      "./utils/retarget-native": {
-        "types": "./dist/scripts/utils/retarget-native.d.mts",
-        "import": "./dist/scripts/utils/retarget-native.mjs",
-        "default": "./dist/scripts/utils/retarget-native.mjs"
-      },
-      "./utils/server-deps": {
-        "types": "./dist/scripts/utils/server-deps.d.mts",
-        "import": "./dist/scripts/utils/server-deps.mjs",
-        "default": "./dist/scripts/utils/server-deps.mjs"
-      },
-      "./utils/verify-server-deps": {
-        "types": "./dist/scripts/utils/verify-server-deps.d.mts",
-        "import": "./dist/scripts/utils/verify-server-deps.mjs",
-        "default": "./dist/scripts/utils/verify-server-deps.mjs"
-      },
-      "./utils/pack-dist": {
-        "types": "./dist/scripts/utils/pack-dist.d.mts",
-        "import": "./dist/scripts/utils/pack-dist.mjs",
-        "default": "./dist/scripts/utils/pack-dist.mjs"
-      },
-      "./utils/workspace-packages": {
-        "types": "./dist/scripts/utils/workspace-packages.d.mts",
-        "import": "./dist/scripts/utils/workspace-packages.mjs",
-        "default": "./dist/scripts/utils/workspace-packages.mjs"
-      },
-      "./utils/clean-dist-bin": {
-        "types": "./dist/scripts/utils/clean-dist-bin.d.mts",
-        "import": "./dist/scripts/utils/clean-dist-bin.mjs",
-        "default": "./dist/scripts/utils/clean-dist-bin.mjs"
-      },
-      "./utils/cli-hooks": {
-        "types": "./dist/scripts/utils/cli-hooks.d.mts",
-        "import": "./dist/scripts/utils/cli-hooks.mjs",
-        "default": "./dist/scripts/utils/cli-hooks.mjs"
-      },
-      "./utils/prune-dist-artifacts": {
-        "types": "./dist/scripts/utils/prune-dist-artifacts.d.mts",
-        "import": "./dist/scripts/utils/prune-dist-artifacts.mjs",
-        "default": "./dist/scripts/utils/prune-dist-artifacts.mjs"
-      },
-      "./utils/build-server-dist-package": {
-        "types": "./dist/scripts/utils/build-server-dist-package.d.mts",
-        "import": "./dist/scripts/utils/build-server-dist-package.mjs",
-        "default": "./dist/scripts/utils/build-server-dist-package.mjs"
-      },
-      "./dev/config-watch": {
-        "types": "./dist/scripts/dev/config-watch.d.mts",
-        "import": "./dist/scripts/dev/config-watch.mjs",
-        "default": "./dist/scripts/dev/config-watch.mjs"
-      },
-      "./dev/plugin-watches": {
-        "types": "./dist/scripts/dev/plugin-watches.d.mts",
-        "import": "./dist/scripts/dev/plugin-watches.mjs",
-        "default": "./dist/scripts/dev/plugin-watches.mjs"
-      },
-      "./dev/run": {
-        "types": "./dist/scripts/dev/run.d.mts",
-        "import": "./dist/scripts/dev/run.mjs",
-        "default": "./dist/scripts/dev/run.mjs"
-      },
-      "./dev/ports": {
-        "types": "./dist/scripts/dev/ports.d.mts",
-        "import": "./dist/scripts/dev/ports.mjs",
-        "default": "./dist/scripts/dev/ports.mjs"
-      },
       "./dev/proxy": {
         "types": "./dist/scripts/dev/proxy.d.mts",
         "import": "./dist/scripts/dev/proxy.mjs",
         "default": "./dist/scripts/dev/proxy.mjs"
-      },
-      "./dev/trusted-origins": {
-        "types": "./dist/scripts/dev/trusted-origins.d.mts",
-        "import": "./dist/scripts/dev/trusted-origins.mjs",
-        "default": "./dist/scripts/dev/trusted-origins.mjs"
-      },
-      "./dev/index": {
-        "types": "./dist/scripts/dev/index.d.mts",
-        "import": "./dist/scripts/dev/index.mjs",
-        "default": "./dist/scripts/dev/index.mjs"
-      },
-      "./dev/watch-environment": {
-        "types": "./dist/scripts/dev/watch-environment.d.mts",
-        "import": "./dist/scripts/dev/watch-environment.mjs",
-        "default": "./dist/scripts/dev/watch-environment.mjs"
-      },
-      "./dev/supervisor": {
-        "types": "./dist/scripts/dev/supervisor.d.mts",
-        "import": "./dist/scripts/dev/supervisor.mjs",
-        "default": "./dist/scripts/dev/supervisor.mjs"
-      },
-      "./dev/readiness": {
-        "types": "./dist/scripts/dev/readiness.d.mts",
-        "import": "./dist/scripts/dev/readiness.mjs",
-        "default": "./dist/scripts/dev/readiness.mjs"
       },
       "./package.json": "./package.json"
     }
@@ -240,7 +60,8 @@
     "typescript": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "tsx": "catalog:"
   },
   "peerDependencies": {
     "@nocobase/app-server": "workspace:^",

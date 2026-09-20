@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 // @vitest-environment node
 
 import { createHash, randomUUID } from 'node:crypto';
@@ -16,9 +15,9 @@ import {
 } from 'vite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveDevTrustedOrigins } from '../../scripts/dev/trusted-origins.mjs';
+import { resolveDevTrustedOrigins } from '../src/scripts/dev/trusted-origins.mjs';
 
-import { createDevProxy, parseProxyTarget } from '../../scripts/dev/proxy.mjs';
+import { createDevProxy, parseProxyTarget } from '../src/scripts/dev/proxy.mjs';
 
 interface ReceivedRequest {
   body: string;
@@ -42,7 +41,7 @@ type DevProxy = ServerOptions['proxy'];
 const backends: TestBackend[] = [];
 const viteServers: ViteDevServer[] = [];
 const devEntrySource = readFileSync(
-  createRequire(import.meta.url).resolve('@nocobase/app-tools/dev/index'),
+  new URL('../src/scripts/dev/index.mjs', import.meta.url),
   'utf8',
 );
 

@@ -2,17 +2,14 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-export type AppTool =
-  | 'build'
-  | 'start'
-  | 'dev/run'
-  | 'dev/index'
-  | 'utils/build-server-dist-package'
-  | 'utils/clean-dist-bin'
-  | 'utils/retarget-native'
-  | 'utils/prune-dist-artifacts'
-  | 'utils/verify-server-deps'
-  | 'utils/pack-dist';
+const TOOL_ENTRIES = {
+  dev: 'dev/run',
+  build: 'build',
+  start: 'start',
+  retarget: 'utils/retarget-native',
+  verify: 'utils/verify-server-deps',
+} as const;
+export type AppTool = keyof typeof TOOL_ENTRIES;
 export interface RunAppToolOptions {
   readonly rootDir: string;
   readonly args?: readonly string[];
@@ -23,7 +20,7 @@ export function runAppTool(
 ): Promise<number> {
   const rootDir = path.resolve(options.rootDir);
   const entry = fileURLToPath(
-    new URL(`./scripts/${tool}.mjs`, import.meta.url),
+    new URL(`./scripts/${TOOL_ENTRIES[tool]}.mjs`, import.meta.url),
   );
   return new Promise((resolve, reject) => {
     const child = spawn(

@@ -8,10 +8,10 @@ import { afterEach, expect, it } from 'vitest';
 
 const processes: ChildProcess[] = [];
 const directories: string[] = [];
-const supervisor = new URL('../../scripts/dev/supervisor.mjs', import.meta.url)
+const supervisor = new URL('../src/scripts/dev/supervisor.mjs', import.meta.url)
   .href;
 const envLoader = new URL(
-  '../../node_modules/@nocobase/app-server/src/node/scope.ts',
+  '../node_modules/@nocobase/app-server/src/node/scope.ts',
   import.meta.url,
 ).href;
 
@@ -56,7 +56,7 @@ async function fixture(strict = false) {
     process.execPath,
     ['--import', createRequire(import.meta.url).resolve('tsx'), launcher],
     {
-      cwd: path.resolve(import.meta.dirname, '../..'),
+      cwd: path.resolve(import.meta.dirname, '..'),
       env: {
         ...process.env,
         SHELL_OVERRIDE: 'shell',

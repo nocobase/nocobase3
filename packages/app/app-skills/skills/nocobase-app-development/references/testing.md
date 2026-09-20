@@ -98,3 +98,7 @@ Do not delete or rebuild a running development server's cache. For an already co
 ## Shared application tooling
 
 Application scripts delegate to `@nocobase/app-tools`, and standard runtime CLI commands delegate to `@nocobase/app-cli`. In the source repository, run shared implementation tests in those packages and application composition tests in each affected template. Keep custom application command tests local. A generated application consumes compiled packages; do not edit installed package files to customize behavior.
+
+Development starts through `scripts/dev.mjs` calling `runAppTool('dev', { rootDir })`. Vite configuration imports proxy helpers directly from `@nocobase/app-tools/dev/proxy`. Keep watcher, proxy, and supervisor unit tests in `app-tools`; templates verify application entry paths and Vite integration.
+
+Standalone dependency checks and native retargeting use `scripts/server-deps.mjs` through the existing `server:deps:verify` and `server:deps:retarget` package scripts. Internal build utilities are owned and tested by `app-tools`.

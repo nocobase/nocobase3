@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 // @vitest-environment node
 
 import { spawnSync } from 'node:child_process';
@@ -33,9 +32,7 @@ function createFixture() {
 
 function copyScript(root: string, relativePath: string) {
   copyFileSync(
-    createRequire(import.meta.url).resolve(
-      '@nocobase/app-tools/' + relativePath.replace(/\.mjs$/, ''),
-    ),
+    path.resolve(import.meta.dirname, '../src/scripts', relativePath),
     path.join(root, 'scripts', relativePath),
   );
 }

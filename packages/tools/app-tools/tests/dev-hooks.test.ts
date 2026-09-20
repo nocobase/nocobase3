@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 // @vitest-environment node
 
 import { readFileSync } from 'node:fs';
@@ -6,7 +5,7 @@ import { runInNewContext } from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 
 const source = readFileSync(
-  createRequire(import.meta.url).resolve('@nocobase/app-tools/dev/index'),
+  new URL('../src/scripts/dev/index.mjs', import.meta.url),
   'utf8',
 );
 // Exercise the hook runner without launching the long-running development servers.

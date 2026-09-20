@@ -51,12 +51,7 @@ describe('development client file watching', () => {
       await mkdir(path.dirname(file), { recursive: true });
       await writeFile(file, 'export const value = 1;\n');
     }
-    await mkdir(path.join(root, 'scripts/dev'), { recursive: true });
-    for (const file of [
-      'vite.config.ts',
-      'scripts/dev/proxy.mjs',
-      'package.json',
-    ]) {
+    for (const file of ['vite.config.ts', 'package.json']) {
       await copyFile(path.join(appRoot, file), path.join(root, file));
     }
     await symlink(

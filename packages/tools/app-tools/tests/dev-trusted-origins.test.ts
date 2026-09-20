@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest';
-import { resolveDevTrustedOrigins } from '../../scripts/dev/trusted-origins.mjs';
+import { resolveDevTrustedOrigins } from '../src/scripts/dev/trusted-origins.mjs';
 
 describe('development authentication origins', () => {
   it('uses the allocated backend port for both local addresses', () => {

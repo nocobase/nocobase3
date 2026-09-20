@@ -56,10 +56,8 @@ describe('resolving the application root from a file location', () => {
   it('finds every file that does this', () => {
     // Guards the pattern itself: a regex that silently stops matching would turn this suite into a no-op. The count is
     // a floor rather than an exact number so that adding such a file does not fail the suite for the wrong reason.
-    expect(resolutions.length).toBeGreaterThanOrEqual(9);
-    expect(resolutions.map(({ file }) => file)).toContain(
-      'scripts/dev/index.mjs',
-    );
+    expect(resolutions.length).toBeGreaterThanOrEqual(5);
+    expect(resolutions.map(({ file }) => file)).toContain('scripts/dev.mjs');
   });
 
   it.each(resolutions)(
