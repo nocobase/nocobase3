@@ -1,6 +1,6 @@
 ---
 name: nocobase-app-plugin-file
-description: Add file collections, uploads, downloads, business attachments, and editable Registry file components to a NocoBase 3 App using the public File Repository services.
+description: Add file collections, uploads, downloads, DOCX/XLSX/PPTX previews, business attachments, and editable Registry file components to a NocoBase 3 App using the public File Repository services.
 ---
 
 # Add files to an App
@@ -8,6 +8,21 @@ description: Add file collections, uploads, downloads, business attachments, and
 Use `@nocobase/app-plugin-file/server` and `@nocobase/app-plugin-file/client`. The plugin provides Repository managers, service tokens, route helpers, and the component-ui Registry recipe. The App or business plugin owns collections, migrations, Drive configuration, resource routes, permissions, and pages.
 
 Inspect the App's existing registrations, migrations, disks, and resources first. Register the Server default export and the Client default factory before consumers, using the App's plugin lifecycle commands. The core does not create collections or routes.
+
+## Find and reuse the preview UI first
+
+Inspect `client/extensions/nocobase-file-component-ui/` before writing upload or preview components. Current Default templates preinstall this application-owned Registry source and its client dependencies; older applications and other templates may not. Import from its `index.ts`, not from plugin-internal paths. Registering the plugin supplies services and translations; it does not automatically install or upgrade the copied UI.
+
+| Format                                               | Registry preview                  | Content access                                                                 |
+| ---------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------ |
+| DOCX / XLSX / PPTX                                   | Local `@silurus/ooxml` viewer     | Same-origin session credentials; no public URL or third-party service required |
+| Raster image / PDF / text / Markdown / audio / video | Built-in preview components       | See the content access rules below                                             |
+| Legacy DOC / XLS / PPT and OpenDocument              | Office Online fallback            | Internet-accessible absolute URL; cannot use the App session                   |
+| Unsupported or unsafe active content                 | Explanation and optional download | Download still requires permission                                             |
+
+For custom attachment lists, uploads or business associations, reuse `FilePreviewDialog` with file records and `contentUrl`; it requires no repository prop. Extend the existing UI or add the necessary content adapter rather than reimplementing format detection and dropping supported formats. A DOCX download fallback indicates a request/rendering failure or an outdated/custom component, not that the plugin lacks DOCX support. Report the actual failure and preserve its evidence.
+
+If the installed package, synchronized Skill and copied UI disagree, inspect the resolved plugin version, run `pnpm skills:sync` to refresh guidance, and reconcile the UI source separately. Skills synchronization does not upgrade Registry copies.
 
 ## Work incrementally
 
@@ -147,21 +162,21 @@ Inputs are a native File or a nonempty File array. Results are `{ record, create
 
 The registered Client plugin supplies English and Chinese UI resources. Registry components bind the `@nocobase/app-plugin-file` namespace explicitly; retain the Client registration and `@nocobase/i18n` dependency when installing them. Existing label overrides still take precedence.
 
-Install component-ui for editable upload, list, thumbnail and preview source. From a NocoBase source workspace:
+Reuse the preinstalled directory when present. For an application without it, materialize `component-ui` from a NocoBase source workspace into the target application:
 
 ```bash
-pnpm registry materialize --package @nocobase/app-plugin-file --item component-ui --output-root packages/templates/app-template-default
+pnpm registry materialize --package @nocobase/app-plugin-file --item component-ui --output-root /absolute/path/to/app
 ```
 
-Materialize copies source only. Run it from the source repository and replace `--output-root` with the target App path. The App must provide React/React DOM, lucide-react, react-markdown, remark-gfm and shadcn button/dialog primitives. It adds no route or permissions. A hosted Registry JSON can instead be installed with shadcn add, which reads the item's declared dependencies; npm publication alone supplies no Registry URL.
+Materialize copies source only and refuses an existing target directory. Run it from the NocoBase source repository, not from a generated application. For an upgrade, materialize into a separate temporary directory and three-way merge the previous Registry source, new source and application copy; preserve application customizations. The App must provide React/React DOM, lucide-react, react-markdown, remark-gfm and shadcn button/dialog primitives. It adds no route or permissions. A hosted Registry JSON can instead be installed with shadcn add, which reads the item's declared dependencies; npm publication alone supplies no Registry URL.
 
-For local materialization or an upgrade of an existing copy, install the OOXML viewer from the target App directory:
+Default already declares the viewer. For an application installing the source or upgrading an older copy, add the OOXML viewer from the target App directory if missing:
 
 ```bash
 pnpm add -D --save-exact @silurus/ooxml@0.85.1
 ```
 
-The viewer is an App client build dependency; do not add it to the deployed server's dependencies. Retain the registered file Client plugin for its locale resources. Merge Registry upgrades with App customizations instead of overwriting installed source.
+The viewer belongs in the App's `devDependencies`: Vite compiles this application-owned client source. Registry `dependencies` describes the installation recipe, while a plugin's published runtime Client imports belong in that plugin's `peerDependencies`. Do not move this viewer into server `dependencies` or add it as a plugin peer solely for copied Registry source. Retain the registered file Client plugin for its locale resources. Merge Registry upgrades with App customizations instead of overwriting installed source.
 
 Use a version of `@nocobase/dev-config` whose `createPortalViteConfig` excludes `@silurus/ooxml` from dependency prebundling. For an older shared preset or custom Vite configuration, merge this entry into the existing configuration and preserve other exclusions:
 
@@ -227,7 +242,7 @@ OOXML request or rendering failure displays an error and, when downloads are ena
 
 Verify upload → query → contentUrl → identical downloaded bytes, including batch upload, resource aliases and host prefixes. After materialization run the consuming App's typecheck/build and exercise upload, cancel/retry, remove, download and preview. Restricted files need anonymous, forbidden-user and permitted-user tests against both API and content routes. Inspectors check registration only.
 
-For preview changes, verify each of DOCX/XLSX/PPTX with real files in development and a served production build. Check relative same-origin URLs, an authorized and unauthorized session, cross-origin CORS success/failure, failed requests and invalid documents, and `download={false}`. Close or switch files while loading and after a failure: pending requests must abort, viewers must be destroyed, and the next file must render without stale state. Unit mocks and a successful build do not establish document rendering fidelity.
+For preview integration or changes, verify each of DOCX/XLSX/PPTX with real files in development and a served production build. Check relative same-origin URLs, an authorized and unauthorized session, cross-origin CORS success/failure, failed requests and invalid documents, and `download={false}`. Close or switch files while loading and after a failure: pending requests must abort, viewers must be destroyed, and the next file must render without stale state. Unit mocks and a successful build do not establish document rendering fidelity.
 
 - Upload defaults are 5 MiB single / 20 MiB batch for the whole multipart body, including overhead. Direct Server uploads have no HTTP limit; UI maxSize checks an individual file. The Client supplies the multipart boundary.
 - BODY_TOO_LARGE (413): reduce request size or adjust route limits. INVALID_FILE/INVALID_FILES (400): send native File values and a nonempty batch.

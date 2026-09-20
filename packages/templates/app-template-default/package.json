@@ -35,6 +35,7 @@
     "@refinedev/react-hook-form": "^5.0.0",
     "@refinedev/react-router": "^2.0.0",
     "@refinedev/react-table": "^6.0.0",
+    "@silurus/ooxml": "0.85.1",
     "@tailwindcss/postcss": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/react-query": "catalog:",
