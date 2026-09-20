@@ -1,209 +1,211 @@
 import type { ConnectionOptions } from 'bullmq';
+import { createIORedisClient, Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
-import { expect, it, vi } from 'vitest';
-import {
-  createServiceRedisBackend,
-  resolveRedisConnection,
-} from '../../src/backends/redis.js';
+import { afterEach, expect, it, vi } from 'vitest';
+import { createInMemoryBackendFactory } from '../../src/backends/in-memory/index.js';
+import { createBackendRegistry } from '../../src/backends/registry.js';
+import { resolveQueueConfiguration } from '../../src/config.js';
+import { createQueueService } from '../../src/service.js';
 
-it('copies standalone options without modifying the caller', () => {
-  const input = Object.freeze({
-    host: 'localhost',
-    port: 6379,
-    db: 0,
-    username: 'user',
-    password: 'secret',
-    connectTimeout: 100,
-  });
-  expect(resolveRedisConnection(input)).toEqual(input);
-  expect(resolveRedisConnection(input)).not.toBe(input);
-});
+afterEach(() => vi.restoreAllMocks());
 
-it.each([
-  { keyPrefix: '' },
-  { keyPrefix: 'unsafe' },
-  { port: 0 },
-  { port: 65536 },
-  { db: -1 },
-  { connectTimeout: NaN },
-  { password: 1 },
-  { host: false },
-  { family: '6' },
-  { family: 5 },
-  { enableOfflineQueue: 'false' },
-  { skipVersionCheck: 1 },
-  { retryStrategy: true },
-  { maxRetriesPerRequest: -1 },
-  { commandTimeout: Infinity },
-  { tls: true },
-  { tls: { rejectUnauthorized: 'false' } },
-  { tls: { servername: 1 } },
-  { scripts: { custom: { lua: 1 } } },
-  { sentinels: [{ host: 'localhost', port: '26379' }] },
-  { autoPipeliningIgnoredCommands: [1] },
-  { monitor: true },
-  { Connector: class {} },
-  { constructor: {} },
-  JSON.parse('{"__proto__":{"host":"wrong-target"}}'),
-  { redisOptions: {} },
-])(
-  'rejects unsupported or invalid standalone options %j before connection',
-  (options) => {
-    expect(() => resolveRedisConnection(options)).toThrow();
-  },
-);
-
-it.each([0, 4, 6])('accepts driver address family %s', (family) => {
-  expect(resolveRedisConnection({ family })).toEqual({ family });
-});
-
-it('preserves additional structured ioredis settings without invoking callbacks', () => {
-  const input = Object.freeze({
+it('preserves frozen driver options by identity without invoking callbacks', () => {
+  const retryStrategy = vi.fn(() => 50);
+  const connection = Object.freeze({
+    host: 'not-contacted.example',
+    family: 6,
+    maxRetriesPerRequest: null,
+    commandTimeout: 500,
+    retryStrategy,
+    tls: Object.freeze({
+      rejectUnauthorized: true,
+      servername: 'redis.example',
+    }),
     sentinels: [{ host: 'sentinel.example', port: 26379 }],
     name: 'queue',
-    sentinelTLS: { rejectUnauthorized: true },
-    autoPipeliningIgnoredCommands: ['info'],
     scripts: { example: { lua: 'return 1', numberOfKeys: 0, readOnly: true } },
   } satisfies ConnectionOptions);
-  expect(resolveRedisConnection(input)).toEqual(input);
+  expect(
+    resolveQueueConfiguration(
+      { namespace: 'app', queueBackend: 'redis', connection },
+      'email',
+    ).connection,
+  ).toBe(connection);
+  expect(retryStrategy).not.toHaveBeenCalled();
 });
 
-it.each([false, true])(
-  'preserves typed ordinary Redis options (flags=%s)',
-  (flag) => {
-    const retryStrategy = vi.fn(() => 50);
-    const input = Object.freeze({
-      family: 6,
-      enableOfflineQueue: flag,
-      skipVersionCheck: flag,
-      enableReadyCheck: flag,
-      noDelay: flag,
-      keepAlive: 1000,
-      path: '/tmp/queue-redis.sock',
-      retryStrategy,
-      maxRetriesPerRequest: null,
-      lazyConnect: false,
-      commandTimeout: 2000,
-      tls: { rejectUnauthorized: true, servername: 'redis.example' },
-    } satisfies ConnectionOptions);
-    expect(resolveRedisConnection(input)).toEqual(input);
-    expect(retryStrategy).not.toHaveBeenCalled();
-  },
-);
-
-it('leaves additional driver-owned scalar keys open instead of maintaining a host/port whitelist', () => {
-  expect(resolveRedisConnection({ driverSpecificFlag: true })).toEqual({
-    driverSpecificFlag: true,
+it('passes opaque custom connection identity to its factory without driver inspection', async () => {
+  const inspect = vi.fn(() => {
+    throw new Error('Unexpected driver inspection');
   });
-});
-
-it.each([false, true])(
-  'passes ordinary options to the actual owned %s Redis clients without weakening role policy',
-  async (worker) => {
-    const clients: Redis[] = [];
-    const connect = vi
-      .spyOn(Redis.prototype, 'connect')
-      .mockImplementation(function (this: Redis) {
-        clients.push(this);
-        this.status = 'ready';
-        this.emit('ready');
-        return Promise.resolve();
-      });
-    const info = vi
-      .spyOn(Redis.prototype, 'info')
-      .mockResolvedValue(
-        'redis_version:7.0.8\r\nmaxmemory_policy:noeviction\r\n',
-      );
-    const disconnect = vi
-      .spyOn(Redis.prototype, 'disconnect')
-      .mockImplementation(function (this: Redis) {
-        this.status = 'end';
-        this.emit('end');
-      });
-    const input = Object.freeze({
-      host: 'not-contacted.example',
-      family: 6,
-      enableOfflineQueue: false,
-      skipVersionCheck: true,
-      lazyConnect: false,
-      maxRetriesPerRequest: 20,
-      commandTimeout: 500,
-      connectTimeout: 100,
-    } satisfies ConnectionOptions);
-    const backend = createServiceRedisBackend(
-      'option-policy',
-      { connection: input },
-      { withBlockingConnection: worker },
-    );
-    backend.on('error', () => {});
-    try {
-      await backend.waitUntilReady();
-      expect(clients).toHaveLength(worker ? 2 : 1);
-      for (const client of clients) {
-        expect(client.options).toMatchObject({
-          host: input.host,
-          family: 6,
-          enableOfflineQueue: false,
-          skipVersionCheck: true,
-          lazyConnect: true,
-          connectTimeout: 100,
-          maxRetriesPerRequest: worker ? null : 1,
-          commandTimeout: worker ? undefined : 10000,
-        });
-      }
-      expect(input.maxRetriesPerRequest).toBe(20);
-      expect(input.commandTimeout).toBe(500);
-      expect(input.lazyConnect).toBe(false);
-    } finally {
-      await backend.close(true);
-      connect.mockRestore();
-      info.mockRestore();
-      disconnect.mockRestore();
-    }
-  },
-);
-
-it('preserves a valid Redis URL without exposing its credentials in validation errors', () => {
-  const url = 'redis://user:password@localhost:6379/2';
-  expect(resolveRedisConnection({ url })).toEqual({ url });
-  for (const invalid of [
-    'https://user:password@localhost',
-    'redis://user:password@',
-    'not-a-url',
-  ]) {
-    expect(() => resolveRedisConnection({ url: invalid })).toThrow(
-      'Invalid connection.url',
-    );
-    try {
-      resolveRedisConnection({ url: invalid });
-    } catch (error) {
-      expect(String(error)).not.toContain('password');
-    }
-  }
-});
-
-it('rejects all invalid built-in overrides before constructing any backend', async () => {
-  const { createQueueService } = await import('../../src/service.js');
-  const { createInMemoryBackendFactory } =
-    await import('../../src/backends/in-memory/index.js');
+  const connection = Object.freeze(
+    Object.defineProperty({}, 'options', { get: inspect }),
+  );
   const service = createQueueService({
-    namespace: 'prevalidation',
-    queueBackend: 'test',
-    queues: {
-      invalid: { queueBackend: 'redis', connection: { family: '6' } },
-    },
+    namespace: 'opaque',
+    queueBackend: 'custom',
+    connection,
   });
   const factory = createInMemoryBackendFactory();
-  let constructed = 0;
-  service.registerBackend('test', (...args) => {
-    constructed++;
-    return factory(...args);
+  const received: unknown[] = [];
+  service.registerBackend('custom', (name, options, extra) => {
+    received.push(options.connection);
+    return factory(name, options, extra);
   });
-  service.producer('valid');
+  service.producer('email');
   try {
-    await expect(service.setup()).rejects.toThrow('Invalid connection.family');
-    expect(constructed).toBe(0);
+    await service.setup();
+    expect(received).toEqual([connection]);
+    expect(received[0]).toBe(connection);
+    expect(inspect).not.toHaveBeenCalled();
   } finally {
     await service.shutdown();
   }
+});
+
+it('does not inspect or construct an unrequested Redis override during setup', async () => {
+  const inspect = vi.fn(() => {
+    throw new Error('Unexpected driver inspection');
+  });
+  const connection = Object.freeze(
+    Object.defineProperty({}, 'duplicate', { get: inspect }),
+  );
+  const service = createQueueService({
+    namespace: 'unused-redis',
+    queues: { unused: { queueBackend: 'redis', connection } },
+  });
+  service.producer('memory');
+  try {
+    await service.setup();
+    expect(inspect).not.toHaveBeenCalled();
+  } finally {
+    await service.shutdown();
+  }
+});
+
+it('still rejects invalid business overrides before constructing any backend', async () => {
+  const service = createQueueService({
+    namespace: 'prevalidation',
+    queueBackend: 'custom',
+    queues: {
+      invalid: {
+        queueBackend: 'redis',
+        connection: { family: 'driver-owned' },
+        concurrency: 0,
+      },
+    },
+  });
+  const factory = vi.fn(createInMemoryBackendFactory());
+  service.registerBackend('custom', factory);
+  service.producer('valid');
+  try {
+    await expect(service.setup()).rejects.toThrow(/concurrency/u);
+    expect(factory).not.toHaveBeenCalled();
+  } finally {
+    await service.shutdown();
+  }
+});
+
+/** Use real driver option/duplicate handling, but never open a socket. */
+function mockTransport(): Redis[] {
+  const clients: Redis[] = [];
+  vi.spyOn(Redis.prototype, 'connect').mockImplementation(function (
+    this: Redis,
+  ) {
+    clients.push(this);
+    this.status = 'ready';
+    this.emit('ready');
+    return Promise.resolve();
+  });
+  vi.spyOn(Redis.prototype, 'info').mockResolvedValue(
+    'redis_version:7.0.8\r\nmaxmemory_policy:noeviction\r\n',
+  );
+  vi.spyOn(Redis.prototype, 'hmset').mockResolvedValue('OK');
+  vi.spyOn(Redis.prototype, 'disconnect').mockImplementation(function (
+    this: Redis,
+  ) {
+    this.status = 'end';
+    this.emit('end');
+  });
+  vi.spyOn(Redis.prototype, 'quit').mockImplementation(function (this: Redis) {
+    this.status = 'end';
+    this.emit('end');
+    return Promise.resolve('OK');
+  });
+  return clients;
+}
+
+it.each(['raw', 'adapter'] as const)(
+  'keeps supplied %s Worker maxRetriesPerRequest:null and commandTimeout unchanged without creating a regular role copy',
+  async (kind) => {
+    const clients = mockTransport();
+    const raw = new Redis({
+      host: 'not-contacted.example',
+      lazyConnect: true,
+      maxRetriesPerRequest: null,
+      commandTimeout: 500,
+    });
+    await raw.connect();
+    const originalOptions = { ...raw.options };
+    const disconnect = vi.spyOn(raw, 'disconnect');
+    const quit = vi.spyOn(raw, 'quit');
+    const factory = createBackendRegistry().resolve('redis');
+    const connection = kind === 'raw' ? raw : createIORedisClient(raw);
+    expect(
+      resolveQueueConfiguration(
+        { namespace: 'app', queueBackend: 'redis', connection },
+        'email',
+      ).connection,
+    ).toBe(connection);
+    const queue = new Queue('supplied-options', { connection }, factory);
+    const worker = new Worker(
+      'supplied-options',
+      async () => {},
+      { connection, autorun: false },
+      factory,
+    );
+    try {
+      await queue.waitUntilReady();
+      await worker.waitUntilReady();
+      expect(clients).toHaveLength(2);
+      for (const client of clients)
+        expect(client.options).toMatchObject({
+          maxRetriesPerRequest: null,
+          commandTimeout: 500,
+        });
+      expect(raw.options).toEqual(originalOptions);
+    } finally {
+      await worker.close(true);
+      await queue.close();
+    }
+    expect(disconnect.mock.contexts).not.toContain(raw);
+    expect(quit.mock.contexts).not.toContain(raw);
+    expect(clients[1]!.status).toBe('end');
+    raw.disconnect();
+  },
+);
+
+it('lets the official Queue own an options-created client without service timeout rewriting', async () => {
+  const clients = mockTransport();
+  const connection = Object.freeze({
+    host: 'not-contacted.example',
+    lazyConnect: true,
+    maxRetriesPerRequest: 20,
+    commandTimeout: 500,
+  });
+  const queue = new Queue(
+    'owned-options',
+    { connection },
+    createBackendRegistry().resolve('redis'),
+  );
+  try {
+    await queue.waitUntilReady();
+    expect(clients).toHaveLength(1);
+    expect(clients[0]!.options).toMatchObject(connection);
+  } finally {
+    await queue.close();
+  }
+  expect(clients[0]!.status).toBe('end');
+  expect(connection.commandTimeout).toBe(500);
+  expect(connection.maxRetriesPerRequest).toBe(20);
 });

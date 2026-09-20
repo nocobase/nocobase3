@@ -2,6 +2,7 @@ import {
   assertProducerDeadline,
   producerDeadline,
   PRODUCER_REQUEST_TIMEOUT_MS,
+  waitForProducerDeadline,
 } from './operation-deadline.js';
 import { resolvePublishOptions } from './config.js';
 import { encodeQueueMessage } from './serialization.js';
@@ -9,7 +10,7 @@ import type { QueueEnvelope } from './serialization.js';
 import type { PublishOptions } from './types.js';
 import type { JobsOptions } from 'bullmq';
 import type { IQueueBackend, Queue } from 'bullmq';
-import type { QueueProducer } from './service.js';
+import type { PublishReceipt, QueueProducer } from './service.js';
 import type { ResolvedQueueConfiguration } from './types.js';
 
 export type ProducerQueue = Queue<
@@ -51,14 +52,34 @@ export function createQueueProducer(context: ProducerContext): QueueProducer {
       opts: { ...opts, ...(id === undefined ? {} : { jobId: id }) },
     };
   }
+  async function run<T>(
+    operation: (deadline: number) => Promise<T>,
+  ): Promise<T> {
+    const deadline = performance.now() + PRODUCER_REQUEST_TIMEOUT_MS;
+    const finish = context.beginOperation?.();
+    const pending = producerDeadline.run(deadline, async () => {
+      try {
+        assertProducerDeadline(deadline);
+        return await operation(deadline);
+      } finally {
+        // Caller timeout is not settlement: shutdown still owns this operation.
+        finish?.();
+      }
+    });
+    return waitForProducerDeadline(pending, deadline);
+  }
+
+  function receipt(job: { id?: string } | undefined): PublishReceipt {
+    const id = job?.id;
+    if (typeof id !== 'string')
+      throw new Error('Queue backend returned an invalid job ID');
+    return { jobId: id };
+  }
+
   return {
     async publish(channel, message, options) {
-      const deadline = performance.now() + PRODUCER_REQUEST_TIMEOUT_MS;
-      const finish = context.beginOperation?.();
-      try {
-        const queue = await producerDeadline.run(deadline, () =>
-          context.queue(),
-        );
+      return run(async (deadline) => {
+        const queue = await context.queue();
         assertProducerDeadline(deadline);
         const prepared = prepare(
           channel,
@@ -66,23 +87,17 @@ export function createQueueProducer(context: ProducerContext): QueueProducer {
           resolvePublishOptions(context.configuration(), options),
         );
         assertProducerDeadline(deadline);
-        const job = await producerDeadline.run(deadline, () =>
-          queue.add(prepared.name, prepared.data, prepared.opts),
+        const job = await queue.add(
+          prepared.name,
+          prepared.data,
+          prepared.opts,
         );
-        if (job.id === undefined)
-          throw new Error('Queue backend returned no job ID');
-        return { jobId: job.id };
-      } finally {
-        finish?.();
-      }
+        return receipt(job);
+      });
     },
     async publishMany(batches, options) {
-      const deadline = performance.now() + PRODUCER_REQUEST_TIMEOUT_MS;
-      const finish = context.beginOperation?.();
-      try {
-        const queue = await producerDeadline.run(deadline, () =>
-          context.queue(),
-        );
+      return run(async (deadline) => {
+        const queue = await context.queue();
         assertProducerDeadline(deadline);
         const resolved = resolvePublishOptions(
           context.configuration(),
@@ -92,17 +107,13 @@ export function createQueueProducer(context: ProducerContext): QueueProducer {
           prepare(channel, message, resolved),
         );
         assertProducerDeadline(deadline);
-        const jobs = await producerDeadline.run(deadline, () =>
-          queue.addBulk(prepared),
-        );
-        return jobs.map((job) => {
-          if (job.id === undefined)
-            throw new Error('Queue backend returned no job ID');
-          return { jobId: job.id };
-        });
-      } finally {
-        finish?.();
-      }
+        const jobs = await queue.addBulk(prepared);
+        if (!Array.isArray(jobs) || jobs.length !== prepared.length)
+          throw new Error(
+            'Queue backend returned an invalid bulk receipt count',
+          );
+        return Array.from(jobs, receipt);
+      });
     },
   };
 }

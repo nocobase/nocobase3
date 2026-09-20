@@ -1,4 +1,4 @@
-import { Queue } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import type { IQueueBackend } from 'bullmq';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueueProducer } from '../src/producer.js';
@@ -35,6 +35,63 @@ function fixture() {
 }
 
 describe('queue producer', () => {
+  it.each([undefined, null, 42, {}, []].map((id) => ({ id })))(
+    'rejects a non-string single receipt ID $id',
+    async ({ id }) => {
+      const { queue, producer } = fixture();
+      const job = new Job(queue, 'work', {});
+      Reflect.set(job, 'id', id);
+      vi.spyOn(queue, 'add').mockResolvedValue(job);
+      await expect(producer.publish('work', {})).rejects.toThrow(/job ID/u);
+    },
+  );
+
+  it.each([undefined, null, 42, {}, []].map((id) => ({ id })))(
+    'rejects a non-string ID $id anywhere in bulk receipts',
+    async ({ id }) => {
+      const { queue, producer } = fixture();
+      const first = new Job(queue, 'work', {}, {}, 'valid');
+      const second = new Job(queue, 'work', {});
+      Reflect.set(second, 'id', id);
+      vi.spyOn(queue, 'addBulk').mockResolvedValue([first, second]);
+      await expect(
+        producer.publishMany([
+          { channel: 'work', message: 1 },
+          { channel: 'work', message: 2 },
+        ]),
+      ).rejects.toThrow(/job ID/u);
+    },
+  );
+
+  it.each([0, 1, 3])(
+    'rejects bulk receipt count %i for two inputs',
+    async (count) => {
+      const { queue, producer } = fixture();
+      vi.spyOn(queue, 'addBulk').mockResolvedValue(
+        Array.from(
+          { length: count },
+          (_, index) => new Job(queue, 'work', {}, {}, `id-${index}`),
+        ),
+      );
+      await expect(
+        producer.publishMany([
+          { channel: 'work', message: 1 },
+          { channel: 'work', message: 2 },
+        ]),
+      ).rejects.toThrow(/receipt|count|length/u);
+    },
+  );
+
+  it('rejects sparse bulk receipts instead of returning holes', async () => {
+    const { queue, producer } = fixture();
+    const jobs: Awaited<ReturnType<ProducerQueue['addBulk']>> = [];
+    jobs.length = 1;
+    vi.spyOn(queue, 'addBulk').mockResolvedValue(jobs);
+    await expect(
+      producer.publishMany([{ channel: 'work', message: 1 }]),
+    ).rejects.toThrow(/job ID/u);
+  });
+
   it.each(['', ' ', 'x'.repeat(257), '\u0000', 'line\nbreak'])(
     'preserves unrestricted string channel %j',
     async (channel) => {

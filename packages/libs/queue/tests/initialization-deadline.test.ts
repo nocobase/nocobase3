@@ -105,3 +105,64 @@ it('gives runtime queues and later workers fresh readiness budgets without leaki
     vi.useRealTimers();
   }
 });
+
+it('keeps lazy setup independent after a producer wait expires and never dispatches the expired publication', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+  const factory = createInMemoryBackendFactory();
+  let release = (): void => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const closed = vi.fn();
+  const added = vi.fn();
+  const service = createQueueService({
+    namespace: 'independent-lazy-setup',
+    queueBackend: 'probe',
+    setupTimeoutMs: 30_000,
+  });
+  service.registerBackend('probe', (name, options, metadata) => {
+    const backend = factory(name, options, metadata);
+    const ready = backend.waitUntilReady.bind(backend);
+    backend.waitUntilReady = async () => {
+      await gate;
+      await ready();
+    };
+    const close = backend.close.bind(backend);
+    backend.close = async (...args) => {
+      closed();
+      await close(...args);
+    };
+    const add = backend.addJob.bind(backend);
+    backend.addJob = async (...args) => {
+      added();
+      return add(...args);
+    };
+    return backend;
+  });
+  try {
+    await service.setup();
+    const producer = service.producer('late');
+    const expired = producer
+      .publish('expired', {})
+      .catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(10_001);
+    expect(await expired).toMatchObject({
+      message: 'Queue producer deadline exceeded',
+    });
+    expect(closed).not.toHaveBeenCalled();
+    expect(added).not.toHaveBeenCalled();
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(added).not.toHaveBeenCalled();
+    await expect(producer.publish('fresh', {})).resolves.toHaveProperty(
+      'jobId',
+    );
+    expect(added).toHaveBeenCalledTimes(1);
+  } finally {
+    release();
+    const closing = service.shutdown();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await closing;
+    vi.useRealTimers();
+  }
+});

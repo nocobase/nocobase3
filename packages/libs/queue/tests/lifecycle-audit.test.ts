@@ -166,7 +166,7 @@ it.each([
     const releaseClaim = barrier();
     let workerClosed = false;
     let forceClosed = false;
-    let disconnectBlocking: (() => Promise<void>) | undefined;
+    let unregistering: Promise<void> | undefined;
     let handlerCalls = 0;
     const service = createQueueService({
       namespace: `finalization-${transition}`,
@@ -177,7 +177,6 @@ it.each([
     service.registerBackend('test', (name, options, metadata) => {
       const backend = factory(name, options, metadata);
       if (metadata?.withBlockingConnection) {
-        disconnectBlocking = () => backend.disconnectBlocking(true);
         // All three public backend transitions have distinct signatures; wrap each without an incomplete backend cast.
         if (transition === 'completed') {
           const original = backend.moveToCompleted.bind(backend);
@@ -228,14 +227,14 @@ it.each([
     await service.setup();
     if (resumed) {
       await off();
-      await disconnectBlocking?.();
       await run.mock.results[0]?.value;
       service.consumer('jobs').consume(handler);
     }
     await service.producer('jobs').publish('event', {});
     if (transition === 'waiting') {
       await claimed.promise;
-      await off();
+      unregistering = off();
+      void unregistering.catch(() => {});
       releaseClaim.release();
     }
     await entered.promise;
@@ -260,6 +259,7 @@ it.each([
       releaseTransition.release();
       await vi.advanceTimersByTimeAsync(0);
       await stopping;
+      await unregistering?.catch(() => {});
       run.mockRestore();
       vi.useRealTimers();
     }

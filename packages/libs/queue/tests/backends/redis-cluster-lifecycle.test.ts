@@ -1,108 +1,67 @@
-import { createIORedisClient, RedisQueueBackend } from 'bullmq';
-import { Cluster, Redis } from 'ioredis';
-import { expect, it, vi } from 'vitest';
-import { createServiceRedisBackend } from '../../src/backends/redis.js';
+import { createIORedisClient, Queue, Worker } from 'bullmq';
+import { Cluster } from 'ioredis';
+import { afterEach, expect, it, vi } from 'vitest';
+import { createBackendRegistry } from '../../src/backends/registry.js';
 
-function fixture() {
-  const clients: Cluster[] = [];
-  const nodes = new Map<Cluster, Redis[]>();
-  const create = (): Cluster => {
-    const client = new Cluster([], { lazyConnect: true });
-    client.status = 'ready';
-    const children = Array.from({ length: 3 }, () => {
-      const node = new Redis({ lazyConnect: true });
-      node.status = 'ready';
-      return node;
+afterEach(() => vi.restoreAllMocks());
+
+it.each(['raw', 'adapter'] as const)(
+  'public Queue/Worker retain a supplied %s Cluster and close only the official blocking duplicate',
+  async (kind) => {
+    const clients: Cluster[] = [];
+    // Real Cluster options and duplicate semantics; transport never starts.
+    vi.spyOn(Cluster.prototype, 'connect').mockImplementation(function (
+      this: Cluster,
+    ) {
+      clients.push(this);
+      this.status = 'ready';
+      this.emit('ready');
+      return Promise.resolve();
     });
-    nodes.set(client, children);
-    vi.spyOn(client, 'nodes').mockReturnValue(children);
-    vi.spyOn(client, 'info').mockResolvedValue(
+    vi.spyOn(Cluster.prototype, 'info').mockResolvedValue(
       'redis_version:7.0.8\r\nmaxmemory_policy:noeviction\r\n',
     );
-    vi.spyOn(client, 'duplicate').mockImplementation(create);
-    vi.spyOn(client, 'disconnect').mockImplementation(() => {
-      client.status = 'end';
-      client.emit('end');
-      // A later node drain overwrites the aggregate status without another end.
-      client.status = 'close';
+    vi.spyOn(Cluster.prototype, 'hmset').mockResolvedValue('OK');
+    vi.spyOn(Cluster.prototype, 'disconnect').mockImplementation(function (
+      this: Cluster,
+    ) {
+      this.status = 'end';
+      this.emit('end');
     });
-    vi.spyOn(client, 'connect').mockImplementation(async () => {
-      expect(children.every((node) => node.status === 'end')).toBe(true);
-      client.status = 'ready';
-      client.emit('ready');
+    const raw = new Cluster([{ host: 'cluster.example', port: 7000 }], {
+      lazyConnect: true,
+      redisOptions: { maxRetriesPerRequest: null, commandTimeout: 500 },
     });
-    clients.push(client);
-    return client;
-  };
-  const caller = create();
-  const endNodes = (client: Cluster): void => {
-    for (const node of nodes.get(client)!) {
-      node.status = 'end';
-      node.emit('end');
+    await raw.connect();
+    const settings = { ...raw.options.redisOptions };
+    const disconnect = vi.spyOn(raw, 'disconnect');
+    const quit = vi.spyOn(raw, 'quit');
+    const connection = kind === 'raw' ? raw : createIORedisClient(raw);
+    const factory = createBackendRegistry().resolve('redis');
+    const queue = new Queue('cluster-ownership', { connection }, factory);
+    const worker = new Worker(
+      'cluster-ownership',
+      async () => {},
+      { connection, autorun: false },
+      factory,
+    );
+    try {
+      await queue.waitUntilReady();
+      await worker.waitUntilReady();
+      expect(clients).toHaveLength(2);
+      expect(raw.options.redisOptions).toEqual(settings);
+      expect(clients[1]!.options.redisOptions).toMatchObject({
+        maxRetriesPerRequest: null,
+        commandTimeout: 500,
+      });
+    } finally {
+      await worker.close(true);
+      await queue.close();
     }
-  };
-  const backend = createServiceRedisBackend(
-    'cluster-end',
-    { connection: createIORedisClient(caller) },
-    { withBlockingConnection: true },
-  );
-  backend.on('error', () => {});
-  return { caller, clients, backend, endNodes };
-}
-
-it('retains every node ending across repeated blocking disconnects and Worker backend close', async () => {
-  const { caller, clients, backend, endNodes } = fixture();
-  await backend.waitUntilReady();
-  const regular = clients[1]!;
-  const blocking = clients[2]!;
-  try {
-    await backend.disconnectBlocking(true);
-    if (!(backend instanceof RedisQueueBackend))
-      throw new Error('Expected Redis backend');
-    expect((await backend.blockingClient)?.status).toBe('end');
-    await backend.disconnectBlocking(true);
-    expect(blocking.disconnect).toHaveBeenCalledOnce();
-    let closed = false;
-    const closing = backend.close().then(() => {
-      closed = true;
-    });
-    await vi.waitFor(() => expect(regular.disconnect).toHaveBeenCalled());
-    endNodes(regular);
-    await Promise.resolve();
-    expect(closed).toBe(false);
-    endNodes(blocking);
-    await closing;
-    expect(closed).toBe(true);
-    expect(caller.disconnect).not.toHaveBeenCalled();
-  } finally {
-    endNodes(regular);
-    endNodes(blocking);
-    await backend.close();
-  }
-});
-
-it('does not reconnect an interrupted Cluster generation before all its nodes end', async () => {
-  const { caller, clients, backend, endNodes } = fixture();
-  await backend.waitUntilReady();
-  const regular = clients[1]!;
-  const blocking = clients[2]!;
-  try {
-    await backend.disconnectBlocking(true);
-    const reconnecting = backend.reconnectBlocking();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(blocking.connect).not.toHaveBeenCalled();
-    endNodes(blocking);
-    await reconnecting;
-    expect(blocking.connect).toHaveBeenCalledOnce();
-    if (!(backend instanceof RedisQueueBackend))
-      throw new Error('Expected Redis backend');
-    expect((await backend.blockingClient)?.status).toBe('ready');
-    expect(caller.connect).not.toHaveBeenCalled();
-  } finally {
-    const closing = backend.close();
-    endNodes(regular);
-    endNodes(blocking);
-    await closing;
-  }
-});
+    expect(disconnect.mock.contexts).not.toContain(raw);
+    expect(quit.mock.contexts).not.toContain(raw);
+    expect(raw.status).toBe('ready');
+    expect(clients[1]!.status).toBe('end');
+    raw.disconnect();
+  },
+);

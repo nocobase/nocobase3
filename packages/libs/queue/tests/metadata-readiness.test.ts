@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { createQueueService } from '../src/service.js';
 import { createInMemoryBackendFactory } from '../src/backends/in-memory/index.js';
 
-it('does not start consumption or resolve setup while default metadata is pending', async () => {
+it('uses official readiness while default metadata is still pending', async () => {
   let release = (): void => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -36,8 +36,8 @@ it('does not start consumption or resolve setup while default metadata is pendin
   try {
     await expect.poll(() => writes).toBe(1);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(ready).toBe(false);
-    expect(workers).toBe(0);
+    expect(ready).toBe(true);
+    expect(workers).toBe(1);
     release();
     await starting;
     expect(workers).toBe(1);
@@ -49,7 +49,7 @@ it('does not start consumption or resolve setup while default metadata is pendin
   }
 });
 
-it('propagates default metadata errors rather than accepting a producer that failed initialization', async () => {
+it('accepts official readiness despite best-effort default metadata rejection', async () => {
   const memory = createInMemoryBackendFactory();
   const failure = new Error('metadata rejected');
   const service = createQueueService({
@@ -65,7 +65,10 @@ it('propagates default metadata errors rather than accepting a producer that fai
   });
   service.producer('jobs');
   try {
-    await expect(service.setup()).rejects.toBe(failure);
+    await expect(service.setup()).resolves.toBeUndefined();
+    await expect(
+      service.producer('jobs').publish('event', {}),
+    ).resolves.toHaveProperty('jobId');
   } finally {
     await service.shutdown();
   }

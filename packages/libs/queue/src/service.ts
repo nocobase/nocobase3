@@ -3,7 +3,6 @@ import { createQueueDiagnostics } from './diagnostics.js';
 import { Queue, Worker, WaitingError } from 'bullmq';
 import type { IQueueBackend, QueueBaseOptions } from 'bullmq';
 import { createBackendRegistry } from './backends/registry.js';
-import { resolveRedisConnection } from './backends/redis.js';
 import { resolveQueueConfiguration, resolveQueueTimeouts } from './config.js';
 import { createQueueIdentity, validateQueueName } from './identity.js';
 import { createQueueProducer } from './producer.js';
@@ -93,6 +92,8 @@ interface QueueEntry {
   manual: QueueRuntimeOptions;
   queue?: ServiceQueue;
   worker?: ServiceWorker;
+  pause?: Promise<void>;
+  resume?: Promise<void>;
   initializeWorker?: () => Promise<void>;
   workerInitialization?: Promise<void>;
   initializationCancelled?: boolean;
@@ -140,16 +141,64 @@ export function createQueueService(
   }
 
   function runWorker(name: string, current: QueueEntry): void {
-    if (!current.worker || current.worker.isRunning()) return;
+    if (
+      stopped ||
+      current.initializationCancelled ||
+      current.workerInitializationCancelled ||
+      !current.handlers.size() ||
+      !current.worker ||
+      (current.worker.isRunning() && !current.pause)
+    )
+      return;
     const worker = current.worker;
     void producerDeadline
-      .exit(() => worker.run())
+      .exit(() => (current.pause ? resumeWorker(current) : worker.run()))
       .catch((error: unknown) => {
         dependencies.logger?.error(
           { error, queue: name },
           'Queue worker run failed',
         );
       });
+  }
+  function pauseWorker(current: QueueEntry): Promise<void> {
+    if (!current.worker) return Promise.resolve();
+    // Retain the original drain, including after a caller stops waiting.
+    current.pause ??= producerDeadline.exit(() => current.worker!.pause(false));
+    void current.pause.catch(() => {});
+    return current.pause;
+  }
+
+  function resumeWorker(current: QueueEntry): Promise<void> {
+    if (current.resume) {
+      return current.resume.then(async () => {
+        // Another unregister may have started a new drain while resume settled.
+        if (current.pause) await resumeWorker(current);
+      });
+    }
+    const resuming = (async (): Promise<void> => {
+      await current.workerInitialization;
+      await current.pause;
+      if (
+        stopped ||
+        current.initializationCancelled ||
+        current.workerInitializationCancelled ||
+        !current.handlers.size() ||
+        !current.worker
+      )
+        return;
+      current.pause = undefined;
+      await producerDeadline.exit(() => current.worker!.resume());
+    })();
+    current.resume = resuming;
+    void resuming.then(
+      () => {
+        if (current.resume === resuming) current.resume = undefined;
+      },
+      () => {
+        if (current.resume === resuming) current.resume = undefined;
+      },
+    );
+    return resuming;
   }
 
   function closeOnce(
@@ -173,14 +222,9 @@ export function createQueueService(
   ): Promise<void> {
     let failure: unknown;
     try {
-      const remaining = Math.max(
-        0,
-        Math.min(
-          timeouts.setupTimeoutMs,
-          (producerDeadline.getStore() ?? Infinity) - performance.now(),
-        ),
-      );
-      if (await settlesWithin(initialization, remaining)) return;
+      // Setup owns its admission budget. A publishing caller timing out must
+      // not cancel shared initialization or poison future publications.
+      if (await settlesWithin(initialization, timeouts.setupTimeoutMs)) return;
       failure = new Error(timeoutMessage);
     } catch (error) {
       failure = error;
@@ -335,8 +379,8 @@ export function createQueueService(
               );
             });
           }
-          if (ready && current.worker?.isPaused()) {
-            void current.worker.resume().catch((error: unknown) => {
+          if (ready && (current.pause || current.worker?.isPaused())) {
+            void resumeWorker(current).catch((error: unknown) => {
               dependencies.logger?.error(
                 { error, queue: name },
                 'Queue worker resume failed',
@@ -346,7 +390,12 @@ export function createQueueService(
           return async (): Promise<void> => {
             const settled = unregister();
             if (handlers.size() === 0 && current.worker) {
-              await Promise.all([current.worker.pause(true), settled]);
+              const results = await Promise.allSettled([
+                pauseWorker(current),
+                settled,
+              ]);
+              for (const result of results)
+                if (result.status === 'rejected') throw result.reason;
             } else {
               await settled;
             }
@@ -434,8 +483,6 @@ export function createQueueService(
     const defaults = resolveQueueConfiguration(options, undefined);
     validateQueueName(defaults.namespace, 'namespace');
     registry.resolve(defaults.queueBackend);
-    if (defaults.queueBackend === 'redis')
-      resolveRedisConnection(defaults.connection);
     for (const name of new Set([
       ...Object.keys(options.queues ?? {}),
       ...entries.keys(),
@@ -447,8 +494,6 @@ export function createQueueService(
       );
       createQueueIdentity(config.namespace, name);
       registry.resolve(config.queueBackend);
-      if (config.queueBackend === 'redis')
-        resolveRedisConnection(config.connection);
     }
     // Registrations may arrive while any initialization awaits readiness. Reconcile
     // until a synchronous pass finds no missing queue or handler-bearing Worker.
@@ -504,26 +549,23 @@ export function createQueueService(
       // Failure cleanup belongs to the bounded admission owner, not this task.
       const config = resolveQueueConfiguration(options, name, current.manual);
       const registeredFactory = registry.resolve(config.queueBackend);
-      const factory: BackendFactory = ['redis', 'inMemory'].includes(
-        config.queueBackend,
-      )
-        ? registeredFactory
-        : (physicalName, backendOptions, metadata) => {
-            // BullMQ types only its built-in connection union. Custom factories own
-            // the opaque connection contract; BullMQ itself receives no custom transport.
-            const customOptions = {
-              ...backendOptions,
-              connection: config.connection,
-            } as QueueBaseOptions;
-            return registeredFactory(physicalName, customOptions, metadata);
-          };
+      const factory: BackendFactory = (
+        physicalName,
+        backendOptions,
+        metadata,
+      ) => {
+        // BullMQ types its connection option for built-ins. Each registered factory
+        // owns validation of the opaque input; this bridge does not inspect drivers.
+        const factoryOptions = {
+          ...backendOptions,
+          connection: config.connection,
+        } as QueueBaseOptions;
+        return registeredFactory(physicalName, factoryOptions, metadata);
+      };
       const identity = createQueueIdentity(config.namespace, name);
       const physicalName = identity.redisQueueName;
       const base: QueueBaseOptions & { prefix: string } = {
-        connection:
-          config.queueBackend === 'redis'
-            ? resolveRedisConnection(config.connection)
-            : {},
+        connection: {},
         prefix: identity.redisPrefix,
       };
       current.queue = new Queue<
@@ -534,7 +576,7 @@ export function createQueueService(
         unknown,
         string,
         IQueueBackend
-      >(physicalName, { ...base, skipMetasUpdate: true }, factory);
+      >(physicalName, base, factory);
       current.queue.on('error', (error: Error) =>
         dependencies.logger?.error(
           { error, queue: name },
@@ -542,8 +584,6 @@ export function createQueueService(
         ),
       );
       await current.queue.waitUntilReady();
-      // Own metadata readiness explicitly: BullMQ's constructor suppresses failures.
-      await current.queue.getBackend().setQueueMeta(current.queue.metaValues);
       if (stopped || current.initializationCancelled)
         throw new Error('Queue initialization was cancelled');
       if (config.queueBackend === 'inMemory')
@@ -645,7 +685,7 @@ export function createQueueService(
       shutdownPromise = (async (): Promise<void> => {
         const paused = Promise.allSettled(
           [...entries.values()].flatMap((current) =>
-            current.worker ? [current.worker.pause(true)] : [],
+            current.worker ? [pauseWorker(current)] : [],
           ),
         );
         const drainDeadline = performance.now() + timeouts.shutdownTimeoutMs;
@@ -670,15 +710,10 @@ export function createQueueService(
           timeouts.shutdownTimeoutMs,
         );
         const errors: unknown[] = [];
-        if (
-          await settlesWithin(
-            paused,
-            Math.max(0, drainDeadline - performance.now()),
-          )
-        ) {
-          for (const result of await paused)
-            if (result.status === 'rejected') errors.push(result.reason);
-        } else errors.push(new Error('Queue consumer pause deadline exceeded'));
+        let pausesSettled = false;
+        void paused.then(() => {
+          pausesSettled = true;
+        });
         if (!prepared)
           errors.push(
             new Error('Queue shutdown preparation deadline exceeded'),
@@ -686,22 +721,27 @@ export function createQueueService(
         const workers = [...entries.values()].filter(
           (current) => current.worker,
         );
-        const waiting = Promise.allSettled(
-          workers.map(async (current) => {
-            await current.worker!.backend.disconnectBlocking(true);
-            await current.handlers.settle();
+        const waiting = Promise.allSettled([
+          paused.then((results) => {
+            for (const result of results)
+              if (result.status === 'rejected') throw result.reason;
           }),
-        );
+          ...workers.map((current) => current.handlers.settle()),
+        ]);
+        void waiting.then((results) => {
+          for (const result of results)
+            if (result.status === 'rejected') errors.push(result.reason);
+        });
         const waitForWorkers = async (
           milliseconds: number,
         ): Promise<boolean> => {
           const deadline = performance.now() + milliseconds;
           if (!(await settlesWithin(waiting, milliseconds))) return false;
-          // pause(false) is a no-op after pause(true). A handler can also have
-          // returned while its completion/failure/requeue is still pending. The
-          // public running state covers both initial and resume-created run loops.
-          // Observe it before close(false), whose memoized promise cannot later
-          // be upgraded to force. This bounded poll leaves no timer after expiry.
+          if ((await waiting).some((result) => result.status === 'rejected'))
+            return false;
+          // Handler settlement alone excludes the subsequent BullMQ transition.
+          // Observe the public run state as well as the original draining pause.
+          // Only choose graceful close once this work is confirmed settled.
           while (workers.some((current) => current.worker?.isRunning())) {
             const remaining = deadline - performance.now();
             if (remaining <= 0) return false;
@@ -731,12 +771,9 @@ export function createQueueService(
           void waiting.then(() =>
             dependencies.logger?.warn(
               {},
-              'Previously unresolved queue handlers have settled',
+              'Previously unresolved queue handler and pause waits have settled; job transitions remain unconfirmed',
             ),
           );
-        } else {
-          for (const result of await waiting)
-            if (result.status === 'rejected') errors.push(result.reason);
         }
         producersOpen = false;
         const publications = Promise.all([...publishing]);
@@ -748,6 +785,29 @@ export function createQueueService(
           errors.push(
             new Error('Queue shutdown publication deadline exceeded'),
           );
+        if (!pausesSettled) {
+          const error = new Error(
+            'Queue consumer pause remains unresolved; forced cleanup is unconfirmed',
+          );
+          errors.push(error);
+          dependencies.logger?.error(
+            { error },
+            'Queue shutdown has unresolved consumer pauses',
+          );
+          void paused.then((results) => {
+            for (const result of results) {
+              if (result.status === 'rejected')
+                dependencies.logger?.error(
+                  { error: result.reason },
+                  'Previously unresolved queue consumer pause failed',
+                );
+            }
+            dependencies.logger?.warn(
+              {},
+              'Previously unresolved queue consumer pauses have settled; cleanup remains unconfirmed',
+            );
+          });
+        }
         const deadline = cleanupDeadline();
         const cleanup = closeEntries(entries.values(), !settled);
         try {
