@@ -2,26 +2,36 @@
   {
     "type": "file",
     "name": "index",
-    "label": "部署"
+    "label": "部署方式与选择"
   },
   {
     "type": "file",
     "name": "configuration",
-    "label": "线上配置"
+    "label": "运行配置"
   },
   {
     "type": "file",
     "name": "standalone",
-    "label": "打包和运行"
+    "label": "独立部署：打包和运行"
   },
   {
     "type": "file",
     "name": "docker",
-    "label": "用 Docker 部署"
+    "label": "独立部署：Docker"
   },
   {
     "type": "file",
     "name": "hub",
-    "label": "Hub"
+    "label": "部署 Hub 平台"
+  },
+  {
+    "type": "file",
+    "name": "hub-publishing",
+    "label": "使用 Hub 发布应用"
+  },
+  {
+    "type": "file",
+    "name": "operations",
+    "label": "备份恢复与排障"
   }
 ]
