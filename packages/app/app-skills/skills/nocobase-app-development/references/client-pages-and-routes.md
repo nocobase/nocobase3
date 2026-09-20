@@ -152,7 +152,7 @@ The owning layout supplies the route tree: `AppLayout` for business pages, `Sett
 The page places `<Breadcrumbs />` itself, above its heading, inside `PageContainer`, which supplies the shared page spacing:
 
 ```tsx
-<PageContainer className='mx-auto max-w-6xl'>
+<PageContainer>
   <Breadcrumbs />
   <PageHeader
     title={t('orders.title')}

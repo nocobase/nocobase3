@@ -184,7 +184,7 @@ export default function ArchivedOrdersPage() {
   return (
     <>
       <RouteChildPage>
-        <PageContainer className='mx-auto max-w-6xl'>
+        <PageContainer>
           <Breadcrumbs />
           <PageHeader title={t('orders.archived.title')} />
           {/* the page's own content */}

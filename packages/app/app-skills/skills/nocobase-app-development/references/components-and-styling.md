@@ -16,7 +16,7 @@ export default function OrdersPage() {
 }
 ```
 
-Place the page heading, breadcrumbs, actions, and content inside this container. Keep loading, empty, and error content within it too. `PageContainer` accepts native `section` props and merges `className`; add a width constraint such as `mx-auto max-w-6xl` only when the page needs it, preserving the shared padding and spacing.
+Place the page heading, breadcrumbs, actions, and content inside this container. Keep loading, empty, and error content within it too. `PageContainer` accepts native `section` props and merges `className`.
 
 For nested routes, the parent page owns the container around inline Tab content; an inline child is content within that page and must not add another padded page container. A covering child page puts its own `PageContainer` inside `RouteChildPage`. Dialog and drawer content uses the corresponding overlay container. See [child routes](client-child-routes.md).
 
