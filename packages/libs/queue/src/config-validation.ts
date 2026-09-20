@@ -140,7 +140,7 @@ export function rateLimit(
   };
 }
 
-/** Validate built-in driver shapes without creating a connection. */
+/** Validate only the connection contract owned by the in-memory backend. */
 export function validateConnection(backend: string, value: unknown): void {
   if (backend === 'inMemory') {
     if (value === undefined) return;
@@ -148,46 +148,5 @@ export function validateConnection(backend: string, value: unknown): void {
       throw new TypeError('inMemory connection must be empty');
     return;
   }
-  if (backend !== 'redis') return;
-  const input = record(value, 'connection');
-  const config =
-    typeof input.duplicate === 'function'
-      ? record(input.options ?? {}, 'connection.options')
-      : input;
-  const clusterConfig =
-    config.redisOptions === undefined
-      ? undefined
-      : record(config.redisOptions, 'connection.redisOptions');
-  if (config.keyPrefix || clusterConfig?.keyPrefix)
-    throw new TypeError('connection.keyPrefix is unsupported');
-  for (const settings of clusterConfig ? [config, clusterConfig] : [config]) {
-    if (settings.port !== undefined)
-      integer(settings.port, 'connection.port', 1, 65535);
-    for (const flag of [
-      'lazyConnect',
-      'enableOfflineQueue',
-      'skipVersionCheck',
-    ]) {
-      if (settings[flag] !== undefined && typeof settings[flag] !== 'boolean')
-        throw new TypeError(`Invalid connection.${flag}`);
-    }
-    if (
-      settings.maxRetriesPerRequest !== undefined &&
-      settings.maxRetriesPerRequest !== null
-    )
-      integer(
-        settings.maxRetriesPerRequest,
-        'connection.maxRetriesPerRequest',
-        0,
-        MAX_QUEUE_COUNT,
-      );
-  }
-  if (config.port !== undefined)
-    integer(config.port, 'connection.port', 1, 65535);
-  if (config.db !== undefined)
-    integer(config.db, 'connection.db', 0, MAX_QUEUE_COUNT);
-  if (config.host !== undefined && typeof config.host !== 'string')
-    throw new TypeError('Invalid connection.host');
-  if (config.url !== undefined && typeof config.url !== 'string')
-    throw new TypeError('Invalid connection.url');
+  // Redis and custom connections are opaque here; their factories own interpretation.
 }

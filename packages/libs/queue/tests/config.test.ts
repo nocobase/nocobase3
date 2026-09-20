@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   resolvePublishOptions,
   resolveQueueConfiguration,
@@ -276,20 +276,61 @@ describe('queue configuration contract', () => {
   });
 
   it.each([
-    ['redis', { redisOptions: { port: 0 } }],
-    ['redis', { lazyConnect: 'yes' }],
-    ['redis', { maxRetriesPerRequest: -1 }],
-  ])('validates known %s driver settings %j', (queueBackend, connection) => {
-    expect(() => resolve({ queueBackend, connection })).toThrow(/connection/u);
-  });
+    undefined,
+    null,
+    'redis://localhost',
+    42,
+    { redisOptions: { port: 0 } },
+    { lazyConnect: 'yes' },
+    { maxRetriesPerRequest: -1 },
+    { keyPrefix: 'bad' },
+    { port: -1 },
+  ])(
+    'leaves Redis connection interpretation to the official factory: %j',
+    (connection) => {
+      // Resolution is not driver validation or a promise that setup will succeed.
+      expect(resolve({ queueBackend: 'redis', connection }).connection).toBe(
+        connection,
+      );
+    },
+  );
 
-  it.each([
-    ['redis', undefined],
-    ['redis', 'redis://localhost'],
-    ['redis', { keyPrefix: 'bad' }],
-    ['redis', { port: -1 }],
-    ['inMemory', { host: 'not-memory' }],
-  ])('rejects invalid %s connection %j', (queueBackend, connection) => {
-    expect(() => resolve({ queueBackend, connection })).toThrow(/connection/u);
+  it.each(['redis', 'custom'])(
+    'does not inspect opaque %s connection properties',
+    (queueBackend) => {
+      const inspect = vi.fn(() => {
+        throw new Error('Driver-owned property was read');
+      });
+      const connection = Object.create(null) as Record<string, unknown>;
+      for (const key of [
+        'duplicate',
+        'options',
+        'redisOptions',
+        'keyPrefix',
+        'port',
+      ])
+        Object.defineProperty(connection, key, {
+          get: inspect,
+          enumerable: true,
+        });
+      Object.freeze(connection);
+      expect(resolve({ queueBackend, connection }).connection).toBe(connection);
+      expect(inspect).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([null, [], 'memory', { host: 'not-memory' }])(
+    'retains memory-owned connection validation: %j',
+    (connection) => {
+      expect(() => resolve({ queueBackend: 'inMemory', connection })).toThrow(
+        /connection/u,
+      );
+    },
+  );
+
+  it('accepts an absent or empty memory connection without changing it', () => {
+    const connection = Object.freeze({});
+    expect(resolve({ connection }).connection).toBe(connection);
+    expect(resolve().connection).toBeUndefined();
   });
 });

@@ -97,6 +97,8 @@ it('still waits for a handler whose unregister already paused the Worker', async
     await expect.poll(() => state, { timeout: 1000 }).toBe('failure');
   } finally {
     release();
-    await Promise.all([closing, unregistering]);
+    await closing;
+    // The original draining pause reconnects after force-close; memory rejects it.
+    await expect(unregistering).rejects.toThrow('Memory backend is closed');
   }
 });

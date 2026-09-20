@@ -13,6 +13,31 @@ export interface BackendHarness {
   close(): Promise<void>;
 }
 
+/** Bounds a fixture observation, not the original operation or product cleanup. */
+export async function observeTestOperation<T>(
+  operation: Promise<T>,
+  description: string,
+  timeoutMs: number = 5000,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(`${description} remained pending after ${timeoutMs}ms`),
+            ),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function selectedBackend(): TestBackend {
   const backend = process.env.QUEUE_TEST_BACKEND;
   if (backend !== 'inMemory' && backend !== 'redis' && backend !== 'cluster') {
@@ -53,7 +78,8 @@ export async function createBackendHarness(
     maxRetriesPerRequest: null,
     lazyConnect: true,
     connectTimeout: 1000,
-    commandTimeout: 5000,
+    // The fixture supplies Worker-compatible options itself. A short command
+    // timeout would also apply to the official Worker's blocking connection.
   };
   let connection: Redis | Cluster;
   if (backend === 'cluster') {

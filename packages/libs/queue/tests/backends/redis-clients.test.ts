@@ -1,18 +1,10 @@
 import { EventEmitter } from 'node:events';
-import {
-  createIORedisClient,
-  createNodeRedisClient,
-  Queue,
-  RedisQueueBackend,
-} from 'bullmq';
-import { Redis } from 'ioredis';
-import { afterEach, expect, it, vi } from 'vitest';
-import {
-  createServiceRedisBackend,
-  resolveRedisConnection,
-} from '../../src/backends/redis.js';
+import { createNodeRedisClient, Queue, Worker } from 'bullmq';
+import { expect, it, vi } from 'vitest';
+import { createBackendRegistry } from '../../src/backends/registry.js';
+import { resolveQueueConfiguration } from '../../src/config.js';
 
-/** No network implementation of the native client capability boundary. */
+/** Already-ready native client double; no sockets or reconnect timers. */
 class NativeClient extends EventEmitter {
   isOpen = true;
   isReady = true;
@@ -27,7 +19,12 @@ class NativeClient extends EventEmitter {
     this.isReady = false;
     this.emit('end');
   });
-  quit = vi.fn(async () => 'OK');
+  quit = vi.fn(async () => {
+    this.isOpen = false;
+    this.isReady = false;
+    this.emit('end');
+    return 'OK';
+  });
   sendCommand = vi.fn(async () => 'OK');
   evalSha = vi.fn(async (): Promise<string | null> => 'job-id');
   hSet = vi.fn(async () => 1);
@@ -54,90 +51,73 @@ class NativeClient extends EventEmitter {
   });
 }
 
-afterEach(() => vi.useRealTimers());
-
-it('preserves a non-enumerable native client without connecting, duplicating, or installing listeners during validation', () => {
+it('preserves a non-enumerable native connection during read-only configuration', () => {
   const raw = new NativeClient();
   for (const key of Object.keys(raw))
     Object.defineProperty(raw, key, { enumerable: false });
-  expect(resolveRedisConnection(raw)).toBe(raw);
+  const resolved = resolveQueueConfiguration(
+    { namespace: 'app', queueBackend: 'redis', connection: raw },
+    'email',
+  );
+  expect(resolved.connection).toBe(raw);
   expect(raw.connect).not.toHaveBeenCalled();
   expect(raw.duplicate).not.toHaveBeenCalled();
   expect(raw.eventNames()).toEqual([]);
 });
 
-it('rejects an unrecognized empty client instance instead of falling back to localhost', () => {
-  class UnrecognizedClient {}
-  expect(() => resolveRedisConnection(new UnrecognizedClient())).toThrow(
-    'Unsupported Redis client',
-  );
-});
-
-it('accepts official IRedisClient without mutating or duplicating it during validation', () => {
+it('does not add listeners or duplicate an explicitly adapted native client during configuration', () => {
   const raw = new NativeClient();
-  const adapter = createNodeRedisClient(raw);
+  const connection = createNodeRedisClient(raw);
   const listeners = raw.eventNames().map((event) => raw.listenerCount(event));
-  expect(resolveRedisConnection(adapter)).toBe(adapter);
-  expect(raw.connect).not.toHaveBeenCalled();
-  expect(raw.duplicate).not.toHaveBeenCalled();
+  expect(
+    resolveQueueConfiguration(
+      { namespace: 'app', queueBackend: 'redis', connection },
+      'email',
+    ).connection,
+  ).toBe(connection);
   expect(raw.eventNames().map((event) => raw.listenerCount(event))).toEqual(
     listeners,
   );
+  expect(raw.connect).not.toHaveBeenCalled();
+  expect(raw.duplicate).not.toHaveBeenCalled();
 });
 
-it.each(['raw', 'adapter'] as const)(
-  'owns only role and blocking duplicates for %s node-redis',
-  async (kind) => {
-    const raw = new NativeClient();
-    const connection = kind === 'raw' ? raw : createNodeRedisClient(raw);
-    const backend = createServiceRedisBackend(
-      'owned',
-      { connection },
-      { withBlockingConnection: true },
-    );
-    backend.on('error', () => {});
-    try {
-      await backend.waitUntilReady();
-      expect(raw.duplicates).toHaveLength(1);
-      const owned = raw.duplicates[0]!;
-      expect(owned.options.url).toBe(raw.options.url);
-      expect(owned.duplicates).toHaveLength(1);
-      expect(owned.duplicates[0]!.options.url).toBe(raw.options.url);
-    } finally {
-      await backend.close(true);
-    }
-    expect(raw.destroy).not.toHaveBeenCalled();
-    expect(raw.quit).not.toHaveBeenCalled();
-    expect(raw.connect).not.toHaveBeenCalled();
-    expect(raw.duplicates[0]!.destroy).toHaveBeenCalledOnce();
-    expect(raw.duplicates[0]!.duplicates[0]!.destroy).toHaveBeenCalledOnce();
-  },
-);
-
-it('keeps official ioredis adapters intact during validation', () => {
-  const raw = new Redis({
-    host: 'target.example',
-    port: 6399,
-    lazyConnect: true,
-  });
-  const adapter = createIORedisClient(raw);
+it('uses explicit native adaptation and lets public Worker close own only its blocking duplicate', async () => {
+  const raw = new NativeClient();
+  const connection = createNodeRedisClient(raw);
+  const factory = createBackendRegistry().resolve('redis');
+  const queue = new Queue('native-ownership', { connection }, factory);
+  const worker = new Worker(
+    'native-ownership',
+    async () => {},
+    { connection, autorun: false },
+    factory,
+  );
   try {
-    expect(resolveRedisConnection(adapter)).toBe(adapter);
-    expect(raw.status).toBe('wait');
+    await queue.waitUntilReady();
+    await worker.waitUntilReady();
+    expect(raw.duplicate).toHaveBeenCalledOnce();
+    expect(raw.duplicates[0]!.duplicates).toHaveLength(0);
+    expect(raw.duplicates[0]!.options.url).toBe(raw.options.url);
   } finally {
-    raw.disconnect();
+    await worker.close(true);
+    await queue.close();
   }
+  expect(raw.destroy).not.toHaveBeenCalled();
+  expect(raw.quit).not.toHaveBeenCalled();
+  expect(raw.connect).not.toHaveBeenCalled();
+  expect(raw.duplicates[0]!.destroy).toHaveBeenCalledOnce();
+  expect(raw.isReady).toBe(true);
+  raw.destroy();
 });
 
-it('keeps native single/bulk receipt IDs as strings and invalidates every concurrent abandoned operation', async () => {
-  vi.useFakeTimers();
+it('preserves official native single/bulk IDs without permanently invalidating a shared client after a command rejection', async () => {
   const raw = new NativeClient();
   const queue = new Queue(
     'native-receipts',
-    { connection: raw },
-    createServiceRedisBackend,
+    { connection: createNodeRedisClient(raw) },
+    createBackendRegistry().resolve('redis'),
   );
-  queue.on('error', () => {});
   try {
     await queue.waitUntilReady();
     expect((await queue.add('one', {})).id).toBe('job-id');
@@ -149,66 +129,14 @@ it('keeps native single/bulk receipt IDs as strings and invalidates every concur
         ])
       ).map((job) => job.id),
     ).toEqual(['bulk-0', 'bulk-1']);
-    const owned = raw.duplicates[0]!;
-    owned.evalSha.mockImplementation(
-      () =>
-        new Promise((_, reject) => {
-          owned.once('end', () => reject(new Error('Disconnects client')));
-        }),
-    );
-    const pending = Promise.allSettled([
-      queue.add('lost-one', {}),
-      queue.add('lost-two', {}),
-    ]);
-    await vi.advanceTimersByTimeAsync(10000);
-    const results = await pending;
-    expect(results.map((result) => result.status)).toEqual([
-      'rejected',
-      'rejected',
-    ]);
-    expect(owned.destroy).toHaveBeenCalledOnce();
-    await expect(queue.add('after-invalidation', {})).rejects.toThrow();
-    expect(raw.destroy).not.toHaveBeenCalled();
+    raw.evalSha.mockRejectedValueOnce(new Error('Command failed'));
+    await expect(queue.add('failed', {})).rejects.toThrow('Command failed');
+    expect((await queue.add('later', {})).id).toBe('job-id');
+    expect(raw.duplicate).not.toHaveBeenCalled();
   } finally {
     await queue.close();
   }
-});
-
-it('coordinates official node-redis adapter reconnect only on owned regular/blocking clients', async () => {
-  vi.useFakeTimers();
-  const raw = new NativeClient();
-  const backend = createServiceRedisBackend(
-    'native-reconnect',
-    { connection: createNodeRedisClient(raw) },
-    { withBlockingConnection: true },
-  );
-  backend.on('error', () => {});
-  await backend.waitUntilReady();
-  const regular = raw.duplicates[0]!;
-  const blocking = regular.duplicates[0]!;
-  try {
-    regular.isReady = false;
-    blocking.isReady = false;
-    await vi.advanceTimersByTimeAsync(10500);
-    expect(regular.connect).toHaveBeenCalledOnce();
-    expect(blocking.connect).toHaveBeenCalledOnce();
-    expect(regular.isReady).toBe(true);
-    expect(blocking.isReady).toBe(true);
-    if (!(backend instanceof RedisQueueBackend))
-      throw new Error('Expected Redis backend');
-    expect((await backend.client).status).toBe('ready');
-    expect((await backend.blockingClient)?.status).toBe('ready');
-    const disconnects = blocking.destroy.mock.calls.length;
-    await backend.disconnectBlocking(true);
-    expect(blocking.destroy).toHaveBeenCalledTimes(disconnects + 1);
-    expect(blocking.isOpen).toBe(false);
-    expect(raw.connect).not.toHaveBeenCalled();
-    expect(raw.destroy).not.toHaveBeenCalled();
-  } finally {
-    await backend.close(true);
-  }
-  await vi.advanceTimersByTimeAsync(30000);
-  expect(regular.connect).toHaveBeenCalledOnce();
-  expect(blocking.connect).toHaveBeenCalledOnce();
-  expect(vi.getTimerCount()).toBe(0);
+  expect(raw.destroy).not.toHaveBeenCalled();
+  expect(raw.quit).not.toHaveBeenCalled();
+  raw.destroy();
 });

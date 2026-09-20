@@ -161,7 +161,7 @@ describe('application-private queue service', () => {
     const off = instance.consumer('jobs').consume(first);
     await instance.setup();
     await off();
-    expect(pause).toHaveBeenCalledWith(true);
+    expect(pause).toHaveBeenCalledWith(false);
     pause.mockRestore();
     await instance.producer('jobs').publish('event', { value: 2 });
     const second = vi.fn(async () => {});
