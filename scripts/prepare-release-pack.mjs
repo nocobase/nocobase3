@@ -149,11 +149,23 @@ function requireSourcePackage(entry, packagesByName) {
   return packageInfo;
 }
 
-async function validateTarball({ entry, packageInfo, tarballPath }) {
+async function validateTarball({
+  entry,
+  packageInfo,
+  tarballPath,
+  expectedIntegrity,
+}) {
   await requireRegularFile(tarballPath, `tarball for ${entry.name}`);
+  // Reject modified bytes before invoking tar; GNU tar and BSD tar handle trailing garbage differently.
+  const integrity = await sha256Integrity(tarballPath);
+  if (expectedIntegrity !== undefined && integrity !== expectedIntegrity) {
+    throw new Error(
+      `Tarball integrity mismatch for ${entry.name}: expected ${expectedIntegrity}, received ${integrity}.`,
+    );
+  }
   const packedManifest = await readPackedManifest(tarballPath);
   validatePackedManifest(packageInfo.manifest, packedManifest);
-  return sha256Integrity(tarballPath);
+  return integrity;
 }
 
 function releaseArchiveName(packageName) {
@@ -405,16 +417,12 @@ export async function validatePreparedReleasePack({ output, plan, repoRoot }) {
     if (!pathsOverlap(canonicalOutputDirectory, canonicalTarballPath)) {
       throw new Error(`${entry.name} tarball.path must stay inside --output.`);
     }
-    const integrity = await validateTarball({
+    await validateTarball({
       entry,
       packageInfo,
       tarballPath: canonicalTarballPath,
+      expectedIntegrity: entry.tarball.integrity,
     });
-    if (integrity !== entry.tarball.integrity) {
-      throw new Error(
-        `Tarball integrity mismatch for ${entry.name}: expected ${entry.tarball.integrity}, received ${integrity}.`,
-      );
-    }
   }
 
   console.log(
