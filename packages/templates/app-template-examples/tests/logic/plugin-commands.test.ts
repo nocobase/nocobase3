@@ -13,6 +13,7 @@ const appRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 interface AppPackageJson {
   readonly files?: readonly string[];
+  readonly publishConfig?: unknown;
   readonly scripts?: Record<string, string>;
   readonly devDependencies?: Record<string, string>;
 }
@@ -70,9 +71,11 @@ describe('documented plugin commands', () => {
     expect(readFileSync(path.join(appRoot, '.gitignore'), 'utf8')).toContain(
       '/.agents/',
     );
-    expect(readFileSync(path.join(appRoot, '.npmignore'), 'utf8')).toContain(
-      '.agents/',
-    );
+    const npmIgnorePath = path.join(appRoot, '.npmignore');
+    if (appPackage.publishConfig) {
+      expect(existsSync(npmIgnorePath)).toBe(true);
+      expect(readFileSync(npmIgnorePath, 'utf8')).toContain('.agents/');
+    }
     expect(appPackage.files).not.toContain('.agents');
   });
 });

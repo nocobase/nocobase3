@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +16,12 @@ import {
   parseInspectAppClientArgs,
   selectAppClientInspection,
 } from '../../cli/dev-commands/inspect-client-impl.mjs';
+
+const appPackageName = (
+  JSON.parse(
+    readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+  ) as { name: string }
+).name;
 
 async function createInspectionApp(pluginsSource?: string): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
@@ -71,7 +78,7 @@ describe('client inspection', () => {
     const inspection = await inspectAppClient();
 
     expect(inspection.app).toMatchObject({
-      packageName: '@nocobase/app-template-examples',
+      packageName: appPackageName,
     });
     expect(inspection.consistent).toBe(true);
     expect(inspection.settings).toEqual(
@@ -94,98 +101,98 @@ describe('client inspection', () => {
     ).toEqual([
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:home',
+        id: `${appPackageName}:home`,
         path: '/',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:notifications',
+        id: `${appPackageName}:notifications`,
         path: '/notifications',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeOverlays',
+        id: `${appPackageName}:routeOverlays`,
         path: '/route-overlays',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeDialogExample',
+        id: `${appPackageName}:routeDialogExample`,
         path: '/route-overlays/dialog',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeDialogDrawerExample',
+        id: `${appPackageName}:routeDialogDrawerExample`,
         path: '/route-overlays/dialog/drawer',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeDrawerExample',
+        id: `${appPackageName}:routeDrawerExample`,
         path: '/route-overlays/drawer',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeDrawerDialogExample',
+        id: `${appPackageName}:routeDrawerDialogExample`,
         path: '/route-overlays/drawer/dialog',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeChildPages',
+        id: `${appPackageName}:routeChildPages`,
         path: '/route-overlays/pages',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeChildPageQuotation',
+        id: `${appPackageName}:routeChildPageQuotation`,
         path: '/route-overlays/pages/quotation',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeChildPageDialog',
+        id: `${appPackageName}:routeChildPageDialog`,
         path: '/route-overlays/pages/quotation/dialog',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeChildPageOnboarding',
+        id: `${appPackageName}:routeChildPageOnboarding`,
         path: '/route-overlays/pages/onboarding',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:routeChildPageRenewal',
+        id: `${appPackageName}:routeChildPageRenewal`,
         path: '/route-overlays/pages/renewal',
       },
 
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:articles',
+        id: `${appPackageName}:articles`,
         path: '/articles',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:numeric-examples',
+        id: `${appPackageName}:numeric-examples`,
         path: '/numeric-examples',
       },
       {
         auth: 'required',
-        id: '@nocobase/app-template-examples:external-crm',
+        id: `${appPackageName}:external-crm`,
         path: '/external-crm',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-template-examples:login',
+        id: `${appPackageName}:login`,
         path: '/login',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-template-examples:register',
+        id: `${appPackageName}:register`,
         path: '/register',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-template-examples:forgot-password',
+        id: `${appPackageName}:forgot-password`,
         path: '/forgot-password',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-template-examples:reset-password',
+        id: `${appPackageName}:reset-password`,
         path: '/reset-password',
       },
       {
@@ -362,7 +369,7 @@ describe('client inspection', () => {
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
     ).toEqual([
-      { id: '@nocobase/app-template-examples:theme', order: 1 },
+      { id: `${appPackageName}:theme`, order: 1 },
       {
         id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
@@ -383,7 +390,7 @@ describe('client inspection', () => {
         order,
       })),
     ).toEqual([
-      { packageName: '@nocobase/app-template-examples', order: 1 },
+      { packageName: appPackageName, order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
       { packageName: '@nocobase/app-plugin-notification-provider', order: 4 },
@@ -394,14 +401,14 @@ describe('client inspection', () => {
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
-      packageName: '@nocobase/app-template-examples',
+      packageName: appPackageName,
       source: 'application',
     });
     expect(inspection.locales).toEqual(
       expect.arrayContaining([
         {
           order: 1,
-          packageName: '@nocobase/app-template-examples',
+          packageName: appPackageName,
           source: 'application',
         },
         expect.objectContaining({
@@ -457,9 +464,9 @@ describe('client inspection', () => {
       inspection.settings
         .filter(
           ({ packageName }) =>
-            packageName !== '@nocobase/app-plugin-ai-employee',
+            packageName === '@nocobase/app-plugin-authorization' ||
+            packageName.startsWith('@nocobase/app-plugin-authz-'),
         )
-        .slice(0, 9)
         .map(({ id }) => id),
     ).toEqual([
       'permission-sets',

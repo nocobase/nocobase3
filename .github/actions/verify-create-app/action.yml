@@ -1,7 +1,7 @@
 name: Verify create-app
 description: >-
-  Publishes packages to a throwaway registry, generates Default and Hub applications with create-app, and checks dev, build, and
-  production start. Fails the run before anything reaches the real registry.
+  Publishes packages to a throwaway registry, generates Default and Hub applications with create-app, and checks test, dev, build,
+  and production start. Fails the run before anything reaches the real registry.
 
 inputs:
   port:
@@ -140,7 +140,7 @@ runs:
 
         pnpm changeset publish --no-git-tag
 
-    - name: Generate Default and Hub applications and verify dev, build, and start
+    - name: Generate Default and Hub applications and verify test, dev, build, and start
       shell: bash
       env:
         PORT: ${{ inputs.port }}
