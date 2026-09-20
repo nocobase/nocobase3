@@ -44,7 +44,6 @@ test('groups employees, conversations, and standalone services as sibling pages'
           {
             name: 'aiConversations',
             path: '/ai/conversations',
-            navigation: { title: 'Conversations' },
             authz: {
               resource: { type: 'page', id: 'ai.settings' },
               action: 'access',
@@ -155,8 +154,8 @@ test('resolves the AI navigation group without changing page URLs or identities'
     {
       id: 'aiConversations',
       path: '/settings/ai/conversations',
-      title: 'Conversations',
-      navigation: true,
+      title: 'aiConversations',
+      navigation: false,
       authz: {
         resource: { type: 'page', id: 'ai.settings' },
         action: 'access',
