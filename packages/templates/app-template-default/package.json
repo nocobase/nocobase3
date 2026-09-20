@@ -134,7 +134,7 @@
     "directory": "packages/templates/app-template-default"
   },
   "scripts": {
-    "dev": "tsx ./scripts/dev/index.mjs",
+    "dev": "tsx ./scripts/dev/run.mjs",
     "build": "node ./scripts/build.mjs",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
