@@ -1,10 +1,11 @@
 // @vitest-environment node
 
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { createServer, type ViteDevServer } from 'vite';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   ClientInspectionError,
@@ -45,6 +46,66 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
 }
 
 describe('client inspection', () => {
+  it('preserves a running dev server cache during client inspection', async () => {
+    const appRoot = await createInspectionApp(
+      'export default { plugins: [], routeComponentOverrides: [] };',
+    );
+    let devServer: ViteDevServer | undefined;
+    try {
+      for (const name of ['inspection-dep', 'dev-only-dep']) {
+        const dependencyRoot = path.join(appRoot, 'node_modules', name);
+        await mkdir(dependencyRoot, { recursive: true });
+        await writeFile(
+          path.join(dependencyRoot, 'package.json'),
+          JSON.stringify({ name, version: '1.0.0', main: 'index.cjs' }),
+        );
+        await writeFile(
+          path.join(dependencyRoot, 'index.cjs'),
+          'module.exports = { value: 1 };',
+        );
+      }
+      // Like plugin-react, this plugin adds includes after the caller supplies include: [].
+      await writeFile(
+        path.join(appRoot, 'vite.config.mjs'),
+        `export default {
+          plugins: [{
+            name: 'fixture-dependency',
+            config() { return { optimizeDeps: { include: ['inspection-dep'] } }; },
+          }],
+        };`,
+      );
+      devServer = await createServer({
+        root: appRoot,
+        logLevel: 'silent',
+        optimizeDeps: { noDiscovery: true, include: ['dev-only-dep'] },
+        server: { middlewareMode: true, watch: null, hmr: false, ws: false },
+      });
+      const metadataFile = path.join(
+        devServer.config.cacheDir,
+        'deps/_metadata.json',
+      );
+      await vi.waitFor(async () => {
+        expect(await readFile(metadataFile, 'utf8')).toContain(
+          '"dev-only-dep"',
+        );
+      });
+      const before = await readFile(metadataFile, 'utf8');
+
+      await inspectAppClient({ appRoot });
+
+      expect(await readFile(metadataFile, 'utf8')).toBe(before);
+      await expect(
+        readFile(
+          path.join(devServer.config.cacheDir, 'deps/dev-only-dep.js'),
+          'utf8',
+        ),
+      ).resolves.toContain('value: 1');
+    } finally {
+      await devServer?.close();
+      await rm(appRoot, { recursive: true, force: true });
+    }
+  });
+
   it('parses the static Client contribution types', () => {
     expect(
       parseInspectAppClientArgs(['--type', 'react-providers', '--json']),

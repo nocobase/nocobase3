@@ -69,6 +69,8 @@ describe('development client file watching', () => {
     vi.stubEnv('PROXY_TARGET_URL', '');
     server = await createServer({
       root,
+      // node_modules is shared with the app; its default cache would overwrite a running dev server's deps.
+      cacheDir: path.join(workspace, 'vite-cache'),
       configFile: path.join(root, 'vite.config.ts'),
       logLevel: 'silent',
       optimizeDeps: { noDiscovery: true, include: [] },

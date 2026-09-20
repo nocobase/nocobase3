@@ -330,6 +330,8 @@ Add tests for what you changed: a route's authenticated, unauthenticated, and un
 
 `pnpm client:inspect` and `pnpm server:inspect` show what is wired when a contribution does not appear as expected. They report composition, not correctness — a clean inspection proves nothing about behavior or security.
 
+Every temporary Vite server created by a test or diagnostic tool must own a separate `cacheDir` and remove it after closing. Vitest's cache isolation does not cover manually created servers; a fixture's linked `node_modules` can share the application's dev cache, and React can add optimizer includes even when the caller sets `include: []`. Preserve the client inspector's per-invocation temporary cache. See [Vite cache isolation](.agents/skills/nocobase-app-development/references/testing.md#vite-cache-isolation).
+
 For creating or editing theme presets, read `.agents/skills/nocobase-app-development/references/themes.md` (from the application root).
 
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `.agents/skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.

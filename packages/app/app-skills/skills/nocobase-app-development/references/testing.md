@@ -12,6 +12,12 @@ e2e/                Tests needing a real server, real auth, or a real database
 
 `vitest.config.ts` discovers `tests/**/*.test.{ts,tsx}` automatically. Theme token tests compile the real CSS; browser checks still need to verify computed styles, typography, spacing and focus.
 
+## Vite cache isolation
+
+Keep the application's separate `vitest.config.ts`. Vitest 4 isolates its own Vite cache under `node_modules/.vite/vitest/<project-hash>`; this does not protect additional Vite servers created by tests or diagnostic tools. Give every temporary `createServer()` instance its own `cacheDir` under an `mkdtemp()` directory, close the server before removing that directory, and clean up on failure too. A fixture with `node_modules` symlinked to the application also shares the default Vite cache, even when its `root` is different.
+
+`optimizeDeps: { noDiscovery: true, include: [] }` does not guarantee that optimization is disabled: plugins such as React can add includes afterward. A second optimizer sharing the dev server's cache can replace its dependency files while the running server still serves URLs with the previous hash. The client inspector uses a separate temporary cache for each invocation. Never delete or regenerate a running dev server's cache; if it has already been replaced, stop and restart that server, then reload the browser.
+
 ## What to test, by change
 
 | You changed         | Test at least                                                                               |
