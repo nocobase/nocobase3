@@ -17,7 +17,7 @@ Configure a persistent storage directory, database and stable authentication/ses
 
 Use `APP_BASE_PATH=/hub`, set `APP_PUBLIC_ORIGIN` to the external origin without a path, and proxy the public site to Hub's application port. The standalone listener keeps `/hub` and its descendants in Hub and forwards other paths, including WebSocket upgrades, to its ready Host. Preserve Host and protocol information. Hosted applications can use paths such as `/crm`; the Host port does not need separate public exposure.
 
-Visit `/hub/`, not only the origin root. With the default authentication seed enabled and an empty user table, the initial account is `admin@nocobase.com` with password `admin123`. Change the password before opening access. Verify platform permissions and deploy a test App to check routing and persistence.
+Visit `/hub/`, not only the origin root. Before first startup, set `users.initialAdmin.username` and `users.initialAdmin.password` in the runtime configuration. The default template uses `nocobase` / `admin123`; the email remains `admin@nocobase.com`. These settings apply only when the default seed runs against an empty user table and do not reset existing accounts. Replace the default password before opening access. Verify platform permissions and deploy a test App to check routing and persistence.
 
 ## Upgrade and recovery
 

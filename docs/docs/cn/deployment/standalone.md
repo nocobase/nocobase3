@@ -51,7 +51,7 @@ mkdir -p storage
 chmod 600 config.yml
 ```
 
-保留模板的功能配置，修改数据库与密钥。分别执行 `openssl rand -hex 32` 生成两个随机值，填入 `auth.secret` 和 `session.secret`，不要保留模板占位值。下面是需要合入实际配置的关键部分，不是完整模板：
+保留模板的功能配置，修改数据库与密钥，并在首次启动前设置[初始管理员](./configuration#配置初始管理员)。分别执行 `openssl rand -hex 32` 生成两个随机值，填入 `auth.secret` 和 `session.secret`，不要保留模板占位值。下面是需要合入实际配置的关键部分，不是完整模板：
 
 ```yaml
 auth:
@@ -121,7 +121,7 @@ WantedBy=multi-user.target
 
 ## 初始化与验收
 
-打开 `https://apps.example.com/crm/`。当前默认认证 seed 在用户表为空且 seed 执行时创建 `admin@nocobase.com`，初始密码为 `admin123`；已有用户表不会因此重新创建管理员。首次访问应在受控网络完成，登录后立即修改密码，再开放正式访问。定制应用的 seed 可能不同，应以实际项目为准。
+打开 `https://apps.example.com/crm/`，使用[初始管理员配置](./configuration#配置初始管理员)中的用户名和密码登录。未修改默认配置时，用户名为 `nocobase`、密码为 `admin123`；也可使用邮箱 `admin@nocobase.com` 登录。使用默认密码时，首次登录后立即修改，再开放正式访问。已有应用使用原账号，修改初始化配置不会重置密码；定制初始化任务以实际项目为准。
 
 验证登录、退出、页面刷新、静态资源、API、实时连接及实际业务操作。创建一条测试记录并上传文件，重启服务后确认仍存在。确认外部回调和通知链接使用正确域名及挂载路径。
 

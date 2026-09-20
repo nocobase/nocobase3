@@ -106,6 +106,8 @@ test -s config.example.yml && { test -e config.yml || cp config.example.yml conf
 | `session.secret`                     | 同样生成随机值并替换占位值                            |
 | `database.connections.main.filename` | 使用 SQLite 时设置为 `/data/hub/database/main.sqlite` |
 
+首次启动前，按[配置初始管理员](./configuration#配置初始管理员)设置 `users.initialAdmin` 中的用户名和密码。
+
 `filename` 是容器内路径。下一步将服务器上的 `storage` 挂载到 `/data`，Hub 数据库和托管应用数据将保存在该持久目录中。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并确认所选镜像包含对应驱动。
 
 镜像以 `node` 用户运行。可用以下命令确认 UID 和 GID，并为该用户设置 `config.yml` 的读取权限及 `storage` 的写入权限：
@@ -201,7 +203,7 @@ cd hub
 
 ### 2. 配置运行环境
 
-编辑项目根目录的 `config.yml`，确认数据库连接信息，保留已生成的密钥。字段说明见[运行配置](./configuration)。
+编辑项目根目录的 `config.yml`，确认数据库连接信息，设置初始管理员用户名和密码，并保留已生成的密钥。字段说明见[运行配置](./configuration)。
 
 在项目根目录的 `.env` 中设置以下参数，保留文件中的其他配置：
 
@@ -264,16 +266,16 @@ Hub 允许上传最大 256 MiB 的 Release 压缩包，这里为发布请求中�
 
 ### 2. 首次登录
 
-打开 `https://apps.example.com/hub/`，使用初始管理员账号登录：
+打开 `https://apps.example.com/hub/`，使用运行配置中 `users.initialAdmin` 设置的用户名和密码登录。未修改默认配置时：
 
-| 项目 | 默认值               |
-| ---- | -------------------- |
-| 账号 | `admin@nocobase.com` |
-| 密码 | `admin123`           |
+| 项目   | 默认值     |
+| ------ | ---------- |
+| 用户名 | `nocobase` |
+| 密码   | `admin123` |
 
-首次安装并使用默认初始化配置时，可使用上述账号登录。已完成初始化的 Hub，请使用已有的管理员账号登录。
+也可使用邮箱 `admin@nocobase.com` 登录。使用默认密码时，首次登录后请修改密码。
 
-使用初始账号登录后，请修改默认密码。
+已完成初始化的 Hub 使用已有管理员账号；修改 `users.initialAdmin` 不会重置账号或密码。
 
 ## Hub 升级
 
