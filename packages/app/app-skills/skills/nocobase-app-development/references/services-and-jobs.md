@@ -61,7 +61,7 @@ Keep the layers apart: a service should not read a Hono context, return HTTP sta
 | `start()`    | Application start                | Long-lived resources: listeners, pollers         |
 | `shutdown()` | Application stop                 | Releasing what `start()` acquired                |
 
-Declaration modules are imported by `server:inspect`, so nothing at module top level may connect to a database or start a worker.
+Declaration modules must not connect to a database or start a worker at module top level.
 
 ## Client-side services
 
@@ -97,7 +97,7 @@ export default class RebuildIndexJob extends Job<RebuildIndexPayload> {
 }
 ```
 
-Jobs in `server/jobs/` are discovered automatically; `pnpm server:inspect --json` lists the plugins that contribute them.
+Jobs in `server/jobs/` are discovered automatically. Review `server/plugins.ts` and each registered plugin’s job declarations when checking contributions.
 
 Dispatch by resolving the queue manager:
 

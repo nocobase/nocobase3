@@ -436,6 +436,43 @@ importers:
         specifier: ^18.0.0
         version: 18.1.0
 
+  packages/app/app-cli:
+    dependencies:
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../app-server
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../../tools/cli
+      '@oclif/core':
+        specifier: 'catalog:'
+        version: 4.14.0
+    devDependencies:
+      '@nocobase/db':
+        specifier: workspace:^
+        version: link:../../libs/db
+      '@nocobase/db-sqlite':
+        specifier: workspace:^
+        version: link:../../libs/db-sqlite
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../../tools/dev-config
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/app/app-client:
     dependencies:
       '@nocobase/api-client':
@@ -3958,6 +3995,9 @@ importers:
       '@nocobase/ai-employee':
         specifier: workspace:^
         version: link:../../libs/ai-employee
+      '@nocobase/app-cli':
+        specifier: workspace:^
+        version: link:../../app/app-cli
       '@nocobase/app-plugin-ai-employee':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-ai-employee
@@ -4082,6 +4122,9 @@ importers:
       '@nocobase/app-skills':
         specifier: workspace:*
         version: link:../../app/app-skills
+      '@nocobase/app-tools':
+        specifier: workspace:^
+        version: link:../../tools/app-tools
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
@@ -4316,6 +4359,9 @@ importers:
       '@nocobase/ai-employee':
         specifier: workspace:^
         version: link:../../libs/ai-employee
+      '@nocobase/app-cli':
+        specifier: workspace:^
+        version: link:../../app/app-cli
       '@nocobase/app-plugin-ai-employee':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-ai-employee
@@ -4479,6 +4525,9 @@ importers:
       '@nocobase/app-skills':
         specifier: workspace:*
         version: link:../../app/app-skills
+      '@nocobase/app-tools':
+        specifier: workspace:^
+        version: link:../../tools/app-tools
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
@@ -4707,6 +4756,9 @@ importers:
 
   packages/templates/app-template-hub:
     dependencies:
+      '@nocobase/app-cli':
+        specifier: workspace:^
+        version: link:../../app/app-cli
       '@nocobase/app-plugin-api-keys':
         specifier: workspace:^
         version: link:../../plugins/app-plugin-api-keys
@@ -4816,6 +4868,9 @@ importers:
       '@nocobase/app-skills':
         specifier: workspace:*
         version: link:../../app/app-skills
+      '@nocobase/app-tools':
+        specifier: workspace:^
+        version: link:../../tools/app-tools
       '@nocobase/app-websocket':
         specifier: workspace:^
         version: link:../../app/app-websocket
@@ -5035,6 +5090,43 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.6.5
+
+  packages/tools/app-tools:
+    dependencies:
+      '@nocobase/app-server':
+        specifier: workspace:^
+        version: link:../../app/app-server
+      '@nocobase/dev-config':
+        specifier: workspace:*
+        version: link:../dev-config
+      '@nocobase/nb3-cli':
+        specifier: workspace:^
+        version: link:../cli
+      cross-spawn:
+        specifier: ^7.0.6
+        version: 7.0.6
+      tar:
+        specifier: ^7.5.22
+        version: 7.5.22
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      eslint:
+        specifier: 'catalog:'
+        version: 10.8.1(jiti@2.7.0)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.9.6
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(jsdom@30.0.1(@noble/hashes@2.3.0))(vite@6.4.3(@types/node@24.13.3)(jiti@2.7.0)(lightningcss@1.32.0)(sass-embedded@1.103.1)(sass@1.103.1)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/tools/cli:
     dependencies:
@@ -15691,7 +15783,7 @@ snapshots:
       '@alicloud/endpoint-util': 0.0.1
       '@alicloud/openapi-client': 0.4.15
       '@alicloud/openapi-util': 0.3.3
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@alicloud/tea-util': 1.4.11(supports-color@8.1.1)
     transitivePeerDependencies:
       - bufferutil
@@ -15700,8 +15792,8 @@ snapshots:
 
   '@alicloud/credentials@2.4.7':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
-      httpx: 2.3.3
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
+      httpx: 2.3.3(supports-color@8.1.1)
       ini: 1.3.8
       kitx: 2.2.0
     transitivePeerDependencies:
@@ -15709,7 +15801,7 @@ snapshots:
 
   '@alicloud/endpoint-util@0.0.1':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       kitx: 2.2.0
     transitivePeerDependencies:
       - supports-color
@@ -15717,7 +15809,7 @@ snapshots:
   '@alicloud/gateway-spi@0.0.8':
     dependencies:
       '@alicloud/credentials': 2.4.7
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -15726,7 +15818,7 @@ snapshots:
       '@alicloud/credentials': 2.4.7
       '@alicloud/gateway-spi': 0.0.8
       '@alicloud/openapi-util': 0.3.3
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@alicloud/tea-util': 1.4.9
       '@alicloud/tea-xml': 0.0.3
     transitivePeerDependencies:
@@ -15736,7 +15828,7 @@ snapshots:
 
   '@alicloud/openapi-util@0.3.3':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@alicloud/tea-util': 1.4.11(supports-color@8.1.1)
       kitx: 2.2.0
       sm3: 1.0.3
@@ -15745,16 +15837,16 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@alicloud/tea-typescript@1.8.0':
+  '@alicloud/tea-typescript@1.8.0(supports-color@8.1.1)':
     dependencies:
       '@types/node': 12.20.55
-      httpx: 2.3.3
+      httpx: 2.3.3(supports-color@8.1.1)
     transitivePeerDependencies:
       - supports-color
 
   '@alicloud/tea-util@1.4.11(supports-color@8.1.1)':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@darabonba/typescript': 1.0.5(supports-color@8.1.1)
       kitx: 2.2.0
     transitivePeerDependencies:
@@ -15764,14 +15856,14 @@ snapshots:
 
   '@alicloud/tea-util@1.4.9':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       kitx: 2.2.0
     transitivePeerDependencies:
       - supports-color
 
   '@alicloud/tea-xml@0.0.3':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       '@types/xml2js': 0.4.14
       xml2js: 0.6.2
     transitivePeerDependencies:
@@ -16782,10 +16874,10 @@ snapshots:
 
   '@darabonba/typescript@1.0.5(supports-color@8.1.1)':
     dependencies:
-      '@alicloud/tea-typescript': 1.8.0
+      '@alicloud/tea-typescript': 1.8.0(supports-color@8.1.1)
       http-proxy-agent: 5.0.0(supports-color@8.1.1)
       https-proxy-agent: 5.0.1
-      httpx: 2.3.3
+      httpx: 2.3.3(supports-color@8.1.1)
       lodash: 4.18.1
       moment: 2.30.1
       moment-timezone: 0.5.48
@@ -22638,7 +22730,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  httpx@2.3.3:
+  httpx@2.3.3(supports-color@8.1.1):
     dependencies:
       '@types/node': 20.19.43
       debug: 4.4.3(supports-color@8.1.1)

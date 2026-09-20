@@ -166,7 +166,7 @@ const routes: readonly AppRouteContribution<Application>[] = [
 export default routes;
 ```
 
-Declaration modules must not connect to the database, start workers, or execute route factories at import time. `server:inspect` imports them.
+Declaration modules must not connect to the database, start workers, or execute route factories at import time.
 
 ## Calling from the browser
 

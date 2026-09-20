@@ -48,7 +48,7 @@ describe('template package name', () => {
   /**
    * `create-app` rewrites this name to the application's in a fixed list of files. A source that embeds it but is not
    * on that list ships the template's name into every generated application, where the client would then declare an
-   * i18n namespace the server does not share and `pnpm client:inspect` would refuse to run.
+   * i18n namespace the server does not share.
    *
    * When this fails, either rewrite the new occurrence to derive the name at runtime, or add the file to
    * `PACKAGE_NAME_SOURCES` in `packages/tools/create-app/src/lib/scaffold.ts` and to `REWRITTEN_SOURCES` above.

@@ -95,7 +95,8 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@nocobase/app-tools": "workspace:^"
   },
   "files": [
     ".env.example",
@@ -150,8 +151,6 @@
     "plugin:skills:sync": "nocobase plugin skills sync",
     "skills:sync": "nocobase skills sync",
     "package:remove": "nocobase package remove",
-    "client:inspect": "pnpm nocobase app inspect client",
-    "server:inspect": "pnpm nocobase app inspect server",
     "server:deps:retarget": "node ./scripts/utils/retarget-native.mjs",
     "server:deps:verify": "node ./scripts/utils/verify-server-deps.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
@@ -201,7 +200,8 @@
     "@nocobase/queue": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/repository-input": "workspace:^"
+    "@nocobase/repository-input": "workspace:^",
+    "@nocobase/app-cli": "workspace:^"
   },
   "description": "NocoBase 3 Hub for managing and hosting applications."
 }

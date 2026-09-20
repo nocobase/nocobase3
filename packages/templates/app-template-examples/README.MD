@@ -370,12 +370,8 @@ An older application with the new CLI but without the script can run `pnpm nocob
 
 | Script                      | What it does                                                                                |
 | --------------------------- | ------------------------------------------------------------------------------------------- |
-| `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each          |
-| `pnpm server:inspect`       | Print the resolved server composition                                                       |
 | `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
 | `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
-
-These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
 
 #### Deploying to a different machine
 

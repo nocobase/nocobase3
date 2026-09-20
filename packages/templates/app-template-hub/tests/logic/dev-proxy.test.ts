@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 // @vitest-environment node
 
 import { createHash, randomUUID } from 'node:crypto';
@@ -41,7 +42,7 @@ type DevProxy = ServerOptions['proxy'];
 const backends: TestBackend[] = [];
 const viteServers: ViteDevServer[] = [];
 const devEntrySource = readFileSync(
-  new URL('../../scripts/dev/index.mjs', import.meta.url),
+  createRequire(import.meta.url).resolve('@nocobase/app-tools/dev/index'),
   'utf8',
 );
 

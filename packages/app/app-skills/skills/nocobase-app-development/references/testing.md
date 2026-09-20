@@ -75,17 +75,6 @@ Then verify the actual behavior. Green commands mean the code compiles and the a
 - Confirm `pnpm migrate` applies cleanly.
 - Switch language and confirm the text changes.
 
-## Diagnostics
-
-```bash
-pnpm client:inspect --json  # Resolved client composition
-pnpm server:inspect --json  # Resolved server composition
-```
-
-Reach for these when a contribution does not appear where you expect. They read static declarations: they do not run providers, execute route factories, load page components, render anything, or touch the database.
-
-**A clean inspection is not evidence of correctness.** `consistent: true` means the wiring the command observed has no contradictions — it says nothing about whether the route is secure or the feature works. Never present an inspection as verification.
-
 ## Reporting
 
 Say what you ran, what passed, and what you did not run. If you could not verify something — no test database, a flow needing real credentials — say so rather than implying it was checked.
@@ -98,10 +87,14 @@ Use the shared Vitest presets for tests that discover queue jobs. They inline th
 
 ## Vite cache isolation
 
-Every auxiliary Vite server started by a test or inspection command must use its own temporary `cacheDir` and remove it after closing the server. A fixture that symlinks the application's `node_modules` also shares its default `.vite` directory. `optimizeDeps.noDiscovery` and an empty `include` are not isolation: plugins can add optimizer entries. Overwriting the live server's dependency files leaves its in-memory module URLs pointing at missing chunks and breaks lazy pages until restart.
+Every auxiliary Vite server started by a test or auxiliary tool must use its own temporary `cacheDir` and remove it after closing the server. A fixture that symlinks the application's `node_modules` also shares its default `.vite` directory. `optimizeDeps.noDiscovery` and an empty `include` are not isolation: plugins can add optimizer entries. Overwriting the live server's dependency files leaves its in-memory module URLs pointing at missing chunks and breaks lazy pages until restart.
 
 Do not delete or rebuild a running development server's cache. For an already corrupted cache, stop all processes using that application cache before rebuilding it, then reload the browser with its cache disabled if stale dependency responses remain. A separate Vitest configuration does not isolate Vite instances created inside tests or child commands.
 
 ## Environment changes during development
 
 `pnpm dev` watches `.env` and `.env.local` with stat polling, including creation, atomic saves, and deletion. Changes stop the current development run before starting a fresh one, so both Vite and the server receive updated ports, base paths, proxy settings, and environment values. Shell variables retain precedence. Use the new ready URL after an address change. Proxy mode restarts Vite; `config.yml` changes restart only the local server. Strict startup disables automatic environment restarts as well as server watching. Never restart with the previous child's resolved environment: deleted dotenv keys would persist.
+
+## Shared application tooling
+
+Application scripts delegate to `@nocobase/app-tools`, and standard runtime CLI commands delegate to `@nocobase/app-cli`. In the source repository, run shared implementation tests in those packages and application composition tests in each affected template. Keep custom application command tests local. A generated application consumes compiled packages; do not edit installed package files to customize behavior.

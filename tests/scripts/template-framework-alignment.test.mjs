@@ -227,7 +227,6 @@ for (const template of templates) {
   test(`${template.kind} keeps the shared build and CLI framework aligned with Default`, () => {
     for (const directory of [
       'scripts',
-      'cli/dev-commands',
       'client/routing',
       'client/layouts',
       'client/theme',
