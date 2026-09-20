@@ -1,5 +1,13 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.29
+
+### Patch Changes
+
+- b2a37a7: Show menu labels and interactive group navigation immediately on hover in collapsed desktop sidebars, with no group popover closing delay.
+- b2a37a7: Persist desktop sidebar collapse state under one origin-wide LocalStorage key shared by application, settings and developer layouts.
+- e819ad3: Make the application tests shipped with templates runnable after scaffolding with a custom project name and installed npm packages, and document how to keep these tests portable.
+
 ## 1.0.0-beta.28
 
 ### Patch Changes

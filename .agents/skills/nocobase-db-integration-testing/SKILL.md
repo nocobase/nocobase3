@@ -13,12 +13,7 @@ NocoBase v2 and uses a different test protocol.
 
 ## Run the least that covers the change
 
-Every pull request already runs all eight dialects — the `db-integration` matrix
-in `.github/workflows/quality.yml` is unconditional and is not filtered by
-changed paths, and it gives each dialect its own runner. Locally there is one
-machine and the suites run one at a time, so a full local pass costs hours and
-proves nothing CI will not prove anyway. Run the dialects the change actually
-puts at risk and let CI cover the rest.
+The `db-integration` matrix in `.github/workflows/quality.yml` runs on pull requests and pushes to `develop`, with a separate job and runner for each selected dialect. `scripts/select-db-integration-matrix.mjs` selects a dialect when its package changes, all eight when shared database packages or dependency/CI inputs change, and none for unrelated changes. CI conservatively covers entire package directories, including tests and documentation, and runs all eight if it cannot determine the comparison range. Locally there is one machine and the suites run one at a time: use the narrower guidance below to cover the change, then let CI cover the selected matrix.
 
 | What changed                                                                                           | Run                                                                  |
 | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |

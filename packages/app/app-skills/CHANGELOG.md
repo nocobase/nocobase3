@@ -1,5 +1,12 @@
 # @nocobase/app-skills
 
+## 0.0.2-beta.8
+
+### Patch Changes
+
+- e819ad3: Make the application tests shipped with templates runnable after scaffolding with a custom project name and installed npm packages, and document how to keep these tests portable.
+- 24f142b: Remove centered width constraints from PageContainer examples and related application development guidance.
+
 ## 0.0.2-beta.7
 
 ### Patch Changes
