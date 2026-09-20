@@ -1,5 +1,11 @@
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -153,13 +159,17 @@ describe('collapsed navigation', () => {
         },
         children: [{ route: child, children: [] }],
       });
-      await user.hover(
-        screen.getByRole(clickable ? 'link' : 'button', { name: 'Group' }),
-      );
+      const trigger = screen.getByRole(clickable ? 'link' : 'button', {
+        name: 'Group',
+      });
+      fireEvent.mouseEnter(trigger);
       const popup = screen.getByRole('dialog', { name: 'Group' });
       const link = within(popup).getByRole('link', { name: 'child' });
       expect(link).toHaveAttribute('aria-current', 'page');
       expect(link).toHaveAttribute('href', '/child');
+      // user-event omits mouseleave.relatedTarget; with zero close delay and
+      // JSDOM's empty rectangles, safePolygon would close before pointer entry.
+      fireEvent.mouseLeave(trigger, { relatedTarget: popup });
       await user.hover(popup);
       await user.click(link);
       expect(onNavigate).toHaveBeenCalledOnce();
@@ -198,8 +208,10 @@ describe('collapsed navigation', () => {
     });
     const parent = screen.getByRole('link', { name: 'Parent' });
     expect(parent).toHaveAttribute('href', '/Parent');
-    await user.hover(parent);
-    const popup = await screen.findByRole('dialog', { name: 'Parent' });
+    fireEvent.mouseEnter(parent);
+    const popup = screen.getByRole('dialog', { name: 'Parent' });
+    fireEvent.mouseLeave(parent, { relatedTarget: popup });
+    await user.hover(popup);
     await user.click(within(popup).getByText('Nested'));
     expect(within(popup).getByRole('link', { name: 'sibling' })).toBeVisible();
     await user.click(parent);
