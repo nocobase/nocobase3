@@ -274,6 +274,122 @@ test('rejects mismatched state and never overwrites a dirty restore checkout', a
   }
 });
 
+test('writes a restored version commit back through release refs and merge targets', async (t) => {
+  const fixture = await createGitFixture(t);
+  const branch = 'release/2026-09-20.6';
+  const packageManifestPath = path.join(
+    fixture.source,
+    'packages/libs/example/package.json',
+  );
+  const packageManifest = JSON.parse(
+    await readFile(packageManifestPath, 'utf8'),
+  );
+  packageManifest.version = '1.1.0';
+  await writeFile(
+    packageManifestPath,
+    `${JSON.stringify(packageManifest, null, 2)}\n`,
+  );
+  await writeFile(
+    path.join(fixture.source, 'packages/libs/example/CHANGELOG.md'),
+    '# @nocobase/example\n\n## 1.1.0\n\n- Released feature.\n\n## 1.0.0\n\n- Initial release.\n',
+  );
+  await rm(path.join(fixture.source, '.changeset/release-feature.md'));
+
+  await releaseState(fixture.source, 'save', {
+    base: fixture.base,
+    branch,
+    directory: fixture.artifacts,
+    message: 'chore: release 2026-09-20.6 [skip ci]',
+  });
+  const state = JSON.parse(
+    await readFile(path.join(fixture.artifacts, 'state.json'), 'utf8'),
+  );
+
+  // This is a local-only counterpart of the publish job: restore the candidate, create the aggregate tag, and push
+  // both refs with explicit refspecs. The bare fixture stands in for origin and has no network transport.
+  await git(
+    fixture.restore,
+    'push',
+    'origin',
+    `${fixture.base}:refs/heads/develop`,
+  );
+  await releaseState(fixture.restore, 'restore', {
+    base: fixture.base,
+    branch,
+    directory: fixture.artifacts,
+    expected: state.source,
+  });
+  await git(fixture.restore, 'tag', branch);
+  await git(
+    fixture.restore,
+    'push',
+    'origin',
+    `refs/heads/${branch}:refs/heads/${branch}`,
+  );
+  await git(
+    fixture.restore,
+    'push',
+    'origin',
+    `refs/tags/${branch}:refs/tags/${branch}`,
+  );
+
+  const integration = path.join(fixture.root, 'release-integration');
+  await git(fixture.root, 'clone', fixture.origin, integration);
+  await configureIdentity(integration);
+  await git(
+    integration,
+    'merge',
+    '--no-ff',
+    `origin/${branch}`,
+    '-m',
+    'chore: merge stable release',
+  );
+  await git(integration, 'push', 'origin', 'main');
+  await git(integration, 'checkout', '-b', 'develop', 'origin/develop');
+  await git(
+    integration,
+    'merge',
+    '--no-ff',
+    'main',
+    '-m',
+    'chore: sync stable release into develop',
+  );
+  await git(integration, 'push', 'origin', 'develop');
+
+  for (const target of ['main', 'develop']) {
+    const ref = `refs/heads/${target}`;
+    const { stdout: manifestContents } = await git(
+      fixture.origin,
+      'show',
+      `${ref}:packages/libs/example/package.json`,
+    );
+    assert.equal(JSON.parse(manifestContents).version, '1.1.0');
+    const { stdout: changelog } = await git(
+      fixture.origin,
+      'show',
+      `${ref}:packages/libs/example/CHANGELOG.md`,
+    );
+    assert.match(changelog, /## 1\.1\.0/u);
+    await assert.rejects(
+      git(
+        fixture.origin,
+        'cat-file',
+        '-e',
+        `${ref}:.changeset/release-feature.md`,
+      ),
+    );
+    await git(fixture.origin, 'merge-base', '--is-ancestor', state.source, ref);
+  }
+  assert.equal(
+    await revParse(fixture.origin, `refs/heads/${branch}^{commit}`),
+    state.source,
+  );
+  assert.equal(
+    await revParse(fixture.origin, `refs/tags/${branch}^{commit}`),
+    state.source,
+  );
+});
+
 async function createGitFixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'nocobase-release-state-'));
   t.after(() => rm(root, { force: true, recursive: true }));
@@ -285,9 +401,30 @@ async function createGitFixture(t) {
   await git(root, 'init', '--bare', origin);
   await git(root, 'init', '--initial-branch=main', seed);
   await configureIdentity(seed);
+  await mkdir(path.join(seed, 'packages/libs/example'), { recursive: true });
+  await mkdir(path.join(seed, '.changeset'));
   await writeFile(path.join(seed, 'version.txt'), '1.0.0\n');
   await writeFile(path.join(seed, 'deleted.txt'), 'remove during release\n');
   await writeFile(path.join(seed, 'metadata.json'), '{"stable":false}\n');
+  await writeFile(
+    path.join(seed, 'packages/libs/example/package.json'),
+    `${JSON.stringify(
+      {
+        name: '@nocobase/example',
+        version: '1.0.0',
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  await writeFile(
+    path.join(seed, 'packages/libs/example/CHANGELOG.md'),
+    '# @nocobase/example\n\n## 1.0.0\n\n- Initial release.\n',
+  );
+  await writeFile(
+    path.join(seed, '.changeset/release-feature.md'),
+    '---\n"@nocobase/example": minor\n---\n\nReleased feature.\n',
+  );
   await git(seed, 'add', '--all');
   await git(seed, 'commit', '-m', 'initial');
   await git(seed, 'remote', 'add', 'origin', origin);
