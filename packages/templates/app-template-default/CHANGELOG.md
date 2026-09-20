@@ -1,5 +1,22 @@
 # @nocobase/app-template-default
 
+## 1.0.0-beta.38
+
+### Patch Changes
+
+- 71d159c: Preinstall editable File Registry components and their OOXML client dependency in the Default template so applications can reuse authenticated DOCX, XLSX and PPTX previews. Clarify component reuse, dependency ownership and separate Skill/UI upgrade steps in the file and application development guidance.
+
+  Keep the shared file preview dialog wide on desktop and within the viewport on small screens, and normalize Date metadata in its refresh key for strict application linting.
+
+- 836014a: Synchronize the shared layout containers and AppLayout organization with Examples while preserving template branding and Hub navigation ordering. Update application guidance for the shared layout components and layout-owned permission checks.
+- Updated dependencies [71d159c]
+- Updated dependencies [4b3bcfe]
+- Updated dependencies [4694f66]
+- Updated dependencies [4b3bcfe]
+  - @nocobase/app-plugin-file@0.1.0-beta.15
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.4
+  - @nocobase/app-plugin-workflow@0.1.0-beta.23
+
 ## 1.0.0-beta.37
 
 ### Patch Changes

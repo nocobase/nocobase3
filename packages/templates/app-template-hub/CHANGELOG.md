@@ -1,5 +1,13 @@
 # @nocobase/app-template-hub
 
+## 1.0.0-beta.28
+
+### Patch Changes
+
+- 836014a: Synchronize the shared layout containers and AppLayout organization with Examples while preserving template branding and Hub navigation ordering. Update application guidance for the shared layout components and layout-owned permission checks.
+- Updated dependencies [e73837a]
+  - @nocobase/app-plugin-hub@0.1.0-beta.14
+
 ## 1.0.0-beta.27
 
 ### Patch Changes
