@@ -16,7 +16,7 @@ import {
   type AppQueueConfig,
   type AppSessionConfigInput,
 } from '@nocobase/app-server';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import appRuntime from '../../server/runtime.ts';
 
@@ -43,11 +43,13 @@ describe('application config', () => {
   let configRoot: string;
   let configPath: string;
   beforeAll(async () => {
+    vi.stubEnv('APP_BASE_PATH', '/main');
     configRoot = await mkdtemp(path.join(os.tmpdir(), 'app-config-test-'));
     configPath = path.join(configRoot, 'config.yml');
     await writeFile(configPath, '{}\n');
   });
   afterAll(async () => {
+    vi.unstubAllEnvs();
     await rm(configRoot, { recursive: true, force: true });
   });
 

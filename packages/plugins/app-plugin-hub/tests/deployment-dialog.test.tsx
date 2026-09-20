@@ -2,32 +2,26 @@ import { useState, type ReactElement } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toaster, toast } from 'sonner';
-import { DeploymentDialog } from '../../../../plugins/app-plugin-hub/client/pages/hub/configuration.js';
-import type {
-  AppDetail,
-  ConfigMode,
-} from '../../../../plugins/app-plugin-hub/client/pages/hub/types.js';
+import { DeploymentDialog } from '../client/pages/hub/configuration.js';
+import type { AppDetail, ConfigMode } from '../client/pages/hub/types.js';
 
-vi.mock(
-  '../../../../plugins/app-plugin-hub/client/components/config-editor.js',
-  () => ({
-    ConfigMergeEditor: ({
-      value,
-      onChange,
-    }: {
-      value: string;
-      onChange: (value: string) => void;
-    }) => (
-      <textarea
-        aria-label='New configuration'
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    ),
-    ConfigUnifiedDiff: () => <div>Configuration review</div>,
-    ConfigEditor: () => null,
-  }),
-);
+vi.mock('../client/components/config-editor.js', () => ({
+  ConfigMergeEditor: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+  }) => (
+    <textarea
+      aria-label='New configuration'
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  ),
+  ConfigUnifiedDiff: () => <div>Configuration review</div>,
+  ConfigEditor: () => null,
+}));
 
 const app = {
   app: { id: 'a', name: 'Example', currentDeploymentId: null },

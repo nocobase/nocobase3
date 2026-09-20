@@ -7,13 +7,15 @@ import {
   AuthorizationClient,
   authorizationClientToken,
 } from '@nocobase/app-plugin-authorization/client';
+import { reactProviders } from '@nocobase/app-plugin-authorization/client/react-providers';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthorizationProvider } from '../../../../plugins/app-plugin-authorization/client/authorization-provider.js';
 import { ClientRoute } from '../../client/routing/client-route.js';
 import { useRouteNavigation } from '../../client/routing/route-navigation.js';
+
+const AuthorizationProvider = reactProviders[0].component;
 
 const authentication = vi.hoisted(() => ({
   session: null as null | { user: { id: string }; session: { id: string } },

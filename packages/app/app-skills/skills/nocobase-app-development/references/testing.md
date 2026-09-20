@@ -12,6 +12,8 @@ e2e/                Tests needing a real server, real auth, or a real database
 
 `vitest.config.ts` discovers `tests/**/*.test.{ts,tsx}` automatically. Theme token tests compile the real CSS; browser checks still need to verify computed styles, typography, spacing and focus.
 
+Templates ship their tests into generated applications. Keep them runnable from the application root after scaffolding: read application identity from `package.json`, resolve application paths relative to the test file, and import dependencies through their published package exports. Do not depend on a monorepo checkout, a fixed template directory name, or a particular pnpm store layout. Run `pnpm test` in the generated application as well as in the template when changing these contracts.
+
 ## What to test, by change
 
 | You changed         | Test at least                                                                               |

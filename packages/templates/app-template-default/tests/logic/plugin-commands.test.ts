@@ -3,7 +3,7 @@
 // Users install and remove plugins by running these scripts inside their app. Nothing at
 // runtime depends on them, so dropping one — a bad merge resolution did exactly that once — breaks the documented
 // workflow silently: the app still builds, starts, and passes every other test. These assertions are the alarm.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +13,7 @@ const appRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 interface AppPackageJson {
   readonly files?: readonly string[];
+  readonly publishConfig?: unknown;
   readonly scripts?: Record<string, string>;
   readonly devDependencies?: Record<string, string>;
 }
@@ -56,9 +57,11 @@ describe('documented plugin commands', () => {
     expect(readFileSync(path.join(appRoot, '.gitignore'), 'utf8')).toContain(
       '/.agents/',
     );
-    expect(readFileSync(path.join(appRoot, '.npmignore'), 'utf8')).toContain(
-      '.agents/',
-    );
+    const npmIgnorePath = path.join(appRoot, '.npmignore');
+    if (appPackage.publishConfig) {
+      expect(existsSync(npmIgnorePath)).toBe(true);
+      expect(readFileSync(npmIgnorePath, 'utf8')).toContain('.agents/');
+    }
     expect(appPackage.files).not.toContain('.agents');
   });
 });

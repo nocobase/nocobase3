@@ -60,10 +60,10 @@ describe('tailwind content sources', () => {
       expect(existsSync(file)).toBe(true);
     }
 
-    // Every path must be resolved, not merely reachable. A path still routed through `node_modules/@nocobase/<pkg>`
-    // is one Tailwind's scanner would refuse to expand a wildcard through, which is exactly how this broke before.
+    // Every file must be its canonical path rather than a path that only reaches the file through a package symlink.
+    // pnpm's canonical store path legitimately contains a nested `node_modules/@nocobase` segment.
     for (const file of content) {
-      expect(file).not.toContain(`node_modules${path.sep}@nocobase${path.sep}`);
+      expect(file).toBe(realpathSync(file));
     }
   });
 
@@ -95,11 +95,7 @@ describe('tailwind content sources', () => {
 
       expect(files).toHaveLength(1);
       expect(files[0]).toBe(path.join(realpathSync(installed), 'page.js'));
-      // Resolved, not merely reachable: a path still routed through the symlink is one Tailwind would refuse to
-      // expand a wildcard through, which is exactly how this broke.
-      expect(files[0]).not.toContain(
-        `node_modules${path.sep}@nocobase${path.sep}`,
-      );
+      expect(files[0]).toBe(realpathSync(files[0]));
     } finally {
       rmSync(store, { recursive: true, force: true });
     }
