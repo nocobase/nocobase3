@@ -349,6 +349,7 @@ describe('app server', () => {
     );
     const application = createApp({
       ...resolvedRuntime,
+      env: { ...resolvedRuntime.env, NOCOBASE_STRICT_STARTUP: 'true' },
       plugins: createResolvedTestServerPlugins([
         defineServerPlugin<AppConfig>({
           baseDir: import.meta.dirname,
@@ -366,6 +367,7 @@ describe('app server', () => {
     );
     await app.start();
 
+    expect(app.strictStartup).toBe(true);
     expect(providerCalls).toEqual(['plugin', 'plugin service']);
     const apiResponse = await requestApp(app, 'http://localhost/api/example');
     const rootResponse = await requestApp(app, 'http://localhost/example');

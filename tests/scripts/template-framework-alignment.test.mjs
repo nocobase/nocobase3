@@ -122,6 +122,40 @@ function runtimeDependencies(template) {
 
 function sharedFrameworkSource(template, file) {
   let source = readFileSync(path.join(template.directory, file), 'utf8');
+  if (template.kind === 'examples' && file === 'server/app.ts') {
+    // Examples owns the customer WebSocket protocol alongside Realtime. Its
+    // runtime suite covers startup; keep all shared provider and route wiring aligned.
+    const replacements = [
+      [
+        /import \{\s*Application,\s*type ApplicationConfig,\s*\} from '@nocobase\/app-server\/application';/u,
+        "import type { Application } from '@nocobase/app-server/application';",
+      ],
+      [
+        /import \{\s*healthCheckApiRoutes,\s*defineRootRoutes,\s*\} from '@nocobase\/app-server\/router';/u,
+        "import { healthCheckApiRoutes } from '@nocobase/app-server/router';",
+      ],
+      [
+        /import \{ type AppRuntimeContext \} from '@nocobase\/app-server\/runtime';/u,
+        "import {\n  createAppFromRuntime,\n  type AppRuntimeContext,\n} from '@nocobase/app-server/runtime';",
+      ],
+      [
+        /import \{ createCustomerWebSocketHandler \} from '@nocobase\/app-plugin-audit-example\/server';\nimport \{\s*createRealtimeWebSocketHandler,\s*RealtimeProvider,\s*registerRealtimeWebSocketRoutes,\s*\} from '@nocobase\/app-server\/realtime';\nimport \{ Hono \} from 'hono';\n/u,
+        '',
+      ],
+      [
+        /  \/\/ This example App owns its customer message protocol alongside Realtime\.\n[\s\S]*?(?=\n  app\.addServiceProvider\(DatabaseProvider\);)/u,
+        '  const app = createAppFromRuntime(runtime);\n',
+      ],
+    ];
+    for (const [pattern, replacement] of replacements) {
+      assert.match(
+        source,
+        pattern,
+        'Examples must retain its explicit WebSocket composition',
+      );
+      source = source.replace(pattern, replacement);
+    }
+  }
   if (
     template.kind === 'examples' &&
     file === 'client/layouts/components/header-actions.tsx'

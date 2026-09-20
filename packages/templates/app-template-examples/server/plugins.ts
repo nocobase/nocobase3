@@ -1,3 +1,5 @@
+import audit from '@nocobase/app-plugin-audit/server';
+import auditExample from '@nocobase/app-plugin-audit-example/server';
 import defaultAccess from '@nocobase/app-plugin-authz-default-access/server';
 import sharingRules from '@nocobase/app-plugin-authz-sharing-rules/server';
 import restrictionRules from '@nocobase/app-plugin-authz-restriction-rules/server';
@@ -56,6 +58,8 @@ const serverPlugins: AppServerPlugins = defineServerPlugins([
   file,
   fileExample,
   scheduler,
+  audit,
+  auditExample,
 ]);
 
 export default serverPlugins;

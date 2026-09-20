@@ -358,6 +358,11 @@ describe('client inspection', () => {
         id: '@nocobase/app-plugin-scheduler:schedule-detail',
         path: '/settings/schedules/:scheduleId',
       },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-audit-example:audit-example',
+        path: '/audit-example',
+      },
     ]);
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
