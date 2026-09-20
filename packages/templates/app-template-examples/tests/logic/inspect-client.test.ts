@@ -1,7 +1,8 @@
 // @vitest-environment node
 
 import { spawn } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -45,6 +46,40 @@ async function createInspectionApp(pluginsSource?: string): Promise<string> {
 }
 
 describe('client inspection', () => {
+  it('isolates and removes the inspection cache even when the app config selects a shared cache', async () => {
+    const appRoot = await createInspectionApp(
+      'export default { plugins: [] };',
+    );
+    const sharedCache = path.join(appRoot, 'node_modules/.vite');
+    const report = path.join(appRoot, 'cache-path.json');
+    await mkdir(sharedCache, { recursive: true });
+    await writeFile(path.join(sharedCache, 'sentinel'), 'live dev cache');
+    await writeFile(
+      path.join(appRoot, 'vite.config.mjs'),
+      `
+      import { writeFileSync } from 'node:fs';
+      export default {
+        cacheDir: ${JSON.stringify(sharedCache)},
+        plugins: [{
+          name: 'report-cache',
+          configResolved(config) {
+            writeFileSync(${JSON.stringify(report)}, JSON.stringify(config.cacheDir));
+          },
+        }],
+      };
+    `,
+    );
+    await inspectAppClient({ appRoot });
+    const inspectionCache = JSON.parse(
+      await readFile(report, 'utf8'),
+    ) as string;
+    expect(inspectionCache).not.toBe(sharedCache);
+    expect(existsSync(inspectionCache)).toBe(false);
+    expect(await readFile(path.join(sharedCache, 'sentinel'), 'utf8')).toBe(
+      'live dev cache',
+    );
+  });
+
   it('parses the static Client contribution types', () => {
     expect(
       parseInspectAppClientArgs(['--type', 'react-providers', '--json']),
