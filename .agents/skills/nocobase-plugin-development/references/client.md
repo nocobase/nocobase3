@@ -116,7 +116,7 @@ export default serviceProviders;
 
 The startup sequence is `register all → boot all → finalize Refine and render configuration → validate Runtime → start all → ready all`. Startup failure and `app.shutdown()` clean up Providers in reverse order. `app.refine` is valid only inside the owning lifecycle hook; code outside lifecycle reads the finalized `app.refineConfig`.
 
-React code resolves application services with `useService(token)` or the HTTP client with `useApiClient()`. Non-React code resolves a token from the application Container or receives the service explicitly. Read the shared [Client API reference](../../../../packages/app/app-skills/skills/nocobase-app-development/references/client-api.md) for configured base paths, requests, uploads, cancellation, errors, and remote Repository operations.
+React code resolves application services with `useService(token)` or the HTTP client with `useApiClient()`. Non-React code resolves a token from the application Container or receives the service explicitly. Read the shared [Client API reference](client-api.md) for configured base paths, requests, uploads, cancellation, errors, and remote Repository operations.
 
 ## React Providers
 

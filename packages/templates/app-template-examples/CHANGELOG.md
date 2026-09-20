@@ -1,5 +1,29 @@
 # @nocobase/app-template-examples
 
+## 0.1.0-beta.22
+
+### Patch Changes
+
+- 5e3c802: Extract shared application development and build tooling into app-tools and runtime CLI commands into app-cli. Keep template entry points and application composition local, preserve supported commands and development restart behavior, and document customization and upgrade boundaries.
+
+  Remove the application client and server inspection commands, their development-only CLI registration, and related guidance.
+
+- 9f52fc6: Correct route authorization guidance to use the existing authz field instead of the removed access field.
+- 5e3c802: Isolate client inspection and file-watching test caches from running Vite development servers to prevent missing lazy dependency chunks. Document cache ownership for auxiliary Vite instances.
+- 8124b03: Mirror every synchronized skill into `.claude/skills/` as a relative symbolic link, so Claude Code discovers the skills an application's NocoBase packages ship. Claude Code reads only `~/.claude/skills/` and `<project>/.claude/skills/`, so a synchronized `.agents/skills/` was invisible to it while globally installed NocoBase 2 skills stayed available. Removing a package or a skill drops its link, application-owned entries are left alone, and a real directory occupying a `nocobase-` name is reported rather than overwritten. Ignore the generated mirror in the template and generated `.gitignore` files alongside `.agents/`.
+- 5e3c802: Clear stale route loading errors when a subsequent component load succeeds so mounted routes recover after loader updates.
+- 5e3c802: Restart development processes when .env or .env.local changes, reloading client and server environment configuration while preserving shell overrides and strict startup behavior.
+- 5e3c802: Replace template development forwarding files with a single dev entry and a direct proxy helper import. Expose the dev lifecycle through the tools launcher and keep development implementation modules and tests inside app-tools.
+
+  Consolidate standalone server dependency operations into one template entry and keep build utility implementations and exports private to app-tools.
+
+  Organize template scripts by purpose and remove redundant test:all, refine, template pack:check, and plugin:skills:sync shortcuts. Keep the application CLI entry and legacy CLI compatibility command unchanged.
+
+- Updated dependencies [5e3c802]
+- Updated dependencies [8124b03]
+  - @nocobase/app-cli@0.0.2-beta.0
+  - @nocobase/nb3-cli@1.0.0-beta.10
+
 ## 0.1.0-beta.21
 
 ### Patch Changes

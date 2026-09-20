@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-hub",
   "displayName": "NocoBase Hub",
-  "version": "1.0.0-beta.29",
+  "version": "1.0.0-beta.30",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "hub",
-    "defaultTemplateVersion": "1.0.0-beta.29"
+    "defaultTemplateVersion": "1.0.0-beta.30"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -95,7 +95,8 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@nocobase/app-tools": "workspace:^"
   },
   "files": [
     ".env.example",
@@ -131,37 +132,31 @@
     "directory": "packages/templates/app-template-hub"
   },
   "scripts": {
-    "dev": "tsx ./scripts/dev/index.mjs",
+    "dev": "tsx ./scripts/dev.mjs",
     "build": "node ./scripts/build.mjs",
+    "start": "node ./scripts/start.mjs",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "fix": "pnpm lint:fix && pnpm format",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
-    "fix": "pnpm lint:fix && pnpm format",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "nocobase": "tsx ./cli/index.ts",
     "collections:generate": "pnpm nocobase app collections generate",
     "migrate": "pnpm nocobase app migrate",
     "seed": "pnpm nocobase app seed",
-    "nocobase": "tsx ./cli/index.ts",
     "plugin:register": "nocobase plugin register",
     "plugin:inspect": "nocobase plugin inspect",
     "plugin:unregister": "nocobase plugin unregister",
     "plugin:update": "nocobase plugin update",
-    "plugin:skills:sync": "nocobase plugin skills sync",
-    "skills:sync": "nocobase skills sync",
     "package:remove": "nocobase package remove",
-    "client:inspect": "pnpm nocobase app inspect client",
-    "server:inspect": "pnpm nocobase app inspect server",
-    "server:deps:retarget": "node ./scripts/utils/retarget-native.mjs",
-    "server:deps:verify": "node ./scripts/utils/verify-server-deps.mjs",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.server.json --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:all": "pnpm typecheck && pnpm test && pnpm build",
-    "start": "node ./scripts/start.mjs",
-    "refine": "refine",
-    "pack:check": "pnpm pack --out \"$PACK_DIR/nocobase-app-template-hub.tgz\" && pnpm exec publint ."
+    "skills:sync": "nocobase skills sync",
+    "server:deps:retarget": "node ./scripts/server-deps.mjs retarget",
+    "server:deps:verify": "node ./scripts/server-deps.mjs verify"
   },
   "browserslist": {
     "production": [
@@ -201,7 +196,8 @@
     "@nocobase/queue": "workspace:^",
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
-    "@nocobase/repository-input": "workspace:^"
+    "@nocobase/repository-input": "workspace:^",
+    "@nocobase/app-cli": "workspace:^"
   },
   "description": "NocoBase 3 Hub for managing and hosting applications."
 }

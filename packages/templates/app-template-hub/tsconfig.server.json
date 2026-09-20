@@ -10,8 +10,5 @@
       "@/jobs/*": ["./server/jobs/*"]
     }
   },
-  "include": ["server/**/*.ts", "database/**/*.ts", "cli/**/*.ts"],
-  // Depends on Vite and the browser client, neither of which a server deployment has. `cli/index.ts` reaches it
-  // through a specifier the compiler cannot follow, so excluding it here keeps it out of the emitted output.
-  "exclude": ["cli/dev-commands/**/*.ts"]
+  "include": ["server/**/*.ts", "database/**/*.ts", "cli/**/*.ts"]
 }

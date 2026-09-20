@@ -1,0 +1,94 @@
+{
+  "name": "@nocobase/app-cli",
+  "version": "0.0.2-beta.0",
+  "description": "Shared application runtime CLI commands.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "prettier": "@nocobase/dev-config/prettier",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./database-command": {
+      "types": "./src/database-command.ts",
+      "import": "./src/database-command.ts",
+      "default": "./src/database-command.ts"
+    },
+    "./hub-publishing": {
+      "types": "./src/hub-publishing.ts",
+      "import": "./src/hub-publishing.ts",
+      "default": "./src/hub-publishing.ts"
+    },
+    "./commands/i18n-check": {
+      "types": "./src/commands/i18n-check.ts",
+      "import": "./src/commands/i18n-check.ts",
+      "default": "./src/commands/i18n-check.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./database-command": {
+        "types": "./dist/database-command.d.ts",
+        "import": "./dist/database-command.js",
+        "default": "./dist/database-command.js"
+      },
+      "./hub-publishing": {
+        "types": "./dist/hub-publishing.d.ts",
+        "import": "./dist/hub-publishing.js",
+        "default": "./dist/hub-publishing.js"
+      },
+      "./commands/i18n-check": {
+        "types": "./dist/commands/i18n-check.d.ts",
+        "import": "./dist/commands/i18n-check.js",
+        "default": "./dist/commands/i18n-check.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nocobase/nocobase3.git",
+    "directory": "packages/app/app-cli"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format:check": "prettier . --check",
+    "test": "vitest run",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "eslint": "catalog:",
+    "prettier": "catalog:",
+    "vitest": "catalog:",
+    "@nocobase/db": "workspace:^",
+    "@nocobase/db-sqlite": "workspace:^"
+  },
+  "peerDependencies": {
+    "@nocobase/app-server": "workspace:^",
+    "@nocobase/nb3-cli": "workspace:^"
+  },
+  "dependencies": {
+    "@oclif/core": "catalog:"
+  }
+}

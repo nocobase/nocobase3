@@ -124,7 +124,7 @@ No command moves source files or rewrites history. When moving a directory, pres
 
 Checksums are based on file contents. Moving unchanged files preserves them; compiling TypeScript into different JavaScript is not guaranteed to preserve an existing development database's checksums. Verify upgrades against the same execution artifact format, and never rewrite checksums to bypass a mismatch.
 
-`pnpm server:inspect --json` lists the plugins that contribute migrations.
+Review `server/plugins.ts` and each registered plugin’s migration declarations to identify migration contributions.
 
 ## Seeds
 

@@ -436,6 +436,7 @@ describe('gitignore handling', () => {
     expect(contents).toContain('/config.yml');
     expect(contents).toContain('/.nocobase/');
     expect(contents).toContain('/.agents/');
+    expect(contents).toContain('/.claude/skills/');
     // Written by this command for a hub, so a template has no particular reason to have ignored it.
     expect(contents).toContain('/.env');
   });
@@ -461,6 +462,8 @@ describe('gitignore handling', () => {
     expect(contents).toContain('custom-output/');
     expect(contents).not.toContain('# Local application state.');
     expect(contents).toContain('/.agents/');
+    // The skills sync writes this mirror, so an older template that never ignored it still gets the entry appended.
+    expect(contents).toContain('/.claude/skills/');
     expect(contents).toContain('/.env');
   });
 });

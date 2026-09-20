@@ -369,7 +369,7 @@ Returning `false` keeps the overlay open. The guard applies to the close button,
 
 Use the same page/group shape with `defineSettingsRoutes()` or `defineDevRoutes()`. Do not write `/settings` or `/dev` in their declared paths. A settings page's nested detail or Tab normally omits navigation. Dev routes and modules reachable only from them are excluded from production.
 
-App entry routes choose auth; descendants inherit it. Settings and Dev require sign-in. Every parent access check must pass before a child is rendered. App entry pages retain their default name/access check; page children add only explicit `access`. A menu group adds no independent page permission. Client access checks do not replace server authorization.
+App entry routes choose auth; descendants inherit it. Settings and Dev require sign-in. Every parent access check must pass before a child is rendered. Authenticated App entry pages retain their default `{ resource: { type: 'page', id: name }, action: 'access' }` check; page children add a check only through explicit `authz`. A menu group adds no independent page permission. Client access checks do not replace server authorization.
 
 ## Verify
 

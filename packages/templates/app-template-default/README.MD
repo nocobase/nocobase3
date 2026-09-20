@@ -164,7 +164,7 @@ Plugins add features to your application. Let these commands edit `package.json`
 | `pnpm package:remove <name>`    | Remove a direct NocoBase package and its synchronized Skill |
 | `pnpm skills:sync`              | Sync direct NocoBase package Skills into `.agents/skills/`  |
 
-`pnpm plugin:skills:sync` remains an alias for older automation; use `pnpm skills:sync` in new scripts and documentation.
+Use `pnpm skills:sync` to synchronize Skills. The CLI retains `nocobase plugin skills sync` for older applications, but new templates do not provide a separate script alias.
 
 Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
 
@@ -197,12 +197,8 @@ An older application with the new CLI but without the script can run `pnpm nocob
 
 | Script                      | What it does                                                                                |
 | --------------------------- | ------------------------------------------------------------------------------------------- |
-| `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each          |
-| `pnpm server:inspect`       | Print the resolved server composition                                                       |
 | `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
 | `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
-
-These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
 
 #### Deploying to a different machine
 
