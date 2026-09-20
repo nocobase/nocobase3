@@ -40,6 +40,7 @@ export class DefaultSkillsManager implements SkillsManager {
       ...options,
       tools: options.tools ?? current?.tools ?? [],
       introduction: options.introduction ?? current?.introduction,
+      i18n: options.i18n ?? current?.i18n,
       from: options.from ?? current?.from ?? 'loader',
     };
     await this.repository.createOrUpdateSkills({ value });

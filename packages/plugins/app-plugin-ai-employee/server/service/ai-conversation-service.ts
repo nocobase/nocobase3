@@ -23,10 +23,13 @@ import type { AIFileEntity } from '../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../repository/file-storage/ai-file-metadata-repository.js';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { Actor, Translate } from '../types.js';
+import type {
+  Actor,
+  ConversationManagementActor,
+  Translate,
+} from '../types.js';
 import { ResourceActionError, sendStreamError } from '../types.js';
 import type {
-  AIConversationEntity,
   AIMessageEntity,
   AIToolMessageEntity,
 } from '../repository/index.js';
@@ -47,6 +50,20 @@ import type { KnowledgeBaseManager } from '../manager/knowledge-base-manager.js'
 import type { LLMStreamCachedManager } from '../manager/llm-stream-cached-manager.js';
 import type { SubAgentsDispatcher } from '../manager/sub-agents/dispatcher.js';
 import type { WorkContextHandler } from '../manager/work-context/index.js';
+import type {
+  AIConversationEntity,
+  AIConversationListFilter,
+} from '../repository/ai-conversation.js';
+import type { GetAIConversationMessagesResult } from '../manager/ai-conversations-manager.js';
+import { requireConversationReadAccess } from './utils.js';
+
+export interface AllConversationsResult {
+  rows: AIConversationEntity[];
+  count: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
 
 async function getAIEmployee(
   repositories: RepositoryFactory,
@@ -399,6 +416,96 @@ export class AIConversationService {
           ]),
         sort: (s) => s.field('updatedAt').desc(),
       });
+  }
+
+  async listAll({
+    actor,
+    keyword,
+    page = 1,
+    pageSize = 20,
+  }: {
+    actor: ConversationManagementActor;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AllConversationsResult> {
+    requireConversationReadAccess(actor);
+    const offset = (page - 1) * pageSize;
+    if (
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      page > 10000 ||
+      !Number.isSafeInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100 ||
+      !Number.isSafeInteger(offset)
+    ) {
+      throw new ResourceActionError(400, 'Invalid pagination');
+    }
+    if (
+      keyword !== undefined &&
+      (typeof keyword !== 'string' || keyword.length > 200)
+    ) {
+      throw new ResourceActionError(400, 'Invalid keyword');
+    }
+    const filter: AIConversationListFilter = {
+      ...(keyword?.trim() ? { title: { $includes: keyword.trim() } } : {}),
+    };
+    const [rows, count] = await Promise.all([
+      this.repositories.aiConversations.find({
+        filter,
+        sort: ['-updatedAt', '-sessionId'],
+        limit: pageSize,
+        offset,
+      }),
+      this.repositories.aiConversations.count({ filter }),
+    ]);
+    return {
+      rows,
+      count,
+      page,
+      pageSize,
+      totalPages: Math.ceil(count / pageSize),
+    };
+  }
+
+  async getAllMessages({
+    actor,
+    sessionId,
+    cursor,
+  }: {
+    actor: ConversationManagementActor;
+    sessionId: string;
+    cursor?: string;
+  }): Promise<GetAIConversationMessagesResult> {
+    requireConversationReadAccess(actor);
+    if (
+      typeof sessionId !== 'string' ||
+      !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(
+        sessionId,
+      )
+    ) {
+      throw new ResourceActionError(400, 'Invalid sessionId');
+    }
+    if (
+      cursor !== undefined &&
+      (typeof cursor !== 'string' ||
+        !/^\d{1,19}$/.test(cursor) ||
+        BigInt(cursor) > 9223372036854775807n)
+    ) {
+      throw new ResourceActionError(400, 'Invalid cursor');
+    }
+    try {
+      return await this.aiConversationsManager.getAllMessages({
+        sessionId,
+        cursor,
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'invalid sessionId') {
+        throw new ResourceActionError(404, 'Conversation not found');
+      }
+      throw error;
+    }
   }
 
   async unreadCount({ actorId }: { actorId: string | number }) {

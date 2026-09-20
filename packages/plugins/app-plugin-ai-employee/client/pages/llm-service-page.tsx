@@ -31,11 +31,13 @@ import {
   DialogTitle,
 } from '../../registry/nocobase-ai/shared/ui/dialog.js';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '../../registry/nocobase-ai/shared/ui/card.js';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../../registry/nocobase-ai/shared/ui/table.js';
 export default function LLMServicePage(): ReactElement {
   const api = useApiClient();
   const t = useT();
@@ -71,91 +73,73 @@ export default function LLMServicePage(): ReactElement {
     }
   };
   return (
-    <main className='px-3 py-4 sm:px-4'>
-      <Card className='gap-0 shadow-sm'>
-        <CardHeader className='border-b px-4 py-4 sm:px-5'>
-          <CardTitle className='text-lg'>{t('LLM Service')}</CardTitle>
-          <p className='mt-1 flex items-start gap-1.5 text-sm text-muted-foreground'>
-            <CircleAlert
-              className='mt-0.5 h-4 w-4 shrink-0'
-              aria-hidden='true'
-            />
-            <span>{t('LLM services are configured in config.yml.')}</span>
-          </p>
-        </CardHeader>
-        <CardContent className='p-0'>
-          {error && (
-            <div
-              role='alert'
-              className='mb-3 rounded-md border border-destructive p-3 text-sm'
-            >
-              {error}
-            </div>
-          )}
-          <div className='overflow-x-auto'>
-            <table className='w-full min-w-[64rem] text-left text-sm'>
-              <thead className='border-b bg-muted/30 text-xs tracking-wide text-muted-foreground uppercase'>
-                <tr>
-                  <th className='w-12 px-5 py-3 text-center'>#</th>
-                  <th className='px-5 py-3'>{t('UID')}</th>
-                  <th className='px-5 py-3'>{t('Title')}</th>
-                  <th className='px-5 py-3'>{t('Provider')}</th>
-                  <th className='px-5 py-3'>{t('Models')}</th>
-                  <th className='px-5 py-3'>{t('Enabled')}</th>
-                </tr>
-              </thead>
-              <tbody className='divide-y'>
-                {loading || (!error && !services.length) ? (
-                  <tr>
-                    <td
-                      className='px-3 py-10 text-center text-muted-foreground'
-                      colSpan={6}
-                    >
-                      {loading
-                        ? t('Loading…')
-                        : t('No LLM services configured.')}
-                    </td>
-                  </tr>
-                ) : null}
-                {services.map((service, index) => (
-                  <tr key={service.name} className='hover:bg-muted/30'>
-                    <td className='px-5 py-4 text-center text-muted-foreground'>
-                      {index + 1}
-                    </td>
-                    <td className='px-5 py-4 font-mono text-xs'>
-                      {service.name}
-                    </td>
-                    <td className='px-5 py-4'>{service.title}</td>
-                    <td className='px-5 py-4'>
-                      <ProviderCell
-                        name={service.provider}
-                        provider={providers.find(
-                          (item) => item.name === service.provider,
-                        )}
-                      />
-                    </td>
-                    <td className='px-5 py-4'>
-                      <ModelsCell
-                        service={service}
-                        onEdit={() => setEditing(service)}
-                      />
-                    </td>
-                    <td className='px-5 py-4'>
-                      <Switch
-                        checked={service.enabled}
-                        label={t('Enable {{name}}', { name: service.name })}
-                        onCheckedChange={(enabled) =>
-                          void toggle(service, enabled)
-                        }
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+    <div className='flex min-w-0 flex-col gap-4'>
+      {error && (
+        <div
+          role='alert'
+          className='rounded-md border border-destructive p-3 text-sm'
+        >
+          {error}
+        </div>
+      )}
+      <div className='overflow-hidden rounded-xl border bg-background'>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className='w-12 text-center'>#</TableHead>
+              <TableHead>{t('UID')}</TableHead>
+              <TableHead>{t('Title')}</TableHead>
+              <TableHead>{t('Provider')}</TableHead>
+              <TableHead>{t('Models')}</TableHead>
+              <TableHead>{t('Enabled')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading || (!error && !services.length) ? (
+              <TableRow>
+                <TableCell
+                  className='px-3 py-10 text-center text-muted-foreground'
+                  colSpan={6}
+                >
+                  {loading ? t('Loading…') : t('No LLM services configured.')}
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {services.map((service, index) => (
+              <TableRow key={service.name}>
+                <TableCell className='text-center text-muted-foreground'>
+                  {index + 1}
+                </TableCell>
+                <TableCell className='font-mono text-xs'>
+                  {service.name}
+                </TableCell>
+                <TableCell>{service.title}</TableCell>
+                <TableCell>
+                  <ProviderCell
+                    name={service.provider}
+                    provider={providers.find(
+                      (item) => item.name === service.provider,
+                    )}
+                  />
+                </TableCell>
+                <TableCell>
+                  <ModelsCell
+                    service={service}
+                    onEdit={() => setEditing(service)}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Switch
+                    checked={service.enabled}
+                    label={t('Enable {{name}}', { name: service.name })}
+                    onCheckedChange={(enabled) => void toggle(service, enabled)}
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
       {editing && (
         <ModelEditor
           api={api}
@@ -169,7 +153,7 @@ export default function LLMServicePage(): ReactElement {
           }}
         />
       )}
-    </main>
+    </div>
   );
 }
 

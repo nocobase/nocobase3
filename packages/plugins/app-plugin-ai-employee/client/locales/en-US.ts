@@ -1,4 +1,135 @@
 export default {
+  // Tool and Skill display metadata uses exact English source text as flat keys.
+  'Chart generator': 'Chart generator',
+  'Generates ECharts options (JSON) based on user input or data context.':
+    'Generates ECharts options (JSON) based on user input or data context.',
+  'Web search': 'Web search',
+  'Use web search to quickly find up-to-date information from the internet.':
+    'Use web search to quickly find up-to-date information from the internet.',
+  'Business report generator': 'Business report generator',
+  'Validate and prepare a business analysis report for preview and export.':
+    'Validate and prepare a business analysis report for preview and export.',
+  'Load frontend tool': 'Load frontend tool',
+  'Load the input schema of a frontend tool provided by the selected block.':
+    'Load the input schema of a frontend tool provided by the selected block.',
+  'Execute frontend tool': 'Execute frontend tool',
+  'Execute a frontend tool provided by the selected block.':
+    'Execute a frontend tool provided by the selected block.',
+  'Get AI employee': 'Get AI employee',
+  'Get the detailed profile of an AI employee.':
+    'Get the detailed profile of an AI employee.',
+  'Dispatch AI employee task': 'Dispatch AI employee task',
+  'Assign a task to an AI employee and return the result.':
+    'Assign a task to an AI employee and return the result.',
+  'List AI employees': 'List AI employees',
+  'Get the list of available AI employees.':
+    'Get the list of available AI employees.',
+  'Form filler': 'Form filler',
+  'Fill form fields with the given content. This tool only writes values into the form UI; it does not submit or save the form.':
+    'Fill form fields with the given content. This tool only writes values into the form UI; it does not submit or save the form.',
+  'Load skill': 'Load skill',
+  'Load the content and related tools for a specified skill.':
+    'Load the content and related tools for a specified skill.',
+  'Knowledge base retrieval': 'Knowledge base retrieval',
+  'Retrieve relevant content from the knowledge base.':
+    'Retrieve relevant content from the knowledge base.',
+  Suggestions: 'Suggestions',
+  'Provide a list of suggested prompts for the user to choose from.':
+    'Provide a list of suggested prompts for the user to choose from.',
+  'List data sources': 'List data sources',
+  'List authorized named database connections. Only explicitly mapped registered collections are discoverable. Results are paginated (limit 1–100, offset at most 10000).':
+    'List authorized named database connections. Only explicitly mapped registered collections are discoverable. Results are paginated (limit 1–100, offset at most 10000).',
+  'List collections': 'List collections',
+  'List accessible registered collections in dataSource (default main). Paginated; physical tables without authorization mappings are not exposed.':
+    'List accessible registered collections in dataSource (default main). Paginated; physical tables without authorization mappings are not exposed.',
+  'Get collection metadata': 'Get collection metadata',
+  'Read normalized accessible fields and queryable relationships for collection in dataSource (default main). Fields are paginated; no credentials or internal definitions are returned.':
+    'Read normalized accessible fields and queryable relationships for collection in dataSource (default main). Fields are paginated; no credentials or internal definitions are returned.',
+  'Search field metadata': 'Search field metadata',
+  'Search accessible field names, titles, and descriptions within dataSource (default main), optionally collection. Results mark exact matches versus candidates; candidates require confirmation.':
+    'Search accessible field names, titles, and descriptions within dataSource (default main), optionally collection. Results mark exact matches versus candidates; candidates require confirmation.',
+  'Query records': 'Query records',
+  'Query authorized detail records using selected fields, a flat AND filter of field/operator/value conditions, sort, limit (1–100), and offset (0–10000). Optional relations support explicit one-hop non-through joins only, with separately authorized target fields and record scopes. Big integers and exact decimals remain strings. Inspect hasMore and truncated; no SQL, raw AST, nested filters, or identity overrides.':
+    'Query authorized detail records using selected fields, a flat AND filter of field/operator/value conditions, sort, limit (1–100), and offset (0–10000). Optional relations support explicit one-hop non-through joins only, with separately authorized target fields and record scopes. Big integers and exact decimals remain strings. Inspect hasMore and truncated; no SQL, raw AST, nested filters, or identity overrides.',
+  'Count records': 'Count records',
+  'Count records in the same authorized read scope as detail queries. Accepts collection, optional dataSource (default main), and flat AND filter conditions. No SQL or identity overrides.':
+    'Count records in the same authorized read scope as detail queries. Accepts collection, optional dataSource (default main), and flat AND filter conditions. No SQL or identity overrides.',
+  'Aggregate data': 'Aggregate data',
+  'Run server-side count/sum/avg/min/max aggregates, each with a unique alias and field (optional for count). Optional groupBy requires explicit field value domains with at most 100 possible group combinations; results cover only those domains. Sort grouped fields or aliases. Uses the same field permissions and record scope as details. No expressions, SQL, arbitrary dimensions, or whole-table in-memory computation.':
+    'Run server-side count/sum/avg/min/max aggregates, each with a unique alias and field (optional for count). Optional groupBy requires explicit field value domains with at most 100 possible group combinations; results cover only those domains. Sort grouped fields or aliases. Uses the same field permissions and record scope as details. No expressions, SQL, arbitrary dimensions, or whole-table in-memory computation.',
+  'Data metadata': 'Data metadata',
+  'Discover accessible database connections, collections, fields, and relationships before querying business data.':
+    'Discover accessible database connections, collections, fields, and relationships before querying business data.',
+  'Data query': 'Data query',
+  'Query current authorized business records, counts, aggregates, and grouped summaries using bounded NocoBase 3 Repository queries.':
+    'Query current authorized business records, counts, aggregates, and grouped summaries using bounded NocoBase 3 Repository queries.',
+  'Business analysis report': 'Business analysis report',
+  'Build a validated Markdown business report with optional inline charts from freshly queried, authorized data.':
+    'Build a validated Markdown business report with optional inline charts from freshly queried, authorized data.',
+  employeeTools: {
+    use: 'Use {{name}}',
+    description:
+      'Choose which tools this employee may use. Skill tools still require their skill to be loaded; optional tools require the corresponding capability.',
+    loading: 'Loading tool eligibility…',
+    error: 'Tool eligibility unavailable. Retry to edit tools and permissions.',
+    unavailable: 'Unavailable',
+    permission: 'Permission for {{name}}: {{permission}}',
+    permissionUnavailable: 'Unknown',
+    enableToEdit:
+      'Enable this tool to edit its permission. Your saved permission is retained.',
+    registeredPermission:
+      'Permission is defined by this tool and cannot be changed here.',
+    askHint: 'Ask for approval before running this tool.',
+    allowHint: 'Allow this tool to run without asking for approval.',
+  },
+  employeeSkills: {
+    use: 'Use {{name}}',
+    loading: 'Loading skill catalog…',
+    error: 'Skill catalog unavailable. Retry to edit skills.',
+    unavailable: 'Unavailable',
+  },
+  tools: {
+    title: 'Tools',
+    description:
+      'Browse the tools available to AI employees and review their usage instructions and input parameters.',
+    search: 'Search tools',
+    searchPlaceholder: 'Search tool names, identifiers, or introductions',
+    count_one: '{{count}} tool',
+    count_other: '{{count}} tools',
+    loading: 'Loading tools…',
+    error: 'Unable to load tools.',
+    empty: 'No tools are available.',
+    noMatches: 'No tools match your search.',
+    scope: 'Scope',
+    source: 'Source',
+    details: 'Tool details',
+    detailsDescription: 'Read about this tool and review its input schema.',
+    detailsLoading: 'Loading tool details…',
+    detailsError: 'Unable to load tool details.',
+    about: 'Overview',
+    descriptionLabel: 'Tool description',
+    noAbout: 'No additional documentation is available.',
+    inputSchema: 'Input JSON Schema',
+    noSchema: 'No input schema is available.',
+  },
+  skills: {
+    count_one: '{{count}} skill',
+    count_other: '{{count}} skills',
+    skill: 'Skill',
+    description: 'Description',
+    tools: 'Tools',
+    details: 'Skill details',
+    instructions: 'Instructions',
+    toolsDescription: 'Tools referenced by this skill. Details are read-only.',
+    detailsDescription: 'Read the skill instructions and review its tools.',
+    detailsLoading: 'Loading skill details…',
+    detailsError: 'Unable to load skill details.',
+    content: 'Skill instructions',
+    noContent: 'No instructions are available.',
+    noTools: 'No tools',
+    toolAvailable: 'Available',
+    toolMissing: 'Missing',
+  },
   'demo.navigation.group': 'AI Components',
   'demo.navigation.chat': 'Chat window',
   'demo.navigation.floating': 'Floating chat',
@@ -374,18 +505,79 @@ export default {
   'demo.codingPromptHint': 'Ready to paste into an implementation task.',
   'demo.containerPreview': 'Container preview',
 
+  AI: 'AI',
+  'AI Conversations': 'AI Conversations',
   'AI Employee': 'AI Employee',
+  'AI Employees': 'AI Employees',
+  'Expand employee list': 'Expand employee list',
+  'Collapse employee list': 'Collapse employee list',
+  'LLM services': 'LLM services',
+  'MCP services': 'MCP services',
+  'employees.pageDescription':
+    'Configure AI employees, their models, instructions, skills, and tools.',
+  'llmServices.pageDescription':
+    'Manage LLM service status and available models. Connections are configured during deployment.',
+  'mcp.pageDescription':
+    'Manage MCP service status and tool permissions. Connections are configured during deployment.',
   'AI settings': 'AI settings',
+  'Conversation center': 'Conversation center',
+  'conversations.pageDescription':
+    'Review all users’ conversations with AI employees, including messages and tool calls, without changing their read status.',
+  'Refresh list': 'Refresh list',
+  'Refresh messages': 'Refresh messages',
+  'Refreshing…': 'Refreshing…',
+  'Conversation pagination': 'Conversation pagination',
+  'Select a conversation': 'Select a conversation',
+  'Choose a conversation on the left to review messages, tool results, and reasoning.':
+    'Choose a conversation on the left to review messages, tool results, and reasoning.',
+  'Read only · Viewing does not mark messages as read.':
+    'Read only · Viewing does not mark messages as read.',
+  '{{count}} messages loaded': '{{count}} messages loaded',
+  'Read only': 'Read only',
+  'View all application conversations in read-only mode.':
+    'View all application conversations in read-only mode.',
+  Refresh: 'Refresh',
+  'Back to conversations': 'Back to conversations',
+  Category: 'Category',
+  'Load earlier messages': 'Load earlier messages',
+  'Page {{page}} of {{pages}}': 'Page {{page}} of {{pages}}',
+  Conversations: 'Conversations',
+  'Search conversations': 'Search conversations',
+  'Search by title or session ID': 'Search by title or session ID',
+  Search: 'Search',
+  'Selected conversation': 'Selected conversation',
+  'Conversation details': 'Conversation details',
+  'Session ID': 'Session ID',
+  User: 'User',
+  'User ID': 'User ID',
+  Scope: 'Scope',
+  'All conversations': 'All conversations',
+  'My conversations': 'My conversations',
+  'Created at': 'Created at',
+  'Updated at': 'Updated at',
+  'Last message at': 'Last message at',
+  Messages: 'Messages',
+  'Message count': 'Message count',
+  Model: 'Model',
+  Metadata: 'Metadata',
+  'Untitled conversation': 'Untitled conversation',
+  'Unknown user': 'Unknown user',
+  'No conversations found.': 'No conversations found.',
+  'Select a conversation to view its messages.':
+    'Select a conversation to view its messages.',
+  'No messages in this conversation.': 'No messages in this conversation.',
+  'Loading conversations…': 'Loading conversations…',
+  'Loading messages…': 'Loading messages…',
+  'Unable to load conversations.': 'Unable to load conversations.',
+  'Unable to load conversation messages.':
+    'Unable to load conversation messages.',
   'LLM Service': 'LLM Service',
   MCP: 'MCP',
-  'mcp.configNotice': 'MCP servers are configured in config.yml.',
   'mcp.toolsTitle': 'MCP tools',
   'mcp.toolsEmpty': 'No MCP tools available.',
   'mcp.transportHttp': 'HTTP (Streamable)',
   'mcp.transportSse': 'HTTP + SSE (Legacy)',
   'MCP servers': 'MCP servers',
-  'LLM services are configured in config.yml.':
-    'LLM services are configured in config.yml.',
   'Manage AI employees, LLM services, and MCP services.':
     'Manage AI employees, LLM services, and MCP services.',
   'Connect AI employees to external tools through Model Context Protocol servers.':
@@ -486,6 +678,13 @@ export default {
   'Saving…': 'Saving…',
   Score: 'Score',
   Skills: 'Skills',
+  'skills.pageDescription':
+    'Browse the skills available to AI employees and review their instructions and associated tools.',
+  'Search skills': 'Search skills',
+  'Loading skills…': 'Loading skills…',
+  'Unable to load skills.': 'Unable to load skills.',
+  'No skills match your search.': 'No skills match your search.',
+  'No skills are available.': 'No skills are available.',
   Tools: 'Tools',
   'Use dedicated models': 'Use dedicated models',
   'Enable dedicated model configuration':
@@ -496,8 +695,8 @@ export default {
     'Restrict this AI employee to the selected models.',
   'Role setting description':
     'The system prompt for the AI model, defines who "I" am, as well as the rules and requirements I follow to perform tasks.',
-  'Role setting placeholder':
-    'The system prompt for the AI model, defines who "I" am, as well as the rules and requirements I follow to perform tasks.',
+  'employees.rolePlaceholder':
+    'Describe the role, responsibilities, and working guidelines.',
   'System default': 'System default',
   Custom: 'Custom',
   'General skills': 'General skills',

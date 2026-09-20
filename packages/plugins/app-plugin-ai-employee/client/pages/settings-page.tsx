@@ -1,51 +1,65 @@
-import { useT } from '../locales/index.js';
+import type { ReactElement } from 'react';
 import {
-  createElement,
-  useEffect,
-  useState,
-  type ComponentType,
-  type ReactElement,
-} from 'react';
-import { AISettingsShell } from '../ai-settings-shell.js';
+  matchPath,
+  Navigate,
+  Outlet,
+  useLocation,
+  useResolvedPath,
+} from 'react-router';
 import {
-  getAISettingsTabs,
-  type AISettingsTabDefinition,
-} from '../ai-settings.js';
+  AISettingsShell,
+  getActiveAISettingsTabKey,
+} from '../ai-settings-shell.js';
+import {
+  conversationCenterPath,
+  knowledgeBaseListPath,
+  llmServicePath,
+  mcpServicePath,
+  vectorDatabasesPath,
+} from '../route-paths.js';
+import AIEmployeePage from './ai-employee-page.js';
 
-function AISettingsTabPage({
-  tab,
-}: {
-  readonly tab: AISettingsTabDefinition;
-}): ReactElement {
-  const t = useT();
-  const [Page, setPage] = useState<ComponentType>();
-
-  useEffect(() => {
-    let active = true;
-    setPage(undefined);
-    void tab.pageLoader().then((module) => {
-      if (active) setPage(() => module.default);
-    });
-    return () => {
-      active = false;
-    };
-  }, [tab]);
-
-  return Page ? (
-    createElement(Page)
-  ) : (
-    <main className='p-8 text-sm text-muted-foreground'>{t('Loading…')}</main>
-  );
-}
+const legacyDestinations: Readonly<Record<string, string>> = {
+  conversations: conversationCenterPath,
+  'llm-service': llmServicePath,
+  mcp: mcpServicePath,
+  'knowledge-base': knowledgeBaseListPath,
+  'vector-database': vectorDatabasesPath,
+};
 
 export default function AISettingsPage(): ReactElement {
-  const tabs = getAISettingsTabs();
-  const [activeTabKey, setActiveTabKey] = useState('ai-employee');
-  const activeTab = tabs.find((tab) => tab.key === activeTabKey) ?? tabs[0];
+  const location = useLocation();
+  const parentPath = useResolvedPath('.');
+  const isParentEntry = matchPath(
+    { path: parentPath.pathname, end: true },
+    location.pathname,
+  );
+  const legacyKey = getActiveAISettingsTabKey(
+    location.pathname,
+    location.search,
+    location.state,
+  );
+  const destination = Object.hasOwn(legacyDestinations, legacyKey)
+    ? legacyDestinations[legacyKey]
+    : undefined;
+  if (isParentEntry && destination) {
+    const search = new URLSearchParams(location.search);
+    search.delete('tab');
+    return (
+      <Navigate
+        to={{
+          pathname: destination,
+          search: search.toString(),
+          hash: location.hash,
+        }}
+        replace
+      />
+    );
+  }
 
   return (
-    <AISettingsShell activeTabKey={activeTab.key} onTabChange={setActiveTabKey}>
-      <AISettingsTabPage key={activeTab.key} tab={activeTab} />
+    <AISettingsShell>
+      {isParentEntry ? <AIEmployeePage /> : <Outlet />}
     </AISettingsShell>
   );
 }

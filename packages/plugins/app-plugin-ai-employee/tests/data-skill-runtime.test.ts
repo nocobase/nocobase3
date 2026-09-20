@@ -5,7 +5,11 @@ import { createDatabaseManager } from '@nocobase/db';
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
 import { createDataServices } from '../server/service/data-services.js';
 import type { DataServices } from '../server/service/data-contracts.js';
-import { buildTool } from '@nocobase/ai-employee';
+import {
+  buildTool,
+  type AIEmployeeSkillSettings as EmployeeSkillSettings,
+} from '@nocobase/ai-employee';
+import getSkill from '../server/ai/tools/getSkill.js';
 import { ToolMessage } from 'langchain';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -122,6 +126,7 @@ async function createFixture(services?: DataServices) {
   async function runtime(
     settings?: AIEmployeeSkillSettings,
     sessionId = 'analysis',
+    employeeSettings: Partial<EmployeeSkillSettings> = {},
   ) {
     const context: AppAgentContext = {
       ...runtimeContext,
@@ -129,7 +134,11 @@ async function createFixture(services?: DataServices) {
     };
     const currentConversation = { sessionId, username: 'atlas' };
     const provider = new AIEmployeeAgentContextProvider({
-      employee: { username: 'atlas', chatSettings: {}, skillSettings: {} },
+      employee: {
+        username: 'atlas',
+        chatSettings: {},
+        skillSettings: employeeSettings,
+      },
       sessionId,
       currentConversation,
       actor: context.actor,
@@ -219,6 +228,187 @@ async function createFixture(services?: DataServices) {
 }
 
 describe('package-owned data skill runtime', () => {
+  it('intersects persisted skill activation with employee tool selection and rejects disabled direct calls', async () => {
+    const fixture = await createFixture();
+    const first = await fixture.runtime();
+    await first.call('getSkill', { skillName: 'data-query' });
+    expect(await first.visibleTools()).toContain('dataQuery');
+    const disabled = await fixture.runtime(undefined, 'analysis', {
+      enabledTools: ['getSkill'],
+    });
+    expect(disabled.discovered.tools.has('dataQuery')).toBe(false);
+    await disabled.call('getSkill', { skillName: 'data-query' });
+    expect(await disabled.visibleTools()).toEqual(['getSkill']);
+    expect((await disabled.call('dataQuery')).result).toMatchObject({
+      status: 'error',
+      content: 'Tool unavailable.',
+    });
+    expect(fixture.data.dataQuery).not.toHaveBeenCalled();
+    const enabled = await fixture.runtime(undefined, 'analysis', {
+      enabledTools: ['getSkill', 'dataQuery'],
+    });
+    expect(new Set(await enabled.visibleTools())).toEqual(
+      new Set(['getSkill', 'dataQuery']),
+    );
+    const narrowed = await fixture.runtime(
+      { toolsVersion: 1, tools: ['getSkill', 'dataSourceQuery'] },
+      'analysis',
+      {
+        enabledTools: ['getSkill', 'dataQuery'],
+      },
+    );
+    expect(await narrowed.visibleTools()).toEqual(['getSkill']);
+    expect(narrowed.discovered.tools.has('dataSourceQuery')).toBe(false);
+    expect(narrowed.discovered.tools.has('dataQuery')).toBe(false);
+    const none = await fixture.runtime(undefined, 'analysis', {
+      enabledTools: [],
+    });
+    expect(none.discovered.tools.size).toBe(0);
+    expect(await none.visibleTools()).toEqual([]);
+    expect(
+      (await none.call('getSkill', { skillName: 'data-query' })).result,
+    ).toMatchObject({ status: 'error', content: 'Tool unavailable.' });
+  });
+
+  it('does not activate selected skill tools until an available skill is loaded', async () => {
+    const fixture = await createFixture();
+    const settings = { enabledTools: ['getSkill', 'dataQuery'] };
+    const selected = await fixture.runtime(undefined, 'analysis', settings);
+    expect(selected.discovered.tools.has('dataQuery')).toBe(true);
+    expect(await selected.visibleTools()).toEqual(['getSkill']);
+    expect((await selected.call('dataQuery')).result).toMatchObject({
+      status: 'error',
+    });
+    await selected.call('getSkill', { skillName: 'data-query' });
+    expect(await selected.visibleTools()).toContain('dataQuery');
+    const disabledSkill = await fixture.runtime(undefined, 'analysis', {
+      ...settings,
+      enabledSkills: [],
+    });
+    expect(await disabledSkill.visibleTools()).toEqual(['getSkill']);
+    expect((await disabledSkill.call('dataQuery')).result).toMatchObject({
+      status: 'error',
+    });
+  });
+
+  it('denies direct skill loads without host visibility and allows an explicit policy', async () => {
+    const fixture = await createFixture();
+    const context = { ...createTestAgentContext(), ai: fixture.aiManager };
+    const runtime = { toolCallId: 'direct', writer: vi.fn() };
+    expect(
+      await getSkill.invoke(context, { skillName: 'data-query' }, runtime),
+    ).toMatchObject({ status: 'error' });
+    expect(
+      await getSkill.invoke(
+        {
+          ...context,
+          availableSkills: async () =>
+            fixture.aiManager.skillsManager.getSkills(['data-query']),
+        },
+        { skillName: 'data-query' },
+        runtime,
+      ),
+    ).toMatchObject({
+      status: 'success',
+      content: { skillName: 'data-query' },
+    });
+  });
+
+  it('denies disabled GENERAL skills in discovery, content loading and persisted tool activation', async () => {
+    const fixture = await createFixture();
+    // Also cover GENERAL tools: disabling their skill must not ungate them.
+    const query = await fixture.aiManager.toolsManager.getTools('dataQuery');
+    await fixture.aiManager.toolsManager.registerTools({
+      ...query!,
+      scope: 'GENERAL',
+    });
+    const first = await fixture.runtime();
+    await first.call('getSkill', { skillName: 'data-query' });
+    expect(await first.visibleTools()).toContain('dataQuery');
+    const disabled = await fixture.runtime(undefined, 'analysis', {
+      enabledSkills: ['data-metadata'],
+      skills: ['data-query'],
+    });
+    expect(
+      (await disabled.availableSkills()).map((skill) => skill.name),
+    ).toEqual(['data-metadata']);
+    expect(await disabled.visibleTools()).not.toContain('dataQuery');
+    const { result, stored } = await disabled.call('getSkill', {
+      skillName: 'data-query',
+    });
+    expect(JSON.parse(result.content as string)).toMatchObject({
+      status: 'error',
+      content: { message: 'Skill not found' },
+    });
+    expect(stored?.status).not.toBe('success');
+    expect(JSON.parse(result.content as string).content).not.toHaveProperty(
+      'skillContent',
+    );
+    expect((await disabled.call('dataQuery')).result).toMatchObject({
+      status: 'error',
+      content: 'Tool unavailable.',
+    });
+    expect(fixture.data.dataQuery).not.toHaveBeenCalled();
+  });
+
+  it('enables SPECIFIED skills by allowlist and intersects session restrictions', async () => {
+    const fixture = await createFixture();
+    await fixture.aiManager.skillsManager.registerSkills({
+      name: 'specified',
+      scope: 'SPECIFIED',
+      description: 'Specified',
+      content: 'Private skill instructions',
+      tools: ['dataQuery'],
+    });
+    const selected = await fixture.runtime(undefined, 'analysis', {
+      enabledSkills: ['specified', 'specified'],
+    });
+    expect(
+      (await selected.availableSkills()).map((skill) => skill.name),
+    ).toEqual(['specified']);
+    expect(
+      (await selected.call('getSkill', { skillName: 'specified' })).stored,
+    ).toMatchObject({
+      status: 'success',
+      content: { skillContent: 'Private skill instructions' },
+    });
+    expect(await selected.visibleTools()).toContain('dataQuery');
+    const narrowed = await fixture.runtime(
+      { skillsVersion: 1, skills: ['data-query'] },
+      'analysis',
+      { enabledSkills: ['specified'] },
+    );
+    expect(await narrowed.availableSkills()).toEqual([]);
+    const denied = await narrowed.call('getSkill', { skillName: 'specified' });
+    expect(JSON.parse(denied.result.content as string)).toMatchObject({
+      status: 'error',
+    });
+    expect(denied.stored?.status).not.toBe('success');
+    expect(await narrowed.visibleTools()).not.toContain('dataQuery');
+  });
+
+  it.each([
+    { enabledSkills: undefined, count: 3 },
+    { enabledSkills: null, count: 3 },
+    { enabledSkills: [], count: 0 },
+  ])(
+    'distinguishes inherited skills from explicit none: $enabledSkills',
+    async ({ enabledSkills, count }) => {
+      const fixture = await createFixture();
+      const runtime = await fixture.runtime(undefined, 'analysis', {
+        enabledSkills,
+      });
+      expect(await runtime.availableSkills()).toHaveLength(count);
+      const loaded = await runtime.call('getSkill', {
+        skillName: 'data-query',
+      });
+      expect(JSON.parse(loaded.result.content as string)).toMatchObject({
+        status: count ? 'success' : 'error',
+      });
+      if (!count) expect(loaded.stored?.status).not.toBe('success');
+    },
+  );
+
   it('statically registers the three GENERAL skills and every mapped tool exactly once', async () => {
     const { aiManager } = await createFixture();
     await new AIEmployeeResources().registerAIResources(aiManager);

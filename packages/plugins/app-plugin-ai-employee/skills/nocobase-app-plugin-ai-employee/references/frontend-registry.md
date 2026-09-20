@@ -11,7 +11,7 @@
 - [Forms](#forms)
 - [Frontend tools](#frontend-tools)
 - [Tool rendering](#tool-rendering)
-- [Settings tabs](#settings-tabs)
+- [Settings pages](#settings-pages)
 
 ## Where to edit
 
@@ -229,22 +229,8 @@ Pass application-specific renderers through `NocoBaseAIRootProvider.toolRenderer
 
 A renderer controls presentation only. It must preserve invocation status, approval/edit/reject actions, resume behavior, and disabled state.
 
-## Settings tabs
+## Settings pages
 
-A contributing application plugin can extend the shared AI settings shell through the public client export:
+Contribute independent sidebar entries with `defineSettingsRoutes()` and `parent: 'aiGroup'`, registering the result through the contributing plugin's client `routes`. Use a unique name and path, a lazy default-exported component, translated navigation, and an explicit access policy. See the [AI Settings example](../SKILL.md#adding-ai-settings-pages).
 
-```ts
-import { registerAISettingsTabs } from '@nocobase/app-plugin-ai-employee/client/ai-settings';
-
-registerAISettingsTabs([
-  {
-    key: 'application-ai',
-    labelKey: 'Application AI',
-    pageLoader: () => import('./pages/application-ai-settings.js'),
-  },
-]);
-```
-
-Register during module evaluation and side-effect import the registration module from the contributing plugin client entry. The page loader must default-export a React component. Add translations for `labelKey`. Keep the shared route `/settings/ai` and use a unique key.
-
-An enabled knowledge-base App plugin is the canonical example: its client registration module calls `registerAISettingsTabs` and is imported for side effects from the plugin client entry.
+AI Employees at `/settings/ai` is employee-only. `AISettingsShell` and `withAISettingsShell` remain exported as tab-free employee layout wrappers; use feature-owned headings for independent pages. The deprecated tab registry no longer contributes visible navigation or page content. Built-in legacy service and knowledge-base tab URLs redirect to standalone routes, preserving unrelated queries and hashes; custom tab integrations must declare their own migration routes.
