@@ -27,13 +27,6 @@ beforeEach(async () => {
     .createMigrator({
       sources: [
         {
-          packageName: 'authentication',
-          directory: path.resolve(
-            import.meta.dirname,
-            '../../../../plugins/app-plugin-authentication/database/migrations',
-          ),
-        },
-        {
           packageName: 'articles',
           directory: path.resolve(
             import.meta.dirname,

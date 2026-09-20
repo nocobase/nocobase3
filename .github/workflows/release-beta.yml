@@ -40,7 +40,7 @@ jobs:
   release:
     name: Publish beta
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     outputs:
       tag: ${{ steps.branch.outputs.name }}
       merged: ${{ steps.merge.outputs.merged }}
