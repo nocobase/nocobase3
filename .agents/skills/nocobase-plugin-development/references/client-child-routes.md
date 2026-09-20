@@ -1,8 +1,8 @@
 # Child routes and route navigation
 
-Use this guide for nested pages, page Tabs, and menu groups. Routes are the source of navigation for App, Settings, and Dev. Business page code decides how child content is presented.
+Use this guide for nested pages, page Tabs, and menu groups in a plugin. All source paths are relative to the plugin package. Register its routes and locales through the Client plugin declaration; see [Client contributions](client.md) and [internationalization](i18n.md). First [copy the required page and route components into the plugin](client-components.md#copy-page-and-route-components-into-the-plugin). Routes are the source of navigation for App, Settings, and Dev. Business page code decides how child content is presented.
 
-Wrap the parent page content in `PageContainer` to apply the shared page padding and spacing. Inline Tab content renders within that container and does not add a second one. A covering child page uses its own `PageContainer` inside `RouteChildPage`.
+Wrap the parent page content in `PageContainer` to apply the shared page padding and spacing. Inline Tab content renders within that container and does not add a second one.
 
 ## Default for page Tabs
 
@@ -31,7 +31,7 @@ Implement the parent-only redirect in the parent page with existing React Router
 | `client/locales/`              | Translate navigation and page copy               |
 | `tests/`                       | Verify actual navigation and access              |
 
-A page that gains children becomes a folder: the page itself moves to `index.tsx` and each child sits beside it under the name of its path segment, so `/orders/archived` is `client/pages/orders/archived.tsx`. A child with children of its own becomes a folder in turn. Anything only these pages use goes in the same folder rather than in `client/components/`, which is for what the whole application shares: a shared component in `shared.tsx`, and constants or fixtures in a module of their own, since Fast Refresh stops working on a file that exports both a component and a constant.
+A page that gains children becomes a folder: the page itself moves to `index.tsx` and each child sits beside it under the name of its path segment, so `/orders/archived` is `client/pages/orders/archived.tsx`. A child with children of its own becomes a folder in turn. Anything only these pages use goes in the same folder rather than in `client/components/`, which is for what the plugin shares: a shared component in `shared.tsx`, and constants or fixtures in a module of their own, since Fast Refresh stops working on a file that exports both a component and a constant.
 
 Do not change the shell, route renderer, or ServiceProvider to add a menu. Keep CRUD resources if business code uses them; resources no longer add sidebar entries.
 
@@ -86,7 +86,7 @@ import {
   useLocation,
   useResolvedPath,
 } from 'react-router';
-import { PageContainer } from '@/components/page-container';
+import { PageContainer } from '../../components/page-container.js';
 
 export default function Workspace(): ReactElement {
   const { t } = useTranslation();
@@ -138,7 +138,7 @@ export default function WorkspaceReport(): ReactElement {
 }
 ```
 
-Add these keys to the application's locale messages (and translate supported languages):
+Add these keys to the plugin's `<plugin>/client/locales/` resources, register its lazy locale manifest, and translate the supported languages. Pages rendered under the plugin's own route inherit its package namespace; see [internationalization](i18n.md):
 
 ```json
 {
@@ -165,43 +165,6 @@ Omit `navigation` for details, Tab content, or another page that should not appe
 
 The route renderer supplies outlets for pure groups. Business pages place their own outlet; no outlet is inserted automatically into a page, and the route overlay wrappers below insert none either. Put it where the next page belongs.
 
-## How a child route presents itself
-
-A child route renders through its parent's outlet. It can render inline, as the Tab example above does, or use one of these wrappers to cover the parent:
-
-| Component        | Where it sits             | Modal |
-| ---------------- | ------------------------- | ----- |
-| `RouteDialog`    | Centred over the page     | Yes   |
-| `RouteDrawer`    | At the side of the page   | Yes   |
-| `RouteChildPage` | Covering the content area | No    |
-
-Among these wrappers, `RouteChildPage` represents a page destination and its route declares `breadcrumb`; `RouteDialog` and `RouteDrawer` leave it unset. Breadcrumbs are not restricted to these wrappers: ordinary page routes can also declare them. See [breadcrumb declarations](client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail).
-
-```tsx
-import { PageContainer } from '@/components/page-container';
-
-export default function ArchivedOrdersPage() {
-  return (
-    <>
-      <RouteChildPage>
-        <PageContainer>
-          <Breadcrumbs />
-          <PageHeader title={t('orders.archived.title')} />
-          {/* the page's own content */}
-        </PageContainer>
-      </RouteChildPage>
-      {/* A deeper layer is a sibling of this one, not content inside it. */}
-      <Outlet />
-    </>
-  );
-}
-```
-
-- Place a deeper route's `<Outlet />` beside `RouteChildPage`, not inside it, so the deeper layer does not scroll with its parent layer.
-- The covered page keeps its DOM, including form state and scroll position. The wrapper marks preceding siblings `inert` while covered and restores them on cleanup.
-- `RouteChildPage` is non-modal: the sidebar and header remain reachable. It has no close button or Escape handler; return through breadcrumbs or browser history.
-- Use it for child pages that cover a parent, not for top-level pages.
-
 ## Child pages shown as dialogs or drawers
 
 When a feature needs a dialog or drawer that represents a page, form, editor, details view, or another URL-addressable state, implement it as a child route. Do not use local `open` state for this case.
@@ -216,7 +179,7 @@ Follow this order:
 
 ### 1. Add a child route
 
-Add the route in the application's `client/routes.ts`, inside the `defineAppRoutes()` contribution. Do not declare the child route in the page component file. Declare the overlay as a child of the page that should remain mounted underneath it:
+Add the route in `<plugin>/client/routes.ts`, inside the owning `defineAppRoutes()`, `defineSettingsRoutes()`, or `defineDevRoutes()` contribution. Do not declare the child route in the page component file. Declare the overlay as a child of the page that should remain mounted underneath it:
 
 ```ts
 {
@@ -241,7 +204,7 @@ The page that declares `children` must render `<Outlet />` where the child belon
 
 ```tsx
 import { Outlet } from 'react-router';
-import { PageContainer } from '@/components/page-container';
+import { PageContainer } from '../components/page-container.js';
 
 export default function OrdersPage() {
   return (
@@ -258,15 +221,15 @@ export default function OrdersPage() {
 ### 3. Choose the overlay component
 
 ```tsx
-import { RouteDialog } from '@/components/route-dialog';
-import { RouteDrawer } from '@/components/route-drawer';
+import { RouteDialog } from '../components/route-dialog.js';
+import { RouteDrawer } from '../components/route-drawer.js';
 ```
 
-Use `RouteDialog` for focused editing, confirmation, and short forms. Use `RouteDrawer` for details, filters, inspectors, and content that benefits from a side panel. Do not create another route-overlay implementation or add a local `open` prop.
+Use `RouteDialog` for focused editing, confirmation, and short forms. Use `RouteDrawer` for details, filters, inspectors, and content that benefits from a side panel. Use the plugin-local source copies described above, preserving their route-driven behavior rather than adding a local `open` prop.
 
 ```tsx
 import { Outlet } from 'react-router';
-import { RouteDialog } from '@/components/route-dialog';
+import { RouteDialog } from '../components/route-dialog.js';
 
 export default function OrderEditPage() {
   return (
@@ -287,9 +250,9 @@ Call `useRouteOverlay()` only in a descendant component rendered inside the `Rou
 Keep the wrapper in the page and put the hook in a separate component, rendered as JSX:
 
 ```tsx
-import { RouteDialog } from '@/components/route-dialog';
-import { useRouteOverlay } from '@/components/use-route-overlay';
-import { Button } from '@/components/ui/button';
+import { RouteDialog } from '../components/route-dialog.js';
+import { useRouteOverlay } from '../components/use-route-overlay.js';
+import { Button } from '../components/ui/button.js';
 
 export default function OrderEditPage() {
   return (
