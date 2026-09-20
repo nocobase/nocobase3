@@ -1,4 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const inspectionTypes = [
@@ -379,8 +381,8 @@ function describeOptions(options) {
  * rather than being a second approximation the inspector has to maintain.
  *
  * The server is configured to do nothing but transform modules on demand: no HMR, no websocket, no file watching,
- * and no dependency pre-bundling. Each of those otherwise leaves a handle open that keeps this process alive after
- * the inspection has printed its result, which for a CLI means it appears to hang rather than exit.
+ * and no dependency discovery. These background tasks otherwise keep the CLI alive after inspection. Plugins can
+ * still request pre-bundling, so its cache is isolated from development and removed after the server closes.
  */
 async function createDeclarationLoader(appRoot) {
   // The annotations plugin installs a file watcher this inspection has no use for, and that watcher keeps the
@@ -404,9 +406,15 @@ async function createDeclarationLoader(appRoot) {
     .map((extension) => path.join(appRoot, `vite.config.${extension}`))
     .find((candidate) => existsSync(candidate));
 
+  // Plugins may add optimizer entries even when discovery is disabled. Never share
+  // the live dev server's cache, including across concurrent inspections.
+  const cacheDir = await mkdtemp(
+    path.join(tmpdir(), 'nocobase-client-inspect-'),
+  );
   let server;
   try {
     server = await createServer({
+      cacheDir,
       // The application's own configuration, so aliases and define constants match a real build. An application
       // without one still resolves `@/`, which every template relies on.
       ...(configFile ? { configFile } : { configFile: false }),
@@ -430,6 +438,7 @@ async function createDeclarationLoader(appRoot) {
           }),
     });
   } catch (error) {
+    await rm(cacheDir, { recursive: true, force: true });
     throw inspectionError(
       'CLIENT_INSPECT_VITE_FAILED',
       `Failed to start the Vite environment client inspection reads declarations through: ${
@@ -441,7 +450,13 @@ async function createDeclarationLoader(appRoot) {
 
   return {
     load: (entry) => server.ssrLoadModule(entry),
-    close: () => server.close(),
+    close: async () => {
+      try {
+        await server.close();
+      } finally {
+        await rm(cacheDir, { recursive: true, force: true });
+      }
+    },
   };
 }
 
