@@ -81,12 +81,12 @@
     "eslint": "catalog:",
     "prettier": "catalog:",
     "vitest": "catalog:",
-    "@nocobase/db": "workspace:^",
     "@nocobase/db-sqlite": "workspace:^"
   },
   "peerDependencies": {
     "@nocobase/app-server": "workspace:^",
-    "@nocobase/nb3-cli": "workspace:^"
+    "@nocobase/nb3-cli": "workspace:^",
+    "@nocobase/db": "workspace:^"
   },
   "dependencies": {
     "@oclif/core": "catalog:"

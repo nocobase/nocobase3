@@ -410,3 +410,5 @@ export {
   type UpsertWritePolicyBuilder,
   type RelationWriteOperation,
 } from './repository/write-policy.js';
+
+export type { DatabaseTaskConfig } from './task-config.js';

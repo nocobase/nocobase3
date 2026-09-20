@@ -1,3 +1,5 @@
+import type { ServiceResolver } from '@nocobase/service-provider';
+import type { DatabaseTaskConfig } from '../task-config.js';
 import type { CollectionBuilder } from '../collection/builder/builder.js';
 import type { DatabaseConnection } from '../database/connection.js';
 import type { DatabaseDialect, DatabaseDriver } from '../database/config.js';
@@ -19,6 +21,8 @@ export interface MigrationConnection {
 
 /** Services available while applying or rolling back a migration. */
 export interface MigrationContext {
+  readonly config: DatabaseTaskConfig;
+  readonly container: ServiceResolver;
   /** Runtime configuration for applicability; excluded from history identity. */
   readonly configuration?: readonly Readonly<Record<string, unknown>>[];
   /** Immutable target parameters declared by this migration source. */
@@ -74,6 +78,8 @@ export interface LoadMigrationsOptions {
 
 /** Configuration for a standalone Migrator, including its database dependency. */
 export interface CreateMigratorOptions extends LoadMigrationsOptions {
+  readonly config?: DatabaseTaskConfig;
+  readonly container?: ServiceResolver;
   readonly database: {
     connection(name?: string): DatabaseConnection;
   };

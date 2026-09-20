@@ -1,3 +1,7 @@
+import { createTaskServiceResolver } from './task-container.js';
+import type { ServiceResolver } from '@nocobase/service-provider';
+import { snapshotDatabaseTaskConfig } from './task-config.js';
+import type { DatabaseTaskConfig } from '@nocobase/db';
 import { resolveDatabaseConfig } from './resolve-config.js';
 import {
   planAppRuntimeDatabaseTasks,
@@ -51,6 +55,8 @@ export class AppDatabaseTaskError extends Error {
 }
 
 export interface AppDatabasePlanExecutionOptions {
+  readonly runtimeConfig?: DatabaseTaskConfig;
+  readonly container?: ServiceResolver;
   readonly paths?: AppPaths;
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
   readonly fresh?: boolean;
@@ -61,11 +67,19 @@ export async function executeAppDatabasePlan(
   database: DatabaseManager,
   config: AppDatabaseConfig,
   plan: readonly AppDatabaseTask[],
-  { paths, drivers, fresh = false }: AppDatabasePlanExecutionOptions = {},
+  {
+    paths,
+    drivers,
+    fresh = false,
+    runtimeConfig,
+    container,
+  }: AppDatabasePlanExecutionOptions = {},
 ): Promise<AppDatabaseTasksResult> {
   if (fresh && plan.some((task) => task.kind !== 'migrations')) {
     throw new Error('--fresh is only supported for migrations.');
   }
+  const taskContainer = createTaskServiceResolver(container);
+  const taskConfig = snapshotDatabaseTaskConfig(runtimeConfig);
   const result: AppDatabaseTasksResult = {
     ok: true,
     status: 'completed',
@@ -89,6 +103,8 @@ export async function executeAppDatabasePlan(
         drivers,
       );
       const options = {
+        runtimeConfig: taskConfig,
+        container: taskContainer,
         database,
         connection: task.connection,
         config: task.config,
@@ -128,6 +144,9 @@ export async function executeAppDatabasePlan(
 }
 
 export interface AppDatabaseTaskRunOptions extends AppRuntimeDatabaseTaskPlanOptions {
+  /** Borrow a database manager; its owner remains responsible for disposal. */
+  readonly database?: () => DatabaseManager;
+  readonly container?: ServiceResolver;
   readonly kind: AppDatabaseTaskKind;
 }
 
@@ -167,19 +186,23 @@ export async function runAppDatabaseTasks(
       throw new Error('Fresh migration cancelled.');
     }
   }
-  const database = createAppDatabaseManager(config, paths, {
-    ...config.drivers,
-    ...drivers,
-  });
+  const database = options.database
+    ? options.database()
+    : createAppDatabaseManager(config, paths, {
+        ...config.drivers,
+        ...drivers,
+      });
   if (!database) return { ok: true, status: 'not-configured', results: [] };
   try {
     return await executeAppDatabasePlan(database, config, plan, {
       paths,
       drivers,
       fresh: options.fresh,
+      runtimeConfig: options.runtimeConfig,
+      container: options.container,
     });
   } finally {
-    await database.destroy();
+    if (!options.database) await database.destroy();
   }
 }
 

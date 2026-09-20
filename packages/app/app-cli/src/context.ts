@@ -1,9 +1,13 @@
+import type { Application } from '@nocobase/app-server';
 import { Command } from '@oclif/core';
 import type { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 export type AppCommandRuntime = Awaited<
   ReturnType<typeof resolveStandaloneAppRuntime>
 >;
 export interface AppCommandContext {
+  readonly createApp: (
+    runtime: AppCommandRuntime,
+  ) => Application | Promise<Application>;
   readonly rootDir: string;
   readonly loadRuntime: () => Promise<AppCommandRuntime>;
 }

@@ -1,3 +1,5 @@
+import type { ServiceResolver } from '@nocobase/service-provider';
+import type { DatabaseTaskConfig } from '../task-config.js';
 import type { DatabaseConnection } from '../database/connection.js';
 import type { MigrationConnection } from '../migration/types.js';
 import type { QueryAdapter } from '../query/types.js';
@@ -10,6 +12,8 @@ export type SeedConnection = MigrationConnection;
 
 /** Services available while executing a seed definition. */
 export interface SeedContext {
+  readonly config: DatabaseTaskConfig;
+  readonly container: ServiceResolver;
   readonly query: QueryAdapter;
   readonly connection: SeedConnection;
 }
@@ -49,6 +53,8 @@ export interface LoadSeedsOptions {
 
 /** Configuration for a standalone Seeder, including its database dependency. */
 export interface CreateSeederOptions extends LoadSeedsOptions {
+  readonly config?: DatabaseTaskConfig;
+  readonly container?: ServiceResolver;
   readonly database: {
     connection(name?: string): DatabaseConnection;
   };
