@@ -1275,47 +1275,60 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
   });
 
-  it('replaces example secrets and preserves them across deployments and publication', async () => {
-    const template =
-      '# Preserve this comment\nauth:\n  secret: replace-with-a-unique-secret\nsession:\n  secret: replace-with-a-unique-secret\n';
-    await service.createApp({ id: 'customer', name: 'Customer' });
-    const release = await service.createRelease('customer', {
-      bytes: await createArtifact(rootDir, '1.2.3', {
-        configTemplate: template,
-      }),
-    });
-    const first = await service.deploy('customer', { releaseId: release.id });
-    await waitForDeployment(service, 'customer', first.id);
-    const initial = await service.readConfig('customer');
-    const secrets = parseYaml(initial.content!) as {
-      auth: { secret: string };
-      session: { secret: string };
-    };
-    expect(secrets.auth.secret).toHaveLength(43);
-    expect(secrets.session.secret).toHaveLength(43);
-    expect(secrets.auth.secret).not.toBe(secrets.session.secret);
-    expect(initial.content).toContain('# Preserve this comment');
-    const second = await service.deploy('customer', {
-      releaseId: release.id,
-      config: { mode: 'file', content: template },
-    });
-    await waitForDeployment(service, 'customer', second.id);
-    expect(parseYaml((await service.readConfig('customer')).content!)).toEqual(
-      secrets,
-    );
-    const updated = await service.updateConfig('customer', {
-      content: template,
-    });
-    expect(parseYaml(updated.content!)).toEqual(secrets);
-    expect(
-      await service.updateConfig('customer', { content: updated.content! }),
-    ).toEqual(updated);
-    const custom =
-      'auth:\n  secret: supplied-auth-secret-at-least-32-characters\nsession:\n  secret: supplied-session-secret-at-least-32-characters\n';
-    expect(
-      (await service.updateConfig('customer', { content: custom })).content,
-    ).toBe(custom);
-  });
+  it.each([
+    [
+      'example secrets',
+      'auth:\n  secret: replace-with-a-unique-secret\nsession:\n  secret: replace-with-a-unique-secret\n',
+    ],
+    ['omitted secret sections', 'feature: enabled\n'],
+    [
+      'omitted session section',
+      'auth:\n  secret: replace-with-a-unique-secret\n',
+    ],
+    ['blank secrets', 'auth:\n  secret: ""\nsession:\n  secret: " "\n'],
+  ])(
+    'fills %s and preserves secrets across deployments and publication',
+    async (_name, config) => {
+      const template = `# Preserve this comment\n${config}`;
+      await service.createApp({ id: 'customer', name: 'Customer' });
+      const release = await service.createRelease('customer', {
+        bytes: await createArtifact(rootDir, '1.2.3', {
+          configTemplate: template,
+        }),
+      });
+      const first = await service.deploy('customer', { releaseId: release.id });
+      await waitForDeployment(service, 'customer', first.id);
+      const initial = await service.readConfig('customer');
+      const secrets = parseYaml(initial.content!) as {
+        auth: { secret: string };
+        session: { secret: string };
+      };
+      expect(secrets.auth.secret).toHaveLength(43);
+      expect(secrets.session.secret).toHaveLength(43);
+      expect(secrets.auth.secret).not.toBe(secrets.session.secret);
+      expect(initial.content).toContain('# Preserve this comment');
+      const second = await service.deploy('customer', {
+        releaseId: release.id,
+        config: { mode: 'file', content: template },
+      });
+      await waitForDeployment(service, 'customer', second.id);
+      expect(
+        parseYaml((await service.readConfig('customer')).content!),
+      ).toEqual(secrets);
+      const updated = await service.updateConfig('customer', {
+        content: template,
+      });
+      expect(parseYaml(updated.content!)).toEqual(secrets);
+      expect(
+        await service.updateConfig('customer', { content: updated.content! }),
+      ).toEqual(updated);
+      const custom =
+        'auth:\n  secret: supplied-auth-secret-at-least-32-characters\nsession:\n  secret: supplied-session-secret-at-least-32-characters\n';
+      expect(
+        (await service.updateConfig('customer', { content: custom })).content,
+      ).toBe(custom);
+    },
+  );
 
   it('reuses an existing auth secret and keeps a user-provided secret', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });

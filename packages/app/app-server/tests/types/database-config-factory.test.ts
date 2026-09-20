@@ -132,9 +132,9 @@ it('rejects missing, unrelated, and incorrectly typed connection fields', () => 
       },
     },
   }));
+  // @ts-expect-error Driver option value types are preserved.
   defineAppDatabaseConfig(() => ({
     drivers: { postgres },
-    // @ts-expect-error Driver option value types are preserved.
     connections: { main: { dialect: 'postgres', port: '5432' } },
   }));
   defineAppDatabaseConfig(() => ({
@@ -142,15 +142,13 @@ it('rejects missing, unrelated, and incorrectly typed connection fields', () => 
     // @ts-expect-error Third-party connection fields remain required.
     connections: { main: { dialect: 'custom' } },
   }));
+  // @ts-expect-error Host and socket targets are mutually exclusive.
   defineAppDatabaseConfig(() => ({
     drivers: { mysql },
     connections: {
       main: {
-        // @ts-expect-error Conflicting targets make the connection invalid.
         dialect: 'mysql',
-        // @ts-expect-error Host and socket targets are mutually exclusive.
         host: 'localhost',
-        // @ts-expect-error Socket and host targets are mutually exclusive.
         socketPath: '/tmp/mysql.sock',
       },
     },
@@ -161,4 +159,14 @@ it('rejects missing, unrelated, and incorrectly typed connection fields', () => 
     connections: {},
     typo: true,
   }));
+});
+
+it('accepts installed official drivers without explicit runtime imports', () => {
+  const factory = defineAppDatabaseConfig(() => ({
+    connections: {
+      main: { dialect: 'mysql', database: 'app', port: 3306 },
+      cache: { dialect: 'sqlite', filename: ':memory:' },
+    },
+  }));
+  expectTypeOf(factory).toEqualTypeOf<AppConfigFactory<AppDatabaseConfig>>();
 });

@@ -1,5 +1,33 @@
 # @nocobase/db
 
+## 1.0.0-beta.11
+
+### Minor Changes
+
+- e9da3c2: Resolve installed official database drivers asynchronously from application configuration before provider registration or standalone database tasks. Configure only the needed dialects and install their optional peer packages in application dependencies. Preserve explicit driver registrations and synchronous core manager APIs; direct core consumers continue to register drivers explicitly. Standard development and test loaders require no synchronous ESM compatibility configuration.
+
+### Patch Changes
+
+- c84bfe8: Reject collection reads whose input resolves to a different logical collection name, instead of silently omitting logical field metadata. Use the logical name for get, getResolution, and getPhysical; inspect physical table names through schemaInspector.getPhysicalCollection.
+
+  Refresh the collection naming index when metadata documents are created or removed, including field-only metadata, so explicitly declared underscored logical names remain valid during and after migrations.
+
+  Resolve Query relative table identifiers to their logical collection before loading field metadata, preserving snake_case table inputs, aliases, and connection prefixes without relaxing public Collection name validation.
+
+## 1.0.0-beta.10
+
+### Minor Changes
+
+- e0c4b3d: Add a transaction-safe physical row upsert API and use it through a unified Queue adapter accepting DatabaseConnection, with the upstream Knex client bridge kept private. Fix scheduler startup across database dialects while preserving schedule execution history.
+
+  Preserve the outer Oracle transaction when a nested savepoint completes, allowing inserted rows to roll back with their owning transaction.
+
+  Retry deadlocks with bounded backoff when a physical row upsert owns its transaction; preserve caller-owned transaction boundaries and propagate failures requiring the caller to retry.
+
+  Recognize Dameng unique-key conflicts during concurrent upserts and preserve the outer transaction when knex-dm finishes a nested savepoint.
+
+  Declare Knex as a Dameng runtime dependency so nested transaction support also works in registry installations.
+
 ## 1.0.0-beta.9
 
 ### Patch Changes

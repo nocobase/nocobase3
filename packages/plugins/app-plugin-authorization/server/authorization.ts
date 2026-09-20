@@ -1,30 +1,48 @@
-import type { DatabaseConnection } from '@nocobase/db';
+import { settingsApi } from './management/settings-resource.js';
+import { installPermissionSetAdministration } from './management/authorization.js';
+import './subjects.js';
+import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import {
-  Authorization,
   createAuthorization,
+  type Authorization,
   type AuthorizationPlugin,
 } from '@nocobase/authorization/core';
 import {
   databaseAuthorization,
   type DatabaseAuthorizationApi,
-} from '@nocobase/authorization/database';
-import {
-  defaultAccess,
-  type DefaultAccessAuthorizationApi,
-} from '@nocobase/authorization/default-access';
-import { pages } from '@nocobase/authorization/pages';
+  type DatabaseAuthorizationPlugin,
+} from './database/index.js';
 import {
   permissionSets,
   type PermissionSetsAuthorizationApi,
+  type PermissionSetsPlugin,
 } from '@nocobase/authorization/permissions';
 import {
-  restrictionRules,
-  type RestrictionRulesAuthorizationApi,
-} from '@nocobase/authorization/restriction-rules';
-import {
-  sharingRules,
-  type SharingRulesAuthorizationApi,
-} from '@nocobase/authorization/sharing-rules';
+  pages,
+  type PagesApi,
+  type PagesPlugin,
+} from './pages-authorization.js';
+import { DatabaseConnectionHandle } from './stores/connection.js';
+import { DatabasePermissionSetStore } from './stores/permission-sets.js';
+
+export interface AppPermissionSetsConfig {
+  /** The Permission Set that confers unrestricted access. */
+  rootSet?: string;
+  /** The Permission Set every signed-in user holds. */
+  defaultSet?: string;
+}
+
+export interface AuthorizationConfig {
+  permissionSets?: AppPermissionSetsConfig;
+  /**
+   * Plugins the application chooses to install. Permission Sets, page and database
+   * authorization are built in and are not among them.
+   */
+  plugins?: readonly AuthorizationPlugin[];
+}
+
+const DEFAULT_ROOT_SET = 'root';
+const DEFAULT_DEFAULT_SET = 'member';
 
 interface AuthSessionUser {
   id: string;
@@ -34,152 +52,88 @@ interface AuthSession {
   user: AuthSessionUser;
 }
 
-export interface AuthorizationUserOption {
-  id: string;
-  name: string;
-  username?: string;
-  email: string;
-}
-
-export interface AuthorizationRecordOption {
-  id: string;
-  label: string;
-  description?: string;
-}
-
-export interface AppAuthorizationAdministrationApi {
-  listUsers(): Promise<readonly AuthorizationUserOption[]>;
-  listRecords(
-    collection: string,
-  ): Promise<readonly AuthorizationRecordOption[]>;
-}
-
-export interface AppAuthorizationAdministrationPluginApi {
-  administration: AppAuthorizationAdministrationApi;
-}
-
-export type AppAuthorization = Authorization &
-  PermissionSetsAuthorizationApi &
-  DatabaseAuthorizationApi &
-  DefaultAccessAuthorizationApi &
-  SharingRulesAuthorizationApi &
-  RestrictionRulesAuthorizationApi &
-  AppAuthorizationAdministrationPluginApi;
-
 export interface CreateAppAuthorizationOptions {
+  database?: DatabaseManager;
   connection?: DatabaseConnection;
   onUserPermissionsChanged?(userId: string): void | Promise<void>;
   onAuthenticatedPermissionsChanged?(): void | Promise<void>;
+  config?: AuthorizationConfig;
 }
 
 export function createAppAuthorization(
   options: CreateAppAuthorizationOptions,
-): AppAuthorization {
-  let resolveCollection: (
-    name: string,
-  ) => { name: string; fields: readonly string[] } | undefined = () =>
-    undefined;
-  const authz = createAuthorization({
-    connection: options.connection,
-    plugins: [
-      authenticationIdentity(),
-      permissionSets({
-        onAssignmentsChanged: async (subject) => {
-          if (subject.type === 'user') {
-            await options.onUserPermissionsChanged?.(subject.id);
-          } else if (subject.type === 'authenticated') {
-            await options.onAuthenticatedPermissionsChanged?.();
-          }
-        },
-      }),
-      databaseAuthorization(),
-      defaultAccess(),
-      sharingRules(),
-      restrictionRules(),
-      pages(),
-      applicationAdministration(options.connection, (name) =>
-        resolveCollection(name),
-      ),
-    ],
+): Authorization &
+  PermissionSetsAuthorizationApi<DatabaseConnection> &
+  DatabaseAuthorizationApi & {
+    pages: PagesApi;
+  } {
+  const sets = options.config?.permissionSets;
+  const database = databaseAuthorization(options.database);
+  const connection = new DatabaseConnectionHandle(
+    'Permission Sets',
+    options.connection,
+  );
+  const permissionSetPlugin = permissionSets<DatabaseConnection>({
+    store: new DatabasePermissionSetStore(connection.resolve),
+    rootSet: {
+      key: sets?.rootSet ?? DEFAULT_ROOT_SET,
+      // The identity middleware below makes `user` this host's principal
+      // type: a superuser is an account, never an audience or a group.
+      assignableTo: ['user'],
+    },
+    defaultSet: sets?.defaultSet ?? DEFAULT_DEFAULT_SET,
   });
-  resolveCollection = (name) => authz.database.collections.get(name);
-  return authz;
-}
-
-function applicationAdministration(
-  connection?: DatabaseConnection,
-  collectionResolver: (
-    name: string,
-  ) => { name: string; fields: readonly string[] } | undefined = () =>
-    undefined,
-): AuthorizationPlugin<AppAuthorizationAdministrationPluginApi> {
-  return {
-    id: 'app-authorization-administration',
-    authorizationApi: {
-      administration: {
-        async listUsers(): Promise<readonly AuthorizationUserOption[]> {
-          if (!connection) return [];
-          const rows = await connection.query
-            .selectFrom('user')
-            .select(['id', 'name', 'username', 'email'])
-            .orderBy('name', 'asc')
-            .execute();
-          return rows.map((row) => ({
-            id: String(row.id),
-            name: String(row.name),
-            ...(typeof row.username === 'string'
-              ? { username: row.username }
-              : {}),
-            email: String(row.email),
-          }));
-        },
-        async listRecords(
-          collectionName: string,
-        ): Promise<readonly AuthorizationRecordOption[]> {
-          if (!connection) return [];
-          const collection = collectionResolver(collectionName);
-          if (!collection) return [];
-          const idField = collection.fields.includes('id')
-            ? 'id'
-            : collection.fields[0];
-          if (!idField) return [];
-          const labelField =
-            ['title', 'name', 'orderNumber', 'username', 'email'].find(
-              (field) => collection.fields.includes(field),
-            ) ?? idField;
-          const fields =
-            idField === labelField ? [idField] : [idField, labelField];
-          const table = collection.name.replace(/^main\./, '');
-          const rows = await connection.query
-            .selectFrom(table)
-            .select(fields)
-            .limit(100)
-            .execute();
-          return rows.map((row) => ({
-            id: String(Reflect.get(row, idField)),
-            label: String(Reflect.get(row, labelField)),
-            ...(labelField === idField
-              ? {}
-              : { description: String(Reflect.get(row, idField)) }),
-          }));
-        },
+  // The built-in plugins lead the tuple so their apis are inferred rather
+  // than asserted: `authz.permissionSets`, `authz.db` and `authz.pages` are statically typed.
+  const plugins: readonly [
+    PermissionSetsPlugin<DatabaseConnection>,
+    DatabaseAuthorizationPlugin,
+    PagesPlugin,
+    ...AuthorizationPlugin[],
+  ] = [
+    {
+      ...permissionSetPlugin,
+      setup(authz) {
+        permissionSetPlugin.setup?.(authz);
+        installPermissionSetAdministration(
+          authz,
+          permissionSetPlugin.authorizationApi!.permissionSets,
+        );
       },
     },
-  };
-}
-
-function authenticationIdentity(): AuthorizationPlugin {
-  return {
-    id: 'app-authentication-identity',
-    setup(authz): void {
-      authz.use(async (request, next) => {
-        const session = readAuthSession(request.http.var.auth);
-        request.principal = { type: 'user', id: session.user.id };
-        request.subjects.add({ type: 'authenticated', id: '*' });
-        await next();
-      });
+    database,
+    pages(),
+    ...(options.config?.plugins ?? []),
+  ];
+  const authz = createAuthorization({
+    connection: options.connection,
+    plugins,
+  });
+  authz.subjects.define('authenticated', {
+    filterActive: async (ids) => ids.filter((id) => id === '*'),
+    administration: {
+      title: { key: 'options.subjectTypes.authenticated' },
+      selection: { type: 'fixed', id: '*' },
     },
-  };
+  });
+  authz.use(async (request, next) => {
+    const session = readAuthSession(request.http.var.auth);
+    request.principal = { type: 'user', id: session.user.id };
+    request.subjects.add({ type: 'authenticated', id: '*' });
+    for (const subject of await authz.subjects.resolveFor(request.principal))
+      request.subjects.add(subject);
+    await next();
+  });
+  authz.onGrantsChanged(async (subject) => {
+    if (subject.type === 'user') {
+      await options.onUserPermissionsChanged?.(subject.id);
+    } else if (subject.type === 'authenticated') {
+      await options.onAuthenticatedPermissionsChanged?.();
+    }
+  });
+  database.authorizationApi.db.installInto(authz);
+  Object.assign(authz, { settings: settingsApi });
+  return authz;
 }
 
 function readAuthSession(value: unknown): AuthSession {

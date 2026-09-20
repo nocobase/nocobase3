@@ -74,6 +74,20 @@ describe('client inspection', () => {
       packageName: '@nocobase/app-template-examples',
     });
     expect(inspection.consistent).toBe(true);
+    expect(inspection.settings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'workflows',
+          path: '/settings/workflow',
+          groupId: 'automation',
+        }),
+        expect.objectContaining({
+          id: 'schedules',
+          path: '/settings/schedules',
+          groupId: 'automation',
+        }),
+      ]),
+    );
     expect(inspection.issues).toEqual([]);
     expect(
       inspection.routes.map(({ auth, id, path }) => ({ auth, id, path })),
@@ -175,6 +189,31 @@ describe('client inspection', () => {
         path: '/reset-password',
       },
       {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example',
+        path: '/',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example-overview',
+        path: '/authorization-example',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example-projects',
+        path: '/authorization-example/projects',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example-quotes',
+        path: '/authorization-example/quotes',
+      },
+      {
+        auth: 'required',
+        id: '@nocobase/app-plugin-authorization-example:authorization-example-orders',
+        path: '/authorization-example/orders',
+      },
+      {
         auth: 'guest',
         id: '@nocobase/app-plugin-install:install',
         path: '/install',
@@ -192,12 +231,12 @@ describe('client inspection', () => {
       {
         auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-detail',
-        path: '/settings/automation/workflows/:workflowId',
+        path: '/settings/workflow/workflows/:id',
       },
       {
         auth: 'required',
         id: '@nocobase/app-plugin-workflow:workflow-run-detail',
-        path: '/settings/automation/workflow-runs/:runId',
+        path: '/settings/workflow/runs/:id',
       },
       {
         auth: 'required',
@@ -317,7 +356,7 @@ describe('client inspection', () => {
       {
         auth: 'required',
         id: '@nocobase/app-plugin-scheduler:schedule-detail',
-        path: '/settings/automation/schedules/:scheduleId',
+        path: '/settings/schedules/:scheduleId',
       },
       {
         auth: 'required',
@@ -376,12 +415,67 @@ describe('client inspection', () => {
         }),
       ]),
     );
-    expect(inspection.settings.slice(0, 5).map(({ id }) => id)).toEqual([
-      'ai',
+    const aiPages = inspection.settings.filter(
+      ({ packageName }) => packageName === '@nocobase/app-plugin-ai-employee',
+    );
+    expect(aiPages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'ai',
+          title: 'AI Employees',
+          path: '/settings/ai',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiSkills',
+          title: 'Skills',
+          path: '/settings/ai/skills',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiTools',
+          title: 'tools.title',
+          path: '/settings/ai/tools',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiConversations',
+          title: 'aiConversations',
+          path: '/settings/ai/conversations',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiLLMServices',
+          title: 'LLM services',
+          path: '/settings/ai/llm-services',
+          groupId: 'aiGroup',
+        }),
+        expect.objectContaining({
+          id: 'aiMCPServices',
+          title: 'MCP services',
+          path: '/settings/ai/mcp-services',
+          groupId: 'aiGroup',
+        }),
+      ]),
+    );
+    expect(
+      inspection.settings
+        .filter(
+          ({ packageName }) =>
+            packageName !== '@nocobase/app-plugin-ai-employee',
+        )
+        .slice(0, 9)
+        .map(({ id }) => id),
+    ).toEqual([
       'permission-sets',
+      'new',
+      'edit',
+      'assignments',
+      'details',
       'default-access',
       'sharing-rules',
       'restriction-rules',
+      'inspector',
     ]);
 
     const output = formatAppClientInspection(inspection);
@@ -413,7 +507,7 @@ describe('client inspection', () => {
     });
   });
 
-  it('reports missing Settings access without running providers or leaf loaders', async () => {
+  it('reports normalized Settings authorization without running providers or leaf loaders', async () => {
     const appRoot = await createInspectionApp(`
       globalThis.__clientInspectCalls = { lifecycle: 0, locale: 0, page: 0 };
       class ExampleProvider {
@@ -454,14 +548,9 @@ describe('client inspection', () => {
       locale: 0,
       page: 0,
     });
-    expect(inspection.consistent).toBe(false);
-    expect(inspection.issues).toEqual([
-      expect.objectContaining({
-        code: 'CLIENT_SETTINGS_ACCESS_MISSING',
-        packageName: '@example/client-plugin',
-        routeId: 'example',
-      }),
-    ]);
+    expect(inspection.consistent).toBe(true);
+    expect(inspection.issues).toEqual([]);
+    expect(inspection.settings[0].authz).toBe('skip');
   });
 
   it('inspects a single declaration type without resolving unrelated contributions', async () => {

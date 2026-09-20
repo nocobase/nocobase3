@@ -13,6 +13,20 @@ import {
 } from '../../components/ui/select.js';
 import type { ApiResponse } from './types.js';
 
+const LOG_LEVEL_LABELS = new Map<string, string>([
+  ['10', 'TRACE'],
+  ['20', 'DEBUG'],
+  ['30', 'INFO'],
+  ['40', 'WARN'],
+  ['50', 'ERROR'],
+  ['60', 'FATAL'],
+]);
+
+function logLevelLabel(level: string | number): string {
+  const value = String(level);
+  return LOG_LEVEL_LABELS.get(value) ?? value.toUpperCase();
+}
+
 interface Entry {
   time: string;
   level: string | number;
@@ -349,10 +363,10 @@ export function LogViewer({
             className='border-b border-border/50 py-1.5'
           >
             <summary
-              className={`cursor-pointer whitespace-pre-wrap break-words ${['error', 'fatal', 50, 60].includes(entry.level) ? 'text-destructive' : ''}`}
+              className={`cursor-pointer whitespace-pre-wrap break-words ${['ERROR', 'FATAL'].includes(logLevelLabel(entry.level)) ? 'text-destructive' : ''}`}
             >
-              {entry.time} [{entry.level}] {entry.logger ?? entry.phase}{' '}
-              {entry.msg}
+              {entry.time} [{logLevelLabel(entry.level)}]{' '}
+              {entry.logger ?? entry.phase} {entry.msg}
             </summary>
             <pre className='mt-2 whitespace-pre-wrap break-words text-muted-foreground'>
               {entry.err &&

@@ -1,5 +1,14 @@
 # @nocobase/db-kingbase
 
+## 0.1.0-beta.2
+
+### Patch Changes
+
+- e9da3c2: Keep the private query-stream constructor boundary independent of PostgreSQL native type declarations so strict workspace consumers can typecheck application imports without undeclared pg types.
+- Updated dependencies [c84bfe8]
+- Updated dependencies [e9da3c2]
+  - @nocobase/db@1.0.0-beta.11
+
 ## 0.1.0-beta.1
 
 ### Patch Changes

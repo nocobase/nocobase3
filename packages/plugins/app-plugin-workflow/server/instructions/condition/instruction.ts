@@ -93,7 +93,7 @@ export class ConditionInstruction extends WorkflowInstruction<ConditionConfig> {
     return conditionConfigIssues(config);
   }
 
-  async run(): Promise<WorkflowInstructionResult> {
+  async run(): Promise<WorkflowInstructionResult | void> {
     const config = readConditionConfig(this.config);
     const evaluated =
       config.expression === undefined
@@ -113,36 +113,61 @@ export class ConditionInstruction extends WorkflowInstruction<ConditionConfig> {
     const branch = this.processor
       .getBranches(this.node)
       .find((candidate) => candidate.branchKey === branchKey);
-    return branch
-      ? {
-          status: NODE_RUN_STATUS.PENDING,
-          result: evaluated,
-          nextKey: branch.key,
-        }
-      : { status: NODE_RUN_STATUS.RESOLVED, result: evaluated };
+    const result = { status: NODE_RUN_STATUS.RESOLVED, result: evaluated };
+    if (!branch) return result;
+
+    const savedNodeRun = await this.processor.saveNodeRun(
+      { ...result, nodeId: this.node.id, nodeKey: this.node.key },
+      this.nodeRun,
+      {
+        startedAt: this.nodeRun.startedAt,
+        finishedAt: new Date().toISOString(),
+      },
+    );
+    await this.processor.run(branch, savedNodeRun);
   }
 
-  async resume(): Promise<WorkflowInstructionResult | null> {
+  async resume(): Promise<null | void> {
     if (!this.input || !('status' in this.input))
       throw new Error(
         `Condition node "${this.node.key}" was resumed without a branch nodeRun`,
       );
     const branchNodeRun: WorkflowNodeRun = this.input;
+    let parentNodeRun = this.processor.findBranchParentNodeRun(
+      branchNodeRun,
+      this.node,
+    );
+    if (!parentNodeRun)
+      throw new Error(`Condition node "${this.node.key}" has no nodeRun`);
+    // Executions started before this behavior change may still have a pending condition.
+    if (parentNodeRun.status === NODE_RUN_STATUS.PENDING) {
+      parentNodeRun = await this.processor.saveNodeRun(
+        {
+          nodeId: this.node.id,
+          nodeKey: this.node.key,
+          status: NODE_RUN_STATUS.RESOLVED,
+          result: parentNodeRun.result,
+          meta: parentNodeRun.meta,
+          log: parentNodeRun.log ?? undefined,
+        },
+        parentNodeRun,
+        {
+          startedAt: parentNodeRun.startedAt,
+          finishedAt: new Date().toISOString(),
+        },
+      );
+    }
     if (branchNodeRun.status === NODE_RUN_STATUS.PENDING) return null;
     if (branchNodeRun.status === NODE_RUN_STATUS.RESOLVED) {
-      const parentNodeRun = this.processor.findBranchParentNodeRun(
-        branchNodeRun,
-        this.node,
-      );
-      return {
-        status: NODE_RUN_STATUS.RESOLVED,
-        result: parentNodeRun ? parentNodeRun.result : null,
-      };
+      if (this.node.downstream) {
+        await this.processor.run(this.node.downstream, parentNodeRun);
+      } else {
+        await this.processor.end(this.node, parentNodeRun);
+      }
+      return;
     }
-    return {
-      status: branchNodeRun.status,
-      error: `Condition node "${this.node.key}" received an error from branch node "${branchNodeRun.nodeKey}"`,
-    };
+    // Propagate the branch outcome without overwriting the condition result.
+    await this.processor.end(this.node, branchNodeRun);
   }
 }
 

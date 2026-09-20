@@ -1,5 +1,172 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.14
+
+### Patch Changes
+
+- e73837a: Generate and persist a session secret for Config file deployments and configuration publications even when the session section is omitted. Reuse existing secrets on subsequent operations and preserve custom values. Existing applications using a runtime-only session secret receive a stable secret on the next deployment or configuration publication, invalidating cookies encrypted with the previous secret.
+
+## 0.1.0-beta.13
+
+### Patch Changes
+
+- 64b3fdb: Separate authorization services from application integration: the library provides decisions, permission-set and access-rule services, store contracts and handlers; the application plugin owns database adapters, migrations, identities and management UI.
+
+  Add configurable root and default permission sets, protected-set metadata, transaction-bound service APIs, and integration with user management and Hub roles. Add database authorization for explicitly registered collections through Repository policies, plus a runnable example plugin.
+
+  Provide a permission-set workspace with routed editing and user assignments, nested resource groups, field and record-scope controls, and a permission inspector. Localize management UI and request-specific resource labels. Application routes may declare signed-in access without a page grant.
+
+  Migration ownership changes inline the existing table definitions in the application plugin. This changes the checksums of previously executed migrations; upgrade compatibility must be resolved before deploying to an existing database.
+
+- 64b3fdb: Separate business resource declarations from underlying handler registration through `resourceTypes`. Remove transitional registration aliases and legacy title decoding. Store rule record IDs directly in each action's JSON, preserving independent named scopes without auxiliary record tables. Initialize the sales example and Hub permission titles directly in their final form, without development-version upgrade scripts.
+- 64b3fdb: Integrate source-qualified database authorization and native relation policies with AI data services. Preserve explicit route group extensions, translated resource search, Hub ownership checks, API key cleanup, and protected permission-set assignments across user deletion. Update shared application guidance for the split authorization plugins.
+- 64b3fdb: Add composed business operations with named data scopes and categorized business and administration groups. Permission and rule editors expose only this catalog; page, collection and custom resource handlers remain internal authorization targets.
+
+  Enforce per-operation default access, sharing and restriction scopes while preserving field permissions. Return resolved underlying decisions and repository policies for inspection and execution.
+
+  Use translation descriptors for permission titles, integrate permission-set assignments into user management, and demonstrate independent project, quote and order scopes with direct and team-based assignments.
+
+- 64b3fdb: Keep the combined release and deployment workspace accessible through Hub page authorization, with separate capability checks for each section instead of requiring deployment-read access for the entire page.
+- c3bc6c8: Hide the unfinished Resources tab and prevent its configuration requests while retaining the implementation for future development.
+- c3bc6c8: Display readable severity labels for numeric and textual levels in runtime and deployment log summaries while preserving raw log details and exports.
+- c3bc6c8: Require a manually entered application ID in the creation dialog, remove name-based ID generation, clarify input placeholders and ID requirements, and mark required fields with a theme-aware asterisk.
+
+  Reject the reserved double-underscore application ID prefix before submission.
+
+- c3bc6c8: Combine release uploads and deployment history in one permission-aware workspace, add per-release deployment actions and collapsible release lists, and open each submitted deployment's live logs in a URL-addressable drawer.
+
+  Derive the latest-upload badge and deployment emphasis from persisted releases and the active release so they survive refreshes; show upload confirmation as a temporary notification.
+
+  Refresh deployment history immediately after an accepted submission, even if the overview refresh fails, and require configuration read permissions before offering the deployment action.
+
+- 64b3fdb: Remove Refine from client authorization checks. Use `AuthorizationClient.can({ resource, action })` instead of the removed two-argument signature, and import `useCan` from `@nocobase/app-plugin-authorization/client`. Migrate page guards, navigation, and notification visibility while preserving session isolation and realtime permission invalidation.
+
+  Remove the Refine access-control configuration and legacy global authorization client accessors. Resolve the application-owned client through `useAuthorizationClient()` or `authorizationClientToken`. Settings actions now revoke stale access immediately; route checks no longer bypass the authorization page or translate Refine CRUD action names.
+
+  Unify route authorization under `authz: 'skip' | { resource: { type, id }, action }`. Normalize default rules during registration and share them across page guards, navigation, permission discovery, and inspection. Remove the legacy `access` field and string resource adapter.
+
+  Limit settings action checks to the actions each page uses, keep the permission-set action helper internal, and avoid rebuilding navigation twice when selecting a route.
+
+- 64b3fdb: Move default user permission-set integration into the Users plugin and remove duplicated template providers. Add application-owned preset title metadata for client-side localization without overwriting custom names. Preserve Hub's custom role scope and share searchable assignment selection between user creation and editing.
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [fe564d9]
+- Updated dependencies [fe564d9]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/authorization@0.1.0-beta.8
+  - @nocobase/app-plugin-authorization@0.2.0-beta.15
+  - @nocobase/app-plugin-users@0.1.0-beta.6
+  - @nocobase/app-server@1.0.0-beta.21
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.4
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- c210c51: Align deployment configuration headings with the comparison editor by reserving the same fixed-width change-control gutter between both columns.
+- c210c51: Keep refreshing pending deployments until completion, retry transient status failures with bounded backoff, and clarify automatic authentication and session secret initialization. Return to the deployment list after submission instead of opening logs automatically, and keep manually opened logs mounted during background refreshes.
+- c210c51: Show the create-app command without a package registry, and follow it with an example prompt that hands the created project to the user's AI Agent.
+- c210c51: Allow importing local YAML files from the configuration editor and deployment draft toolbar with validation, overwrite confirmation, undo, and environment warnings. Importing does not save, deploy, or change the active configuration until explicitly submitted.
+- c210c51: Preserve configuration drafts during deployment polling and require confirmation before replacing unsaved edits with updated server configuration.
+- c210c51: Show request-scoped feedback for automatic and manual status refreshes and prevent overlapping refresh requests without blocking unrelated page controls.
+- c210c51: Accept a dragged release artifact through a full-size native file input, highlight the drop zone, and explain that selecting a file requires a separate upload confirmation. Validate a single .tar.gz or .tgz file for both selection methods, prevent replacement during upload, and claim file drops that miss the zone so the browser does not open the artifact.
+- c210c51: Remove the native release file picker filter that can disable valid .tar.gz artifacts on macOS. Keep single-file extension validation for selected and dropped files, and require explicit upload submission.
+- Updated dependencies [c84bfe8]
+- Updated dependencies [e9da3c2]
+- Updated dependencies [9628cdd]
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/app-server@1.0.0-beta.20
+  - @nocobase/app-plugin-authorization@0.2.0-beta.14
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+
+## 0.1.0-beta.11
+
+### Minor Changes
+
+- e13ed84: Organize Hub storage by ownership, add explicit managed revision and log directories, retain legacy layouts, and provide an offline migration preview and copy workflow. Keep standalone Hub data outside build output and place template build archives under storage/exports with matching publishing defaults.
+- e13ed84: Persist per-deployment phase and failure logs and expose application runtime logs in Hub with scoped access, incremental reading, retention, and independent file and console outputs.
+
+  Unify runtime logging configuration and source routing, merge default outputs into app files, connect workflow diagnostics with execution identities, and preserve legacy configuration and historical log readability.
+
+  Enforce hosted capture policy, declare the Host server runtime peer, merge paged source logs chronologically with bounded opaque cursors, and preserve correlation and error details when truncating oversized records. Handle expired scans explicitly in the Hub viewer and downloads.
+
+  Route HTTP request logs to separate request files by default in all application templates.
+
+- e13ed84: Unify application directory fields and path helpers in AppPaths, shared by configuration factories, runtime and Application. Replace ConfigPaths and runtime.configPaths with AppPaths and runtime.paths, and construct applications through createAppFromRuntime so Host logging policy and the runtime application reference are wired consistently.
+
+  Standalone applications declare their deployment root separately from their code root. Configuration and default persistent storage use that deployment root in both source and compiled execution. Explicit storage paths take precedence over HUB_STORAGE_DIR, and embedded applications retain Host-provided volumes.
+
+  Standardize Hub storage and expanded releases on the hub, host and apps layout, remove legacy layout detection and offline storage migration commands, and replace appDeploymentsDir with appRevisionsDir. Expanded releases use appRevisionsDir/<appId>/<sha256>; standalone discovery records the selected revision. Consumers must update removed path and storage APIs and configure existing data locations explicitly before adopting this release. Rebuild application artifacts with the updated runtime and templates.
+
+### Patch Changes
+
+- e13ed84: Align Hub dialog backdrops with application templates using a light scrim, supported backdrop blur, and fade transitions.
+- e13ed84: Preserve input focus rings inside Hub dialogs and use the standard input styling for application search, with a full-width search field on narrow screens.
+- 00362cf: Report a reused Hub deployment honestly. A repeated `app deploy` for the same Release and configuration is answered from the earlier idempotent request, so the Hub now returns `reused` and the deployment's `createdAt` with the accepted operation, and the CLI reports that field and warns that nothing was deployed now instead of printing the same success line as a new deployment. Existing retries keep their exit code; only the output changes.
+- e13ed84: Use shadcn select and calendar popover controls for log level and local date-time filters, with localized labels, clear actions, and responsive sizing.
+- Updated dependencies [e0c4b3d]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [00362cf]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+  - @nocobase/db@1.0.0-beta.10
+  - @nocobase/app-host@0.1.0-beta.8
+  - @nocobase/app-server@1.0.0-beta.19
+  - @nocobase/logging@0.1.0-beta.5
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/authorization@0.1.0-beta.7
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.3
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+  - @nocobase/app-plugin-users@0.0.2-beta.5
+
 ## 0.1.0-beta.10
 
 ### Minor Changes

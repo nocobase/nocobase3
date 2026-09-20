@@ -426,7 +426,13 @@ export function CreateDialog({
             {t('detail.cancel', { defaultValue: 'Cancel' })}
           </Button>
           {/* The button sits outside the form now that it is pinned, so `form` reassociates it. */}
-          <Button disabled={busy} form={createAppFormId} type='submit'>
+          <Button
+            disabled={
+              busy || !name.trim() || !/^(?!__)[A-Za-z0-9_-]+$/.test(appId)
+            }
+            form={createAppFormId}
+            type='submit'
+          >
             {t('page.create', { defaultValue: 'Create application' })}
           </Button>
         </>
@@ -443,13 +449,14 @@ export function CreateDialog({
           label={t('page.applicationName', {
             defaultValue: 'Application name',
           })}
+          required
         >
           <Input
             autoFocus
             className='h-10'
             onChange={(event) => onName(event.target.value)}
             placeholder={t('page.applicationNamePlaceholder', {
-              defaultValue: 'Customer portal',
+              defaultValue: 'Enter application name',
             })}
             required
             value={name}
@@ -457,17 +464,18 @@ export function CreateDialog({
         </Field>
         <Field
           label={t('page.applicationId', { defaultValue: 'Application ID' })}
+          required
           hint={t('page.applicationIdHint', {
             defaultValue:
-              'Auto-generated and editable; globally unique and fixed after creation.',
+              'Required. Use letters, numbers, hyphens, or underscores; cannot start with __. Must be globally unique and cannot be changed after creation.',
           })}
         >
           <Input
             className='h-10 font-mono'
             onChange={(event) => onAppId(event.target.value)}
-            pattern='[A-Za-z0-9_-]+'
+            pattern='(?!__)[A-Za-z0-9_-]+'
             placeholder={t('page.applicationIdPlaceholder', {
-              defaultValue: 'customer-portal',
+              defaultValue: 'Enter application ID',
             })}
             required
             value={appId}

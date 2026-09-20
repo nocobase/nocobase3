@@ -1,4 +1,9 @@
-import type { CollectionRepository } from '@nocobase/ai-employee';
+import type {
+  CollectionFilter,
+  CollectionQuery,
+  CollectionRepository,
+  RepositoryOptions,
+} from '@nocobase/ai-employee';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 
 export type AIConversationEntity = {
@@ -20,4 +25,28 @@ export type AIConversationEntity = {
   updatedAt?: Date | string;
 };
 
-export interface AIConversationRepository extends CollectionRepository<AIConversationEntity> {}
+export type AIConversationListFilter = Omit<
+  CollectionFilter<AIConversationEntity>,
+  'title'
+> & {
+  title?:
+    CollectionFilter<AIConversationEntity>['title'] | { $includes: string };
+};
+
+export type AIConversationListQuery = Omit<
+  CollectionQuery<AIConversationEntity>,
+  'filter'
+> & {
+  filter?: AIConversationListFilter;
+};
+
+export interface AIConversationRepository extends CollectionRepository<AIConversationEntity> {
+  find(
+    query?: AIConversationListQuery,
+    options?: RepositoryOptions,
+  ): Promise<AIConversationEntity[]>;
+  count(
+    query?: Pick<AIConversationListQuery, 'filter'>,
+    options?: RepositoryOptions,
+  ): Promise<number>;
+}

@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { formatHelp, parseInput } from '../src/lib/flags.ts';
 
 describe('parseInput', () => {
+  it('defaults to SQLite and accepts dialect and JSON flags', async () => {
+    expect((await parseInput(['crm'])).flags).toMatchObject({
+      dialect: 'sqlite',
+      json: false,
+      install: true,
+    });
+    expect(
+      (await parseInput(['crm', '--dialect=mysql', '--json'])).flags,
+    ).toMatchObject({ dialect: 'mysql', json: true });
+  });
   /**
    * `pnpm create @nocobase/app crm --template=hub` forwards everything after the package name verbatim, so this is the
    * exact argv the command receives in the documented invocation.
@@ -25,7 +35,7 @@ describe('parseInput', () => {
     expect(input.directory).toBeUndefined();
   });
 
-  /** The database is chosen in the generated application rather than here, so there is no flag for it. */
+  /** Keep the old flag rejected; database selection now uses --dialect. */
   it('rejects the removed dialect flag', async () => {
     await expect(
       parseInput(['crm', '--db-dialect=postgres']),

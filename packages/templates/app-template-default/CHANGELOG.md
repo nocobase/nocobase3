@@ -1,5 +1,196 @@
 # @nocobase/app-template-default
 
+## 1.0.0-beta.38
+
+### Patch Changes
+
+- 71d159c: Preinstall editable File Registry components and their OOXML client dependency in the Default template so applications can reuse authenticated DOCX, XLSX and PPTX previews. Clarify component reuse, dependency ownership and separate Skill/UI upgrade steps in the file and application development guidance.
+
+  Keep the shared file preview dialog wide on desktop and within the viewport on small screens, and normalize Date metadata in its refresh key for strict application linting.
+
+- 836014a: Synchronize the shared layout containers and AppLayout organization with Examples while preserving template branding and Hub navigation ordering. Update application guidance for the shared layout components and layout-owned permission checks.
+- Updated dependencies [71d159c]
+- Updated dependencies [4b3bcfe]
+- Updated dependencies [4694f66]
+- Updated dependencies [4b3bcfe]
+  - @nocobase/app-plugin-file@0.1.0-beta.15
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.4
+  - @nocobase/app-plugin-workflow@0.1.0-beta.23
+
+## 1.0.0-beta.37
+
+### Patch Changes
+
+- 0cd728d: Declare Hono as a runtime dependency so generated application server routes can resolve it after deployment.
+- f93f147: Remove the default SQLite driver dependency from application templates. Application creation supplies the database driver selected by --dialect, defaulting to SQLite.
+- Updated dependencies [c175bef]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+- Updated dependencies [8f5eacf]
+  - @nocobase/app-plugin-workflow@0.1.0-beta.22
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.18
+
+## 1.0.0-beta.36
+
+### Patch Changes
+
+- 64b3fdb: Separate authorization services from application integration: the library provides decisions, permission-set and access-rule services, store contracts and handlers; the application plugin owns database adapters, migrations, identities and management UI.
+
+  Add configurable root and default permission sets, protected-set metadata, transaction-bound service APIs, and integration with user management and Hub roles. Add database authorization for explicitly registered collections through Repository policies, plus a runnable example plugin.
+
+  Provide a permission-set workspace with routed editing and user assignments, nested resource groups, field and record-scope controls, and a permission inspector. Localize management UI and request-specific resource labels. Application routes may declare signed-in access without a page grant.
+
+  Migration ownership changes inline the existing table definitions in the application plugin. This changes the checksums of previously executed migrations; upgrade compatibility must be resolved before deploying to an existing database.
+
+- 64b3fdb: Support entry-level parent references for settings routes contributed by different plugins. Preserve route ownership and localization while resolving nested groups independently of plugin order.
+
+  Split default access, sharing rules and restriction rules into application plugins that own management endpoints, stores, migrations and UI. Keep pure authorization rules and Store contracts in the authorization library and move permission-set management HTTP handlers to the application plugin. Update all application templates to explicitly compose the new plugins. The migration ownership change assumes a fresh installation.
+
+- 64b3fdb: Install page authorization automatically alongside permission sets and database authorization in createAppAuthorization. Remove explicit pages() installation from application configuration; the Default, Examples and Hub templates now configure only optional access-rule plugins. Page grants and route access behavior remain unchanged.
+- 64b3fdb: Allow development sign-in through localhost and 127.0.0.1 on the allocated backend port. Preserve existing Better Auth trusted origins and application configuration; only augment the local development backend environment.
+- 64b3fdb: Remove Refine from client authorization checks. Use `AuthorizationClient.can({ resource, action })` instead of the removed two-argument signature, and import `useCan` from `@nocobase/app-plugin-authorization/client`. Migrate page guards, navigation, and notification visibility while preserving session isolation and realtime permission invalidation.
+
+  Remove the Refine access-control configuration and legacy global authorization client accessors. Resolve the application-owned client through `useAuthorizationClient()` or `authorizationClientToken`. Settings actions now revoke stale access immediately; route checks no longer bypass the authorization page or translate Refine CRUD action names.
+
+  Unify route authorization under `authz: 'skip' | { resource: { type, id }, action }`. Normalize default rules during registration and share them across page guards, navigation, permission discovery, and inspection. Remove the legacy `access` field and string resource adapter.
+
+  Limit settings action checks to the actions each page uses, keep the permission-set action helper internal, and avoid rebuilding navigation twice when selecting a route.
+
+- 64b3fdb: Move default user permission-set integration into the Users plugin and remove duplicated template providers. Add application-owned preset title metadata for client-side localization without overwriting custom names. Preserve Hub's custom role scope and share searchable assignment selection between user creation and editing.
+- fe564d9: Add opt-in strict startup verification that propagates job import failures and exits development and production processes on startup failure.
+- 64b3fdb: Unify grantable resource registration through getResource(type).items and separate recursive display groups. Move authorization settings to module-qualified items under the built-in settings resource, replace the database collections registration entry point, and preserve page navigation groups in the resource picker. Existing authorization settings grant records are not migrated.
+
+  Replace the permission-set list and separate detail view with a collapsible, searchable sidebar and routed permission configuration and user-assignment tabs. Keep edits in the workspace with save/discard controls and protected-set restrictions. Present registered resources in an expandable tree with searchable field configuration in a local floating panel, and toggle simple permissions directly between full access and no grant.
+
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [fe564d9]
+- Updated dependencies [fe564d9]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [0f17c1b]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+  - @nocobase/authorization@0.1.0-beta.8
+  - @nocobase/app-plugin-authorization@0.2.0-beta.15
+  - @nocobase/app-plugin-users@0.1.0-beta.6
+  - @nocobase/app-plugin-notification@0.1.0-beta.13
+  - @nocobase/app-server@1.0.0-beta.21
+  - @nocobase/app-plugin-authz-default-access@0.1.0-beta.0
+  - @nocobase/app-plugin-authz-sharing-rules@0.1.0-beta.0
+  - @nocobase/app-plugin-authz-restriction-rules@0.1.0-beta.0
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.17
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.4
+  - @nocobase/app-plugin-database-explorer@0.1.0-beta.4
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.3
+  - @nocobase/app-plugin-workflow@0.1.0-beta.21
+  - @nocobase/queue@0.1.0-beta.7
+
+## 1.0.0-beta.35
+
+### Patch Changes
+
+- e9da3c2: Resolve installed official database drivers asynchronously from application configuration before provider registration or standalone database tasks. Configure only the needed dialects and install their optional peer packages in application dependencies. Preserve explicit driver registrations and synchronous core manager APIs; direct core consumers continue to register drivers explicitly. Standard development and test loaders require no synchronous ESM compatibility configuration.
+- Updated dependencies [c84bfe8]
+- Updated dependencies [e9da3c2]
+- Updated dependencies [9628cdd]
+- Updated dependencies [7542686]
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/app-server@1.0.0-beta.20
+  - @nocobase/app-plugin-workflow@0.1.0-beta.20
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.2
+  - @nocobase/app-plugin-authorization@0.2.0-beta.14
+
+## 1.0.0-beta.34
+
+### Minor Changes
+
+- e13ed84: Unify application directory fields and path helpers in AppPaths, shared by configuration factories, runtime and Application. Replace ConfigPaths and runtime.configPaths with AppPaths and runtime.paths, and construct applications through createAppFromRuntime so Host logging policy and the runtime application reference are wired consistently.
+
+  Standalone applications declare their deployment root separately from their code root. Configuration and default persistent storage use that deployment root in both source and compiled execution. Explicit storage paths take precedence over HUB_STORAGE_DIR, and embedded applications retain Host-provided volumes.
+
+  Standardize Hub storage and expanded releases on the hub, host and apps layout, remove legacy layout detection and offline storage migration commands, and replace appDeploymentsDir with appRevisionsDir. Expanded releases use appRevisionsDir/<appId>/<sha256>; standalone discovery records the selected revision. Consumers must update removed path and storage APIs and configure existing data locations explicitly before adopting this release. Rebuild application artifacts with the updated runtime and templates.
+
+### Patch Changes
+
+- a255f91: Use the Compact theme by default across application templates while preserving configured defaults and saved browser preferences. Label the other theme Spacious instead of Default to avoid confusing its name with the default selection. Update theme development guidance.
+- e55b17d: Add localized header tooltips for component examples and settings, plus the Examples notification entry, and open appearance and account panels immediately on hover using the built-in shadcn behavior. Preserve click, touch, keyboard, and default dismissal behavior; close the account menu when selecting a language.
+- 00362cf: Report a reused Hub deployment honestly. A repeated `app deploy` for the same Release and configuration is answered from the earlier idempotent request, so the Hub now returns `reused` and the deployment's `createdAt` with the accepted operation, and the CLI reports that field and warns that nothing was deployed now instead of printing the same success line as a new deployment. Existing retries keep their exit code; only the output changes.
+- e13ed84: Organize Hub storage by ownership, add explicit managed revision and log directories, retain legacy layouts, and provide an offline migration preview and copy workflow. Keep standalone Hub data outside build output and place template build archives under storage/exports with matching publishing defaults.
+- e13ed84: Wait for artifact upload streams to close before publishing returns, preventing unhandled file errors when a Hub response or network failure arrives before the upload body is consumed.
+- 8607909: Update agent-annotations to 0.1.9 so the development annotation toolbar remembers its collapsed or expanded state across page reloads.
+- e13ed84: Make development logs concise and application-scoped while retaining structured file diagnostics. Route configuration and authentication diagnostics through application logging, reduce routine startup and request noise, distinguish optional AI Skill directories from missing configured paths, and align development console settings across templates. Document that deployed applications need rebuilding to adopt the current logging protocol.
+- 64733b6: Clarify that useRouteOverlay must run in a descendant of the intended overlay, with complete usage examples and guidance on avoiding the parent context in nested overlays.
+- e13ed84: Persist per-deployment phase and failure logs and expose application runtime logs in Hub with scoped access, incremental reading, retention, and independent file and console outputs.
+
+  Unify runtime logging configuration and source routing, merge default outputs into app files, connect workflow diagnostics with execution identities, and preserve legacy configuration and historical log readability.
+
+  Enforce hosted capture policy, declare the Host server runtime peer, merge paged source logs chronologically with bounded opaque cursors, and preserve correlation and error details when truncating oversized records. Handle expired scans explicitly in the Hub viewer and downloads.
+
+  Route HTTP request logs to separate request files by default in all application templates.
+
+- Updated dependencies [e0c4b3d]
+- Updated dependencies [e13ed84]
+- Updated dependencies [78e3c42]
+- Updated dependencies [5f92529]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [00362cf]
+- Updated dependencies [9e3bbee]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [25cf9f6]
+- Updated dependencies [49a7890]
+  - @nocobase/app-plugin-scheduler@0.1.0-beta.1
+  - @nocobase/queue@0.1.0-beta.6
+  - @nocobase/db@1.0.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.19
+  - @nocobase/app-plugin-notification-in-app@0.2.0-beta.14
+  - @nocobase/app-plugin-file@0.1.0-beta.14
+  - @nocobase/app-plugin-workflow@0.1.0-beta.19
+  - @nocobase/app-plugin-ai-employee@0.1.0-beta.16
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/app-plugin-notification@0.1.0-beta.12
+  - @nocobase/app-plugin-install@0.1.0-beta.9
+
 ## 1.0.0-beta.33
 
 ### Minor Changes

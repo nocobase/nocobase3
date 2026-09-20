@@ -8,7 +8,7 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 
 - `routes/` holds your HTTP endpoints and the array `routes/index.ts` exports.
 - `providers/` holds your services, their tokens, and their lifecycle.
-- Database defaults use `export default defineAppDatabaseConfig((runtime) => ({ drivers, connections }))`; the helper infers connection fields from the returned drivers. Application server declarations use full TypeScript inference (`isolatedDeclarations: false`); see `.agents/skills/nocobase-app-development/references/database-connections.md` from the application root.
+- Database defaults use `export default defineAppDatabaseConfig((runtime) => ({ connections }))`. The application runtime asynchronously imports only configured official drivers before provider registration; optional explicit `drivers` registrations override them and retain connection-field inference. Application server declarations use full TypeScript inference (`isolatedDeclarations: false`); see `.agents/skills/nocobase-app-development/references/database-connections.md` from the application root.
 - `config/` defines editable module defaults with `defineAppConfig`; `config/index.ts` collects them with `defaultAppConfigs`. `config.ts` loads deployment settings and `environment.ts` maps environment variables.
 - `runtime.ts` is the composition root, declaring config, plugins, service providers, and routes.
 - `app.ts` assembles the application and its core providers and middleware.
@@ -34,4 +34,6 @@ Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm buil
 
 `runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
 
-`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.
+`createAppFromRuntime(runtime)` defines the shared contract for transferring configuration, paths, mode and Host logging policy and binding `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.
+
+Examples constructs `Application` directly to compose its customer audit WebSocket protocol with Realtime. Keep its runtime configuration, paths, mode, Host logging policy, `NOCOBASE_STRICT_STARTUP` option, and `runtime.app` binding equivalent to `createAppFromRuntime`. Register the Realtime provider and upgrade routes explicitly when supplying the custom WebSocket factory. This demonstration composition does not apply to Default or Hub.

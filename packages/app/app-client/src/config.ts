@@ -38,7 +38,7 @@ export type AppClientConfigFactory = (
 
 export type AppClientReactProvider = ComponentType<PropsWithChildren>;
 
-export type AppClientRefineConfig = RefineProps;
+export type AppClientRefineConfig = Omit<RefineProps, 'accessControlProvider'>;
 
 export interface AppClientRenderConfig {
   readonly basename?: string;

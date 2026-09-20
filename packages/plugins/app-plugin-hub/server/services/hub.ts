@@ -2191,10 +2191,6 @@ function ensureConfigSecrets(
       !isPlaceholderSecret(oldSecret)
         ? oldSecret
         : undefined;
-    // An omitted session secret uses the runtime's auth-secret fallback. Do not
-    // introduce a new key for existing apps unless a separate key was configured.
-    if (key === 'session' && section === undefined && fallback === undefined)
-      continue;
     if (section !== undefined && !isRecord(section)) continue;
     const secret = isRecord(section) ? section.secret : undefined;
     if (

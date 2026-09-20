@@ -8,7 +8,7 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 
 - `routes/` holds your HTTP endpoints and the array `routes/index.ts` exports.
 - `providers/` holds your services, their tokens, and their lifecycle.
-- Database defaults use `export default defineAppDatabaseConfig((runtime) => ({ drivers, connections }))`; the helper infers connection fields from the returned drivers. Application server declarations use full TypeScript inference (`isolatedDeclarations: false`); see `.agents/skills/nocobase-app-development/references/database-connections.md` from the application root.
+- Database defaults use `export default defineAppDatabaseConfig((runtime) => ({ connections }))`. The application runtime asynchronously imports only configured official drivers before provider registration; optional explicit `drivers` registrations override them and retain connection-field inference. Application server declarations use full TypeScript inference (`isolatedDeclarations: false`); see `.agents/skills/nocobase-app-development/references/database-connections.md` from the application root.
 - `config/` defines editable module defaults with `defineAppConfig`; `config/index.ts` collects them with `defaultAppConfigs`. `config.ts` loads deployment settings and `environment.ts` maps environment variables.
 - `runtime.ts` is the composition root, declaring config, plugins, service providers, and routes.
 - `app.ts` assembles the application and its core providers and middleware.

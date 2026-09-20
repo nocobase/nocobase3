@@ -7,9 +7,11 @@ This reference records the parameter shapes an App code agent normally needs whe
 - [Employee resources](#employee-resources)
 - [Backend tools](#backend-tools)
 - [Skills](#skills)
+- [Tool and Skill display i18n](#tool-and-skill-display-i18n)
 - [MCP](#mcp)
 - [LLM models](#llm-models)
 - [Tool context](#tool-context)
+- [Message input and history boundaries](#message-input-and-history-boundaries)
 - [Frontend root/provider](#frontend-rootprovider)
 - [Chat provider and tasks](#chat-provider-and-tasks)
 - [Page context](#page-context)
@@ -63,9 +65,10 @@ type ToolsOptions<TContext> = {
   requiresContext?: boolean;
   defaultPermission?: 'ASK' | 'ALLOW';
   silence?: boolean;
+  i18n?: { namespace: string }; // actual owning plugin or application package name
   introduction?: {
-    title: string; // may contain i18n template syntax
-    about?: string;
+    title: string; // English source text, not template syntax
+    about?: string; // English source text for display only
   };
   definition: {
     name: string; // stable tool key
@@ -131,13 +134,26 @@ Only use `repositories` and `services` members that the App runtime actually sup
 scope: SPECIFIED | GENERAL | CUSTOM
 name: stable-skill-name
 description: One-line model-facing purpose.
+i18n:
+  namespace: '@acme/sales-app' # Replace with the actual owning package.json name.
 tools: ['tool-name']
 introduction:
   title: Display title
-  about: Optional display description
 ```
 
 `name`, `description`, and `scope` are required. `tools` is an array of exact registered tool names. The Markdown body is the skill content supplied to the model. A skill-local `tools/` directory is discovered and merged into `tools`; do not use filesystem paths in the frontmatter.
+
+## Tool and Skill display i18n
+
+Top-level `i18n.namespace` opts a resource into display translation using the actual `package.json` name of the plugin or application that owns it. Do not use a display name, Skill name, the renderer's package, or an application namespace sentinel. Dynamic Tool factories must return the namespace on each Tool. A Skill and its referenced Tools remain independent: each resource uses its own namespace even when the resources come from different packages.
+
+Tool `introduction.title` and `introduction.about`, and Skill `introduction.title` and `description`, use readable English source text as flat translation keys. This is a narrow exception to the general semantic-key convention. Match the exact full source string, including punctuation, whitespace, and capitalization; do not put semantic keys or `{{t(...)}}` templates in these fields. Use Skill `description` for its translated summary rather than adding `introduction.about`.
+
+Add every source key to the owner's `client/locales/en-US.ts` with the English text as its value, even when English fallback already looks correct. Add the same flat key with its translation to `client/locales/zh-CN.ts` and other supported locales, and register the owner's Client locale loaders. Server locale resources do not provide these display translations. A source wording change requires updating the exact key in every locale.
+
+Localization happens only when rendering display metadata. Do not translate or rewrite Tool `definition.description`, Tool or Skill names, schemas, Skill Markdown instructions, persisted data, or descriptions passed to the model. Namespace-free resources and missing translations retain their source text. Lists sort by localized display title using the current locale, with the stable `name` as the tie-breaker, and recompute when the locale changes.
+
+See the [Tool example and locale entries](../SKILL.md#tool-and-skill-display-translations) for a complete source-key example.
 
 ## MCP
 
@@ -226,6 +242,21 @@ type WorkContext = {
 ```
 
 For normal Registry usage, do not construct these manually; let the chat transport do it. If constructing one for an API adapter, use a supported role and structured content and omit server-assigned ids.
+
+## Message input and history boundaries
+
+Do not reuse one message type across these boundaries:
+
+| Boundary                                    | Shape and id contract                                                                                                                                                                                                                                                                                |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Direct server `AgentService` input          | `AIMessageInput` above; omit server-assigned `messageId` and `sessionId`.                                                                                                                                                                                                                            |
+| HTTP `sendMessages` input                   | `{ sessionId, aiEmployee, model, messages }`; the session id belongs to the request, and a normal user message has `{ role: 'user', content: { type: 'text', content: string } }`. See [send-message contracts](api-reference.md#post-aiconversationssendmessages).                                  |
+| HTTP `getMessages` response                 | `{ rows, hasMore, cursor }` by default, or `{ rows }` for `paginate=false`. Each parsed row has `key`, `role`, `createdAt`, and a structured `content` object containing `messageId`. There is no top-level `messageId`. See the [complete history schema](api-reference.md#history-message-schema). |
+| Registry `getConversationMessages()` result | `AIChatMessage[]` after unwrapping, reversing, filtering system/tool roles, and converting content to UI parts. This is not the raw HTTP response.                                                                                                                                                   |
+
+History pitfalls: preserve `key`/`content.messageId` and cursors as opaque strings; distinguish the containing message id from `content.tool_calls[].id`; tolerate missing/null timestamps, metadata, attachments, and work context; and check the payload type before rendering `content.content` as text. History's nested `content.tool_calls` is not input's top-level `toolCalls`. Do not echo a whole history row back as a new user message. `paginate=false` is capped at 200 rows, not an unlimited export, and top-level history arrives newest first.
+
+For a complete authenticated create → list → history → send → history exchange, see the [HTTP walkthrough](api-reference.md#http-conversation-walkthrough). In particular, `stream: false` currently changes internal execution but **does not produce a JSON HTTP response**: the route remains SSE and discards the invoke result. Read persisted history after completion or use the installed streaming transport; never retry the mutation blindly.
 
 ## Frontend root/provider
 
@@ -484,4 +515,4 @@ registerAISettingsTabs(
 ): void;
 ```
 
-Register during client module evaluation. Import the registration module for side effects from the App plugin client entry. The lazy module must default-export a React component. The shared route is `/settings/ai`; do not create a replacement settings page for one tab. Core tabs are `ai-employee` and `llm-service`; use a unique application key.
+This registry and `getAISettingsTabs()` are deprecated compatibility APIs only. They retain definitions for existing callers, but AI Employees and the public shell wrappers no longer render cross-feature tabs or contributed tab content. Contribute `defineSettingsRoutes()` entries with `parent: 'aiGroup'` instead; see [Settings pages](frontend-registry.md#settings-pages). `AISettingsShellProps.activeTabKey` and `onTabChange` remain accepted but have no effect. `getActiveAISettingsTabKey()` remains available for interpreting legacy URLs/state. Knowledge-base list/vector path constants now point to `/settings/ai/knowledge-base` and `/settings/ai/vector-database`; detail path prefixes are unchanged.

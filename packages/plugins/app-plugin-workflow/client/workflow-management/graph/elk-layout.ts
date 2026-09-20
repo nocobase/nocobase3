@@ -1,3 +1,4 @@
+import { centerEdgePoints } from './center-edge.js';
 import * as ElkModule from 'elkjs/lib/elk.bundled.js';
 import type {
   ELK,
@@ -63,13 +64,28 @@ export async function layoutWithElk(
       x: node.x ?? 0,
       y: node.y ?? 0,
     })),
-    routes: ((result.edges ?? []) as ElkExtendedEdge[]).map((edge) => ({
-      id: edge.id,
-      points: (edge.sections ?? []).flatMap((section, index) => [
+    routes: ((result.edges ?? []) as ElkExtendedEdge[]).map((edge) => {
+      const inputEdge = input.edges.find((item) => item.id === edge.id);
+      const points = (edge.sections ?? []).flatMap((section, index) => [
         ...(index === 0 ? [section.startPoint] : []),
         ...(section.bendPoints ?? []),
         section.endPoint,
-      ]),
-    })),
+      ]);
+      const obstacles = (result.children ?? [])
+        .filter(
+          (node) =>
+            node.id !== inputEdge?.source && node.id !== inputEdge?.target,
+        )
+        .map((node) => ({
+          x: node.x ?? 0,
+          y: node.y ?? 0,
+          width: node.width ?? 0,
+          height: node.height ?? 0,
+        }));
+      return {
+        id: edge.id,
+        points: centerEdgePoints(points, input.direction, obstacles),
+      };
+    }),
   };
 }

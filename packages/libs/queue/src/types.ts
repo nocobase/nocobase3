@@ -71,6 +71,8 @@ export interface AppQueueConfig {
 }
 
 export interface CreateQueueManagerOptions {
+  /** Reject initialization when an automatically loaded job cannot be imported. */
+  strictJobLoading?: boolean;
   database?: DatabaseManager;
   logger?: NocoBaseQueueLogger;
   jobFactory?: NocoBaseQueueJobFactory;

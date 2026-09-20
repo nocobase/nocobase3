@@ -59,8 +59,6 @@ const zhCN: AppResource = {
   'navigation.brandApps': 'NocoBase 应用',
   'auth.passwordMismatch': '两次输入的密码不一致。',
   'status.deniedDescription': '你没有访问 {{label}} 的权限。',
-  'status.settingFailedDescription':
-    '无法加载 {{packageName}} 的设置 {{label}}。',
   'status.routeFailedDescription':
     '无法加载 {{packageName}} 的路由 {{label}}。',
   shell: {
@@ -79,6 +77,7 @@ const zhCN: AppResource = {
     emptyDescription: '没有已启用的插件提供你有权访问的设置页面。',
   },
   dev: {
+    componentExamples: '组件示例',
     title: '开发工具',
     emptyTitle: '暂无可用开发工具',
     emptyDescription: '没有已启用的插件提供你有权访问的开发页面。',

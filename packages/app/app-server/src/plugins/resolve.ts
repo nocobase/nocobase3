@@ -125,9 +125,10 @@ function resolvePlugin(definition: AppServerPlugin): ResolvedAppPlugin {
   };
 }
 
+// Published job directories contain declarations beside executable modules. Never import declarations as jobs.
 function createJobLocation(resolvedPath: string): string {
   return statSync(resolvedPath).isDirectory()
-    ? path.join(resolvedPath, '**/*.{ts,js,mts,mjs}')
+    ? path.join(resolvedPath, '**/!(*.d).{ts,js,mts,mjs}')
     : resolvedPath;
 }
 

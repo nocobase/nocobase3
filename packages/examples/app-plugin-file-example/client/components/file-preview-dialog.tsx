@@ -9,6 +9,9 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { FileRecord } from '@nocobase/app-plugin-file/client';
 
 import { formatBytes, previewKind } from '../lib/files.js';
+import { resolveOfficeOpenXmlFormat } from '../lib/office-format.js';
+import { resolveSafeFileUrl } from '../lib/file-url.js';
+import { OfficeOpenXmlPreview } from './office-open-xml-preview.js';
 
 export interface FilePreviewLabels {
   readonly preview: string;
@@ -136,6 +139,20 @@ export function FilePreviewDialog({
       return (
         <p className='text-sm text-muted-foreground'>{labels.unsupported}</p>
       );
+    if (kind === 'ooxml') {
+      const format = resolveOfficeOpenXmlFormat(file);
+      const url = resolveSafeFileUrl(file.contentUrl);
+      if (format)
+        return (
+          <OfficeOpenXmlPreview
+            key={`${file.id}:${String(file.updatedAt)}:${file.contentUrl}`}
+            format={format}
+            url={url}
+            error={url ? undefined : labels.previewFailed}
+            labels={labels}
+          />
+        );
+    }
     if (kind === 'audio') return <audio controls src={file.contentUrl} />;
     if (kind === 'video')
       return <video controls src={file.contentUrl} className='max-h-[60vh]' />;
@@ -176,6 +193,11 @@ export function FilePreviewDialog({
       aria-label={labels.preview}
       className='m-auto w-[min(56rem,calc(100%-2rem))] rounded-xl border bg-card p-0 text-card-foreground backdrop:bg-black/40'
       onKeyDown={(event) => {
+        if (
+          event.target !== dialogRef.current &&
+          (event.target as HTMLElement).closest('[data-office-open-xml-format]')
+        )
+          return;
         if (event.key === 'ArrowLeft') move(-1);
         if (event.key === 'ArrowRight') move(1);
       }}

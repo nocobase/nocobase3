@@ -7,5 +7,6 @@ export interface DefaultAccessRule {
 
 export interface DefaultAccessAction {
   action: string;
+  scopeKey?: string;
   scope: AccessConstraintValue;
 }

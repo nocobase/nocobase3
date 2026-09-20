@@ -16,19 +16,28 @@ describe('@nocobase/app-plugin-database-explorer Client routes', () => {
         {
           name: 'database-explorer',
           path: '/database-explorer',
-          access: { resource: 'database-explorer', action: 'access' },
+          authz: {
+            resource: { type: 'page', id: 'database-explorer' },
+            action: 'access',
+          },
           navigation: { title: 'nav.databaseExplorer' },
           componentLoader: expect.any(Function),
           children: [
             {
               name: 'database-explorer.fields',
               path: 'fields',
-              access: { resource: 'database-explorer', action: 'access' },
+              authz: {
+                resource: { type: 'page', id: 'database-explorer' },
+                action: 'access',
+              },
             },
             {
               name: 'database-explorer.columns',
               path: 'columns',
-              access: { resource: 'database-explorer', action: 'access' },
+              authz: {
+                resource: { type: 'page', id: 'database-explorer' },
+                action: 'access',
+              },
             },
           ],
         },
@@ -54,7 +63,7 @@ describe('@nocobase/app-plugin-database-explorer Client routes', () => {
     // A Settings child Route without `access` is reachable without the grant,
     // and the application's Client inspection reports it as an issue.
     for (const child of routes.routes[0]?.children ?? []) {
-      expect(child.access).toEqual(DATABASE_EXPLORER_ACCESS);
+      expect(child.authz).toEqual(DATABASE_EXPLORER_ACCESS);
     }
   });
 
@@ -65,7 +74,10 @@ describe('@nocobase/app-plugin-database-explorer Client routes', () => {
   it('guards the page with the resource the server checks', () => {
     // One grant governs the navigation entry and the API; the two halves of
     // that contract can only stay aligned if they name the same resource.
-    expect(DATABASE_EXPLORER_ACCESS.resource).toBe(DATABASE_EXPLORER_PAGE);
+    expect(DATABASE_EXPLORER_ACCESS.resource).toEqual({
+      type: 'page',
+      id: DATABASE_EXPLORER_PAGE,
+    });
     expect(DATABASE_EXPLORER_ACCESS.action).toBe('access');
   });
 

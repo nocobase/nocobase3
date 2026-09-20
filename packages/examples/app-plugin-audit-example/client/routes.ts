@@ -9,7 +9,10 @@ const routes: readonly AppClientRouteContribution[] = [
       name: 'audit-example',
       path: '/audit-example',
       auth: 'required',
-      access: { resource: 'audit-example.customer:*', action: 'list' },
+      authz: {
+        resource: { type: 'audit-example.customer', id: '*' },
+        action: 'list',
+      },
       navigation: { title: 'title', icon: ClipboardList },
       breadcrumb: { title: 'title' },
       componentLoader: () => import('./pages/customers.js'),

@@ -4,6 +4,7 @@ export interface RunCommandOptions {
   cwd?: string;
   timeoutMs?: number;
   env?: NodeJS.ProcessEnv;
+  onOutput?: (chunk: string) => void;
 }
 
 export interface RunCommandResult {
@@ -65,10 +66,12 @@ export function runCommand(
 
     child.stdout.on('data', (chunk: Buffer) => {
       stdout += chunk.toString();
+      options.onOutput?.(chunk.toString());
     });
 
     child.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
+      options.onOutput?.(chunk.toString());
     });
 
     child.once('error', (error: Error) => {

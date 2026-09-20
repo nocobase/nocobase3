@@ -47,16 +47,32 @@ type CheckedFactory<
   : { unknownDatabaseConfigFields: UnknownFields<TConfig, TDrivers> };
 
 /**
- * Declare database defaults with connection fields inferred from returned drivers.
+ * Declare database defaults; explicit drivers provide dialect-specific inference.
  * The factory runs when application configuration is resolved, not on import.
  * Export the common runtime contract so declarations do not expose native drivers.
  */
+export function defineAppDatabaseConfig<
+  const TConfig extends AppDatabaseConfig,
+>(
+  factory: AppConfigFactory<TConfig & { drivers?: never }> &
+    (Exclude<keyof TConfig, keyof AppDatabaseConfig> extends never
+      ? unknown
+      : {
+          unknownDatabaseConfigFields: Exclude<
+            keyof TConfig,
+            keyof AppDatabaseConfig
+          >;
+        }),
+): AppConfigFactory<AppDatabaseConfig>;
 export function defineAppDatabaseConfig<
   const TDrivers extends Drivers,
   const TConfig extends AppDatabaseConfig & { drivers: TDrivers },
 >(
   factory: AppConfigFactory<InferredConfig<TConfig, TDrivers>> &
     CheckedFactory<NoInfer<TConfig>, NoInfer<TDrivers>>,
+): AppConfigFactory<AppDatabaseConfig>;
+export function defineAppDatabaseConfig(
+  factory: AppConfigFactory<AppDatabaseConfig>,
 ): AppConfigFactory<AppDatabaseConfig> {
   return factory;
 }

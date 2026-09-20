@@ -4,11 +4,11 @@ import type {
   AuthorizationPlugin,
   ResolveAccessConstraintsInput,
 } from '../../core/index.js';
-import { DatabaseDefaultAccessStore } from './database-store.js';
 import type { DefaultAccessRule } from './model.js';
 import type { DefaultAccessStore } from './store.js';
+import { requireStore } from '../internal/store.js';
 
-export interface DefaultAccessApi {
+export interface DefaultAccessApi<TTransaction = unknown> {
   set(rule: DefaultAccessRule): Promise<DefaultAccessRule>;
   get(
     resourceType: string,
@@ -16,81 +16,97 @@ export interface DefaultAccessApi {
   ): Promise<DefaultAccessRule | undefined>;
   list(): Promise<readonly DefaultAccessRule[]>;
   delete(resourceType: string, resourceId: string): Promise<void>;
+  /**
+   * Returns an API bound to the caller's transaction. The caller opens and
+   * commits the transaction.
+   */
+  withTransaction(transaction: TTransaction): DefaultAccessApi<TTransaction>;
 }
 
-export interface DefaultAccessAuthorizationApi {
-  defaultAccess: DefaultAccessApi;
+export interface DefaultAccessAuthorizationApi<TTransaction = unknown> {
+  defaultAccess: DefaultAccessApi<TTransaction>;
 }
 
-export interface DefaultAccessOptions {
-  store?: DefaultAccessStore;
+export interface DefaultAccessOptions<TTransaction = unknown> {
+  store: DefaultAccessStore<TTransaction>;
 }
 
-export type DefaultAccessPlugin =
-  AuthorizationPlugin<DefaultAccessAuthorizationApi>;
+export type DefaultAccessPlugin<TTransaction = unknown> = AuthorizationPlugin<
+  DefaultAccessAuthorizationApi<TTransaction>
+>;
 
-export function defaultAccess(
-  options: DefaultAccessOptions = {},
-): DefaultAccessPlugin {
-  const service = new DefaultAccessService(options.store);
+export function defaultAccess<TTransaction = unknown>(
+  options: DefaultAccessOptions<TTransaction>,
+): DefaultAccessPlugin<TTransaction> {
+  const service = new DefaultAccessService(
+    requireStore(options.store, 'Default Access'),
+  );
   return {
     id: 'default-access',
     authorizationApi: { defaultAccess: service },
     setup(authz): void {
-      if (!options.store) {
-        if (!authz.connection) {
-          throw new Error(
-            'Default Access requires createAuthorization({ connection }) or an explicit store',
-          );
-        }
-        service.initialize(new DatabaseDefaultAccessStore(authz.connection));
-      }
       authz.constraints.add(service);
     },
   };
 }
 
-class DefaultAccessService
-  implements DefaultAccessApi, AccessConstraintResolver
+class DefaultAccessService<TTransaction = unknown>
+  implements DefaultAccessApi<TTransaction>, AccessConstraintResolver
 {
   readonly id = 'default-access';
-  private store?: DefaultAccessStore;
 
-  constructor(store?: DefaultAccessStore) {
-    this.store = store;
-  }
+  constructor(private readonly store: DefaultAccessStore<TTransaction>) {}
 
-  initialize(store: DefaultAccessStore): void {
-    this.store = store;
+  withTransaction(transaction: TTransaction): DefaultAccessApi<TTransaction> {
+    return new DefaultAccessService<TTransaction>(
+      this.store.withTransaction(transaction),
+    );
   }
 
   set(rule: DefaultAccessRule): Promise<DefaultAccessRule> {
-    return this.getStore().set(rule);
+    return this.store.set(rule);
   }
 
   get(
     resourceType: string,
     resourceId: string,
   ): Promise<DefaultAccessRule | undefined> {
-    return this.getStore().get(resourceType, resourceId);
+    return this.store.get(resourceType, resourceId);
   }
 
   list(): Promise<readonly DefaultAccessRule[]> {
-    return this.getStore().list();
+    return this.store.list();
   }
 
   delete(resourceType: string, resourceId: string): Promise<void> {
-    return this.getStore().delete(resourceType, resourceId);
+    return this.store.delete(resourceType, resourceId);
+  }
+
+  scope(): AccessConstraintResolver {
+    let rules: Promise<readonly DefaultAccessRule[]> | undefined;
+    return {
+      id: this.id,
+      resolve: async (input) =>
+        this.resolveRules(input, await (rules ??= this.store.list())),
+    };
   }
 
   async resolve(
     input: ResolveAccessConstraintsInput,
   ): Promise<readonly AccessConstraint[]> {
-    const rules = await this.getStore().list();
+    return this.resolveRules(input, await this.store.list());
+  }
+
+  private resolveRules(
+    input: ResolveAccessConstraintsInput,
+    rules: readonly DefaultAccessRule[],
+  ): readonly AccessConstraint[] {
     return rules
       .flatMap((rule) => {
         const configured = rule.actions.find(
-          (action) => action.action === input.action,
+          (action) =>
+            action.action === input.action &&
+            action.scopeKey === input.scopeKey,
         );
         return rule.resource.type === input.resource.type &&
           (rule.resource.id === '*' ||
@@ -107,10 +123,5 @@ class DefaultAccessService
         effect: 'expand' as const,
         value: configured.scope,
       }));
-  }
-
-  private getStore(): DefaultAccessStore {
-    if (!this.store) throw new Error('Default Access has not been initialized');
-    return this.store;
   }
 }

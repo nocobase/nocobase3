@@ -97,6 +97,7 @@ export type {
   AppClientRegisteredSetting,
   AppClientRegisteredSettingGroup,
   AppClientRouteAuth,
+  AppClientRouteAuthz,
   AppClientRouteComponentLoader,
   AppClientRouteComponentModule,
   AppClientRouteComponentOverrideDefinition,

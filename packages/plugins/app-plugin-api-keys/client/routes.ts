@@ -18,7 +18,7 @@ export const API_KEYS_ROUTE_ID = '@nocobase/app-plugin-api-keys:api-keys';
  * application's permissions rather than by the absence of a rule.
  */
 export const API_KEYS_PAGE_ACCESS = {
-  resource: 'api-keys',
+  resource: { type: 'page', id: 'api-keys' },
   action: 'access',
 } as const;
 
@@ -29,7 +29,7 @@ export function createApiKeysRoutes(
     {
       name: 'api-keys',
       path: normalizeApiKeysRoutePath(options.path ?? '/api-keys'),
-      access: API_KEYS_PAGE_ACCESS,
+      authz: API_KEYS_PAGE_ACCESS,
       componentLoader: () => import('./pages/api-keys-page.js'),
       navigation: {
         title: options.title ?? 'nav.apiKeys',

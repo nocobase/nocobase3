@@ -9,7 +9,7 @@ import type { UsersClientOptions } from './plugin.js';
 
 export const USERS_ROUTE_ID = '@nocobase/app-plugin-users:users';
 export const USERS_PAGE_ACCESS = {
-  resource: 'users',
+  resource: { type: 'page', id: 'users' },
   action: 'access',
 } as const;
 
@@ -20,7 +20,7 @@ export function createUsersRoutes(
   const page = {
     name: 'users',
     path,
-    access: USERS_PAGE_ACCESS,
+    authz: USERS_PAGE_ACCESS,
     componentLoader: () => import('./pages/users-page.js'),
   } as const;
   if ((options.mount ?? 'settings') === 'app') {

@@ -1,3 +1,5 @@
+import { SelectionFocus } from './selection-focus.js';
+import { terminalEdgePoints } from './graph/terminal-edge.js';
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useTranslation } from '@nocobase/i18n/client';
 import {
@@ -21,6 +23,7 @@ import {
   Columns3,
   Flag,
   GitBranch,
+  X,
   Rows3,
   Terminal,
   Zap,
@@ -41,6 +44,8 @@ import type { WorkflowCanvasProps, WorkflowNodeRunRecord } from './types.js';
 import './workflow-canvas.css';
 
 interface CanvasNodeData extends Record<string, unknown> {
+  difference?: string;
+  connectionsChanged?: boolean;
   title: string;
   nodeType: string | null;
   kind: string;
@@ -53,6 +58,7 @@ interface CanvasNodeData extends Record<string, unknown> {
 interface CanvasEdgeData extends Record<string, unknown> {
   readonly points: readonly WorkflowLayoutPoint[];
   readonly labelColor: string;
+  readonly terminal?: boolean;
 }
 
 const EMPTY_NODE_RUNS: readonly WorkflowNodeRunRecord[] = [];
@@ -97,7 +103,7 @@ function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>): ReactElement {
             : Terminal;
   return (
     <div
-      className={`workflow-flow-node ${boundary ? 'boundary' : ''} ${data.kind} ${instructionClass} ${data.status}`}
+      className={`workflow-flow-node ${boundary ? 'boundary' : ''} ${data.kind} ${instructionClass} ${data.status} ${data.difference ? `workflow-diff-${data.difference}` : ''}`}
     >
       {data.kind !== 'start' ? (
         <Handle
@@ -111,8 +117,15 @@ function CanvasNode({ data }: NodeProps<Node<CanvasNodeData>>): ReactElement {
       </span>
       <span className='workflow-flow-copy'>
         <strong>{data.title}</strong>
+        {data.difference && data.difference !== 'unchanged' ? (
+          <span className={`workflow-diff-label ${data.difference}`}>
+            {data.connectionsChanged
+              ? t('comparison.connectionsChanged')
+              : t(`comparison.${data.difference}`)}
+          </span>
+        ) : null}
       </span>
-      {data.kind === 'end' || terminateInstruction ? null : condition ? (
+      {data.kind === 'end' ? null : condition ? (
         <>
           <Handle
             type='source'
@@ -145,19 +158,26 @@ function pointAlongPath(points: CanvasEdgeData['points']): {
   x: number;
   y: number;
 } {
+  return pointAlongPathAt(points, 0.5);
+}
+
+function pointAlongPathAt(
+  points: CanvasEdgeData['points'],
+  fraction: number,
+): { x: number; y: number } {
   if (points.length === 0) return { x: 0, y: 0 };
   const lengths = points
     .slice(1)
     .map((point, index) =>
       Math.hypot(point.x - points[index].x, point.y - points[index].y),
     );
-  const midpoint = lengths.reduce((sum, length) => sum + length, 0) / 2;
+  const distance = lengths.reduce((sum, length) => sum + length, 0) * fraction;
   let traversed = 0;
   for (let index = 0; index < lengths.length; index += 1) {
     const next = traversed + lengths[index];
-    if (next >= midpoint) {
+    if (next >= distance) {
       const ratio =
-        lengths[index] === 0 ? 0 : (midpoint - traversed) / lengths[index];
+        lengths[index] === 0 ? 0 : (distance - traversed) / lengths[index];
       return {
         x: points[index].x + (points[index + 1].x - points[index].x) * ratio,
         y: points[index].y + (points[index + 1].y - points[index].y) * ratio,
@@ -178,6 +198,7 @@ function RoutedWorkflowEdge({
   targetX,
   targetY,
 }: EdgeProps<Edge<CanvasEdgeData>>): ReactElement {
+  const { t } = useTranslation(WORKFLOW_NS);
   const points =
     data?.points && data.points.length >= 2
       ? data.points
@@ -189,9 +210,27 @@ function RoutedWorkflowEdge({
     .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
     .join(' ');
   const labelPoint = pointAlongPath(points);
+  const terminalPoint = data?.terminal ? points.at(-1) : null;
   return (
     <>
-      <BaseEdge path={path} markerEnd={markerEnd} style={style} />
+      <BaseEdge
+        path={path}
+        markerEnd={data?.terminal ? undefined : markerEnd}
+        style={style}
+      />
+      {terminalPoint ? (
+        <EdgeLabelRenderer>
+          <div
+            className='workflow-flow-terminal-marker nodrag nopan'
+            aria-label={t('canvas.terminates')}
+            style={{
+              transform: `translate(-50%, -50%) translate(${terminalPoint.x}px, ${terminalPoint.y}px)`,
+            }}
+          >
+            <X aria-hidden='true' />
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
       {label == null ? null : (
         <EdgeLabelRenderer>
           <div
@@ -213,6 +252,9 @@ const edgeTypes = { workflow: RoutedWorkflowEdge };
 
 export function WorkflowCanvas({
   definition,
+  focusRequest,
+  differences,
+  changedConnections,
   overlay,
   nodeRuns = EMPTY_NODE_RUNS,
   selectedNodeKey,
@@ -328,6 +370,13 @@ export function WorkflowCanvas({
         type: 'workflow',
         position: positions.get(node.id) ?? { x: 0, y: 0 },
         data: {
+          connectionsChanged: Boolean(
+            node.workflowNodeKey &&
+            changedConnections?.has(node.workflowNodeKey),
+          ),
+          difference: node.workflowNodeKey
+            ? differences?.get(node.workflowNodeKey)
+            : undefined,
           title: node.title,
           nodeType: node.nodeType,
           kind: node.kind,
@@ -350,6 +399,8 @@ export function WorkflowCanvas({
       })),
     [
       attemptsByNode,
+      differences,
+      changedConnections,
       direction,
       graph,
       onViewNodeRun,
@@ -363,6 +414,15 @@ export function WorkflowCanvas({
     () =>
       graph.edges.map((edge) => {
         const traversed = overlay?.traversedEdgeIds.has(edge.id) ?? false;
+        const points = routes.get(edge.id) ?? [];
+        const renderedPoints = edge.terminal
+          ? terminalEdgePoints(
+              points,
+              [...routes]
+                .filter(([id]) => id !== edge.id)
+                .map(([, route]) => route),
+            )
+          : points;
         return {
           id: edge.id,
           source: edge.source,
@@ -371,7 +431,8 @@ export function WorkflowCanvas({
             edge.kind === 'branch' ? (edge.branchKey ?? undefined) : undefined,
           type: 'workflow',
           data: {
-            points: routes.get(edge.id) ?? [],
+            points: renderedPoints,
+            terminal: edge.terminal,
             labelColor: traversed
               ? 'var(--foreground)'
               : 'var(--muted-foreground)',
@@ -434,6 +495,12 @@ export function WorkflowCanvas({
       {ready ? (
         <>
           <ReactFlow
+            ariaLabelConfig={{
+              'controls.ariaLabel': t('canvas.controls'),
+              'controls.zoomIn.ariaLabel': t('canvas.zoomIn'),
+              'controls.zoomOut.ariaLabel': t('canvas.zoomOut'),
+              'controls.fitView.ariaLabel': t('canvas.fitView'),
+            }}
             className={`workflow-canvas-viewport${viewportReady ? ' ready' : ''}`}
             nodes={nodes}
             edges={edges}
@@ -473,6 +540,18 @@ export function WorkflowCanvas({
             minZoom={0.2}
             maxZoom={1.5}
           >
+            <SelectionFocus
+              node={nodes.find(
+                (node) =>
+                  node.id ===
+                  graph.nodes.find(
+                    (item) => item.workflowNodeKey === selectedNodeKey,
+                  )?.id,
+              )}
+              request={focusRequest}
+              ready={viewportReady}
+              selected={selectedNodeKey}
+            />
             <Background color='var(--border)' gap={24} size={1} />
             <Panel position='top-right' className='workflow-layout-toggle'>
               <button
@@ -497,6 +576,7 @@ export function WorkflowCanvas({
               </button>
             </Panel>
             <MiniMap
+              style={differences ? { width: 120, height: 90 } : undefined}
               nodeColor={minimapColor}
               nodeStrokeColor={minimapStroke}
               nodeBorderRadius={8}

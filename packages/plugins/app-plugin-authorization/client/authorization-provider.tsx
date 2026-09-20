@@ -39,6 +39,6 @@ export function AuthorizationProvider({
     return null;
   }
 
-  // Refine and page state belong to one session, including their query caches.
+  // Page state and query caches belong to one session.
   return <Fragment key={sessionKey}>{children}</Fragment>;
 }

@@ -27,7 +27,7 @@ node packages/tools/create-app/bin/run.js my-examples --template ./packages/temp
 
 The scaffolder creates an independent configuration and database. Never copy another application's `config.yml`, `.env`, `storage/`, or generated `dist/` into this template.
 
-Article migration and seed sources create six articles on a fresh managed default connection. Existing system administrators receive an `articles-manager` permission set during the application's first eligible startup. Later edits and revoked assignments are preserved. Other examples retain their plugins' authorization policies.
+Article migration and seed sources create six articles on a fresh managed default connection. Every signed-in user can view, create, and edit all articles. Article pages and APIs do not participate in permission-set authorization. Other examples retain their plugins' authorization policies.
 
 ## Maintain this template
 
@@ -103,8 +103,8 @@ client/                  Browser application
 ├── pages/               Your page components
 ├── components/          Your components
 │   └── ui/              shadcn/ui primitives
-├── layouts/             Settings and dev tool shells
-├── shell/               Authenticated app shell: header, sidebar, user menu
+├── layouts/             App, Settings and Dev layouts
+│   └── components/      Layout containers, navigation, branding and account controls
 ├── routing/             Route rendering, access checks, loading and error UI
 ├── locales/             Your translated strings
 ├── theme/               App-wide theme and light/dark selector
@@ -639,3 +639,7 @@ This is Examples-only teaching content, so it does not change Default or Hub.
 `runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
 
 `server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.
+
+## Strict startup verification
+
+Set `NOCOBASE_STRICT_STARTUP=true` when running `pnpm dev` or `pnpm start` in automated verification. Startup failures, including job import failures, exit nonzero after resource cleanup. Strict dev runs the server without watch mode so a failed server cannot remain hidden behind a watcher; restart the command after server or configuration changes. Client HMR remains available. Omit the variable or set it to `false` for normal development with server hot reload. Request errors and individual job execution failures do not terminate the application.

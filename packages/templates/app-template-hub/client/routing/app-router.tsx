@@ -10,7 +10,7 @@ import { Navigate, Outlet, Route, Routes } from 'react-router';
 import { Loading } from '@/components/loading';
 import { EMPTY_ARRAY } from '@/lib/constants';
 
-import { AppShell } from '../shell/index.js';
+import { AppLayout } from '../layouts/app-layout.js';
 import { renderRouteTree } from './route-tree.js';
 import { StandalonePageLayout } from './standalone-page-layout.js';
 
@@ -80,7 +80,7 @@ export function AppRouter(inputProps: AppRouterProps): ReactElement {
           </RequiredAuthentication>
         }
       >
-        <Route element={<AppShell routes={routeGroups.required} />}>
+        <Route element={<AppLayout routes={routeGroups.required} />}>
           {renderRouteTree(routeGroups.required)}
         </Route>
         <Route

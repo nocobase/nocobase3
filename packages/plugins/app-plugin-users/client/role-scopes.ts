@@ -2,17 +2,17 @@ import type { UserRoleScopeOption, UserRoleValue } from './user-client.js';
 
 export function localizeRoleScopes(
   scopes: readonly UserRoleScopeOption[],
-  translate: (key: string, namespace?: string) => string,
+  translate: (key: string, namespace?: string, defaultValue?: string) => string,
 ): readonly UserRoleScopeOption[] {
   return scopes.map((scope) => ({
     ...scope,
     label: scope.labelI18nKey
-      ? translate(scope.labelI18nKey, scope.labelI18nNs)
+      ? translate(scope.labelI18nKey, scope.labelI18nNs, scope.label)
       : scope.label,
     options: scope.options.map((option) => ({
       ...option,
       label: option.labelI18nKey
-        ? translate(option.labelI18nKey, option.labelI18nNs)
+        ? translate(option.labelI18nKey, option.labelI18nNs, option.label)
         : option.label,
     })),
   }));

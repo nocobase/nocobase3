@@ -7,7 +7,7 @@ export default function ConfigurationPage(): ReactElement {
   if (context.panelLoading) return <AppTabLoading />;
   return (
     <Configuration
-      key={`${context.app.app.id}:${context.app.app.currentDeploymentId}`}
+      key={context.app.app.id}
       mode={context.configMode}
       content={context.configContent}
       busy={context.busy || context.app.hasPendingDeployment}

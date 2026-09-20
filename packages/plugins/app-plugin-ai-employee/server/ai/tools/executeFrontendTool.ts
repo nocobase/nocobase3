@@ -5,7 +5,6 @@ import {
   isFrontendToolInvokeResult,
 } from '../../agent/context/ai-employee/common/frontend-tool-contracts.js';
 import type { AgentFrontendToolService } from '../../agent/contracts.js';
-import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 type FrontendToolContext = AgentContext<
   {},
@@ -16,9 +15,10 @@ export default defineTools<FrontendToolContext>({
   scope: 'GENERAL',
   execution: 'frontend',
   defaultPermission: 'ALLOW',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
-    title: `{{t("Execute frontend tool", { ns: "${packageMetadata.name}" })}}`,
-    about: `{{t("Execute a frontend tool provided by the selected block.", { ns: "${packageMetadata.name}" })}}`,
+    title: 'Execute frontend tool',
+    about: 'Execute a frontend tool provided by the selected block.',
   },
   definition: {
     name: EXECUTE_FRONTEND_TOOL_NAME,

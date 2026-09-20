@@ -1,15 +1,15 @@
 import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import { z } from 'zod';
 import type { AIMessageRepository } from '../../repository/index.js';
-import packageMetadata from '@nocobase/app-plugin-ai-employee/package.json' with { type: 'json' };
 
 type SuggestionsContext = AgentContext<{ aiMessages: AIMessageRepository }, {}>;
 
 export default defineTools<SuggestionsContext>({
   scope: 'GENERAL',
+  i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
-    title: `{{t("Suggestions", { ns: "${packageMetadata.name}" })}}`,
-    about: `{{t("Provide a list of suggested prompts for the user to choose from.", { ns: "${packageMetadata.name}" })}}`,
+    title: 'Suggestions',
+    about: 'Provide a list of suggested prompts for the user to choose from.',
   },
   definition: {
     name: 'suggestions',

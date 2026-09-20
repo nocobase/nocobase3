@@ -1,3 +1,4 @@
+import { permissionSetsToken } from '@nocobase/app-plugin-authorization';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -918,6 +919,7 @@ describe('Hub API Key HTTP boundary', () => {
       });
     }
     container.instance(authorizationToken, authz);
+    container.instance(permissionSetsToken, authz.permissionSets);
     container.instance(hubApiKeyServiceToken, service);
     const listReleases = vi
       .fn<HubService['listReleases']>()

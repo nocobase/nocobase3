@@ -1,3 +1,7 @@
+import { glob } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { fake } from '@boringnode/queue/drivers/fake_adapter';
 import { redis } from '@boringnode/queue/drivers/redis_adapter';
 import { sync } from '@boringnode/queue/drivers/sync_adapter';
@@ -21,6 +25,17 @@ export async function createBoringQueueConfig(
   config: AppQueueConfig,
   options: CreateQueueManagerOptions = {},
 ): Promise<QueueManagerConfig> {
+  // The upstream loader logs import errors and continues. Validate first so
+  // strict startup fails before initializing adapters or registering jobs.
+  if (options.strictJobLoading && (config.jobs?.autoLoad ?? true)) {
+    for await (const file of glob(config.jobs?.locations ?? [])) {
+      try {
+        await import(pathToFileURL(path.resolve(file)).href);
+      } catch (cause) {
+        throw new Error(`Failed to load job from ${file}`, { cause });
+      }
+    }
+  }
   return {
     default: config.default,
     adapters: await createAdapterFactories(

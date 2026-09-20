@@ -35,6 +35,7 @@ export function createApp(runtime: AppRuntimeContext): Application {
   const app = new Application<ApplicationConfig>({
     config: runtime.config,
     mode: runtime.mode,
+    strictStartup: runtime.env.NOCOBASE_STRICT_STARTUP === 'true',
     paths: runtime.paths,
     runtimeLogging: runtime.scope.logging,
     websocket: (services) => {

@@ -12,6 +12,88 @@ import type {
 } from '../../../src/schema/inspector/types.js';
 
 describe('CollectionRegistry', () => {
+  it.each(['get', 'getResolution', 'getPhysical'] as const)(
+    '%s rejects physical aliases while retaining the logical collection',
+    async (method) => {
+      const store = new InMemoryCollectionMetadataStore();
+      await store.put(
+        { version: 1, name: 'customerOrders', title: 'Customer orders' },
+        { expectedRevision: null },
+      );
+      const registry = new CollectionRegistry({
+        inspector: new FakeInspector([physical('customer_orders')]),
+        metadataStore: store,
+      });
+      await expect(registry[method]('customer_orders')).rejects.toMatchObject({
+        issues: [
+          expect.objectContaining({
+            code: 'COLLECTION_NAME_CONFLICT',
+            message: expect.stringContaining(
+              'logical Collection "customerOrders"',
+            ),
+          }),
+        ],
+      });
+      await expect(registry.get('customerOrders')).resolves.toMatchObject({
+        name: 'customerOrders',
+        title: 'Customer orders',
+      });
+      registry.invalidate('customerOrders');
+      await expect(registry[method]('customer_orders')).rejects.toThrow(
+        'customerOrders',
+      );
+    },
+  );
+
+  it('checks aliases against collection naming overrides', async () => {
+    const store = new InMemoryCollectionMetadataStore();
+    await store.put(
+      {
+        version: 1,
+        name: 'customerOrders',
+        naming: { tablePrefix: 'legacy_' },
+      },
+      { expectedRevision: null },
+    );
+    const registry = new CollectionRegistry({
+      inspector: new FakeInspector([physical('legacy_customer_orders')]),
+      metadataStore: store,
+    });
+    await expect(registry.get('legacy_customer_orders')).rejects.toThrow(
+      'customerOrders',
+    );
+    await expect(registry.get('customerOrders')).resolves.toMatchObject({
+      name: 'customerOrders',
+    });
+  });
+
+  it('preserves explicit underscored logical names and metadata-free external tables', async () => {
+    const store = new InMemoryCollectionMetadataStore();
+    await store.put(
+      { version: 1, name: 'customer_orders', title: 'Explicit name' },
+      { expectedRevision: null },
+    );
+    const registry = new CollectionRegistry({
+      inspector: new FakeInspector([
+        physical('app_customer_orders'),
+        physical('app_external_events'),
+      ]),
+      metadataStore: store,
+      naming: { tablePrefix: 'app_' },
+    });
+    await expect(registry.get('customer_orders')).resolves.toMatchObject({
+      name: 'customer_orders',
+      title: 'Explicit name',
+    });
+    await expect(registry.get('externalEvents')).resolves.toMatchObject({
+      name: 'externalEvents',
+    });
+    await expect(registry.get('external_events')).rejects.toThrow(
+      'externalEvents',
+    );
+    await expect(registry.get('missing')).resolves.toBeUndefined();
+  });
+
   it('deduplicates concurrent loads, caches clones, refreshes, and avoids negative caching', async () => {
     const inspector = new FakeInspector([physical('orders')]);
     const registry = new CollectionRegistry({

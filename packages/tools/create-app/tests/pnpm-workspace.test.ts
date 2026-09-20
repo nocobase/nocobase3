@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { parse } from 'yaml';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ALLOWED_BUILDS,
@@ -93,6 +94,12 @@ describe('buildAllowBuildsYaml', () => {
 });
 
 describe('buildWorkspaceYaml', () => {
+  it('disables implicit installation before running application scripts', () => {
+    const config = parse(buildWorkspaceYaml()) as {
+      verifyDepsBeforeRun: boolean;
+    };
+    expect(config.verifyDepsBeforeRun).toBe(false);
+  });
   /**
    * The supply-chain pass re-applies `minimumReleaseAge` and `trustPolicy` to every lockfile entry on every install,
    * querying registry metadata for each one. On a tree this size that costs tens of seconds to re-verify versions the
@@ -139,6 +146,22 @@ describe('buildWorkspaceYaml', () => {
 });
 
 describe('ensureAllowBuilds', () => {
+  it('adds the startup policy once while retaining an explicit template policy', async () => {
+    const directory = await createTempDirectory();
+    const file = path.join(directory, PNPM_WORKSPACE_FILE);
+    await writeFile(file, 'allowBuilds:\n  esbuild: true\n');
+    await ensureAllowBuilds(directory);
+    await ensureAllowBuilds(directory);
+    const generated = await readWorkspace(directory);
+    expect(generated.match(/^verifyDepsBeforeRun: false$/gmu)).toHaveLength(1);
+    await writeFile(file, 'verifyDepsBeforeRun: warn\n');
+    await ensureAllowBuilds(directory);
+    const retained = parse(await readWorkspace(directory)) as {
+      verifyDepsBeforeRun: string;
+    };
+    expect(retained.verifyDepsBeforeRun).toBe('warn');
+  });
+
   /**
    * pnpm 11 skips a dependency's install script unless it is listed here, and reads the list from this file alone.
    * Without it `better-sqlite3` installs without its native addon and the app fails at its first query.

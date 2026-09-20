@@ -177,7 +177,7 @@ describe('Agent plugin development loop', () => {
       if (expectsClient) {
         await writeFile(
           path.join(pluginRoot, 'client', 'routes.ts'),
-          `import { defineAppRoutes, defineSettingsRoutes, type AppClientRouteContribution } from '@nocobase/app-client/plugins';\n\nconst routes: readonly AppClientRouteContribution[] = [\n  defineAppRoutes([{ name: 'agent-loop', path: '/agent-loop', auth: 'required', componentLoader: async () => ({ default: () => null }) }]),\n  defineSettingsRoutes([{ name: 'agent-loop', path: '/agent-loop', navigation: { title: 'Agent loop' }, access: { resource: 'agent-loop.settings', action: 'read' }, componentLoader: async () => ({ default: () => null }) }]),\n];\n\nexport default routes;\n`,
+          `import { defineAppRoutes, defineSettingsRoutes, type AppClientRouteContribution } from '@nocobase/app-client/plugins';\n\nconst routes: readonly AppClientRouteContribution[] = [\n  defineAppRoutes([{ name: 'agent-loop', path: '/agent-loop', auth: 'required', componentLoader: async () => ({ default: () => null }) }]),\n  defineSettingsRoutes([{ name: 'agent-loop', path: '/agent-loop', navigation: { title: 'Agent loop' }, authz: { resource: { type: 'page', id: 'agent-loop.settings' }, action: 'access' }, componentLoader: async () => ({ default: () => null }) }]),\n];\n\nexport default routes;\n`,
         );
       }
       if (expectsServer) {
@@ -306,7 +306,10 @@ describe('Agent plugin development loop', () => {
           ],
           settings: [
             {
-              access: { resource: 'agent-loop.settings', action: 'read' },
+              authz: {
+                resource: { type: 'page', id: 'agent-loop.settings' },
+                action: 'access',
+              },
               packageName: '@nocobase/app-plugin-agent-loop',
               parent: 'settings',
               path: '/settings/agent-loop',

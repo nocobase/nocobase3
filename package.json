@@ -60,7 +60,11 @@
     "db:lint": "eslint dev/db --max-warnings 0",
     "db:typecheck": "tsc -p dev/db/tsconfig.json --noEmit",
     "db:test": "cd dev/db && vitest run",
-    "db:check": "pnpm db:lint && pnpm db:typecheck && pnpm db:test"
+    "db:check": "pnpm db:lint && pnpm db:typecheck && pnpm db:test",
+    "local-registry:prepare": "node ./scripts/local-registry.mjs prepare",
+    "local-registry:verify": "node ./scripts/local-registry.mjs verify",
+    "local-registry:stop": "node ./scripts/local-registry.mjs stop",
+    "local-registry:create": "node ./scripts/local-registry.mjs create"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",

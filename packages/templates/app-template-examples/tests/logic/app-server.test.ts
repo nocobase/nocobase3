@@ -1,7 +1,6 @@
 import { createApp } from '../../server/app.js';
 import authConfig from '../../server/config/auth.js';
 // @vitest-environment node
-import ArticlesProvider from '../../server/providers/articles.ts';
 import { articlesRoutes } from '../../server/routes/articles.ts';
 import { analyticsRoutes } from '../../server/routes/analytics.ts';
 import { externalCrmRoutes } from '../../server/routes/external-crm.ts';
@@ -342,9 +341,7 @@ describe('app server', () => {
             route !== numericExamplesRoutes,
         ),
         serviceProviders: [
-          ...appRuntime.serviceProviders.filter(
-            (provider) => provider !== ArticlesProvider,
-          ),
+          ...appRuntime.serviceProviders,
           TestRuntimeApplicationProvider,
         ],
       },
@@ -352,6 +349,7 @@ describe('app server', () => {
     );
     const application = createApp({
       ...resolvedRuntime,
+      env: { ...resolvedRuntime.env, NOCOBASE_STRICT_STARTUP: 'true' },
       plugins: createResolvedTestServerPlugins([
         defineServerPlugin<AppConfig>({
           baseDir: import.meta.dirname,
@@ -369,6 +367,7 @@ describe('app server', () => {
     );
     await app.start();
 
+    expect(app.strictStartup).toBe(true);
     expect(providerCalls).toEqual(['plugin', 'plugin service']);
     const apiResponse = await requestApp(app, 'http://localhost/api/example');
     const rootResponse = await requestApp(app, 'http://localhost/example');

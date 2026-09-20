@@ -1,9 +1,12 @@
+import {
+  type AuthorizationCheck,
+  authorizationClientToken as clientToken,
+} from '@nocobase/app-plugin-authorization/client';
 import { resolveAppClientContributions } from '@nocobase/app-client/plugins';
 import {
   apiClientToken,
   realtimeClientToken,
   type ApiClient,
-  type AppClientRefineConfig,
   type RealtimeClient,
 } from '@nocobase/app-client';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -14,7 +17,22 @@ import { AuthorizationServiceProvider } from '../client/service-provider.js';
 import routes from '../client/routes.js';
 import { firstActions } from '../client/components/rule-utils.js';
 import { AuthorizationClient } from '../client/authorization-client.js';
+import type { PermissionSet } from '../client/authorization-client.js';
+import {
+  canAssignSubjectType,
+  permissionSetCapabilities,
+  permissionSetErrorMessage,
+} from '../client/components/permission-set-access.js';
+
+import {
+  grantablePages,
+  pageGroups,
+  withPageResources,
+} from '../client/components/page-options.js';
+import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
+import type { AuthorizationOptions } from '../client/authorization-client.js';
 import { authorizationClientToken } from '../client/tokens.js';
+import { translate } from './locale-harness.js';
 
 describe('@nocobase/app-plugin-authorization client', () => {
   it('contributes its administration pages as one settings group', () => {
@@ -36,24 +54,35 @@ describe('@nocobase/app-plugin-authorization client', () => {
 
     expect(resolved.settings.map((setting) => setting.path)).toEqual([
       '/settings/authorization/permission-sets',
-      '/settings/authorization/default-access',
-      '/settings/authorization/sharing-rules',
-      '/settings/authorization/restriction-rules',
+      '/settings/authorization/permission-sets/new',
+      '/settings/authorization/permission-sets/edit/:permissionSetKey',
+      '/settings/authorization/permission-sets/edit/:permissionSetKey/assignments',
+      '/settings/authorization/permission-sets/edit/:permissionSetKey/details',
+      '/settings/authorization/inspector',
     ]);
     expect(
-      resolved.settings.map((setting) => setting.access?.resource),
+      resolved.settings.map((setting) =>
+        setting.authz === 'skip'
+          ? undefined
+          : `${setting.authz.resource.type}.${setting.authz.resource.id}`,
+      ),
     ).toEqual([
-      'authorization.settings.permission-sets',
-      'authorization.settings.default-access',
-      'authorization.settings.sharing-rules',
-      'authorization.settings.restriction-rules',
+      'settings.authorization.permission-sets',
+      'settings.authorization.permission-sets',
+      'settings.authorization.permission-sets',
+      'settings.authorization.permission-sets',
+      // The inspector has its own permission.
+      'settings.authorization.permission-sets',
+      'settings.authorization.inspector',
     ]);
     // The group and every page carry an icon, so the navigation never falls back to a bare row. A lucide icon is a
     // forwardRef object rather than a plain function, so this checks for a renderable rather than for a typeof.
     expect(resolved.settingGroups[0].icon).toBeTruthy();
-    expect(resolved.settings.every((setting) => Boolean(setting.icon))).toBe(
-      true,
-    );
+    expect(
+      resolved.settings
+        .filter((setting) => setting.navigation)
+        .every((setting) => Boolean(setting.icon)),
+    ).toBe(true);
   });
 
   it('uses CRUD order when choosing the initial action', () => {
@@ -89,7 +118,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
           plugins: [],
           resourceTypes: [
             {
-              value: 'authorization.settings',
+              value: 'settings',
               label: 'Settings',
               resources: [
                 {
@@ -108,7 +137,7 @@ describe('@nocobase/app-plugin-authorization client', () => {
           collections: [],
           recordAccessPolicies: [],
         },
-        'authorization.settings',
+        'settings',
         'audit-log',
       ),
     ).toEqual(['read']);
@@ -138,12 +167,10 @@ describe('@nocobase/app-plugin-authorization client', () => {
       reconnect: vi.fn(),
       close: vi.fn(),
     } satisfies RealtimeClient;
-    const setAccessControlProvider = vi.fn();
     container.instance(apiClientToken, api);
     container.instance(realtimeClientToken, realtime);
     const provider = new AuthorizationServiceProvider({
       container,
-      refine: { setAccessControlProvider },
     } as never);
 
     provider.register();
@@ -156,11 +183,290 @@ describe('@nocobase/app-plugin-authorization client', () => {
     expect(container.resolve(authorizationClientToken)).toBeInstanceOf(
       AuthorizationClient,
     );
-    expect(setAccessControlProvider).toHaveBeenCalledOnce();
     expect(realtime.subscribe).toHaveBeenCalledTimes(2);
     expect(realtime.onOpen).toHaveBeenCalledOnce();
   });
+
+  it('offers no editor and no delete for an unrestricted permission set, but keeps its assignment controls', () => {
+    const superuser: PermissionSet = {
+      key: 'root',
+      grants: [],
+      protection: {
+        owner: '@nocobase/app-plugin-authorization',
+        allow: ['assign', 'revoke'],
+      },
+      unrestricted: true,
+    };
+
+    expect(permissionSetCapabilities(superuser)).toEqual({
+      unrestricted: true,
+      protectedSet: true,
+      canUpdate: false,
+      canDelete: false,
+      // Adding a second superuser is the only recovery path an installation has.
+      canAssign: true,
+      canRevoke: true,
+    });
+  });
+
+  it('follows protection.allow for each operation separately', () => {
+    const defaultSet: PermissionSet = {
+      key: 'member',
+      grants: [],
+      protection: {
+        owner: '@nocobase/app-plugin-authorization',
+        allow: ['update'],
+      },
+    };
+
+    expect(permissionSetCapabilities(defaultSet)).toEqual({
+      unrestricted: false,
+      protectedSet: true,
+      canUpdate: true,
+      canDelete: false,
+      canAssign: false,
+      canRevoke: false,
+    });
+  });
+
+  it('leaves an ordinary permission set fully manageable', () => {
+    const ordinary: PermissionSet = { key: 'reader', grants: [] };
+    const everything = {
+      unrestricted: false,
+      protectedSet: false,
+      canUpdate: true,
+      canDelete: true,
+      canAssign: true,
+      canRevoke: true,
+    };
+
+    expect(permissionSetCapabilities(ordinary)).toEqual(everything);
+    // An unsaved set has no server metadata yet and behaves the same way.
+    expect(permissionSetCapabilities(undefined)).toEqual(everything);
+  });
+
+  it('offers only the subject types the server allows for a set', () => {
+    const superuser: PermissionSet = {
+      key: 'root',
+      grants: [],
+      protection: {
+        owner: '@nocobase/authorization/permissions',
+        allow: ['assign', 'revoke'],
+        assignableTo: ['user'],
+      },
+      unrestricted: true,
+    };
+    const ordinary: PermissionSet = { key: 'reader', grants: [] };
+
+    const root = permissionSetCapabilities(superuser);
+    expect(canAssignSubjectType(root, 'user')).toBe(true);
+    expect(canAssignSubjectType(root, 'authenticated')).toBe(false);
+
+    for (const type of ['user', 'authenticated']) {
+      expect(
+        canAssignSubjectType(permissionSetCapabilities(ordinary), type),
+      ).toBe(true);
+    }
+  });
+
+  it('explains the refusal to remove the last assignment instead of showing its code', () => {
+    const lastAssignment = Object.assign(
+      new Error(
+        'The last active assignment of the root Permission Set cannot be removed.',
+      ),
+      { code: 'LAST_ASSIGNMENT' },
+    );
+
+    const shown = permissionSetErrorMessage(translate, lastAssignment);
+    expect(shown).not.toContain('LAST_ASSIGNMENT');
+    expect(shown).toBe(translate('errors.lastAssignment'));
+    expect(
+      permissionSetErrorMessage(
+        translate,
+        Object.assign(new Error('forbidden'), {
+          code: 'PROTECTED_PERMISSION_SET',
+        }),
+      ),
+    ).toBe(translate('errors.protectedSet'));
+    expect(
+      permissionSetErrorMessage(translate, new Error('Network down')),
+    ).toBe('Network down');
+  });
+
+  it('uses route groups for server-declared pages while retaining server metadata', () => {
+    const groups = [
+      {
+        value: 'business',
+        label: 'Business',
+        children: [{ value: 'sales', label: 'Sales' }],
+      },
+    ];
+    const merged = withPageResources(
+      options(),
+      [{ value: '*', label: 'Route title', group: 'sales' }],
+      groups,
+    );
+    const pages = merged.resourceTypes.find((type) => type.value === 'page')!;
+    expect(pages.groups).toEqual(groups);
+    expect(pages.resources[0]).toMatchObject({
+      ...options().resourceTypes[0].resources[0],
+      group: 'sales',
+    });
+    const refreshed = withPageResources(merged, [
+      { value: '*', label: 'Route title' },
+    ]);
+    expect(refreshed.resourceTypes[0].groups).toEqual([]);
+    expect(refreshed.resourceTypes[0].resources[0].group).toBeUndefined();
+  });
+
+  it('preserves recursive route groups without turning them into grantable pages', () => {
+    const routes = [
+      route({
+        name: 'business',
+        componentLoader: undefined,
+        navigation: { title: 'Business' },
+        children: [
+          route({
+            name: 'sales',
+            componentLoader: undefined,
+            navigation: { title: 'Sales' },
+            children: [route({ name: 'orders' })],
+          }),
+        ],
+      }),
+      route({ name: 'home' }),
+    ];
+    expect(pageGroups(routes, (title) => title)).toEqual([
+      {
+        value: 'business',
+        label: 'Business',
+        children: [{ value: 'sales', label: 'Sales' }],
+      },
+    ]);
+    expect(grantablePages(routes)).toMatchObject([
+      { name: 'orders', group: 'sales' },
+      { name: 'home' },
+    ]);
+    expect(grantablePages(routes)[1]).not.toHaveProperty('group');
+  });
+
+  it('offers only the routes a page grant can name', () => {
+    const routes: readonly AppClientRegisteredRoute[] = [
+      route({
+        name: 'home',
+        // Declared unconditional: signed in is enough, so there is nothing to grant or withhold.
+        authz: 'skip',
+      }),
+      route({ name: 'orders', navigation: { title: 'navigation.orders' } }),
+      route({
+        name: 'orders-alias',
+        authz: { resource: { type: 'page', id: 'orders' }, action: 'access' },
+      }),
+      route({
+        name: 'orders-detail',
+        authz: {
+          resource: { type: 'page', id: 'orders-detail' },
+          action: 'access',
+        },
+      }),
+      route({
+        name: 'hub',
+        // Authorized as something other than a page.
+        authz: { resource: { type: 'hub.app', id: '*' }, action: 'read' },
+      }),
+      route({ name: 'login', auth: 'guest', authz: 'skip' }),
+      route({ name: 'group', componentLoader: undefined }),
+      route({
+        name: 'reports',
+        children: [
+          // Nested under a page, so the parent's check is the only one.
+          route({ name: 'report-detail', authz: 'skip' }),
+        ],
+      }),
+      route({
+        name: 'section',
+        componentLoader: undefined,
+        // A group is not a page, so its children are still authorized on their own.
+        children: [route({ name: 'inside-group' })],
+      }),
+    ];
+
+    expect(grantablePages(routes)).toEqual([
+      { name: 'orders', packageName: 'app', title: 'navigation.orders' },
+      { name: 'orders-detail', packageName: 'app' },
+      { name: 'reports', packageName: 'app' },
+      { name: 'inside-group', packageName: 'app' },
+    ]);
+  });
+
+  it('adds the discovered pages to the page resource type and leaves the rest alone', () => {
+    const merged = withPageResources(options(), [
+      { value: 'orders', label: 'Orders' },
+      // The server already reports the wildcard; it keeps its own entry and its description.
+      { value: '*', label: 'Everything' },
+    ]);
+
+    expect(
+      merged.resourceTypes.map((resourceType) => ({
+        value: resourceType.value,
+        resources: resourceType.resources.map((resource) => resource.value),
+      })),
+    ).toEqual([
+      { value: 'page', resources: ['*', 'orders'] },
+      { value: 'database.collection', resources: ['orders'] },
+    ]);
+    expect(merged.resourceTypes[0].resources[0].description).toBe(
+      'Allow access to every page, including pages added later.',
+    );
+    expect(merged.collections).toEqual(options().collections);
+  });
 });
+
+function route(
+  overrides: Partial<AppClientRegisteredRoute> & { name: string },
+): AppClientRegisteredRoute {
+  return {
+    id: overrides.name,
+    path: `/${overrides.name}`,
+    auth: 'required',
+    authz: { resource: { type: 'page', id: overrides.name }, action: 'access' },
+    packageName: 'app',
+    source: 'application',
+    componentLoader: async () => ({ default: () => null }),
+    ...overrides,
+  };
+}
+
+function options(): AuthorizationOptions {
+  return {
+    plugins: ['permission-sets', 'pages', 'database'],
+    resourceTypes: [
+      {
+        value: 'page',
+        label: 'Pages',
+        resources: [
+          {
+            value: '*',
+            label: 'All pages',
+            description:
+              'Allow access to every page, including pages added later.',
+            actions: [{ value: 'access', label: 'Access' }],
+          },
+        ],
+        actions: [{ value: 'access', label: 'Access' }],
+      },
+      {
+        value: 'database.collection',
+        label: 'Collections',
+        resources: [{ value: 'orders', label: 'Orders' }],
+        actions: [{ value: 'read', label: 'Read' }],
+      },
+    ],
+    subjectTypes: [{ value: 'user', label: 'User' }],
+    collections: [],
+    recordAccessPolicies: [],
+  };
+}
 
 describe('permission snapshot lifecycle', () => {
   const resource = { type: 'page', id: 'users' };
@@ -176,13 +482,13 @@ describe('permission snapshot lifecycle', () => {
       .mockResolvedValueOnce(denied)
       .mockResolvedValueOnce(granted);
     const client = new AuthorizationClient({ request } as never);
-    expect(await client.can(resource, 'access')).toBe(true);
-    expect(await client.can(resource, 'access')).toBe(true);
+    expect(await client.can({ resource, action: 'access' })).toBe(true);
+    expect(await client.can({ resource, action: 'access' })).toBe(true);
     expect(request).toHaveBeenCalledTimes(1);
     client.invalidatePermissions();
-    expect(await client.can(resource, 'access')).toBe(false);
+    expect(await client.can({ resource, action: 'access' })).toBe(false);
     client.invalidatePermissions();
-    expect(await client.can(resource, 'access')).toBe(true);
+    expect(await client.can({ resource, action: 'access' })).toBe(true);
     expect(request).toHaveBeenCalledTimes(3);
     expect(client.getPermissionsRevision()).toBe(2);
   });
@@ -196,13 +502,13 @@ describe('permission snapshot lifecycle', () => {
         .mockReturnValueOnce(old.promise)
         .mockResolvedValueOnce(denied);
       const client = new AuthorizationClient({ request } as never);
-      const oldCheck = client.can(resource, 'access');
+      const oldCheck = client.can({ resource, action: 'access' });
       client.invalidatePermissions();
-      expect(await client.can(resource, 'access')).toBe(false);
+      expect(await client.can({ resource, action: 'access' })).toBe(false);
       if (outcome === 'resolve') old.resolve(granted);
       else old.reject(new Error('Previous session expired'));
       expect(await oldCheck).toBe(false);
-      expect(await client.can(resource, 'access')).toBe(false);
+      expect(await client.can({ resource, action: 'access' })).toBe(false);
       expect(request).toHaveBeenCalledTimes(2);
     },
   );
@@ -213,8 +519,10 @@ describe('permission snapshot lifecycle', () => {
       .mockRejectedValueOnce(new Error('Offline'))
       .mockResolvedValueOnce(granted);
     const client = new AuthorizationClient({ request } as never);
-    await expect(client.can(resource, 'access')).rejects.toThrow('Offline');
-    expect(await client.can(resource, 'access')).toBe(true);
+    await expect(client.can({ resource, action: 'access' })).rejects.toThrow(
+      'Offline',
+    );
+    expect(await client.can({ resource, action: 'access' })).toBe(true);
   });
 });
 
@@ -232,7 +540,7 @@ describe('explicit domain route permissions', () => {
           { resource: { type: 'page', id: 'hub' }, actions: ['access'] },
           { resource: { type: 'page', id: 'hub.app' }, actions: ['access'] },
           {
-            resource: { type: 'authorization.settings', id: 'permission-sets' },
+            resource: { type: 'settings', id: 'authorization.permission-sets' },
             actions: ['read'],
           },
         ],
@@ -243,43 +551,43 @@ describe('explicit domain route permissions', () => {
       subscribe: () => () => {},
       onOpen: () => () => {},
     } as never);
-    const setAccessControlProvider =
-      vi.fn<
-        (
-          value: NonNullable<AppClientRefineConfig['accessControlProvider']>,
-        ) => void
-      >();
     const provider = new AuthorizationServiceProvider({
       container,
-      refine: { setAccessControlProvider },
     } as never);
     provider.register();
     await provider.boot();
-    const { can } = setAccessControlProvider.mock.calls[0]![0];
-    expect(
-      await can({ resource: 'hub.app:*', action: 'upload-release' }),
-    ).toEqual({ can: true });
-    expect(
-      await can({ resource: 'hub.app:*', action: 'manage-api-keys' }),
-    ).toEqual({ can: false });
-    expect(await can({ resource: 'report:one', action: 'read' })).toEqual({
-      can: true,
-    });
-    expect(await can({ resource: 'report:two', action: 'read' })).toEqual({
-      can: false,
-    });
-    expect(await can({ resource: 'report:', action: 'read' })).toEqual({
-      can: false,
-    });
-    expect(await can({ resource: 'hub', action: 'access' })).toEqual({
-      can: true,
-    });
+    const can = (check: AuthorizationCheck) =>
+      container.resolve(clientToken).can(check);
     expect(
       await can({
-        resource: 'authorization.settings.permission-sets',
-        action: 'list',
+        resource: { type: 'hub.app', id: '*' },
+        action: 'upload-release',
       }),
-    ).toEqual({ can: true });
+    ).toBe(true);
+    expect(
+      await can({
+        resource: { type: 'hub.app', id: '*' },
+        action: 'manage-api-keys',
+      }),
+    ).toBe(false);
+    expect(
+      await can({ resource: { type: 'report', id: 'one' }, action: 'read' }),
+    ).toBe(true);
+    expect(
+      await can({ resource: { type: 'report', id: 'two' }, action: 'read' }),
+    ).toBe(false);
+    expect(
+      await can({ resource: { type: 'report', id: '' }, action: 'read' }),
+    ).toBe(false);
+    expect(
+      await can({ resource: { type: 'page', id: 'hub' }, action: 'access' }),
+    ).toBe(true);
+    expect(
+      await can({
+        resource: { type: 'settings', id: 'authorization.permission-sets' },
+        action: 'read',
+      }),
+    ).toBe(true);
     await provider.shutdown();
   });
 });

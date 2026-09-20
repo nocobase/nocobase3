@@ -10,6 +10,7 @@ import { resolveWatchEnvironment } from './watch-environment.mjs';
 import { findAvailablePort } from './ports.mjs';
 import { waitForHttpReady } from './readiness.mjs';
 import { parseProxyTarget } from './proxy.mjs';
+import { resolveDevTrustedOrigins } from './trusted-origins.mjs';
 
 // This entry lives in scripts/dev; all child commands run from the application root.
 const rootDir = path.resolve(
@@ -91,7 +92,7 @@ const spawnDevProcess = (label, command, args, env, options = {}) => {
     console.error(
       `[${label}] exited unexpectedly; code=${code ?? 'null'} signal=${signal ?? 'null'}`,
     );
-    shutdown(typeof code === 'number' ? code : 1);
+    shutdown(typeof code === 'number' && code !== 0 ? code : 1);
   });
 
   children.push(child);
@@ -106,6 +107,7 @@ let envWatcher;
 const shutdown = (exitCode = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
+  process.exitCode = exitCode;
 
   if (envRestartTimer) {
     clearTimeout(envRestartTimer);
@@ -121,7 +123,7 @@ const shutdown = (exitCode = 0) => {
 
   setTimeout(() => {
     for (const child of children) {
-      if (!child.killed && child.exitCode === null) {
+      if (child.exitCode === null && child.signalCode === null) {
         child.kill('SIGKILL');
       }
     }
@@ -133,6 +135,7 @@ process.once('SIGINT', () => shutdown(0));
 process.once('SIGTERM', () => shutdown(0));
 
 const env = loadEnv();
+const strictStartup = env.NOCOBASE_STRICT_STARTUP === 'true';
 const watchEnv = await resolveWatchEnvironment(env);
 const proxyTarget = parseProxyTarget(env.PROXY_TARGET_URL);
 const viteDevHost = env.APP_VITE_DEV_HOST || '0.0.0.0';
@@ -241,6 +244,10 @@ if (!proxyTarget) {
     APP_SERVER_HOST: appServerHost,
     APP_SERVER_PORT: String(appServerPort),
     APP_SERVER_START_LOG: 'false',
+    BETTER_AUTH_TRUSTED_ORIGINS: resolveDevTrustedOrigins(
+      nextEnv.BETTER_AUTH_TRUSTED_ORIGINS,
+      appServerPort,
+    ),
     APP_PUBLIC_ORIGIN:
       String(nextEnv.APP_PUBLIC_ORIGIN || '').trim() || appOrigin,
   };
@@ -249,37 +256,42 @@ if (!proxyTarget) {
     'server',
     'tsx',
     [
-      'watch',
+      ...(strictStartup ? [] : ['watch']),
       '--tsconfig',
       'tsconfig.server.json',
-      '--clear-screen=false',
-      '--include',
-      'package.json',
-      ...pluginWatchIncludes.flatMap((include) => ['--include', include]),
+      ...(strictStartup
+        ? []
+        : [
+            '--clear-screen=false',
+            '--include',
+            'package.json',
+            ...pluginWatchIncludes.flatMap((include) => ['--include', include]),
+          ]),
       'server/standalone.ts',
     ],
     serverEnv,
     { stdio: ['pipe', 'inherit', 'inherit'] },
   );
 
-  if (serverChild.stdin) {
+  if (!strictStartup && serverChild.stdin) {
     process.stdin.pipe(serverChild.stdin);
   }
 
   const configuredConfigPath = serverEnv.APP_CONFIG_FILE;
   const configWatch = resolveConfigWatch(rootDir, configuredConfigPath);
 
-  envWatcher = watchConfigFiles(configWatch, (_eventType, filename) => {
-    const changedFile = filename?.toString();
-    if (!changedFile || !configWatch.filenames.has(changedFile)) return;
+  if (!strictStartup)
+    envWatcher = watchConfigFiles(configWatch, (_eventType, filename) => {
+      const changedFile = filename?.toString();
+      if (!changedFile || !configWatch.filenames.has(changedFile)) return;
 
-    if (envRestartTimer) clearTimeout(envRestartTimer);
-    envRestartTimer = setTimeout(() => {
-      envRestartTimer = undefined;
-      console.log(`[dev] ${changedFile} changed; restarting server`);
-      serverChild.stdin?.write('\n');
-    }, 100);
-  });
+      if (envRestartTimer) clearTimeout(envRestartTimer);
+      envRestartTimer = setTimeout(() => {
+        envRestartTimer = undefined;
+        console.log(`[dev] ${changedFile} changed; restarting server`);
+        serverChild.stdin?.write('\n');
+      }, 100);
+    });
 }
 
 try {

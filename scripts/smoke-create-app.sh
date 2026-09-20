@@ -15,7 +15,7 @@
 #     --registry http://localhost:4873 \
 #     --create-app-version 0.1.0-beta.12 \
 #     --template @nocobase/app-template-default@0.1.0-beta.12 \
-#     [--workdir DIR] [--timeout SECONDS]
+#     [--workdir DIR] [--timeout SECONDS] [--dialect DIALECT] [--config FILE] [--json]
 
 set -euo pipefail
 
@@ -25,6 +25,10 @@ TEMPLATE=''
 WORKDIR=''
 TIMEOUT=420
 APP_NAME='crm'
+DIALECT=''
+CONFIG=''
+JSON_OUTPUT=0
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -33,6 +37,9 @@ while [ $# -gt 0 ]; do
     --template) TEMPLATE="$2"; shift 2 ;;
     --workdir) WORKDIR="$2"; shift 2 ;;
     --timeout) TIMEOUT="$2"; shift 2 ;;
+    --dialect) DIALECT="$2"; shift 2 ;;
+    --config) CONFIG="$2"; shift 2 ;;
+    --json) JSON_OUTPUT=1; shift ;;
     --app-name) APP_NAME="$2"; shift 2 ;;
     -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
@@ -48,6 +55,18 @@ if [ -z "$WORKDIR" ]; then
   WORKDIR="$(mktemp -d)"
 fi
 mkdir -p "$WORKDIR"
+WORKDIR="$(cd "$WORKDIR" && pwd)"
+if [ -n "$(ls -A "$WORKDIR")" ]; then
+  echo "Test workdir must be empty: $WORKDIR" >&2
+  exit 2
+fi
+if ! [[ "$APP_NAME" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || ! [[ "$TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Invalid app name or timeout" >&2
+  exit 2
+fi
+if [ -n "$CONFIG" ]; then
+  CONFIG=$(node -e 'console.log(require("node:path").resolve(process.argv[1]))' "$CONFIG")
+fi
 
 APP_DIR="$WORKDIR/$APP_NAME"
 DEV_LOG="$WORKDIR/dev.log"
@@ -88,13 +107,18 @@ echo "template:    $TEMPLATE"
 echo "workdir:     $WORKDIR"
 
 cd "$WORKDIR"
-rm -rf "$APP_DIR"
 
-# The directory argument is what keeps this non-interactive: it is the only question the command asks. The generated
-# application runs on the SQLite connection its template declares, so there is nothing else to answer here.
-pnpm create "@nocobase/app@$CREATE_APP_VERSION" "$APP_NAME" \
-  --registry="$REGISTRY" \
-  --template="$TEMPLATE"
+CREATE_ARGS=("@nocobase/app@$CREATE_APP_VERSION" "$APP_NAME" "--registry=$REGISTRY" "--template=$TEMPLATE")
+if [ -n "$DIALECT" ]; then CREATE_ARGS+=("--dialect=$DIALECT"); fi
+if [ "$JSON_OUTPUT" = 1 ]; then
+  pnpm create "${CREATE_ARGS[@]}" --json > "$WORKDIR/create.json"
+  node -e 'const r=JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); if(r.status!=="success" || !r.dependenciesInstalled) process.exit(1)' "$WORKDIR/create.json"
+else
+  pnpm create "${CREATE_ARGS[@]}"
+fi
+if [ -n "$CONFIG" ]; then
+  node "$SCRIPT_DIR/local-registry-config.mjs" "$APP_DIR/config.yml" "$CONFIG" "$DIALECT"
+fi
 echo "::endgroup::"
 
 if [ ! -d "$APP_DIR/node_modules" ]; then
@@ -121,7 +145,7 @@ READY_MARKER='App dev server ready'
 # Killing the pnpm process alone would leave vite and tsx running, and the job would hang waiting on them. `setsid`
 # would do the same thing but does not exist on macOS, where this script is also run by hand.
 set -m
-pnpm dev > "$DEV_LOG" 2>&1 &
+NOCOBASE_STRICT_STARTUP=true pnpm dev > "$DEV_LOG" 2>&1 &
 APP_PID=$!
 set +m
 
@@ -179,6 +203,12 @@ if [ -z "$APP_URL" ]; then
   exit 1
 fi
 
+if grep -qF 'Failed to load job from ' "$DEV_LOG"; then
+  echo "::error::Job discovery failed during development startup"
+  cat "$DEV_LOG"
+  exit 1
+fi
+
 echo "Application is serving at $APP_URL"
 
 if ! curl -fsS --max-time 30 "$APP_URL" -o /dev/null; then
@@ -219,7 +249,7 @@ echo "Waiting up to ${TIMEOUT}s for $START_URL/api/healthz"
 # Create the log before forking so the progress loop cannot race the child's output redirection.
 : > "$START_LOG"
 set -m
-APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$START_PORT" pnpm start > "$START_LOG" 2>&1 &
+NOCOBASE_STRICT_STARTUP=true APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$START_PORT" pnpm start > "$START_LOG" 2>&1 &
 APP_PID=$!
 set +m
 trap stop_app EXIT
@@ -262,6 +292,12 @@ fi
 if ! curl -fsS --max-time 30 "$START_URL/" -o /dev/null || ! kill -0 "$APP_PID" 2>/dev/null; then
   echo "::endgroup::"
   echo "::error::The production application did not serve its homepage or exited after becoming ready"
+  cat "$START_LOG"
+  exit 1
+fi
+
+if grep -qF 'Failed to load job from ' "$START_LOG"; then
+  echo "::error::Job discovery failed during production startup"
   cat "$START_LOG"
   exit 1
 fi

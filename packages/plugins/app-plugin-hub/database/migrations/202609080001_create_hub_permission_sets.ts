@@ -3,7 +3,10 @@ import { defineMigration, type MigrationDefinition } from '@nocobase/db';
 const HUB_PERMISSION_SETS = [
   {
     key: 'hub-administrator',
-    title: 'Hub administrator',
+    title: {
+      key: 'roles.names.hub-administrator',
+      ns: '@nocobase/app-plugin-hub',
+    },
     grants: [
       pageGrant('hub'),
       pageGrant('users'),
@@ -40,7 +43,7 @@ const HUB_PERMISSION_SETS = [
   },
   {
     key: 'hub-operator',
-    title: 'Hub operator',
+    title: { key: 'roles.names.hub-operator', ns: '@nocobase/app-plugin-hub' },
     grants: [
       pageGrant('hub'),
       grant('hub.app', '*', [
@@ -65,7 +68,7 @@ const HUB_PERMISSION_SETS = [
   },
   {
     key: 'hub-viewer',
-    title: 'Hub viewer',
+    title: { key: 'roles.names.hub-viewer', ns: '@nocobase/app-plugin-hub' },
     grants: [
       pageGrant('hub'),
       grant('hub.app', '*', ['read', 'read-release', 'read-deployment']),
@@ -88,7 +91,7 @@ const migration: MigrationDefinition = defineMigration({
         .where('key', '=', permissionSet.key)
         .executeTakeFirst();
       const values = {
-        title: permissionSet.title,
+        title: JSON.stringify(permissionSet.title),
         grants: JSON.stringify(permissionSet.grants),
         updatedAt: now,
       };

@@ -118,3 +118,12 @@ describe('createPortalViteConfig asset URLs', () => {
     ).toBe('/cdn/assets/page-hash.css');
   });
 });
+
+it('preserves OOXML WASM URLs and consumer dependency exclusions', async () => {
+  const config = await resolvePortalConfig({
+    optimizeDeps: { exclude: ['custom-viewer'] },
+  });
+  expect(config.optimizeDeps?.exclude).toEqual(
+    expect.arrayContaining(['@silurus/ooxml', 'custom-viewer']),
+  );
+});

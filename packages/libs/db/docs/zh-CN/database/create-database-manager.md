@@ -23,7 +23,11 @@ const db = createDatabaseManager({
 
 ## Dialect 包
 
-生产应用建议显式使用对应的 dialect 包。下面两种写法等价：
+The core manager consumes explicitly registered drivers and remains synchronous. It does not discover or import dialect packages. Register a factory in `drivers`, or supply the connection returned by a dialect factory.
+
+Applications built with `@nocobase/app-server` can install an official driver and configure its dialect without a static import. The application runtime calls `resolveDatabaseConfig()` from `@nocobase/app-server/database` after loading configuration. This asynchronously imports only configured dialects, then passes registered drivers to the synchronous manager. Standalone core consumers can keep explicit registration; they do not need an application runtime dependency.
+
+Factories and descriptors remain supported. The following explicit forms are equivalent:
 
 ```ts
 import postgres from '@nocobase/db-postgres';

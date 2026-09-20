@@ -1,6 +1,33 @@
 import type { WorkflowResource } from './en-US.js';
 
 const zhCN: WorkflowResource = {
+  comparison: {
+    connectionsChanged: '位置 / 连接变更',
+    untitledNode: '未命名节点',
+    compare: '对比',
+    compareWith: '与 {{version}} 对比',
+    title: '版本对比',
+    description:
+      '选择两个版本，点击节点查看定义和连接关系的差异。按节点 key 匹配；修改 key 会显示为删除和新增。不包含运行时参数值、执行数据及外部脚本和资源文件内容。',
+    needVersions: '至少需要两个版本才能对比',
+    direction: '从基准版本到目标版本的变化',
+    before: '基准版本',
+    after: '目标版本',
+    added: '新增',
+    removed: '删除',
+    changed: '变更',
+    unchanged: '未变更',
+    swap: '交换版本',
+    current: '当前版本',
+    field: '字段路径',
+    absent: '不存在',
+    noChanges: '定义没有变化',
+    missingNode: '此版本中不存在该节点',
+    changedNodes: '变更节点',
+    workflowFields: '工作流设置',
+    details: '变更详情',
+  },
+  authorization: { title: '工作流', read: '查看' },
   nav: {
     automation: '自动化',
     workflows: '工作流',
@@ -8,6 +35,7 @@ const zhCN: WorkflowResource = {
     runs: '执行记录',
   },
   common: {
+    back: '返回',
     cancel: '取消',
     save: '保存',
     refresh: '刷新',
@@ -23,6 +51,7 @@ const zhCN: WorkflowResource = {
     runCount_other: '{{count}} 次运行',
   },
   status: {
+    notExecuted: '未执行',
     queued: '排队中',
     running: '运行中',
     resolved: '已完成',
@@ -89,6 +118,7 @@ const zhCN: WorkflowResource = {
     triggeredAt: '触发时间 {{time}}',
   },
   inspector: {
+    notExecuted: '本次执行未运行此节点，因此没有执行结果。',
     label: '工作流检查器',
     overview: '工作流概览',
     selectNode: '选择一个节点以查看详情。',
@@ -106,10 +136,16 @@ const zhCN: WorkflowResource = {
     unserializable: '[无法序列化的值]',
   },
   canvas: {
+    controls: '画布控件',
+    zoomIn: '放大',
+    zoomOut: '缩小',
+    fitView: '适应视图',
+
     start: '开始',
     end: '结束',
     condition: '条件',
     terminate: '终止',
+    terminates: '工作流在此终止',
     run: '运行',
     emptyBranch: '空分支',
     yes: '是',
@@ -121,6 +157,8 @@ const zhCN: WorkflowResource = {
     verticalLayout: '垂直布局',
     fitting: '正在适配全览视图…',
     layingOut: '正在布局流程…',
+    fullscreen: '进入全屏',
+    exitFullscreen: '退出全屏',
   },
   pages: {
     list: {

@@ -1,5 +1,47 @@
 # @nocobase/app-client
 
+## 1.0.0-beta.19
+
+### Minor Changes
+
+- 64b3fdb: Send the application's language on every API request.
+
+  The language an application is showing lives in the browser: `useLocale` changes it on the client i18n runtime and stores it under `nocobase.locale`. Nothing told the server, which resolves a request's locale from the session and then from `Accept-Language` — the language the browser was configured with, not the one the user picked. Server-side translation therefore answered in the wrong language, and kept answering in it after a reload: `@nocobase/app-plugin-workflow` and both notification plugins already translate their messages per request and were all affected.
+
+  The core API client now resolves `Accept-Language` from the i18n runtime on each request. Resolving it per request rather than capturing it once means a language switch needs nothing invalidated; the next request already carries the new locale.
+
+- 64b3fdb: Separate authorization services from application integration: the library provides decisions, permission-set and access-rule services, store contracts and handlers; the application plugin owns database adapters, migrations, identities and management UI.
+
+  Add configurable root and default permission sets, protected-set metadata, transaction-bound service APIs, and integration with user management and Hub roles. Add database authorization for explicitly registered collections through Repository policies, plus a runnable example plugin.
+
+  Provide a permission-set workspace with routed editing and user assignments, nested resource groups, field and record-scope controls, and a permission inspector. Localize management UI and request-specific resource labels. Application routes may declare signed-in access without a page grant.
+
+  Migration ownership changes inline the existing table definitions in the application plugin. This changes the checksums of previously executed migrations; upgrade compatibility must be resolved before deploying to an existing database.
+
+- 64b3fdb: Support settings navigation order across plugin contributions. Place the authorization inspector after rule management and align authorization page headings with other settings pages.
+
+  Each rule plugin owns its shadcn primitives instead of importing them from the authorization management API.
+
+- 64b3fdb: Support entry-level parent references for settings routes contributed by different plugins. Preserve route ownership and localization while resolving nested groups independently of plugin order.
+
+  Split default access, sharing rules and restriction rules into application plugins that own management endpoints, stores, migrations and UI. Keep pure authorization rules and Store contracts in the authorization library and move permission-set management HTTP handlers to the application plugin. Update all application templates to explicitly compose the new plugins. The migration ownership change assumes a fresh installation.
+
+- 64b3fdb: Remove Refine from client authorization checks. Use `AuthorizationClient.can({ resource, action })` instead of the removed two-argument signature, and import `useCan` from `@nocobase/app-plugin-authorization/client`. Migrate page guards, navigation, and notification visibility while preserving session isolation and realtime permission invalidation.
+
+  Remove the Refine access-control configuration and legacy global authorization client accessors. Resolve the application-owned client through `useAuthorizationClient()` or `authorizationClientToken`. Settings actions now revoke stale access immediately; route checks no longer bypass the authorization page or translate Refine CRUD action names.
+
+  Unify route authorization under `authz: 'skip' | { resource: { type, id }, action }`. Normalize default rules during registration and share them across page guards, navigation, permission discovery, and inspection. Remove the legacy `access` field and string resource adapter.
+
+  Limit settings action checks to the actions each page uses, keep the permission-set action helper internal, and avoid rebuilding navigation twice when selecting a route.
+
+### Patch Changes
+
+- 64b3fdb: Return translation descriptors for authorization options and translate them on the client. Language changes update resource, action, group, scope and subject labels without reloading permission data or discarding edits. Rule plugins expose their resource titles in client locales.
+- 64b3fdb: Integrate source-qualified database authorization and native relation policies with AI data services. Preserve explicit route group extensions, translated resource search, Hub ownership checks, API key cleanup, and protected permission-set assignments across user deletion. Update shared application guidance for the split authorization plugins.
+- 64b3fdb: Support parent group contributions and sibling navigation ordering on App and Dev routes as well as Settings. Simplify route assembly with explicit node ownership and shared resolution context.
+- @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 1.0.0-beta.18
 
 ### Minor Changes

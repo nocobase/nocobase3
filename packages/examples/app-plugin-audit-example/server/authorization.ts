@@ -1,16 +1,16 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import {
   createAppAuthorization,
-  type AppAuthorization,
+  type AppAuthorizationService,
 } from '@nocobase/app-plugin-authorization';
 import type { DatabaseManager } from '@nocobase/db';
 
 /** This demonstration workspace grants each authenticated user their own records. */
 export function registerCustomerAuthorization(
-  authorization: AppAuthorization,
+  authorization: AppAuthorizationService,
   database: DatabaseManager,
 ): void {
-  authorization.resources.add({
+  authorization.resourceTypes.add({
     resourceType: 'audit-example.customer',
     async authorize(request, context) {
       let permit = false;
@@ -48,7 +48,7 @@ export function registerCustomerAuthorization(
 
 /** Initialize atomically once; preserve later administrative edits. */
 export async function initializeCustomerPermissions(
-  authorization: AppAuthorization,
+  authorization: AppAuthorizationService,
   database: DatabaseManager,
 ): Promise<void> {
   const key = 'audit-example-member';

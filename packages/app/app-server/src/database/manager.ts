@@ -1,5 +1,6 @@
 import {
   createDatabaseManager,
+  resolveDatabaseDriver,
   defineDatabase,
   type ConnectionConfig,
   type DatabaseDriverDefinition,
@@ -18,10 +19,9 @@ import type {
 /**
  * Builds the manager from the application's own database config.
  *
- * The app-server package deliberately does not depend on any concrete database
- * driver. An application declares the dialect packages it installs under
- * `database.drivers`, which is what every entry point — the runtime, the CLI
- * commands and the tests — resolves a dialect from.
+ * Call resolveDatabaseConfig before this synchronous factory when using official
+ * drivers without explicit registrations. Application runtime preparation and
+ * standalone database tasks perform that asynchronous step.
  */
 export function createAppDatabaseManager<TConfig extends AppDatabaseConfig>(
   config: TConfig,
@@ -91,6 +91,7 @@ export function resolveConnections(
           },
           paths,
           drivers,
+          name,
         ),
       ];
     }),
@@ -127,9 +128,10 @@ function bookkeepingTables(
 function normalizeConnection(
   connection: ConnectionConfig,
   paths: AppPaths | undefined,
-  drivers?: Record<string, DatabaseDriverRegistration>,
+  drivers: Record<string, DatabaseDriverRegistration> | undefined,
+  name: string,
 ): ConnectionConfig {
-  const driver = resolveAppDatabaseDriver(connection.dialect, drivers);
+  const driver = resolveDatabaseDriver(connection, drivers, name);
   if (!driver?.normalizeConnection) return connection;
   return driver.normalizeConnection(connection, {
     resolveStoragePath: paths
@@ -142,13 +144,5 @@ export function resolveAppDatabaseDriver(
   dialect: string,
   drivers?: Record<string, DatabaseDriverRegistration>,
 ): DatabaseDriverDefinition | undefined {
-  const value = drivers?.[dialect];
-  if (!value) return undefined;
-  const candidate = value as DatabaseDriverRegistration & {
-    driver?: DatabaseDriverDefinition;
-  };
-  if (typeof candidate === 'function') {
-    return candidate.driver;
-  }
-  return candidate;
+  return resolveDatabaseDriver({ dialect }, drivers);
 }

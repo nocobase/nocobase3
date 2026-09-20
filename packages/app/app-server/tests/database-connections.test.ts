@@ -108,6 +108,23 @@ async function inspect(
 }
 
 describe('connection-bound application database tasks', () => {
+  it('prepares official drivers for standalone migration tasks', async () => {
+    const { config, paths, contributions } = fixture();
+    migration(paths.database('main/migrations'), '001_auto_driver', 'autoRows');
+    const result = await runAppDatabaseTasks(
+      { ...config, drivers: undefined },
+      {
+        paths,
+        contributions,
+        kind: 'migrations',
+      },
+    );
+    expect(result.ok).toBe(true);
+    await inspect(config, 'main', async (client) => {
+      expect(await client.schema.hasTable('auto_rows')).toBe(true);
+    });
+  });
+
   it('isolates migrations, seeds and histories and runs plugins only on the default connection', async () => {
     const { config, paths, root } = fixture();
     migration(paths.database('main/migrations'), '001_main', 'mainRows');

@@ -1,9 +1,12 @@
 import { mkdir } from 'node:fs/promises';
 
-import type { DatabaseDriverRegistration } from '@nocobase/db';
+import {
+  resolveDatabaseDriver,
+  type DatabaseDriverRegistration,
+} from '@nocobase/db';
 import type { AppPaths } from '../config/index.js';
 import type { AppDatabaseConfig } from './types.js';
-import { resolveAppDatabaseDriver, resolveConnections } from './manager.js';
+import { resolveConnections } from './manager.js';
 import { defaultConnectionName } from './plan.js';
 
 export async function prepareAppDatabaseStorage<
@@ -25,10 +28,7 @@ export async function prepareAppDatabaseStorage<
   for (const name of names ?? (primary ? [primary] : [])) {
     const connection = connections[name];
     if (!connection) throw new Error(`Unknown database connection "${name}".`);
-    const driver = resolveAppDatabaseDriver(
-      connection.dialect,
-      availableDrivers,
-    );
+    const driver = resolveDatabaseDriver(connection, availableDrivers, name);
     await driver?.prepareStorage?.(connection, {
       ensureDirectory: async (directory) => {
         await mkdir(directory, { recursive: true });

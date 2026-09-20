@@ -1,5 +1,106 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.18
+
+### Patch Changes
+
+- 8f5eacf: Document a configuration readiness gate for embedded AI chat so the first message can be sent after initial navigation or refresh without switching employees or models. Include complete integration examples, actionable loading and unavailable states, and first-send verification steps.
+- 8f5eacf: Document conversation history response fields, stable message identifiers, pagination, nullability, and authenticated HTTP examples. Clarify the current SSE response limitation for non-streaming execution and distinguish history rows from message inputs and server agent results.
+- 8f5eacf: Fix AI conversation keyword searches failing with a SQL binding error. Use native repository substring filters with literal wildcard escaping while preserving user and scope isolation and conversation ordering.
+- 8f5eacf: Fix missing knowledge base options in the AI employee editor by using the knowledge base plugin's AI API route. Exclude disabled knowledge bases from the available options.
+- 8f5eacf: Use the shared Dialog and Button components for the LLM model editor so backdrop clicks and Escape dismiss it, focus is managed and restored, and modal styling matches the application's component library.
+
+  Use a searchable multi-select Combobox for provider models, with selected chips and the search input inside the same field. Filter by model label or ID, preserve selections while searching, and portal the options outside the editor's scroll container with viewport-aware list scrolling. Escape closes the picker before the editor.
+
+  Show localized loading and empty states while discovering LLM services instead of leaving the settings table blank.
+
+## 0.1.0-beta.17
+
+### Patch Changes
+
+- 64b3fdb: Integrate source-qualified database authorization and native relation policies with AI data services. Preserve explicit route group extensions, translated resource search, Hub ownership checks, API key cleanup, and protected permission-set assignments across user deletion. Update shared application guidance for the split authorization plugins.
+- 64b3fdb: Remove Refine from client authorization checks. Use `AuthorizationClient.can({ resource, action })` instead of the removed two-argument signature, and import `useCan` from `@nocobase/app-plugin-authorization/client`. Migrate page guards, navigation, and notification visibility while preserving session isolation and realtime permission invalidation.
+
+  Remove the Refine access-control configuration and legacy global authorization client accessors. Resolve the application-owned client through `useAuthorizationClient()` or `authorizationClientToken`. Settings actions now revoke stale access immediately; route checks no longer bypass the authorization page or translate Refine CRUD action names.
+
+  Unify route authorization under `authz: 'skip' | { resource: { type, id }, action }`. Normalize default rules during registration and share them across page guards, navigation, permission discovery, and inspection. Remove the legacy `access` field and string resource adapter.
+
+  Limit settings action checks to the actions each page uses, keep the permission-set action helper internal, and avoid rebuilding navigation twice when selecting a route.
+
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [fe564d9]
+- Updated dependencies [fe564d9]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/app-plugin-authorization@0.2.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.21
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.16
+
+### Patch Changes
+
+- e13ed84: Make development logs concise and application-scoped while retaining structured file diagnostics. Route configuration and authentication diagnostics through application logging, reduce routine startup and request noise, distinguish optional AI Skill directories from missing configured paths, and align development console settings across templates. Document that deployed applications need rebuilding to adopt the current logging protocol.
+- Updated dependencies [e0c4b3d]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [00362cf]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+  - @nocobase/db@1.0.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.19
+  - @nocobase/logging@0.1.0-beta.5
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+
 ## 0.1.0-beta.15
 
 ### Minor Changes

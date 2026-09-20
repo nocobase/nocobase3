@@ -283,3 +283,7 @@ for the JSON Aggregate, Filter and Sort AST contracts.
 Every Server plugin declares an absolute `baseDir`. In `server/plugin.ts`, use `baseDir: path.resolve(import.meta.dirname, '..')`; the same declaration in `dist/server/plugin.js` points to `dist`. Migrations, Seeds, and Queue Jobs resolve only against that directory. The runtime does not try a second source or build directory and does not infer the choice from `NODE_ENV` or the application command. Source and publish exports must load the matching plugin declaration.
 
 `rootDir` remains the package root: the resolver walks upward from `baseDir` to a `package.json` whose name matches `packageName`. Inspection includes both directories and the resolved contribution paths, so an installed copy cannot silently borrow another copy's metadata. Missing `baseDir` is an API error; update all Server plugin declarations when upgrading.
+
+## Request constraints for Repository routes
+
+Trusted middleware can call `addRepositoryRequestConstraint(context, { repository, action, collection, connection?, policy })` from `@nocobase/app-server/router`. `policy` is a complete Repository policy; constraints only intersect the route's static or principal-derived policy. All constraints accumulate for the current request, and repository/action/collection/connection mismatches return 403. Request JSON cannot supply a constraint. Without middleware, existing route behavior is unchanged. Business applications should use the authorization plugin's `db.authorizeRepository` instead of resolving grants themselves.

@@ -118,7 +118,7 @@ Rarely touched by the template — a change landing here deserves a careful read
   server/routes/  server/providers/  database/  cli/commands/  tests/  e2e/
 
 Template structure — where most of the delta lands
-  client/routing/  client/shell/  client/layouts/  client/theme/
+  client/routing/  client/layouts/  client/theme/
   client/app.ts  client/runtime.ts  client/startup.tsx  server/*.ts
   scripts/  vite.config.ts  vitest.config.ts  eslint.config.js
   tsconfig*.json  index.html  components.json

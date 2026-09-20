@@ -1,5 +1,18 @@
-import type { DatabaseConnection } from '@nocobase/db';
-import { ResourceHandlerRegistry } from './registry.js';
+import { RecordAccessRegistry } from './record-access.js';
+import {
+  type ResourceAuthorizationConditions,
+  type ResourceAuthorizationCheck,
+  AuthorizationResourceGroups,
+  AuthorizationResources,
+  composedGrants,
+} from './resources.js';
+import {
+  ResourceHandlerRegistry,
+  type AuthorizationResourceItems,
+  type RegisteredResource,
+} from './registry.js';
+import { AuthorizationSubjectRegistry } from './subjects.js';
+import { AuthorizationRouteRegistry } from './routes.js';
 import { AccessConstraintRegistry } from './constraints.js';
 import type { AccessConstraintService } from './constraints.js';
 import {
@@ -7,7 +20,10 @@ import {
   type AuthorizationPluginApis,
   type AuthorizationPlugin,
 } from './plugin.js';
-import type { AuthorizationGrantService } from './grants.js';
+import type {
+  AuthorizationGrantService,
+  AuthorizationGrantsChangedListener,
+} from './grants.js';
 import {
   createAuthorizationPermissionsApi,
   type AuthorizationPermission,
@@ -32,9 +48,16 @@ import {
 
 export interface AuthorizationScope {
   readonly identity: AuthorizationIdentity;
+  authorize(
+    request: Omit<
+      AuthorizationRequest,
+      'principal' | 'subjects' | 'resource'
+    > & { resource: { type: 'resource'; id: string } },
+  ): Promise<AuthorizationDecision<ResourceAuthorizationConditions>>;
   authorize<TParams = undefined>(
     request: Omit<AuthorizationRequest<TParams>, 'principal' | 'subjects'>,
   ): Promise<AuthorizationDecision>;
+  /** Feature visibility for composed operations; data conditions still require enforcement. */
   can<TParams = undefined>(
     request: Omit<AuthorizationRequest<TParams>, 'principal' | 'subjects'>,
   ): Promise<boolean>;
@@ -71,36 +94,78 @@ export type AuthorizationGuardResolver<
 
 export interface CreateAuthorizationOptions<
   TPlugins extends readonly AuthorizationPlugin[],
+  TConnection = unknown,
 > {
-  connection?: DatabaseConnection;
+  /** Passed through to every plugin's setup; the library never inspects it. */
+  connection?: TConnection;
   plugins: TPlugins;
 }
 
 interface AuthorizationOptions {
-  connection?: DatabaseConnection;
+  connection?: unknown;
   plugins: readonly AuthorizationPlugin[];
 }
 
 export class Authorization {
+  readonly recordAccess: RecordAccessRegistry = new RecordAccessRegistry();
   private readonly plugins: readonly AuthorizationPlugin[];
-  readonly resources: ResourceHandlerRegistry;
+  readonly resources: AuthorizationResources;
+  readonly resourceTypes: ResourceHandlerRegistry;
+  readonly resourceGroups: AuthorizationResourceGroups =
+    new AuthorizationResourceGroups();
   readonly constraints: AccessConstraintRegistry;
+  readonly subjects: AuthorizationSubjectRegistry;
+  readonly routes: AuthorizationRouteRegistry;
   readonly permissions: AuthorizationPermissionsApi;
   private readonly grants: AuthorizationGrantService;
+  private readonly grantProviderService: AuthorizationGrantService;
   private readonly grantProvider?: string;
   private readonly middlewares: AuthorizationMiddleware[] = [];
 
   constructor(options: AuthorizationOptions) {
-    this.resources = new ResourceHandlerRegistry();
+    this.resources = new AuthorizationResources(this.resourceGroups);
+    this.resourceTypes = new ResourceHandlerRegistry();
     this.constraints = new AccessConstraintRegistry();
+    this.subjects = new AuthorizationSubjectRegistry();
+    this.routes = new AuthorizationRouteRegistry();
     this.permissions = createAuthorizationPermissionsApi();
     this.plugins = sortAuthorizationPlugins(options.plugins);
     const grantProvider = this.plugins.find((plugin) => plugin.grants);
-    this.grants = grantProvider?.grants ?? this.createMissingGrantService();
+    this.grantProviderService =
+      grantProvider?.grants ?? this.createMissingGrantService();
+    this.grants = composedGrants(
+      this.grantProviderService,
+      this.resources,
+      this.constraints,
+    );
     this.grantProvider = grantProvider?.id;
+    this.resourceTypes.add({
+      resourceType: 'resource',
+      async authorize(request, context) {
+        const grants = await context.grants.resolve(request);
+        return {
+          effect: grants.length ? 'permit' : 'deny',
+          reasons: grants.length
+            ? grants.map((grant) => ({
+                code: 'GRANT_MATCHED',
+                message: `${grant.source.plugin}:${grant.source.id} allows ${request.resource.id}.${request.action}`,
+                plugin: 'resource',
+                details: { source: grant.source, policy: grant.policy },
+              }))
+            : [
+                {
+                  code: 'NO_OBJECT_PERMISSION',
+                  message: 'No permission set grants this operation',
+                  plugin: 'resource',
+                },
+              ],
+        };
+      },
+    });
     this.installApis();
     for (const plugin of this.plugins) {
       plugin.setup?.({
+        recordAccess: this.recordAccess,
         ...(options.connection === undefined
           ? {}
           : { connection: options.connection }),
@@ -113,14 +178,53 @@ export class Authorization {
           return grantProvider.grants;
         },
         resources: this.resources,
+        resourceTypes: this.resourceTypes,
+        resourceGroups: this.resourceGroups,
+        getResource: this.resourceTypes.getResource.bind(this.resourceTypes),
         constraints: this.constraints,
+        subjects: this.subjects,
+        routes: this.routes,
         use: (middleware): void => {
-          this.middlewares.push(middleware);
+          this.use(middleware);
         },
       });
     }
   }
 
+  getResource<T extends keyof AuthorizationResourceItems>(
+    type: T,
+  ): RegisteredResource<AuthorizationResourceItems[T]>;
+  getResource(type: string): RegisteredResource;
+  getResource(type: string): RegisteredResource<unknown> {
+    return this.resourceTypes.getResource(type);
+  }
+
+  /**
+   * Registers a step that resolves the request's principal and subjects.
+   * `middleware()` runs every registered step before it builds the
+   * request-scoped Authorization.
+   */
+  use(middleware: AuthorizationMiddleware): void {
+    this.middlewares.push(middleware);
+  }
+
+  /**
+   * Subscribes to the Grant Provider's own announcement that a subject's
+   * grants may have changed. Returns a function that releases the
+   * subscription; a provider that announces nothing releases nothing.
+   */
+  onGrantsChanged(listener: AuthorizationGrantsChangedListener): () => void {
+    return this.grants.onChange?.(listener) ?? ((): void => {});
+  }
+
+  authorize(
+    request: Omit<AuthorizationRequest, 'resource'> & {
+      resource: { type: 'resource'; id: string };
+    },
+  ): Promise<AuthorizationDecision<ResourceAuthorizationConditions>>;
+  authorize<TParams = undefined>(
+    request: AuthorizationRequest<TParams>,
+  ): Promise<AuthorizationDecision>;
   async authorize<TParams = undefined>(
     request: AuthorizationRequest<TParams>,
   ): Promise<AuthorizationDecision> {
@@ -131,8 +235,9 @@ export class Authorization {
     request: AuthorizationRequest<TParams>,
     grants: AuthorizationGrantService,
     constraints: AccessConstraintService = this.constraints,
+    resolveConditions = true,
   ): Promise<AuthorizationDecision> {
-    const handler = this.resources.get(request.resource.type);
+    const handler = this.resourceTypes.get(request.resource.type);
     if (!handler) {
       return this.deny(
         'UNKNOWN_RESOURCE_TYPE',
@@ -140,6 +245,112 @@ export class Authorization {
       );
     }
     try {
+      const operation =
+        request.resource.type === 'resource'
+          ? this.resources.operation(request.resource.id, request.action)
+          : undefined;
+      if (request.resource.type === 'resource' && !operation)
+        return this.deny(
+          'RESOURCE_ACTION_NOT_SUPPORTED',
+          'Unknown resource or action',
+        );
+      const finish = async (
+        decision: AuthorizationDecision,
+      ): Promise<AuthorizationDecision> => {
+        if (!operation || !resolveConditions || decision.effect === 'deny')
+          return decision;
+        const targets = new Map<
+          string,
+          { resource: AuthorizationRequest['resource']; action: string }
+        >();
+        for (const grant of operation.grants)
+          for (const action of grant.actions)
+            targets.set(JSON.stringify([grant.resource, action.action]), {
+              resource: grant.resource,
+              action: action.action,
+            });
+        const checks: ResourceAuthorizationCheck[] = await Promise.all(
+          [...targets.values()].map(async (target) => ({
+            ...target,
+            decision: await this.authorizeWithGrants(
+              {
+                principal: request.principal,
+                subjects: request.subjects,
+                ...target,
+                params: {
+                  operation: {
+                    resource: request.resource.id,
+                    action: request.action,
+                  },
+                },
+              },
+              {
+                ...grants,
+                resolveAll: async (input) =>
+                  (await grants.resolveAll(input)).filter(
+                    (grant) =>
+                      grant.origin?.resource.id === request.resource.id &&
+                      grant.origin.action === request.action,
+                  ),
+                resolve: async (input) =>
+                  (await grants.resolve(input)).filter(
+                    (grant) =>
+                      grant.origin?.resource.id === request.resource.id &&
+                      grant.origin.action === request.action,
+                  ),
+              },
+              constraints,
+            ),
+          })),
+        );
+        const conditions: ResourceAuthorizationConditions = {
+          type: 'resource',
+          checks,
+        };
+        for (const plugin of this.plugins)
+          Object.assign(conditions, plugin.composeConditions?.(checks));
+        // A denied data branch becomes a deny policy (lists can return no records).
+        // Non-data checks, such as page access, must succeed outright.
+        const denied = checks.some(
+          (check) =>
+            check.resource.type !== 'database.collection' &&
+            check.decision.effect === 'deny',
+        );
+        return {
+          effect: denied
+            ? 'deny'
+            : checks.some((check) => check.decision.effect !== 'permit')
+              ? 'conditional'
+              : 'permit',
+          conditions,
+          reasons: [
+            ...decision.reasons,
+            ...checks.flatMap((check) => check.decision.reasons),
+          ],
+        };
+      };
+      const unrestricted = await grants.unrestricted?.({
+        principal: request.principal,
+        ...(request.subjects === undefined
+          ? {}
+          : { subjects: request.subjects }),
+      });
+      if (unrestricted === true) {
+        return await finish(
+          handler.authorizeUnrestricted
+            ? await handler.authorizeUnrestricted(request)
+            : {
+                effect: 'permit',
+                reasons: [
+                  {
+                    code: 'UNRESTRICTED_ACCESS',
+                    message: `Unrestricted access allows ${request.resource.type}.${request.action}`,
+                    plugin: handler.resourceType,
+                  },
+                ],
+              },
+        );
+      }
       const decision = await handler.authorize(request, {
         grants,
         constraints,
@@ -153,7 +364,7 @@ export class Authorization {
           `Handler "${handler.resourceType}" returned a conditional decision without conditions`,
         );
       }
-      return decision;
+      return await finish(decision);
     } catch (error) {
       return this.deny(
         'AUTHORIZATION_HANDLER_FAILED',
@@ -163,8 +374,12 @@ export class Authorization {
   }
 
   for(identity: AuthorizationIdentity): AuthorizationScope {
-    const grants = this.grants.scope?.(identity) ?? this.grants;
     const constraints = this.constraints.scope(identity);
+    const grants = composedGrants(
+      this.grantProviderService.scope?.(identity) ?? this.grantProviderService,
+      this.resources,
+      constraints,
+    );
     const request = <TParams>(
       input: Omit<AuthorizationRequest<TParams>, 'principal' | 'subjects'>,
     ): AuthorizationRequest<TParams> =>
@@ -181,8 +396,16 @@ export class Authorization {
       this.authorizeWithGrants(request(input), grants, constraints);
     return {
       identity,
-      authorize,
-      can: async (input) => (await authorize(input)).effect === 'permit',
+      authorize: authorize as AuthorizationScope['authorize'],
+      can: async (input) =>
+        (
+          await this.authorizeWithGrants(
+            request(input),
+            grants,
+            constraints,
+            false,
+          )
+        ).effect === 'permit',
       require: async (input) => {
         const decision = await authorize(input);
         if (decision.effect !== 'permit') {
@@ -233,7 +456,16 @@ export class Authorization {
   async can<TParams = undefined>(
     request: AuthorizationRequest<TParams>,
   ): Promise<boolean> {
-    return (await this.authorize(request)).effect === 'permit';
+    return (
+      (
+        await this.authorizeWithGrants(
+          request,
+          this.grants,
+          this.constraints,
+          false,
+        )
+      ).effect === 'permit'
+    );
   }
 
   async require<TParams = undefined>(
@@ -257,7 +489,12 @@ export class Authorization {
       ...(this.grantProvider === undefined
         ? {}
         : { grantProvider: this.grantProvider }),
-      resourceTypes: this.resources.list(),
+      resourceTypes: this.resourceTypes
+        .list()
+        .filter(
+          (type) =>
+            type !== 'resource' || this.resources.definitionsList().length > 0,
+        ),
       constraintResolvers: this.constraints.list(),
     };
   }
@@ -277,13 +514,31 @@ export class Authorization {
     identity: AuthorizationIdentity,
     grantsService: AuthorizationGrantService = this.grants,
   ): Promise<AuthorizationPermissionsSnapshot> {
+    const unrestricted =
+      (await grantsService.unrestricted?.(identity)) === true;
     const grants = await grantsService.resolveAll(identity);
     const grouped = new Map<
       string,
       { resource: AuthorizationPermission['resource']; actions: Set<string> }
     >();
     for (const grant of grants) {
-      if (grant.policy !== undefined) continue;
+      if (grant.policy !== undefined) {
+        if (
+          !this.resourceTypes.getAction(
+            grant.resource.type,
+            grant.resource.id,
+            grant.action,
+          )?.scope
+        )
+          continue;
+        const decision = await this.authorizeWithGrants<undefined>(
+          { ...identity, resource: grant.resource, action: grant.action },
+          grantsService,
+          this.constraints,
+          false,
+        );
+        if (decision.effect !== 'permit') continue;
+      }
       const key = `${grant.resource.type}\u0000${grant.resource.id}`;
       const permission = grouped.get(key) ?? {
         resource: grant.resource,
@@ -293,6 +548,7 @@ export class Authorization {
       grouped.set(key, permission);
     }
     return {
+      unrestricted,
       permissions: [...grouped.values()]
         .sort((left, right) => {
           const leftKey = `${left.resource.type}\u0000${left.resource.id}`;
@@ -333,8 +589,9 @@ export class Authorization {
 
 export function createAuthorization<
   const TPlugins extends readonly AuthorizationPlugin[],
+  TConnection = unknown,
 >(
-  options: CreateAuthorizationOptions<TPlugins>,
+  options: CreateAuthorizationOptions<TPlugins, TConnection>,
 ): Authorization & AuthorizationPluginApis<TPlugins> {
   return new Authorization(options) as Authorization &
     AuthorizationPluginApis<TPlugins>;

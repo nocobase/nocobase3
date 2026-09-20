@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { builtinModules } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import ts from 'typescript';
+
+import { collectRuntimeSpecifiers } from '../../scripts/check-runtime-deps.mjs';
 
 const root = path.resolve(import.meta.dirname, '../../packages/templates');
 const templates = ['default', 'examples', 'hub'].map((kind) => {
@@ -16,6 +19,10 @@ const templates = ['default', 'examples', 'hub'].map((kind) => {
   };
 });
 const [baseline] = templates;
+const runtimeExtensions = ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs'];
+const builtins = new Set(
+  builtinModules.flatMap((name) => [name, name.replace(/^node:/u, '')]),
+);
 
 function filesIn(directory, prefix = '') {
   return readdirSync(directory, { withFileTypes: true })
@@ -28,26 +35,185 @@ function filesIn(directory, prefix = '') {
     .sort();
 }
 
+function runtimeFilesIn(directory) {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (
+      ['dev-commands', 'dist', 'node_modules', 'tests'].includes(entry.name)
+    ) {
+      return [];
+    }
+    const target = path.join(directory, entry.name);
+    if (entry.isDirectory()) return runtimeFilesIn(target);
+    return runtimeExtensions.includes(path.extname(entry.name)) ? [target] : [];
+  });
+}
+
+function resolveRuntimeRelative(from, specifier) {
+  const unresolved = path.resolve(path.dirname(from), specifier);
+  const base = unresolved.replace(/\.(?:c|m)?js$/u, '');
+  const candidates = [
+    unresolved,
+    ...runtimeExtensions.map((extension) => `${base}${extension}`),
+    ...runtimeExtensions.map((extension) =>
+      path.join(base, `index${extension}`),
+    ),
+  ];
+  return candidates.find(
+    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+  );
+}
+
+function runtimePackageName(specifier) {
+  if (
+    specifier.startsWith('.') ||
+    specifier.startsWith('/') ||
+    specifier.startsWith('#') ||
+    specifier.startsWith('@/') ||
+    specifier.startsWith('node:')
+  ) {
+    return undefined;
+  }
+  const segments = specifier.split('/');
+  return specifier.startsWith('@')
+    ? segments.slice(0, 2).join('/')
+    : segments[0];
+}
+
+function runtimeDependencies(template) {
+  const pending = ['server', 'database', 'cli'].flatMap((directory) =>
+    runtimeFilesIn(path.join(template.directory, directory)),
+  );
+  const visited = new Set();
+  const imported = new Map();
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (!file || visited.has(file)) continue;
+    visited.add(file);
+    for (const specifier of collectRuntimeSpecifiers(
+      readFileSync(file, 'utf8'),
+      file,
+    )) {
+      if (specifier.startsWith('.')) {
+        const resolved = resolveRuntimeRelative(file, specifier);
+        assert.ok(
+          resolved,
+          `${template.kind}: unresolved ${specifier} from ${file}`,
+        );
+        if (
+          !resolved.includes(`${path.sep}cli${path.sep}dev-commands${path.sep}`)
+        ) {
+          pending.push(resolved);
+        }
+        continue;
+      }
+      const dependency = runtimePackageName(specifier);
+      if (
+        dependency &&
+        dependency !== template.manifest.name &&
+        !builtins.has(dependency)
+      ) {
+        imported.set(dependency, path.relative(template.directory, file));
+      }
+    }
+  }
+  return imported;
+}
+
 function sharedFrameworkSource(template, file) {
-  const source = readFileSync(path.join(template.directory, file), 'utf8');
+  let source = readFileSync(path.join(template.directory, file), 'utf8');
+  if (template.kind === 'examples' && file === 'server/app.ts') {
+    // Examples owns the customer WebSocket protocol alongside Realtime. Its
+    // runtime suite covers startup; keep all shared provider and route wiring aligned.
+    const replacements = [
+      [
+        /import \{\s*Application,\s*type ApplicationConfig,\s*\} from '@nocobase\/app-server\/application';/u,
+        "import type { Application } from '@nocobase/app-server/application';",
+      ],
+      [
+        /import \{\s*healthCheckApiRoutes,\s*defineRootRoutes,\s*\} from '@nocobase\/app-server\/router';/u,
+        "import { healthCheckApiRoutes } from '@nocobase/app-server/router';",
+      ],
+      [
+        /import \{ type AppRuntimeContext \} from '@nocobase\/app-server\/runtime';/u,
+        "import {\n  createAppFromRuntime,\n  type AppRuntimeContext,\n} from '@nocobase/app-server/runtime';",
+      ],
+      [
+        /import \{ createCustomerWebSocketHandler \} from '@nocobase\/app-plugin-audit-example\/server';\nimport \{\s*createRealtimeWebSocketHandler,\s*RealtimeProvider,\s*registerRealtimeWebSocketRoutes,\s*\} from '@nocobase\/app-server\/realtime';\nimport \{ Hono \} from 'hono';\n/u,
+        '',
+      ],
+      [
+        /  \/\/ This example App owns its customer message protocol alongside Realtime\.\n[\s\S]*?(?=\n  app\.addServiceProvider\(DatabaseProvider\);)/u,
+        '  const app = createAppFromRuntime(runtime);\n',
+      ],
+    ];
+    for (const [pattern, replacement] of replacements) {
+      assert.match(
+        source,
+        pattern,
+        'Examples must retain its explicit WebSocket composition',
+      );
+      source = source.replace(pattern, replacement);
+    }
+  }
   if (
     template.kind === 'examples' &&
-    file === 'client/shell/header-actions.tsx'
+    file === 'client/layouts/components/header-actions.tsx'
   ) {
     // Examples owns the notification-center demonstration. Exclude only its
     // explicit entry; all shared header behavior must still match Default.
     const additions = [
-      "import { NotificationButton } from '@/components/notification-button';\n",
-      '      {/* Examples owns its notification center; keep its unread shortcut on every authenticated surface. */}\n      <NotificationButton />\n',
+      /^import \{ NotificationButton \} from '@\/components\/notification-button';\n/gm,
+      /^[\t ]*\{\/\* Examples owns its notification center; keep its unread shortcut on every authenticated surface\. \*\/\}\n[\t ]*<NotificationButton \/>\n/gm,
     ];
     return additions.reduce((shared, addition) => {
       assert.equal(
-        shared.split(addition).length - 1,
+        [...shared.matchAll(addition)].length,
         1,
         'Examples header must contain exactly one notification entry',
       );
       return shared.replace(addition, '');
     }, source);
+  }
+
+  // Keep product identity and Hub's deliberate menu order local while comparing the shared layout.
+  if (file === 'client/layouts/components/sidebar-footer.tsx') {
+    source = source
+      .replace("'Examples Template'", "'Default Template'")
+      .replace("'NocoBase Hub'", "'Default Template'");
+  }
+  if (
+    template.kind === 'hub' &&
+    file === 'client/layouts/components/app-brand.tsx'
+  ) {
+    source = source
+      .replace('AppBrand(props:', 'AppBrand(inputProps:')
+      .replace('= props;', '= inputProps;')
+      .replace(
+        /aria-label=\{t\('navigation.brandApps', \{\s*defaultValue: 'NocoBase applications',\s*\}\)\}/u,
+        "aria-label={t('navigation.brandHome', { defaultValue: 'NocoBase home' })}",
+      );
+  }
+  if (template.kind === 'hub' && file === 'client/layouts/app-layout.tsx') {
+    source = source
+      .replace('  type RouteNavigationItem,\n', '')
+      .replace(
+        'const { items, denied } = useRouteNavigation(routes);\n  const menuItems = orderHubNavigation(items);',
+        'const { items: menuItems, denied } = useRouteNavigation(routes);',
+      )
+      .replace("t('navigation.console',", "t('shell.workspace',")
+      .replace(
+        "defaultValue: 'Hub console'",
+        "defaultValue: 'AI application workspace'",
+      );
+    // The Hub client-shell suite verifies this product-specific sort order.
+    const helper = source.indexOf('\nconst HUB_NAVIGATION_PATHS');
+    assert.notEqual(
+      helper,
+      -1,
+      'Hub must retain its navigation ordering helper',
+    );
+    source = source.slice(0, helper).trimEnd() + '\n';
   }
 
   if (template.kind !== 'hub' || file !== 'server/standalone.ts') {
@@ -108,8 +274,8 @@ for (const template of templates) {
       for (const file of expected) {
         const relative = path.join(directory, file);
         assert.equal(
-          readFileSync(path.join(template.directory, relative), 'utf8'),
-          readFileSync(path.join(baseline.directory, relative), 'utf8'),
+          sharedFrameworkSource(template, relative),
+          sharedFrameworkSource(baseline, relative),
           `${template.kind}: ${relative}`,
         );
       }
@@ -123,7 +289,6 @@ for (const template of templates) {
       'server/app.ts',
       'server/embedded.ts',
       'server/standalone.ts',
-      'client/shell/header-actions.tsx',
     ]) {
       assert.equal(
         sharedFrameworkSource(template, file),
@@ -162,14 +327,32 @@ for (const template of templates) {
     }
   });
 
-  test(`${template.kind} declares a single dependency category and the database runtime peer`, () => {
+  test(`${template.kind} declares server runtime packages in dependencies only`, () => {
     const { dependencies, devDependencies } = template.manifest;
     const duplicates = Object.keys(dependencies).filter(
       (name) => name in devDependencies,
     );
     assert.deepEqual(duplicates, []);
     assert.ok(dependencies['@nocobase/db']);
-    assert.ok(dependencies['@nocobase/db-sqlite']);
+    // create-app adds SQLite when selected; templates must not force its installation.
+    assert.equal(
+      dependencies['@nocobase/db-sqlite'],
+      undefined,
+      `${template.kind}: the SQLite driver must be supplied by create-app`,
+    );
+    assert.equal(
+      devDependencies['@nocobase/db-sqlite'],
+      undefined,
+      `${template.kind}: devDependencies must not force SQLite installation`,
+    );
+    assert.equal(dependencies.hono, 'catalog:');
+    assert.equal(devDependencies.hono, undefined);
+    for (const [name, file] of runtimeDependencies(template)) {
+      assert.ok(
+        dependencies[name],
+        `${template.kind}: ${name} is imported at runtime by ${file} but is not in dependencies`,
+      );
+    }
     for (const field of [
       'engines',
       'packageManager',

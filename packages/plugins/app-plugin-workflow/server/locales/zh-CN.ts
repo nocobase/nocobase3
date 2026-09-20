@@ -1,6 +1,8 @@
 import type { WorkflowServerResource } from './en-US.js';
 
 const zhCN: WorkflowServerResource = {
+  nav: { automation: '自动化' },
+  authorization: { title: '工作流', read: '查看' },
   errors: {
     badRequest: '工作流请求无效。',
     conflict: '工作流请求与当前状态冲突。',

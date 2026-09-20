@@ -6,6 +6,8 @@ export type SkillsEntity = {
   description: string;
   content: string;
   tools?: string[];
+  /** UI translation metadata, independent of associated tools. */
+  i18n?: { namespace: string };
   introduction?: { title: string; about?: string };
   from?: string;
   sort?: number;

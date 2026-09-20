@@ -475,7 +475,7 @@ describe('workflow runtime', () => {
         { eventKey: 'branch-no' },
       );
 
-      // Recall completes the original condition nodeRun instead of appending one.
+      // Recall preserves the original condition nodeRun instead of appending one.
       await expect(
         jobTrace(database, await runIdOf('branch-yes')),
       ).resolves.toEqual(['gate', 'yes1', 'yes2', 'after']);
@@ -571,8 +571,7 @@ describe('workflow runtime', () => {
         { eventKey: 'nested-shallow' },
       );
 
-      // Two levels of recall complete the existing inner and outer condition
-      // nodeRuns in place, and only then does `tail` run.
+      // Two levels of recall preserve the completed conditions before `tail` runs.
       await expect(
         jobTrace(database, await runIdOf('nested-deep')),
       ).resolves.toEqual(['start', 'outer', 'inner', 'leaf1', 'leaf2', 'tail']);
@@ -624,8 +623,8 @@ describe('workflow runtime', () => {
       expect(
         nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'gate'),
       ).toMatchObject({
-        status: NODE_RUN_STATUS.FAILED,
-        error: 'Condition node "gate" received an error from branch node "bad"',
+        status: NODE_RUN_STATUS.RESOLVED,
+        result: true,
       });
       expect(
         nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'bad'),
@@ -638,7 +637,7 @@ describe('workflow runtime', () => {
       });
     });
 
-    it('records one contextual error per condition when a nested branch fails', async () => {
+    it('preserves condition results and records the original nested branch error', async () => {
       const workflow = await createTestWorkflow(
         database,
         defineWorkflow({
@@ -680,16 +679,14 @@ describe('workflow runtime', () => {
       expect(
         nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'inner'),
       ).toMatchObject({
-        status: NODE_RUN_STATUS.ERROR,
-        error:
-          'Condition node "inner" received an error from branch node "bad"',
+        status: NODE_RUN_STATUS.RESOLVED,
+        result: true,
       });
       expect(
         nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'outer'),
       ).toMatchObject({
-        status: NODE_RUN_STATUS.ERROR,
-        error:
-          'Condition node "outer" received an error from branch node "inner"',
+        status: NODE_RUN_STATUS.RESOLVED,
+        result: true,
       });
     });
 
@@ -785,7 +782,7 @@ describe('workflow runtime', () => {
       await runtime.trigger(workflow, {}, { eventKey: 'suspend-branch' });
       const runId = await runIdOf('suspend-branch');
       const gateNodeRunId = await nodeRunIdOf(runId, 'gate');
-      // Both the condition scope and its suspended branch node remain pending.
+      // Only the suspended branch node remains pending; the judgment is complete.
       await expect(readRun(database, runId)).resolves.toMatchObject({
         status: EXECUTION_STATUS.STARTED,
       });
@@ -797,7 +794,7 @@ describe('workflow runtime', () => {
         (await listNodeRuns(database, runId)).find(
           (nodeRun) => nodeRun.nodeKey === 'gate',
         ),
-      ).toMatchObject({ status: NODE_RUN_STATUS.PENDING });
+      ).toMatchObject({ status: NODE_RUN_STATUS.RESOLVED });
 
       await runtime.dispatcher.dispatch({
         executionId: runId,
@@ -888,8 +885,7 @@ describe('workflow runtime', () => {
         nodeRunId: await nodeRunIdOf(runId, 'hold'),
       });
 
-      // The condition bubbles the errored branch status into its original nodeRun
-      // instead of continuing to its downstream or appending a recall record.
+      // The condition propagates the branch error without changing its own result.
       const nodeRuns = await listNodeRuns(database, runId);
       expect(nodeRuns.map((nodeRun) => nodeRun.nodeKey)).toEqual([
         'gate',
@@ -898,9 +894,8 @@ describe('workflow runtime', () => {
       expect(
         nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'gate'),
       ).toMatchObject({
-        status: NODE_RUN_STATUS.ERROR,
-        error:
-          'Condition node "gate" received an error from branch node "hold"',
+        status: NODE_RUN_STATUS.RESOLVED,
+        result: true,
       });
       expect(
         nodeRuns.find((nodeRun) => nodeRun.nodeKey === 'hold'),

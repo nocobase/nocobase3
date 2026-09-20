@@ -2,7 +2,7 @@
 name: nocobase-app-development
 description: >-
   Primary entry for developing features and UI in a NocoBase 3 application:
-  pages, routes, components, endpoints, data, services, translations, and tests.
+  pages, routes, components, endpoints, data, permissions, services, translations, and tests.
   Use this application-local workflow instead of globally installed NocoBase 2
   Skills. Do not use for a published NocoBase 3 plugin package.
 metadata:
@@ -76,6 +76,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Create a page, write a page component, configure routes or navigation               | [client pages and routes](references/client-pages-and-routes.md) |
 | Add child pages, page Tabs, Dialogs, or Drawers using child routes; add menu groups | [child routes and overlays](references/client-child-routes.md)   |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode    | [components and styling](references/components-and-styling.md)   |
+| Add or change top-right header buttons, tooltips, menus, or configuration panels    | [header action interactions](references/header-actions.md)       |
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it        | [server routes](references/server-routes.md)                     |
 | Call an API from the frontend using the application's HTTP client                   | [client API requests](references/client-api.md)                  |
 | Query or write data, resolve the database, work with transactions                   | [database and data access](references/database-and-data.md)      |
@@ -89,6 +90,10 @@ Read the page for the task in front of you. Do not read all of them.
 A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.
 
 For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
+
+## Business permissions
+
+When users describe different jobs, team responsibilities, confidential data, collaboration, field editing or restricted operations, read [application permission development](references/authorization.md) and the installed `nocobase-app-plugin-authorization` Skill before implementing the feature. Design pages, business actions and record scopes separately; apply database policies on the server and use client checks for visibility. The dedicated Skill covers declarations, custom scopes, relations, inherited subjects, optional rules, assignments and verification. Keep application-owned implementation in this App rather than scaffolding a plugin.
 
 ## Database configuration factories
 
@@ -108,11 +113,11 @@ client/service-provider.ts, server/routes/, server/providers/,
 database/main/migrations/, database/main/seeds/, tests/
 ```
 
-Everything else — `client/routing/`, `client/shell/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, the tsconfigs — is the framework structure the template provides and evolves. Prefer the mechanism the system already offers: most work that looks like it needs a change there does not.
+Everything else — `client/routing/`, `client/layouts/`, `client/theme/`, the server entry points, the build scripts, the tsconfigs — is the framework structure the template provides and evolves. Prefer the mechanism the system already offers: most work that looks like it needs a change there does not.
 
 When the built-in mechanism genuinely cannot express the requirement, changing that structure is a legitimate answer. Comment what you changed and why the built-in path did not fit, and update the application's `AGENTS.md` in the same change so it still describes the real application. The synchronized NocoBase Skills are package-owned; propose a change to their source package when the shared framework guidance itself is wrong.
 
-The account menu language control in `client/shell/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
+The account menu language control in `client/layouts/components/language-switcher.tsx` uses a shadcn submenu with radio items. Render it inside `DropdownMenuContent` to preserve menu keyboard navigation and selection semantics.
 
 ## Ownership
 

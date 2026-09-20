@@ -1,6 +1,6 @@
 import { Job, type JobOptions } from '@nocobase/queue';
 import type { AppAudit } from '@nocobase/app-plugin-audit/server';
-import type { AppAuthorization } from '@nocobase/app-plugin-authorization';
+import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization';
 import type { CustomerService } from '../services/audit-example.js';
 import { parseCustomerUpdate } from '../input.js';
 import type { CustomerUpdate } from '../types.js';
@@ -12,7 +12,7 @@ export interface CustomerMaintenancePayload {
 export interface CustomerMaintenanceDependencies {
   readonly customers: CustomerService;
   readonly audit: AppAudit;
-  readonly authorization: AppAuthorization;
+  readonly authorization: AppAuthorizationService;
 }
 export default class CustomerMaintenanceJob extends Job<CustomerMaintenancePayload> {
   public static options: JobOptions = {

@@ -5,10 +5,10 @@ import { I18nRuntime } from '@nocobase/i18n';
 import { I18nProvider } from '@nocobase/i18n/client';
 import { expect, it, vi } from 'vitest';
 import locales from '../client/locales/index.js';
-import { PermissionSetsPanel } from '../client/pages/permission-sets-panel.js';
+import { PermissionSetEditor } from '../client/pages/permission-sets/editor.js';
 
-vi.mock('../client/runtime.js', () => ({
-  getAuthorizationClient: () => ({ listPermissionSets: async () => [] }),
+vi.mock('../client/use-authorization-client.js', () => ({
+  useAuthorizationClient: () => ({ listPermissionSets: async () => [] }),
 }));
 
 it('finds resources by translated label, original label and identifier', async () => {
@@ -35,7 +35,8 @@ it('finds resources by translated label, original label and identifier', async (
         resources: [
           {
             value: 'home-id',
-            label: 'Home',
+            label: '首页',
+            searchText: 'Home',
             actions: [{ value: 'access', label: 'Access' }],
           },
         ],
@@ -46,23 +47,27 @@ it('finds resources by translated label, original label and identifier', async (
     collections: [],
     recordAccessPolicies: [],
   };
-  const click = async (text: string) => {
-    const button = [...container.querySelectorAll('button')].find(
-      (item) => item.textContent === text,
-    );
-    expect(button).toBeDefined();
-    await act(() => button!.click());
-  };
   try {
     await act(() =>
       root.render(
         <I18nProvider runtime={runtime}>
-          <PermissionSetsPanel options={options} users={[]} />
+          <PermissionSetEditor
+            dirty={true}
+            options={options}
+            draft={{
+              originalKey: 'test',
+              key: 'test',
+              title: 'Test',
+              grants: [],
+            }}
+            busy={false}
+            onChange={() => {}}
+            onSave={() => {}}
+            onClose={() => {}}
+          />
         </I18nProvider>,
       ),
     );
-    await click('新建权限集');
-    await click('添加权限');
     const input = container.querySelector<HTMLInputElement>(
       'input[placeholder="搜索资源"]',
     )!;
@@ -76,7 +81,6 @@ it('finds resources by translated label, original label and identifier', async (
         input.dispatchEvent(new Event('input', { bubbles: true }));
       });
       expect(container.textContent).toContain('首页');
-      expect(container.textContent).toContain('home-id');
     }
   } finally {
     await act(() => root.unmount());

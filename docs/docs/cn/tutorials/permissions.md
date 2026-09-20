@@ -36,16 +36,18 @@ description: '配置业务员和主管，并用不同账号验证服务端的数
 ```text
 读取当前应用的 Authorization Skill 和 Users Skill，为教程订单接入现有权限系统，不另建角色表。
 
-注册 tutorialOrders 数据库资源，包含 read、create、update 动作，以及教程字段；owner 属性使用 ownerId。注册订单列表、详情和主管审批操作的页面资源。
+注册 tutorialOrders 集合及 read、create、update 动作，字段元数据由数据库提供，归属使用 ownerId。分别注册列表/详情页面与查看、提交、通过、驳回等业务操作，并声明每个操作可使用的字段。
 
 创建“教程业务员”和“教程主管”权限集。业务员 read/update 使用 recordsIOwn，主管使用 allRecords；只允许需要的输入和输出字段。创建时 ownerId 来自登录身份。
 
-服务端用 authorize() 得到数据库条件，将记录过滤器放进查询和更新语句的 WHERE，落实字段限制。不能只隐藏菜单和按钮，也不能先查询全部数据再在浏览器中过滤。
+业务操作在请求级 authorize() 中检查一次，将 conditions.database 的策略通过 repository.withPolicy() 绑定到对应查询和写入。普通集合 CRUD 使用 db.policyFor()。不能只隐藏菜单和按钮，也不能先查询全部数据再在浏览器中过滤。
 
 为后续审批保留主管操作权限；提交接口还要检查本人归属。前端按权限展示操作，服务端独立校验。
 ```
 
-应用代码使用的数据库资源 ID 是 `main.tutorialOrders`。权限集配置、页面资源名和接口中的检查必须对应；不要用可见的中文标题代替资源 ID。
+完整的职责设计流程见[向 AI 描述业务权限](../capabilities/authorization/develop-with-ai)。
+
+应用代码使用的数据库资源 ID 是 `tutorialOrders`。权限集配置、页面资源名和接口中的检查必须对应；不要用可见的中文标题代替资源 ID。
 
 ## 创建测试账号
 

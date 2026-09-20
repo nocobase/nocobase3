@@ -13,6 +13,7 @@ type DataToolContext = AgentContext<object, { data: DataServices }>;
 /** Tools receive only an actor-bound capability, never an unscoped Repository. */
 export function defineDataTool<T>(
   name: string,
+  title: string,
   description: string,
   schema: z.ZodType<T>,
   invoke: (service: DataServices, input: T) => Promise<unknown>,
@@ -20,7 +21,8 @@ export function defineDataTool<T>(
   return defineTools<DataToolContext>({
     scope: 'SPECIFIED',
     defaultPermission: 'ALLOW',
-    introduction: { title: name, about: description },
+    i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
+    introduction: { title, about: description },
     definition: { name, description, schema },
     async invoke(ctx, args) {
       try {

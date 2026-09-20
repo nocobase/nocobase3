@@ -67,15 +67,17 @@ npm_config_registry=https://npm.nocobase.ai pnpm create @nocobase/app
 
 ## Flags
 
-| Flag             | Description                                                                              |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| `[directory]`    | Application directory, relative to the current one. Prompted for when omitted            |
-| `--no-install`   | Skip installing dependencies after scaffolding                                           |
-| `--template`     | Template, `default` by default. Also accepts a published package or a local package path |
-| `--template-tag` | Channel a named template is fetched from: `latest` (default) or `beta`                   |
-| `--registry`     | Registry the template is downloaded from, `https://npm.nocobase.ai` by default           |
-| `-h, --help`     | Show help                                                                                |
-| `--version`      | Show the version                                                                         |
+| Flag             | Description                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `[directory]`    | Application directory, relative to the current one. Prompted for when omitted                                   |
+| `--dialect`      | Main database: `sqlite` (default), `postgres`, `mysql`, `mssql`, `oracle`, `dameng`, `kingbase`, or `oceanbase` |
+| `--json`         | Non-interactive mode; requires a directory and prints one final JSON result                                     |
+| `--no-install`   | Skip installing dependencies after scaffolding                                                                  |
+| `--template`     | Template, `default` by default. Also accepts a published package or a local package path                        |
+| `--template-tag` | Channel a named template is fetched from: `latest` (default) or `beta`                                          |
+| `--registry`     | Registry the template is downloaded from, `https://npm.nocobase.ai` by default                                  |
+| `-h, --help`     | Show help                                                                                                       |
+| `--version`      | Show the version                                                                                                |
 
 `--template` supports three names: `default` (the default application), `examples` (the example application), and `hub` (an application hub), each pointing at the corresponding `@nocobase/app-template-*` package.
 
@@ -100,7 +102,7 @@ pnpm create @nocobase/app crm --template=@nocobase/app-template-default@1.0.0-be
 pnpm create @nocobase/app crm --template=./packages/templates/app-template-default
 ```
 
-Dependencies are installed automatically; `--no-install` skips that.
+Dependencies are installed automatically; `--no-install` skips that. Generated `pnpm-workspace.yaml` defaults to `verifyDepsBeforeRun: false`, so `pnpm dev`, `pnpm build`, and `pnpm start` do not implicitly install dependencies. Run `pnpm install` explicitly after changing dependencies, or before starting an app created with `--no-install`. An explicit template setting is preserved. Existing applications can add `verifyDepsBeforeRun: false` to their own `pnpm-workspace.yaml`.
 
 ## What gets generated
 
@@ -116,18 +118,28 @@ The template is downloaded (`@nocobase/app-template-default@latest` by default) 
 
 ## Choosing a database
 
-There is no flag for it. A generated application runs on SQLite, which needs no server, and the database is part of the application's source rather than a setup-time question:
+Use `--dialect` to generate the main connection in `config.yml` and add the matching driver dependency before the automatic `pnpm install`:
 
-```ts
-// server/config/database.ts
-import sqlite from '@nocobase/db-sqlite';
-
-drivers: { sqlite },
+```bash
+pnpm create @nocobase/app crm --dialect postgres
+# Edit database.connections.main in crm/config.yml with actual connection settings.
+cd crm
+pnpm dev
 ```
 
-To use another database, add its dialect package (`@nocobase/db-postgres`, `@nocobase/db-mysql`, `@nocobase/db-oracle`, `@nocobase/db-mssql`, `@nocobase/db-kingbase`, `@nocobase/db-oceanbase`, `@nocobase/db-dameng`), register it in `drivers`, and point the connection at it — in that file, or in `config.yml` for the host and credentials. A dialect that is not registered fails at startup with `Database dialect "…" is not registered.`, because drivers are code rather than settings and `config.yml` cannot introduce one.
+SQLite is the default and preserves the template's SQLite file path. Other dialects generate localhost, a default port, a sample username/database and an empty password; Oracle uses `serviceName`, and Dameng uses `schema`. Edit these directly in `config.yml` and prepare the target database before starting. No database `.env` or environment-variable placeholders are generated. Other connections and their dependencies are retained, including the Examples template's SQLite databases. Official drivers load automatically; registration in source code is unnecessary. The template's source defaults and `config.example.yml` remain unchanged; the generated local `config.yml` selects the database.
 
-Each dialect package brings its own driver, so nothing has to be installed by name.
+When a driver is missing, its version range comes from the template runtime's published peer dependencies, using the selected registry. A runtime that does not declare the driver contract fails before scaffolding rather than guessing a version. `--no-install` still generates configuration and dependency declarations.
+
+## Agent output
+
+```bash
+pnpm create @nocobase/app crm --dialect postgres --json
+```
+
+JSON mode never prompts. It writes one final JSON object to stdout and progress to stderr. The result includes `status`, `stage`, `directory`, `dialect`, `projectCreated`, `dependenciesInstalled`, `databaseConnectionVerified`, `configurationRequired`, `configFile`, `configPath`, `nextCommands`, `message`, and `warnings` where available. No generated secrets or complete configuration are printed. `--help --json` and `--version --json` return the requested information as JSON.
+
+Success exits with 0, invalid input with 2, and operational failures with 1. An install failure reports `stage: "install"`, preserves generated files, and directs the agent to retry `pnpm install` in the existing directory. Successful installation does not verify database connectivity. Edit `config.yml` before running `nextCommands`; a Hub uses `pnpm build` followed by `pnpm start`. The CLI never starts the application itself.
 
 ## About native install scripts
 
@@ -156,3 +168,5 @@ node ./bin/run.js crm --template ../../templates/app-template-default
 ```
 
 A local directory is packed with `pnpm pack`, which resolves `workspace:` and `catalog:` into real version ranges, so the generated project installs outside the repository too.
+
+Post-install native dependency verification checks `better-sqlite3` when present. It does not verify other selected drivers or database connectivity. Non-SQLite creation reports this limitation in its output and JSON `warnings`; configure `database.connections.main` in `config.yml` and verify startup against the target database.

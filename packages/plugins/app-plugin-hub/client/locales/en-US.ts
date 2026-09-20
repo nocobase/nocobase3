@@ -158,17 +158,18 @@ const enUS = {
     createTitle: 'Create application',
     createDescription: 'Create a stable identity before deploying a release.',
     applicationName: 'Application name',
-    applicationNamePlaceholder: 'Customer portal',
+    applicationNamePlaceholder: 'Enter application name',
     applicationId: 'Application ID',
     applicationIdHint:
-      'Auto-generated and editable; globally unique and fixed after creation.',
-    applicationIdPlaceholder: 'customer-portal',
+      'Required. Use letters, numbers, hyphens, or underscores; cannot start with __. Must be globally unique and cannot be changed after creation.',
+    applicationIdPlaceholder: 'Enter application ID',
     create: 'Create application',
   },
   detail: {
     allApplications: 'All applications',
     visit: 'Visit',
     refreshStatus: 'Refresh status',
+    refreshing: 'Refreshing…',
     release: 'Release',
     notDeployed: 'Not deployed',
     startup: 'Startup',
@@ -176,8 +177,8 @@ const enUS = {
     onFirstVisit: 'On first visit',
     updated: 'Updated {{date}}',
     tabs: {
-      logs: 'Logs',
-      deployments: 'Deployments',
+      logs: 'Runtime logs',
+      deployments: 'Releases & deployments',
       releases: 'Releases',
       development: 'Development',
       resources: 'Resources',
@@ -264,6 +265,9 @@ const enUS = {
       'The viewer keeps the latest 2,000 matching entries. Download to read the full retained selection.',
   },
   deployments: {
+    statusRetrying: 'Status updates interrupted. Retrying automatically…',
+    statusFinished:
+      'Deployment or startup has finished. Check the latest status and deployment record for the result.',
     title: 'Deployments',
     description:
       'Each row is a deployment operation. Rolling back creates a new deployment using the selected release and configuration.',
@@ -309,9 +313,26 @@ const enUS = {
     },
   },
   releases: {
-    title: 'Releases',
-    description:
-      'Upload and inspect immutable release artifacts for this application.',
+    uploadedOnly: 'Upload complete.',
+    expand: 'Expand releases',
+    collapse: 'Collapse releases',
+    uploadedAt: 'Uploaded',
+    size: 'Size',
+    deploy: 'Deploy',
+    deployVersion: 'Deploy v{{version}}',
+    latestUpload: 'Latest upload',
+    uploaded:
+      'Upload complete. Choose Deploy on the uploaded release to continue.',
+    reusable:
+      'Each release can be deployed multiple times. Every deployment has its own record.',
+    showAll: 'View all {{count}} releases',
+    showLess: 'Show fewer releases',
+    firstTitle: 'Upload your first release to get started',
+    firstDescription:
+      'Upload a built artifact, confirm its configuration, then deploy and follow the logs.',
+
+    title: 'Release artifacts',
+    description: 'Upload a new artifact or deploy an existing release again.',
     upload: 'Upload release',
     noReleases: 'No releases uploaded',
     active: 'Active',
@@ -319,7 +340,10 @@ const enUS = {
     uploadTitle: 'Upload release',
     uploadDescription:
       'Upload a built application artifact. Version and config.example.yml or config.example.yaml are detected automatically.',
-    chooseArtifact: 'Choose a .tar.gz release artifact',
+    chooseArtifact: 'Click or drag a .tar.gz / .tgz artifact here',
+    dropArtifact: 'Drop to select this artifact',
+    selectionHint: 'Select one file, then click Upload release to submit.',
+    invalidSelection: 'Select exactly one .tar.gz or .tgz file.',
     uploading: 'Uploading…',
     cancel: 'Cancel',
   },
@@ -384,6 +408,22 @@ const enUS = {
     visibility: 'Visibility',
   },
   configuration: {
+    importConfig: 'Import file',
+    importDraftNotice:
+      'Imported into the editor only. Review and submit to apply changes. Undo import also discards edits made after importing.',
+    undoImport: 'Undo import',
+    serverChanged:
+      'Server configuration has changed. Your unsaved draft has been preserved.',
+    discardDraftWarning: 'Reloading discards your unsaved changes. Continue?',
+    discardAndReload: 'Discard draft and reload',
+    reloadServerConfig: 'Reload server configuration',
+    importError:
+      'Choose a non-empty UTF-8 .yml or .yaml file up to 1 MiB with a valid YAML object.',
+    replaceDraft: 'Importing replaces your edited draft. Continue?',
+    confirmImport: 'Replace draft',
+    importWarning:
+      'Check the target database before deployment: migrations may run. Database drivers must be included in the release; localhost, paths and environment variables refer to the deployment environment. Undo import also discards edits made after importing.',
+    importedFrom: 'Imported from {{name}} · Editable',
     title: 'Configuration',
     description: 'Configuration source used by this application.',
     configFile: 'Config file',
@@ -415,7 +455,7 @@ const enUS = {
     secretWarning:
       'config.yml may contain secrets. Hub stores the complete file for this application, and authorized administrators can view its contents.',
     secretAutoGeneration:
-      'When auth.secret is missing, Hub generates a unique secret for the first Config file deployment and reuses it for later deployments.',
+      'For Config file deployments, Hub automatically fills missing, blank or example auth.secret and session.secret values, including omitted sections, with secure random secrets. Existing secrets are reused and custom values are preserved. External configuration is not modified.',
     noSourceChanges: 'No configuration source changes',
     continue: 'Continue',
     review: 'Review',
@@ -475,17 +515,23 @@ const enUS = {
     remove: 'Remove application',
   },
   development: {
+    openWorkspace: 'Go to Releases & deployments',
     buildTitle: 'Build the release',
     projectSource: 'Project source',
     prepareTitle: 'Prepare your project',
-    copyFailed: 'Could not copy. Select and copy the command manually.',
-    copied: 'Command copied',
+    copyFailed: 'Could not copy. Select and copy the text manually.',
+    copied: 'Copied',
     title: 'Deploy your first release',
     description:
       'Prepare your project locally, then upload and deploy it here.',
     createTitle: 'New project',
     createDescription: 'Run this command where you keep your source projects.',
     copyCommand: 'Copy create-app command',
+    agentDescription:
+      'Next, hand the project to your AI Agent and let it start building. To build a CRM application, for example, send it this:',
+    agentPrompt:
+      'Build a CRM application based on this NocoBase 3 project template.',
+    copyPrompt: 'Copy example prompt',
     footer:
       'Open the generated directory and finish local setup and development before building.',
     existingTitle: 'Existing project',
@@ -498,7 +544,7 @@ const enUS = {
     buildTarget:
       'Building for another machine? Match the Hub host with --target and --node-version. See pnpm build --help for options.',
     uploadDescription:
-      'Upload storage/dist.tar.gz in Releases. Then choose Deploy in Deployments to select the release and review its configuration.',
+      'Upload storage/dist.tar.gz in Releases & deployments. Then choose Deploy on the release and review its configuration.',
     openReleases: 'Go to Releases',
     deployDescription:
       'Uploading does not start the application. Visit it after deployment succeeds.',

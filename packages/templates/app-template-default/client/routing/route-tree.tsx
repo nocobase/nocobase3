@@ -11,8 +11,6 @@ import { ClientRoute } from './client-route.js';
 export function renderRouteTree(
   routes: readonly AppClientRegisteredRoute[],
   parentPath = '',
-  hasPageAncestor = false,
-  surface = false,
 ): ReactElement[] {
   return routes.map((route) => (
     <Route
@@ -27,11 +25,7 @@ export function renderRouteTree(
       }
       element={
         route.componentLoader ? (
-          <ClientRoute
-            key={routeKey(route)}
-            route={route}
-            defaultAccess={!surface && !hasPageAncestor}
-          />
+          <ClientRoute key={routeKey(route)} route={route} />
         ) : (
           <Outlet />
         )
@@ -42,8 +36,6 @@ export function renderRouteTree(
         parentPath.startsWith(`${route.path.replace(/\/$/, '')}/`)
           ? parentPath
           : route.path,
-        hasPageAncestor || Boolean(route.componentLoader),
-        surface,
       )}
     </Route>
   ));

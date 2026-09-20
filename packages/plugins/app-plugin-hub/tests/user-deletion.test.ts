@@ -11,6 +11,7 @@ import {
   createAuthentication,
   createUserAdministrationService,
   authenticationToken,
+  userAdministrationServiceToken,
 } from '@nocobase/app-plugin-authentication';
 import {
   createAppAuthorization,
@@ -30,6 +31,7 @@ import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   createHubUserRoleScope,
   registerHubResources,
+  protectHubPermissionSets,
 } from '../server/authorization.js';
 import {
   hubApiKeyAuthentication,
@@ -76,12 +78,15 @@ beforeEach(async () => {
   });
   authz = createAppAuthorization({ connection: db.connection() });
   registerHubResources(authz, db.connection());
+  protectHubPermissionSets(authz.permissionSets);
+
   roles = createUserRoleScopeRegistry();
-  roles.register(createHubUserRoleScope(authz));
+  roles.register(createHubUserRoleScope(authz.permissionSets));
   management = createUserManagementService({
     database: db,
     users,
     roleScopes: roles,
+    permissionSets: authz.permissionSets,
   });
   for (const id of ['admin', 'admin-two']) {
     await db
@@ -162,6 +167,7 @@ async function router(actorId?: string) {
         updatedAt: new Date(),
       },
     });
+  container.instance(userAdministrationServiceToken, users);
   container.instance(authenticationToken, sessionAuth);
   container.instance(authorizationToken, authz);
   container.instance(userManagementServiceToken, management);
@@ -216,6 +222,7 @@ describe('Hub user deletion', () => {
     ).toHaveLength(1);
   });
   it('protects the last enabled administrator even when the other administrator is disabled', async () => {
+    await router('admin');
     await db
       .query()
       .updateTable('user')
@@ -224,7 +231,7 @@ describe('Hub user deletion', () => {
       .execute();
     await expect(
       roles.get('hub')!.assertCanDisable!('admin', db.connection()),
-    ).rejects.toMatchObject({ code: 'LAST_HUB_ADMIN' });
+    ).rejects.toMatchObject({ name: 'PermissionSetLastAssignmentError' });
     await expect(management.remove('admin', 'admin-two')).rejects.toMatchObject(
       { code: 'HUB_ADMIN_REQUIRED' },
     );

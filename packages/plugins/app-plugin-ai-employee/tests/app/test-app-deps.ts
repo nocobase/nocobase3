@@ -12,6 +12,10 @@ import {
   createAuthentication,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
+import {
+  createAppAuthorization,
+  type AppAuthorization,
+} from '@nocobase/app-plugin-authorization';
 import type { Caching } from '@nocobase/caching';
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import { createLogging, type Logging } from '@nocobase/logging';
@@ -25,6 +29,7 @@ export interface TestAppDeps {
   readonly paths: AppPaths;
   readonly database: DatabaseManager;
   readonly auth: Auth;
+  readonly authorization: AppAuthorization;
   readonly caching: Caching;
   readonly fileStorageFactory: FileStorageFactory;
   readonly aiStorageDisk: string;
@@ -47,6 +52,9 @@ export function createTestAppDeps(): TestAppDeps {
     auth: createAuthentication({
       connection: database.connection(),
       secret: 'ai-employee-test-auth-secret-at-least-32-characters',
+    }),
+    authorization: createAppAuthorization({
+      connection: database.connection(),
     }),
     caching: {
       getCache: ({ namespace }) => {
