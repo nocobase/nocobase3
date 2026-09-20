@@ -211,4 +211,3 @@ Current implementation and maintained examples:
 - [Registry example package](../../../../packages/examples/app-plugin-registry-example/package.json)
 - [Registry example configuration](../../../../packages/examples/app-plugin-registry-example/registry.config.json)
 - [Page source extension example](../../../../packages/examples/app-plugin-registry-example/registry/page-ui/extension.ts)
-- [Default Template source-extension loader](../../../../packages/templates/app-template-default/client/source-extensions.ts)

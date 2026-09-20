@@ -273,6 +273,5 @@ Current implementation and maintained examples:
 - [CLI plugin validation](../../../../packages/tools/cli/src/plugins/define.ts)
 - [CLI assembly](../../../../packages/tools/cli/src/runtime/assemble.ts)
 - [CLI example plugin](../../../../packages/examples/app-plugin-cli-example/cli/index.ts)
-- [Default Template CLI composition](../../../../packages/templates/app-template-default/cli/index.ts)
 - [Plugin registration implementation](../../../../packages/tools/cli/src/lib/plugin-registration.ts)
 - [Skills synchronization implementation](../../../../packages/tools/cli/src/lib/skills-sync.ts)

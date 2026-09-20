@@ -98,21 +98,327 @@ Use the shared theme contract for all plugin UI: [theme tokens](theme-tokens.md)
 
 ## Copy page and route components into the plugin
 
-When a plugin needs the template's page structure or route overlays, copy the required source into `<plugin>/client/components/` and maintain it as plugin-owned code. Reuse an existing plugin copy before adding another. These template files are source references, not runtime imports from the host App:
+Copy the required source from the sections below into `<plugin>/client/components/` and maintain it as plugin-owned code. Reuse an existing plugin copy before adding another. The examples are self-contained source references; no App template files are required.
 
-| Need                     | Source to copy                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Page spacing             | [page-container.tsx](../../../../packages/templates/app-template-default/client/components/page-container.tsx)                                                                                                                                                                                                                                                                                                                                               |
-| Page heading and actions | [page-header.tsx](../../../../packages/templates/app-template-default/client/components/page-header.tsx)                                                                                                                                                                                                                                                                                                                                                     |
-| Route dialog or drawer   | [route-dialog.tsx](../../../../packages/templates/app-template-default/client/components/route-dialog.tsx), [route-drawer.tsx](../../../../packages/templates/app-template-default/client/components/route-drawer.tsx), [route-overlay.tsx](../../../../packages/templates/app-template-default/client/components/route-overlay.tsx), and [use-route-overlay.ts](../../../../packages/templates/app-template-default/client/components/use-route-overlay.ts) |
+| Need                     | Source in this guide                                                                                                                                  |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page spacing             | [PageContainer](#pagecontainer)                                                                                                                       |
+| Page heading and actions | [PageHeader](#pageheader)                                                                                                                             |
+| Route dialog or drawer   | [Overlay context and hook](#overlay-context-and-hook), [RouteOverlay](#routeoverlay), and [RouteDialog and RouteDrawer](#routedialog-and-routedrawer) |
 
-Copy the overlay implementation and its hook together, retaining one plugin-local Context instance for both wrappers. Include only the wrappers needed by the feature. Resolve their transitive imports against plugin-owned shadcn primitives and utilities, including `ui/dialog`, `ui/button`, and `lib/utils`; generate missing primitives using the workflow above. Change internal imports to relative `.js` paths and add explicit declaration-safe types as described above. Declare imported Client runtime packages as peers. Keep these copies private unless an approved public export is required.
+Copy the overlay implementation and its hook together, retaining one plugin-local Context instance for both wrappers. Include only the wrappers needed by the feature. Resolve their transitive imports against plugin-owned shadcn primitives and utilities, including `ui/dialog`, `ui/button`, and `lib/utils`; generate missing primitives using the workflow above. The source below already uses relative `.js` imports and explicit types for declaration output. Declare imported Client runtime packages as peers. Keep these copies private unless an approved public export is required.
 
 Copy the components' translation keys into the plugin's own `client/locales/` resources and register the lazy locale manifest in its Client declaration; see [internationalization](i18n.md). In particular, `route-overlay.tsx` uses `actions.close`: supply this key in every supported plugin language (for example, `Close` in English and `关闭` in Chinese). Do not rely on the host App providing the same key. Under the plugin's own route, the copied overlay inherits the plugin namespace; if it is intentionally exported for another owner to render, bind that namespace explicitly as described in the internationalization guide.
 
 The page examples in this Skill assume these copies already exist. Nested pages adjust the relative path to the same plugin-owned components. The host App's private breadcrumb component is excluded from this copy workflow because it reads an App-owned route Context; do not copy that Context or import the host's routing internals.
 
 Verify copied components with the plugin's lint, typecheck, tests and build, then exercise them in the target App. For overlays, cover direct URLs, closing, nested Context ownership, keyboard interaction and unsaved-change guards.
+
+### PageContainer
+
+`client/components/page-container.tsx`:
+
+```tsx
+import type { ComponentProps, ReactElement } from 'react';
+import { cn } from '../lib/utils.js';
+
+export type PageContainerProps = ComponentProps<'section'>;
+
+export function PageContainer({
+  className,
+  ...props
+}: PageContainerProps): ReactElement {
+  return (
+    <section
+      className={cn('w-full space-y-6 p-6 md:p-8', className)}
+      {...props}
+    />
+  );
+}
+```
+
+### PageHeader
+
+`client/components/page-header.tsx`:
+
+```tsx
+import type { ReactElement, ReactNode } from 'react';
+
+export interface PageHeaderProps {
+  readonly title: ReactNode;
+  readonly description?: ReactNode;
+  readonly actions?: ReactNode;
+}
+
+export function PageHeader({
+  actions,
+  description,
+  title,
+}: PageHeaderProps): ReactElement {
+  return (
+    <header className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
+      <div className='min-w-0'>
+        <h1 className='font-heading text-3xl font-semibold tracking-[-0.035em]'>
+          {title}
+        </h1>
+        {description ? (
+          <p className='mt-2 max-w-2xl text-sm leading-6 text-muted-foreground'>
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {actions ? (
+        <div className='flex shrink-0 items-center gap-2'>{actions}</div>
+      ) : null}
+    </header>
+  );
+}
+```
+
+### Overlay context and hook
+
+`client/components/use-route-overlay.ts`:
+
+```ts
+import { createContext, useContext, type Context } from 'react';
+
+interface RouteOverlayContextValue {
+  close: () => Promise<void>;
+  isClosing: boolean;
+}
+
+/** Internal context shared by both route overlay components. */
+export const RouteOverlayContext: Context<RouteOverlayContextValue | null> =
+  createContext<RouteOverlayContextValue | null>(null);
+
+export function useRouteOverlay(): RouteOverlayContextValue {
+  const value = useContext(RouteOverlayContext);
+  if (!value) {
+    throw new Error(
+      'useRouteOverlay must be used inside RouteDialog or RouteDrawer',
+    );
+  }
+  return value;
+}
+```
+
+### RouteOverlay
+
+`client/components/route-overlay.tsx`:
+
+```tsx
+import {
+  createContext,
+  useContext,
+  type RefObject,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type ReactElement,
+} from 'react';
+import { useLocation, useNavigate, type To } from 'react-router';
+import {
+  Dialog,
+  DialogOverlay,
+  DialogClose,
+  DialogPortal,
+  DialogDescription,
+  DialogTitle,
+} from './ui/dialog.js';
+import { RouteOverlayContext } from './use-route-overlay.js';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
+import { useTranslation } from '@nocobase/i18n/client';
+import { XIcon } from 'lucide-react';
+import { Button } from './ui/button.js';
+import { cn } from '../lib/utils.js';
+
+export interface RouteOverlayProps {
+  title: ReactNode;
+  description?: ReactNode;
+  children?: ReactNode;
+  footer?: ReactNode;
+  closeTo?: To;
+  beforeClose?: () => boolean | Promise<boolean>;
+  className?: string;
+}
+
+// Lets an overlay rendered through another overlay's outlet return focus into
+// the enclosing panel. Two overlays reached by one URL mount in the same
+// commit, so the nested one never observes the parent panel taking focus and
+// would otherwise fall back to `document.body`.
+const ParentPopupContext =
+  createContext<RefObject<HTMLDivElement | null> | null>(null);
+
+/** Plugin-owned presentation; route registration stays unchanged. */
+export function RouteOverlay({
+  title,
+  description,
+  children,
+  footer,
+  closeTo,
+  beforeClose,
+  className,
+  drawer = false,
+}: RouteOverlayProps & { drawer?: boolean }): ReactElement {
+  const { t } = useTranslation();
+  const parentPopup = useContext(ParentPopupContext);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+  }, []);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [closingLocation, setClosingLocation] = useState<
+    typeof location | null
+  >(null);
+  const isClosing = closingLocation === location;
+  const pendingRef = useRef<Promise<void> | null>(null);
+  const generationRef = useRef(0);
+
+  // A still-mounted parent can change location while its confirmation is pending.
+  // Invalidate that request as well as requests from an unmounted route.
+  useLayoutEffect(() => {
+    generationRef.current += 1;
+    pendingRef.current = null;
+    return () => {
+      generationRef.current += 1;
+    };
+  }, [location]);
+
+  const close = useCallback((): Promise<void> => {
+    if (pendingRef.current) return pendingRef.current;
+    const requestGeneration = generationRef.current;
+    setClosingLocation(location);
+    const request = Promise.resolve()
+      .then(async () => {
+        const allowed = beforeClose ? await beforeClose() : true;
+        if (allowed && generationRef.current === requestGeneration) {
+          await navigate(
+            closeTo ?? { pathname: '..', search: location.search, hash: '' },
+            { relative: 'route', replace: true },
+          );
+        }
+      })
+      .finally(() => {
+        if (generationRef.current === requestGeneration) {
+          pendingRef.current = null;
+          setClosingLocation(null);
+        }
+      });
+    pendingRef.current = request;
+    return request;
+  }, [beforeClose, closeTo, location, navigate]);
+  const value = useMemo(() => ({ close, isClosing }), [close, isClosing]);
+
+  return (
+    <RouteOverlayContext.Provider value={value}>
+      {/* Covers the panel body too, so an overlay placed at this page's outlet
+          finds the enclosing panel without knowing where the outlet lives. */}
+      <ParentPopupContext.Provider value={popupRef}>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open)
+              void close().catch((error: unknown) => {
+                console.error('Failed to close route overlay', error);
+              });
+          }}
+        >
+          <DialogPortal>
+            {/* Each nested panel needs its own backdrop above its parent panel. */}
+            <DialogOverlay forceRender />
+            <DialogPrimitive.Popup
+              ref={popupRef}
+              finalFocus={() => {
+                const previous = previousFocusRef.current;
+                if (parentPopup?.current) {
+                  return previous?.isConnected &&
+                    parentPopup.current.contains(previous)
+                    ? previous
+                    : parentPopup.current;
+                }
+                return true;
+              }}
+              className={cn(
+                'fixed top-1/2 left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-popover text-popover-foreground shadow-lg outline-none duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
+                'flex max-h-[calc(100svh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl',
+                // The viewport constraints are deliberate; all ordinary styling uses theme tokens.
+                drawer &&
+                  'top-0 right-0 left-auto h-svh max-h-svh w-full max-w-full translate-x-0 translate-y-0 rounded-none sm:max-w-xl data-open:slide-in-from-right data-open:zoom-in-100',
+                className,
+              )}
+            >
+              <header className='shrink-0 space-y-2 border-b p-4 pr-12'>
+                <DialogTitle>{title}</DialogTitle>
+                {description != null && (
+                  <DialogDescription>{description}</DialogDescription>
+                )}
+              </header>
+              <div className='min-h-0 flex-1 overflow-y-auto p-4'>
+                {children}
+              </div>
+              {footer != null && (
+                <footer className='flex shrink-0 flex-wrap justify-end gap-2 border-t p-4'>
+                  {footer}
+                </footer>
+              )}
+              <DialogClose
+                render={
+                  <Button
+                    variant='ghost'
+                    size='icon-sm'
+                    className='absolute top-2 right-2'
+                  />
+                }
+              >
+                <XIcon />
+                <span className='sr-only'>{t('actions.close')}</span>
+              </DialogClose>
+            </DialogPrimitive.Popup>
+          </DialogPortal>
+        </Dialog>
+      </ParentPopupContext.Provider>
+    </RouteOverlayContext.Provider>
+  );
+}
+```
+
+### RouteDialog and RouteDrawer
+
+`client/components/route-dialog.tsx`:
+
+```tsx
+import type { ReactElement } from 'react';
+
+import { RouteOverlay, type RouteOverlayProps } from './route-overlay.js';
+
+export type RouteDialogProps = RouteOverlayProps;
+
+export function RouteDialog(props: RouteDialogProps): ReactElement {
+  return <RouteOverlay {...props} />;
+}
+```
+
+`client/components/route-drawer.tsx`:
+
+```tsx
+import type { ReactElement } from 'react';
+
+import { RouteOverlay, type RouteOverlayProps } from './route-overlay.js';
+
+export type RouteDrawerProps = RouteOverlayProps;
+
+export function RouteDrawer(props: RouteDrawerProps): ReactElement {
+  return <RouteOverlay {...props} drawer />;
+}
+```
 
 ## Compose business components
 
