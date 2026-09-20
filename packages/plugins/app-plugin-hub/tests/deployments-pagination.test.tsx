@@ -1,8 +1,8 @@
 import { MemoryRouter } from 'react-router';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Deployments } from '../../../../plugins/app-plugin-hub/client/pages/hub/deployments.js';
-import type { AppDetail } from '../../../../plugins/app-plugin-hub/client/pages/hub/types.js';
+import { Deployments } from '../client/pages/hub/deployments.js';
+import type { AppDetail } from '../client/pages/hub/types.js';
 
 const app = {
   app: { id: 'a', currentDeploymentId: null },

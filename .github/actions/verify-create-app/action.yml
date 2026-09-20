@@ -1,7 +1,7 @@
 name: Verify create-app
 description: >-
-  Publishes packages to a throwaway registry, generates Default and Hub applications with create-app, and checks test, dev, build,
-  and production start. Fails the run before anything reaches the real registry.
+  Publishes packages to a throwaway registry, generates Default, Examples, and Hub applications with create-app, and checks test,
+  dev, build, and production start. Fails the run before anything reaches the real registry.
 
 inputs:
   port:
@@ -140,7 +140,7 @@ runs:
 
         pnpm changeset publish --no-git-tag
 
-    - name: Generate Default and Hub applications and verify test, dev, build, and start
+    - name: Generate Default, Examples, and Hub applications and verify test, dev, build, and start
       shell: bash
       env:
         PORT: ${{ inputs.port }}
@@ -154,8 +154,8 @@ runs:
         # Outside the checkout on purpose. The generated application writes its own pnpm-workspace.yaml, which would
         # make pnpm treat it as a workspace root nested inside this one, and the release commit stages everything in
         # the working tree — a generated application there would be committed and published.
-        # Hub has a separate dependency graph: workspace tests cannot prove that its published declarations resolve.
-        for TEMPLATE_KIND in default hub; do
+        # Each template has its own dependency graph: workspace tests cannot prove that its published declarations resolve.
+        for TEMPLATE_KIND in default examples hub; do
           TEMPLATE_VERSION=$(node -p "require('./packages/templates/app-template-$TEMPLATE_KIND/package.json').version")
           ./scripts/smoke-create-app.sh \
             --registry "http://localhost:$PORT" \
