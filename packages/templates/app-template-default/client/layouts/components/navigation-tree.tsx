@@ -43,6 +43,7 @@ function isDesktop() {
 
 interface NavigationTreeProps {
   readonly collapsed: boolean;
+  readonly inPopover?: boolean;
   readonly item: RouteNavigationItem;
   readonly onNavigate: () => void;
   readonly selectedKey: string | undefined;
@@ -50,6 +51,7 @@ interface NavigationTreeProps {
 
 export function NavigationTree({
   collapsed,
+  inPopover = false,
   item,
   onNavigate,
   selectedKey,
@@ -124,7 +126,11 @@ export function NavigationTree({
           }
           aria-label={label}
           aria-current={isSelected ? 'page' : undefined}
-          className={`flex w-full items-center justify-center gap-3 rounded-lg px-2 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring ${selected ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
+          className={`flex w-full items-center justify-center gap-3 rounded-lg px-2 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-colors ${
+            selected
+              ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+              : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground'
+          }`}
         >
           {icon ? (
             <NavigationIcon>{icon}</NavigationIcon>
@@ -142,18 +148,25 @@ export function NavigationTree({
             restoringFocusRef.current = interaction === 'keyboard';
             return interaction === 'keyboard';
           }}
-          className='max-h-(--available-height) overflow-y-auto bg-sidebar text-sidebar-foreground'
+          className='max-h-(--available-height) w-max min-w-40 max-w-sm overflow-y-auto p-1.5 gap-0.5 border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-lg'
         >
-          <PopoverTitle className='px-3 py-1 text-sm'>{label}</PopoverTitle>
-          {children.map((child) => (
-            <NavigationTree
-              key={routeKey(child.route)}
-              item={child}
-              collapsed={false}
-              onNavigate={navigate}
-              selectedKey={selectedKey}
-            />
-          ))}
+          <div className='px-2 pt-1 pb-0.5'>
+            <PopoverTitle className='text-xs font-medium text-muted-foreground whitespace-nowrap'>
+              {label}
+            </PopoverTitle>
+          </div>
+          <div className='flex flex-col gap-0.5 pl-2'>
+            {children.map((child) => (
+              <NavigationTree
+                key={routeKey(child.route)}
+                item={child}
+                collapsed={false}
+                inPopover
+                onNavigate={navigate}
+                selectedKey={selectedKey}
+              />
+            ))}
+          </div>
         </PopoverContent>
       </Popover>
     );
@@ -167,6 +180,7 @@ export function NavigationTree({
             <NavigationLink
               collapsed={collapsed && desktop}
               icon={icon}
+              inPopover={inPopover}
               isSelected={isSelected}
               label={label}
               onNavigate={onNavigate}
@@ -180,20 +194,21 @@ export function NavigationTree({
             onClick={() =>
               setDisclosure({ key: selectedKey, expanded: !expanded })
             }
-            className={`rounded-lg p-2 hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring ${collapsed ? 'md:hidden' : ''}`}
+            className={`hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-colors ${collapsed ? 'md:hidden' : ''} ${inPopover ? 'rounded-md p-1.5' : 'rounded-lg p-2'}`}
           >
             <ChevronRight className={`size-4 ${expanded ? 'rotate-90' : ''}`} />
           </button>
         </div>
         {expanded ? (
           <div
-            className={`ml-3 space-y-1 border-l border-sidebar-border pl-2 ${collapsed ? 'md:hidden' : ''}`}
+            className={`space-y-1 ${collapsed ? 'md:hidden' : ''} ${inPopover ? 'pl-2 space-y-0.5' : 'ml-3 pl-2 border-l border-sidebar-border'}`}
           >
             {children.map((child) => (
               <NavigationTree
                 key={routeKey(child.route)}
                 item={child}
                 collapsed={collapsed}
+                inPopover={inPopover}
                 onNavigate={onNavigate}
                 selectedKey={selectedKey}
               />
@@ -212,12 +227,14 @@ export function NavigationTree({
             event.preventDefault();
             setDisclosure({ key: selectedKey, expanded: !expanded });
           }}
-          className={`flex cursor-pointer list-none items-center rounded-lg px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&::-webkit-details-marker]:hidden ${collapsed ? 'md:justify-center md:px-2' : 'justify-between'}`}
+          className={`flex cursor-pointer list-none items-center text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground [&::-webkit-details-marker]:hidden ${collapsed ? 'md:justify-center md:px-2' : 'justify-between'} ${inPopover ? 'gap-2 rounded-md px-2 py-1.5' : 'gap-3 rounded-lg px-3 py-2'}`}
         >
-          <span className='flex min-w-0 items-center gap-3'>
+          <span
+            className={`flex min-w-0 items-center ${inPopover ? 'gap-2' : 'gap-3'}`}
+          >
             {icon ? <NavigationIcon>{icon}</NavigationIcon> : null}
             <span
-              className={`truncate ${collapsed && icon ? 'md:hidden' : ''}`}
+              className={`${inPopover ? 'whitespace-nowrap' : 'truncate'} ${collapsed && icon ? 'md:hidden' : ''}`}
             >
               {label}
             </span>
@@ -227,11 +244,12 @@ export function NavigationTree({
           />
         </summary>
         <div
-          className={`mt-1 ml-3 space-y-1 border-l border-sidebar-border pl-2 ${collapsed ? 'md:hidden' : ''}`}
+          className={`space-y-1 ${collapsed ? 'md:hidden' : ''} ${inPopover ? 'mt-0.5 pl-2 space-y-0.5' : 'mt-1 ml-3 pl-2 border-l border-sidebar-border'}`}
         >
           {children.map((child) => (
             <NavigationTree
               collapsed={collapsed}
+              inPopover={inPopover}
               item={child}
               key={routeKey(child.route)}
               onNavigate={onNavigate}
@@ -251,6 +269,7 @@ export function NavigationTree({
     <NavigationLink
       collapsed={collapsed && desktop}
       icon={icon}
+      inPopover={inPopover}
       isSelected={isSelected}
       label={label}
       onNavigate={onNavigate}
@@ -272,6 +291,7 @@ function containsSelection(
 interface NavigationLinkProps {
   readonly collapsed: boolean;
   readonly icon: ReactNode;
+  readonly inPopover?: boolean;
   readonly isSelected: boolean;
   readonly label: string;
   readonly onNavigate: () => void;
@@ -281,6 +301,7 @@ interface NavigationLinkProps {
 function NavigationLink({
   collapsed,
   icon,
+  inPopover,
   isSelected,
   label,
   onNavigate,
@@ -289,12 +310,22 @@ function NavigationLink({
   const link = (
     <Link
       aria-current={isSelected ? 'page' : undefined}
-      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-colors ${collapsed ? 'md:justify-center md:px-2' : ''} ${isSelected ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'}`}
+      className={`flex items-center text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring transition-colors ${
+        inPopover
+          ? 'gap-2 rounded-md px-2 py-1.5'
+          : 'gap-3 rounded-lg px-3 py-2'
+      } ${collapsed ? 'md:justify-center md:px-2' : ''} ${
+        isSelected
+          ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+          : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+      }`}
       onClick={onNavigate}
       to={route}
     >
       {icon ? <NavigationIcon>{icon}</NavigationIcon> : null}
-      <span className={`truncate ${collapsed && icon ? 'md:hidden' : ''}`}>
+      <span
+        className={`${inPopover ? 'whitespace-nowrap' : 'truncate'} ${collapsed && icon ? 'md:hidden' : ''}`}
+      >
         {label}
       </span>
     </Link>
