@@ -1,24 +1,12 @@
 name: Release Stable
 
-# 发稳定版。默认从 main 发到 dist-tag latest；给旧版本发 hotfix 时
-# 填该版本的分支名并勾上 keep_latest，发到 dist-tag legacy。
+# Stable releases normally publish main to the latest dist-tag. A hotfix from an older branch must set keep_latest so
+# that it publishes to legacy without moving latest backwards.
 #
-# 覆盖两种场景，靠待消费 changeset 的数量自动分流：
-#
-#   A. merge-beta-to-stable 刚把转正结果合进 main
-#      版本号已经写好，changeset 是 0 个 -> 直接 publish
-#
-#   B. 分支上有新的 changeset（main 的补丁，或旧版本分支的 hotfix）
-#      changeset 是 N 个 -> 先在临时发版分支上 version，再 PR 合回
-#
-# 关于 dist-tag：它只影响 `npm install <pkg>` 不写版本号的人。写了
-# `^1.3.0` 这类 range 的用户按 semver 从版本列表解析，不看 dist-tag。
-# 所以给旧版本发补丁时，唯一要做的就是别让 latest 指针倒退。
-#
-# 用 GITHUB_TOKEN 而不是 PAT：仓库暂时没有分支保护，它足够推送。
-# GITHUB_TOKEN pushes do not trigger push workflows, but its PRs create CI runs awaiting approval.
-# Add [skip ci] to generated commits to skip version-sync PR checks; this workflow still runs its own checks.
-# 将来给 main / develop 加上分支保护后，需要换成能绕过保护的 PAT。
+# The workflow supports two sources. A promotion from beta already contains the final versions and has no pending
+# changesets. A direct stable patch or hotfix still has changesets, so prepare computes and commits its versions on an
+# isolated release branch. Both paths build and pack once, fan out create-app smoke tests, and publish those exact
+# artifacts only after all smoke runners pass.
 
 on:
   workflow_dispatch:
@@ -49,20 +37,32 @@ permissions:
   pull-requests: write
 
 jobs:
-  release:
-    name: Publish from main
+  prepare:
+    name: Prepare stable release
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: release-source
     outputs:
-      # 场景 A 的 tag 是转正时打的，场景 B 是这次新建的。
       tag: ${{ steps.batch.outputs.name }}
-      merged: ${{ steps.merge.outputs.merged }}
+      batch: ${{ steps.batch.outputs.value }}
+      branch: ${{ steps.batch.outputs.name }}
+      rows: ${{ steps.changed.outputs.rows }}
+      base_sha: ${{ steps.base.outputs.sha }}
+      source_sha: ${{ steps.state.outputs.source_sha }}
+      has_changes: ${{ steps.state.outputs.has_changes }}
+      dist_tag: ${{ steps.disttag.outputs.value }}
       needs_version: ${{ steps.mode.outputs.needs_version }}
     steps:
-      - name: Check out the release branch
+      - name: Check out workflow code
+        uses: actions/checkout@v4
+
+      - name: Check out the release source
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
+          path: release-source
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -77,13 +77,16 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+          cache-dependency-path: release-source/pnpm-lock.yaml
           registry-url: https://npm.nocobase.ai
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # 出现 pre.json 说明 develop 的预发布状态被误合进来了。
-      # 继续跑会把稳定版发成预发布版本。
+      - name: Record the release base
+        id: base
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Verify branch is not in pre mode
         env:
           BRANCH: ${{ inputs.branch }}
@@ -93,7 +96,6 @@ jobs:
             exit 1
           fi
 
-      # develop 是 pre 模式常驻分支，发版走 release-beta.yml。
       - name: Reject develop
         env:
           BRANCH: ${{ inputs.branch }}
@@ -103,8 +105,6 @@ jobs:
             exit 1
           fi
 
-      # 从非 main 分支发版却没勾 keep_latest，多半是忘了 —— 那会让旧版本
-      # 抢走 latest 指针，用户 `npm install` 会拿到退回的版本。
       - name: Resolve dist-tag
         id: disttag
         env:
@@ -124,44 +124,34 @@ jobs:
             echo "dist-tag: latest"
           fi
 
-      # 分流：有待消费 changeset 就要先 version，没有则说明版本号已就绪。
-      - name: Decide mode
+      - name: Decide version mode
         id: mode
         run: |
           COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
           if [ "$COUNT" = "0" ]; then
-            echo "0 changesets — versions were already written by merge-beta-to-stable, publishing directly"
+            echo "0 changesets — versions are already ready to publish"
             echo "needs_version=false" >> "$GITHUB_OUTPUT"
           else
-            echo "$COUNT changesets — versions need to be computed first"
+            echo "$COUNT changesets — versions need to be computed"
             echo "needs_version=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # 场景 A：版本号已就绪，检查是否真有东西可发。
-      # 全部 package 的 name@version 都已在 registry 时，publish 会静默跳过，
-      # 白跑一轮。这里提前发现。
       - name: Verify there is something to publish
         if: steps.mode.outputs.needs_version == 'false'
         run: |
           echo "Publish candidates:"
           node scripts/list-package-versions.mjs --candidates
-          echo "publish queries the registry per package and skips the ones already there"
+          echo "The publish plan will query the registry and omit versions already published."
 
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      # ── 场景 B：需要计算版本号 ────────────────────────────────────
       - name: Snapshot versions before versioning
         if: steps.mode.outputs.needs_version == 'true'
-        run: |
-          node scripts/list-package-versions.mjs > /tmp/versions-before.json
+        run: node scripts/list-package-versions.mjs > /tmp/versions-before.json
 
-      # 批次号两种场景都要算 —— 聚合 tag 只在这里打，转正阶段不再打。
-      #
-      # 版本标识 `YYYY-MM-DD.{num}`，序号从 tag 推导而不是从分支：分支合并后
-      # 会被删除，只看分支会让序号回退并与已发布的版本重复。tag 是长期记录。
       - name: Allocate the release batch
         id: batch
         run: |
@@ -181,23 +171,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Version: $BATCH"
 
-      # 场景 B 独有：版本号要在临时发版分支上算，再 PR 合回。
-      # 场景 A 的版本号已经在 main 上了，没有需要合回的东西。
-      - name: Create release branch
-        if: steps.mode.outputs.needs_version == 'true'
-        id: branch
-        run: |
-          git checkout -b "${{ steps.batch.outputs.name }}"
-          echo "name=${{ steps.batch.outputs.name }}" >> "$GITHUB_OUTPUT"
-
-      - name: Version
+      - name: Version packages
         if: steps.mode.outputs.needs_version == 'true'
         run: pnpm changeset version
 
-      # changeset rewrites `version` but knows nothing about the `nocobase` block, so
-      # `defaultTemplateVersion` drifts on every release unless it is synchronized here.
-      # This runs unconditionally: when merge-beta-to-stable already wrote the versions
-      # there is no `changeset version` step, and the two still have to be aligned.
       - name: Sync template version
         run: node ./scripts/sync-template-version.mjs
 
@@ -211,16 +188,13 @@ jobs:
             exit 1
           fi
           echo "$CHANGED"
-
-          # 发布清单留给飞书通知的表格用。单行 JSON，不需要 heredoc 定界符。
           echo "rows=$(node scripts/list-package-versions.mjs --released-rows /tmp/versions-before.json)" >> "$GITHUB_OUTPUT"
 
-      # main 上不应产生预发布版本号。出现了说明 changeset 写错了。
       - name: Verify no prerelease versions
         run: |
           LEFT=$(node scripts/list-package-versions.mjs --prerelease)
           if [ -n "$LEFT" ]; then
-            echo "::error::Prerelease versions should not exist on main: $LEFT"
+            echo "::error::Prerelease versions should not exist on a stable release: $LEFT"
             exit 1
           fi
 
@@ -234,84 +208,321 @@ jobs:
             node scripts/list-package-versions.mjs --table
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Build and test
-        run: |
-          pnpm build
-          pnpm -r --if-present test
+      - name: Build
+        run: pnpm build
 
-      # A generated application is the only thing that exercises what this release actually publishes. Everything
-      # above resolves through the workspace, where `workspace:` links every package to a directory on disk; an
-      # installed application resolves through published manifests instead, so a dependency declared in the wrong
-      # place builds and tests cleanly here and fails on first boot there.
-      #
-      # It runs on a dry run too. That is the only way to exercise this without publishing anything, and a dry run is
-      # already the rehearsal step.
-      - name: Verify create-app against this release
+      - name: Test without template packages
         if: '!inputs.skip_smoke_test'
-        uses: ./.github/actions/verify-create-app
+        run: |
+          pnpm scripts:test
+          pnpm --filter '!@nocobase/app-template-default' --filter '!@nocobase/app-template-examples' --filter '!@nocobase/app-template-hub' -r --if-present test
+          pnpm db:test
 
-      - name: Note the skipped smoke test
+      - name: Test all packages
         if: inputs.skip_smoke_test
-        run: |
-          echo "::warning::The create-app smoke test was skipped for this release."
+        run: pnpm test
 
-      - name: Stop here on dry run
-        if: inputs.dry_run
-        run: echo "dry_run=true — stopping here."
+      - name: Pack packages for create-app smoke tests
+        env:
+          PACK_DIR: ${{ runner.temp }}/release-smoke-packages
+        run: pnpm pack:check
 
-      # ── 场景 B 独有：提交版本号变更并推发版分支 ────────────────────
-      - name: Commit and push release branch
-        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true'"
-        run: |
-          git add -A
-          git commit -m "chore: release ${{ steps.batch.outputs.value }} [skip ci]"
-          git push origin "refs/heads/${{ steps.branch.outputs.name }}:refs/heads/${{ steps.branch.outputs.name }}"
-
-      # 两种场景共用：聚合 tag 打在即将 publish 的这个 commit 上。
-      #
-      # 必须在 publish 之前打：publish 会为每个实际发出去的 package 在 HEAD 上
-      # 打 name@version tag，聚合 tag 和它们落在同一个 commit，之后就能用
-      # `git tag --points-at` 读回「这批发了哪些包」。GitHub Release 靠的就是这个。
-      #
-      # 场景 B 里 tag 与发版分支同名，同名期间必须用完整 refspec ——
-      # `git push origin <name>` 会报 src refspec matches more than one。
-      - name: Tag the release
-        if: '!inputs.dry_run'
-        run: |
-          NAME="${{ steps.batch.outputs.name }}"
-          git tag "$NAME"
-          git push origin "refs/tags/${NAME}:refs/tags/${NAME}"
-          echo "Tagged $(git rev-parse --short HEAD) as $NAME"
-
-      # ── 两种场景共用：发布 ────────────────────────────────────────
-      - name: Publish to npm
-        if: '!inputs.dry_run'
+      - name: Create publish plan
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ steps.disttag.outputs.value }}
         run: |
+          PLAN="$RUNNER_TEMP/release-pack/publish-plan.json"
+          pnpm changeset publish-plan --output "$PLAN"
+
+          ARGS=(
+            --plan "$PLAN"
+            --artifacts "$RUNNER_TEMP/release-smoke-packages"
+            --output "$RUNNER_TEMP/release-pack"
+            --repo-root "$PWD"
+          )
           if [ -n "$DIST_TAG" ]; then
-            pnpm changeset publish --tag "$DIST_TAG"
-          else
-            pnpm changeset publish
+            ARGS+=(--tag "$DIST_TAG")
           fi
+          node ../scripts/prepare-release-pack.mjs "${ARGS[@]}"
+
+      - name: Save prepared release source
+        id: state
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          BATCH_TAG: ${{ steps.batch.outputs.name }}
+          BATCH: ${{ steps.batch.outputs.value }}
+        run: |
+          node ../scripts/release-state.mjs save \
+            --directory "$RUNNER_TEMP/release-state" \
+            --base "$BASE_SHA" \
+            --branch "$BATCH_TAG" \
+            --message "chore: release $BATCH [skip ci]"
+
+      - name: Upload prepared release source
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-source-state
+          path: ${{ runner.temp }}/release-state
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload smoke-test packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-packages
+          path: ${{ runner.temp }}/release-smoke-packages/*.tgz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload release packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-pack
+          path: ${{ runner.temp }}/release-pack
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  smoke:
+    name: Create-app smoke (${{ matrix.template }})
+    if: '!inputs.skip_smoke_test'
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [default, examples, hub]
+    defaults:
+      run:
+        working-directory: release-source
+    steps:
+      - name: Check out workflow code
+        uses: actions/checkout@v4
+
+      - name: Check out the release base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: release-source
+          fetch-depth: 0
+
+      - name: Download prepared release source
+        uses: actions/download-artifact@v4
+        with:
+          name: release-source-state
+          path: ${{ runner.temp }}/release-state
+
+      - name: Restore prepared release source
+        env:
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          BATCH_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          node ../scripts/release-state.mjs restore \
+            --directory "$RUNNER_TEMP/release-state" \
+            --base "$BASE_SHA" \
+            --expected "$SOURCE_SHA" \
+            --branch "$BATCH_TAG"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: release-source/pnpm-lock.yaml
+
+      - name: Download smoke-test packages
+        uses: actions/download-artifact@v4
+        with:
+          name: release-smoke-packages
+          path: ${{ runner.temp }}/release-smoke-packages
+
+      - name: Verify create-app against the prepared packages
+        uses: ./.github/actions/verify-create-app
+        with:
+          source-directory: release-source
+          local-packages-only: 'true'
+          template-kind: ${{ matrix.template }}
+          package-artifacts: ${{ runner.temp }}/release-smoke-packages
+
+  release:
+    name: Publish from ${{ inputs.branch }}
+    needs: [prepare, smoke]
+    if: >-
+      !cancelled()
+      && needs.prepare.result == 'success'
+      && (needs.smoke.result == 'success' || (inputs.skip_smoke_test && needs.smoke.result == 'skipped'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: release-source
+    outputs:
+      tag: ${{ needs.prepare.outputs.tag }}
+      merged: ${{ steps.merge.outputs.merged }}
+      needs_version: ${{ needs.prepare.outputs.needs_version }}
+    steps:
+      - name: Check out workflow code
+        uses: actions/checkout@v4
+
+      - name: Check out the release base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.base_sha }}
+          path: release-source
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download prepared release source
+        uses: actions/download-artifact@v4
+        with:
+          name: release-source-state
+          path: ${{ runner.temp }}/release-state
+
+      - name: Restore prepared release source
+        env:
+          BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          BATCH_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          node ../scripts/release-state.mjs restore \
+            --directory "$RUNNER_TEMP/release-state" \
+            --base "$BASE_SHA" \
+            --expected "$SOURCE_SHA" \
+            --branch "$BATCH_TAG"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: release-source/pnpm-lock.yaml
+          registry-url: https://npm.nocobase.ai
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Download release packages
+        uses: actions/download-artifact@v4
+        with:
+          name: release-pack
+          path: ${{ runner.temp }}/release-pack
+
+      - name: Validate release packages
+        run: |
+          node ../scripts/prepare-release-pack.mjs \
+            --validate-only \
+            --plan "$RUNNER_TEMP/release-pack/publish-plan.json" \
+            --output "$RUNNER_TEMP/release-pack" \
+            --repo-root "$PWD"
+
+      # A failed publish may have uploaded only part of the original plan. Re-query the registry on every release-job
+      # attempt and select the still-unpublished packages from the already tested tarballs, making a failed-job retry
+      # safe without rebuilding or assigning a new version.
+      - name: Refresh publish plan
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ needs.prepare.outputs.dist_tag }}
+        run: |
+          PLAN="$RUNNER_TEMP/release-publish/publish-plan.json"
+          pnpm changeset publish-plan --output "$PLAN"
+
+          ARGS=(
+            --plan "$PLAN"
+            --artifacts "$RUNNER_TEMP/release-pack/packages"
+            --output "$RUNNER_TEMP/release-publish"
+            --repo-root "$PWD"
+          )
+          if [ -n "$DIST_TAG" ]; then
+            ARGS+=(--tag "$DIST_TAG")
+          fi
+          node ../scripts/prepare-release-pack.mjs "${ARGS[@]}"
+
+      - name: Verify restored release revision
+        env:
+          EXPECTED_SHA: ${{ needs.prepare.outputs.source_sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Note dry run
+        if: inputs.dry_run
+        run: echo "dry_run=true — prepared artifacts were restored and verified; nothing will be pushed or published."
+
+      - name: Note skipped smoke tests
+        if: inputs.skip_smoke_test
+        run: echo "::warning::The create-app smoke tests were skipped for this release."
+
+      - name: Push release branch
+        if: "!inputs.dry_run && needs.prepare.outputs.has_changes == 'true'"
+        env:
+          BATCH_TAG: ${{ needs.prepare.outputs.tag }}
+        run: git push origin "refs/heads/${BATCH_TAG}:refs/heads/${BATCH_TAG}"
+
+      - name: Tag the release
+        if: '!inputs.dry_run'
+        env:
+          BATCH_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          git fetch --tags --force
+          HEAD_SHA=$(git rev-parse HEAD)
+          if git rev-parse --verify --quiet "refs/tags/${BATCH_TAG}^{commit}" > /dev/null; then
+            TAG_SHA=$(git rev-parse "refs/tags/${BATCH_TAG}^{commit}")
+            if [ "$TAG_SHA" != "$HEAD_SHA" ]; then
+              echo "::error::$BATCH_TAG already points to $TAG_SHA instead of $HEAD_SHA"
+              exit 1
+            fi
+            echo "Reusing $BATCH_TAG at $(git rev-parse --short HEAD)"
+          else
+            git tag "$BATCH_TAG"
+            git push origin "refs/tags/${BATCH_TAG}:refs/tags/${BATCH_TAG}"
+            echo "Tagged $(git rev-parse --short HEAD) as $BATCH_TAG"
+          fi
+
+      - name: Publish to npm
+        if: '!inputs.dry_run'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm changeset publish --from-pack-dir "$RUNNER_TEMP/release-publish"
 
       - name: Push package tags
         if: '!inputs.dry_run'
         run: git push origin --tags
 
-      # ── 场景 B 独有：把版本号变更合回 main ────────────────────────
       - name: Merge back into the release branch
-        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true'"
+        if: "!inputs.dry_run && needs.prepare.outputs.has_changes == 'true'"
         id: merge
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BATCH: ${{ needs.prepare.outputs.batch }}
+          BATCH_TAG: ${{ needs.prepare.outputs.tag }}
+          DIST_TAG: ${{ needs.prepare.outputs.dist_tag }}
         run: |
+          PUBLISH_TAG="${DIST_TAG:-latest}"
           PR_URL=$(gh pr create \
-            --title "chore: release ${{ steps.batch.outputs.value }}" \
-            --body "Stable release \`${{ steps.batch.outputs.value }}\` published to npm under the \`latest\` dist-tag. Per-package versions are in the GitHub Release." \
+            --title "chore: release $BATCH" \
+            --body "Stable release \`$BATCH\` published to npm under the \`$PUBLISH_TAG\` dist-tag. Per-package versions are in the GitHub Release." \
             --base "${{ inputs.branch }}" \
-            --head "${{ steps.branch.outputs.name }}")
+            --head "$BATCH_TAG")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
           set +e
@@ -325,21 +536,17 @@ jobs:
             echo "merged=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # main 上的补丁必须同步到 develop，否则下一次转正会把它覆盖掉。
-      # 直接 merge + push，不走 PR —— 冲突的解法是确定的，没有需要人
-      # review 的内容。
-      #
-      # 旧版本分支的 hotfix 不适用：那条线与主线已经分叉，是否同步由人
-      # 判断（通常是 cherry-pick 代码后在 develop 上单独写 changeset）。
       - name: Sync into develop
-        if: "!inputs.dry_run && inputs.branch == 'main' && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'true'"
+        if: "!inputs.dry_run && inputs.branch == 'main' && needs.prepare.outputs.has_changes == 'true' && steps.merge.outputs.merged == 'true'"
         id: sync
+        env:
+          BATCH: ${{ needs.prepare.outputs.batch }}
         run: |
           git fetch origin main develop
           git checkout -B develop origin/develop
 
           set +e
-          git merge --no-ff origin/main -m "chore: sync ${{ steps.batch.outputs.value }} into develop [skip ci]"
+          git merge --no-ff origin/main -m "chore: sync $BATCH into develop [skip ci]"
           MERGE_RC=$?
           set -e
 
@@ -349,32 +556,24 @@ jobs:
             RESOLVE_RC=$?
             set -e
             if [ $RESOLVE_RC -ne 0 ]; then
-              # abort 之后远端 develop 完全没动，人工可以干净地重做一遍。
-              # npm 已经发布成功，这里失败的只是把版本提交同步回 develop。
               git merge --abort
               {
                 echo "::warning::Conflicts that cannot be resolved automatically — sync by hand"
-                echo ""
+                echo
                 echo "npm publish succeeded and main is updated; only the sync back to develop failed."
                 echo "Remote develop is untouched. Run this locally:"
-                echo ""
+                echo
                 echo "  git checkout develop && git pull"
                 echo "  git merge origin/main"
-                echo "  node scripts/resolve-sync-conflicts.mjs   # resolves version conflicts automatically"
-                echo "  # then resolve the remaining source conflicts by hand:"
-                echo "  git commit"
-                echo "  git push origin develop"
-                echo ""
-                echo "Without this sync the next promotion will overwrite the patch."
+                echo "  node scripts/resolve-sync-conflicts.mjs"
+                echo "  # resolve the remaining source conflicts, then commit and push"
               } >> "$GITHUB_STEP_SUMMARY"
               echo "synced=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            git commit -m "chore: sync ${{ steps.batch.outputs.value }} into develop [skip ci]"
+            git commit -m "chore: sync $BATCH into develop [skip ci]"
           fi
 
-          # 合并不该带走 develop 的 pre 状态。带走了说明合进来的内容有问题，
-          # 推上去会让下一轮 beta 发成稳定版号。
           if [ ! -f .changeset/pre.json ]; then
             echo "::warning::develop lost pre.json after the merge — aborting the push"
             echo "synced=false" >> "$GITHUB_OUTPUT"
@@ -385,7 +584,7 @@ jobs:
           echo "synced=true" >> "$GITHUB_OUTPUT"
 
       - name: Notify merge failure
-        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'false'"
+        if: "!inputs.dry_run && needs.prepare.outputs.has_changes == 'true' && steps.merge.outputs.merged == 'false'"
         env:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
@@ -396,17 +595,17 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.batch.outputs.value }}** 已成功发布到 npm（dist-tag `latest`）。
+            版本 **${{ needs.prepare.outputs.batch }}** 已成功发布到 npm。
 
-            但版本提交合回 `main` 时发生冲突，需要人工解决：
+            但版本提交合回 `${{ inputs.branch }}` 时发生冲突，需要人工解决：
             ${{ steps.merge.outputs.url }}
 
-            发版分支 `${{ steps.branch.outputs.name }}` 已保留。
+            发版分支 `${{ needs.prepare.outputs.tag }}` 已保留。
             **在此之前不要再次发版**，否则版本号会从旧基线重新计算。
-        run: ./scripts/feishu-notify.sh
+        run: ../scripts/feishu-notify.sh
 
       - name: Notify sync failure
-        if: "!inputs.dry_run && inputs.branch == 'main' && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'true' && steps.sync.outputs.synced == 'false'"
+        if: "!inputs.dry_run && inputs.branch == 'main' && needs.prepare.outputs.has_changes == 'true' && steps.merge.outputs.merged == 'true' && steps.sync.outputs.synced == 'false'"
         env:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
@@ -417,25 +616,18 @@ jobs:
           STATUS_TEXT_FAILURE: 需要人工介入
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           CONTENT: |
-            版本 **${{ steps.batch.outputs.value }}** 已发布到 npm 并合进 `main`。
+            版本 **${{ needs.prepare.outputs.batch }}** 已发布到 npm 并合进 `main`。
 
-            但同步到 `develop` 时有无法自动解决的冲突（源码冲突）。
-            远端 `develop` 未被修改，在本地执行：
-            ```
-            git checkout develop && git pull
-            git merge origin/main
-            node scripts/resolve-sync-conflicts.mjs
-            # 手工解决剩下的源码冲突后 git commit && git push
-            ```
+            但同步到 `develop` 时有无法自动解决的源码冲突。远端 `develop` 未被修改，请手工合并 `origin/main` 并运行 `node scripts/resolve-sync-conflicts.mjs`。
             **不同步的话，下一次转正会覆盖掉这个补丁。**
-        run: ./scripts/feishu-notify.sh
+        run: ../scripts/feishu-notify.sh
 
       - name: Fail the run when merge failed
-        if: "!inputs.dry_run && steps.mode.outputs.needs_version == 'true' && steps.merge.outputs.merged == 'false'"
+        if: "!inputs.dry_run && needs.prepare.outputs.has_changes == 'true' && steps.merge.outputs.merged == 'false'"
         run: exit 1
 
       - name: Notify success
-        if: "!inputs.dry_run && (steps.mode.outputs.needs_version == 'false' || steps.merge.outputs.merged == 'true')"
+        if: "!inputs.dry_run && (needs.prepare.outputs.has_changes != 'true' || steps.merge.outputs.merged == 'true')"
         env:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
@@ -446,23 +638,17 @@ jobs:
           STATUS_TEXT_SUCCESS: 发布成功
           WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases
-          TABLE_JSON: ${{ steps.changed.outputs.rows }}
+          TABLE_JSON: ${{ needs.prepare.outputs.rows }}
           CONTENT: |
-            已发布到 npm（dist-tag `latest`）。
+            已发布到 npm。
 
-            ${{ steps.changed.outputs.rows && '本次发布的 package：' || '本次发布的 package 见 GitHub Release。' }}
+            ${{ needs.prepare.outputs.rows && '本次发布的 package：' || '本次发布的 package 见 GitHub Release。' }}
 
             ${{ steps.sync.outputs.synced == 'true' && '补丁已同步到 develop。' || '' }}
-        run: ./scripts/feishu-notify.sh
+        run: ../scripts/feishu-notify.sh
 
-      # 兜底通知，理由同 release-beta：上面几条只覆盖流程末尾暴露的失败，
-      # 早于它们的任何一步失败都不会有任何通知，发版静默挂掉。
-      #
-      # 排除合回失败：那条已经单独通知过，其后的 exit 1 会让 failure() 为真。
-      - name: Notify failure
-        if: >-
-          failure() && !inputs.dry_run
-          && steps.merge.outputs.merged != 'false'
+      - name: Notify release failure
+        if: failure() && !inputs.dry_run && steps.merge.outputs.merged != 'false'
         env:
           WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
           ACTOR: ${{ github.actor }}
@@ -474,17 +660,37 @@ jobs:
           CONTENT: |
             稳定版发版流程中断。
 
-            如果失败发生在 publish 之前，npm 上没有产生这批版本，修好后重新触发即可；
-            请先看构建详情确认 publish 这一步有没有跑过。
+            如果失败发生在 publish 之前，npm 上没有产生这批版本；请先看构建详情确认 publish 是否执行。
+        run: ../scripts/feishu-notify.sh
+
+  notify-validation-failure:
+    name: Notify stable validation failure
+    needs: [prepare, smoke]
+    if: >-
+      always() && !cancelled() && !inputs.dry_run
+      && (needs.prepare.result == 'failure' || needs.smoke.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out workflow code
+        uses: actions/checkout@v4
+
+      - name: Notify failure
+        env:
+          WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          TITLE: NocoBase 3 稳定版发布失败
+          STATUS: failure
+          STATUS_TEXT_FAILURE: 发版校验中断
+          WORKFLOW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONTENT: |
+            稳定版的构建、测试或 create-app 冒烟测试失败，npm 未发布任何内容。修复后可重新触发发版。
         run: ./scripts/feishu-notify.sh
 
-  # 与 release-beta 一样：把这批发布渲染成 GitHub Release。
-  # 场景 A 用转正时打的聚合 tag，场景 B 用这次新建的。
   github-release:
     name: Publish the GitHub Release
     needs: release
-    # 合回 main 失败时 release job 是失败的，但 npm 已经发出去了，
-    # Release 还是要建。
+    # npm may already be published when merging the prepared source fails, so create the GitHub Release in that case.
     if: >-
       !cancelled() && !inputs.dry_run
       && needs.release.outputs.tag != ''

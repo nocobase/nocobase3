@@ -16,6 +16,31 @@ import {
 const execFileAsync = promisify(execFile);
 const registry = 'http://localhost:4873/';
 
+test('validates candidate artifacts against a separate release checkout without its node_modules', async (t) => {
+  const fixture = await createFixture(t, [
+    ['libs/candidate', '@example/candidate', '2.0.0-beta.1'],
+  ]);
+  const script = new URL(
+    '../../scripts/publish-pack-artifacts.mjs',
+    import.meta.url,
+  );
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [
+      script.pathname,
+      '--repo-root',
+      fixture.repoRoot,
+      '--artifacts',
+      fixture.artifactsDirectory,
+      '--registry',
+      registry,
+      '--validate-only',
+    ],
+    { cwd: fixture.artifactsDirectory },
+  );
+  assert.match(stdout, /Validated 1 package artifacts/u);
+});
+
 test('publishes the validated pack-check tarballs unchanged with safe npm flags', async (t) => {
   const fixture = await createFixture(t, [
     ['libs/alpha', '@nocobase/alpha', '1.2.3'],

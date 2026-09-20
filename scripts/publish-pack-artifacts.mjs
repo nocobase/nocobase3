@@ -233,13 +233,18 @@ function parseArguments(args) {
       options.validateOnly = true;
       continue;
     }
-    if (['--artifacts', '--concurrency', '--registry'].includes(argument)) {
+    if (
+      ['--artifacts', '--concurrency', '--registry', '--repo-root'].includes(
+        argument,
+      )
+    ) {
       const value = args[index + 1];
       if (!value) throw new Error(`${argument} requires a value.`);
       index += 1;
       if (argument === '--artifacts') options.artifactsDirectory = value;
       if (argument === '--concurrency') options.concurrency = Number(value);
       if (argument === '--registry') options.registry = value;
+      if (argument === '--repo-root') options.repoRoot = path.resolve(value);
       continue;
     }
     throw new Error(`Unknown argument: ${argument}`);
@@ -261,6 +266,7 @@ if (isMain) {
     const artifacts = await validatePackArtifacts({
       artifactsDirectory: options.artifactsDirectory,
       registry,
+      repoRoot: options.repoRoot,
     });
     console.log(
       `Validated ${artifacts.length} package artifacts for ${registry}`,
@@ -270,6 +276,7 @@ if (isMain) {
       artifactsDirectory: options.artifactsDirectory,
       concurrency: options.concurrency,
       registry,
+      repoRoot: options.repoRoot,
     });
   }
 }
