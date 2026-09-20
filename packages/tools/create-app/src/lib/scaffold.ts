@@ -61,6 +61,7 @@ const FALLBACK_GITIGNORE = [
   '/database.sqlite-wal',
   '/database.sqlite-shm',
   '/.agents/',
+  '/.claude/skills/',
   '/.agent-annotations/',
   '/.nocobase/',
   '*.log',
@@ -76,6 +77,7 @@ const FALLBACK_GITIGNORE = [
 const REQUIRED_GITIGNORE_ENTRIES = [
   '/.env',
   '/.agents/',
+  '/.claude/skills/',
   '/.agent-annotations/',
 ] as const;
 

@@ -20,7 +20,17 @@ import {
 } from './server-plugins.ts';
 
 import { createCliPluginsEditor, readCliPlugins } from './cli-plugins.ts';
-import { cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 
 const PACKAGE_SCOPE = '@nocobase/';
@@ -36,6 +46,18 @@ export const APP_SKILLS_DIRECTORY: string = path.join('.agents', 'skills');
 
 /** Every synchronized skill directory starts with this prefix. */
 export const SKILL_NAME_PREFIX = 'nocobase-';
+
+/**
+ * Directory, relative to an application root, that Claude Code reads skills from.
+ *
+ * `.agents/skills/` is the agent-neutral location this command owns, and Claude Code does not look there: it discovers
+ * skills only under `~/.claude/skills/` and `<project>/.claude/skills/`. An application that synchronized its skills
+ * would therefore still show none of them in Claude Code, while the globally installed NocoBase 2 skills its
+ * `AGENTS.md` tells agents to ignore stay available — exactly backwards. So every synchronized directory is mirrored
+ * here as a symbolic link. Links rather than copies because `.agents/skills/` is replaced wholesale on the next sync,
+ * and a copy taken from it silently becomes the stale second version of the same guidance.
+ */
+export const CLAUDE_SKILLS_DIRECTORY: string = path.join('.claude', 'skills');
 
 export interface PluginLocation {
   readonly packageName: string;
@@ -259,6 +281,7 @@ export async function applySkillsSync(
 ): Promise<SkillsSyncPlan> {
   for (const removal of plan.removals) {
     await rm(removal.targetPath, { force: true, recursive: true });
+    await unlinkClaudeSkill(plan.appRoot, removal.skillName);
   }
   if (plan.copies.length > 0) {
     await mkdir(plan.skillsRoot, { recursive: true });
@@ -266,6 +289,7 @@ export async function applySkillsSync(
   for (const copy of plan.copies) {
     await rm(copy.targetPath, { force: true, recursive: true });
     await cp(copy.sourcePath, copy.targetPath, { recursive: true });
+    await linkClaudeSkill(plan.appRoot, copy.skillName);
   }
   await writeSkillsOwnership(plan.appRoot, plan.ownership);
   return plan;
@@ -314,6 +338,7 @@ export async function removePackageSkills(
       force: true,
       recursive: true,
     });
+    await unlinkClaudeSkill(appRoot, name);
   }
   const ownership = await readSkillsOwnership(appRoot);
   if (Object.values(ownership).includes(packageName)) {
@@ -543,6 +568,74 @@ async function writeSkillsOwnership(
   const filePath = path.join(appRoot, OWNERSHIP_FILE);
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(ownership, null, 2)}\n`);
+}
+
+/**
+ * Mirrors one synchronized skill into `.claude/skills/` as a symbolic link.
+ *
+ * The link is relative so the application directory stays movable. Only a link is ever replaced: a real directory
+ * under a `nocobase-` name is something this command did not write, and removing it to make room would delete work it
+ * cannot restore, so it is reported instead.
+ */
+async function linkClaudeSkill(
+  appRoot: string,
+  skillName: string,
+): Promise<void> {
+  const linkPath = path.join(appRoot, CLAUDE_SKILLS_DIRECTORY, skillName);
+  if (!(await removeSymbolicLink(linkPath))) {
+    throw new Error(
+      `Cannot link ${skillName} into ${CLAUDE_SKILLS_DIRECTORY}: ${linkPath} exists and is not a symbolic link. Remove it and run the sync again.`,
+    );
+  }
+  await mkdir(path.dirname(linkPath), { recursive: true });
+  const relativeTarget = path.join('..', '..', APP_SKILLS_DIRECTORY, skillName);
+  try {
+    await symlink(relativeTarget, linkPath, 'dir');
+  } catch (error) {
+    if (process.platform !== 'win32') {
+      throw error;
+    }
+    // Windows refuses symbolic links without developer mode or elevation. A junction needs neither, but only accepts
+    // an absolute target, so on that platform alone the application directory stops being movable.
+    await symlink(
+      path.join(appRoot, APP_SKILLS_DIRECTORY, skillName),
+      linkPath,
+      'junction',
+    );
+  }
+}
+
+/** Drops the `.claude/skills/` mirror of a skill that is no longer synchronized. */
+async function unlinkClaudeSkill(
+  appRoot: string,
+  skillName: string,
+): Promise<void> {
+  await removeSymbolicLink(
+    path.join(appRoot, CLAUDE_SKILLS_DIRECTORY, skillName),
+  );
+}
+
+/**
+ * Removes `linkPath` when it is a symbolic link, reporting whether the path is now free.
+ *
+ * `lstat` rather than `stat` so a link to a missing target still reads as a link, and `unlink` rather than `rm` so a
+ * link to a directory is removed without following it.
+ */
+async function removeSymbolicLink(linkPath: string): Promise<boolean> {
+  let entry;
+  try {
+    entry = await lstat(linkPath);
+  } catch (error) {
+    if (isNodeError(error, 'ENOENT') || isNodeError(error, 'ENOTDIR')) {
+      return true;
+    }
+    throw error;
+  }
+  if (!entry.isSymbolicLink()) {
+    return false;
+  }
+  await unlink(linkPath);
+  return true;
 }
 
 async function isPackageDirectory(

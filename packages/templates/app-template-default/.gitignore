@@ -21,6 +21,7 @@ dist-ssr
 /.pnpm-store/
 /storage/
 /.agents/
+/.claude/skills/
 
 # Local application configuration
 /config.yml

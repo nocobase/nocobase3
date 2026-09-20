@@ -249,7 +249,7 @@ Run `pnpm skills:sync` if `.agents/skills/` is missing or looks out of date, the
 
 Building a permission system, a notification sender, or a job scheduler by hand when a registered plugin already provides one is the most expensive mistake available here. Prefer the plugin; write your own only when you have read its Skill and confirmed it genuinely does not fit.
 
-`.agents/skills/` is generated output: gitignored, and every synchronized package-owned directory is replaced wholesale on the next sync, so never edit a file there. Put application-specific guidance in committed `AGENTS.md` files.
+`.agents/skills/` is generated output: gitignored, and every synchronized package-owned directory is replaced wholesale on the next sync, so never edit a file there. The same sync mirrors each synchronized directory into `.claude/skills/` as a symbolic link, because Claude Code discovers skills only there; that mirror is generated and gitignored too. Put application-specific guidance in committed `AGENTS.md` files.
 
 ## Removing a NocoBase dependency
 

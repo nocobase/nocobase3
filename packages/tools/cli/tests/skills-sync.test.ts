@@ -1,10 +1,12 @@
 import { createRequire } from 'node:module';
 import { symlink } from 'node:fs/promises';
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
   readdir,
+  readlink,
   rm,
   writeFile,
 } from 'node:fs/promises';
@@ -547,6 +549,150 @@ describe('NocoBase dependency skills', () => {
       JSON.stringify({ '../../outside': '@nocobase/app-skills' }),
     );
     await expect(syncApp(appRoot)).rejects.toThrow('Invalid skills ownership');
+  });
+});
+
+describe('Claude Code skill mirror', () => {
+  it('links every synchronized skill so Claude Code discovers it', async () => {
+    const appRoot = await createApp({
+      '@nocobase/app-plugin-demo': { enabled: true },
+    });
+    await installPlugin(appRoot, '@nocobase/app-plugin-demo', {
+      'nocobase-app-plugin-demo': '# main',
+      'nocobase-app-plugin-demo-extra': '# extra',
+    });
+
+    await syncApp(appRoot);
+
+    expect(
+      (await readdir(path.join(appRoot, '.claude', 'skills'))).sort(),
+    ).toEqual(['nocobase-app-plugin-demo', 'nocobase-app-plugin-demo-extra']);
+    const linkPath = path.join(
+      appRoot,
+      '.claude/skills/nocobase-app-plugin-demo',
+    );
+    expect((await lstat(linkPath)).isSymbolicLink()).toBe(true);
+    expect(await readlink(linkPath)).toBe(
+      path.join('..', '..', '.agents', 'skills', 'nocobase-app-plugin-demo'),
+    );
+    expect(await readFile(path.join(linkPath, 'SKILL.md'), 'utf8')).toBe(
+      '# main',
+    );
+  });
+
+  it('resolves through the link after a later sync replaces the skill', async () => {
+    const appRoot = await createApp({
+      '@nocobase/app-plugin-demo': { enabled: true },
+    });
+    await installPlugin(appRoot, '@nocobase/app-plugin-demo', {
+      'nocobase-app-plugin-demo': '# first',
+    });
+    await syncApp(appRoot);
+    await installPlugin(appRoot, '@nocobase/app-plugin-demo', {
+      'nocobase-app-plugin-demo': '# second',
+    });
+
+    await syncApp(appRoot);
+
+    expect(
+      await readFile(
+        path.join(appRoot, '.claude/skills/nocobase-app-plugin-demo/SKILL.md'),
+        'utf8',
+      ),
+    ).toBe('# second');
+  });
+
+  it('drops the link when the skill is no longer synchronized', async () => {
+    const appRoot = await createApp({
+      '@nocobase/app-plugin-demo': { enabled: true },
+    });
+    await installPlugin(appRoot, '@nocobase/app-plugin-demo', {
+      'nocobase-app-plugin-demo': '# main',
+      'nocobase-app-plugin-demo-extra': '# extra',
+    });
+    await syncApp(appRoot);
+    await rm(
+      path.join(
+        appRoot,
+        'node_modules/@nocobase/app-plugin-demo/skills/nocobase-app-plugin-demo-extra',
+      ),
+      { recursive: true },
+    );
+
+    await syncApp(appRoot);
+
+    expect(await readdir(path.join(appRoot, '.claude', 'skills'))).toEqual([
+      'nocobase-app-plugin-demo',
+    ]);
+  });
+
+  it('leaves entries the application owns in place', async () => {
+    const appRoot = await createApp({
+      '@nocobase/app-plugin-demo': { enabled: true },
+    });
+    await installPlugin(appRoot, '@nocobase/app-plugin-demo', {
+      'nocobase-app-plugin-demo': '# main',
+    });
+    const ownSkill = path.join(appRoot, '.claude/skills/my-own-skill');
+    await mkdir(ownSkill, { recursive: true });
+    await writeFile(path.join(ownSkill, 'SKILL.md'), '# mine');
+
+    await syncApp(appRoot);
+
+    expect(
+      (await readdir(path.join(appRoot, '.claude', 'skills'))).sort(),
+    ).toEqual(['my-own-skill', 'nocobase-app-plugin-demo']);
+    expect(await readFile(path.join(ownSkill, 'SKILL.md'), 'utf8')).toBe(
+      '# mine',
+    );
+  });
+
+  it('refuses to replace a real directory occupying a synchronized name', async () => {
+    const appRoot = await createApp({
+      '@nocobase/app-plugin-demo': { enabled: true },
+    });
+    await installPlugin(appRoot, '@nocobase/app-plugin-demo', {
+      'nocobase-app-plugin-demo': '# main',
+    });
+    const occupied = path.join(
+      appRoot,
+      '.claude/skills/nocobase-app-plugin-demo',
+    );
+    await mkdir(occupied, { recursive: true });
+    await writeFile(path.join(occupied, 'SKILL.md'), '# handwritten');
+
+    await expect(syncApp(appRoot)).rejects.toThrow('is not a symbolic link');
+    expect(await readFile(path.join(occupied, 'SKILL.md'), 'utf8')).toBe(
+      '# handwritten',
+    );
+  });
+
+  it('unlinks a removed package’s skills', async () => {
+    const appRoot = await createApp();
+    await declareDependencies(appRoot, {
+      dependencies: { '@nocobase/app-skills': '1' },
+    });
+    await installPlugin(appRoot, '@nocobase/app-skills', {
+      'nocobase-app-development': '# develop',
+    });
+    await syncApp(appRoot);
+
+    await removePackageSkills(appRoot, '@nocobase/app-skills');
+
+    expect(await readdir(path.join(appRoot, '.claude', 'skills'))).toEqual([]);
+  });
+
+  it('does not create the directory when there is nothing to link', async () => {
+    const appRoot = await createApp({
+      '@nocobase/app-plugin-demo': { enabled: true },
+    });
+    await installPlugin(appRoot, '@nocobase/app-plugin-demo');
+
+    await syncApp(appRoot);
+
+    await expect(readdir(path.join(appRoot, '.claude'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
   });
 });
 

@@ -246,7 +246,7 @@ The built-in Hub roles do not grant `page:api-keys/access`; system administrator
 
 Application-owned routes and providers start empty; Hub management routes and role scopes come from the Hub plugin. Keep learning demonstrations in the Examples template.
 
-`.agents/skills/` is generated output: gitignored, and every synchronized package-owned directory is replaced wholesale on the next sync, so never edit a file there. Put application-specific guidance in committed `AGENTS.md` files.
+`.agents/skills/` is generated output: gitignored, and every synchronized package-owned directory is replaced wholesale on the next sync, so never edit a file there. The same sync mirrors each synchronized directory into `.claude/skills/` as a symbolic link, because Claude Code discovers skills only there; that mirror is generated and gitignored too. Put application-specific guidance in committed `AGENTS.md` files.
 
 ## Removing a NocoBase dependency
 
