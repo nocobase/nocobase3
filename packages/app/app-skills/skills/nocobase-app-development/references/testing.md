@@ -95,3 +95,9 @@ Say what you ran, what passed, and what you did not run. If you could not verify
 Set `NOCOBASE_STRICT_STARTUP=true` when running `pnpm dev` or `pnpm start` in automated verification. Startup failures, including job import failures, exit nonzero after resource cleanup. Strict dev runs the server without watch mode so a failed server cannot remain hidden behind a watcher; restart the command after server or configuration changes. Client HMR remains available. Omit the variable or set it to `false` for normal development with server hot reload. Request errors and individual job execution failures do not terminate the application.
 
 Use the shared Vitest presets for tests that discover queue jobs. They inline the queue loader so dynamically imported TypeScript tasks use Vitest's transformation and module registry. Do not suppress job import warnings or disable automatic discovery to make a startup test pass; assert that discovered jobs register and execute.
+
+## Vite cache isolation
+
+Every auxiliary Vite server started by a test or inspection command must use its own temporary `cacheDir` and remove it after closing the server. A fixture that symlinks the application's `node_modules` also shares its default `.vite` directory. `optimizeDeps.noDiscovery` and an empty `include` are not isolation: plugins can add optimizer entries. Overwriting the live server's dependency files leaves its in-memory module URLs pointing at missing chunks and breaks lazy pages until restart.
+
+Do not delete or rebuild a running development server's cache. For an already corrupted cache, stop all processes using that application cache before rebuilding it, then reload the browser with its cache disabled if stale dependency responses remain. A separate Vitest configuration does not isolate Vite instances created inside tests or child commands.
