@@ -91,7 +91,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Toaster, toast } from '@/components/ui/toast';
 
-import { ExamplePage } from '../shared';
+import { ExamplePage } from '../../shared';
 import {
   ORDERS,
   ORDER_STATUSES,
@@ -466,7 +466,7 @@ export default function OrdersExamplePage(): ReactElement {
     <ExamplePage
       title={t('examples.orders.title')}
       description={t('examples.orders.description')}
-      source='client/pages/reference/examples/orders.tsx'
+      source='client/pages/reference/examples/orders/orders.tsx'
       actions={
         <>
           <Button variant='outline'>

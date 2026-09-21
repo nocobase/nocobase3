@@ -39,7 +39,8 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       //     icon: LayoutDashboard,
       //   },
       //   breadcrumb: { title: 'examples.dashboard.title' },
-      //   componentLoader: () => import('./pages/reference/examples/dashboard.js'),
+      //   componentLoader: () =>
+      //     import('./pages/reference/examples/dashboard/dashboard.js'),
       // },
       {
         name: 'examples-orders',
@@ -48,7 +49,8 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
         authz: 'skip',
         navigation: { title: 'examples.orders.title', icon: ShoppingCart },
         breadcrumb: { title: 'examples.orders.title' },
-        componentLoader: () => import('./pages/reference/examples/orders.js'),
+        componentLoader: () =>
+          import('./pages/reference/examples/orders/orders.js'),
       },
       // {
       //   name: 'examples-customers',
@@ -57,7 +59,8 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       //   authz: 'skip',
       //   navigation: { title: 'examples.customers.title', icon: Users },
       //   breadcrumb: { title: 'examples.customers.title' },
-      //   componentLoader: () => import('./pages/reference/examples/customers.js'),
+      //   componentLoader: () =>
+      //     import('./pages/reference/examples/customers/customers.js'),
       // },
       // {
       //   name: 'examples-product-form',
@@ -69,7 +72,8 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       //     icon: PackagePlus,
       //   },
       //   breadcrumb: { title: 'examples.productForm.title' },
-      //   componentLoader: () => import('./pages/reference/examples/product-form.js'),
+      //   componentLoader: () =>
+      //     import('./pages/reference/examples/product-form/product-form.js'),
       // },
       // {
       //   name: 'examples-inbox',
@@ -78,7 +82,8 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       //   authz: 'skip',
       //   navigation: { title: 'examples.inbox.title', icon: MessagesSquare },
       //   breadcrumb: { title: 'examples.inbox.title' },
-      //   componentLoader: () => import('./pages/reference/examples/inbox.js'),
+      //   componentLoader: () =>
+      //     import('./pages/reference/examples/inbox/inbox.js'),
       // },
       // {
       //   name: 'examples-survey',
@@ -87,7 +92,8 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       //   authz: 'skip',
       //   navigation: { title: 'examples.survey.title', icon: ClipboardList },
       //   breadcrumb: { title: 'examples.survey.title' },
-      //   componentLoader: () => import('./pages/reference/examples/survey.js'),
+      //   componentLoader: () =>
+      //     import('./pages/reference/examples/survey/survey.js'),
       // },
       // {
       //   name: 'examples-team-settings',
@@ -99,7 +105,8 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       //     icon: Settings2,
       //   },
       //   breadcrumb: { title: 'examples.teamSettings.title' },
-      //   componentLoader: () => import('./pages/reference/examples/team-settings.js'),
+      //   componentLoader: () =>
+      //     import('./pages/reference/examples/team-settings/team-settings.js'),
       // },
       // {
       //   name: 'examples-schedule',
@@ -108,7 +115,8 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
       //   authz: 'skip',
       //   navigation: { title: 'examples.schedule.title', icon: CalendarDays },
       //   breadcrumb: { title: 'examples.schedule.title' },
-      //   componentLoader: () => import('./pages/reference/examples/schedule.js'),
+      //   componentLoader: () =>
+      //     import('./pages/reference/examples/schedule/schedule.js'),
       // },
     ],
   },
