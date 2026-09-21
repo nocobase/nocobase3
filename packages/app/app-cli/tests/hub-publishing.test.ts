@@ -482,14 +482,14 @@ describe('CLI command output', () => {
     '%s %j reports %s with polling=%s',
     async (operation, flags, status, polls) => {
       const { Config } = await import('@oclif/core');
-      const { deploy: AppDeploy } = createAppCommands(
-        { rootDir: root, loadRuntime: vi.fn() },
-        { publishing: true },
-      );
-      const { upload: AppUpload } = createAppCommands(
-        { rootDir: root, loadRuntime: vi.fn() },
-        { publishing: true },
-      );
+      const { deploy: AppDeploy } = createAppCommands({
+        rootDir: root,
+        publishing: true,
+      });
+      const { upload: AppUpload } = createAppCommands({
+        rootDir: root,
+        publishing: true,
+      });
       const config = await Config.load({
         root,
         pjson: {
@@ -550,10 +550,10 @@ describe('CLI command output', () => {
   );
   it('prints one JSON envelope and a parameter exit code without echoing secret arguments', async () => {
     const { Config } = await import('@oclif/core');
-    const { deploy: AppDeploy } = createAppCommands(
-      { rootDir: root, loadRuntime: vi.fn() },
-      { publishing: true },
-    );
+    const { deploy: AppDeploy } = createAppCommands({
+      rootDir: root,
+      publishing: true,
+    });
     const config = await Config.load({
       root,
       pjson: {
@@ -580,10 +580,10 @@ describe('CLI command output', () => {
   });
   it('exits with failure JSON when upload --deploy has no confirmed deployment', async () => {
     const { Config } = await import('@oclif/core');
-    const { upload: AppUpload } = createAppCommands(
-      { rootDir: root, loadRuntime: vi.fn() },
-      { publishing: true },
-    );
+    const { upload: AppUpload } = createAppCommands({
+      rootDir: root,
+      publishing: true,
+    });
     const config = await Config.load({
       root,
       pjson: {
@@ -629,10 +629,10 @@ describe('CLI command output', () => {
 
   it('warns in human output when the Hub reused an earlier deployment', async () => {
     const { Config } = await import('@oclif/core');
-    const { deploy: AppDeploy } = createAppCommands(
-      { rootDir: root, loadRuntime: vi.fn() },
-      { publishing: true },
-    );
+    const { deploy: AppDeploy } = createAppCommands({
+      rootDir: root,
+      publishing: true,
+    });
     const config = await Config.load({
       root,
       pjson: {
@@ -676,10 +676,10 @@ describe('CLI command output', () => {
 
   it('allows --no-wait to return the accepted deployment status', async () => {
     const { Config } = await import('@oclif/core');
-    const { deploy: AppDeploy } = createAppCommands(
-      { rootDir: root, loadRuntime: vi.fn() },
-      { publishing: true },
-    );
+    const { deploy: AppDeploy } = createAppCommands({
+      rootDir: root,
+      publishing: true,
+    });
     const config = await Config.load({
       root,
       pjson: {

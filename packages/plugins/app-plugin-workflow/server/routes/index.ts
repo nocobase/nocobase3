@@ -1,5 +1,9 @@
 import { databaseManagerToken } from '@nocobase/db';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
+import {
+  authorizationToken,
+  type AuthorizationEnv,
+} from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
   defineApiRoutes,
@@ -24,7 +28,7 @@ const workflowRoutePaths = [
 export const apiRoutes: AppApiRouteContribution<
   AppPluginApplication<WorkflowProviderConfig>
 > = defineApiRoutes(({ container }) => {
-  const router = new Hono();
+  const router = new Hono<AuthorizationEnv>();
   router.onError((error, context) => {
     if (error instanceof AppServiceError) {
       const key =
@@ -71,8 +75,33 @@ export const apiRoutes: AppApiRouteContribution<
     );
   });
   const authentication = container.resolve(authenticationToken);
+  const authorization = container.resolve(authorizationToken);
   for (const path of workflowRoutePaths) {
-    router.use(path, authentication.required());
+    router.use(
+      path,
+      authentication.required(),
+      authorization.middleware(),
+      async (context, next) => {
+        const allowed = await context.get('authz').can({
+          resource: { type: 'settings', id: 'workflow' },
+          action: 'manage',
+        });
+        if (!allowed) {
+          return context.json(
+            {
+              code: 'FORBIDDEN',
+              message: translateWorkflowMessage(
+                context,
+                'errors.forbidden',
+                'Workflow management permission is required.',
+              ),
+            },
+            403,
+          );
+        }
+        await next();
+      },
+    );
   }
   if (
     container.has(databaseManagerToken) &&
@@ -101,7 +130,7 @@ export const apiRoutes: AppApiRouteContribution<
       );
     }
   }
-  return router;
+  return new Hono().route('/', router);
 });
 
 const routes: readonly AppApiRouteContribution<

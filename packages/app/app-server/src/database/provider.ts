@@ -60,6 +60,8 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
     );
     const database = container.resolve(databaseManagerToken);
     await executeAppDatabasePlan(database, config, plan, {
+      runtimeConfig: this.app.config,
+      container: this.app.container,
       paths: this.app.paths,
     });
   }

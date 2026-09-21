@@ -27,7 +27,7 @@ const zhCN: WorkflowResource = {
     workflowFields: '工作流设置',
     details: '变更详情',
   },
-  authorization: { title: '工作流', read: '查看' },
+  authorization: { title: '工作流', manage: '管理' },
   nav: {
     automation: '自动化',
     workflows: '工作流',

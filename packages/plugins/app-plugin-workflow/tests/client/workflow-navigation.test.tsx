@@ -59,7 +59,7 @@ describe('workflow module navigation', () => {
       '/settings/workflow/workflows?q=test',
     );
     const runs = screen.getByRole('link', { name: 'Execution records' });
-    expect(runs.closest('header')).not.toBeNull();
+    expect(runs.closest('nav')).toBe(screen.getByRole('navigation'));
     fireEvent.click(runs);
     await screen.findByText('Run panel');
     expect(runs.getAttribute('aria-current')).toBe('page');

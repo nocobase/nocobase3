@@ -56,7 +56,7 @@ export default class AppMigrate extends AppCommand {
       },
       'migrations',
       flags,
-      async () => this.appContext.loadRuntime(),
+      this.appContext,
     );
   }
 }

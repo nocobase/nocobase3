@@ -1,14 +1,17 @@
+import { authenticationToken, Auth } from '@nocobase/app-plugin-authentication';
 import {
-  authenticationToken,
-  type Auth,
-} from '@nocobase/app-plugin-authentication';
-import { databaseManagerToken } from '@nocobase/db';
+  authorizationToken,
+  createAppAuthorization,
+} from '@nocobase/app-plugin-authorization';
+import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { createI18nMiddleware } from '@nocobase/i18n/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
+import { WorkflowAuthorizationProvider } from '../server/authorization.js';
 import type { WorkflowProviderConfig } from '../server/provider.js';
 import type { WorkflowService } from '../server/service.js';
 import { createNodeRunRoutes } from '../server/routes/node-runs.js';
@@ -21,6 +24,11 @@ import { createTestDatabase } from './helpers.js';
 import { createWorkflowI18nRuntime } from './i18n.js';
 
 const i18n = await createWorkflowI18nRuntime(serverLocales);
+const databases: DatabaseManager[] = [];
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await Promise.all(databases.splice(0).map((database) => database.destroy()));
+});
 
 describe('@nocobase/app-plugin-workflow routes', () => {
   it('registers the protected workflow API routes', async () => {
@@ -136,9 +144,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
 
   it('rejects invalid workflow identifiers before database dispatch', async () => {
     const database = await createTestDatabase();
-    const application = createWorkflowApplication({
-      required: () => async (_context, next) => next(),
-    } as unknown as Auth);
+    const application = await createWorkflowApplication();
     const ensureArtifactMaterialized = vi.fn(async () => undefined);
     application.container.instance(databaseManagerToken, database);
     application.container.instance(internalWorkflowServiceToken, {
@@ -169,10 +175,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
   it('does not apply its authentication boundary to later Route contributions', async () => {
     const application = new Hono();
     const pluginRouter = await apiRoutes.createRouter(
-      createWorkflowApplication({
-        required: () => (context) =>
-          context.json({ code: 'UNAUTHORIZED' }, 401),
-      } as unknown as Auth),
+      await createWorkflowApplication(null),
     );
     application.route('/api', pluginRouter);
     application.get('/api/later-plugin', (context) => context.text('later'));
@@ -188,9 +191,7 @@ describe('@nocobase/app-plugin-workflow routes', () => {
 
   it('returns unavailable only after authentication succeeds', async () => {
     const router = await apiRoutes.createRouter(
-      createWorkflowApplication({
-        required: () => async (_context, next) => next(),
-      } as unknown as Auth),
+      await createWorkflowApplication(),
     );
 
     const app = new Hono();
@@ -202,6 +203,131 @@ describe('@nocobase/app-plugin-workflow routes', () => {
     await expect(response.json()).resolves.toEqual({
       message: 'Workflow service is not configured.',
     });
+  });
+
+  it.each([null, 'member', 'reader', 'manager', 'root'])(
+    'enforces management permission on every HTTP endpoint for %s',
+    async (userId) => {
+      const application = await createWorkflowApplication(userId);
+      const app = new Hono();
+      app.use('*', createI18nMiddleware(i18n));
+      app.route('/api', await apiRoutes.createRouter(application));
+      app.get('/api/later-plugin', (context) => context.text('later'));
+      const endpoints = [
+        ['GET', '/workflows'],
+        ['GET', '/workflows/1'],
+        ['GET', '/workflows/1/revisions'],
+        ['GET', '/workflows/1/parameters'],
+        ['PUT', '/workflows/1/parameters'],
+        ['PATCH', '/workflows/1/status'],
+        ['POST', '/workflows/1/enable'],
+        ['POST', '/workflows/1/disable'],
+        ['POST', '/workflows/1/run'],
+        ['GET', '/workflows/1/runs'],
+        ['GET', '/workflow-runs'],
+        ['GET', '/workflow-runs/1'],
+        ['GET', '/workflow-runs/1/node-runs'],
+        ['GET', '/workflow-runs/1/node-runs/2/payload'],
+      ];
+      const status =
+        userId === null
+          ? 401
+          : userId === 'root' || userId === 'manager'
+            ? 503
+            : 403;
+      for (const [method, path] of endpoints) {
+        const response = await app.request(`/api${path}`, { method });
+        expect(response.status, `${method} ${path}`).toBe(status);
+        if (status === 403)
+          await expect(response.json()).resolves.toEqual({
+            code: 'FORBIDDEN',
+            message: 'Workflow management permission is required.',
+          });
+      }
+      expect((await app.request('/api/later-plugin')).status).toBe(200);
+    },
+  );
+
+  it.each(['member', 'reader', 'manager', 'root'])(
+    'dispatches manual execution only for an authorized %s',
+    async (userId) => {
+      const application = await createWorkflowApplication(userId);
+      const database = databases.at(-1)!;
+      application.container.instance(databaseManagerToken, database);
+      application.container.instance(
+        internalWorkflowServiceToken,
+        {} as WorkflowService,
+      );
+      const run = vi
+        .spyOn(WorkflowRunRepository.prototype, 'run')
+        .mockResolvedValue({
+          id: 'run-1',
+          workflowId: '1',
+          workflowKey: 'approval',
+          workflowTitle: 'Approval',
+          workflowVersion: 'version-1',
+          eventKey: 'manual-request',
+          status: null,
+          startedAt: null,
+          finishedAt: null,
+          createdAt: '2026-08-26T00:00:00.000Z',
+        });
+      const app = new Hono();
+      app.use('*', createI18nMiddleware(i18n));
+      app.route('/api', await apiRoutes.createRouter(application));
+      const response = await app.request('/api/workflows/1/run', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'event-key': 'manual-request',
+        },
+        body: JSON.stringify({ input: { amount: 100 } }),
+      });
+      if (userId === 'manager' || userId === 'root') {
+        expect(response.status).toBe(200);
+        expect(run).toHaveBeenCalledExactlyOnceWith(
+          '1',
+          { amount: 100 },
+          { eventKey: 'manual-request' },
+        );
+        await expect(response.json()).resolves.toMatchObject({
+          data: { id: 'run-1' },
+        });
+      } else {
+        expect(response.status).toBe(403);
+        expect(run).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it('denies manual execution before dispatch and observes permission revocation', async () => {
+    const application = await createWorkflowApplication('manager');
+    const database = databases.at(-1)!;
+    const ensureArtifactMaterialized = vi.fn(async () => undefined);
+    application.container.instance(databaseManagerToken, database);
+    application.container.instance(internalWorkflowServiceToken, {
+      discoverArtifacts: async () => [],
+      ensureArtifactMaterialized,
+    } as unknown as WorkflowService);
+    const app = new Hono();
+    app.use('*', createI18nMiddleware(i18n));
+    app.route('/api', await apiRoutes.createRouter(application));
+    expect((await app.request('/api/workflows')).status).toBe(200);
+    await application.container
+      .resolve(authorizationToken)
+      .permissionSets.update('manager', { key: 'manager', grants: [] });
+    const response = await app.request('/api/workflows/1/run', {
+      method: 'POST',
+      headers: { 'accept-language': 'zh-CN' },
+      body: '{}',
+    });
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      code: 'FORBIDDEN',
+      message: '需要工作流管理权限。',
+    });
+    expect(ensureArtifactMaterialized).not.toHaveBeenCalled();
+    expect((await app.request('/api/workflows')).status).toBe(403);
   });
 
   it('returns validation errors using the standard error contract', async () => {
@@ -261,11 +387,92 @@ function registerTestRoutes(app: Hono, repositories: TestRepositories): void {
   app.route('/api', createNodeRunRoutes(repositories.workflowRuns));
 }
 
-function createWorkflowApplication(
-  authentication: Auth,
-): AppPluginApplication<WorkflowProviderConfig> {
+async function createWorkflowApplication(
+  userId: string | null = 'manager',
+): Promise<AppPluginApplication<WorkflowProviderConfig>> {
+  const database = await createTestDatabase();
+  databases.push(database);
+  await database
+    .builder()
+    .createCollection('authorizationPermissionSets', (table) => {
+      table.string('id').primary();
+      table.string('key');
+      table.string('title').nullable();
+      table.json('grants');
+      table.datetime('createdAt');
+      table.datetime('updatedAt');
+    });
+  await database
+    .builder()
+    .createCollection('authorizationPermissionSetAssignments', (table) => {
+      table.string('id').primary();
+      table.string('subjectType');
+      table.string('subjectId');
+      table.string('permissionSetKey');
+      table.datetime('createdAt');
+      table.datetime('updatedAt');
+    });
+  const authorization = createAppAuthorization({
+    connection: database.connection(),
+  });
+  for (const key of ['root', 'manager', 'reader', 'member']) {
+    await authorization.permissionSets.create({
+      key,
+      grants:
+        key === 'manager' || key === 'reader'
+          ? [
+              authorization.settings.grant('workflow', [
+                key === 'manager' ? 'manage' : 'read',
+              ]),
+            ]
+          : [],
+    });
+    await database
+      .connection()
+      .query.insertInto('authorizationPermissionSetAssignments')
+      .values({
+        id: key,
+        subjectType: 'user',
+        subjectId: key,
+        permissionSetKey: key,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .execute();
+  }
+  const authentication = new Auth({
+    connection: database.connection(),
+    baseURL: 'http://example.test',
+    secret: 'workflow-route-test-secret-at-least-32-characters',
+  });
+  vi.spyOn(authentication, 'getSession').mockResolvedValue(
+    userId
+      ? {
+          user: {
+            id: userId,
+            name: userId,
+            email: `${userId}@example.test`,
+            emailVerified: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          session: {
+            id: 'session',
+            userId,
+            token: 'test-token',
+            expiresAt: new Date(Date.now() + 60_000),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        }
+      : null,
+  );
   const container = new ServiceContainer();
   container.instance(authenticationToken, authentication);
+  container.instance(authorizationToken, authorization);
+  await new WorkflowAuthorizationProvider({
+    container,
+  } as AppPluginApplication).boot();
   return {
     appName: 'main',
     publicBasePath: '',

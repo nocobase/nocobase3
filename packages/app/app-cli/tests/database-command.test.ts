@@ -1,14 +1,32 @@
+import { databaseManagerToken } from '@nocobase/db';
+import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
+import { createAppFromRuntime } from '@nocobase/app-server/runtime';
+import { DatabaseProvider } from '@nocobase/app-server/database';
+import type { AppCommandContext } from '../src/context.js';
+import { IdGeneratorProvider } from '@nocobase/app-server/id-generator';
+import { ServiceProvider } from '../../../libs/service-provider/src/index.js';
+import type { Application } from '@nocobase/app-server';
 // @vitest-environment node
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { runDatabaseCommand } from '../src/database-command.js';
-import {
-  createAppPaths,
-  type AppConfigAccessor,
-} from '@nocobase/app-server/config';
+import { createAppPaths, AppConfig } from '@nocobase/app-server/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 import sqlite, { type SqliteConnectionConfig } from '@nocobase/db-sqlite';
+
+class TaskServiceProvider extends ServiceProvider<Application> {
+  override async boot(): Promise<void> {
+    throw new Error('CLI must not boot providers');
+  }
+  override async start(): Promise<void> {
+    throw new Error('CLI must not start providers');
+  }
+
+  override register(): void {
+    this.app.config.mergeDefaults({ taskServiceRegistered: true });
+  }
+}
 
 const roots: string[] = [];
 afterEach(() => {
@@ -40,11 +58,36 @@ function fixture() {
       },
     },
   };
-  const runtime = async () => ({
-    config: { get: () => database } as unknown as AppConfigAccessor,
-    paths: paths,
-    plugins: { appPackageName: 'test-app', plugins: [] },
-  });
+  writeFileSync(
+    path.join(root, 'package.json'),
+    JSON.stringify({ name: 'test-app', version: '1.0.0' }),
+  );
+  const runtime: {
+    -readonly [K in 'loadRuntime' | 'createApp']: AppCommandContext[K];
+  } = {
+    loadRuntime: () =>
+      resolveStandaloneAppRuntime(
+        {
+          createAppConfig: () => {
+            const config = new AppConfig();
+            return config;
+          },
+          defaultConfigs: () => ({ database, snowflake: { workerId: 0 } }),
+          plugins: { plugins: [] },
+          serviceProviders: [],
+          routes: [],
+        },
+        { rootDir: root },
+      ),
+    createApp: (loaded) => {
+      const app = createAppFromRuntime(loaded);
+      app.addServiceProvider(DatabaseProvider);
+      app.addServiceProvider(IdGeneratorProvider);
+      app.addServiceProvider(TaskServiceProvider);
+      app.addRuntimeContributions(loaded);
+      return app;
+    },
+  };
   const command = {
     log: vi.fn(),
     logJson: vi.fn(),
@@ -57,8 +100,12 @@ function fixture() {
     mkdirSync(directory, { recursive: true });
     writeFileSync(
       path.join(directory, '001_create.ts'),
-      `import { defineMigration } from '@nocobase/db';
-export default defineMigration({ name: '001_create', async up({ builder }) {
+      `import { defineMigration, databaseManagerToken } from '@nocobase/db';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+export default defineMigration({ name: '001_create', async up({ builder, config, container }) {
+if (config.get('taskServiceRegistered') !== true) throw new Error('providers not registered');
+if (container.has(databaseManagerToken)) throw new Error('database manager exposed');
+if (!container.resolve(idGeneratorToken).generateString()) throw new Error('missing ID generator');
 ${fail ? "throw new Error('failed migration');" : "await builder.createCollection('rows', c => c.increments('id'));"}
 }, async down({ builder }) { await builder.dropCollection('rows'); } });`,
     );
@@ -167,4 +214,120 @@ it('requires force for fresh migrations in CI', async () => {
     '--fresh requires --force in CI or a non-interactive terminal.',
   );
   expect(command.logJson).not.toHaveBeenCalled();
+});
+
+it('uses and disposes the factory application and its scope without autoRun', async () => {
+  const { runtime, command, migration } = fixture();
+  migration('main', true); // Would fail if autoRun were triggered while migrating analytics.
+  migration('analytics');
+  const load = runtime.loadRuntime;
+  const create = runtime.createApp;
+  const destroy = vi.fn();
+  const shutdown = vi.fn();
+  const register = vi.fn();
+  let databaseDestroy = vi.fn();
+  let databaseConnection = vi.fn();
+  runtime.loadRuntime = async () => {
+    const loaded = await load();
+    loaded.scope.registerDisposer('test-scope', destroy);
+    return loaded;
+  };
+  runtime.createApp = async (loaded) => {
+    const app = await create(loaded);
+    const original = app.registerProviders.bind(app);
+    app.registerProviders = () => {
+      register();
+      original();
+      const database = app.container.resolve(databaseManagerToken);
+      databaseDestroy = vi.spyOn(database, 'destroy');
+      databaseConnection = vi.spyOn(database, 'connection');
+    };
+    const dispose = app.shutdown.bind(app);
+    app.shutdown = async () => {
+      shutdown();
+      await dispose();
+    };
+    return app;
+  };
+  await runDatabaseCommand(
+    command,
+    'migrations',
+    { json: true, all: false, connection: 'analytics' },
+    runtime,
+  );
+  expect(register).toHaveBeenCalledOnce();
+  expect(shutdown).toHaveBeenCalledOnce();
+  expect(destroy).toHaveBeenCalledOnce();
+  expect(databaseDestroy).toHaveBeenCalledOnce();
+  expect(databaseConnection).toHaveBeenCalledWith('analytics');
+});
+
+it('cleans partial assembly and retains the factory error when cleanup also fails', async () => {
+  const { runtime, command } = fixture();
+  const create = runtime.createApp;
+  const load = runtime.loadRuntime;
+  const destroy = vi.fn();
+  const shutdown = vi.fn(async () => {
+    throw new Error('cleanup failure');
+  });
+  runtime.loadRuntime = async () => {
+    const loaded = await load();
+    loaded.scope.registerDisposer('test-scope', destroy);
+    return loaded;
+  };
+  runtime.createApp = async (loaded) => {
+    const app = await create(loaded);
+    app.shutdown = shutdown;
+    throw new Error('factory failure');
+  };
+  await expect(
+    runDatabaseCommand(command, 'seeds', { json: true, all: false }, runtime),
+  ).rejects.toThrow('exit 1');
+  expect(shutdown).toHaveBeenCalledOnce();
+  expect(destroy).toHaveBeenCalledOnce();
+  expect(command.logJson).toHaveBeenCalledWith(
+    expect.objectContaining({
+      error: expect.stringContaining('factory failure'),
+    }),
+  );
+});
+
+it('uses migration sources contributed by the application factory', async () => {
+  const { runtime, command, migration } = fixture();
+  migration('extra');
+  const create = runtime.createApp;
+  runtime.createApp = async (loaded) => {
+    const app = await create(loaded);
+    app.addServerPlugins({
+      appPackageName: 'test-app',
+      plugins: [
+        {
+          definition: {
+            packageName: 'factory-plugin',
+            baseDir: loaded.paths.rootDir,
+            serviceProviders: [],
+            routes: [],
+          },
+          metadata: {
+            packageName: 'factory-plugin',
+            version: '1.0.0',
+            baseDir: loaded.paths.rootDir,
+            rootDir: loaded.paths.rootDir,
+            migrationsDirectory: loaded.paths.database('extra/migrations'),
+            jobLocations: [],
+          },
+        },
+      ],
+    });
+    return app;
+  };
+  await runDatabaseCommand(
+    command,
+    'migrations',
+    { json: true, all: false },
+    runtime,
+  );
+  expect(command.logJson).toHaveBeenCalledWith(
+    expect.objectContaining({ executed: ['001_create'] }),
+  );
 });

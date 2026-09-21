@@ -5,11 +5,13 @@ const ROOT = 'root';
 const seed: SeedDefinition = defineSeed({
   name: '202608240001_authorization_create_root_set',
 
-  async run({ query }) {
+  async run({ query, config }) {
+    const username =
+      config.get<string>('users.initialAdmin.username') ?? 'nocobase';
     const user = await query
       .selectFrom('user')
       .select('id')
-      .where('username', '=', 'nocobase')
+      .where('username', '=', username.toLowerCase())
       .limit(1)
       .executeTakeFirst();
     if (!user) return;

@@ -24,12 +24,12 @@ export class WorkflowAuthorizationProvider extends ServiceProvider<AppPluginAppl
       group: 'automation',
       actions: [
         {
-          name: 'read',
+          name: 'manage',
           title: {
-            key: 'authorization.read',
+            key: 'authorization.manage',
             ns: '@nocobase/app-plugin-workflow',
           },
-          grants: [authz.settings.grant('workflow', ['read'])],
+          grants: [authz.settings.grant('workflow', ['manage'])],
         },
       ],
     });

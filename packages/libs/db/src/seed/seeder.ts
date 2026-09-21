@@ -34,7 +34,11 @@ class DefaultSeeder implements Seeder {
       this.options.connection,
     );
     const seeds = await loadSeeds(this.options);
-    const seedConnection = createSeedContext(connection).connection;
+    const seedConnection = createSeedContext(
+      connection,
+      this.options.config,
+      this.options.container,
+    ).connection;
 
     return withSeedLock(
       seedConnection,
@@ -82,7 +86,11 @@ class DefaultSeeder implements Seeder {
   ): Promise<void> {
     const mode = loaded.seed.transaction ?? 'auto';
     if (mode === false) {
-      const context = createSeedContext(connection);
+      const context = createSeedContext(
+        connection,
+        this.options.config,
+        this.options.container,
+      );
       const startedAt = Date.now();
       await loaded.seed.run(context);
       await recordSeedCompleted(context.connection, {
@@ -96,7 +104,11 @@ class DefaultSeeder implements Seeder {
     }
 
     await connection.transaction(async (trxConnection) => {
-      const context = createSeedContext(trxConnection);
+      const context = createSeedContext(
+        trxConnection,
+        this.options.config,
+        this.options.container,
+      );
       const startedAt = Date.now();
       await loaded.seed.run(context);
       await recordSeedCompleted(context.connection, {

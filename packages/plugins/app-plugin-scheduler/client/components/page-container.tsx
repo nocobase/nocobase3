@@ -1,25 +1,16 @@
-import type { ComponentProps, ReactElement, ReactNode } from 'react';
+import type { ComponentProps, ReactElement } from 'react';
+import { twMerge } from 'tailwind-merge';
 
-export interface PageContainerProps extends ComponentProps<'section'> {
-  readonly header?: ReactNode;
-}
+export type PageContainerProps = ComponentProps<'section'>;
 
-/** Centered, width-constrained application page; the header owns its own surface and divider. */
 export function PageContainer({
-  header,
-  children,
-  className = '',
+  className,
   ...props
 }: PageContainerProps): ReactElement {
   return (
     <section
-      className={`min-h-[calc(100svh-4rem)] w-full bg-muted/20 ${className}`}
+      className={twMerge('w-full space-y-6 p-6 md:p-8', className)}
       {...props}
-    >
-      {header}
-      <div className='mx-auto w-full max-w-7xl space-y-5 px-6 py-6'>
-        {children}
-      </div>
-    </section>
+    />
   );
 }
