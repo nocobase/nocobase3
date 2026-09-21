@@ -97,7 +97,7 @@ After deployment, check that each workflow's active version points to an artifac
 
 Collect evidence for each item:
 
-1. The process, container, Hub, and Host report ready. An application answers `GET <APP_BASE_PATH>/api/healthz` with `{"ok":true}`; Hub answers at `/hub/api/healthz`.
+1. The process, container, Hub, and Host report ready. An application answers `GET <APP_BASE_PATH>/api/healthz` with a JSON object whose `ok` is `true` (alongside the app name and base path); Hub answers at `/hub/api/healthz`.
 2. The public URL, base path, static assets, page refresh, API requests, cookies, and WebSocket connections work through the real reverse proxy.
 3. The configured administrator can sign in, and a normal user has the expected server-side permissions.
 4. The application can read and write a known record in the intended database; the database is not an unexpected empty instance.

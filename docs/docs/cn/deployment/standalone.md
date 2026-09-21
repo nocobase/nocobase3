@@ -85,7 +85,7 @@ APP_SERVER_PORT=13000 \
 node ./dist/server/standalone.js
 ```
 
-`APP_PUBLIC_ORIGIN` 不带 `/crm`；挂载路径由 `APP_BASE_PATH` 指定。访问 `http://127.0.0.1:13000/crm/api/healthz`，返回 `{"ok":true}` 表示应用就绪；浏览器登录需通过 localhost 或 HTTPS，生产模式下会话 Cookie 带 `Secure` 标记。检查实际页面与日志后停止前台进程，再交给服务管理器，避免启动两个应用处理同一份数据。
+`APP_PUBLIC_ORIGIN` 不带 `/crm`；挂载路径由 `APP_BASE_PATH` 指定。访问 `http://127.0.0.1:13000/crm/api/healthz`，返回的 JSON 中 `ok` 为 `true` 表示应用就绪，其余字段为应用名称和挂载路径；浏览器登录需通过 localhost 或 HTTPS，生产模式下会话 Cookie 带 `Secure` 标记。检查实际页面与日志后停止前台进程，再交给服务管理器，避免启动两个应用处理同一份数据。
 
 **长期运行。** Linux systemd 示例：将以下内容作为 `/etc/systemd/system/nocobase-crm.service`，账号 `nocobase` 必须已创建，并将 Node 路径替换成服务器 `command -v node` 的实际结果。
 
@@ -138,7 +138,7 @@ pm2 save
 
 打开 `https://apps.example.com/crm/`，使用[初始管理员配置](./configuration#配置初始管理员)中的用户名和密码登录。未修改默认配置时，用户名为 `nocobase`、密码为 `admin123`；也可使用邮箱 `admin@nocobase.com` 登录。使用默认密码时，首次登录后立即修改，再开放正式访问。已有应用使用原账号，修改初始化配置不会重置密码；定制初始化任务以实际项目为准。
 
-先请求 `https://apps.example.com/crm/api/healthz`，返回 `{"ok":true}` 表示应用已就绪，该地址也可作为服务管理器或负载均衡的健康检查。随后验证登录、退出、页面刷新、静态资源、API、实时连接及实际业务操作。创建一条测试记录并上传文件，重启服务后确认仍存在。确认外部回调和通知链接使用正确域名及挂载路径。
+先请求 `https://apps.example.com/crm/api/healthz`，返回的 JSON 中 `ok` 为 `true` 表示应用已就绪，该地址也可作为服务管理器或负载均衡的健康检查。随后验证登录、退出、页面刷新、静态资源、API、实时连接及实际业务操作。创建一条测试记录并上传文件，重启服务后确认仍存在。确认外部回调和通知链接使用正确域名及挂载路径。
 
 ## 更新与版本恢复
 

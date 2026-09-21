@@ -69,14 +69,14 @@ cd hub
 mkdir -p storage
 ```
 
-Hub 镜像发布到以下两个仓库。目前两者均提供 `latest` 标签，支持 Linux amd64 和 arm64。
+Hub 镜像由 beta 发布流程推送到以下两个仓库，支持 Linux amd64 和 arm64。
 
 | 镜像仓库                  | 镜像名称                                        |
 | ------------------------- | ----------------------------------------------- |
 | GitHub Container Registry | `ghcr.io/nocobase/hub`                          |
 | 阿里云镜像仓库            | `registry.cn-beijing.aliyuncs.com/nocobase/hub` |
 
-首次试用可将下方 `YOUR_VERSION` 替换为 `latest`；固定部署版本时，使用仓库中实际存在的标签或镜像 digest；每次构建还会打上形如 `run-<运行ID>-<尝试号>` 的固定标签。不要直接将 npm 包版本作为镜像标签。
+每次发布推送两个标签：发布流程指定的标签（beta 发布使用 `latest`）和形如 `run-<运行ID>-<尝试号>` 的固定标签。使用前先在镜像仓库中确认标签确实存在；发布流程的配置本身不代表某个标签已经推送。首次试用可将下方 `YOUR_VERSION` 替换为 `latest`；固定部署版本时，使用仓库中实际存在的 `run-` 标签或镜像 digest。镜像不打 npm 包版本号标签，不要直接把 npm 版本当作镜像标签。
 
 ```bash
 hub_image=ghcr.io/nocobase/hub:YOUR_VERSION
@@ -100,15 +100,15 @@ test -s config.example.yml && { test -e config.yml || cp config.example.yml conf
 
 编辑 `config.yml`，保留模板中的其他配置，修改以下字段：
 
-| 配置项                               | 设置                                                  |
-| ------------------------------------ | ----------------------------------------------------- |
-| `auth.secret`                        | 运行 `openssl rand -hex 32` 生成随机值，替换占位值    |
-| `session.secret`                     | 同样生成随机值并替换占位值                            |
-| `database.connections.main.database` | 使用 SQLite 时设置为 `/data/hub/database/main.sqlite` |
+| 配置项                               | 设置                                                                                                                         |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `auth.secret`                        | 运行 `openssl rand -hex 32` 生成随机值，替换占位值                                                                           |
+| `session.secret`                     | 同样生成随机值并替换占位值                                                                                                   |
+| `database.connections.main.database` | 使用 SQLite 时保留模板值 `hub/database/main.sqlite`，相对路径按持久目录解析，等价于容器内的 `/data/hub/database/main.sqlite` |
 
 首次启动前，按[配置初始管理员](./configuration#配置初始管理员)设置 `users.initialAdmin` 中的用户名和密码。
 
-`database` 是容器内路径。下一步将服务器上的 `storage` 挂载到 `/data`，Hub 数据库和托管应用数据将保存在该持久目录中。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像，或改用应用模板方式并在创建时指定 `--dialect`。
+`database` 中的相对路径按 `HUB_STORAGE_DIR` 解析，下一步将它设为 `/data`，并把服务器上的 `storage` 挂载到该位置，Hub 数据库和托管应用数据将保存在该持久目录中。写绝对路径时必须使用容器内路径。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像，或改用应用模板方式并在创建时指定 `--dialect`。
 
 镜像以 `node` 用户运行。可用以下命令确认 UID 和 GID，并为该用户设置 `config.yml` 的读取权限及 `storage` 的写入权限：
 
