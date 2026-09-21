@@ -26,7 +26,6 @@ describe('IM webhook Providers', () => {
       await createDingTalkWebhookProviderDefinition().createProvider(
         providerContext(),
         defineDingTalkWebhookProviderConfig({
-          name: 'primary',
           webhookUrl:
             'https://oapi.dingtalk.com/robot/send?access_token=example-token',
         }),
@@ -38,7 +37,7 @@ describe('IM webhook Providers', () => {
     });
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
       msgtype: 'text',
-      text: { content: 'Approval\nReview it\n/approvals/1' },
+      text: { content: 'Approval\nReview it\nhttps://example.com/approvals/1' },
     });
   });
 
@@ -56,7 +55,6 @@ describe('IM webhook Providers', () => {
       await createFeishuWebhookProviderDefinition().createProvider(
         providerContext(),
         defineFeishuWebhookProviderConfig({
-          name: 'primary',
           webhookUrl:
             'https://open.feishu.cn/open-apis/bot/v2/hook/example-token',
         }),
@@ -88,7 +86,6 @@ describe('IM webhook Providers', () => {
       await createFeishuWebhookProviderDefinition().createProvider(
         providerContext(),
         defineFeishuWebhookProviderConfig({
-          name: 'primary',
           webhookUrl:
             'https://open.feishu.cn/open-apis/bot/v2/hook/example-token',
         }),
@@ -108,7 +105,6 @@ describe('IM webhook Providers', () => {
       await createFeishuWebhookProviderDefinition().createProvider(
         providerContext(),
         defineFeishuWebhookProviderConfig({
-          name: 'primary',
           webhookUrl:
             'https://open.feishu.cn/open-apis/bot/v2/hook/example-token',
         }),
@@ -140,7 +136,6 @@ describe('IM webhook Providers', () => {
       await createFeishuWebhookProviderDefinition().createProvider(
         providerContext(),
         defineFeishuWebhookProviderConfig({
-          name: 'primary',
           webhookUrl:
             'https://open.feishu.cn/open-apis/bot/v2/hook/example-token',
         }),
@@ -166,7 +161,6 @@ describe('IM webhook Providers', () => {
       await createFeishuWebhookProviderDefinition().createProvider(
         providerContext(),
         defineFeishuWebhookProviderConfig({
-          name: 'primary',
           webhookUrl:
             'https://open.feishu.cn/open-apis/bot/v2/hook/example-token',
         }),
@@ -197,7 +191,6 @@ describe('IM webhook Providers', () => {
         await createDingTalkWebhookProviderDefinition().createProvider(
           providerContext(),
           defineDingTalkWebhookProviderConfig({
-            name: 'primary',
             webhookUrl:
               'https://oapi.dingtalk.com/robot/send?access_token=example-token',
           }),
@@ -230,7 +223,6 @@ describe('IM webhook Providers', () => {
       await createDingTalkWebhookProviderDefinition().createProvider(
         providerContext(),
         defineDingTalkWebhookProviderConfig({
-          name: 'primary',
           webhookUrl:
             'https://oapi.dingtalk.com/robot/send?access_token=example-token',
         }),
@@ -267,13 +259,11 @@ function sendInput(): NotificationProviderSendInput<PreparedImMessage> {
     deadline: '2026-08-27T00:01:00.000Z',
     signal: new AbortController().signal,
     message: {
-      recipient: {
-        provider: { name: 'primary', type: 'feishu-webhook' },
-      },
+      recipient: { webhook: true },
       content: {
         title: 'Approval',
         text: 'Review it',
-        actionUrl: '/approvals/1',
+        target: { type: 'url', url: 'https://example.com/approvals/1' },
       },
     },
   };

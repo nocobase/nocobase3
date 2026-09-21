@@ -10,6 +10,21 @@ export interface NotificationChannelSchema {
   readonly message: object;
 }
 
+/** Providers extend this interface with their recipient/message schema, keyed by Provider identifier. */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Public declaration-merging registry populated by Channel packages.
+export interface NotificationChannelSchemas {}
+
+type ChannelSchemaForType<T extends string> =
+  T extends keyof NotificationChannelSchemas
+    ? NotificationChannelSchemas[T] & NotificationChannelSchema
+    : NotificationChannelSchema;
+
+export type ConfiguredNotificationChannels<
+  T extends Readonly<Record<string, NotificationChannelConfig>>,
+> = {
+  [N in keyof T]: ChannelSchemaForType<T[N]['provider']>;
+};
+
 export type NotificationChannelMap = Record<string, NotificationChannelSchema>;
 
 export interface NotificationService {
@@ -36,19 +51,11 @@ export interface NotificationExtensionRegistry {
     definition: NotificationChannelDefinition,
   ): NotificationExtensionRegistry;
   registerProvider(
-    channelType: string,
     definition: NotificationProviderDefinition,
   ): NotificationExtensionRegistry;
 }
 
-export interface NotificationContent {
-  readonly title?: string;
-  readonly body: string;
-  readonly actionUrl?: string;
-}
-
 export interface NotificationProviderIdentity {
-  readonly name: string;
   readonly type: string;
 }
 
@@ -102,6 +109,7 @@ export interface NotificationTestTargetDescriptor<
   TText = string | NotificationI18nText,
 > {
   readonly channel: {
+    readonly name: string;
     readonly type: string;
     readonly label: TText;
   };
@@ -117,17 +125,10 @@ export interface NotificationTestActor {
 
 export interface NotificationTestSendRequest {
   readonly channel: string;
-  readonly provider: NotificationProviderIdentity;
   readonly values: Readonly<Record<string, string>>;
 }
 
-export type NotificationTestSendInput = Pick<
-  NotificationSendInput<NotificationChannelMap>,
-  'content'
-> & {
-  readonly to?: NotificationRecipient;
-  readonly channelOverride?: object;
-};
+export type NotificationTestSendInput = object;
 
 export interface NotificationTestAdapter<
   TConfig extends NotificationChannelConfig = NotificationChannelConfig,
@@ -138,47 +139,16 @@ export interface NotificationTestAdapter<
     readonly actor: NotificationTestActor;
     readonly values: Readonly<Record<string, string>>;
     readonly channelConfig: TConfig;
-    readonly providerConfig: TConfig['providers'][number];
   }): NotificationTestSendInput;
-}
-
-export type NotificationRecipient =
-  | { readonly type: 'user'; readonly id: string }
-  | { readonly type: 'email'; readonly address: string }
-  | { readonly type: 'phone'; readonly number: string };
-
-export type NotificationProviderRouting =
-  | {
-      readonly strategy?: 'single';
-      readonly provider?: string;
-    }
-  | {
-      readonly strategy: 'all';
-      readonly providers?: readonly string[];
-    };
-
-export interface NotificationChannelRouting {
-  readonly providers?: NotificationProviderRouting;
 }
 
 export interface NotificationSendInput<
   TChannels extends NotificationChannelMap,
 > {
   readonly idempotencyKey: string;
-  readonly source?: {
-    readonly type: string;
-    readonly referenceId?: string;
-  };
-  readonly to?: NotificationRecipient | readonly NotificationRecipient[];
-  readonly channels: readonly (keyof TChannels & string)[];
-  readonly routing?: Partial<{
-    readonly [TType in keyof TChannels & string]: NotificationChannelRouting;
-  }>;
-  readonly content: NotificationContent;
-  readonly channelOverrides?: Partial<{
-    readonly [TType in keyof TChannels & string]: Partial<
-      TChannels[TType]['message']
-    >;
+  readonly source?: { readonly type: string; readonly referenceId?: string };
+  readonly messages: Partial<{
+    readonly [N in keyof TChannels]: TChannels[N]['message'];
   }>;
 }
 
@@ -212,7 +182,8 @@ export interface NotificationDeliveryRetryDecision {
 
 export interface NotificationDeliveryStatusSnapshot {
   readonly id: string;
-  readonly channel: string;
+  readonly channelName: string;
+  readonly channelType: string;
   readonly provider: NotificationProviderIdentity;
   readonly attemptCount: number;
   readonly status: NotificationDeliveryStatus;
@@ -262,23 +233,14 @@ export interface NotificationRetryDeliveryInput {
 }
 
 export interface NotificationProviderConfig {
-  readonly type: string;
-  readonly name: string;
+  readonly provider: string;
   readonly enabled?: boolean;
 }
 
-export interface NotificationChannelConfig {
-  readonly type: string;
-  readonly enabled: boolean;
-  readonly providers: readonly NotificationProviderConfig[];
-}
+export type NotificationChannelConfig = NotificationProviderConfig;
 
 export interface NotificationConfig {
-  readonly channels: readonly NotificationChannelConfig[];
-  /** @deprecated Test sending is controlled by authorization. */
-  readonly test?: {
-    readonly enabled: boolean;
-  };
+  readonly channels: Readonly<Record<string, NotificationChannelConfig>>;
 }
 
 export interface NotificationProviderSendError {
@@ -352,7 +314,6 @@ export interface NotificationProviderSendInput<TMessage = object> {
 }
 
 export interface NotificationProvider<TMessage = object> {
-  readonly name: string;
   readonly type: string;
   readonly capabilities?: NotificationProviderCapabilities;
   send(
@@ -376,14 +337,10 @@ export interface NotificationChannel<
   TPrepared = object,
 > {
   readonly type: string;
-  resolveRecipient?(input: {
-    readonly recipient?: NotificationRecipient;
-    readonly provider: NotificationProviderIdentity;
-  }): TRecipient | undefined | Promise<TRecipient | undefined>;
-  render?(input: {
-    readonly content: NotificationContent;
-    readonly override?: Partial<TMessage>;
-  }): TMessage;
+  validateMessage(message: unknown): {
+    readonly message: TMessage;
+    readonly recipients: readonly TRecipient[];
+  };
   prepare(input: {
     readonly deliveryId: string;
     readonly notificationId: string;
@@ -404,14 +361,11 @@ export interface NotificationChannelContext {
 }
 
 export interface NotificationProviderDefinition<
-  TConfig extends {
-    readonly type: string;
-    readonly name: string;
-    readonly enabled?: boolean;
-  } = NotificationProviderConfig,
+  TConfig extends NotificationProviderConfig = NotificationProviderConfig,
   TPrepared = object,
 > {
-  readonly type: TConfig['type'];
+  readonly type: TConfig['provider'];
+  readonly messageType: string;
   readonly label?: string | NotificationI18nText;
   readonly capabilities?: NotificationProviderCapabilities;
   validateConfig?(config: TConfig): void;
@@ -422,20 +376,12 @@ export interface NotificationProviderDefinition<
 }
 
 export interface NotificationChannelDefinition<
-  TConfig extends {
-    readonly type: string;
-    readonly enabled: boolean;
-    readonly providers: readonly {
-      readonly type: string;
-      readonly name: string;
-      readonly enabled?: boolean;
-    }[];
-  } = NotificationChannelConfig,
+  TConfig extends NotificationChannelConfig = NotificationChannelConfig,
   TRecipient = object,
   TMessage = object,
   TPrepared = object,
 > {
-  readonly type: TConfig['type'];
+  readonly type: string;
   readonly test?: NotificationTestAdapter<TConfig>;
   validateConfig?(config: TConfig): void;
   createChannel(

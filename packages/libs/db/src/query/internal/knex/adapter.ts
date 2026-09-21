@@ -2948,7 +2948,8 @@ function encodeQueryTemporal(
   field: FieldDefinition,
   value: unknown,
 ): unknown {
-  if (value === null) return null;
+  // Preserve omitted fields for insert defaults and skipped updates.
+  if (value === null || value === undefined) return value;
   const temporalBinding =
     getDatabaseDriverRuntime(client)?.repository?.temporalBinding;
   if (!(value instanceof Date)) {

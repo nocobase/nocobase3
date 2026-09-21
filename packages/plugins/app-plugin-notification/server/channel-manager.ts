@@ -9,19 +9,17 @@ import type {
 } from './store.js';
 import type {
   NotificationChannel,
-  NotificationContent,
   NotificationProvider,
   NotificationProviderCapabilities,
   NotificationProviderErrorCategory,
   NotificationProviderIdentity,
   NotificationProviderSendError,
-  NotificationRecipient,
   ProviderSendResult,
 } from './types.js';
 
 export interface ChannelRuntime {
   readonly channel: NotificationChannel;
-  readonly providers: readonly NotificationProvider[];
+  readonly provider: NotificationProvider;
 }
 
 export interface ChannelManagerOptions {
@@ -57,78 +55,36 @@ export class ChannelManager {
     return this.runtimes.has(type);
   }
 
-  async resolveRecipient(
-    type: string,
-    recipient: NotificationRecipient | undefined,
-    provider: NotificationProviderIdentity,
-  ): Promise<object | undefined> {
-    const channel = this.runtimes.get(type)?.channel;
-    if (!channel)
-      throw new Error(`Notification Channel "${type}" is not enabled.`);
-    return channel.resolveRecipient?.({ recipient, provider });
+  type(name: string): string {
+    const runtime = this.runtimes.get(name);
+    if (!runtime)
+      throw new Error(`Notification Channel "${name}" is not enabled.`);
+    return runtime.channel.type;
   }
 
-  render(
-    type: string,
-    content: NotificationContent,
-    override?: object,
-  ): object {
-    const channel = this.runtimes.get(type)?.channel;
-    if (!channel)
-      throw new Error(`Notification Channel "${type}" is not enabled.`);
-    if (!channel.render)
-      throw new Error(
-        `Notification Channel "${type}" does not support common content.`,
-      );
-    return channel.render({ content, override });
+  validateMessage(
+    name: string,
+    message: unknown,
+  ): { readonly message: object; readonly recipients: readonly object[] } {
+    const runtime = this.runtimes.get(name);
+    if (!runtime)
+      throw new Error(`Notification Channel "${name}" is unavailable.`);
+    return runtime.channel.validateMessage(message);
   }
 
-  providerIdentities(
-    type: string,
-    options: {
-      readonly providerName?: string;
-      readonly all?: boolean;
-    } = {},
-  ): readonly NotificationProviderIdentity[] {
-    const providers = this.runtimes.get(type)?.providers ?? [];
-    if (options.all)
-      return providers.map(({ name, type: providerType }) => ({
-        name,
-        type: providerType,
-      }));
-    const provider = options.providerName
-      ? providers.find((candidate) => candidate.name === options.providerName)
-      : providers[0];
-    return provider ? [{ name: provider.name, type: provider.type }] : [];
-  }
-
-  providerCandidates(type: string): readonly NotificationProviderIdentity[] {
-    const preferred = this.providerIdentities(type);
-    const all = this.providerIdentities(type, { all: true });
-    if (preferred.length === 0) return all;
-    const [first] = preferred;
-    return [
-      first,
-      ...all.filter(
-        (provider) =>
-          provider.name !== first.name || provider.type !== first.type,
-      ),
-    ];
+  providerIdentities(name: string): readonly NotificationProviderIdentity[] {
+    const provider = this.runtimes.get(name)?.provider;
+    return provider ? [{ type: provider.type }] : [];
   }
 
   providerCapabilities(
     channel: string,
     provider: NotificationProviderIdentity,
   ): NotificationProviderCapabilities {
-    return (
-      this.runtimes
-        .get(channel)
-        ?.providers.find(
-          (candidate) =>
-            candidate.name === provider.name &&
-            candidate.type === provider.type,
-        )?.capabilities ?? { idempotency: { supported: false } }
-    );
+    const runtime = this.runtimes.get(channel);
+    return runtime?.provider.type === provider.type
+      ? (runtime.provider.capabilities ?? { idempotency: { supported: false } })
+      : { idempotency: { supported: false } };
   }
 
   async send(
@@ -137,9 +93,20 @@ export class ChannelManager {
     const stored = await this.options.store.getDelivery(deliveryId);
     if (!stored || !isRunnable(stored, await this.options.store.now()))
       return stored;
-    await this.options.resolveRuntime?.(stored.channel);
-    const runtime = this.runtimes.get(stored.channel);
-    if (!runtime || runtime.providers.length === 0) return undefined;
+    let runtime: ChannelRuntime | undefined;
+    let unavailable: string | undefined;
+    try {
+      await this.options.resolveRuntime?.(stored.channelName);
+      runtime = this.runtimes.get(stored.channelName);
+      if (!runtime)
+        unavailable = `Notification Channel "${stored.channelName}" is not enabled.`;
+      else if (runtime.channel.type !== stored.channelType)
+        unavailable = `Notification Channel "${stored.channelName}" type has changed.`;
+      else if (runtime.provider.type !== stored.providerType)
+        unavailable = 'The original notification Provider is unavailable.';
+    } catch (error) {
+      unavailable = error instanceof Error ? error.message : String(error);
+    }
 
     const leaseToken = randomUUID();
     const claimed = await this.options.store.claimDelivery(
@@ -149,6 +116,12 @@ export class ChannelManager {
     );
     if (!claimed) return undefined;
     this.changed(claimed);
+    if (unavailable || !runtime)
+      return this.finishDelivery(claimed, 'failed', {
+        code: 'PROVIDER_UNAVAILABLE',
+        category: 'configuration',
+        message: unavailable ?? 'Notification Channel is unavailable.',
+      });
 
     const stopHeartbeat = this.startHeartbeat(claimed.id, leaseToken);
     try {
@@ -163,7 +136,7 @@ export class ChannelManager {
 
   async close(): Promise<void> {
     const providers = [...this.runtimes.values()]
-      .flatMap((runtime) => runtime.providers)
+      .map((runtime) => runtime.provider)
       .reverse();
     for (const provider of providers) {
       try {
@@ -173,7 +146,6 @@ export class ChannelManager {
           {
             event: 'notification.provider.close_failed',
             err: error,
-            provider: provider.name,
             providerType: provider.type,
           },
           'Failed to close notification Provider.',
@@ -204,7 +176,6 @@ export class ChannelManager {
           recipient: delivery.recipientSnapshot,
           message: delivery.messageSnapshot,
           provider: {
-            name: delivery.providerName,
             type: delivery.providerType,
           },
           signal: controller.signal,
@@ -235,15 +206,11 @@ export class ChannelManager {
     claimed: NotificationDeliveryRecord,
     prepared: object,
   ): Promise<NotificationDeliveryRecord | undefined> {
-    const provider = runtime.providers.find(
-      (candidate) =>
-        candidate.name === claimed.providerName &&
-        candidate.type === claimed.providerType,
-    );
-    if (!provider)
+    const provider = runtime.provider;
+    if (provider.type !== claimed.providerType)
       return this.finishDelivery(claimed, 'failed', {
         code: 'PROVIDER_UNAVAILABLE',
-        message: `Notification Provider "${claimed.providerName}" (${claimed.providerType}) is unavailable.`,
+        message: `Notification Provider "${claimed.providerType}" (${claimed.providerType}) is unavailable.`,
         category: 'configuration',
       });
 
@@ -266,7 +233,6 @@ export class ChannelManager {
       id: randomUUID(),
       deliveryId: claimed.id,
       sequence: claimed.attemptCount + 1,
-      providerName: provider.name,
       providerType: provider.type,
       status: 'submitting',
       startedAt,
@@ -321,9 +287,11 @@ export class ChannelManager {
           event: 'notification.delivery.accepted',
           notificationId: current.notificationId,
           deliveryId: current.id,
-          channel: current.channel,
-          provider: provider.name,
+          channelName: current.channelName,
+          channelType: current.channelType,
           providerType: provider.type,
+          attemptId: attempt.id,
+          attemptCount: attempt.sequence,
           providerMessageId: result.providerMessageId,
         },
         'Notification Delivery accepted by Provider.',
@@ -353,7 +321,7 @@ export class ChannelManager {
     if (result.disposition === 'same_provider') {
       const providerAttempts = (
         await this.options.store.listAttempts(current.id)
-      ).filter((item) => item.providerName === provider.name).length;
+      ).filter((item) => item.providerType === provider.type).length;
       if (providerAttempts < this.maxAttemptsPerProvider) {
         const retryAt = new Date(
           Date.parse(finishedAt) +

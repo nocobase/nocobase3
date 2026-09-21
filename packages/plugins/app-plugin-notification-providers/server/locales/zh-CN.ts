@@ -9,7 +9,15 @@ const zhCN: NotificationProvidersResource = {
       feishuWebhook: '飞书 Webhook',
       dingtalkWebhook: '钉钉 Webhook',
     },
-    fields: { recipient: '收件人', title: '标题', message: '消息' },
+    fields: {
+      subject: '邮件主题',
+      text: '文本正文',
+      html: 'HTML',
+      url: '完整 HTTP(S) URL',
+      recipient: '收件人',
+      title: '标题',
+      message: '消息',
+    },
     placeholders: { email: 'name@example.com' },
     defaults: {
       title: 'NocoBase 通知测试',

@@ -61,7 +61,7 @@ describe('NotificationLogsPage', () => {
     notification.listLogs.mockResolvedValue([]);
     notification.listTestTargets.mockResolvedValue([
       {
-        channel: { type: 'in-app', label: 'In-app' },
+        channel: { name: 'in-app', type: 'in-app', label: 'In-app' },
         provider: {
           name: 'default',
           type: 'database',
@@ -80,10 +80,10 @@ describe('NotificationLogsPage', () => {
       name: 'Delivery method',
     });
     fireEvent.change(methodSelect, {
-      target: { value: 'in-app:default:database' },
+      target: { value: 'in-app' },
     });
 
-    expect(methodSelect).toHaveDisplayValue('In-app (Built-in)');
+    expect(methodSelect).toHaveDisplayValue('in-app');
     expect(screen.queryByText(/default/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Database/)).not.toBeInTheDocument();
   });
@@ -102,8 +102,7 @@ describe('NotificationLogsPage', () => {
           {
             delivery: {
               id: 'delivery-1',
-              channel: 'email',
-              providerName: 'primary-smtp',
+              channelName: 'email',
               providerType: 'smtp',
               attemptCount: 1,
               status: 'failed',
@@ -114,7 +113,6 @@ describe('NotificationLogsPage', () => {
               {
                 id: 'attempt-1',
                 sequence: 1,
-                providerName: 'primary-smtp',
                 providerType: 'smtp',
                 status: 'failed',
                 startedAt: '2026-08-28T07:00:00.000Z',
@@ -133,7 +131,7 @@ describe('NotificationLogsPage', () => {
     });
     fireEvent.click(expand);
 
-    expect(screen.getAllByText('primary-smtp')).toHaveLength(2);
+    expect(screen.getAllByText('smtp')).toHaveLength(2);
     expect(screen.getByText('Connection refused')).toBeInTheDocument();
     expect(
       screen.getByText('Need attention').previousSibling,
@@ -143,7 +141,7 @@ describe('NotificationLogsPage', () => {
   it('shows user-facing labels for a single Provider in recent notifications', async () => {
     notification.listTestTargets.mockResolvedValue([
       {
-        channel: { type: 'in-app', label: 'In-app' },
+        channel: { name: 'in-app', type: 'in-app', label: 'In-app' },
         provider: {
           name: 'default',
           type: 'database',
@@ -165,8 +163,7 @@ describe('NotificationLogsPage', () => {
           {
             delivery: {
               id: 'delivery-1',
-              channel: 'in-app',
-              providerName: 'default',
+              channelName: 'in-app',
               providerType: 'database',
               attemptCount: 1,
               status: 'completed',
@@ -177,7 +174,6 @@ describe('NotificationLogsPage', () => {
               {
                 id: 'attempt-1',
                 sequence: 1,
-                providerName: 'default',
                 providerType: 'database',
                 status: 'completed',
                 startedAt: '2026-08-28T07:00:00.000Z',
@@ -195,7 +191,7 @@ describe('NotificationLogsPage', () => {
       await screen.findByRole('button', { name: 'Expand notification' }),
     );
 
-    expect(await screen.findByText('In-app')).toBeInTheDocument();
+    expect(await screen.findByText('in-app')).toBeInTheDocument();
     expect(screen.getAllByText('Built-in')).toHaveLength(2);
     expect(screen.queryByText('default')).not.toBeInTheDocument();
     expect(screen.queryByText('database')).not.toBeInTheDocument();
@@ -205,7 +201,7 @@ describe('NotificationLogsPage', () => {
     notification.listLogs.mockResolvedValue([]);
     notification.listTestTargets.mockResolvedValue([
       {
-        channel: { type: 'email', label: 'Email' },
+        channel: { name: 'system-email', type: 'email', label: 'Email' },
         provider: { name: 'smtp', type: 'smtp', label: 'SMTP' },
         fields: [
           {
@@ -246,12 +242,16 @@ describe('NotificationLogsPage', () => {
       name: 'Delivery method',
     });
     expect(providerSelect).toHaveDisplayValue('Select a delivery method');
-    expect(screen.getByRole('group', { name: 'Email' })).toBeInTheDocument();
-    fireEvent.change(providerSelect, { target: { value: 'email:smtp:smtp' } });
+    expect(
+      screen.getByRole('option', { name: 'system-email' }),
+    ).toBeInTheDocument();
+    fireEvent.change(providerSelect, {
+      target: { value: 'system-email' },
+    });
     expect(
       providerSelect.compareDocumentPosition(screen.getByLabelText('Title')),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(providerSelect).toHaveDisplayValue('Email (SMTP)');
+    expect(providerSelect).toHaveDisplayValue('system-email');
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     fireEvent.change(screen.getByRole('textbox', { name: 'Recipient' }), {
       target: { value: 'recipient@example.com' },
@@ -260,8 +260,7 @@ describe('NotificationLogsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Send' }));
 
     expect(notification.sendTest).toHaveBeenCalledWith({
-      channel: 'email',
-      provider: { name: 'smtp', type: 'smtp' },
+      channel: 'system-email',
       values: {
         recipient: 'recipient@example.com',
         title: 'NocoBase notification test',

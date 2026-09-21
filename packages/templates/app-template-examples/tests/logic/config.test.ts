@@ -68,7 +68,6 @@ describe('application config', () => {
       const registry = createNotificationRegistry()
         .registerChannel(definition)
         .registerProvider(
-          'in-app',
           createDatabaseProviderDefinition({
             store: new MemoryInAppStore(),
             recipientExists: async () => true,
@@ -79,25 +78,26 @@ describe('application config', () => {
         expect.objectContaining({
           channel: expect.objectContaining({ type: 'in-app' }),
           provider: expect.objectContaining({
-            name: 'default',
-            type: 'database',
+            type: 'in-app',
           }),
         }),
       ]);
-      const channelConfig = config.channels[0]!;
-      for (const recipient of ['', 'another-user']) {
+      const channelConfig = config.channels.inbox!;
+      for (const recipient of ['current-user', 'another-user']) {
         expect(
           definition.test?.toSendInput({
             actor: { userId: 'current-user' },
             values: { recipient, title: 'Test', body: 'Hello' },
             channelConfig,
-            providerConfig: channelConfig.providers[0]!,
           }),
         ).toMatchObject({
-          to: { type: 'user', id: recipient || 'current-user' },
+          to: recipient,
         });
       }
-      writeFileSync(configPath, 'notification:\n  channels: []\n');
+      writeFileSync(
+        configPath,
+        'notification:\n  channels:\n    inbox:\n      provider: in-app\n      enabled: false\n',
+      );
       const disabled = await resolve();
       expect(
         registry.testTargets(

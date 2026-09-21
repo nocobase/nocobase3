@@ -31,7 +31,6 @@ describe('DatabaseNotificationStore', () => {
     ).resolves.toMatchObject([
       {
         id: 'delivery-1',
-        providerName: 'primary',
         status: 'pending',
       },
     ]);
@@ -425,10 +424,10 @@ function createBundle(): NotificationLogBundle {
   const delivery: NotificationDeliveryRecord = {
     id: 'delivery-1',
     notificationId: 'notification-1',
-    channel: 'email',
+    channelName: 'email',
+    channelType: 'email',
     recipientSnapshot: { address: 'test@example.com' },
     messageSnapshot: { subject: 'Hello' },
-    providerName: 'primary',
     providerType: 'fake',
     attemptCount: 0,
     status: 'pending',
@@ -453,7 +452,6 @@ function createAttempt(): NotificationAttemptRecord {
     id: 'attempt-1',
     deliveryId: 'delivery-1',
     sequence: 1,
-    providerName: 'primary',
     providerType: 'fake',
     status: 'submitting',
     startedAt: '2026-08-24T00:00:01.000Z',

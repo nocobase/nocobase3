@@ -1,3 +1,4 @@
+import singleProviderMigration from '../database/migrations/202609200003_notification_single_provider.js';
 import type { MysqlConnectionConfig } from '@nocobase/db-mysql';
 import type { OracleConnectionConfig } from '@nocobase/db-oracle';
 import { resolve } from 'node:path';
@@ -12,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import baseMigration from '../database/migrations/202608190001_create_notification_tables.js';
 import idempotencyMigration from '../database/migrations/202609080001_create_notification_idempotency.js';
+import namesMigration from '../database/migrations/202609200001_notification_channel_names.js';
 import instantMigration from '../database/migrations/202609130001_notification_instant_columns.js';
 
 type TestedDialect = 'mysql' | 'oracle';
@@ -90,7 +92,12 @@ describe.skipIf(!dialect)(
 
       await expect(migrator.latest()).resolves.toEqual({
         batch: 2,
-        executed: [idempotencyMigration.name, instantMigration.name],
+        executed: [
+          idempotencyMigration.name,
+          instantMigration.name,
+          namesMigration.name,
+          singleProviderMigration.name,
+        ],
         skipped: [baseMigration.name],
       });
       await expect(
@@ -148,7 +155,12 @@ describe.skipIf(!dialect)(
 
       await expect(migrator.rollback()).resolves.toEqual({
         batch: 2,
-        rolledBack: [instantMigration.name, idempotencyMigration.name],
+        rolledBack: [
+          singleProviderMigration.name,
+          namesMigration.name,
+          instantMigration.name,
+          idempotencyMigration.name,
+        ],
       });
       const client = await connection.client<SchemaClient>();
       await expect(

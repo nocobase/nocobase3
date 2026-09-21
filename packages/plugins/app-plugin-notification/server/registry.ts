@@ -1,11 +1,12 @@
 import type {
   NotificationChannelDefinition,
+  NotificationConfig,
   NotificationExtensionRegistry,
   NotificationProviderDefinition,
+  NotificationTestTargetDescriptor,
 } from './types.js';
-import { notificationI18nText } from './types.js';
 
-/** Collects notification definitions without creating runtime resources. */
+/** Collects definitions without creating runtime resources. */
 export class NotificationRegistry implements NotificationExtensionRegistry {
   private readonly channelDefinitions = new Map<
     string,
@@ -13,33 +14,32 @@ export class NotificationRegistry implements NotificationExtensionRegistry {
   >();
   private readonly providerDefinitions = new Map<
     string,
-    Map<string, NotificationProviderDefinition>
+    NotificationProviderDefinition
   >();
 
   registerChannel(definition: NotificationChannelDefinition): this {
-    if (this.channelDefinitions.has(definition.type)) {
+    if (this.channelDefinitions.has(definition.type))
       throw new Error(
-        `Notification Channel definition "${definition.type}" is already registered.`,
+        `Notification message type "${definition.type}" is already registered.`,
       );
-    }
     this.channelDefinitions.set(definition.type, definition);
     return this;
   }
 
-  registerProvider(
-    channelType: string,
-    definition: NotificationProviderDefinition,
-  ): this {
-    const definitions =
-      this.providerDefinitions.get(channelType) ??
-      new Map<string, NotificationProviderDefinition>();
-    if (definitions.has(definition.type)) {
+  registerProvider(definition: NotificationProviderDefinition): this {
+    if (
+      !definition.type?.trim() ||
+      definition.type !== definition.type.trim() ||
+      !definition.messageType?.trim()
+    )
       throw new Error(
-        `Notification Provider definition "${definition.type}" is already registered for Channel "${channelType}".`,
+        'Notification Provider requires a non-empty identifier and message type.',
       );
-    }
-    definitions.set(definition.type, definition);
-    this.providerDefinitions.set(channelType, definitions);
+    if (this.providerDefinitions.has(definition.type))
+      throw new Error(
+        `Notification Provider "${definition.type}" is already registered.`,
+      );
+    this.providerDefinitions.set(definition.type, definition);
     return this;
   }
 
@@ -47,98 +47,76 @@ export class NotificationRegistry implements NotificationExtensionRegistry {
     return this.channelDefinitions.get(type);
   }
 
-  provider(
-    channelType: string,
-    providerType: string,
-  ): NotificationProviderDefinition | undefined {
-    return this.providerDefinitions.get(channelType)?.get(providerType);
+  provider(type: string): NotificationProviderDefinition | undefined {
+    return this.providerDefinitions.get(type);
   }
 
   testTargets(
-    config: import('./types.js').NotificationConfig,
-  ): readonly import('./types.js').NotificationTestTargetDescriptor[] {
-    return config.channels.flatMap((channelConfig) => {
-      if (!channelConfig.enabled) return [];
-      const channel = this.channel(channelConfig.type);
-      if (!channel?.test) return [];
-      const test = channel.test;
-      return channelConfig.providers.flatMap((providerConfig) => {
-        if (providerConfig.enabled === false) return [];
-        const provider = this.provider(channelConfig.type, providerConfig.type);
-        if (!provider) return [];
-        return [
-          {
-            channel: {
-              type: channelConfig.type,
-              label: test.label,
-            },
-            provider: {
-              name: providerConfig.name,
-              type: providerConfig.type,
-              label:
-                provider.label ??
-                notificationI18nText(
-                  `test.providers.${providerConfig.type}`,
-                  providerConfig.type,
-                ),
-            },
-            fields: test.fields.map((field) => ({
-              name: field.name,
-              label: field.label,
-              type: field.type,
-              ...(field.required === undefined
-                ? {}
-                : { required: field.required }),
-              ...(field.placeholder === undefined
-                ? {}
-                : { placeholder: field.placeholder }),
-              ...(field.defaultValue === undefined
-                ? {}
-                : { defaultValue: field.defaultValue }),
-              ...(field.maxLength === undefined
-                ? {}
-                : { maxLength: field.maxLength }),
-            })),
+    config: NotificationConfig,
+  ): readonly NotificationTestTargetDescriptor[] {
+    return Object.entries(config.channels).flatMap(([name, channelConfig]) => {
+      if (channelConfig.enabled === false) return [];
+      const provider = this.provider(channelConfig.provider);
+      const channel = provider && this.channel(provider.messageType);
+      if (!channel?.test || !provider) return [];
+      return [
+        {
+          channel: { name, type: provider.messageType, label: name },
+          provider: {
+            type: provider.type,
+            label: provider.label ?? provider.type,
           },
-        ];
-      });
+          fields: channel.test.fields,
+        },
+      ];
     });
   }
 
-  validate(config: import('./types.js').NotificationConfig): void {
-    for (const channelConfig of config.channels) {
-      if (!channelConfig.enabled) continue;
-      const channel = this.channel(channelConfig.type);
-      if (!channel) {
+  validate(config: NotificationConfig): void {
+    if (
+      !config.channels ||
+      typeof config.channels !== 'object' ||
+      Array.isArray(config.channels)
+    )
+      throw new Error(
+        'Notification channels must be a name-to-configuration map.',
+      );
+    for (const [name, channelConfig] of Object.entries(config.channels)) {
+      if (!name.trim() || name !== name.trim() || name.length > 100)
         throw new Error(
-          `Notification Channel definition "${channelConfig.type}" is not registered.`,
+          'Notification Channel names must be non-empty trimmed strings.',
         );
-      }
+      if (
+        !channelConfig ||
+        typeof channelConfig !== 'object' ||
+        Array.isArray(channelConfig)
+      )
+        throw new Error(
+          `Invalid configuration for Notification Channel "${name}".`,
+        );
+      for (const key of ['name', 'type', 'providers'])
+        if (key in channelConfig)
+          throw new Error(
+            `Unsupported Notification Channel property "${key}".`,
+          );
+      if (
+        channelConfig.enabled !== undefined &&
+        typeof channelConfig.enabled !== 'boolean'
+      )
+        throw new Error('Notification Channel enabled must be a boolean.');
+      const provider = this.provider(channelConfig.provider);
+      if (!provider)
+        throw new Error(
+          `Notification Provider "${channelConfig.provider}" is not registered.`,
+        );
+      const channel = this.channel(provider.messageType);
+      if (!channel)
+        throw new Error(
+          `Notification message type "${provider.messageType}" is not registered.`,
+        );
+      if (channelConfig.enabled === false) continue;
       channel.validateConfig?.(channelConfig);
-      const names = new Set<string>();
-      let enabledProviderCount = 0;
-      for (const providerConfig of channelConfig.providers) {
-        if (providerConfig.enabled === false) continue;
-        enabledProviderCount += 1;
-        if (names.has(providerConfig.name)) {
-          throw new Error(
-            `Provider name "${providerConfig.name}" is duplicated in Channel "${channelConfig.type}".`,
-          );
-        }
-        names.add(providerConfig.name);
-        const provider = this.provider(channelConfig.type, providerConfig.type);
-        if (!provider) {
-          throw new Error(
-            `Provider definition "${providerConfig.type}" is not registered for Channel "${channelConfig.type}".`,
-          );
-        }
-        provider.validateConfig?.(providerConfig);
-      }
-      if (enabledProviderCount === 0) {
-        throw new Error(
-          `Enabled Channel "${channelConfig.type}" requires at least one enabled Provider.`,
-        );
-      }
+      provider.validateConfig?.(channelConfig);
     }
   }
 }
