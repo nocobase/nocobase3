@@ -33,6 +33,14 @@ docs/theme/components/HomeHero/
 **/.agents/skills/
 **/.claude/skills/
 
+# The generated Collection artifacts an application keeps under `database/<connection>/collections/`: one JSON file
+# per Collection plus a `_manifest.json`, written by `pnpm collections:generate` through a stable serializer so that
+# `pnpm collections:generate --check` can regenerate them and compare byte for byte. Prettier collapses their short
+# arrays and objects onto single lines, which makes that check report the artifacts as out of date when nothing about
+# the schema changed. Each template names the same path in its own `.prettierignore`; a pattern containing a slash is
+# anchored to the directory of the file it is written in, so reaching them from here needs the `**/`.
+**/database/*/collections/
+
 # changeset 文件由 changesets 生成和消费，格式由它自己决定。
 # 项目的 singleQuote 会把 `"@nocobase/core": minor` 改成单引号，
 # 与 changesets 实际生成的格式不符。

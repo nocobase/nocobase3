@@ -33,9 +33,11 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'skills:sync': 'nocobase skills sync',
   'package:remove': 'nocobase package remove',
   nocobase: 'tsx ./cli/index.ts',
-  'db:apply': 'pnpm nocobase app db apply',
-  'db:reset': 'pnpm nocobase app db reset',
-  'db:repair': 'pnpm nocobase app db repair',
+  // Straight at the CLI entry, not through `pnpm nocobase`: a script calling another script is a
+  // second `pnpm run`, and each layer prints its own ELIFECYCLE line for one non-zero exit.
+  'db:apply': 'tsx ./cli/index.ts app db apply',
+  'db:reset': 'tsx ./cli/index.ts app db reset',
+  'db:repair': 'tsx ./cli/index.ts app db repair',
 };
 
 describe('documented plugin commands', () => {

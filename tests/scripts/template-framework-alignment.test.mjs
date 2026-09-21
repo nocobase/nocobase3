@@ -297,13 +297,35 @@ for (const template of templates) {
   test(`${template.kind} exposes publishing scripts only when supported`, () => {
     for (const command of ['upload', 'deploy']) {
       if (template.kind === 'default') {
+        // Straight at the CLI entry, not through `pnpm nocobase`: a script
+        // calling another script is a second `pnpm run`, and each layer
+        // prints its own ELIFECYCLE line for one non-zero exit.
         assert.equal(
           template.manifest.scripts[command],
-          `pnpm nocobase app ${command}`,
+          `tsx ./cli/index.ts app ${command}`,
         );
       } else {
         assert.equal(Object.hasOwn(template.manifest.scripts, command), false);
       }
+    }
+  });
+
+  test(`${template.kind} publishes the database directory by part, not whole`, () => {
+    // `files` is a whitelist npm applies ahead of every ignore file, so a bare `database` entry publishes
+    // whatever `collections:generate` happens to have written locally: a snapshot of one developer's database,
+    // in whatever dialect they run it against, shipped to every application scaffolded from the template.
+    // Neither .gitignore nor .npmignore can take it back out. Name the parts that are source instead.
+    const { files } = template.manifest;
+    assert.equal(files.includes('database'), false);
+    for (const entry of [
+      'database/tsconfig.json',
+      'database/*/migrations/**',
+      'database/*/seeds/**',
+    ]) {
+      assert.ok(
+        files.includes(entry),
+        `${template.kind}: files must list ${entry}`,
+      );
     }
   });
 

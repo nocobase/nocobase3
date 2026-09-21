@@ -346,7 +346,7 @@ MIT
 
 ## Publish to an application Hub
 
-The Default template includes `upload` and `deploy` scripts. Run `pnpm run upload` or `pnpm run deploy` from the App root; these forward all arguments to `pnpm nocobase app upload` and `pnpm nocobase app deploy`, respectively. Use `pnpm run deploy` explicitly because `pnpm deploy` is also a pnpm built-in command. Existing applications need to add these scripts if they already have the publishing CLI but predate the shortcuts.
+The Default template includes `upload` and `deploy` scripts. Run `pnpm run upload` or `pnpm run deploy` from the App root; these forward all arguments to the `app upload` and `app deploy` commands of the application's own CLI, respectively. Use `pnpm run deploy` explicitly because `pnpm deploy` is also a pnpm built-in command. Existing applications need to add these scripts if they already have the publishing CLI but predate the shortcuts.
 
 ```bash
 pnpm run upload
