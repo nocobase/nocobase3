@@ -9,7 +9,7 @@ Build a small order feature: sign in, view orders, add one, and change its amoun
 
 ## Describe this round of work
 
-Finish [creating the application](./create-app), keep development running, and open the application root with your AI Agent. You can use this prompt:
+Finish [creating the application](./create-app), keep development running, and start a new AI Agent session in the application root. You can use this prompt:
 
 ```text
 Read the project's AGENTS.md and relevant development guidance first.
