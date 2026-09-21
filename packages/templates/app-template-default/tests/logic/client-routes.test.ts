@@ -15,7 +15,7 @@ describe('app client routes', () => {
   });
 
   it('declares application and settings route contributions', async () => {
-    expect(applicationRoutes).toHaveLength(2);
+    expect(applicationRoutes).toHaveLength(3);
     expect(applicationRoutes[0]).toMatchObject({
       parent: 'app',
       routes: [
@@ -38,10 +38,38 @@ describe('app client routes', () => {
       parent: 'settings',
       routes: [],
     });
+    // The reference pages live under `/dev` so a production build drops them; see `defineDevRoutes`.
+    expect(applicationRoutes[2]).toMatchObject({
+      parent: 'dev',
+      routes: [
+        { name: 'dev-examples', navigation: { title: 'devExamples.title' } },
+        {
+          name: 'dev-components',
+          navigation: { title: 'devComponents.title' },
+        },
+      ],
+    });
     expect(Object.isFrozen(applicationRoutes[0])).toBe(true);
     expect(Object.isFrozen(applicationRoutes[1])).toBe(true);
+    expect(Object.isFrozen(applicationRoutes[2])).toBe(true);
     for (const route of applicationRoutes[0].routes) {
       await expect(route.componentLoader()).resolves.toMatchObject({
+        default: expect.any(Function),
+      });
+    }
+  });
+
+  it('loads a page for every dev reference route', async () => {
+    const pages = applicationRoutes[2].routes.flatMap(
+      (group) => group.children ?? [],
+    );
+    // The reference set is filled in page by page, so this count moves as pages land. It covers the 31 component
+    // pages and the single example that ship today; `client/routes.ts` declares no dev route without its page.
+    expect(pages).toHaveLength(32);
+    for (const page of pages) {
+      expect(page.path).toMatch(/^\/(examples|components)\/[a-z-]+$/);
+      if (!page.componentLoader) throw new Error(`${page.name} has no page`);
+      await expect(page.componentLoader()).resolves.toMatchObject({
         default: expect.any(Function),
       });
     }
