@@ -1,3 +1,7 @@
+import {
+  createServiceToken,
+  type ServiceToken,
+} from '@nocobase/service-provider';
 import type {
   AppAuthorizationService,
   DatabaseAuthorizationConditions,
@@ -14,6 +18,7 @@ import type {
 } from '@nocobase/db';
 import type {
   CreateDataServicesOptions,
+  DataServicesFactory,
   DataAggregateInput,
   DataAggregateResult,
   DataCollectionSummary,
@@ -80,6 +85,11 @@ export function createDataServices(
 ): DataServices {
   return new ActorDataServices(options);
 }
+
+export const dataServicesFactoryToken: ServiceToken<DataServicesFactory> =
+  createServiceToken<DataServicesFactory>(
+    '@nocobase/app-plugin-ai-employee/data-services-factory',
+  );
 
 class ActorDataServices implements DataServices {
   private readonly authorization?: AppAuthorizationService;

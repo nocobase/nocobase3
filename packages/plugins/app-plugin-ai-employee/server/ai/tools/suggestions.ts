@@ -1,10 +1,8 @@
-import { defineTools, type AgentContext } from '@nocobase/ai-employee';
+import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import type { AIMessageRepository } from '../../repository/index.js';
+import { repositoryFactoryToken } from '../../factory/repository-factory.js';
 
-type SuggestionsContext = AgentContext<{ aiMessages: AIMessageRepository }, {}>;
-
-export default defineTools<SuggestionsContext>({
+export default defineTools({
   scope: 'GENERAL',
   i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
   introduction: {
@@ -27,10 +25,11 @@ export default defineTools<SuggestionsContext>({
         ),
     }),
   },
+  dependencies: { repositories: repositoryFactoryToken },
   invoke: async (ctx, args, runtime) => {
     const { messageId } = ctx.state;
     if (messageId) {
-      const messageRepo = ctx.repositories.aiMessages;
+      const messageRepo = ctx.deps.repositories.aiMessages;
       const message = await messageRepo.findOne({ filter: { messageId } });
       const toolCalls = message?.toolCalls || [];
       const index = toolCalls.findIndex(

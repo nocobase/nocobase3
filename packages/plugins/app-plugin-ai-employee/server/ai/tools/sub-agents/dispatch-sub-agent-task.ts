@@ -1,41 +1,13 @@
-import {
-  defineTools,
-  type AgentContext,
-  type AIEmployeeRepository,
-} from '@nocobase/ai-employee';
+import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import type {
-  AIConversationRepository,
-  AIMessageRepository,
-  AIToolMessageRepository,
-} from '../../../repository/index.js';
 import type { ModelRef } from '../../../types.js';
-import type {
-  AgentBuiltInService,
-  AgentConversationService,
-  AgentEmployeeService,
-  AgentSubAgentService,
-} from '../../../agent/contracts.js';
+import { managerFactoryToken } from '../../../factory/manager-factory.js';
+import { repositoryFactoryToken } from '../../../factory/repository-factory.js';
 import {
   getAccessibleAIEmployee,
   getSkillSettingsFromMain,
   updateMessageMetadata,
 } from '../../sub-agents/shared.js';
-
-type DispatchContext = AgentContext<
-  {
-    aiEmployees: AIEmployeeRepository;
-    aiConversations: AIConversationRepository;
-    aiMessages: AIMessageRepository;
-    aiToolMessages: AIToolMessageRepository;
-  },
-  {
-    aiEmployees: AgentEmployeeService;
-    aiConversations: AgentConversationService;
-    builtIn: AgentBuiltInService;
-    subAgents: AgentSubAgentService;
-  }
->;
 
 const isModelRef = (value: unknown): value is ModelRef =>
   !!value &&
@@ -43,7 +15,7 @@ const isModelRef = (value: unknown): value is ModelRef =>
   typeof (value as Record<string, unknown>).llmService === 'string' &&
   typeof (value as Record<string, unknown>).model === 'string';
 
-export default defineTools<DispatchContext>({
+export default defineTools({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
@@ -64,19 +36,26 @@ export default defineTools<DispatchContext>({
         ),
     }),
   },
+  dependencies: {
+    repositories: repositoryFactoryToken,
+    managers: managerFactoryToken,
+  },
   async invoke(ctx, { username, question }, { toolCallId, writer }) {
+    const { managers } = ctx.deps;
     const sessionId = ctx.state.sessionId;
     const employee = await getAccessibleAIEmployee(ctx, username);
     if (!employee) throw new Error(`AI employee "${username}" not found`);
     const skillSettings = await getSkillSettingsFromMain(ctx, sessionId);
     const existedConversation =
-      await ctx.services.aiConversations.resolveSubAgentConversation(
-        sessionId,
-        toolCallId,
-      );
+      sessionId && toolCallId
+        ? await managers.aiConversationsManager.resolveSubAgentConversation(
+            sessionId,
+            toolCallId,
+          )
+        : null;
     let subSessionId = existedConversation?.sessionId;
     if (!subSessionId) {
-      const newConversation = await ctx.services.aiConversations.create({
+      const newConversation = await managers.aiConversationsManager.create({
         userId: ctx.actor.id,
         aiEmployee: { username: employee.username },
         title: question.slice(0, 30),
@@ -94,21 +73,36 @@ export default defineTools<DispatchContext>({
       'pending',
       sessionId,
     );
-    const model = await ctx.services.aiEmployees.resolveModel(
+    const model = await managers.aiEmployeesManager.resolveModel(
       employee,
       isModelRef(ctx.state.model) ? ctx.state.model : undefined,
     );
-    const answer = await ctx.services.subAgents.run({
-      sessionId: subSessionId,
-      employee,
-      model,
-      webSearch: ctx.state.webSearch,
-      messages: ctx.state.messages,
-      question,
-      skillSettings: (skillSettings ?? undefined) as
-        Record<string, unknown> | undefined,
-      writer,
-    });
+    const answer = await managers.subAgentsDispatcher.run(
+      {
+        sessionId: subSessionId,
+        employee,
+        model,
+        webSearch: ctx.state.webSearch,
+        messages: ctx.state.messages,
+        question,
+        skillSettings: (skillSettings ?? undefined) as
+          Record<string, unknown> | undefined,
+        writer,
+      },
+      {
+        actor: ctx.actor,
+        execution: {
+          sessionId: ctx.state.sessionId,
+          messages: ctx.state.messages,
+          frontendTools: ctx.state.frontendTools,
+          toolCallResults: ctx.state.toolCallResults,
+          timezone: ctx.state.timezone,
+          important: ctx.state.important,
+        },
+        translate: ctx.translate,
+        getHeader: ctx.getHeader,
+      },
+    );
     await updateMessageMetadata(
       ctx,
       toolCallId,

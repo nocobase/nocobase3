@@ -1,65 +1,30 @@
-import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization/server';
-import type {
-  AgentContext,
-  AgentState,
-  AIManager,
-} from '@nocobase/ai-employee';
-import type { ConversationExecution } from './contracts.js';
-import type { DatabaseManager } from '@nocobase/db';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import type { AgentContext, AgentState } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
-import type { RepositoryFactory } from '../factory/repository-factory.js';
-import type { AIEmployeesManager } from '../manager/ai-employees-manager.js';
-import type { AIConversationsManager } from '../manager/ai-conversations-manager.js';
-import type { BuiltInManager } from '../manager/built-in-manager.js';
-import type { KnowledgeBaseManager } from '../manager/knowledge-base-manager.js';
-import type { SubAgentsDispatcher } from '../manager/sub-agents/dispatcher.js';
-import type {
-  AIConversationRepository,
-  AIMessageRepository,
-  AIToolMessageRepository,
-  LCCheckpointBlobRepository,
-  LCCheckpointRepository,
-  LCCheckpointWriteRepository,
-  UserAIEmployeeRepository,
-} from '../repository/index.js';
-import type { AIEmployeeRepository } from '@nocobase/ai-employee';
-import {
-  findCurrentFrontendTool,
-  readFrontendToolResult,
-} from './context/ai-employee/frontend-tools.js';
-import type { AppAgentServices } from './contracts.js';
+import type { ConversationExecution } from './contracts.js';
 import type { Actor, Translate } from '../types.js';
-import { createDataServices } from '../service/data-services.js';
 
-export interface AppAgentRepositories {
-  aiConversations: AIConversationRepository;
-  aiEmployees: AIEmployeeRepository;
-  aiMessages: AIMessageRepository;
-  aiToolMessages: AIToolMessageRepository;
-  usersAiEmployees: UserAIEmployeeRepository;
-  lcCheckpoints: LCCheckpointRepository;
-  lcCheckpointBlobs: LCCheckpointBlobRepository;
-  lcCheckpointWrites: LCCheckpointWriteRepository;
-}
-
-export type AppAgentContext = AgentContext<
-  AppAgentRepositories,
-  AppAgentServices
->;
+/**
+ * The context every backend tool of this application starts from. It carries
+ * what this execution is — who is asking, what the turn holds — and nothing
+ * else. A tool that needs a manager, repository or service declares its
+ * container token, and `AgentService` resolves it into `deps` for that tool
+ * alone.
+ */
+export type AppAgentContext = AgentContext;
 
 export interface CreateAgentContextOptions {
   readonly actor: Actor;
   readonly state?: Partial<AgentState>;
-  readonly ai: AIManager;
-  readonly database: DatabaseManager;
-  readonly authorization?: AppAuthorizationService;
   readonly logger: Logger;
-  readonly repositories: RepositoryFactory;
-  readonly aiEmployeesManager: AIEmployeesManager;
-  readonly aiConversationsManager: AIConversationsManager;
-  readonly builtInManager: BuiltInManager;
-  readonly knowledgeBaseManager: KnowledgeBaseManager;
-  readonly subAgentsDispatcher: SubAgentsDispatcher;
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
 }
@@ -94,108 +59,21 @@ export function toAgentState(
 export function createAgentContext({
   actor,
   state: stateOverrides,
-  ai,
-  database,
-  authorization,
   logger,
-  repositories,
-  aiEmployeesManager,
-  aiConversationsManager,
-  builtInManager,
-  knowledgeBaseManager,
-  subAgentsDispatcher,
   translate,
   getHeader,
 }: CreateAgentContextOptions): AppAgentContext {
-  const state: AgentState = {
-    ...stateOverrides,
-  };
-  const services: AppAgentServices = {
-    data: createDataServices({
-      database,
-      authorization,
-      actor,
-      get timezone() {
-        return state.timezone;
-      },
-    }),
-    aiEmployees: {
-      resolveModel: (employee, model) =>
-        aiEmployeesManager.resolveModel(employee, model),
-    },
-    aiConversations: {
-      create: (params) => aiConversationsManager.create(params),
-      resolveSubAgentConversation: async (sessionId, toolCallId) => {
-        if (!sessionId || !toolCallId) return null;
-        return aiConversationsManager.resolveSubAgentConversation(
-          sessionId,
-          toolCallId,
-        );
-      },
-      getUserDecisions: async (messageId) =>
-        (await aiConversationsManager.getUserDecisions(messageId)) ?? null,
-    },
-    builtIn: {
-      localize: (employee) =>
-        builtInManager.setupBuiltInInfo({ employee, translate }),
-    },
-    knowledgeBase: {
-      retrievePrompt: (params) => knowledgeBaseManager.retrievePrompt(params),
-    },
-    subAgents: {
-      run: (task) =>
-        subAgentsDispatcher.run(task, {
-          actor,
-          execution: {
-            sessionId: state.sessionId,
-            messages: state.messages,
-            frontendTools: state.frontendTools,
-            toolCallResults: state.toolCallResults,
-            timezone: state.timezone,
-            important: state.important,
-          },
-          translate,
-          getHeader,
-        }),
-    },
-    frontendTools: {
-      find: (toolId) =>
-        findCurrentFrontendTool(repositories.aiConversations, toolId, {
-          sessionId: state.sessionId,
-          messages: state.messages,
-          frontendTools: state.frontendTools,
-          toolCallResults: state.toolCallResults,
-        }),
-      readResult: (toolCallId) =>
-        readFrontendToolResult(
-          { toolCallResults: state.toolCallResults },
-          toolCallId,
-        ),
-    },
-  };
-
   return {
-    ai,
-    database,
-    logger,
-    repositories: {
-      aiConversations: repositories.aiConversations,
-      aiEmployees: repositories.aiEmployees,
-      aiMessages: repositories.aiMessages,
-      aiToolMessages: repositories.aiToolMessages,
-      usersAiEmployees: repositories.usersAiEmployees,
-      lcCheckpoints: repositories.lcCheckpoints,
-      lcCheckpointBlobs: repositories.lcCheckpointBlobs,
-      lcCheckpointWrites: repositories.lcCheckpointWrites,
-    },
-    services,
-    state,
+    deps: {},
     actor: {
       id: actor.id,
       roles: [...actor.roles],
       isRoot: actor.isRoot,
       locale: actor.locale,
     },
+    state: { ...stateOverrides },
+    logger,
     translate,
+    getHeader,
   };
 }

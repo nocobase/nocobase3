@@ -10,6 +10,7 @@ import type { ZodType } from 'zod';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
+import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
   AgentThread,
   AIMessage,
@@ -411,6 +412,11 @@ export interface AgentProviders {
   checkpointer?: BaseCheckpointSaver | boolean;
   logger: Logger;
   features: AgentFeatureOptions;
+  /**
+   * Resolves the container tokens a tool declared. Absent only where no tool
+   * declares anything, such as a service assembled directly in a test.
+   */
+  container?: ServiceResolver;
 }
 
 export interface CreateAgentProvidersOptions {
@@ -420,6 +426,7 @@ export interface CreateAgentProvidersOptions {
   logger?: Logger;
   features?: Partial<AgentFeatureOptions>;
   checkpointer?: BaseCheckpointSaver | boolean;
+  container?: ServiceResolver;
 }
 export type AIEmployeeProviderOptions = {
   username?: string;

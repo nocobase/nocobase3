@@ -326,8 +326,11 @@ export class AgentService {
           tools: new Map<string, ToolsEntity>(),
           activeTools: () => Promise.resolve(new Set<string>()),
         };
+    const baseToolContext = context.toolRuntimeContext();
     const resolvedTools = llm.provider.resolveTools(
-      [...discoveredTools.tools.values()].map(buildTool),
+      [...discoveredTools.tools.values()].map((entity) =>
+        buildTool(entity, this.toolContext(entity, baseToolContext)),
+      ),
     );
     let thread = await conversation.messages.currentThread();
     if (this.shouldFork(operation, request)) {
@@ -349,12 +352,13 @@ export class AgentService {
       : messages.length
         ? { messages, ...(state ?? {}) }
         : null;
+    // A tool's context is bound when the tool is built, never read back out of
+    // the invocation config, so `agentContext` on a request reaches nothing.
+    const { agentContext: _requestAgentContext, ...requestContext } =
+      request.context ?? {};
     const config = {
       context: {
-        ...(request.context ?? {}),
-        // Fixed when this service was created. Listed after the request spread
-        // so a request can never substitute another execution context.
-        agentContext: context.toolRuntimeContext(),
+        ...requestContext,
         agentRequest: request,
         decisions: request.userDecisions,
       },
@@ -393,6 +397,40 @@ export class AgentService {
       model: llm.model,
       provider: llm.provider,
     };
+  }
+
+  /**
+   * The context one tool runs with: this execution's data, plus the container
+   * dependencies that tool declared. Each tool gets its own, so a tool can
+   * reach neither what another tool declared nor anything undeclared.
+   */
+  private toolContext(entity: ToolsEntity, base: unknown): unknown {
+    const declared = entity.dependencies ?? {};
+    const names = Object.keys(declared);
+    if (!base || typeof base !== 'object') {
+      if (names.length)
+        throw new Error(
+          `Tool "${entity.definition.name}" declares dependencies but this agent has no tool context to resolve them into`,
+        );
+      return base;
+    }
+    const deps: Record<string, unknown> = {};
+    for (const name of names) {
+      const token = declared[name];
+      if (!this.providers.container)
+        throw new Error(
+          `Tool "${entity.definition.name}" declares dependency "${name}" but this agent has no container to resolve it from`,
+        );
+      try {
+        deps[name] = this.providers.container.resolve(token);
+      } catch (error) {
+        throw new Error(
+          `Tool "${entity.definition.name}" declares dependency "${name}" ("${token.name}") which the application container cannot resolve`,
+          { cause: error },
+        );
+      }
+    }
+    return { ...base, deps };
   }
 
   private create(prepared: PreparedAgentContext) {

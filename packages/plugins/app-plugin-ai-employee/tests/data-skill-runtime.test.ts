@@ -3,7 +3,11 @@ import { dirname, join } from 'node:path';
 import sqlite from '@nocobase/db-sqlite';
 import { createDatabaseManager } from '@nocobase/db';
 import { createAppAuthorization } from '@nocobase/app-plugin-authorization/server';
-import { createDataServices } from '../server/service/data-services.js';
+import {
+  createDataServices,
+  dataServicesFactoryToken,
+} from '../server/service/data-services.js';
+import { aiManagerToken } from '../server/provider/ai-employee.js';
 import type { DataServices } from '../server/service/data-contracts.js';
 import {
   buildTool,
@@ -116,12 +120,22 @@ async function createFixture(services?: DataServices) {
       timezone: 'UTC',
     })),
   };
-  const originalContext = createTestAgentContext();
-  const runtimeContext: AppAgentContext = {
-    ...originalContext,
-    ai: aiManager,
-    services: { ...originalContext.services, data: services ?? data },
-  };
+  const runtimeContext: AppAgentContext = createTestAgentContext();
+  // Stands in for the container: what each declared token resolves to here.
+  const resolved = new Map<unknown, unknown>([
+    [dataServicesFactoryToken, () => services ?? data],
+    [aiManagerToken, aiManager],
+  ]);
+  /** Resolves one tool's declaration the way AgentService does. */
+  const depsFor = (entry: {
+    dependencies?: Record<string, unknown>;
+  }): Record<string, unknown> =>
+    Object.fromEntries(
+      Object.entries(entry.dependencies ?? {}).map(([name, token]) => [
+        name,
+        resolved.get(token),
+      ]),
+    );
 
   async function runtime(
     settings?: AIEmployeeSkillSettings,
@@ -177,11 +191,13 @@ async function createFixture(services?: DataServices) {
         const entry = discovered.tools.get(request.toolCall.name);
         if (!entry)
           throw new Error(`Unregistered tool: ${request.toolCall.name}`);
-        const built = buildTool(entry) as unknown as {
+        const built = buildTool(entry, {
+          ...context,
+          deps: depsFor(entry),
+        }) as unknown as {
           invoke(input: unknown, config: unknown): Promise<ToolMessage>;
         };
         return built.invoke(request.toolCall.args, {
-          context: { agentContext: context },
           toolCall: request.toolCall,
           writer: request.runtime.writer,
         });
@@ -293,7 +309,7 @@ describe('package-owned data skill runtime', () => {
 
   it('denies direct skill loads without host visibility and allows an explicit policy', async () => {
     const fixture = await createFixture();
-    const context = { ...createTestAgentContext(), ai: fixture.aiManager };
+    const context = createTestAgentContext();
     const runtime = { toolCallId: 'direct', writer: vi.fn() };
     expect(
       await getSkill.invoke(context, { skillName: 'data-query' }, runtime),

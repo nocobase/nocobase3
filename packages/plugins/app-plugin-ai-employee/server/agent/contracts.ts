@@ -1,15 +1,10 @@
-import type { DataServices } from '../service/data-contracts.js';
 import type {
-  AIEmployeeEntity,
   AIMessageInput,
   AgentToolCallResult,
   UserDecision,
 } from '@nocobase/ai-employee';
-import type { FrontendToolManifest } from './context/ai-employee/common/frontend-tool-contracts.js';
 import type { ModelRef } from '../types.js';
 import type { ConversationStreamTarget } from '../types.js';
-import type { CreateAIConversationParams } from '../manager/ai-conversations-manager.js';
-import type { AIConversationEntity } from '../repository/ai-conversation.js';
 
 export interface ConversationExecution {
   readonly sessionId?: string;
@@ -28,60 +23,4 @@ export interface ConversationExecution {
 export interface AgentUserDecisionResult {
   interruptId?: string;
   decisions: UserDecision[];
-}
-
-export interface AgentEmployeeService {
-  resolveModel(
-    employee: AIEmployeeEntity,
-    model?: ModelRef | null,
-  ): Promise<ModelRef>;
-}
-
-export interface AgentConversationService {
-  create(options: CreateAIConversationParams): Promise<AIConversationEntity>;
-  resolveSubAgentConversation(
-    sessionId?: string,
-    toolCallId?: string,
-  ): Promise<AIConversationEntity | null>;
-  getUserDecisions(messageId: string): Promise<AgentUserDecisionResult | null>;
-}
-
-export interface AgentBuiltInService {
-  localize(employee: AIEmployeeEntity): void;
-}
-
-export interface AgentKnowledgeBaseService {
-  retrievePrompt(options: { username: string; query: string }): Promise<string>;
-}
-
-export interface AgentSubAgentTask {
-  sessionId: string;
-  employee: AIEmployeeEntity;
-  model: ModelRef;
-  question: string;
-  skillSettings?: Record<string, unknown>;
-  webSearch?: boolean;
-  messages?: AIMessageInput[];
-  writer?: (chunk: unknown) => void;
-}
-
-export interface AgentSubAgentService {
-  run(task: AgentSubAgentTask): Promise<string>;
-}
-
-export interface AgentFrontendToolService {
-  find(toolId: string): Promise<FrontendToolManifest | undefined>;
-  readResult(
-    toolCallId: string,
-  ): { provided: true; value: unknown } | undefined;
-}
-
-export interface AppAgentServices {
-  data: DataServices;
-  aiEmployees: AgentEmployeeService;
-  aiConversations: AgentConversationService;
-  builtIn: AgentBuiltInService;
-  knowledgeBase: AgentKnowledgeBaseService;
-  subAgents: AgentSubAgentService;
-  frontendTools: AgentFrontendToolService;
 }

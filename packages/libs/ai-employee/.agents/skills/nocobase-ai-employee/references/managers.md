@@ -90,7 +90,28 @@ await ai.toolsManager.registerTools({
 });
 ```
 
-Use `registerDynamicTools` for request/context-sensitive tools:
+A tool that needs one of the application's services declares its container token and reads it from `ctx.deps`. This is the normal way to reach a manager, repository factory or service — do not close over one at registration, and do not expect an ambient handle on the context:
+
+```ts
+export default defineTools({
+  scope: 'SPECIFIED',
+  defaultPermission: 'ASK',
+  definition: {
+    name: 'lookupInvoice',
+    description: 'Look up an invoice',
+    schema,
+  },
+  dependencies: { billing: billingServiceToken },
+  invoke: async (ctx, args) => ({
+    status: 'success',
+    content: await ctx.deps.billing.findInvoice(args.id, ctx.actor.id),
+  }),
+});
+```
+
+`TDeps` is inferred from `dependencies`, so `ctx.deps.billing` is typed from the token. A tool that declares nothing has an empty `deps` and can reach nothing beyond this execution's `actor`, `state`, `logger` and `translate`. A declared token the container cannot resolve fails the execution naming the tool and the token.
+
+Use `registerDynamicTools` when the tool set itself depends on the request — which tools exist, not which services they use:
 
 ```ts
 ai.toolsManager.registerDynamicTools(async (register, filter) => {

@@ -2,39 +2,26 @@ import type {
   AgentContext,
   AIEmployee as AIEmployeeType,
   AIEmployeeEntity,
-  AIEmployeeRepository,
   SubAgentConversationMetadata,
 } from '@nocobase/ai-employee';
-import type {
-  AIConversationRepository,
-  AIMessageRepository,
-  AIToolMessageRepository,
-} from '../../repository/index.js';
-import type { AgentBuiltInService } from '../../agent/contracts.js';
+import type { ManagerFactory } from '../../factory/manager-factory.js';
+import type { RepositoryFactory } from '../../factory/repository-factory.js';
 
-type EmployeeLookupContext = AgentContext<
-  { aiEmployees: AIEmployeeRepository },
-  { builtIn: AgentBuiltInService }
->;
+/** What a sub-agent tool declares, and therefore what these helpers read. */
+export type SubAgentDeps = {
+  repositories: RepositoryFactory;
+  managers: ManagerFactory;
+};
 
-type SkillSettingsContext = AgentContext<
-  { aiConversations: AIConversationRepository },
-  {}
->;
-
-type MessageMetadataContext = AgentContext<
-  {
-    aiToolMessages: AIToolMessageRepository;
-    aiMessages: AIMessageRepository;
-  },
-  {}
->;
+type EmployeeLookupContext = AgentContext<SubAgentDeps>;
+type SkillSettingsContext = AgentContext<Pick<SubAgentDeps, 'repositories'>>;
+type MessageMetadataContext = AgentContext<Pick<SubAgentDeps, 'repositories'>>;
 
 export async function listAccessibleAIEmployees(
   ctx: EmployeeLookupContext,
 ): Promise<AIEmployeeEntity[]> {
   const filter = buildAccessibleEmployeeFilter(ctx);
-  return ctx.repositories.aiEmployees.find({
+  return ctx.deps.repositories.aiEmployees.find({
     filter,
     sort: ['sort', 'username'],
   });
@@ -45,7 +32,7 @@ export async function getAccessibleAIEmployee(
   username: string,
 ): Promise<AIEmployeeEntity | null> {
   const filter = buildAccessibleEmployeeFilter(ctx);
-  return ctx.repositories.aiEmployees.findOne({
+  return ctx.deps.repositories.aiEmployees.findOne({
     filter: { ...filter, username },
   });
 }
@@ -54,7 +41,10 @@ function localizeBuiltInInfo(
   ctx: EmployeeLookupContext,
   employee: AIEmployeeEntity,
 ): void {
-  ctx.services.builtIn.localize(employee as unknown as AIEmployeeType);
+  ctx.deps.managers.builtInManager.setupBuiltInInfo({
+    employee: employee as unknown as AIEmployeeType,
+    translate: ctx.translate,
+  });
 }
 
 export function serializeEmployeeSummary(
@@ -98,7 +88,7 @@ export const getSkillSettingsFromMain = async (
   sessionId?: string,
 ): Promise<unknown> => {
   if (!sessionId) return null;
-  const aiConversation = await ctx.repositories.aiConversations.findOne({
+  const aiConversation = await ctx.deps.repositories.aiConversations.findOne({
     filter: { sessionId, userId: ctx.actor.id },
   });
   return aiConversation?.options?.skillSettings;
@@ -112,11 +102,11 @@ export const updateMessageMetadata = async (
   sessionId?: string,
 ): Promise<void> => {
   if (!sessionId) return;
-  const aiToolMessage = await ctx.repositories.aiToolMessages.findOne({
+  const aiToolMessage = await ctx.deps.repositories.aiToolMessages.findOne({
     filter: { sessionId, toolCallId },
   });
   if (!aiToolMessage) return;
-  const aiMessage = await ctx.repositories.aiMessages.findOne({
+  const aiMessage = await ctx.deps.repositories.aiMessages.findOne({
     filter: { sessionId, messageId: String(aiToolMessage.messageId) },
   });
   if (!aiMessage) return;
@@ -132,7 +122,7 @@ export const updateMessageMetadata = async (
   } else {
     subAgentConversations.push({ sessionId: subSessionId, toolCallId, status });
   }
-  await ctx.repositories.aiMessages.update({
+  await ctx.deps.repositories.aiMessages.update({
     values: { metadata: { ...metadata, subAgentConversations } },
     filter: { sessionId, messageId: aiMessage.messageId },
   });

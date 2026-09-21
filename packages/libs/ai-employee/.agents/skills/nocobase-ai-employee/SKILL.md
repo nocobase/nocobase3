@@ -84,7 +84,8 @@ Rules:
 - **Static skill:** add `<appRoot>/ai/skills/<directory>/SKILL.md`, with optional local tools.
 - **Static employee:** add `<appRoot>/server/ai/employees/<name>.ts` or `<name>/index.ts`, with `systemPrompt` field in the TypeScript definition.
 - **Static MCP connection:** add a direct module under `<appRoot>/ai/mcp/`.
-- **Context/request/session-dependent tools:** call `deps.ai.toolsManager.registerDynamicTools(...)` from plugin bootstrap.
+- **A tool that needs an application service:** declare its container token in `dependencies` and read it from `ctx.deps`; never close over the service at registration.
+- **Context/request/session-dependent tool sets:** call `deps.ai.toolsManager.registerDynamicTools(...)` from plugin bootstrap.
 - **Computed application resources:** call the appropriate manager from plugin bootstrap rather than generating files at runtime.
 - **Custom LLM backend:** implement provider classes in the owning App plugin, register with `deps.ai.llmProviderManager`, then use that key in `config.yml` `ai.llmServices` or `llmServiceManager`.
 - **Cross-plugin optional capability:** attach it with `deps.ai.features.enableFeatures(...)` from the capability plugin.

@@ -345,7 +345,7 @@ Do not infer HTTP behavior from that return value: [`sendMessages` with `stream:
 
 ## Implementing `AgentContextProvider`
 
-`AgentContextProvider` is the extension point for the context an `AgentService` consumes. It is not a database service and it must not expose repositories or the App container to the agent:
+`AgentContextProvider` is the extension point for the context an `AgentService` consumes. `toolRuntimeContext()` returns this execution's data only — actor, state, logger, translate — and never a database handle, a manager registry or the App container. What a tool may additionally reach is whatever it declared in `dependencies`, which `AgentService` resolves from the container into that tool's own `ctx.deps`:
 
 ```ts
 interface AgentContextProvider {

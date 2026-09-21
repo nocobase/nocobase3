@@ -274,33 +274,25 @@ export interface AIConversationServiceOptions {
 export class AIConversationService {
   private readonly ai: AIManager;
   private readonly database: DatabaseConnection;
-  private readonly databaseManager: DatabaseManager;
-  private readonly authorization?: AppAuthorizationService;
   private readonly logger: Logger;
   private readonly snowflake: IdGeneratorService;
   private readonly repositories: RepositoryFactory;
   private readonly aiEmployeesManager: AIEmployeesManager;
   private readonly aiConversationsManager: AIConversationsManager;
-  private readonly builtInManager: BuiltInManager;
   private readonly llmStreamCachedManager: LLMStreamCachedManager;
   private readonly subAgentsDispatcher: SubAgentsDispatcher;
-  private readonly knowledgeBaseManager: KnowledgeBaseManager;
   private readonly agentServiceFactory: import('../agent/service/agent-service-factory.js').AgentServiceFactory;
 
   public constructor(options: AIConversationServiceOptions) {
     this.ai = options.ai;
     this.database = options.database;
-    this.databaseManager = options.databaseManager;
-    this.authorization = options.authorization;
     this.logger = options.logger;
     this.snowflake = options.snowflake;
     this.repositories = options.repositories;
     this.aiEmployeesManager = options.aiEmployeesManager;
     this.aiConversationsManager = options.aiConversationsManager;
-    this.builtInManager = options.builtInManager;
     this.llmStreamCachedManager = options.llmStreamCachedManager;
     this.subAgentsDispatcher = options.subAgentsDispatcher;
-    this.knowledgeBaseManager = options.knowledgeBaseManager;
     this.agentServiceFactory = options.agentServiceFactory;
   }
   private createAgentContext({
@@ -319,16 +311,7 @@ export class AIConversationService {
     return createAgentContext({
       actor,
       state: toAgentState(execution, state),
-      ai: this.ai,
-      database: this.databaseManager,
-      authorization: this.authorization,
       logger: this.logger,
-      repositories: this.repositories,
-      aiEmployeesManager: this.aiEmployeesManager,
-      aiConversationsManager: this.aiConversationsManager,
-      builtInManager: this.builtInManager,
-      knowledgeBaseManager: this.knowledgeBaseManager,
-      subAgentsDispatcher: this.subAgentsDispatcher,
       translate,
       getHeader,
     });

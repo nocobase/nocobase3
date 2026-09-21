@@ -23,6 +23,15 @@ const runtimeContext = { marker: 'from-provider' };
 function createFixture() {
   const invoke = vi.fn(async () => ({ messages: [] }));
   mocks.createAgent.mockReturnValue({ invoke });
+  const seen: unknown[] = [];
+  const recordingTool = {
+    scope: 'GENERAL',
+    definition: { name: 'record-context', description: 'records its context' },
+    invoke: async (ctx: unknown) => {
+      seen.push(ctx);
+      return 'ok';
+    },
+  };
   const providers = {
     conversation: createTestConversationProvider({ sessionId: 'runtime' }),
     logger: { warn: vi.fn(), error: vi.fn() },
@@ -40,8 +49,8 @@ function createFixture() {
       })),
       getSystemPrompt: vi.fn(async () => undefined),
       discoveredTools: vi.fn(async () => ({
-        tools: new Map(),
-        activeTools: async () => new Set(),
+        tools: new Map([['record-context', recordingTool]]),
+        activeTools: async () => new Set(['record-context']),
       })),
     },
     converters: {
@@ -52,7 +61,13 @@ function createFixture() {
     },
     features: { ...DEFAULT_AGENT_FEATURES },
   } as never;
-  return { service: new AgentService(providers), invoke };
+  /** Runs the tool the agent was built with, the way the graph would. */
+  const runBuiltTool = async (): Promise<unknown> => {
+    const [built] = mocks.createAgent.mock.calls.at(-1)[0].tools;
+    await built.invoke({}, { context: {}, toolCall: { id: 'call-1' } });
+    return seen.at(-1);
+  };
+  return { service: new AgentService(providers), invoke, runBuiltTool };
 }
 
 const userMessages = [
@@ -60,16 +75,18 @@ const userMessages = [
 ];
 
 describe('AgentService tool runtime context', () => {
-  it('takes the tool context from the provider that was fixed at creation', async () => {
-    const { service, invoke } = createFixture();
+  it('builds each tool with the context fixed when the service was created', async () => {
+    const { service, runBuiltTool } = createFixture();
 
     await service.invoke({ userMessages });
 
-    expect(invoke.mock.calls[0][1].context.agentContext).toBe(runtimeContext);
+    // The tool declared nothing, so it receives the execution context and an
+    // empty `deps` — not the provider object itself, and nothing ambient.
+    expect(await runBuiltTool()).toEqual({ ...runtimeContext, deps: {} });
   });
 
   it('ignores an agent context supplied by a request and keeps the other request values', async () => {
-    const { service, invoke } = createFixture();
+    const { service, invoke, runBuiltTool } = createFixture();
 
     await service.invoke({
       userMessages,
@@ -79,8 +96,10 @@ describe('AgentService tool runtime context', () => {
       },
     });
 
+    expect(await runBuiltTool()).toEqual({ ...runtimeContext, deps: {} });
     const config = invoke.mock.calls[0][1];
-    expect(config.context.agentContext).toBe(runtimeContext);
+    // The key reaches nothing now, and is not forwarded either.
+    expect(config.context).not.toHaveProperty('agentContext');
     expect(config.context.timezone).toBe('Asia/Shanghai');
   });
 });

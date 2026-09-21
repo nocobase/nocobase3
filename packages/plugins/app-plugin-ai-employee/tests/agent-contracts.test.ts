@@ -134,7 +134,7 @@ describe('fixed AgentService contracts', () => {
       'context.getSystemPrompt(allMessages)',
     );
     expect(read('agent/service/agent-service.ts')).toContain(
-      '...(request.context ?? {})',
+      'request.context ?? {}',
     );
   });
 
@@ -440,7 +440,10 @@ describe('fixed AgentService contracts', () => {
     expect(aiToolSources).not.toMatch(/ctx\.subAgentsDispatcher/);
     const service = read('agent/service/agent-service.ts');
     const providers = read('agent/context/ai-employee/context.ts');
-    expect(service).toContain('agentContext');
+    // Each tool is built with its own context; a request-supplied one is
+    // dropped rather than forwarded.
+    expect(service).toContain('this.toolContext(entity, baseToolContext)');
+    expect(service).toContain('agentContext: _requestAgentContext');
     expect(service).not.toContain('context.ctx');
     expect(providers).not.toContain('ctx: options.ctx');
   });

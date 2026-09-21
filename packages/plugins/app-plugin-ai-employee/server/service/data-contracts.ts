@@ -131,6 +131,15 @@ export interface DataServices {
   dataSourceCounting(input: DataFilterInput): Promise<{ count: number }>;
   dataQuery(input: DataAggregateInput): Promise<DataAggregateResult>;
 }
+/**
+ * Builds the actor-bound data reader for one execution. Tools declare this
+ * factory rather than the database, so no tool holds an unscoped handle.
+ */
+export type DataServicesFactory = (scope: {
+  actor: Actor;
+  timezone?: string;
+}) => DataServices;
+
 export interface CreateDataServicesOptions {
   database: DatabaseManager;
   authorization?: AppAuthorizationService;

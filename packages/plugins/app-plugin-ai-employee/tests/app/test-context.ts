@@ -123,14 +123,17 @@ export function createTestAgentContext({
       timezone: execution.timezone,
       ...state,
     },
-    ai: fixture.deps.ai,
-    database: fixture.deps.database,
     logger: fixture.deps.logging.getLogger('ai-employee-test'),
-    repositories: fixture.repositories,
-    aiEmployeesManager: fixture.managers.aiEmployeesManager,
-    aiConversationsManager: fixture.managers.aiConversationsManager,
-    builtInManager: fixture.managers.builtInManager,
-    knowledgeBaseManager: fixture.managers.knowledgeBaseManager,
-    subAgentsDispatcher: fixture.managers.subAgentsDispatcher,
   });
+}
+
+/**
+ * The context a tool that declared `dependencies` receives. Tests build it the
+ * way `AgentService` does: the execution context plus that tool's own deps.
+ */
+export function withTestToolDeps<TDeps>(
+  context: AppAgentContext,
+  deps: TDeps,
+): AppAgentContext & { deps: TDeps } {
+  return { ...context, deps };
 }

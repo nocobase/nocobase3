@@ -37,6 +37,12 @@ import {
   agentServiceFactoryToken,
 } from '../agent/service/agent-service-factory.js';
 import { aiConversationsManagerToken } from '../manager/ai-conversations-manager.js';
+import { databaseManagerToken } from '@nocobase/db';
+import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
+import {
+  createDataServices,
+  dataServicesFactoryToken,
+} from '../service/data-services.js';
 import {
   ServiceFactory,
   serviceFactoryToken,
@@ -75,6 +81,19 @@ export class AIEmployeeProvider extends ServiceProvider<AppPluginApplication> {
     this.app.container.singleton(
       serviceFactoryToken,
       () => new ServiceFactory({ container: this.app.container }),
+    );
+
+    this.app.container.singleton(
+      dataServicesFactoryToken,
+      (resolver) => (scope) =>
+        createDataServices({
+          database: resolver.resolve(databaseManagerToken),
+          authorization: resolver.has(authorizationToken)
+            ? resolver.resolve(authorizationToken)
+            : undefined,
+          actor: scope.actor,
+          timezone: scope.timezone,
+        }),
     );
 
     this.app.container.singleton(

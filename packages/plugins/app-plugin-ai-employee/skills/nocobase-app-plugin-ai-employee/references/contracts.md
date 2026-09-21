@@ -94,15 +94,31 @@ Recommended tool result convention:
 
 `scope` controls activation: `GENERAL` is globally available; `SPECIFIED` is activated through employee/skill/conversation settings; `CUSTOM` is reserved for a caller-specific provider. `execution` describes where invocation occurs. `defaultPermission` controls default approval behavior and must be explicit for application tools. The schema must describe the exact argument object the model sends; do not read undeclared positional arguments.
 
-`AgentContext<Repositories, Services>` is:
+A tool declares what it needs as container tokens, and receives them resolved on `ctx.deps`. Nothing else is reachable: there is no ambient handle to the database, the container or the App's managers. `TDeps` is inferred from `dependencies`, so `ctx.deps` is typed without repeating the service types:
 
 ```ts
-type AgentContext<R = unknown, S = unknown> = {
-  ai: AIManager;
-  database: DatabaseManager;
+import { defineTools } from '@nocobase/ai-employee';
+import { repositoryFactoryToken } from '@nocobase/app-plugin-ai-employee/server';
+
+export default defineTools({
+  scope: 'SPECIFIED',
+  definition: { name: 'recent-messages', description: '...', schema },
+  dependencies: { repositories: repositoryFactoryToken },
+  invoke: async (ctx, args) => {
+    const messages = await ctx.deps.repositories.aiMessages.find({ ... });
+    return { status: 'success', content: messages };
+  },
+});
+```
+
+Declare the factory or manager the work actually needs — `repositoryFactoryToken`, `managerFactoryToken`, `serviceFactoryToken`, or an application's own service token. A token the container cannot resolve fails the execution naming the tool and the token, rather than surfacing as an undefined property later.
+
+`AgentContext<TDeps>` is:
+
+```ts
+type AgentContext<TDeps = Record<string, never>> = {
+  deps: TDeps;
   logger: Logger;
-  repositories: R;
-  services: S;
   state: {
     sessionId?: string;
     messageId?: string;
@@ -121,10 +137,13 @@ type AgentContext<R = unknown, S = unknown> = {
     locale?: string;
   };
   translate?: (key: string, options?: Record<string, unknown>) => string;
+  getHeader?: (name: string) => string | undefined;
+  /** Host-owned authorization boundary for loading skill content. */
+  availableSkills?: () => Promise<readonly SkillsEntity[]>;
 };
 ```
 
-Only use `repositories` and `services` members that the App runtime actually supplies. `actor` is the authorization identity; never treat a model-provided id as authorized without checking it.
+`actor` is the authorization identity; never treat a model-provided id as authorized without checking it. Reading business data belongs behind an actor-bound capability rather than a raw Repository: this package's data tools declare `dataServicesFactoryToken` and call it with `ctx.actor`, so every read is authorized before it reaches a collection.
 
 ## Skills
 

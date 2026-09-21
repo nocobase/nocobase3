@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 import {
   createServiceToken,
   type ServiceResolver,
@@ -179,6 +178,7 @@ export class AgentServiceFactory {
       createAgentProviders({
         conversation,
         context,
+        container: this.container,
         logger: this.loggerService,
         converters: new DefaultChatMessageConverters({
           employee: contextOptions.employee,
@@ -293,6 +293,7 @@ export class AgentServiceFactory {
       createAgentProviders({
         conversation,
         context,
+        container: this.container,
         logger: this.loggerService,
         converters: undefined,
       }),
@@ -330,22 +331,10 @@ export class AgentServiceFactory {
     getHeader?: (name: string) => string | undefined,
     state?: Partial<AgentState>,
   ): AppAgentContext {
-    const managers = this.managerFactory;
     return createAgentContext({
       actor,
       state,
-      ai: this.aiManager,
-      database: this.databaseManager,
-      authorization: this.container.has(authorizationToken)
-        ? this.container.resolve(authorizationToken)
-        : undefined,
       logger: this.loggerService,
-      repositories: this.repositoryFactory,
-      aiEmployeesManager: managers.aiEmployeesManager,
-      aiConversationsManager: managers.aiConversationsManager,
-      builtInManager: managers.builtInManager,
-      knowledgeBaseManager: managers.knowledgeBaseManager,
-      subAgentsDispatcher: managers.subAgentsDispatcher,
       translate,
       getHeader,
     });

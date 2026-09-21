@@ -7,10 +7,11 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { defineTools, type AgentContext } from '@nocobase/ai-employee';
+import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
+import { aiManagerToken } from '../../provider/ai-employee.js';
 
-export default defineTools<AgentContext<{}, {}>>({
+export default defineTools({
   scope: 'SPECIFIED',
   defaultPermission: 'ALLOW',
   i18n: { namespace: '@nocobase/app-plugin-ai-employee' },
@@ -31,6 +32,7 @@ export default defineTools<AgentContext<{}, {}>>({
         ),
     }),
   },
+  dependencies: { ai: aiManagerToken },
   invoke: async (ctx, args: { query: string[] }) => {
     const { model } = ctx.state;
     if (
@@ -39,7 +41,7 @@ export default defineTools<AgentContext<{}, {}>>({
     ) {
       throw new Error('Web search model is not configured');
     }
-    const { provider } = await ctx.ai.llmProviderManager.getLLMService({
+    const { provider } = await ctx.deps.ai.llmProviderManager.getLLMService({
       llmService: model.llmService,
       model: model.model,
       webSearch: true,
@@ -72,8 +74,8 @@ export default defineTools<AgentContext<{}, {}>>({
             tags: ['langsmith:nostream'],
           },
         )
-        .then((content) => content.text as string)
-        .then((result) => ({ query, result })),
+        .then((content: { text: unknown }) => content.text as string)
+        .then((result: string) => ({ query, result })),
     );
 
     const result = await Promise.all(running);
