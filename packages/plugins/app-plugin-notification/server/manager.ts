@@ -1,4 +1,3 @@
-import { validateNotificationTarget } from '../shared/target.js';
 import { randomUUID } from 'node:crypto';
 
 import { Hono } from 'hono';
@@ -292,7 +291,6 @@ export class NotificationManager<
     input: NotificationSendInput<TChannels>,
   ): Promise<NotificationSendResult> {
     this.activate();
-    validateNotificationTarget(input.content.target);
     validateNotificationIdempotencyKey(input.idempotencyKey);
     if (
       input.source !== undefined &&

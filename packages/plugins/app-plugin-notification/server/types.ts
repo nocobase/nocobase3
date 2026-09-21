@@ -1,4 +1,3 @@
-import type { NotificationTarget } from '../shared/target.js';
 import type { Logger } from '@nocobase/logging';
 import type { DatabaseManager } from '@nocobase/db';
 import type { NocoBaseQueueManager } from '@nocobase/queue';
