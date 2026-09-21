@@ -11,7 +11,7 @@ import {
   PopoverTitle,
 } from '../../client/components/ui/popover';
 import { LayoutSidebar } from '../../client/layouts/components/layout-sidebar';
-import { AppThemeProvider, ThemeSettings } from '../../client/theme';
+import { AppThemeProvider, ThemeModeToggle } from '../../client/theme';
 import '../../client/styles.css';
 
 // A server-free browser fixture using the real shell, primitives and theme provider.
@@ -37,7 +37,7 @@ export default function Fixture() {
             </LayoutSidebar>
             <main className='min-w-0 flex-1 space-y-6 p-6'>
               <div className='flex flex-wrap gap-2'>
-                <ThemeSettings />
+                <ThemeModeToggle />
                 <Button onClick={() => setCollapsed(!collapsed)}>
                   Collapse sidebar
                 </Button>

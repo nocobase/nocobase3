@@ -89,12 +89,13 @@ const zhCN: AppResource = {
   },
 
   appearance: {
-    title: '外观',
-    mode: '颜色模式',
-    preset: '主题',
-    light: '浅色',
-    dark: '深色',
-    system: '跟随系统',
+    toggle: '切换浅色/深色',
+    theme: {
+      title: '主题',
+      description: '选择应用使用的主题。浅色与深色在右上角切换。',
+      search: '搜索主题',
+      empty: '没有匹配“{{query}}”的主题。',
+    },
     themes: { default: '宽松', compact: '紧凑' },
   },
   app: {

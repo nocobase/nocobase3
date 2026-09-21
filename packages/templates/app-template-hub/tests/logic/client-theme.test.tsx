@@ -10,17 +10,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AppThemeProvider,
-  ThemeSettings,
+  ThemeModeToggle,
   useTheme,
+  useThemePreset,
 } from '../../client/theme/index.ts';
 
 describe('app client theme', () => {
   it.each([
-    ['en-US', 'Appearance', 'Spacious'],
-    ['zh-CN', '外观', '宽松'],
+    ['en-US', 'Switch between light and dark'],
+    ['zh-CN', '切换浅色/深色'],
   ])(
-    'labels the default preset without implying default selection (%s)',
-    async (locale, appearance, label) => {
+    'switches light and dark from the header toggle (%s)',
+    async (locale, label) => {
       const runtime = new I18nRuntime({
         defaultLocale: 'en-US',
         locales: ['en-US', 'zh-CN'],
@@ -31,15 +32,25 @@ describe('app client theme', () => {
       render(
         <I18nProvider runtime={runtime}>
           <AppThemeProvider>
-            <ThemeSettings />
+            <ThemeModeToggle />
           </AppThemeProvider>
         </I18nProvider>,
       );
-      await userEvent.click(screen.getByRole('button', { name: appearance }));
-      const option = screen.getByRole('radio', { name: label });
-      expect(option).toHaveAttribute('value', 'default');
-      await userEvent.click(option);
-      expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe('default');
+      const toggle = screen.getByRole('button', { name: label });
+      expect(toggle).not.toHaveAttribute('title');
+
+      // The browser follows the system at rest, so the first click states the opposite mode outright.
+      await userEvent.click(toggle);
+      expect(document.documentElement).toHaveClass('light');
+      expect(localStorage.getItem('nocobase:crm:theme:color-scheme')).toBe(
+        'light',
+      );
+
+      await userEvent.click(toggle);
+      expect(document.documentElement).toHaveClass('dark');
+      expect(localStorage.getItem('nocobase:crm:theme:color-scheme')).toBe(
+        'dark',
+      );
     },
   );
 
@@ -48,30 +59,25 @@ describe('app client theme', () => {
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'light');
     render(
       <AppThemeProvider>
-        <ThemeSettings />
+        <PresetProbe />
       </AppThemeProvider>,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-    expect(
-      screen.queryByRole('radio', { name: 'Ant-design' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Compact' })).toBeChecked();
+    expect(themePresets.map(({ id }) => id)).not.toContain('ant-design');
     expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    expect(screen.getByTestId('preset')).toHaveTextContent('compact');
     expect(document.documentElement).toHaveClass('light');
   });
+
   it('omits Ocean and falls back from its saved ID to Compact', async () => {
     localStorage.setItem('nocobase:crm:theme:preset', 'ocean');
     render(
       <AppThemeProvider>
-        <ThemeSettings />
+        <PresetProbe />
       </AppThemeProvider>,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-    expect(
-      screen.queryByRole('radio', { name: 'Ocean' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Compact' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Default' })).toBeInTheDocument();
+    expect(themePresets.map(({ id }) => id)).not.toContain('ocean');
+    expect(screen.getByTestId('preset')).toHaveTextContent('compact');
+    expect(themePresets.map(({ id }) => id)).toContain('default');
     expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
   });
 
@@ -99,6 +105,7 @@ describe('app client theme', () => {
     document.getElementById('nocobase-runtime-config')?.remove();
     document.documentElement.removeAttribute('class');
     document.documentElement.removeAttribute('style');
+    document.documentElement.removeAttribute('data-theme');
   });
 
   it.each([
@@ -132,10 +139,12 @@ describe('app client theme', () => {
       render(
         <AppThemeProvider>
           <ThemeProbe />
+          <PresetProbe />
         </AppThemeProvider>,
       );
       await waitFor(() => expect(document.documentElement).toHaveClass(mode));
       expect(document.documentElement).toHaveAttribute('data-theme', preset);
+      expect(screen.getByTestId('preset')).toHaveTextContent(preset);
       if (!savedMode)
         expect(
           localStorage.getItem('nocobase:crm:theme:color-scheme'),
@@ -179,15 +188,10 @@ describe('app client theme', () => {
       expect(document.documentElement).toHaveAttribute('data-theme', expected);
       render(
         <AppThemeProvider>
-          <ThemeSettings />
+          <PresetProbe />
         </AppThemeProvider>,
       );
-      await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-      expect(
-        screen.getByRole('radio', {
-          name: expected === 'compact' ? 'Compact' : 'Default',
-        }),
-      ).toBeChecked();
+      expect(screen.getByTestId('preset')).toHaveTextContent(expected);
       expect(document.documentElement).toHaveAttribute('data-theme', expected);
       expect(localStorage.getItem(key)).toBe(saved ?? null);
     },
@@ -310,20 +314,16 @@ describe('app client theme', () => {
     localStorage.setItem('nocobase:crm:theme:preset', 'default');
     render(
       <AppThemeProvider>
-        <ThemeSettings />
+        <PresetProbe />
       </AppThemeProvider>,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
     await userEvent.click(
-      await screen.findByRole('radio', { name: 'Compact' }),
+      screen.getByRole('button', { name: 'Use the compact preset' }),
     );
     expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     expect(document.documentElement).toHaveClass('dark');
     expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe('compact');
-    await userEvent.click(screen.getByRole('radio', { name: 'Light' }));
-    expect(document.documentElement).toHaveClass('light');
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     fireEvent(
       window,
       new StorageEvent('storage', {
@@ -339,11 +339,10 @@ describe('app client theme', () => {
         newValue: 'default',
       }),
     );
-    expect(await screen.findByRole('radio', { name: 'Default' })).toBeChecked();
-    await userEvent.keyboard('{Escape}');
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Appearance' })).toHaveFocus(),
+      expect(screen.getByTestId('preset')).toHaveTextContent('default'),
     );
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
   });
 
   it('restores a saved preset and resets both selections when storage is cleared', async () => {
@@ -363,6 +362,7 @@ describe('app client theme', () => {
     await waitFor(() => expect(document.documentElement).toHaveClass('dark'));
     expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
   });
+
   it('keeps selections usable when browser storage is unavailable', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
@@ -372,24 +372,25 @@ describe('app client theme', () => {
     });
     render(
       <AppThemeProvider>
-        <ThemeSettings />
+        <PresetProbe />
       </AppThemeProvider>,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-    await userEvent.click(screen.getByRole('radio', { name: 'Default' }));
-    await userEvent.click(screen.getByRole('radio', { name: 'Light' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Use the default preset' }),
+    );
     expect(document.documentElement).toHaveAttribute('data-theme', 'default');
-    expect(document.documentElement).toHaveClass('light');
   });
 
   it('syncs valid modes, normalizes invalid modes and removed presets', async () => {
     render(
       <AppThemeProvider>
-        <ThemeSettings />
+        <PresetProbe />
+        <ThemeProbe />
       </AppThemeProvider>,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-    await userEvent.click(screen.getByRole('radio', { name: 'Default' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Use the default preset' }),
+    );
     fireEvent(
       window,
       new StorageEvent('storage', {
@@ -405,6 +406,9 @@ describe('app client theme', () => {
         newValue: 'removed',
       }),
     );
+    await waitFor(() =>
+      expect(screen.getByTestId('preset')).toHaveTextContent('compact'),
+    );
     expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     fireEvent(
       window,
@@ -414,7 +418,7 @@ describe('app client theme', () => {
       }),
     );
     await waitFor(() => expect(document.documentElement).toHaveClass('dark'));
-    expect(screen.getByRole('radio', { name: 'System' })).toBeChecked();
+    expect(screen.getByTestId('theme')).toHaveTextContent('system');
   });
 });
 
@@ -427,6 +431,22 @@ function ThemeProbe(): ReactElement {
       <span data-testid='resolved-theme'>{resolvedTheme}</span>
       <button type='button' onClick={() => setTheme('light')}>
         Use light theme
+      </button>
+    </>
+  );
+}
+
+function PresetProbe(): ReactElement {
+  const { preset, setPreset } = useThemePreset();
+
+  return (
+    <>
+      <span data-testid='preset'>{preset}</span>
+      <button type='button' onClick={() => setPreset('compact')}>
+        Use the compact preset
+      </button>
+      <button type='button' onClick={() => setPreset('default')}>
+        Use the default preset
       </button>
     </>
   );

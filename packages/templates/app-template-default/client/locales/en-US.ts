@@ -96,12 +96,14 @@ const enUS = {
   },
 
   appearance: {
-    title: 'Appearance',
-    mode: 'Color mode',
-    preset: 'Theme',
-    light: 'Light',
-    dark: 'Dark',
-    system: 'System',
+    toggle: 'Switch between light and dark',
+    theme: {
+      title: 'Theme',
+      description:
+        'Choose the theme this application uses. Light and dark are switched from the header.',
+      search: 'Search themes',
+      empty: 'No theme matches “{{query}}”.',
+    },
     themes: { default: 'Spacious', compact: 'Compact' },
   },
   app: {

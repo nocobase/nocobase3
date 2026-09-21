@@ -6,7 +6,7 @@ Do not create a plugin to add a feature. Plugins are separately published packag
 
 ## Default template scope
 
-Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server routes start empty; the only built-in application provider exposes Authorization Permission Sets as direct roles in the Users page. The only application page is a localized homepage.
+Default is the clean application starting point. It registers product capabilities but no `app-plugin-*-example` plugins, example pages, application sample services, or sample APIs. Keep runnable demonstrations in `app-template-examples`. Application-owned server routes start empty; the only built-in application provider exposes Authorization Permission Sets as direct roles in the Users page. Its own pages are a localized homepage and a Theme settings page that only administrators hold by default.
 
 `database/main/` contains required permission initialization only; application-owned business migrations and seeds start empty. Do not add article history, demo seeds, or compatibility copies from Examples to this template. Existing installations retain their own executed migration sources when upgrading; see the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations).
 
