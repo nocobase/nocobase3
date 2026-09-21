@@ -297,9 +297,12 @@ for (const template of templates) {
   test(`${template.kind} exposes publishing scripts only when supported`, () => {
     for (const command of ['upload', 'deploy']) {
       if (template.kind === 'default') {
+        // Straight at the CLI entry, not through `pnpm nocobase`: a script
+        // calling another script is a second `pnpm run`, and each layer
+        // prints its own ELIFECYCLE line for one non-zero exit.
         assert.equal(
           template.manifest.scripts[command],
-          `pnpm nocobase app ${command}`,
+          `tsx ./cli/index.ts app ${command}`,
         );
       } else {
         assert.equal(Object.hasOwn(template.manifest.scripts, command), false);
