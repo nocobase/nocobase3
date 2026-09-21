@@ -2943,6 +2943,17 @@ function encodeQueryBoolean(
     : normalizeBooleanValue(field, value);
 }
 
+/**
+ * Bind a temporal value the way Repository does, so both writers store the same thing.
+ *
+ * Strings used to reach the driver untouched, which let `2026-09-06T09:30:00Z` land in a `datetime` column
+ * verbatim on SQLite — accepted by the write and then unreadable, since no valid local value carries an offset.
+ * Every other dialect took it too and silently dropped the offset. Normalizing here converts it instead, and
+ * `temporalBinding` keeps receiving the canonical string each dialect's formatting is written against.
+ *
+ * Only the value shapes a caller writes are normalized. Anything else — a `Knex.Raw`, a column reference, a
+ * subquery — is a SQL expression the builder composes, not a value to validate, and is passed through.
+ */
 function encodeQueryTemporal(
   client: Knex,
   field: FieldDefinition,
@@ -2951,7 +2962,7 @@ function encodeQueryTemporal(
   if (value === null) return null;
   const temporalBinding =
     getDatabaseDriverRuntime(client)?.repository?.temporalBinding;
-  if (!(value instanceof Date)) {
+  if (!(value instanceof Date) && typeof value !== 'string') {
     return temporalBinding ? temporalBinding({ client, field, value }) : value;
   }
   const normalized = normalizeTemporalValue(field, value);
