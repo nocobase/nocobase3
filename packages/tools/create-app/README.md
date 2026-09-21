@@ -109,7 +109,7 @@ Dependencies are installed automatically; `--no-install` skips that. Generated `
 The template is downloaded (`@nocobase/app-template-default@latest` by default) and, on top of it:
 
 - `package.json` is rewritten: the application's own name and display name, publish metadata dropped so it cannot be released by accident, and `packageManager` pinned to a pnpm that reads `allowBuilds`
-- `config.yml` is generated from the template's `config.example.yml`, with `auth.secret` and `session.secret` filled in
+- `config.yml` is generated from the template's `config.example.yml`, with `auth.secret` filled in; `session.secret` inherits it unless explicitly configured
 - `.gitignore` is written when the template ships none, so the secrets in `config.yml` cannot be committed
 - `pnpm-workspace.yaml` gets its `allowBuilds` decisions (see below)
 - A hub additionally gets `.env`, derived from the template's `.env.example` with `APP_NAME` set

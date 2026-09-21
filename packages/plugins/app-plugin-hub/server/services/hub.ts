@@ -2181,6 +2181,7 @@ function ensureConfigSecrets(
 
   const previous: unknown = fallbackContent ? parseYaml(fallbackContent) : {};
   let changed = false;
+  let resolvedAuthSecret: string | undefined;
   for (const key of ['auth', 'session'] as const) {
     const section = value[key];
     const oldSection = isRecord(previous) ? previous[key] : undefined;
@@ -2197,11 +2198,23 @@ function ensureConfigSecrets(
       typeof secret === 'string' &&
       secret.trim().length > 0 &&
       !isPlaceholderSecret(secret)
-    )
+    ) {
+      if (key === 'auth') resolvedAuthSecret = secret;
       continue;
+    }
     // Preserve invalid non-string values for the runtime's configuration errors.
     if (secret !== undefined && typeof secret !== 'string') continue;
-    document.setIn([key, 'secret'], fallback ?? generateAuthSecret());
+    // auth.secret is the canonical application secret. session.secret is an
+    // optional override and inherits auth.secret at runtime, so do not add a
+    // second secret to configurations that do not already contain that key.
+    if (key === 'session' && section === undefined) continue;
+    const nextSecret =
+      fallback ??
+      (key === 'session' && resolvedAuthSecret
+        ? resolvedAuthSecret
+        : generateAuthSecret());
+    document.setIn([key, 'secret'], nextSecret);
+    if (key === 'auth') resolvedAuthSecret = nextSecret;
     changed = true;
   }
   return changed ? ensureTrailingNewline(document.toString()) : content;
