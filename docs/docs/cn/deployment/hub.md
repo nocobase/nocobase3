@@ -275,6 +275,8 @@ Hub 允许上传最大 256 MiB 的 Release 压缩包，这里为发布请求中�
 
 也可使用邮箱 `admin@nocobase.com` 登录。使用默认密码时，首次登录后请修改密码。
 
+![首次登录后的 Hub 控制台，应用列表为空](https://static-docs.nocobase.com/20260921171832.png)
+
 已完成初始化的 Hub 使用已有管理员账号；修改 `users.initialAdmin` 不会重置账号或密码。
 
 ## Hub 升级

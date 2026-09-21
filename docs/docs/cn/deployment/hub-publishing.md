@@ -27,6 +27,8 @@ description: 通过页面或 CLI 上传、部署和更新业务应用。
 
 在 Hub 中创建应用，记录应用 ID 和访问地址。已有应用直接使用原记录，无需重复创建。
 
+![刚创建的应用详情页，开发指引提示上传第一个 Release，状态为未部署](https://static-docs.nocobase.com/20260921171935.png)
+
 | 信息         | 示例                            | 用途                       |
 | ------------ | ------------------------------- | -------------------------- |
 | 应用 ID      | `crm`                           | CLI 发布时指定目标应用     |
@@ -53,6 +55,16 @@ APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
 4. 选择配置方式，按下面的规则填写或复用运行配置。
 5. 审阅后提交，等待部署记录显示成功；失败时查看该次部署日志。
 6. 打开应用地址，验证登录、数据库内容和实际业务功能。
+
+![已上传一个 Release，应用仍为未部署](https://static-docs.nocobase.com/20260921170942.png)
+
+![部署对话框第一步，选择要运行的 Release](https://static-docs.nocobase.com/20260921171113.png)
+
+![部署对话框第二步，选择配置方式并在 Release 模板旁编辑部署配置](https://static-docs.nocobase.com/20260921171227.png)
+
+![部署记录：一次成功的部署，应用状态为运行中](https://static-docs.nocobase.com/20260921171453.png)
+
+![部署日志：按阶段记录排队、解析、校验和解包过程](https://static-docs.nocobase.com/20260921171357.png)
 
 首次采用文件配置时，用 Release 模板作为起点，填写生产数据库、文件存储及外部服务参数；Hub 会为缺失、空白或示例占位的 auth.secret、session.secret 生成密钥，保留已有有效值。
 
@@ -119,6 +131,8 @@ pnpm nocobase app upload --deploy --config ./runtime.yml --wait --json
 2. 选择新 Release，核对运行配置；新版本新增的必填配置需要补充。
 3. 涉及数据库变更时，完成备份后再发起部署。
 4. 查看部署结果，并访问应用确认功能正常。
+
+![上传新的 Release 后，运行中的仍是原 Release，需要再次部署才会切换](https://static-docs.nocobase.com/20260921171603.png)
 
 部署失败时查看该次部署日志；部署成功后的业务异常查看应用运行日志。应用版本替换期间会中断服务。
 
