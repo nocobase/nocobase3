@@ -11,6 +11,7 @@ import {
 } from './stream-event-utils.js';
 import { SubAgentStreamAccumulator } from './sub-agent-stream.js';
 import type { AIChatMessage } from './types.js';
+import { toText } from '../shared/text.js';
 
 const VISUAL_DELTA_FLUSH_INTERVAL = 50;
 const VISUAL_DELTA_FLUSH_SIZE = 768;
@@ -359,8 +360,9 @@ export function createNocoBaseUIMessageStream(
                 controller.enqueue({
                   type: 'tool-output-error',
                   toolCallId,
-                  errorText: String(
-                    toolCall.content ?? toolCall.output ?? 'Tool call failed',
+                  errorText: toText(
+                    toolCall.content ?? toolCall.output,
+                    'Tool call failed',
                   ),
                   dynamic: true,
                 });
@@ -420,7 +422,7 @@ export function createNocoBaseUIMessageStream(
                 controller.enqueue({
                   type: 'tool-output-error',
                   toolCallId,
-                  errorText: String(event.body.content ?? 'Tool call failed'),
+                  errorText: toText(event.body.content, 'Tool call failed'),
                   dynamic: true,
                 });
               } else if (toolState.completed) {
@@ -439,7 +441,7 @@ export function createNocoBaseUIMessageStream(
           if (event.type === 'error') {
             controller.enqueue({
               type: 'error',
-              errorText: String(event.body ?? 'AI response failed'),
+              errorText: toText(event.body, 'AI response failed'),
             });
           }
         }

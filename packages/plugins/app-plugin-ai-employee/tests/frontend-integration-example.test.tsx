@@ -15,9 +15,9 @@ import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 import {
   AIProvider,
-  useAI,
   type AIProviderProps,
 } from '../registry/nocobase-ai/providers/ai-provider.js';
+import { useAI } from '../registry/nocobase-ai/providers/ai-context.js';
 import { useAIChat } from '../registry/nocobase-ai/providers/chat-context.js';
 import { useAIChatController } from '../registry/nocobase-ai/providers/chat-controller.js';
 import { AIChatProvider } from '../registry/nocobase-ai/providers/chat-provider.js';

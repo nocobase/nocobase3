@@ -1,9 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  type PropsWithChildren,
-} from 'react';
+import { createContext, useContext } from 'react';
 import type { AIToolInvoker } from './types.js';
 
 export type AIFormField = {
@@ -21,7 +16,8 @@ export type AIFormTarget = {
   id: string;
   title: string;
   fields: AIFormField[];
-  getValues: () => unknown | Promise<unknown>;
+  /** The result is awaited, so an implementation may return a promise. */
+  getValues: () => unknown;
   setValues: (values: Record<string, unknown>) => void | Promise<void>;
 };
 
@@ -84,16 +80,7 @@ export class AIFormRegistry {
   }
 }
 
-const AIFormRegistryContext = createContext<AIFormRegistry | null>(null);
-
-export function AIFormRegistryProvider({ children }: PropsWithChildren) {
-  const registry = useMemo(() => new AIFormRegistry(), []);
-  return (
-    <AIFormRegistryContext.Provider value={registry}>
-      {children}
-    </AIFormRegistryContext.Provider>
-  );
-}
+export const AIFormRegistryContext = createContext<AIFormRegistry | null>(null);
 
 export function useAIFormRegistry() {
   const registry = useContext(AIFormRegistryContext);
@@ -108,9 +95,10 @@ export function useAIFormRegistry() {
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-const getEnumValues = (definition: unknown) => {
+const getEnumValues = (definition: unknown): unknown[] | undefined => {
   if (!Array.isArray(definition)) return undefined;
-  return definition.map((item) => {
+  const entries: unknown[] = definition;
+  return entries.map((item) => {
     if (item && typeof item === 'object' && !Array.isArray(item)) {
       return (item as { value?: unknown }).value;
     }

@@ -1,9 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  type PropsWithChildren,
-} from 'react';
+import { createContext, useContext } from 'react';
 import type { AIToolCallInvocationContext, AIToolInvokerMap } from './types.js';
 
 export type AIFrontendToolPermission = 'ASK' | 'ALLOW';
@@ -30,7 +25,8 @@ export type AIFrontendToolManifest = {
 type AIFrontendToolEntry = {
   token: symbol;
   manifest: AIFrontendToolManifest;
-  execute: (args: unknown) => unknown | Promise<unknown>;
+  /** The result is awaited, so an implementation may return a promise. */
+  execute: (args: unknown) => unknown;
 };
 
 const TOOL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -141,19 +137,8 @@ export class AIFrontendToolRegistry {
   }
 }
 
-const AIFrontendToolRegistryContext =
+export const AIFrontendToolRegistryContext =
   createContext<AIFrontendToolRegistry | null>(null);
-
-export function AIFrontendToolRegistryProvider({
-  children,
-}: PropsWithChildren) {
-  const registry = useMemo(() => new AIFrontendToolRegistry(), []);
-  return (
-    <AIFrontendToolRegistryContext.Provider value={registry}>
-      {children}
-    </AIFrontendToolRegistryContext.Provider>
-  );
-}
 
 export function useAIFrontendToolRegistry() {
   const registry = useContext(AIFrontendToolRegistryContext);

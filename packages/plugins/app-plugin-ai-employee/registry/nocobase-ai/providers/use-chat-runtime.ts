@@ -8,7 +8,7 @@ import {
 import type { AIChatAction, AIChatState } from './chat-reducer.js';
 import { NocoBaseChatTransport } from './chat-transport.js';
 import { findAIModel, getAIModelKey } from './model.js';
-import type { useAI } from './ai-provider.js';
+import type { useAI } from './ai-context.js';
 import {
   AI_DRAFT_CONVERSATION_ID,
   type AIChatMessage,

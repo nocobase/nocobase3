@@ -1,7 +1,7 @@
 import {
   getAIWorkContextRequiredTools,
   mergeAIRequiredTools,
-} from './page-context.js';
+} from './page-context-utils.js';
 import type {
   AIChatTaskRuntime,
   AIEmployee,

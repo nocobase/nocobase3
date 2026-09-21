@@ -30,7 +30,7 @@ import {
   useAIChatControllerState,
   type AIChatController,
 } from './chat-controller.js';
-import { useAI } from './ai-provider.js';
+import { useAI } from './ai-context.js';
 import { findAIModel, getAIModelKey } from './model.js';
 import { useChatAttachments } from './use-chat-attachments.js';
 import {
@@ -45,9 +45,11 @@ import { useChatRuntime } from './use-chat-runtime.js';
 import {
   getAIWorkContextRequiredTools,
   mergeAIRequiredTools,
+} from './page-context-utils.js';
+import {
   useAIPageContextResolver,
   useAIPageContextScope,
-} from './page-context.js';
+} from './page-context-store.js';
 import {
   AI_DRAFT_CONVERSATION_ID,
   type AIChatMessage,
@@ -84,6 +86,13 @@ export type AIChatProviderProps = PropsWithChildren<{
   webSearch?: boolean;
 }>;
 
+type PendingAIChatTask = {
+  key: string;
+  employeeUsername: string;
+  task: AIEmployeeTask;
+  auto: boolean;
+};
+
 export function AIChatProvider({
   id,
   controller,
@@ -98,7 +107,6 @@ export function AIChatProvider({
   const inheritedPageContext = useAIPageContextScope();
   const { open: chatSurfaceOpen } = useAIChatControllerState(controller);
   const chatSurfaceOpenRef = useRef(chatSurfaceOpen);
-  chatSurfaceOpenRef.current = chatSurfaceOpen;
   const { configurationStatus, listConversations } = ai;
   const defaultEmployeeUsername =
     ai.employees.find((employee) => employee.username === defaultEmployee)
@@ -165,12 +173,15 @@ export function AIChatProvider({
   );
   const webSearchRef = useRef(webSearch);
   const taskRuntimeRef = useRef<AIChatTaskRuntime | undefined>(undefined);
-  const [pendingTask, setPendingTask] = useState<{
-    key: string;
-    employeeUsername: string;
-    task: AIEmployeeTask;
-    auto: boolean;
-  }>();
+  // A queued task is never rendered; it waits for the draft conversation and
+  // the requested employee to become current. Keeping it in a ref with a
+  // signal that wakes the effect keeps the queue out of the render output.
+  const pendingTaskRef = useRef<PendingAIChatTask | undefined>(undefined);
+  const [pendingTaskSignal, setPendingTaskSignal] = useState(0);
+  const queuePendingTask = useCallback((task?: PendingAIChatTask) => {
+    pendingTaskRef.current = task;
+    setPendingTaskSignal((signal) => signal + 1);
+  }, []);
   const getConfiguredTaskSet = useCallback(
     (employeeUsername: string) =>
       getConfiguredAIChatTaskSet({
@@ -195,8 +206,13 @@ export function AIChatProvider({
     0,
   );
   const stateRef = useRef(state);
-  stateRef.current = state;
-  webSearchRef.current = webSearch;
+  // The chat runtime reads these from callbacks that run after a commit, so
+  // they are synchronized in an effect rather than written during render.
+  useEffect(() => {
+    chatSurfaceOpenRef.current = chatSurfaceOpen;
+    stateRef.current = state;
+    webSearchRef.current = webSearch;
+  }, [chatSurfaceOpen, state, webSearch]);
   const {
     transportsRef,
     runtimeContextsRef,
@@ -308,7 +324,7 @@ export function AIChatProvider({
         return;
 
       setInteractionError(undefined);
-      let currentWorkContext = unresolvedWorkContext;
+      let currentWorkContext: typeof unresolvedWorkContext;
       try {
         currentWorkContext = resolvePageContext
           ? await resolvePageContext(unresolvedWorkContext)
@@ -435,6 +451,7 @@ export function AIChatProvider({
   } = useChatMessageActions({
     ai,
     activeChat,
+    getChat,
     stateRef,
     chatSurfaceOpenRef,
     transportsRef,
@@ -476,7 +493,9 @@ export function AIChatProvider({
       refreshConversationMessages,
     ],
   );
-  conversationFinishedHandlerRef.current = handleConversationFinished;
+  useEffect(() => {
+    conversationFinishedHandlerRef.current = handleConversationFinished;
+  }, [handleConversationFinished]);
 
   const startNewConversation = useCallback(() => {
     invalidatePendingInteraction();
@@ -485,7 +504,9 @@ export function AIChatProvider({
       snapshot &&
       snapshot.conversationId === stateRef.current.activeConversationId
     ) {
-      activeChat.messages = snapshot.messages;
+      // Resolve the chat here rather than mutating the one this render closed
+      // over: the store write belongs to the callback, not to the render.
+      getChat(snapshot.conversationId).messages = snapshot.messages;
       setConversationAttachments(snapshot.conversationId, snapshot.attachments);
       setConversationWorkContext(snapshot.conversationId, snapshot.workContext);
     }
@@ -493,7 +514,7 @@ export function AIChatProvider({
     invalidateConversationHistory();
     taskRuntimeRef.current = undefined;
     setInteractionError(undefined);
-    setPendingTask(undefined);
+    queuePendingTask(undefined);
     setEditingMessageId(undefined);
     editingSnapshotRef.current = undefined;
     setConversationAttachments(AI_DRAFT_CONVERSATION_ID, []);
@@ -504,10 +525,11 @@ export function AIChatProvider({
     dispatch({ type: 'start-new-conversation' });
     requestComposerFocus();
   }, [
-    activeChat,
+    getChat,
     getConfiguredTaskSet,
     invalidateConversationHistory,
     invalidatePendingInteraction,
+    queuePendingTask,
     removeChatRuntime,
     setConversationAttachments,
     setConversationWorkContext,
@@ -524,9 +546,11 @@ export function AIChatProvider({
       );
 
       if (!employee) {
-        console.warn(
-          `AI employee "${String(options.aiEmployee)}" was not found.`,
-        );
+        const requested =
+          typeof options.aiEmployee === 'string'
+            ? options.aiEmployee
+            : options.aiEmployee.username;
+        console.warn(`AI employee "${requested}" was not found.`);
         return;
       }
 
@@ -574,21 +598,21 @@ export function AIChatProvider({
 
       if (task) {
         setActiveTaskSet(undefined);
-        setPendingTask({
+        queuePendingTask({
           key: crypto.randomUUID(),
           employeeUsername: employee.username,
           task,
           auto: options.auto !== false,
         });
       } else if (options.tasks?.length) {
-        setPendingTask(undefined);
+        queuePendingTask(undefined);
         setActiveTaskSet({
           employeeUsername: employee.username,
           tasks: options.tasks,
           context: options.context,
         });
       } else {
-        setPendingTask(undefined);
+        queuePendingTask(undefined);
         setActiveTaskSet(getConfiguredTaskSet(employee.username));
       }
       requestComposerFocus();
@@ -601,6 +625,7 @@ export function AIChatProvider({
       getConfiguredTaskSet,
       inheritedPageContext,
       invalidateConversationHistory,
+      queuePendingTask,
       resolvePageContext,
       removeChatRuntime,
       setConversationAttachments,
@@ -609,6 +634,7 @@ export function AIChatProvider({
   );
 
   useEffect(() => {
+    const pendingTask = pendingTaskRef.current;
     if (
       !pendingTask ||
       state.activeConversationId !== AI_DRAFT_CONVERSATION_ID ||
@@ -619,7 +645,7 @@ export function AIChatProvider({
 
     const userMessage =
       pendingTask.task.message?.user ?? pendingTask.task.title ?? '';
-    setPendingTask(undefined);
+    pendingTaskRef.current = undefined;
     if (pendingTask.auto && pendingTask.task.autoSend && userMessage.trim()) {
       void sendText(userMessage);
       return;
@@ -631,7 +657,7 @@ export function AIChatProvider({
     });
   }, [
     currentEmployee.username,
-    pendingTask,
+    pendingTaskSignal,
     sendText,
     state.activeConversationId,
   ]);
@@ -682,7 +708,7 @@ export function AIChatProvider({
         removeChatRuntime(AI_DRAFT_CONVERSATION_ID);
         invalidateConversationHistory();
         taskRuntimeRef.current = undefined;
-        setPendingTask(undefined);
+        queuePendingTask(undefined);
         setEditingMessageId(undefined);
         editingSnapshotRef.current = undefined;
         setConversationAttachments(AI_DRAFT_CONVERSATION_ID, []);
@@ -700,6 +726,7 @@ export function AIChatProvider({
       getConfiguredTaskSet,
       invalidateConversationHistory,
       invalidatePendingInteraction,
+      queuePendingTask,
       removeConversationAttachments,
       removeConversationWorkContext,
       removeChatRuntime,
@@ -768,7 +795,7 @@ export function AIChatProvider({
         cancelEditingMessage();
         setInteractionError(undefined);
         taskRuntimeRef.current = undefined;
-        setPendingTask(undefined);
+        queuePendingTask(undefined);
         setActiveTaskSet(undefined);
         const conversation = stateRef.current.conversations.find(
           (item) => item.id === conversationId,
@@ -806,7 +833,7 @@ export function AIChatProvider({
         removeChatRuntime(AI_DRAFT_CONVERSATION_ID);
         invalidateConversationHistory();
         taskRuntimeRef.current = undefined;
-        setPendingTask(undefined);
+        queuePendingTask(undefined);
         setActiveTaskSet(getConfiguredTaskSet(username));
         setConversationAttachments(AI_DRAFT_CONVERSATION_ID, []);
         setConversationWorkContext(AI_DRAFT_CONVERSATION_ID, []);
@@ -849,6 +876,7 @@ export function AIChatProvider({
       getConfiguredTaskSet,
       invalidateConversationHistory,
       invalidatePendingInteraction,
+      queuePendingTask,
       draft,
       id,
       removeConversation,

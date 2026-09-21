@@ -145,10 +145,11 @@ export type AIToolCallInvocationContext = {
   automatic?: boolean;
 };
 
+/** The result is awaited, so an invoker may return a promise. */
 export type AIToolInvoker = (
   input: unknown,
   context: AIToolCallInvocationContext,
-) => unknown | Promise<unknown>;
+) => unknown;
 
 export type AIToolInvokerMap = Record<string, AIToolInvoker>;
 

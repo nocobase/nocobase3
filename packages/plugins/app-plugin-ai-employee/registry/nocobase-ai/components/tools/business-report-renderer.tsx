@@ -2,13 +2,13 @@ import { Badge } from '../../shared/ui/badge.js';
 import { cn } from '../../shared/utils.js';
 import { FileText, LoaderCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
-import { getNocoBaseToolCallMetadata } from '../chat/tool-call-card.js';
+import { getNocoBaseToolCallMetadata } from '../chat/tool-call-utils.js';
 import type { AIToolRendererProps } from './tool-renderer-provider.js';
 import {
   getValidatedBusinessReport,
   type BusinessReportData,
 } from './business-report-utils.js';
-import { useBusinessReportDialog } from './business-report-dialog.js';
+import { useBusinessReportDialog } from './business-report-dialog-context.js';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
 
 function ReportGeneratingProgress() {
@@ -101,7 +101,7 @@ export function BusinessReportRenderer({ part }: AIToolRendererProps) {
           'tool.businessReport.openHint',
           'Open the report to review the generated analysis.',
         );
-  const wasGenerating = useRef(false);
+  const wasGeneratingRef = useRef(false);
 
   useEffect(() => {
     reportDialog.update(part.toolCallId, report, ready);
@@ -109,13 +109,13 @@ export function BusinessReportRenderer({ part }: AIToolRendererProps) {
 
   useEffect(() => {
     if (generating) {
-      wasGenerating.current = true;
+      wasGeneratingRef.current = true;
       return;
     }
-    if (wasGenerating.current && previewReady) {
+    if (wasGeneratingRef.current && previewReady) {
       reportDialog.open(part.toolCallId, report, ready);
     }
-    wasGenerating.current = false;
+    wasGeneratingRef.current = false;
   }, [generating, part.toolCallId, previewReady, ready, report, reportDialog]);
 
   return (

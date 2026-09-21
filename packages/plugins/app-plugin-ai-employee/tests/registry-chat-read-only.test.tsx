@@ -9,7 +9,7 @@ import type {
   AIChatMessage,
   AISubAgentConversation,
 } from '../registry/nocobase-ai/providers/types.js';
-import type { AIToolRendererProps } from '../registry/nocobase-ai/components/tools/tool-renderer-provider.js';
+import type { AIToolRendererProps } from '../registry/nocobase-ai/components/tools/tool-renderer-context.js';
 import { AIChatMessageList } from '../registry/nocobase-ai/components/chat/chat-messages.js';
 
 const mountTool = vi.hoisted(() => vi.fn());
@@ -25,7 +25,7 @@ vi.mock('../registry/nocobase-ai/locales/use-ai-translate.js', () => ({
   useAITranslate: () => (_key: string, fallback: string) => fallback,
 }));
 vi.mock(
-  '../registry/nocobase-ai/components/tools/tool-renderer-provider.js',
+  '../registry/nocobase-ai/components/tools/tool-renderer-context.js',
   () => ({
     useAIToolRenderer: (name: string) =>
       name.startsWith('custom')

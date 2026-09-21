@@ -133,6 +133,11 @@
           "target": "client/extensions/nocobase-ai/components/chat/tool-call-card.tsx"
         },
         {
+          "path": "registry/nocobase-ai/components/chat/tool-call-utils.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/components/chat/tool-call-utils.ts"
+        },
+        {
           "path": "registry/nocobase-ai/components/chat/user-prompt-editor.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/components/chat/user-prompt-editor.tsx"
@@ -156,6 +161,11 @@
           "path": "registry/nocobase-ai/components/page-elements/page-element-provider.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/components/page-elements/page-element-provider.tsx"
+        },
+        {
+          "path": "registry/nocobase-ai/components/page-elements/page-element-store.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/components/page-elements/page-element-store.ts"
         },
         {
           "path": "registry/nocobase-ai/components/surfaces/chat-dialog.tsx",
@@ -196,6 +206,11 @@
           "path": "registry/nocobase-ai/components/tools/builtin-tool-renderers.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/components/tools/builtin-tool-renderers.tsx"
+        },
+        {
+          "path": "registry/nocobase-ai/components/tools/business-report-dialog-context.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/components/tools/business-report-dialog-context.ts"
         },
         {
           "path": "registry/nocobase-ai/components/tools/business-report-dialog.tsx",
@@ -258,6 +273,11 @@
           "target": "client/extensions/nocobase-ai/components/tools/suggestions-renderer.tsx"
         },
         {
+          "path": "registry/nocobase-ai/components/tools/tool-renderer-context.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/components/tools/tool-renderer-context.ts"
+        },
+        {
           "path": "registry/nocobase-ai/components/tools/tool-renderer-provider.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/components/tools/tool-renderer-provider.tsx"
@@ -308,6 +328,11 @@
           "target": "client/extensions/nocobase-ai/locales/zh-CN.ts"
         },
         {
+          "path": "registry/nocobase-ai/providers/ai-context.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/providers/ai-context.ts"
+        },
+        {
           "path": "registry/nocobase-ai/providers/ai-provider.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/providers/ai-provider.tsx"
@@ -353,14 +378,24 @@
           "target": "client/extensions/nocobase-ai/providers/chat-transport.ts"
         },
         {
-          "path": "registry/nocobase-ai/providers/form-registry.tsx",
+          "path": "registry/nocobase-ai/providers/form-registry-provider.tsx",
           "type": "registry:file",
-          "target": "client/extensions/nocobase-ai/providers/form-registry.tsx"
+          "target": "client/extensions/nocobase-ai/providers/form-registry-provider.tsx"
         },
         {
-          "path": "registry/nocobase-ai/providers/frontend-tool-registry.tsx",
+          "path": "registry/nocobase-ai/providers/form-registry.ts",
           "type": "registry:file",
-          "target": "client/extensions/nocobase-ai/providers/frontend-tool-registry.tsx"
+          "target": "client/extensions/nocobase-ai/providers/form-registry.ts"
+        },
+        {
+          "path": "registry/nocobase-ai/providers/frontend-tool-registry-provider.tsx",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/providers/frontend-tool-registry-provider.tsx"
+        },
+        {
+          "path": "registry/nocobase-ai/providers/frontend-tool-registry.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/providers/frontend-tool-registry.ts"
         },
         {
           "path": "registry/nocobase-ai/providers/index.ts",
@@ -371,6 +406,16 @@
           "path": "registry/nocobase-ai/providers/model.ts",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/providers/model.ts"
+        },
+        {
+          "path": "registry/nocobase-ai/providers/page-context-store.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/providers/page-context-store.ts"
+        },
+        {
+          "path": "registry/nocobase-ai/providers/page-context-utils.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/providers/page-context-utils.ts"
         },
         {
           "path": "registry/nocobase-ai/providers/page-context.tsx",
@@ -478,6 +523,11 @@
           "target": "client/extensions/nocobase-ai/shared/icons/nocobase-ai-chat-icon.tsx"
         },
         {
+          "path": "registry/nocobase-ai/shared/keys.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/shared/keys.ts"
+        },
+        {
           "path": "registry/nocobase-ai/shared/loading-state.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/shared/loading-state.tsx"
@@ -488,6 +538,11 @@
           "target": "client/extensions/nocobase-ai/shared/prompt-output.tsx"
         },
         {
+          "path": "registry/nocobase-ai/shared/text.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/shared/text.ts"
+        },
+        {
           "path": "registry/nocobase-ai/shared/ui/accordion.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/shared/ui/accordion.tsx"
@@ -496,6 +551,11 @@
           "path": "registry/nocobase-ai/shared/ui/alert.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/shared/ui/alert.tsx"
+        },
+        {
+          "path": "registry/nocobase-ai/shared/ui/badge-variants.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/shared/ui/badge-variants.ts"
         },
         {
           "path": "registry/nocobase-ai/shared/ui/badge.tsx",
@@ -571,6 +631,11 @@
           "path": "registry/nocobase-ai/shared/ui/table.tsx",
           "type": "registry:file",
           "target": "client/extensions/nocobase-ai/shared/ui/table.tsx"
+        },
+        {
+          "path": "registry/nocobase-ai/shared/ui/tabs-variants.ts",
+          "type": "registry:file",
+          "target": "client/extensions/nocobase-ai/shared/ui/tabs-variants.ts"
         },
         {
           "path": "registry/nocobase-ai/shared/ui/tabs.tsx",

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAI } from './ai-provider.js';
+import { useAI } from './ai-context.js';
 import type { AIChatAttachment } from './types.js';
+import { toText } from '../shared/text.js';
 
 const EMPTY_ATTACHMENTS: AIChatAttachment[] = [];
 
@@ -87,11 +88,10 @@ export function useChatAttachments(activeConversationId: string) {
                 item.uid === attachment.uid
                   ? {
                       ...response,
-                      uid: String(response.id ?? attachment.uid),
-                      filename: String(
-                        response.filename ??
-                          response.title ??
-                          attachment.filename,
+                      uid: toText(response.id, attachment.uid),
+                      filename: toText(
+                        response.filename ?? response.title,
+                        attachment.filename,
                       ),
                       status: 'done',
                       size:

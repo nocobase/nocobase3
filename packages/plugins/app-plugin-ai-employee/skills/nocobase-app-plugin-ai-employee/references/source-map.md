@@ -54,16 +54,18 @@ Inside the AI frontend extension, inspect:
 - `global-ai-chat.tsx`: global provider/chat entry.
 - `services/types.ts`: `AIService` contract.
 - `services/nocobase-ai-service.ts`: `/api/ai` adapter.
-- `providers/ai-provider.tsx`: configuration, transport, invokers.
+- `providers/ai-provider.tsx` and `providers/ai-context.ts`: configuration, transport and invokers, and the `useAI` hooks that read them.
 - `providers/chat-transport.ts`: requests and SSE transport.
-- `providers/page-context.tsx`: context scopes and tool/form allowlists.
-- `providers/frontend-tool-registry.tsx`: browser tool registration/execution.
-- `providers/form-registry.tsx`: form validation/filling.
+- `providers/page-context.tsx`, `providers/page-context-store.ts` and `providers/page-context-utils.ts`: context scopes and tool/form allowlists.
+- `providers/frontend-tool-registry.ts`: browser tool registration/execution.
+- `providers/form-registry.ts`: form validation/filling.
 - `components/page-elements/`: page-element and form hooks.
 - `components/surfaces/`: inline/page/dialog/side-panel chat.
 - `components/chat/`: chat UI.
 - `components/tools/`: result renderers.
 - `demo/` or example pages: complete integration examples when installed.
+
+A module that exports a component exports nothing else, because an application lints this source with its own Portal configuration and Fast Refresh requires it. A component's context, hooks and helpers live in a sibling module — `page-element-store.ts` beside `page-element-provider.tsx`, `tool-call-utils.ts` beside `tool-call-card.tsx` — so import a hook or helper from that sibling rather than from the component file, and put new non-component exports there too.
 
 If `client/extensions/nocobase-ai` is not installed, install the `nocobase-ai` Registry item that `@nocobase/app-plugin-ai-employee` owns before doing frontend work. The Skill's "Install the AI Frontend Extension" section gives the ordered options; inside a generated App, install from the plugin already resolved in the App's `node_modules` so the UI matches the installed plugin version. A missing extension is never a reason to import UI from `@nocobase/ai-employee` or to rebuild chat under `client/`.
 

@@ -35,11 +35,7 @@ type VerticalDragSession = {
   moved: boolean;
 };
 
-export function clampFloatingTriggerTop(
-  top: number,
-  minTop: number,
-  maxTop: number,
-) {
+function clampFloatingTriggerTop(top: number, minTop: number, maxTop: number) {
   return Math.min(Math.max(top, minTop), Math.max(minTop, maxTop));
 }
 

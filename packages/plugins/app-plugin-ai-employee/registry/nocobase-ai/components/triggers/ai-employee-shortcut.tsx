@@ -18,6 +18,7 @@ import { AIEmployeeAvatar } from '../chat/ai-employee-avatar.js';
 import { Send, TextCursorInput } from 'lucide-react';
 import { useState } from 'react';
 import { useAITranslate } from '../../locales/use-ai-translate.js';
+import { withStableKeys } from '../../shared/keys.js';
 
 export type AIEmployeeShortcutProps = {
   aiEmployee: string | AIEmployee;
@@ -121,9 +122,12 @@ export function AIEmployeeShortcut({
         ) : null}
         {visibleTasks.length ? (
           <div className='mt-3 flex flex-wrap gap-1.5 border-t pt-3'>
-            {visibleTasks.map((task, index) => (
+            {withStableKeys(
+              visibleTasks,
+              (task) => task.title ?? task.message?.user ?? 'task',
+            ).map(({ key, item: task }) => (
               <Button
-                key={`${task.title}-${index}`}
+                key={key}
                 variant='secondary'
                 size='sm'
                 className='h-auto min-h-7 whitespace-normal py-1 text-left'
