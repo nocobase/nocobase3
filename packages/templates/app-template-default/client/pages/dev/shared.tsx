@@ -37,7 +37,7 @@ export function ExamplePage({
   const { t } = useTranslation();
 
   return (
-    <PageContainer className={cn('mx-auto max-w-6xl', className)}>
+    <PageContainer className={className}>
       <PageHeader
         title={title}
         description={description}
