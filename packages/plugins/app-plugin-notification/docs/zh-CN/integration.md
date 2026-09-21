@@ -25,7 +25,7 @@ pnpm add @nocobase/app-plugin-notification \
 然后执行应用的 migration 命令：
 
 ```bash
-pnpm migrate
+pnpm db:apply
 ```
 
 默认模板在

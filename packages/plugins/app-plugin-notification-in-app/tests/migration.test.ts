@@ -219,11 +219,13 @@ describe('in-app notification database migration', () => {
       batch: 1,
       executed: [MIGRATION_NAME, INSTANT_MIGRATION_NAME],
       skipped: [],
+      warnings: [],
     });
     await expect(migrator.latest()).resolves.toEqual({
       batch: 1,
       executed: [],
       skipped: [MIGRATION_NAME, INSTANT_MIGRATION_NAME],
+      warnings: [],
     });
 
     const client = await database.connection().client<SqliteClient>();
@@ -248,6 +250,7 @@ describe('in-app notification database migration', () => {
     await expect(migrator.rollback()).resolves.toEqual({
       batch: 1,
       rolledBack: [INSTANT_MIGRATION_NAME, MIGRATION_NAME],
+      warnings: [],
     });
     await expect(
       client.schema.hasTable('notification_in_app_items'),
