@@ -241,6 +241,220 @@ const zhCN: AppResource = {
   },
   examples: {
     title: '业务示例',
+    customers: {
+      title: '客户',
+      description:
+        '客户档案目录：可搜索的卡片网格与数据表格自由切换，悬浮卡展示联系方式，抽屉中的分页签展示客户档案，对话框表单新增记录，全部基于模拟数据。',
+      import: '导入',
+      addCustomer: '新增客户',
+      addDescription: '为通过系统未接入的渠道进入的客户手动创建档案。',
+      searchPlaceholder: '搜索姓名、公司或标签',
+      allTiers: '全部等级',
+      matchCount: '{{count}} 位客户',
+      viewLabel: '布局',
+      gridView: '卡片网格',
+      tableView: '表格',
+      emptyTitle: '没有匹配的客户',
+      emptyDescription:
+        '当前搜索条件和等级下没有任何客户，清除筛选可查看全部目录。',
+      selectAll: '选择全部行',
+      selectRow: '选择此行',
+      columns: {
+        name: '姓名',
+        company: '公司',
+        tier: '等级',
+        status: '状态',
+        orders: '订单数',
+        lifetimeValue: '累计消费',
+        lastActiveAt: '最近活跃',
+      },
+      tier: {
+        enterprise: '企业版',
+        business: '商业版',
+        starter: '入门版',
+      },
+      status: {
+        active: '活跃',
+        inactive: '未激活',
+        pending: '待确认',
+      },
+      tabs: {
+        details: '资料',
+        activity: '动态',
+        notes: '备注',
+      },
+      activity: {
+        order: '订单',
+        email: '邮件',
+        call: '电话',
+        meeting: '会议',
+        note: '备注',
+      },
+      location: '所在地',
+      since: '成为客户时间',
+      customerSince: '自 {{date}} 起成为客户',
+      noActivity: '该客户暂时没有任何动态。',
+      noNotes: '还没有人为该客户添加备注。',
+      openProfile: '查看档案',
+      copyEmail: '复制邮箱',
+      sendEmail: '发送邮件',
+      jobTitle: '职位',
+      city: '城市',
+      country: '国家或地区',
+      notePlaceholder: '该客户的来源渠道，以及由谁负责跟进。',
+      created: '客户已添加',
+    },
+    dashboard: {
+      title: '仪表盘',
+      description:
+        '团队每天早上打开的运营总览：趋势卡片、可切换时间范围的营收与渠道图表、最近订单表格、团队动态流以及季度目标，全部基于模拟数据。',
+      rangeLabel: '统计范围',
+      range: {
+        '3m': '近 3 个月',
+        '6m': '近 6 个月',
+        '12m': '近 12 个月',
+      },
+      tabs: {
+        overview: '总览',
+        analytics: '分析',
+      },
+      stats: {
+        revenue: '营收',
+        orders: '订单',
+        newCustomers: '新客户',
+        visitors: '访客',
+        versusPrevious: '较前 {{months}} 个月',
+      },
+      series: {
+        revenue: '营收',
+        target: '目标',
+        amount: '销售额',
+        newCustomers: '新客户',
+        returningCustomers: '老客户',
+        visitors: '访客',
+        sessions: '会话',
+      },
+      channel: {
+        web: '线上',
+        store: '门店',
+        partner: '伙伴',
+        phone: '电话',
+      },
+      device: {
+        desktop: '桌面端',
+        mobile: '移动端',
+        tablet: '平板',
+      },
+      status: {
+        pending: '待处理',
+        processing: '处理中',
+        shipped: '已发货',
+        completed: '已完成',
+        refunded: '已退款',
+      },
+      revenueChart: {
+        title: '营收与目标',
+        description: '近 {{months}} 个月的月度营收，虚线为计划目标。',
+      },
+      channelChart: {
+        title: '各渠道销售额',
+        description: '今年的营收来自哪些渠道。',
+      },
+      recentOrders: {
+        title: '最近订单',
+        description: '最新提交的订单，按时间倒序排列。',
+        number: '订单号',
+      },
+      activity: {
+        title: '团队动态',
+        description: '团队今天都做了什么。',
+        minutesAgo: '{{count}} 分钟前',
+        hoursAgo: '{{count}} 小时前',
+        daysAgo: '{{count}} 天前',
+        kind: {
+          order: '录入了订单',
+          shipment: '发出了订单',
+          customer: '新增了客户',
+          refund: '办理了退款',
+          note: '添加了备注',
+          target: '结算了目标',
+        },
+      },
+      targets: {
+        title: '季度目标',
+        description: '距离季度结束还有三周的完成情况。',
+        revenue: '营收',
+        orders: '订单',
+        customers: '新客户',
+        satisfaction: '满意度',
+        progress: '{{current}} / {{target}}',
+        footer: '目标在每个季度开始时重新评估。',
+      },
+      customerChart: {
+        title: '新客户与老客户',
+        description: '每个月的需求中有多少来自回头客。',
+      },
+      visitorChart: {
+        title: '访客',
+        description: '商城每月的访问会话数。',
+      },
+      deviceChart: {
+        title: '各设备会话占比',
+        description: '访客使用什么设备浏览商城。',
+      },
+    },
+    inbox: {
+      title: '收件箱',
+      description:
+        '客户支持收件箱：可调节宽度的会话列表与会话详情并排显示，包含日期分隔、附件和回复输入框，全部基于模拟数据。',
+      searchPlaceholder: '搜索联系人、公司或主题',
+      conversationCount: '{{count}} 个会话',
+      unreadCount: '{{count}} 条未读',
+      noConversations: '没有符合该筛选条件的会话。',
+      noSelection: '选择一个会话以查看内容。',
+      status: {
+        open: '处理中',
+        pending: '待跟进',
+        closed: '已关闭',
+      },
+      channel: {
+        email: '邮件',
+        chat: '在线聊天',
+        phone: '电话',
+      },
+      attachmentKind: {
+        pdf: 'PDF',
+        image: '图片',
+        spreadsheet: '表格',
+      },
+      assignedTo: '已指派给 {{name}}',
+      unassigned: '未指派',
+      assign: '指派给',
+      snooze: '延后至',
+      snoozeOption: {
+        oneHour: '一小时后',
+        tomorrow: '明天上午',
+        nextWeek: '下周',
+      },
+      snoozed: '会话已延后',
+      closeConversation: '关闭会话',
+      closed: '会话已关闭',
+      star: '标记此会话',
+      addTag: '此会话的标签',
+      suggestReply: '帮我起草回复',
+      scrollToLatest: '滚动到最新消息',
+      composerLabel: '回复',
+      composerPlaceholder: '回复 {{name}}…',
+      attachFile: '添加附件',
+      insertEmoji: '插入表情',
+      useTemplate: '插入常用回复',
+      sendHint: '发送',
+      send: '发送',
+      replySent: '回复已发送',
+      markAllRead: '全部标为已读',
+      allMarkedRead: '所有会话已标为已读',
+      refreshed: '收件箱已刷新',
+    },
     orders: {
       title: '订单',
       description:
@@ -292,34 +506,428 @@ const zhCN: AppResource = {
       cancelled: '订单已取消',
       created: '订单已创建',
     },
+    productForm: {
+      title: '新建商品',
+      description:
+        '商品编辑页：左侧为详情、价格、库存与媒体，右侧为状态、归类与危险操作，提交时校验，并由底部固定操作栏保存。',
+      fillSample: '填充示例',
+      save: '保存商品',
+      saveHint: '保存快捷键',
+      status: {
+        draft: '草稿',
+        active: '已上架',
+        archived: '已归档',
+      },
+      category: {
+        furniture: '家具',
+        electronics: '电子产品',
+        lighting: '照明',
+        accessories: '配件',
+        storage: '收纳',
+      },
+      pricingModel: {
+        'one-time': '一次性购买',
+        subscription: '订阅制',
+        usage: '按用量计费',
+      },
+      pricingModelHint: {
+        'one-time': '客户支付一次即可长期使用。',
+        subscription: '客户按月付费，直到取消订阅。',
+        usage: '客户每月按实际用量结算。',
+      },
+      errors: {
+        name: {
+          required: '请填写商品名称。',
+          invalid: '该名称不可用。',
+        },
+        price: {
+          required: '请填写价格。',
+          invalid: '价格必须是大于零的数字。',
+        },
+        quantity: {
+          required: '请填写数量。',
+          invalid: '数量必须是不小于零的整数。',
+        },
+      },
+      details: {
+        title: '详情',
+        description: '商品的名称，以及顾客如何找到它。',
+        namePlaceholder: '橡木升降桌 140 厘米',
+        descriptionPlaceholder: '材质、尺寸以及包装内含物。',
+        descriptionHint: '会显示在商品页和搜索结果中。',
+        brand: '品牌',
+        brandPlaceholder: '搜索品牌',
+        brandEmpty: '没有匹配的品牌。',
+        brandHint: '输入关键字筛选，无品牌商品可留空。',
+        sku: 'SKU',
+        skuHint: '在整个商品库中必须唯一。',
+        suggest: '生成',
+        removeTag: '移除标签 {{tag}}',
+        tagPlaceholder: '输入标签后按回车',
+        tagHint: '标签决定店铺前台的筛选项。',
+      },
+      pricing: {
+        title: '价格',
+        description: '商品的售价以及计费方式。',
+        compareAt: '划线价',
+        compareAtHint: '显示在售价旁并带删除线。',
+        discount: '折扣',
+        percent: '{{value}}%',
+        effective: '顾客实付 {{amount}}。',
+        noPrice: '填写价格后可查看实付金额。',
+        taxInclusive: '价格含税',
+        taxInclusiveHint: '关闭后在结算时另行计税。',
+        model: '计费模式',
+      },
+      inventory: {
+        title: '库存',
+        description: '当前库存数量以及发货仓库。',
+        warehouse: '仓库',
+        trackStock: '跟踪该商品库存',
+        trackStockHint: '销售会扣减数量，为零时商品自动隐藏。',
+        lowStock: '低库存阈值',
+        lowStockHint: '库存降到该数量时提醒团队。',
+      },
+      media: {
+        title: '媒体',
+        description: '商品页展示的图片与文档。',
+        dropTitle: '将图片拖到此处',
+        dropHint: '支持 JPG 或 PNG，单个不超过 5 MB。',
+        noFiles: '尚未添加任何文件。',
+        removeFile: '移除 {{file}}',
+        queueEmpty: '示例文件已全部添加。',
+      },
+      statusCard: {
+        description: '商品是否可见，以及何时上线。',
+        publishAt: '上线日期',
+        publishPlaceholder: '选择日期',
+        publishOn: '将于 {{date}} 上线。',
+        publishNow: '设为已上架后立即生效。',
+      },
+      organization: {
+        title: '归类',
+        description: '该商品所属的集合。',
+        itemCount: '{{count}} 件商品',
+      },
+      danger: {
+        title: '危险操作',
+        description: '放弃草稿会清空表单中的全部内容。',
+        discard: '放弃草稿',
+        confirmTitle: '确定放弃这份草稿吗？',
+        confirmDescription:
+          '所有字段会被清空，已上传的文件也会移除，且无法撤销。',
+        discarded: '草稿已放弃',
+      },
+      toast: {
+        invalidTitle: '表单存在错误',
+        invalidDescription: '请修正标红的字段后重新保存。',
+        savedTitle: '商品已保存',
+        savedDescription: '{{name}} 已保存为草稿。',
+      },
+    },
+    schedule: {
+      title: '团队日程',
+      description:
+        '团队日历：左侧月历配合右侧时间格日程，事件按类别着色并在气泡中展示详情，抽屉用于新建或编辑事件。',
+      view: {
+        day: '日',
+        week: '周',
+        month: '月',
+      },
+      category: {
+        planning: '规划',
+        review: '评审',
+        customer: '客户',
+        focus: '专注时间',
+        social: '团建',
+      },
+      legend: '类别',
+      eventCount: '{{count}} 个日程',
+      dayEmpty: '这一天没有安排。',
+      monthEmpty: '本月没有日程。',
+      simulateLoading: '模拟加载',
+      newEvent: '新建日程',
+      editEvent: '编辑日程',
+      drawerDescription: '所有内容仅保存在浏览器中，保存只会更新当前页面。',
+      titlePlaceholder: '每周规划会',
+      notesPlaceholder: '议程、链接，或者参会人需要提前了解的内容……',
+      allDay: '全天',
+      startsAt: '开始时间',
+      endsAt: '结束时间',
+      attendees: '参与人',
+      attendeesPlaceholder: '添加参与人',
+      noAttendees: '没有匹配的人员。',
+      attendeeCount: '已邀请 {{count}} 人',
+      eventCreated: '日程已创建',
+      eventUpdated: '日程已更新',
+      milestones: '近期里程碑',
+      milestonesDescription: '团队接下来几周要达成的关键节点。',
+      milestoneOwner: '负责人：{{name}}',
+    },
+    survey: {
+      title: '入门调研',
+      description:
+        '客户入门问卷：逐题作答，带进度、跳过和校验，完成后以表格汇总答案，旁边配有说明卡片与常见问题。',
+      formTitle: '介绍一下你的团队',
+      formDescription: '五个简短问题。你的回答将决定我们为你准备的工作区。',
+      progress: '第 {{current}} 题，共 {{total}} 题',
+      skip: '跳过',
+      skipped: '已跳过',
+      startOver: '重新开始',
+      submitted: '问卷已提交',
+      submittedDescription: '入门顾问将在一个工作日内与你联系。',
+      completeTitle: '谢谢，问卷已完成',
+      completeDescription: '以下是你的回答。可以重新开始再填一次。',
+      summaryQuestion: '问题',
+      summaryAnswer: '回答',
+      ratingLabel: '评 {{score}} 分（满分 5 分）',
+      ratingValue: '{{score}} / 5',
+      seatsBadge: '{{count}} 人',
+      questions: {
+        role: {
+          title: '哪一项最能描述你的角色？',
+          description: '这决定我们优先为你搭建哪些示例页面。',
+          operations: '运营',
+          operationsHint: '订单、履约和日常排期',
+          finance: '财务',
+          financeHint: '开票、对账和报表',
+          engineering: '研发',
+          engineeringHint: '集成、数据模型和部署',
+          founder: '创始人或总经理',
+          founderHint: '各方面都要管，同时盯着经营数据',
+        },
+        goals: {
+          title: '你希望先搭建什么？',
+          description: '可多选。我们会为每一项准备一个起点。',
+          orders: '订单跟踪',
+          inventory: '库存与存量管理',
+          reporting: '仪表盘与报表',
+          automation: '自动审批与提醒',
+          portal: '面向客户的门户',
+        },
+        experience: {
+          title: '你的团队对这类工具的熟悉程度如何？',
+          description: '没有标准答案，这只影响我们安排多少陪跑支持。',
+          low: '完全没有接触过',
+          high: '以前搭建过',
+        },
+        teamSize: {
+          title: '将有多少人使用这个工作区？',
+          description: '填个大概即可，席位随时可以增减。',
+          low: '1',
+          high: '200+',
+        },
+        notes: {
+          title: '还有什么需要我们了解的？',
+          description: '例如上线时间、需要对接的系统，或者其他特殊情况。',
+          placeholder: '我们计划在十一月从电子表格迁移过来……',
+        },
+      },
+      about: {
+        title: '关于本问卷',
+        heading: '我们为什么要问',
+        body: '这些回答会直接用于启动会前的工作区搭建，让你打开的第一个页面就已经包含你的数据模型。',
+        benefitPlan: '与团队规模匹配的上线计划',
+        benefitTemplates: '针对你所选场景的入门页面',
+        benefitSession: '由已读过你回答的顾问主持启动会',
+        footnote: '大约需要两分钟。内容不会提供给客户团队之外的人。',
+        hint: '按字母键选择选项，按回车继续。',
+      },
+      faq: {
+        title: '常见问题',
+        description: '填写之前大家通常会问的问题。',
+        timeQuestion: '填写需要多长时间？',
+        timeAnswer: '大约两分钟，共五题，每一题都可以跳过。',
+        privacyQuestion: '谁会看到我的回答？',
+        privacyAnswer: '只有负责你账户的入门顾问。这些内容不会用于市场推广。',
+        changeQuestion: '之后还能修改答案吗？',
+        changeAnswer:
+          '可以。填写时用上一题按钮返回修改，或在启动会上告诉顾问。',
+        skipQuestion: '如果我还不确定怎么办？',
+        skipAnswer: '直接跳过。未作答本身也是有用的信息，我们会再跟进。',
+      },
+    },
+    teamSettings: {
+      title: '团队设置',
+      description:
+        '小型团队的工作区设置页：一个页面内分四个标签页，包含常规表单、带角色与邀请的成员表格、分组的通知开关，以及套餐与账单。',
+      breadcrumb: {
+        workspace: '工作区',
+        team: '团队',
+      },
+      notice: {
+        title: '仍有未结清的账单',
+        description:
+          '尚有 {{amount}} 未付。请在下次扣费前结清，以免影响工作区席位。',
+        action: '前往账单',
+      },
+      tabs: {
+        general: '常规',
+        members: '成员',
+        notifications: '通知',
+        billing: '账单',
+      },
+      general: {
+        title: '工作区',
+        description: '工作区的名称，以及以哪个时区开始一天的工作。',
+        logo: '工作区标识',
+        logoHint: '请使用不小于 256 像素的方形 PNG 或 SVG。',
+        logoUploaded: '标识已上传',
+        name: '工作区名称',
+        slug: '工作区地址',
+        slugHint: '修改地址会导致已分享出去的链接失效。',
+        timezone: '时区',
+        timezoneHint: '报表、摘要与定时任务都按此时区执行。',
+        saved: '设置已保存',
+        savedDescription: '{{name}} 已更新。',
+      },
+      members: {
+        title: '成员',
+        description: '共有 {{count}} 人可以访问该工作区。',
+        invite: '邀请成员',
+        inviteTitle: '邀请成员',
+        inviteDescription: '对方会收到一封邮件，其中的链接七天后失效。',
+        sendInvite: '发送邀请',
+        invited: '邀请已发送',
+        joined: '加入时间',
+        roleFor: '{{name}} 的角色',
+        roleChanged: '角色已更新',
+        roleChangedDescription: '{{name}} 现在是{{role}}。',
+        removeMember: '移除 {{name}}',
+        removeTitle: '确定移除该成员吗？',
+        removeDescription:
+          '{{name}} 会立即失去访问权限，其评论与历史记录仍保留在工作区中。',
+        removed: '成员已移除',
+      },
+      role: {
+        owner: '所有者',
+        admin: '管理员',
+        editor: '编辑者',
+        viewer: '只读成员',
+      },
+      roleHint: {
+        owner: '拥有全部权限，包括账单与删除工作区。',
+        admin: '可管理成员与设置，但不能管理账单。',
+        editor: '可在工作区内创建和编辑内容。',
+        viewer: '可查看内容并发表评论。',
+      },
+      memberStatus: {
+        active: '正常',
+        invited: '待接受',
+        suspended: '已停用',
+      },
+      notifications: {
+        title: '通知',
+        description: '选择哪些事件通过邮件通知你，每个人可单独设置。',
+        advanced: '高级设置',
+      },
+      notificationGroups: {
+        activity: '动态',
+        security: '安全',
+        billing: '账单',
+      },
+      notificationItems: {
+        mentions: {
+          label: '提及',
+          hint: '有人在评论中提到你。',
+        },
+        comments: {
+          label: '评论',
+          hint: '你关注的内容有了新评论。',
+        },
+        assignments: {
+          label: '任务指派',
+          hint: '有任务被指派给你。',
+        },
+        weeklyDigest: {
+          label: '每周摘要',
+          hint: '每周一汇总上周的进展。',
+        },
+        newSignIn: {
+          label: '新设备登录',
+          hint: '你的账号在未识别的设备上登录。',
+        },
+        passwordChanged: {
+          label: '密码变更',
+          hint: '密码或两步验证方式被修改。',
+        },
+        apiKeyCreated: {
+          label: '创建 API 密钥',
+          hint: '该工作区签发了新的密钥。',
+        },
+        invoiceIssued: {
+          label: '开具账单',
+          hint: '有新的账单可供下载。',
+        },
+        paymentFailed: {
+          label: '扣款失败',
+          hint: '发卡机构拒绝了本次扣款。',
+        },
+        usageLimit: {
+          label: '用量预警',
+          hint: '席位或存储超过套餐的 90%。',
+        },
+      },
+      advancedItems: {
+        ownActivity: {
+          label: '我自己的操作也通知我',
+          hint: '调试自动化流程时比较有用。',
+        },
+        resolvedThreads: {
+          label: '已解决的讨论仍继续通知',
+          hint: '否则讨论被标记为解决后不再提醒。',
+        },
+        batchHourly: {
+          label: '按小时合并邮件',
+          hint: '每小时一封，而不是每个事件一封。',
+        },
+        quietHours: {
+          label: '遵守免打扰时段',
+          hint: '22:00 至 07:00 之间暂不发送。',
+        },
+      },
+      billing: {
+        trialTitle: '试用进行中',
+        trialDescription:
+          '团队版在 {{date}} 之前免费，在此之前不会产生任何费用。',
+        plan: '套餐',
+        planDescription: '变更将在下一个计费周期开始时生效。',
+        perSeat: '每席位 / 月',
+        usage: '用量',
+        usageDescription: '当前工作区已使用的套餐额度。',
+        seats: '席位 · {{used}} / {{total}}',
+        storage: '存储 · {{used}} GB / {{total}} GB',
+        invoices: '账单记录',
+        invoicesDescription: '最近十二个月，按时间倒序排列。',
+        invoice: '账单',
+        period: '账期',
+        downloadInvoice: '下载账单 {{number}}',
+      },
+      plans: {
+        starter: {
+          name: '入门版',
+          summary: '{{seats}} 个席位，{{storage}} GB 存储空间。',
+        },
+        team: {
+          name: '团队版',
+          summary:
+            '{{seats}} 个席位，{{storage}} GB 存储空间，并支持审计日志。',
+        },
+        business: {
+          name: '商业版',
+          summary:
+            '{{seats}} 个席位，{{storage}} GB 存储空间，并支持单点登录。',
+        },
+      },
+      invoiceStatus: {
+        paid: '已支付',
+        pending: '待支付',
+        failed: '支付失败',
+      },
+    },
   },
   components: {
     title: '组件',
-    button: {
-      title: '按钮',
-      description:
-        '触发一个操作。按操作应获得的关注程度选择变体，每个视图只保留一个主按钮。',
-      variants: '变体',
-      variantsDescription:
-        'default 用于主操作，secondary 和 outline 用于辅助操作，ghost 用于工具栏，destructive 用于不可逆操作，link 用于行内导航。',
-      sizes: '尺寸',
-      sizesDescription:
-        '与周围控件保持一致：表格和工具栏内用 sm，表单和对话框用 default，营销式号召用 lg。',
-      extraSmall: '超小',
-      small: '小',
-      default: '默认',
-      large: '大',
-      withIcon: '带图标',
-      withIconDescription: '给图标加上 data-icon，对应一侧的内边距会自动收紧。',
-      sendEmail: '发送邮件',
-      iconOnly: '仅图标',
-      iconOnlyDescription: '图标按钮没有可见文字，必须提供 aria-label。',
-      states: '状态',
-      statesDescription: '请求进行中时禁用按钮，并用 Spinner 替换前置图标。',
-      asLink: '作为链接',
-      asLinkDescription:
-        '通过 render 传入 a 或路由 Link，让真正的链接沿用按钮样式。',
-    },
     accordion: {
       title: '折叠面板',
       description:
@@ -637,6 +1245,31 @@ const zhCN: AppResource = {
         '发票 INV-2031 已于今天上午发送到 billing@acme.com，账户内也有一份副本。',
       answerShipping: '订单今天已出库，两个工作日内送达。',
       answerAgent: '正在为你转接人工客服，当前等待时间约两分钟。',
+    },
+    button: {
+      title: '按钮',
+      description:
+        '触发一个操作。按操作应获得的关注程度选择变体，每个视图只保留一个主按钮。',
+      variants: '变体',
+      variantsDescription:
+        'default 用于主操作，secondary 和 outline 用于辅助操作，ghost 用于工具栏，destructive 用于不可逆操作，link 用于行内导航。',
+      sizes: '尺寸',
+      sizesDescription:
+        '与周围控件保持一致：表格和工具栏内用 sm，表单和对话框用 default，营销式号召用 lg。',
+      extraSmall: '超小',
+      small: '小',
+      default: '默认',
+      large: '大',
+      withIcon: '带图标',
+      withIconDescription: '给图标加上 data-icon，对应一侧的内边距会自动收紧。',
+      sendEmail: '发送邮件',
+      iconOnly: '仅图标',
+      iconOnlyDescription: '图标按钮没有可见文字，必须提供 aria-label。',
+      states: '状态',
+      statesDescription: '请求进行中时禁用按钮，并用 Spinner 替换前置图标。',
+      asLink: '作为链接',
+      asLinkDescription:
+        '通过 render 传入 a 或路由 Link，让真正的链接沿用按钮样式。',
     },
     buttonGroup: {
       title: '按钮组',
@@ -1121,6 +1754,92 @@ const zhCN: AppResource = {
       logicalHint:
         'text-start、ps-3 和 border-s-2 会随方向翻转，rtl:rotate-180 让箭头调头。',
     },
+    drawer: {
+      title: '抽屉',
+      description:
+        '从屏幕边缘滑入、可以滑动关闭的面板。适合用户完成后即离开的任务；Sheet 是桌面端更朴素的同类组件。',
+      basic: '底部抽屉',
+      basicDescription:
+        '默认从底部升起。showSwipeHandle 会加上抓取条，告诉触屏用户可以拖动关闭。',
+      openOrderSummary: '打开订单摘要',
+      orderSummary: '订单摘要',
+      orderSummaryDescription: '订单 {{number}} 共三件商品，待确认。',
+      confirmOrder: '确认订单',
+      positions: '四个方向',
+      positionsDescription:
+        'swipeDirection 同时决定面板停靠的边缘和关闭它的滑动方向。',
+      top: '上方',
+      right: '右侧',
+      bottom: '下方',
+      left: '左侧',
+      panelDescription:
+        'swipeDirection="{{direction}}" 决定关闭该面板的滑动方向。',
+      controlled: '受控且自适应',
+      controlledDescription:
+        '当抽屉需要在操作成功后关闭时，用 state 持有 open。useIsMobile 决定停靠边缘，同一个抽屉在手机上从底部升起，在桌面端从侧面滑入。',
+      pickDeliveryTime: '选择配送时间',
+      deliveryDescription: '为明天选择一个配送时段。包裹揽收前都可以更改。',
+      standardDelivery: '标准配送',
+      fastest: '最快',
+      slotStandard: '两个工作日内送达',
+      slotAfterWork: '下班后立即送达',
+      slotPopular: '最热门的时段',
+      slotLast: '当晚最后一班',
+      confirmDelivery: '确认该时段',
+      deliveryConfirmed: '配送时间已确认',
+      responsiveHint: '缩放窗口：宽度小于 768px 时，抽屉改为从底部升起。',
+      snapPoints: '停靠高度',
+      snapPointsDescription:
+        '部分展开的抽屉先显示摘要，用户上拉后再展开到全高。',
+      openActivity: '查看今日动态',
+      activity: '今日动态',
+      activityDescription: '上拉面板可查看全天记录。',
+      paymentReceived: '{{time}} 收到款项',
+      nonModal: '非模态',
+      nonModalDescription:
+        'modal={false} 让背后的页面仍可操作，用户可以一边处理页面一边保持面板打开。',
+      openNotes: '打开备注',
+      notesDescription:
+        '面板背后的订单仍可阅读，方便你把细节直接复制到备注里。',
+      notesPlaceholder: '下一位处理该订单的同事需要知道的信息。',
+    },
+    dropdownMenu: {
+      title: '下拉菜单',
+      description:
+        '锚定在触发控件上的命令菜单。菜单项执行操作，不像 Select 那样承载一个值。',
+      basic: '分组、标题与快捷键',
+      basicDescription:
+        '把同类命令归为一组，组与组之间用分隔线，有快捷键的命令在旁边显示它。',
+      myAccount: '我的账号',
+      billing: '账单',
+      team: '团队',
+      newTeam: '新建团队',
+      support: '支持',
+      apiAccess: 'API 访问',
+      icons: '图标与子菜单',
+      iconsDescription:
+        '前置图标能加快识别；一个操作有多个去向时，嵌套一层子菜单就够了。',
+      inviteUsers: '邀请成员',
+      message: '站内信',
+      copyInviteLink: '复制邀请链接',
+      checkboxes: '复选项',
+      checkboxesDescription:
+        '每一项独立切换且菜单保持打开，这正是它适合控制列显隐的原因。',
+      columns: '列',
+      toggleColumns: '切换显示的列',
+      radio: '单选项',
+      radioDescription:
+        '在一组选项中单选。值由单选组持有，选中后菜单关闭，因此触发按钮可以显示当前选择。',
+      sortBy: '排序方式',
+      rowActions: '行操作',
+      rowActionsDescription:
+        '图标按钮打开某一行的命令；菜单靠尾侧对齐，并给触发按钮加上 aria-label。',
+      viewDetails: '查看详情',
+      duplicate: '创建副本',
+      cancelOrder: '取消订单',
+      lastAction: '上一次操作：{{action}}',
+      noAction: '打开菜单并选择一个操作。',
+    },
     empty: {
       title: '空状态',
       description:
@@ -1164,6 +1883,60 @@ const zhCN: AppResource = {
         '把文件拖到这里，或上传已签收的送货单，它会随订单一起保存。',
       uploadFile: '上传文件',
     },
+    field: {
+      title: '表单字段',
+      description:
+        '单个控件连同标签、说明和错误信息的布局。它把三者关联起来，无需额外的 aria 属性，控件就能被正确播报。',
+      form: '完整表单',
+      formDescription:
+        'FieldSet 与 FieldLegend 为一个分区命名，FieldGroup 负责分区内的字段间距，FieldSeparator 分隔两个分区。',
+      customerDetails: '客户信息',
+      customerDetailsDescription: '将用于发票和运单。',
+      fullName: '姓名',
+      namePlaceholder: 'Ava Chen',
+      emailPlaceholder: 'ava.chen@northwind.example',
+      emailHint: '订单确认和配送通知将发送到这个邮箱。',
+      region: '地区',
+      notesPlaceholder: '配送说明、门禁密码等司机需要知道的信息。',
+      nameRequired: '请填写客户姓名。',
+      emailRequired: '请填写邮箱地址。',
+      emailInvalid: '这看起来不是一个有效的邮箱地址。',
+      regionRequired: '请选择地区。',
+      preferences: '偏好设置',
+      preferencesDescription: '随时可以在客户档案中修改。',
+      marketing: '接收产品动态',
+      marketingHint: '大约每月一封。退订不会影响订单通知。',
+      invoiceCopy: '每张发票都抄送邮件',
+      invoiceCopyHint: '发票开具后立即发送 PDF。',
+      submitted: '已保存。',
+      orientations: '排列方向',
+      orientationsDescription:
+        'vertical 把标签置于控件上方，horizontal 让两者同行，responsive 则在 sm 断点处在两者之间切换。',
+      vertical: '公司名称',
+      companyPlaceholder: 'Northwind Traders',
+      verticalHint: '将按填写内容原样显示在发票上。',
+      agreeTerms: '我同意相关处理条款',
+      responsive: '税号',
+      responsiveHint: '窄屏时上下排列，sm 及以上同行显示。',
+      taxIdPlaceholder: 'DE 811 234 567',
+      choiceCards: '选项卡片',
+      choiceCardsDescription:
+        '用 FieldLabel 包裹 Field，每个选项就变成一张卡片，整张卡片都是点击区域。',
+      shippingMethod: '配送方式',
+      shippingStandard: '标准配送',
+      shippingStandardHint: '3 到 5 个工作日送达。',
+      shippingExpress: '加急配送',
+      shippingExpressHint: '次个工作日 18:00 前送达。',
+      shippingOvernight: '隔夜达',
+      shippingOvernightHint: '16:00 前下单，次日 09:00 前送达。',
+      errors: '错误信息',
+      errorsDescription:
+        'FieldError 可以渲染单条消息，也可以在多条规则同时失败时渲染列表。请在 Field 上设置 data-invalid，在控件上设置 aria-invalid。',
+      password: '密码',
+      passwordTooShort: '至少需要 12 个字符。',
+      passwordNeedsNumber: '需要包含数字。',
+      passwordNeedsSymbol: '需要包含符号。',
+    },
     hoverCard: {
       title: '悬浮卡片',
       description:
@@ -1192,6 +1965,148 @@ const zhCN: AppResource = {
       items: '件数',
       sentenceMiddle: '，下单人为',
       sentenceEnd: '，目前正在等待补发。',
+    },
+    input: {
+      title: '输入框',
+      description:
+        '单行文本输入框。设置 type，浏览器才会提供合适的键盘、校验和自动填充；搭配 Field 来承载标签、提示和错误信息。',
+      types: '类型',
+      typesDescription:
+        'type 不是装饰：它会改变软键盘、浏览器提供的自动填充项，以及该字段报告的值。',
+      namePlaceholder: 'Ava Chen',
+      emailPlaceholder: 'ava.chen@northwind.example',
+      password: '密码',
+      passwordPlaceholder: '至少 12 个字符',
+      website: '网址',
+      search: '搜索',
+      field: '搭配标签与提示',
+      fieldDescription:
+        'Field 提供标签、说明和错误插槽，并为屏幕阅读器把三者与输入框关联起来。',
+      companyName: '公司名称',
+      companyPlaceholder: 'Northwind Traders',
+      companyHint: '将按填写内容原样显示在发票上。',
+      taxId: '税号',
+      taxIdHint: '欧盟境内客户必填。',
+      states: '状态',
+      statesDescription:
+        'disabled 让字段不参与表单提交，readOnly 仍会提交其值，aria-invalid 搭配 data-invalid 则呈现错误样式。',
+      disabled: '订单号',
+      disabledHint: '订单创建时自动生成。',
+      readOnly: '客户编号',
+      readOnlyHint: '随表单提交，但不可编辑。',
+      emailInvalid: '这看起来不是一个有效的邮箱地址。',
+      file: '文件选择',
+      fileDescription:
+        'accept 把选择器限定在你确实能处理的格式。它只是提示，服务端仍需校验实际收到的文件。',
+      attachment: '已签收送货单',
+      attachmentHint: '支持 PDF、PNG 或 JPG，最大 10 MB。',
+      controlled: '受控',
+      controlledDescription:
+        '当你需要规范化或限制用户输入时，把值放在 state 里；同时在元素上保留 maxLength，让浏览器一起约束。',
+      reference: '采购单编号',
+      referenceHint: '仅限字母、数字和连字符。',
+    },
+    inputGroup: {
+      title: '输入框组',
+      description:
+        '在输入框两端附加文本、图标或按钮，让单位、前缀与内联操作都留在同一个控件内。附加内容要简短，并始终为输入框单独提供标签。',
+      addons: '前缀与后缀',
+      addonsDescription:
+        '在输入框两侧各放一个附加元素，用来说明币种、协议或域名，免去用户手动输入。',
+      amountLabel: '发票金额',
+      websiteLabel: '企业子域名',
+      search: '搜索框',
+      searchDescription:
+        '开头放置图标附加元素，仅在有输入内容时显示清除按钮，这样空状态下控件宽度不会跳动。',
+      searchPlaceholder: '搜索客户…',
+      searchEmpty: '没有匹配“{{query}}”的客户。',
+      inlineButton: '内联操作',
+      inlineButtonDescription:
+        '把完成该字段的操作放在输入框旁边：应用优惠码或复制生成的值都属于组内，而不是放在下方。',
+      discountLabel: '优惠码',
+      discountPlaceholder: '输入优惠码',
+      discountApplied: '优惠码 {{code}} 已应用于此订单。',
+      apiKeyLabel: 'API 密钥',
+      textarea: '带工具栏的多行输入',
+      textareaDescription:
+        '将附加元素对齐到上方与下方，为多行输入添加标题行，并在底部放置字数统计和保存操作。',
+      deliveryNote: '配送备注 · {{number}}',
+      deliveryNoteLabel: '配送备注',
+      characterCount: '{{used}} / {{limit}} 字符',
+    },
+    inputOtp: {
+      title: '一次性验证码输入框',
+      description:
+        '用独立的格子收集简短的一次性验证码，让用户看清每个字符的落位。设置与下发内容一致的输入规则，并在最后一格填满时立即校验。',
+      basic: '六位数字',
+      basicDescription:
+        '用分隔符把验证码拆成两组：分组更短，用户从短信里回读时更轻松。',
+      codeLabel: '验证码',
+      patterns: '长度与字符规则',
+      patternsDescription:
+        '让输入规则与下发的验证码保持一致——终端 PIN 用四位数字，单据访问码用六位字母数字。',
+      pinLabel: '终端 PIN 码',
+      pinDescription: '四位数字，在仓库扫码终端上输入。',
+      invoiceCodeLabel: '发票访问码',
+      invoiceCodeDescription: '发票邮件中的字母与数字组合。',
+      disabled: '禁用状态',
+      disabledDescription:
+        '重新发送验证码期间禁用整个输入框，而不是清空用户已经输入的字符。',
+      verify: '验证登录',
+      verifyDescription:
+        '受控地保存输入值，在最后一格填满时校验，并把格子标记为错误状态，而不是另开一个弹窗提示。',
+      sentTo: '我们已向 {{email}} 发送六位验证码。',
+      hint: '在本示例中，正确的验证码是 {{code}}。',
+      verified: '验证码正确，正在登录…',
+      incorrect: '验证码无效，请检查短信或重新获取。',
+      resend: '重新发送验证码',
+    },
+    item: {
+      title: '列表项',
+      description:
+        '用一行排布媒体、标题、描述与操作，不必为每个列表都做一套卡片。当各行结构一致、且用户是以整行为单位浏览时，优先使用它。',
+      variants: '变体',
+      variantsDescription:
+        '默认变体适合放在已有边框的卡片或面板内，outline 适合每行各自独立，muted 则用于弱化仅作说明的行。',
+      defaultVariant: '默认',
+      defaultVariantDescription: '自身不带边框，适合已经位于卡片或面板中的行。',
+      outlineVariant: '描边',
+      outlineVariantDescription: '每行独立描边，让各行看起来是彼此独立的对象。',
+      mutedVariant: '弱化',
+      mutedVariantDescription:
+        '浅色底纹，用于辅助说明、不需要与其他行争夺注意力的内容。',
+      media: '媒体与操作',
+      mediaDescription:
+        '把图标或头像放进 ItemMedia，把该行的控件放进 ItemActions，这样每一行都会对齐到同样的两侧边缘。',
+      shipmentTitle: '运单 SHP-8821',
+      shipmentDescription: '已由 {{carrier}} 揽收，预计两天后送达。',
+      message: '发送消息',
+      cardExpiry: '有效期至 {{date}}',
+      sizes: '尺寸',
+      sizesDescription:
+        '信息密集的列表可改用 sm 或 xs；媒体与文字会随行高一起缩放，不需要手动调整。',
+      inStock: '库存 {{quantity}} 件',
+      group: '成组排列',
+      groupDescription:
+        'ItemGroup 统一行间距，ItemSeparator 负责分隔。当每行只承载少量字段时，它比表格更轻。',
+      role: {
+        owner: '拥有者',
+        editor: '编辑者',
+        viewer: '查看者',
+      },
+      links: '整行作为链接',
+      linksDescription:
+        '把列表项渲染为链接，使整行都是点击目标，而不是在看起来就可点击的行里再放一个小链接。',
+      category: {
+        scanners: '条码扫描枪',
+        printers: '小票打印机',
+        terminals: '收款终端',
+      },
+      productCount: '{{total}} 个商品',
+      headerFooter: '页眉与页脚',
+      headerFooterDescription:
+        'ItemHeader 与 ItemFooter 会占满整行宽度，适合放置单号、状态和合计金额这类汇总信息。',
+      orderSummary: '共 {{items}} 个商品行，发往加州旧金山',
     },
     kbd: {
       title: '键盘按键',
@@ -1420,185 +2335,405 @@ const zhCN: AppResource = {
       compactDescription:
         '滚动区本身只是一个视口，可以放进任何带边框的容器；当读者可能想回到开头时，再加一个跳到开头的按钮。',
     },
-    drawer: {
-      title: '抽屉',
+    nativeSelect: {
+      title: '原生下拉框',
       description:
-        '从屏幕边缘滑入、可以滑动关闭的面板。适合用户完成后即离开的任务；Sheet 是桌面端更朴素的同类组件。',
-      basic: '底部抽屉',
+        '浏览器原生的 select 元素，样式与表单其余部分保持一致。选项简短朴素、或在触屏设备上优先使用它；需要图标、描述或搜索时改用 Select。',
+      basic: '基础用法',
       basicDescription:
-        '默认从底部升起。showSwipeHandle 会加上抓取条，告诉触屏用户可以拖动关闭。',
-      openOrderSummary: '打开订单摘要',
-      orderSummary: '订单摘要',
-      orderSummaryDescription: '订单 {{number}} 共三件商品，待确认。',
-      confirmOrder: '确认订单',
-      positions: '四个方向',
-      positionsDescription:
-        'swipeDirection 同时决定面板停靠的边缘和关闭它的滑动方向。',
-      top: '上方',
-      right: '右侧',
-      bottom: '下方',
-      left: '左侧',
-      panelDescription:
-        'swipeDirection="{{direction}}" 决定关闭该面板的滑动方向。',
-      controlled: '受控且自适应',
-      controlledDescription:
-        '当抽屉需要在操作成功后关闭时，用 state 持有 open。useIsMobile 决定停靠边缘，同一个抽屉在手机上从底部升起，在桌面端从侧面滑入。',
-      pickDeliveryTime: '选择配送时间',
-      deliveryDescription: '为明天选择一个配送时段。包裹揽收前都可以更改。',
-      standardDelivery: '标准配送',
-      fastest: '最快',
-      slotStandard: '两个工作日内送达',
-      slotAfterWork: '下班后立即送达',
-      slotPopular: '最热门的时段',
-      slotLast: '当晚最后一班',
-      confirmDelivery: '确认该时段',
-      deliveryConfirmed: '配送时间已确认',
-      responsiveHint: '缩放窗口：宽度小于 768px 时，抽屉改为从底部升起。',
-      snapPoints: '停靠高度',
-      snapPointsDescription:
-        '部分展开的抽屉先显示摘要，用户上拉后再展开到全高。',
-      openActivity: '查看今日动态',
-      activity: '今日动态',
-      activityDescription: '上拉面板可查看全天记录。',
-      paymentReceived: '{{time}} 收到款项',
-      nonModal: '非模态',
-      nonModalDescription:
-        'modal={false} 让背后的页面仍可操作，用户可以一边处理页面一边保持面板打开。',
-      openNotes: '打开备注',
-      notesDescription:
-        '面板背后的订单仍可阅读，方便你把细节直接复制到备注里。',
-      notesPlaceholder: '下一位处理该订单的同事需要知道的信息。',
+        '与 Field 标签搭配使用，选项列表交给浏览器渲染，无需自行实现。',
+      sizes: '尺寸',
+      sizesDescription:
+        '小尺寸与工具栏中的 sm 按钮对齐；表单内保持默认尺寸，以便与其他输入控件一致。',
+      pageSizeLabel: '每页行数',
+      groups: '选项分组',
+      groupsDescription:
+        '当选项存在明显分类时使用 optgroup 分组，长列表也能保持易于浏览。',
+      regionWest: '西海岸',
+      regionEast: '东海岸',
+      warehouseLabel: '发货仓库',
+      warehouseDescription: '订单会从距离收货地址最近的仓库拣货。',
+      states: '禁用与错误',
+      statesDescription:
+        '取值固定时应禁用控件而不是隐藏它；缺少选择时标记 aria-invalid，并把错误提示放在紧邻位置。',
+      currencyLabel: '结算币种',
+      currencyDescription: '在客户账户上设置，单个订单无法修改。',
+      termsLabel: '付款条件',
+      termsError: '请先选择付款条件，再发送发票。',
+      filters: '工具栏筛选',
+      filtersDescription:
+        '一行中的几个小尺寸下拉框可组成紧凑的列表筛选；每个都保持受控，结果才会跟随当前选择。',
+      filterSummary:
+        '正在显示 {{warehouse}} 的 {{status}} 订单，每页 {{size}} 条。',
     },
-    dropdownMenu: {
-      title: '下拉菜单',
+    navigationMenu: {
+      title: '导航菜单',
       description:
-        '锚定在触发控件上的命令菜单。菜单项执行操作，不像 Select 那样承载一个值。',
-      basic: '分组、标题与快捷键',
-      basicDescription:
-        '把同类命令归为一组，组与组之间用分隔线，有快捷键的命令在旁边显示它。',
-      myAccount: '我的账号',
-      billing: '账单',
-      team: '团队',
-      newTeam: '新建团队',
-      support: '支持',
-      apiAccess: 'API 访问',
-      icons: '图标与子菜单',
+        '横向排列顶层目的地的导航条，触发器可展开面板说明其下内容。它用于站点或产品导航，而非执行操作——承载命令的菜单应使用菜单栏或下拉菜单。',
+      product: '产品菜单',
+      productDescription:
+        '内容较多的区域用面板为每个目的地配一句简介；只有单一目的地时直接用普通链接，不要给它一个空面板。',
+      products: '产品',
+      solutions: '解决方案',
+      pricing: '定价',
+      item: {
+        orders: {
+          title: '订单管理',
+          description: '在同一个队列中接单、分派并完成履约。',
+        },
+        inventory: {
+          title: '库存',
+          description: '分仓查看库存水位，并在低库存时告警。',
+        },
+        invoicing: {
+          title: '开票',
+          description: '开具发票、跟踪回款并催收逾期账款。',
+        },
+        analytics: {
+          title: '数据分析',
+          description: '跨渠道的收入、毛利与履约时长。',
+        },
+      },
+      solution: {
+        retail: {
+          title: '零售',
+          description: '门店、柜台与线上订单集中管理。',
+        },
+        wholesale: {
+          title: '批发',
+          description: '按客户维护价目表、报价与账期。',
+        },
+        logistics: {
+          title: '物流',
+          description: '承运商报价、面单与配送跟踪。',
+        },
+      },
+      icons: '带图标的链接',
       iconsDescription:
-        '前置图标能加快识别；一个操作有多个去向时，嵌套一层子菜单就够了。',
-      inviteUsers: '邀请成员',
-      message: '站内信',
-      copyInviteLink: '复制邀请链接',
-      checkboxes: '复选项',
-      checkboxesDescription:
-        '每一项独立切换且菜单保持打开，这正是它适合控制列显隐的原因。',
-      columns: '列',
-      toggleColumns: '切换显示的列',
-      radio: '单选项',
-      radioDescription:
-        '在一组选项中单选。值由单选组持有，选中后菜单关闭，因此触发按钮可以显示当前选择。',
-      sortBy: '排序方式',
-      rowActions: '行操作',
-      rowActionsDescription:
-        '图标按钮打开某一行的命令；菜单靠尾侧对齐，并给触发按钮加上 aria-label。',
-      viewDetails: '查看详情',
-      duplicate: '创建副本',
-      cancelOrder: '取消订单',
-      lastAction: '上一次操作：{{action}}',
-      noAction: '打开菜单并选择一个操作。',
+        '当面板列出的是状态或对象、用户靠图形比靠文字识别更快时，为每个链接加上前置图标。',
+      pipeline: '订单流转',
+      alignment: '对齐方式',
+      alignmentDescription:
+        '面板默认与菜单起始位置对齐；当菜单位于页头中部或末端时，用 align 调整。',
+      supportMenu: '支持',
+      support: {
+        help: '帮助中心',
+        status: '服务状态',
+        contact: '联系支持',
+      },
+      linksOnly: '不带面板的链接',
+      linksOnlyDescription:
+        '纯链接菜单同样能获得统一的样式与键盘行为；把当前页面标记为选中，导航条才能显示用户所在位置。',
+      ordersLink: '订单',
+      customersLink: '客户',
+      reportsLink: '报表',
     },
-    field: {
-      title: '表单字段',
+    pagination: {
+      title: '分页',
       description:
-        '单个控件连同标签、说明和错误信息的布局。它把三者关联起来，无需额外的 aria 属性，控件就能被正确播报。',
-      form: '完整表单',
+        '用于逐屏阅读的列表分页控件。始终标记当前页，边界处禁用而不是移除按钮，并明确告诉读者所处的位置。',
+      basic: '基础用法',
+      basicDescription:
+        '页数较少时逐页列出；到达首尾时把上一页或下一页置灰，控件宽度才不会变化。',
+      pageOf: '第 {{page}} / {{total}} 页',
+      ellipsis: '长页码区间',
+      ellipsisDescription:
+        '页数较多时，显示首页、末页以及当前页附近的一段，中间的空缺用省略号代替。',
+      compact: '紧凑控件',
+      compactDescription:
+        '两个图标按钮加一个计数器，可放进完整页码列表放不下的工具栏或卡片底部。',
+      list: '为列表分页',
+      listDescription:
+        '让列表行与分页控件共用同一份状态，并在旁边显示当前区间，读者无需从页码推算条目数。',
+      range: '显示第 {{from}}–{{to}} 条，共 {{total}} 张发票',
+    },
+    popover: {
+      title: '气泡卡片',
+      description:
+        '锚定在触发控件旁的小面板，用于展示细节或完成简短编辑，而不占满整个界面。必须先回答才能继续的内容应改用对话框。',
+      basic: '基础用法',
+      basicDescription:
+        '为面板提供标题与描述，便于辅助技术朗读；内容控制在无需滚动的范围内。',
+      viewOrder: '订单概览',
+      orderSummary: '由 {{customer}} 下单，从奥克兰仓库拣货。',
+      placement: '位置',
+      placementDescription:
+        '触发控件靠近边缘时设置 side 与 align；空间不足时面板才会自动翻转。',
+      alignStart: '起始对齐',
+      alignEnd: '末端对齐',
+      sideTop: '向上展开',
+      placementHint: '此面板使用 {{align}} 定位。',
+      form: '内联编辑',
       formDescription:
-        'FieldSet 与 FieldLegend 为一个分区命名，FieldGroup 负责分区内的字段间距，FieldSeparator 分隔两个分区。',
-      customerDetails: '客户信息',
-      customerDetailsDescription: '将用于发票和运单。',
-      fullName: '姓名',
-      namePlaceholder: 'Ava Chen',
-      emailPlaceholder: 'ava.chen@northwind.example',
-      emailHint: '订单确认和配送通知将发送到这个邮箱。',
-      region: '地区',
-      notesPlaceholder: '配送说明、门禁密码等司机需要知道的信息。',
-      nameRequired: '请填写客户姓名。',
-      emailRequired: '请填写邮箱地址。',
-      emailInvalid: '这看起来不是一个有效的邮箱地址。',
-      regionRequired: '请选择地区。',
-      preferences: '偏好设置',
-      preferencesDescription: '随时可以在客户档案中修改。',
-      marketing: '接收产品动态',
-      marketingHint: '大约每月一封。退订不会影响订单通知。',
-      invoiceCopy: '每张发票都抄送邮件',
-      invoiceCopyHint: '发票开具后立即发送 PDF。',
-      submitted: '已保存。',
-      orientations: '排列方向',
-      orientationsDescription:
-        'vertical 把标签置于控件上方，horizontal 让两者同行，responsive 则在 sm 断点处在两者之间切换。',
-      vertical: '公司名称',
-      companyPlaceholder: 'Northwind Traders',
-      verticalHint: '将按填写内容原样显示在发票上。',
-      agreeTerms: '我同意相关处理条款',
-      responsive: '税号',
-      responsiveHint: '窄屏时上下排列，sm 及以上同行显示。',
-      taxIdPlaceholder: 'DE 811 234 567',
-      choiceCards: '选项卡片',
-      choiceCardsDescription:
-        '用 FieldLabel 包裹 Field，每个选项就变成一张卡片，整张卡片都是点击区域。',
+        '受控管理展开状态，使草稿值在每次打开时重置，只有保存才会写回。',
+      quantityValue: '{{quantity}} 件',
+      adjustQuantity: '调整数量',
+      adjustQuantityDescription: '保存后，修改数量会同步更新订单合计。',
+      contact: '联系人预览',
+      contactDescription:
+        '在姓名上挂载预览面板，读者无需离开当前列表即可确认对方身份。',
+      contactRole: '{{company}} 采购经理',
+      viewCustomer: '打开客户档案',
+    },
+    progress: {
+      title: '进度条',
+      description:
+        '当剩余工作量可以度量时，用它展示任务进展。进度条要配合标签与数值——只有一根条，用户知道有事在进行，却不知道是什么、还剩多少。',
+      basic: '确定进度',
+      basicDescription:
+        '传入 0 到 100 之间的数值。限制宽度，让进度条成为版面的一部分，而不是横贯整页。',
+      label: '标签与数值',
+      labelDescription:
+        'ProgressLabel 说明任务名称，ProgressValue 输出百分比，两者同在一个 Progress 内，便于一起播报。',
+      storageUsed: '已用存储',
+      running: '进行中的任务',
+      runningDescription:
+        '随任务推进更新数值，并说明这个数字统计的是什么；同时保留可操作的按钮，让用户能够重新开始或重置。',
+      importLabel: '正在导入 {{file}}',
+      importRunning: '已导入 {{rows}} / {{total}} 行。',
+      importDone: '{{rows}} 行已全部导入。',
+      startImport: '开始导入',
+      fulfilment: '多条进度对比',
+      fulfilmentDescription:
+        '堆叠的进度条便于横向比较多条记录；当原始数量比百分比更有意义时，可自行渲染数值。',
+      pickedOf: '已拣 {{picked}} / {{ordered}}',
+    },
+    questionnaire: {
+      title: '问卷',
+      description:
+        '逐题提问，进度、跳过与校验都已内置。适用于引导流程或简短调研；需要用户自行安排节奏填写的内容仍应使用表单。',
+      onboarding: '引导问卷',
+      onboardingDescription:
+        '一道必答单选、一道可选多选和一道开放填空，结束后展示提交结果摘要，而不是回到空白表单。',
+      role: {
+        legend: '团队',
+        title: '哪个团队会使用这个工作区？',
+        description: '我们据此决定默认打开哪些页面。',
+        operations: {
+          label: '仓储运营',
+          hint: '订单的拣货、打包与发货。',
+        },
+        finance: {
+          label: '财务',
+          hint: '开票、收款与对账。',
+        },
+        support: {
+          label: '客户支持',
+          hint: '订单查询、退货与退款。',
+        },
+      },
+      goals: {
+        legend: '目标',
+        title: '最先希望改善什么？',
+        description: '可多选，也可以跳过本题。',
+        fulfilment: {
+          label: '提升履约速度',
+        },
+        errors: {
+          label: '减少拣货差错',
+        },
+        reporting: {
+          label: '让报表更清晰',
+        },
+        cost: {
+          label: '降低运费成本',
+        },
+      },
+      tools: {
+        legend: '现有工具',
+        title: '目前在用什么工具？',
+        description: '选填——有助于我们准备合适的数据导入方案。',
+        placeholder: '电子表格、其他订单系统…',
+      },
+      skip: '跳过',
+      finish: '完成设置',
+      completedTitle: '设置已保存',
+      startOver: '重新填写问卷',
+      shortcuts: '键盘快捷键',
+      shortcutsDescription:
+        '字母快捷键让用户无需使用鼠标即可作答；适合每个选项都能单行显示的短列表。',
+      source: {
+        title: '您是通过什么渠道了解到我们的？',
+        search: {
+          label: '搜索引擎',
+        },
+        partner: {
+          label: '实施合作伙伴',
+        },
+        conference: {
+          label: '行业会议',
+        },
+        colleague: {
+          label: '同事推荐',
+        },
+      },
+      sourceSaved: '已记录为“{{answer}}”，感谢反馈。',
+      customProgress: '自定义进度',
+      customProgressDescription:
+        '进度的渲染状态提供当前步骤与总步数，足以用分段进度条替代默认的文字计数。',
+      step: '第 {{current}} / {{total}} 步',
+      reminders: {
+        title: '发票催收提醒的发送频率？',
+        daily: {
+          label: '逾期期间每天提醒',
+        },
+        weekly: {
+          label: '每周一次',
+        },
+        never: {
+          label: '不提醒，我们自行跟进',
+        },
+      },
+      format: {
+        title: '月度报表希望以什么形式送达？',
+        csv: {
+          label: 'CSV 附件',
+        },
+        pdf: {
+          label: 'PDF 摘要',
+        },
+        dashboard: {
+          label: '仪表盘链接',
+        },
+      },
+    },
+    radioGroup: {
+      title: '单选组',
+      description:
+        '从少量选项中选择其一，且所有选项同时可见。选项不超过六个、且需要相互比较时使用；更多选项用 Select 更节省版面，互不影响的开关则应使用复选框。',
+      basic: '基础用法',
+      basicDescription:
+        '为每一项配上 Field 标签，让文字也成为点击区域，并预选大多数人会选的选项。',
+      shippingEconomy: '经济 · 5–7 个工作日',
+      shippingStandard: '标准 · 2–3 个工作日',
+      shippingExpress: '特快 · 次个工作日',
+      descriptions: '带说明的选项',
+      descriptionsDescription:
+        '当几个词不足以说清选项差异时，把标签与解释一起放进 FieldContent。',
+      notifyEmail: '每个订单事件',
+      notifyEmailDescription: '下单、发货或退款时各发送一封邮件。',
+      notifyDigest: '每日汇总',
+      notifyDigestDescription: '每天 08:00 汇总前一天的全部动态。',
+      notifyNone: '不发邮件',
+      notifyNoneDescription: '订单事件仅保留在通知中心。',
+      cards: '卡片式选项',
+      cardsDescription:
+        '用 FieldLabel 包裹整个 Field，可让每个选项成为整块可点击的卡片；当选项涉及价格或取舍时尤其值得。',
+      plan: {
+        starter: {
+          name: '入门版',
+          description: '每月最多 500 笔订单，支持一个仓库。',
+        },
+        growth: {
+          name: '成长版',
+          description: '订单量不限，支持三个仓库并开放 API。',
+        },
+        enterprise: {
+          name: '企业版',
+          description: '定制条款、审计日志与专属支持联系人。',
+        },
+      },
+      perMonth: '{{price}} / 月',
+      fieldset: '字段组与受控取值',
+      fieldsetDescription:
+        '带图例的 FieldSet 为整组命名，便于辅助技术识别；当表单其他部分需要随选择变化时，改为受控。',
+      termsLegend: '付款条件',
+      termsDescription: '适用于开给该客户的所有发票。',
+      terms: {
+        net15: 'Net 15',
+        net30: 'Net 30',
+        net60: 'Net 60',
+      },
+      termsSummary: '发票将在开票日后 {{terms}} 到期。',
+      states: '禁用与错误',
+      statesDescription:
+        '取值由别处决定时禁用整组；标记 aria-invalid 时，为整组给出一条错误提示，而不是每个选项一条。',
+      warehouseLegend: '发货仓库',
+      warehouseDescription: '由该客户所在区域的路由规则决定。',
+      refundLegend: '退款方式',
+      refundCredit: '店铺余额',
+      refundOriginal: '原支付方式',
+      refundError: '请选择本次退款的发放方式。',
+    },
+    resizable: {
+      title: '可调整面板',
+      description:
+        '让用户自行决定各个面板的宽窄。适用于列表与详情并排的页面，以及某一侧需要更多空间、而布局无法预判的编辑器。',
+      horizontal: '水平面板',
+      horizontalDescription:
+        '为每个面板设置 defaultSize 与 minSize，这样拖动分隔条时任一面板都不会被压缩到完全消失。',
+      orderList: '订单',
+      vertical: '垂直面板',
+      verticalDescription:
+        '当分栏是上下堆叠时（例如记录概要在上、动态记录在下），将 orientation 设为 vertical。',
+      customerRecord: '客户资料',
+      activity: '动态',
+      nested: '嵌套分组',
+      nestedDescription:
+        '在面板内再放一个面板组即可搭出工作区：左侧是导航，右侧是预览与备注两栏。',
+      navigation: '账务',
+      invoices: '发票',
+      payments: '收款',
+      creditNotes: '红字发票',
+      invoicePreview: '发票预览',
+      collapsible: '可折叠面板',
+      collapsibleDescription:
+        '将侧边面板设为 collapsible，拖过最小宽度即完全收起，再把分隔条拖回来即可展开。',
+      filterHint: '按状态、负责人和到期日筛选发票列表。',
+      resultsHint: '把分隔条拖到左边缘即可隐藏筛选面板。',
+    },
+    scrollArea: {
+      title: '滚动区域',
+      description:
+        '把长列表限制在固定尺寸的容器内，并提供与主题一致的滚动条。适用于页面高度不能继续增长的场景，但它不能替代分页。',
+      vertical: '垂直滚动',
+      verticalDescription:
+        '必须显式设置高度，否则没有可滚动的空间，内容只会一直撑开。',
+      auditTrail: '操作记录',
+      horizontal: '水平滚动',
+      horizontalDescription:
+        '添加 orientation 为 horizontal 的 ScrollBar，并让内部行使用 w-max 自适应宽度，才能产生横向溢出。',
+      list: '用于列表',
+      listDescription:
+        '在分隔列表外套一层滚动区域，较长的成员名单就不会把页面其余内容往下挤。',
+      prose: '长篇文本',
+      proseDescription:
+        '条款、政策和发布说明放在可滚动的容器里比放在链接后面更好读，因为读者不会离开当前页面。',
+      termsTitle: '标准供货条款',
+    },
+    select: {
+      title: '选择器',
+      description:
+        '从一组已知且不长的选项中选择一个值。当用户更愿意输入而不是翻找时改用组合框；当所有选项都应始终可见时改用单选按钮。',
+      basic: '基础用法',
+      basicDescription:
+        '把选项通过 items 传给 Select，触发器才能显示所选项的文字；再加一个值为 null 的条目作为占位提示。',
+      groups: '分组',
+      groupsDescription:
+        '用 SelectLabel 把相关选项归组并加分隔线，比一长串按字母排列的列表更容易扫读。',
+      teamSales: '销售',
+      teamSupport: '客服',
+      disabledItem: '禁用选项',
+      disabledItemDescription:
+        '把暂不可用的选项保留在列表中并置为禁用，让用户知道它确实存在，而不是怀疑它去哪了。',
       shippingMethod: '配送方式',
       shippingStandard: '标准配送',
-      shippingStandardHint: '3 到 5 个工作日送达。',
       shippingExpress: '加急配送',
-      shippingExpressHint: '次个工作日 18:00 前送达。',
-      shippingOvernight: '隔夜达',
-      shippingOvernightHint: '16:00 前下单，次日 09:00 前送达。',
-      errors: '错误信息',
-      errorsDescription:
-        'FieldError 可以渲染单条消息，也可以在多条规则同时失败时渲染列表。请在 Field 上设置 data-invalid，在控件上设置 aria-invalid。',
-      password: '密码',
-      passwordTooShort: '至少需要 12 个字符。',
-      passwordNeedsNumber: '需要包含数字。',
-      passwordNeedsSymbol: '需要包含符号。',
-    },
-    input: {
-      title: '输入框',
-      description:
-        '单行文本输入框。设置 type，浏览器才会提供合适的键盘、校验和自动填充；搭配 Field 来承载标签、提示和错误信息。',
-      types: '类型',
-      typesDescription:
-        'type 不是装饰：它会改变软键盘、浏览器提供的自动填充项，以及该字段报告的值。',
-      namePlaceholder: 'Ava Chen',
-      emailPlaceholder: 'ava.chen@northwind.example',
-      password: '密码',
-      passwordPlaceholder: '至少 12 个字符',
-      website: '网址',
-      search: '搜索',
-      field: '搭配标签与提示',
-      fieldDescription:
-        'Field 提供标签、说明和错误插槽，并为屏幕阅读器把三者与输入框关联起来。',
-      companyName: '公司名称',
-      companyPlaceholder: 'Northwind Traders',
-      companyHint: '将按填写内容原样显示在发票上。',
-      taxId: '税号',
-      taxIdHint: '欧盟境内客户必填。',
-      states: '状态',
-      statesDescription:
-        'disabled 让字段不参与表单提交，readOnly 仍会提交其值，aria-invalid 搭配 data-invalid 则呈现错误样式。',
-      disabled: '订单号',
-      disabledHint: '订单创建时自动生成。',
-      readOnly: '客户编号',
-      readOnlyHint: '随表单提交，但不可编辑。',
-      emailInvalid: '这看起来不是一个有效的邮箱地址。',
-      file: '文件选择',
-      fileDescription:
-        'accept 把选择器限定在你确实能处理的格式。它只是提示，服务端仍需校验实际收到的文件。',
-      attachment: '已签收送货单',
-      attachmentHint: '支持 PDF、PNG 或 JPG，最大 10 MB。',
-      controlled: '受控',
+      shippingSameDay: '当日速递',
+      shippingPickup: '仓库自提',
+      controlled: '受控用法',
       controlledDescription:
-        '当你需要规范化或限制用户输入时，把值放在 state 里；同时在元素上保留 maxLength，让浏览器一起约束。',
-      reference: '采购单编号',
-      referenceHint: '仅限字母、数字和连字符。',
+        '当页面其他部分需要随之变化时，用 state 保存取值。onValueChange 可能返回 null，记得回退到一个可接受的值。',
+      termsPrepaid: '先款后货',
+      termsNet14: '14 天账期',
+      termsNet30: '30 天账期',
+      termsNet60: '60 天账期',
+      dueHint: '该账户的发票按「{{terms}}」开具。',
+      inForm: '表单中使用',
+      inFormDescription:
+        '放在 Field 中时给触发器加上 w-full，让它与上下的输入框对齐，并用 htmlFor 关联标签。',
+      region: '开票区域',
+      regionHint: '税务规则与发票模板随开票区域而定。',
     },
     separator: {
       title: '分隔线',
@@ -1808,6 +2943,253 @@ const zhCN: AppResource = {
       recentOrders: '最近订单',
       recentOrdersDescription: '所有客户最近下的五笔订单。',
       order: '订单号',
+    },
+    tabs: {
+      title: '标签页',
+      description:
+        '把同一条记录拆成几个可切换的视图。各面板之间应是并列关系；如果点击后会跳到别处，那应该是链接而不是标签页。',
+      basic: '基础用法',
+      basicDescription:
+        '每个触发器的 value 要与对应面板一致，并用 defaultValue 指定用户最先需要看到的视图。',
+      summary: '概要',
+      summaryDescription: '订单金额、客户以及负责人。',
+      items: '商品',
+      itemsDescription: '订单中的全部商品及其数量和行金额。',
+      shipping: '配送',
+      shippingDescription: '订单发往何处，以及预计何时送达。',
+      variants: '样式变体',
+      variantsDescription:
+        '默认样式带底色轨道；line 变体用下划线标示当前标签，更适合外层已经有卡片的页面。',
+      openInvoices: '未结清',
+      overdueInvoices: '已逾期',
+      invoiceCount: '该视图下共 {{count}} 张发票',
+      withIcons: '带图标',
+      withIconsDescription:
+        '文字前加图标能帮用户再次找到某个标签，前提是每个标签都有图标。',
+      fulfilment: '备货',
+      fulfilmentBody: '已在奥克兰仓库完成拣货和打包。',
+      delivery: '配送',
+      deliveryBody: '已交承运商，物流单号已发送给客户。',
+      billing: '账务',
+      billingBody: '发货时开票，已用预留银行卡付款。',
+      vertical: '纵向排列',
+      verticalDescription:
+        '当标签文字较长，或这组标签更像设置菜单而非一排视图时，把 orientation 设为 vertical。',
+      companyProfile: '公司资料',
+      contacts: '联系人',
+      paymentTerms: '付款条件',
+      paymentTermsBody: '自开票日起 30 天账期，每年复核一次。',
+      disabled: '禁用标签',
+      disabledDescription:
+        '内容尚不存在的标签应置为禁用，而不是直接移除，以免页面结构发生变化。',
+      invoice: '发票',
+      creditNote: '红字发票',
+      creditNoteBody: '该订单尚未开具红字发票。',
+    },
+    textarea: {
+      title: '多行文本框',
+      description:
+        '用于收集超过一行的文本。按预期回答的篇幅设定尺寸；姓名、单号这类单行取值请使用 Input。',
+      basic: '基础用法',
+      basicDescription:
+        '控件会随内容自动增高，因此设置宽度而非高度，让行数跟随用户的输入。',
+      notePlaceholder: '为这张订单添加备注…',
+      withLabel: '带标签',
+      withLabelDescription:
+        '用 Field 包裹，使标签、提示与控件和表单其余部分对齐，并让 htmlFor 指向文本框的 id。',
+      deliveryInstructions: '配送说明',
+      deliveryPlaceholder: '门禁密码、卸货月台、希望的送达时段…',
+      deliveryHint: '会打印在装箱单上并提供给承运商。',
+      states: '禁用与校验失败',
+      statesDescription:
+        '在 Field 上同步 data-disabled 或 data-invalid，标签和提示才会随控件一起变灰或变红。',
+      archivedNote: '归档说明',
+      archivedHint: '已归档的订单为只读。',
+      refundReason: '退款原因',
+      refundPlaceholder: '这张订单为什么要退款？',
+      refundRequired: '开具红字发票前必须填写退款原因。',
+      counter: '带字数统计',
+      counterDescription:
+        '存在长度上限时设置 maxLength 并显示剩余字数；让用户撞上才发现的上限就是陷阱。',
+      internalNote: '内部备注',
+      remaining: '还可输入 {{remaining}} 个字符，上限 {{limit}}',
+      inForm: '表单中使用',
+      inFormDescription:
+        '把文本框放在表单组最后、操作按钮放在其下方，用户写完后正好落到按钮上。',
+      messageToCustomer: '给客户的留言',
+      messagePlaceholder: '填写随发货通知一起发出的留言…',
+      messageHint: '订单发货时发送至 {{email}}。',
+    },
+    toast: {
+      title: '轻提示',
+      description:
+        '在不打断当前操作的前提下告知结果。内容控制在一句话以内，绝不要在其中让用户做决定——那属于对话框。',
+      basic: '基础用法',
+      basicDescription:
+        '在页面或布局中挂载一次 Toaster，然后在任意位置调用 toast.add；管理器是模块级单例。',
+      savedTitle: '订单已保存',
+      savedBody: 'ORD-1042 刚刚更新成功。',
+      types: '类型',
+      typesDescription:
+        '用 type 选择状态图标。失败用 error，只有在需要用户采取行动时才用 warning。',
+      type: {
+        success: '成功',
+        info: '信息',
+        warning: '警告',
+        error: '错误',
+      },
+      headline: {
+        success: '发票已发送',
+        info: '配送时间已调整',
+        warning: '库存不足',
+        error: '发票发送失败',
+      },
+      body: {
+        success: 'INV-2041 已邮件发送给 Northwind Trading。',
+        info: 'ORD-1042 的送达日期由 9 月 24 日改为 9 月 26 日。',
+        warning: '奥克兰仓库的 POS Terminal Pro 仅剩 3 台。',
+        error: '该客户未登记开票邮箱。',
+      },
+      withAction: '带操作按钮',
+      withActionDescription:
+        '通过 actionProps 提供一次撤回机会，并在回调里用 add 返回的 id 关闭提示。',
+      archiveOrder: '归档订单',
+      archivedTitle: '订单 {{number}} 已归档',
+      archivedBody: '它不会再出现在未结订单列表中。',
+      undo: '撤销',
+      longDescription: '较长的说明',
+      longDescriptionDescription:
+        '当用户需要这些细节才能解决问题时，设置高优先级并把 timeout 设为 0，让提示停留等待他们阅读。',
+      retryPayment: '重新扣款',
+      paymentFailedTitle: '扣款被拒绝',
+      paymentFailedBody:
+        '尾号 4242 的银行卡因已过期被发卡行拒绝。请向客户索取新卡，或按 30 天账期开票并在结清后重新扣款。',
+      promise: '跟随异步任务',
+      promiseDescription:
+        'toast.promise 让同一条提示贯穿加载、成功与失败三个阶段，慢任务不会接连弹出三条提示。',
+      exportInvoices: '导出发票',
+      exportLoading: '正在导出发票…',
+      exportSuccess: '已导出 {{count}} 张发票为 CSV。',
+      exportError: '导出失败，未下载任何文件。',
+    },
+    toggle: {
+      title: '开关按钮',
+      description:
+        '一个可保持按下状态的按钮，适合按下即刻生效的选项。需要用户保存的设置请用 Switch，表单内的选项请用 Checkbox。',
+      basic: '基础用法',
+      basicDescription:
+        '默认变体在未按下时是透明的；outline 变体保留边框，在空白背景上更像一个控件。',
+      followCustomer: '关注',
+      priorityAccount: '重点客户',
+      sizes: '尺寸',
+      sizesDescription:
+        '尺寸要与周围元素协调：表头旁用 sm，工具栏用 default，单独出现时用 lg。',
+      showArchived: '显示已归档',
+      iconOnly: '仅图标',
+      iconOnlyDescription:
+        '仅有图标的开关必须提供 aria-label，否则读屏软件无法说明它控制的是什么。',
+      controlled: '受控用法',
+      controlledDescription:
+        '当页面需要响应按下状态时把它保存在 state 中，并在旁边显示结果，让效果可见。',
+      onlyMyOrders: '只看我的订单',
+      resultsMine: '分配给你的订单共 {{count}} 张',
+      resultsAll: '团队订单共 {{count}} 张',
+      states: '状态',
+      statesDescription:
+        '让图标和文字随状态变化，说明当前的实际情况；选项不可用时将其禁用。',
+      notificationsOn: '邮件通知已开启',
+      notificationsOff: '邮件通知已关闭',
+      smsAlerts: '短信提醒',
+    },
+    toggleGroup: {
+      title: '开关按钮组',
+      description:
+        '共用一个取值的一组开关按钮，用于切换视图或筛选列表。若选择会整块替换内容面板，请改用标签页。',
+      single: '单选',
+      singleDescription:
+        '不加 multiple 时，按下一项会释放其他项，这正是视图切换器需要的行为。',
+      tableView: '表格',
+      boardView: '看板',
+      calendarView: '日历',
+      multiple: '多选',
+      multipleDescription:
+        '加上 multiple 后取值为所有被按下的项，这组按钮便成为一组筛选条件。',
+      filterCount: '已应用 {{count}} 个状态筛选',
+      noFilters: '显示全部状态',
+      joined: '连成一体',
+      joinedDescription:
+        '把 spacing 设为 0 可让各项紧贴成分段控件；仅图标的项仍要保留 aria-label。',
+      alignLeft: '左对齐',
+      alignCenter: '居中对齐',
+      alignRight: '右对齐',
+      vertical: '纵向排列',
+      verticalDescription:
+        '放在侧栏或表单旁时纵向堆叠，并留一点间距以保持可读性。',
+      channelEmail: '邮件',
+      channelSms: '短信',
+      channelWebhook: 'Webhook',
+      disabled: '禁用某一项',
+      disabledDescription:
+        '数据尚未覆盖的时间范围应置为禁用而不是隐藏，这样数据补齐后按钮组的结构不会变化。',
+    },
+    tooltip: {
+      title: '文字提示',
+      description:
+        '在悬停和聚焦时说明控件的名称或补充一句提示。它绝不能是信息的唯一出处，因为触屏用户可能永远看不到。',
+      basic: '基础用法',
+      basicDescription:
+        '在页面外层挂载一个 TooltipProvider，然后通过 render 把真正的控件传给触发器，使其保留自身样式与语义。',
+      exportHint: '把当前视图导出为 CSV',
+      sides: '方位',
+      sidesDescription: '用 side 让提示避开屏幕边缘或控件旁边的其他元素。',
+      side: {
+        top: '上方',
+        right: '右侧',
+        bottom: '下方',
+        left: '左侧',
+      },
+      lastSynced: '上次同步于 {{time}}',
+      shortcut: '带快捷键',
+      shortcutDescription:
+        '在提示内容里放一个 Kbd 是告知快捷键最省事的做法，因为它恰好出现在用户正看的位置。',
+      saveHint: '保存更改',
+      refreshHint: '重新加载订单列表',
+      iconButtons: '图标按钮',
+      iconButtonsDescription:
+        '图标按钮两者都需要：给辅助技术的 aria-label，以及给其他所有人的文字提示。',
+      printInvoice: '打印发票',
+      downloadPdf: '下载 PDF',
+      shareInvoice: '复制分享链接',
+      disabled: '用于禁用的控件',
+      disabledDescription:
+        '禁用的按钮不会触发指针事件，因此用 span 包裹并把 span 作为触发器——同时说明为什么被禁用。',
+      deleteInvoice: '删除发票',
+      deleteBlocked: '已付款的发票不能删除，请改开红字发票。',
+    },
+    typography: {
+      title: '排版',
+      description:
+        '面向产品中仍然需要的长篇文本：政策条款、发布说明、打印报表。用这些排版原语组合内容，而不是在每个页面重复书写工具类。',
+      article: '完整文章',
+      articleDescription:
+        '按阅读顺序组合使用时，这些原语自带垂直间距；为文章设置最大宽度，行长才便于阅读。',
+      headings: '标题',
+      headingsDescription:
+        '每页只用一个 H1，之后逐级下降不要跳级——读屏软件正是依靠这份大纲来导航的。',
+      body: '正文',
+      bodyDescription:
+        'Lead 用于开篇，P 承载主体，Large 与 Small 用于突出数字及其说明，Muted 放置无需细读的脚注。',
+      lists: '列表',
+      listsDescription:
+        '默认是无序列表；当顺序有意义时（例如需要逐步执行的操作流程）传入 ordered。',
+      unordered: '发送发票前',
+      ordered: '办理退款',
+      table: '表格',
+      tableDescription:
+        '用于文章内固定的对比。若列表需要排序、筛选或翻页，那应该用 DataTable，而不是这个。',
+      inline: '行内代码',
+      inlineDescription:
+        '把命令、字段名和存储值标记出来，读者才能分清哪些要原样输入、哪些只是叙述文字。',
     },
   },
 };

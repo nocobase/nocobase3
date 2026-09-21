@@ -250,6 +250,222 @@ const enUS = {
   },
   examples: {
     title: 'Examples',
+    customers: {
+      title: 'Customers',
+      description:
+        'A CRM directory of accounts: a searchable card grid that switches to a data table, a hover card for contact details, a profile sheet with tabs and a dialog form that adds a record, all on mock data.',
+      import: 'Import',
+      addCustomer: 'Add customer',
+      addDescription:
+        'Create the account by hand, for a customer who came in through a channel the system does not import.',
+      searchPlaceholder: 'Search name, company or tag',
+      allTiers: 'All tiers',
+      matchCount: '{{count}} customers',
+      viewLabel: 'Layout',
+      gridView: 'Card grid',
+      tableView: 'Table',
+      emptyTitle: 'No customer matches',
+      emptyDescription:
+        'Nothing matches this search and tier. Clear the filters to see the whole directory.',
+      selectAll: 'Select every row',
+      selectRow: 'Select this row',
+      columns: {
+        name: 'Name',
+        company: 'Company',
+        tier: 'Tier',
+        status: 'Status',
+        orders: 'Orders',
+        lifetimeValue: 'Lifetime value',
+        lastActiveAt: 'Last active',
+      },
+      tier: {
+        enterprise: 'Enterprise',
+        business: 'Business',
+        starter: 'Starter',
+      },
+      status: {
+        active: 'Active',
+        inactive: 'Inactive',
+        pending: 'Pending',
+      },
+      tabs: {
+        details: 'Details',
+        activity: 'Activity',
+        notes: 'Notes',
+      },
+      activity: {
+        order: 'Order',
+        email: 'Email',
+        call: 'Call',
+        meeting: 'Meeting',
+        note: 'Note',
+      },
+      location: 'Location',
+      since: 'Customer since',
+      customerSince: 'Customer since {{date}}',
+      noActivity: 'Nothing has happened on this account yet.',
+      noNotes: 'No one has left a note on this account yet.',
+      openProfile: 'Open profile',
+      copyEmail: 'Copy email',
+      sendEmail: 'Send an email',
+      jobTitle: 'Job title',
+      city: 'City',
+      country: 'Country',
+      notePlaceholder: 'How this account came in, and who owns it.',
+      created: 'Customer added',
+    },
+    dashboard: {
+      title: 'Dashboard',
+      description:
+        'The operations overview a team opens every morning: trend cards, revenue and channel charts over a selectable range, a recent order table, a team activity feed and quarterly targets, all on mock data.',
+      rangeLabel: 'Reporting range',
+      range: {
+        '3m': '3 months',
+        '6m': '6 months',
+        '12m': '12 months',
+      },
+      tabs: {
+        overview: 'Overview',
+        analytics: 'Analytics',
+      },
+      stats: {
+        revenue: 'Revenue',
+        orders: 'Orders',
+        newCustomers: 'New customers',
+        visitors: 'Visitors',
+        versusPrevious: 'vs the previous {{months}} months',
+      },
+      series: {
+        revenue: 'Revenue',
+        target: 'Target',
+        amount: 'Sales',
+        newCustomers: 'New',
+        returningCustomers: 'Returning',
+        visitors: 'Visitors',
+        sessions: 'Sessions',
+      },
+      channel: {
+        web: 'Web',
+        store: 'Store',
+        partner: 'Partner',
+        phone: 'Phone',
+      },
+      device: {
+        desktop: 'Desktop',
+        mobile: 'Mobile',
+        tablet: 'Tablet',
+      },
+      status: {
+        pending: 'Pending',
+        processing: 'Processing',
+        shipped: 'Shipped',
+        completed: 'Completed',
+        refunded: 'Refunded',
+      },
+      revenueChart: {
+        title: 'Revenue against target',
+        description:
+          'Monthly revenue over the last {{months}} months, with the plan as a dashed line.',
+      },
+      channelChart: {
+        title: 'Sales by channel',
+        description: "Where this year's revenue came from.",
+      },
+      recentOrders: {
+        title: 'Recent orders',
+        description: 'The last orders taken, newest first.',
+        number: 'Order',
+      },
+      activity: {
+        title: 'Team activity',
+        description: 'What the team has been doing today.',
+        minutesAgo: '{{count}} min ago',
+        hoursAgo: '{{count}} h ago',
+        daysAgo: '{{count}} d ago',
+        kind: {
+          order: 'recorded an order',
+          shipment: 'shipped an order',
+          customer: 'added a customer',
+          refund: 'issued a refund',
+          note: 'left a note on',
+          target: 'closed the target for',
+        },
+      },
+      targets: {
+        title: 'Quarterly targets',
+        description: 'How the quarter is tracking with three weeks to go.',
+        revenue: 'Revenue',
+        orders: 'Orders',
+        customers: 'New customers',
+        satisfaction: 'Satisfaction',
+        progress: '{{current}} of {{target}}',
+        footer: 'Targets are reviewed at the start of every quarter.',
+      },
+      customerChart: {
+        title: 'New and returning customers',
+        description: "How much of each month's demand comes back on its own.",
+      },
+      visitorChart: {
+        title: 'Visitors',
+        description: 'Sessions on the storefront, by month.',
+      },
+      deviceChart: {
+        title: 'Sessions by device',
+        description: 'Which device visitors browse the storefront on.',
+      },
+    },
+    inbox: {
+      title: 'Inbox',
+      description:
+        'A customer-support inbox: a resizable conversation list beside the thread, with day separators, attachments and a reply composer, all on mock data.',
+      searchPlaceholder: 'Search people, companies or subjects',
+      conversationCount: '{{count}} conversations',
+      unreadCount: '{{count}} unread',
+      noConversations: 'No conversations match this filter.',
+      noSelection: 'Select a conversation to read the thread.',
+      status: {
+        open: 'Open',
+        pending: 'Pending',
+        closed: 'Closed',
+      },
+      channel: {
+        email: 'Email',
+        chat: 'Chat',
+        phone: 'Phone',
+      },
+      attachmentKind: {
+        pdf: 'PDF',
+        image: 'Image',
+        spreadsheet: 'Spreadsheet',
+      },
+      assignedTo: 'Assigned to {{name}}',
+      unassigned: 'Unassigned',
+      assign: 'Assign to',
+      snooze: 'Snooze until',
+      snoozeOption: {
+        oneHour: 'In one hour',
+        tomorrow: 'Tomorrow morning',
+        nextWeek: 'Next week',
+      },
+      snoozed: 'Conversation snoozed',
+      closeConversation: 'Close conversation',
+      closed: 'Conversation closed',
+      star: 'Star this conversation',
+      addTag: 'Tags on this conversation',
+      suggestReply: 'Draft a reply for me',
+      scrollToLatest: 'Scroll to the latest message',
+      composerLabel: 'Reply',
+      composerPlaceholder: 'Reply to {{name}}…',
+      attachFile: 'Attach a file',
+      insertEmoji: 'Insert an emoji',
+      useTemplate: 'Insert a saved reply',
+      sendHint: 'to send',
+      send: 'Send',
+      replySent: 'Reply sent',
+      markAllRead: 'Mark all read',
+      allMarkedRead: 'Every conversation is marked read',
+      refreshed: 'Inbox refreshed',
+    },
     orders: {
       title: 'Orders',
       description:
@@ -302,37 +518,448 @@ const enUS = {
       cancelled: 'Order cancelled',
       created: 'Order created',
     },
+    productForm: {
+      title: 'New product',
+      description:
+        'The product editor of a catalogue: a two-column form with details, pricing, inventory and media on the left, status, organization and a danger zone on the right, validated on submit and saved with a sticky footer bar.',
+      fillSample: 'Fill sample',
+      save: 'Save product',
+      saveHint: 'Save with',
+      status: {
+        draft: 'Draft',
+        active: 'Active',
+        archived: 'Archived',
+      },
+      category: {
+        furniture: 'Furniture',
+        electronics: 'Electronics',
+        lighting: 'Lighting',
+        accessories: 'Accessories',
+        storage: 'Storage',
+      },
+      pricingModel: {
+        'one-time': 'One-time purchase',
+        subscription: 'Subscription',
+        usage: 'Usage based',
+      },
+      pricingModelHint: {
+        'one-time': 'The customer pays once and keeps the product.',
+        subscription: 'The customer is billed every month until they cancel.',
+        usage: 'The customer is billed for what they consume each month.',
+      },
+      errors: {
+        name: {
+          required: 'A product needs a name.',
+          invalid: 'This name cannot be used.',
+        },
+        price: {
+          required: 'Enter a price.',
+          invalid: 'The price must be a number above zero.',
+        },
+        quantity: {
+          required: 'Enter a quantity.',
+          invalid: 'The quantity must be a whole number of zero or more.',
+        },
+      },
+      details: {
+        title: 'Details',
+        description: 'What the product is called and how shoppers find it.',
+        namePlaceholder: 'Oak standing desk 140 cm',
+        descriptionPlaceholder: 'Materials, dimensions and what is in the box.',
+        descriptionHint: 'Shown on the product page and in search results.',
+        brand: 'Brand',
+        brandPlaceholder: 'Search brands',
+        brandEmpty: 'No brand matches that search.',
+        brandHint: 'Type to filter, or leave empty for an unbranded product.',
+        sku: 'SKU',
+        skuHint: 'Must be unique across the catalogue.',
+        suggest: 'Suggest',
+        removeTag: 'Remove the tag {{tag}}',
+        tagPlaceholder: 'Add a tag and press Enter',
+        tagHint: 'Tags drive the filters on the storefront.',
+      },
+      pricing: {
+        title: 'Pricing',
+        description: 'What the product costs and how it is billed.',
+        compareAt: 'Compare-at price',
+        compareAtHint: 'Shown struck through next to the price.',
+        discount: 'Discount',
+        percent: '{{value}}%',
+        effective: 'Customers pay {{amount}}.',
+        noPrice: 'Enter a price to see what customers pay.',
+        taxInclusive: 'Price includes tax',
+        taxInclusiveHint: 'Turn off to add tax at checkout.',
+        model: 'Pricing model',
+      },
+      inventory: {
+        title: 'Inventory',
+        description: 'How much is in stock and where it ships from.',
+        warehouse: 'Warehouse',
+        trackStock: 'Track stock for this product',
+        trackStockHint:
+          'Sales reduce the quantity and the product hides at zero.',
+        lowStock: 'Low stock threshold',
+        lowStockHint: 'Alert the team when the quantity drops to this number.',
+      },
+      media: {
+        title: 'Media',
+        description: 'Photos and documents shown on the product page.',
+        dropTitle: 'Drop images here',
+        dropHint: 'JPG or PNG, up to 5 MB each.',
+        noFiles: 'No files attached yet.',
+        removeFile: 'Remove {{file}}',
+        queueEmpty: 'Every sample file has been added.',
+      },
+      statusCard: {
+        description: 'Whether the product is visible and when it goes live.',
+        publishAt: 'Publish date',
+        publishPlaceholder: 'Pick a date',
+        publishOn: 'Goes live on {{date}}.',
+        publishNow: 'Goes live as soon as it is set to active.',
+      },
+      organization: {
+        title: 'Organization',
+        description: 'The collections this product appears in.',
+        itemCount: '{{count}} products',
+      },
+      danger: {
+        title: 'Danger zone',
+        description: 'Discarding clears every field on this form.',
+        discard: 'Discard draft',
+        confirmTitle: 'Discard this draft?',
+        confirmDescription:
+          'Every field is cleared and the attached files are removed. This cannot be undone.',
+        discarded: 'Draft discarded',
+      },
+      toast: {
+        invalidTitle: 'The form has errors',
+        invalidDescription: 'Fix the highlighted fields and save again.',
+        savedTitle: 'Product saved',
+        savedDescription: '{{name}} is stored as a draft.',
+      },
+    },
+    schedule: {
+      title: 'Team schedule',
+      description:
+        'A team calendar: a month picker beside a time-slot agenda, events tinted by category with details in a popover, and a drawer for creating or editing one.',
+      view: {
+        day: 'Day',
+        week: 'Week',
+        month: 'Month',
+      },
+      category: {
+        planning: 'Planning',
+        review: 'Review',
+        customer: 'Customer',
+        focus: 'Focus time',
+        social: 'Social',
+      },
+      legend: 'Categories',
+      eventCount: '{{count}} events',
+      dayEmpty: 'Nothing scheduled on this day.',
+      monthEmpty: 'No events this month.',
+      simulateLoading: 'Simulate loading',
+      newEvent: 'New event',
+      editEvent: 'Edit event',
+      drawerDescription:
+        'Everything stays in the browser; saving only updates this page.',
+      titlePlaceholder: 'Weekly planning',
+      notesPlaceholder:
+        'Agenda, links, anything the attendees should read first…',
+      allDay: 'All day',
+      startsAt: 'Starts',
+      endsAt: 'Ends',
+      attendees: 'Attendees',
+      attendeesPlaceholder: 'Add someone',
+      noAttendees: 'Nobody matches that name.',
+      attendeeCount: '{{count}} people invited',
+      eventCreated: 'Event created',
+      eventUpdated: 'Event updated',
+      milestones: 'Upcoming milestones',
+      milestonesDescription:
+        'The dates the team is working towards over the next few weeks.',
+      milestoneOwner: 'Owned by {{name}}',
+    },
+    survey: {
+      title: 'Onboarding survey',
+      description:
+        'A customer-onboarding questionnaire: one question at a time with progress, skip and validation, a summary table on completion, and an explainer card with an FAQ beside it.',
+      formTitle: 'Tell us about your team',
+      formDescription:
+        'Five short questions. Your answers shape the workspace we prepare for you.',
+      progress: 'Question {{current}} of {{total}}',
+      skip: 'Skip',
+      skipped: 'Skipped',
+      startOver: 'Start over',
+      submitted: 'Survey submitted',
+      submittedDescription:
+        'Your onboarding specialist will follow up within one business day.',
+      completeTitle: 'Thanks — that is everything',
+      completeDescription:
+        'Here is what you told us. Start over to run through the questions again.',
+      summaryQuestion: 'Question',
+      summaryAnswer: 'Answer',
+      ratingLabel: 'Rate {{score}} out of 5',
+      ratingValue: '{{score}} out of 5',
+      seatsBadge: '{{count}} people',
+      questions: {
+        role: {
+          title: 'What best describes your role?',
+          description: 'This decides which sample screens we set up first.',
+          operations: 'Operations',
+          operationsHint: 'Orders, fulfilment and day-to-day scheduling',
+          finance: 'Finance',
+          financeHint: 'Invoicing, reconciliation and reporting',
+          engineering: 'Engineering',
+          engineeringHint: 'Integrations, data models and deployment',
+          founder: 'Founder or general management',
+          founderHint: 'A bit of everything, with an eye on the numbers',
+        },
+        goals: {
+          title: 'What do you want to set up first?',
+          description:
+            'Choose as many as apply. We will prepare a starting point for each.',
+          orders: 'Order tracking',
+          inventory: 'Inventory and stock levels',
+          reporting: 'Dashboards and reporting',
+          automation: 'Automated approvals and reminders',
+          portal: 'A portal for customers',
+        },
+        experience: {
+          title: 'How familiar is your team with tools like this?',
+          description:
+            'There is no wrong answer — it only changes how much hand-holding we plan for.',
+          low: 'Completely new',
+          high: 'We have built one before',
+        },
+        teamSize: {
+          title: 'How many people will use the workspace?',
+          description:
+            'An estimate is fine; you can add or remove seats at any time.',
+          low: '1',
+          high: '200+',
+        },
+        notes: {
+          title: 'Anything else we should know?',
+          description:
+            'Deadlines, systems you need to connect to, or anything unusual about your setup.',
+          placeholder: 'We migrate from a spreadsheet in November…',
+        },
+      },
+      about: {
+        title: 'About this survey',
+        heading: 'Why we ask',
+        body: 'The answers go straight into the workspace we prepare before your kickoff call, so the first screen you open already has your data model in it.',
+        benefitPlan: 'A rollout plan matched to your team size',
+        benefitTemplates: 'Starter pages for the areas you picked',
+        benefitSession:
+          'A kickoff session with someone who has read your answers',
+        footnote:
+          'Takes about two minutes. Nothing is shared outside your account team.',
+        hint: 'Press a letter key to pick an option, Enter to continue.',
+      },
+      faq: {
+        title: 'Common questions',
+        description: 'What people usually ask before filling this in.',
+        timeQuestion: 'How long does this take?',
+        timeAnswer:
+          'About two minutes. Five questions, and every one of them can be skipped.',
+        privacyQuestion: 'Who sees my answers?',
+        privacyAnswer:
+          'Only the onboarding specialist assigned to your account. Nothing here is used for marketing.',
+        changeQuestion: 'Can I change an answer later?',
+        changeAnswer:
+          'Yes. Use the back button while you are here, or tell your specialist on the kickoff call.',
+        skipQuestion: 'What if I do not know yet?',
+        skipAnswer:
+          'Skip the question. An unanswered question is a useful signal too, and we will follow up on it.',
+      },
+    },
+    teamSettings: {
+      title: 'Team settings',
+      description:
+        'The workspace settings screen of a small team: four tabs over one page, with a general form, a member table with roles and invitations, grouped notification switches, and plan and invoice billing.',
+      breadcrumb: {
+        workspace: 'Workspace',
+        team: 'Team',
+      },
+      notice: {
+        title: 'An invoice is still open',
+        description:
+          '{{amount}} is outstanding. Settle it before the next billing run so the workspace keeps its seats.',
+        action: 'Go to billing',
+      },
+      tabs: {
+        general: 'General',
+        members: 'Members',
+        notifications: 'Notifications',
+        billing: 'Billing',
+      },
+      general: {
+        title: 'Workspace',
+        description:
+          'How the workspace is named and where its working day starts.',
+        logo: 'Workspace logo',
+        logoHint: 'A square PNG or SVG of at least 256 pixels.',
+        logoUploaded: 'Logo uploaded',
+        name: 'Workspace name',
+        slug: 'Workspace address',
+        slugHint:
+          'Changing the address breaks links people have already shared.',
+        timezone: 'Time zone',
+        timezoneHint: 'Reports, digests and schedules follow this time zone.',
+        saved: 'Settings saved',
+        savedDescription: '{{name}} is up to date.',
+      },
+      members: {
+        title: 'Members',
+        description: '{{count}} people can open this workspace.',
+        invite: 'Invite member',
+        inviteTitle: 'Invite a member',
+        inviteDescription:
+          'They receive an email with a link that expires in seven days.',
+        sendInvite: 'Send invitation',
+        invited: 'Invitation sent',
+        joined: 'Joined',
+        roleFor: 'Role for {{name}}',
+        roleChanged: 'Role updated',
+        roleChangedDescription: '{{name}} is now {{role}}.',
+        removeMember: 'Remove {{name}}',
+        removeTitle: 'Remove this member?',
+        removeDescription:
+          '{{name}} loses access immediately. Their comments and history stay in the workspace.',
+        removed: 'Member removed',
+      },
+      role: {
+        owner: 'Owner',
+        admin: 'Admin',
+        editor: 'Editor',
+        viewer: 'Viewer',
+      },
+      roleHint: {
+        owner: 'Full control, including billing and deleting the workspace.',
+        admin: 'Manages members and settings, but not billing.',
+        editor: 'Creates and edits content across the workspace.',
+        viewer: 'Reads content and leaves comments.',
+      },
+      memberStatus: {
+        active: 'Active',
+        invited: 'Invited',
+        suspended: 'Suspended',
+      },
+      notifications: {
+        title: 'Notifications',
+        description:
+          'Which events reach you by email. Each person sets their own.',
+        advanced: 'Advanced',
+      },
+      notificationGroups: {
+        activity: 'Activity',
+        security: 'Security',
+        billing: 'Billing',
+      },
+      notificationItems: {
+        mentions: {
+          label: 'Mentions',
+          hint: 'Someone writes your name in a comment.',
+        },
+        comments: {
+          label: 'Comments',
+          hint: 'A new comment lands on something you follow.',
+        },
+        assignments: {
+          label: 'Assignments',
+          hint: 'A task is handed to you.',
+        },
+        weeklyDigest: {
+          label: 'Weekly digest',
+          hint: 'A Monday summary of what moved last week.',
+        },
+        newSignIn: {
+          label: 'New sign-in',
+          hint: 'Your account is used from an unrecognized device.',
+        },
+        passwordChanged: {
+          label: 'Password changed',
+          hint: 'Your password or two-factor method is updated.',
+        },
+        apiKeyCreated: {
+          label: 'API key created',
+          hint: 'A new key is issued for this workspace.',
+        },
+        invoiceIssued: {
+          label: 'Invoice issued',
+          hint: 'A new invoice is ready to download.',
+        },
+        paymentFailed: {
+          label: 'Payment failed',
+          hint: 'A charge is declined by the card issuer.',
+        },
+        usageLimit: {
+          label: 'Usage limit',
+          hint: 'Seats or storage pass 90% of the plan.',
+        },
+      },
+      advancedItems: {
+        ownActivity: {
+          label: 'Notify me about my own activity',
+          hint: 'Useful while testing an automation.',
+        },
+        resolvedThreads: {
+          label: 'Keep notifying on resolved threads',
+          hint: 'Otherwise a resolved thread goes quiet.',
+        },
+        batchHourly: {
+          label: 'Batch emails hourly',
+          hint: 'One email per hour instead of one per event.',
+        },
+        quietHours: {
+          label: 'Respect quiet hours',
+          hint: 'Hold everything between 22:00 and 07:00.',
+        },
+      },
+      billing: {
+        trialTitle: 'Your trial is running',
+        trialDescription:
+          'The Team plan is free until {{date}}. Nothing is charged before that date.',
+        plan: 'Plan',
+        planDescription:
+          'Switching takes effect at the start of the next billing period.',
+        perSeat: 'per seat / month',
+        usage: 'Usage',
+        usageDescription: 'What this workspace consumes of its plan.',
+        seats: 'Seats · {{used}} of {{total}}',
+        storage: 'Storage · {{used}} GB of {{total}} GB',
+        invoices: 'Invoices',
+        invoicesDescription: 'The last twelve months, newest first.',
+        invoice: 'Invoice',
+        period: 'Period',
+        downloadInvoice: 'Download invoice {{number}}',
+      },
+      plans: {
+        starter: {
+          name: 'Starter',
+          summary: '{{seats}} seats and {{storage}} GB of storage.',
+        },
+        team: {
+          name: 'Team',
+          summary: '{{seats}} seats, {{storage}} GB of storage and audit logs.',
+        },
+        business: {
+          name: 'Business',
+          summary:
+            '{{seats}} seats, {{storage}} GB of storage and single sign-on.',
+        },
+      },
+      invoiceStatus: {
+        paid: 'Paid',
+        pending: 'Pending',
+        failed: 'Failed',
+      },
+    },
   },
   components: {
     title: 'Components',
-    button: {
-      title: 'Button',
-      description:
-        'Triggers an action. Pick the variant by how much attention the action deserves, and keep one primary button per view.',
-      variants: 'Variants',
-      variantsDescription:
-        'Default for the main action, secondary and outline for supporting actions, ghost for toolbars, destructive for irreversible actions, link for inline navigation.',
-      sizes: 'Sizes',
-      sizesDescription:
-        'Match the surrounding controls: sm inside tables and toolbars, default in forms and dialogs, lg for marketing-style calls to action.',
-      extraSmall: 'Extra small',
-      small: 'Small',
-      default: 'Default',
-      large: 'Large',
-      withIcon: 'With icon',
-      withIconDescription:
-        'Mark the icon with data-icon so the padding on that side tightens.',
-      sendEmail: 'Send email',
-      iconOnly: 'Icon only',
-      iconOnlyDescription:
-        'Icon buttons need an aria-label; there is no visible text to name them.',
-      states: 'States',
-      statesDescription:
-        'Disable while a request is in flight and show a spinner in place of the leading icon.',
-      asLink: 'As a link',
-      asLinkDescription:
-        'Pass an anchor or router Link through render to keep button styling on a real link.',
-    },
     accordion: {
       title: 'Accordion',
       description:
@@ -697,6 +1324,34 @@ const enUS = {
         'Your order left the warehouse today and arrives within two business days.',
       answerAgent:
         'Connecting you to a support agent. The current wait is about two minutes.',
+    },
+    button: {
+      title: 'Button',
+      description:
+        'Triggers an action. Pick the variant by how much attention the action deserves, and keep one primary button per view.',
+      variants: 'Variants',
+      variantsDescription:
+        'Default for the main action, secondary and outline for supporting actions, ghost for toolbars, destructive for irreversible actions, link for inline navigation.',
+      sizes: 'Sizes',
+      sizesDescription:
+        'Match the surrounding controls: sm inside tables and toolbars, default in forms and dialogs, lg for marketing-style calls to action.',
+      extraSmall: 'Extra small',
+      small: 'Small',
+      default: 'Default',
+      large: 'Large',
+      withIcon: 'With icon',
+      withIconDescription:
+        'Mark the icon with data-icon so the padding on that side tightens.',
+      sendEmail: 'Send email',
+      iconOnly: 'Icon only',
+      iconOnlyDescription:
+        'Icon buttons need an aria-label; there is no visible text to name them.',
+      states: 'States',
+      statesDescription:
+        'Disable while a request is in flight and show a spinner in place of the leading icon.',
+      asLink: 'As a link',
+      asLinkDescription:
+        'Pass an anchor or router Link through render to keep button styling on a real link.',
     },
     buttonGroup: {
       title: 'Button group',
@@ -1225,6 +1880,95 @@ const enUS = {
       logicalHint:
         'text-start, ps-3 and border-s-2 flip with the direction; rtl:rotate-180 turns the chevron.',
     },
+    drawer: {
+      title: 'Drawer',
+      description:
+        'A panel that slides in from an edge and can be dismissed with a swipe. Use it for a task the user finishes and leaves; Sheet is the plainer desktop-side variant.',
+      basic: 'A bottom drawer',
+      basicDescription:
+        'The default rises from the bottom edge. showSwipeHandle adds the grab bar that tells a touch user it can be dragged away.',
+      openOrderSummary: 'Open order summary',
+      orderSummary: 'Order summary',
+      orderSummaryDescription:
+        'Three items in order {{number}}, ready to confirm.',
+      confirmOrder: 'Confirm order',
+      positions: 'Four edges',
+      positionsDescription:
+        'swipeDirection decides both the edge the panel sits on and the direction that dismisses it.',
+      top: 'Top',
+      right: 'Right',
+      bottom: 'Bottom',
+      left: 'Left',
+      panelDescription: 'swipeDirection="{{direction}}" dismisses this panel.',
+      controlled: 'Controlled, and responsive',
+      controlledDescription:
+        'Hold open in state when the drawer closes on a successful action. useIsMobile picks the edge, so one drawer rises on a phone and slides in on a desktop.',
+      pickDeliveryTime: 'Pick a delivery time',
+      deliveryDescription:
+        'Choose a window for tomorrow. You can change it until the parcel is picked up.',
+      standardDelivery: 'Standard delivery',
+      fastest: 'Fastest',
+      slotStandard: 'Arrives within two working days',
+      slotAfterWork: 'Right after the working day',
+      slotPopular: 'The most requested window',
+      slotLast: 'The last run of the evening',
+      confirmDelivery: 'Confirm this time',
+      deliveryConfirmed: 'Delivery time confirmed',
+      responsiveHint:
+        'Resize the window: below 768px the drawer rises from the bottom instead.',
+      snapPoints: 'Snap points',
+      snapPointsDescription:
+        'A partly open drawer shows a summary and expands to full height when the user drags it up.',
+      openActivity: "Open today's activity",
+      activity: "Today's activity",
+      activityDescription: 'Drag the panel up to read the whole day.',
+      paymentReceived: 'Payment received at {{time}}',
+      nonModal: 'Non-modal',
+      nonModalDescription:
+        'modal={false} leaves the page behind it usable, so the reader can keep working while the panel stays open.',
+      openNotes: 'Open notes',
+      notesDescription:
+        'The order stays readable behind this panel, so you can copy a detail straight into the note.',
+      notesPlaceholder:
+        'Anything the next person handling this order should know.',
+    },
+    dropdownMenu: {
+      title: 'Dropdown Menu',
+      description:
+        'A menu of commands anchored to the control that opened it. Commands act; they do not hold a value the way a Select does.',
+      basic: 'Groups, labels and shortcuts',
+      basicDescription:
+        'Group commands that belong together, separate the groups, and show the keyboard shortcut of the item that has one.',
+      myAccount: 'My account',
+      billing: 'Billing',
+      team: 'Team',
+      newTeam: 'New team',
+      support: 'Support',
+      apiAccess: 'API access',
+      icons: 'With icons and a submenu',
+      iconsDescription:
+        'A leading icon speeds up recognition, and one level of nesting covers an action with a few destinations.',
+      inviteUsers: 'Invite people',
+      message: 'Message',
+      copyInviteLink: 'Copy invite link',
+      checkboxes: 'Checkbox items',
+      checkboxesDescription:
+        'Each item toggles independently and the menu stays open, which is what makes it right for column visibility.',
+      columns: 'Columns',
+      toggleColumns: 'Toggle columns',
+      radio: 'Radio items',
+      radioDescription:
+        'One choice out of a set. The group holds the value and closes on selection, so the trigger can show the current choice.',
+      sortBy: 'Sort by',
+      rowActions: 'Row actions',
+      rowActionsDescription:
+        'An icon button opens the commands for one row; align the menu to the trailing edge and give the trigger an aria-label.',
+      viewDetails: 'View details',
+      duplicate: 'Duplicate',
+      cancelOrder: 'Cancel order',
+      lastAction: 'Last action: {{action}}',
+      noAction: 'Open the menu and pick an action.',
+    },
     empty: {
       title: 'Empty',
       description:
@@ -1268,6 +2012,66 @@ const enUS = {
         'Drop a file here, or upload a signed delivery note so it travels with the order.',
       uploadFile: 'Upload a file',
     },
+    field: {
+      title: 'Field',
+      description:
+        'The layout of one control with its label, description and error. It wires the three together, so the control announces itself correctly without extra aria attributes.',
+      form: 'A complete form',
+      formDescription:
+        'FieldSet and FieldLegend name a section, FieldGroup spaces the fields inside it, and FieldSeparator divides two sections.',
+      customerDetails: 'Customer details',
+      customerDetailsDescription:
+        'Used on the invoice and on the shipping label.',
+      fullName: 'Full name',
+      namePlaceholder: 'Ava Chen',
+      emailPlaceholder: 'ava.chen@northwind.example',
+      emailHint: 'Order confirmations and delivery updates go here.',
+      region: 'Region',
+      notesPlaceholder:
+        'Delivery instructions, access codes, anything the driver needs.',
+      nameRequired: 'Enter the customer name.',
+      emailRequired: 'Enter an email address.',
+      emailInvalid: 'This does not look like an email address.',
+      regionRequired: 'Choose a region.',
+      preferences: 'Preferences',
+      preferencesDescription:
+        'These can be changed at any time from the customer record.',
+      marketing: 'Send product news',
+      marketingHint:
+        'About one email a month. Unsubscribing never affects order updates.',
+      invoiceCopy: 'Email a copy of every invoice',
+      invoiceCopyHint: 'A PDF goes out as soon as the invoice is issued.',
+      submitted: 'Saved.',
+      orientations: 'Orientations',
+      orientationsDescription:
+        'Vertical stacks the label above the control, horizontal sits them on one line, and responsive switches between the two at the sm breakpoint.',
+      vertical: 'Company name',
+      companyPlaceholder: 'Northwind Traders',
+      verticalHint: 'Appears on the invoice exactly as typed.',
+      agreeTerms: 'I agree to the processing terms',
+      responsive: 'Tax ID',
+      responsiveHint:
+        'Stacks on a narrow screen and sits on one line from sm upwards.',
+      taxIdPlaceholder: 'DE 811 234 567',
+      choiceCards: 'Choice cards',
+      choiceCardsDescription:
+        'Wrap a Field in FieldLabel to turn each option into a card, so the whole card becomes the click target.',
+      shippingMethod: 'Shipping method',
+      shippingStandard: 'Standard',
+      shippingStandardHint: 'Arrives in three to five working days.',
+      shippingExpress: 'Express',
+      shippingExpressHint: 'Arrives the next working day before 18:00.',
+      shippingOvernight: 'Overnight',
+      shippingOvernightHint:
+        'Ordered before 16:00, delivered by 09:00 tomorrow.',
+      errors: 'Errors',
+      errorsDescription:
+        'FieldError renders one message, or a list when several rules fail at once. Set data-invalid on the Field and aria-invalid on the control.',
+      password: 'Password',
+      passwordTooShort: 'Use at least 12 characters.',
+      passwordNeedsNumber: 'Include a number.',
+      passwordNeedsSymbol: 'Include a symbol.',
+    },
     hoverCard: {
       title: 'Hover Card',
       description:
@@ -1297,6 +2101,151 @@ const enUS = {
       items: 'Items',
       sentenceMiddle: 'placed by',
       sentenceEnd: ', who is waiting on a replacement shipment.',
+    },
+    input: {
+      title: 'Input',
+      description:
+        'A single-line text field. Set type so the browser offers the right keyboard, validation and autofill, and pair it with Field for the label, hint and error.',
+      types: 'Types',
+      typesDescription:
+        'The type is not decoration: it changes the on-screen keyboard, the autofill entry the browser offers, and the value the field reports.',
+      namePlaceholder: 'Ava Chen',
+      emailPlaceholder: 'ava.chen@northwind.example',
+      password: 'Password',
+      passwordPlaceholder: 'At least 12 characters',
+      website: 'Website',
+      search: 'Search',
+      field: 'With a label and a hint',
+      fieldDescription:
+        'Field supplies the label, the description and the error slot, and connects all three to the input for a screen reader.',
+      companyName: 'Company name',
+      companyPlaceholder: 'Northwind Traders',
+      companyHint: 'Appears on the invoice exactly as typed.',
+      taxId: 'Tax ID',
+      taxIdHint: 'Required for customers inside the EU.',
+      states: 'States',
+      statesDescription:
+        'Disabled takes the field out of the form, read-only keeps its value submitted, and aria-invalid with data-invalid styles the error.',
+      disabled: 'Order number',
+      disabledHint: 'Assigned when the order is created.',
+      readOnly: 'Customer ID',
+      readOnlyHint: 'Submitted with the form but not editable.',
+      emailInvalid: 'This does not look like an email address.',
+      file: 'File input',
+      fileDescription:
+        'accept narrows the picker to the formats you can actually process. It is a hint, so the server still validates what arrives.',
+      attachment: 'Signed delivery note',
+      attachmentHint: 'PDF, PNG or JPG, up to 10 MB.',
+      controlled: 'Controlled',
+      controlledDescription:
+        'Hold the value in state when you need to normalise or limit what is typed, and keep maxLength on the element so the browser enforces it too.',
+      reference: 'Purchase order reference',
+      referenceHint: 'Letters, digits and hyphens.',
+    },
+    inputGroup: {
+      title: 'Input Group',
+      description:
+        'Attach text, icons or buttons to the edges of a field so units, prefixes and inline actions stay inside one control. Keep addons short and always give the control its own label.',
+      addons: 'Prefix and suffix',
+      addonsDescription:
+        'Wrap the field with an addon on either side to state a currency, a protocol or a domain the user should not have to type.',
+      amountLabel: 'Invoice amount',
+      websiteLabel: 'Company subdomain',
+      search: 'Search field',
+      searchDescription:
+        'Lead with an icon addon and reveal a clear action once the field has a value, so the control never shifts width while empty.',
+      searchPlaceholder: 'Search customers…',
+      searchEmpty: 'No customer matches “{{query}}”.',
+      inlineButton: 'Inline action',
+      inlineButtonDescription:
+        'Put the action that finishes the field next to its input: applying a code or copying a generated value belongs inside the group, not below it.',
+      discountLabel: 'Discount code',
+      discountPlaceholder: 'Enter a code',
+      discountApplied: 'Code {{code}} applied to this order.',
+      apiKeyLabel: 'API key',
+      textarea: 'Textarea with toolbars',
+      textareaDescription:
+        'Align addons to block-start and block-end to frame a textarea with a heading row and a footer holding the counter and the save action.',
+      deliveryNote: 'Delivery note · {{number}}',
+      deliveryNoteLabel: 'Delivery note',
+      characterCount: '{{used}} / {{limit}} characters',
+    },
+    inputOtp: {
+      title: 'Input OTP',
+      description:
+        'Collect a short one-time code in separate slots so the user can see each character land. Set a pattern that matches what you send, and verify as soon as the last slot is filled.',
+      basic: 'Six digits',
+      basicDescription:
+        'Split the code into two groups with a separator: shorter groups are easier to read back from a message.',
+      codeLabel: 'Verification code',
+      patterns: 'Length and pattern',
+      patternsDescription:
+        'Match the shape of the code you issue — four digits for a terminal PIN, six alphanumeric characters for a document access code.',
+      pinLabel: 'Terminal PIN',
+      pinDescription: 'Four digits, entered at the warehouse scanner.',
+      invoiceCodeLabel: 'Invoice access code',
+      invoiceCodeDescription: 'Letters and digits from the invoice email.',
+      disabled: 'Disabled',
+      disabledDescription:
+        'Disable the whole input while the code is being resent, rather than blanking the characters already entered.',
+      verify: 'Verify a sign-in',
+      verifyDescription:
+        'Control the value and check it as the last slot fills, marking the slots invalid instead of pushing the error into a separate dialog.',
+      sentTo: 'We sent a six-digit code to {{email}}.',
+      hint: 'For this example, the valid code is {{code}}.',
+      verified: 'Code accepted. Signing you in…',
+      incorrect:
+        'That code is not valid. Check the message or request a new one.',
+      resend: 'Send a new code',
+    },
+    item: {
+      title: 'Item',
+      description:
+        'Lay out a row of content — media, a title, a description and its actions — without building a card for every list. Reach for it when rows share one shape and the whole row is the unit a user scans.',
+      variants: 'Variants',
+      variantsDescription:
+        'Keep the default variant inside a bordered container, use outline when each row stands alone, and muted to recede a row that is informational.',
+      defaultVariant: 'Default',
+      defaultVariantDescription:
+        'No border of its own — for rows already inside a card or a panel.',
+      outlineVariant: 'Outline',
+      outlineVariantDescription:
+        'A border per row, so rows read as separate objects.',
+      mutedVariant: 'Muted',
+      mutedVariantDescription:
+        'A quiet background for a row that supports the others rather than competing with them.',
+      media: 'Media and actions',
+      mediaDescription:
+        "Put an icon or an avatar in ItemMedia and keep the row's controls in ItemActions, so every row lines up on the same two edges.",
+      shipmentTitle: 'Shipment SHP-8821',
+      shipmentDescription: 'Picked up by {{carrier}}, arriving in two days.',
+      message: 'Message',
+      cardExpiry: 'Expires {{date}}',
+      sizes: 'Sizes',
+      sizesDescription:
+        'Drop to sm or xs for dense lists; the media and text scale with the row, so do not shrink them by hand.',
+      inStock: '{{quantity}} units in stock',
+      group: 'Grouped rows',
+      groupDescription:
+        'ItemGroup spaces a list evenly and ItemSeparator divides it, which is lighter than a table when each row carries only a few values.',
+      role: {
+        owner: 'Owner',
+        editor: 'Editor',
+        viewer: 'Viewer',
+      },
+      links: 'Rows as links',
+      linksDescription:
+        'Render the item as an anchor so the whole row is the target, instead of leaving a small link inside a row that looks clickable anyway.',
+      category: {
+        scanners: 'Barcode scanners',
+        printers: 'Receipt printers',
+        terminals: 'Payment terminals',
+      },
+      productCount: '{{total}} products',
+      headerFooter: 'Header and footer',
+      headerFooterDescription:
+        'ItemHeader and ItemFooter span the full row, which is where a reference number, a status and a total belong on a summary row.',
+      orderSummary: '{{items}} line items, shipping to San Francisco, CA',
     },
     kbd: {
       title: 'Kbd',
@@ -1541,194 +2490,414 @@ const enUS = {
       compactDescription:
         'The scroller is only a viewport, so it works inside any bordered box; add a start button when the reader may want to go back to the beginning.',
     },
-    drawer: {
-      title: 'Drawer',
+    nativeSelect: {
+      title: 'Native Select',
       description:
-        'A panel that slides in from an edge and can be dismissed with a swipe. Use it for a task the user finishes and leaves; Sheet is the plainer desktop-side variant.',
-      basic: 'A bottom drawer',
+        "The platform's own select element, styled to match the rest of the form. Prefer it for short, plain option lists and on touch devices; use Select when options need icons, descriptions or search.",
+      basic: 'Basic',
       basicDescription:
-        'The default rises from the bottom edge. showSwipeHandle adds the grab bar that tells a touch user it can be dragged away.',
-      openOrderSummary: 'Open order summary',
-      orderSummary: 'Order summary',
-      orderSummaryDescription:
-        'Three items in order {{number}}, ready to confirm.',
-      confirmOrder: 'Confirm order',
-      positions: 'Four edges',
-      positionsDescription:
-        'swipeDirection decides both the edge the panel sits on and the direction that dismisses it.',
-      top: 'Top',
-      right: 'Right',
-      bottom: 'Bottom',
-      left: 'Left',
-      panelDescription: 'swipeDirection="{{direction}}" dismisses this panel.',
-      controlled: 'Controlled, and responsive',
-      controlledDescription:
-        'Hold open in state when the drawer closes on a successful action. useIsMobile picks the edge, so one drawer rises on a phone and slides in on a desktop.',
-      pickDeliveryTime: 'Pick a delivery time',
-      deliveryDescription:
-        'Choose a window for tomorrow. You can change it until the parcel is picked up.',
-      standardDelivery: 'Standard delivery',
-      fastest: 'Fastest',
-      slotStandard: 'Arrives within two working days',
-      slotAfterWork: 'Right after the working day',
-      slotPopular: 'The most requested window',
-      slotLast: 'The last run of the evening',
-      confirmDelivery: 'Confirm this time',
-      deliveryConfirmed: 'Delivery time confirmed',
-      responsiveHint:
-        'Resize the window: below 768px the drawer rises from the bottom instead.',
-      snapPoints: 'Snap points',
-      snapPointsDescription:
-        'A partly open drawer shows a summary and expands to full height when the user drags it up.',
-      openActivity: "Open today's activity",
-      activity: "Today's activity",
-      activityDescription: 'Drag the panel up to read the whole day.',
-      paymentReceived: 'Payment received at {{time}}',
-      nonModal: 'Non-modal',
-      nonModalDescription:
-        'modal={false} leaves the page behind it usable, so the reader can keep working while the panel stays open.',
-      openNotes: 'Open notes',
-      notesDescription:
-        'The order stays readable behind this panel, so you can copy a detail straight into the note.',
-      notesPlaceholder:
-        'Anything the next person handling this order should know.',
-    },
-    dropdownMenu: {
-      title: 'Dropdown Menu',
-      description:
-        'A menu of commands anchored to the control that opened it. Commands act; they do not hold a value the way a Select does.',
-      basic: 'Groups, labels and shortcuts',
-      basicDescription:
-        'Group commands that belong together, separate the groups, and show the keyboard shortcut of the item that has one.',
-      myAccount: 'My account',
-      billing: 'Billing',
-      team: 'Team',
-      newTeam: 'New team',
-      support: 'Support',
-      apiAccess: 'API access',
-      icons: 'With icons and a submenu',
-      iconsDescription:
-        'A leading icon speeds up recognition, and one level of nesting covers an action with a few destinations.',
-      inviteUsers: 'Invite people',
-      message: 'Message',
-      copyInviteLink: 'Copy invite link',
-      checkboxes: 'Checkbox items',
-      checkboxesDescription:
-        'Each item toggles independently and the menu stays open, which is what makes it right for column visibility.',
-      columns: 'Columns',
-      toggleColumns: 'Toggle columns',
-      radio: 'Radio items',
-      radioDescription:
-        'One choice out of a set. The group holds the value and closes on selection, so the trigger can show the current choice.',
-      sortBy: 'Sort by',
-      rowActions: 'Row actions',
-      rowActionsDescription:
-        'An icon button opens the commands for one row; align the menu to the trailing edge and give the trigger an aria-label.',
-      viewDetails: 'View details',
-      duplicate: 'Duplicate',
-      cancelOrder: 'Cancel order',
-      lastAction: 'Last action: {{action}}',
-      noAction: 'Open the menu and pick an action.',
-    },
-    field: {
-      title: 'Field',
-      description:
-        'The layout of one control with its label, description and error. It wires the three together, so the control announces itself correctly without extra aria attributes.',
-      form: 'A complete form',
-      formDescription:
-        'FieldSet and FieldLegend name a section, FieldGroup spaces the fields inside it, and FieldSeparator divides two sections.',
-      customerDetails: 'Customer details',
-      customerDetailsDescription:
-        'Used on the invoice and on the shipping label.',
-      fullName: 'Full name',
-      namePlaceholder: 'Ava Chen',
-      emailPlaceholder: 'ava.chen@northwind.example',
-      emailHint: 'Order confirmations and delivery updates go here.',
-      region: 'Region',
-      notesPlaceholder:
-        'Delivery instructions, access codes, anything the driver needs.',
-      nameRequired: 'Enter the customer name.',
-      emailRequired: 'Enter an email address.',
-      emailInvalid: 'This does not look like an email address.',
-      regionRequired: 'Choose a region.',
-      preferences: 'Preferences',
-      preferencesDescription:
-        'These can be changed at any time from the customer record.',
-      marketing: 'Send product news',
-      marketingHint:
-        'About one email a month. Unsubscribing never affects order updates.',
-      invoiceCopy: 'Email a copy of every invoice',
-      invoiceCopyHint: 'A PDF goes out as soon as the invoice is issued.',
-      submitted: 'Saved.',
-      orientations: 'Orientations',
-      orientationsDescription:
-        'Vertical stacks the label above the control, horizontal sits them on one line, and responsive switches between the two at the sm breakpoint.',
-      vertical: 'Company name',
-      companyPlaceholder: 'Northwind Traders',
-      verticalHint: 'Appears on the invoice exactly as typed.',
-      agreeTerms: 'I agree to the processing terms',
-      responsive: 'Tax ID',
-      responsiveHint:
-        'Stacks on a narrow screen and sits on one line from sm upwards.',
-      taxIdPlaceholder: 'DE 811 234 567',
-      choiceCards: 'Choice cards',
-      choiceCardsDescription:
-        'Wrap a Field in FieldLabel to turn each option into a card, so the whole card becomes the click target.',
-      shippingMethod: 'Shipping method',
-      shippingStandard: 'Standard',
-      shippingStandardHint: 'Arrives in three to five working days.',
-      shippingExpress: 'Express',
-      shippingExpressHint: 'Arrives the next working day before 18:00.',
-      shippingOvernight: 'Overnight',
-      shippingOvernightHint:
-        'Ordered before 16:00, delivered by 09:00 tomorrow.',
-      errors: 'Errors',
-      errorsDescription:
-        'FieldError renders one message, or a list when several rules fail at once. Set data-invalid on the Field and aria-invalid on the control.',
-      password: 'Password',
-      passwordTooShort: 'Use at least 12 characters.',
-      passwordNeedsNumber: 'Include a number.',
-      passwordNeedsSymbol: 'Include a symbol.',
-    },
-    input: {
-      title: 'Input',
-      description:
-        'A single-line text field. Set type so the browser offers the right keyboard, validation and autofill, and pair it with Field for the label, hint and error.',
-      types: 'Types',
-      typesDescription:
-        'The type is not decoration: it changes the on-screen keyboard, the autofill entry the browser offers, and the value the field reports.',
-      namePlaceholder: 'Ava Chen',
-      emailPlaceholder: 'ava.chen@northwind.example',
-      password: 'Password',
-      passwordPlaceholder: 'At least 12 characters',
-      website: 'Website',
-      search: 'Search',
-      field: 'With a label and a hint',
-      fieldDescription:
-        'Field supplies the label, the description and the error slot, and connects all three to the input for a screen reader.',
-      companyName: 'Company name',
-      companyPlaceholder: 'Northwind Traders',
-      companyHint: 'Appears on the invoice exactly as typed.',
-      taxId: 'Tax ID',
-      taxIdHint: 'Required for customers inside the EU.',
-      states: 'States',
+        'Pair it with a Field label and let the browser render the option list — nothing here has to be reimplemented.',
+      sizes: 'Sizes',
+      sizesDescription:
+        'The small size lines up with sm buttons in a toolbar; keep the default size inside forms so it matches the other inputs.',
+      pageSizeLabel: 'Rows per page',
+      groups: 'Option groups',
+      groupsDescription:
+        'Group options with an optgroup label when the list has an obvious shape, so a long list stays scannable.',
+      regionWest: 'West coast',
+      regionEast: 'East coast',
+      warehouseLabel: 'Fulfilment warehouse',
+      warehouseDescription:
+        'Orders are picked from the warehouse nearest the delivery address.',
+      states: 'Disabled and invalid',
       statesDescription:
-        'Disabled takes the field out of the form, read-only keeps its value submitted, and aria-invalid with data-invalid styles the error.',
-      disabled: 'Order number',
-      disabledHint: 'Assigned when the order is created.',
-      readOnly: 'Customer ID',
-      readOnlyHint: 'Submitted with the form but not editable.',
-      emailInvalid: 'This does not look like an email address.',
-      file: 'File input',
-      fileDescription:
-        'accept narrows the picker to the formats you can actually process. It is a hint, so the server still validates what arrives.',
-      attachment: 'Signed delivery note',
-      attachmentHint: 'PDF, PNG or JPG, up to 10 MB.',
+        'Disable the control rather than hiding it when a value is fixed, and mark it aria-invalid with the error next to it when a choice is missing.',
+      currencyLabel: 'Billing currency',
+      currencyDescription:
+        'Set on the customer account and cannot be changed per order.',
+      termsLabel: 'Payment terms',
+      termsError: 'Choose the payment terms before sending the invoice.',
+      filters: 'Toolbar filters',
+      filtersDescription:
+        'Several small selects in one row make a compact list filter; keep each one controlled so the result reflects the current selection.',
+      filterSummary:
+        'Showing {{status}} orders from {{warehouse}}, {{size}} per page.',
+    },
+    navigationMenu: {
+      title: 'Navigation Menu',
+      description:
+        'A horizontal bar of top-level destinations, where a trigger may open a panel describing what is behind it. Use it for site or product navigation, not for actions — a menu that performs commands is a Menubar or a Dropdown Menu.',
+      product: 'Product menu',
+      productDescription:
+        'Give a crowded area a panel with a short description per destination, and leave a single destination as a plain link rather than an empty panel.',
+      products: 'Products',
+      solutions: 'Solutions',
+      pricing: 'Pricing',
+      item: {
+        orders: {
+          title: 'Order management',
+          description: 'Capture, route and fulfil orders from one queue.',
+        },
+        inventory: {
+          title: 'Inventory',
+          description: 'Stock levels per warehouse with low-stock alerts.',
+        },
+        invoicing: {
+          title: 'Invoicing',
+          description:
+            'Issue invoices, track payments and chase overdue balances.',
+        },
+        analytics: {
+          title: 'Analytics',
+          description: 'Revenue, margin and fulfilment time across channels.',
+        },
+      },
+      solution: {
+        retail: {
+          title: 'Retail',
+          description: 'Store, counter and online orders in one place.',
+        },
+        wholesale: {
+          title: 'Wholesale',
+          description: 'Price lists, quotes and account terms per buyer.',
+        },
+        logistics: {
+          title: 'Logistics',
+          description: 'Carrier rates, labels and delivery tracking.',
+        },
+      },
+      icons: 'Links with icons',
+      iconsDescription:
+        'Add a leading icon to each link when the panel lists states or objects a user recognizes faster by shape than by word.',
+      pipeline: 'Order pipeline',
+      alignment: 'Alignment',
+      alignmentDescription:
+        'The panel opens aligned to the start of the menu by default; set align when the menu sits in the middle or at the end of a header.',
+      supportMenu: 'Support',
+      support: {
+        help: 'Help centre',
+        status: 'Service status',
+        contact: 'Contact support',
+      },
+      linksOnly: 'Links without panels',
+      linksOnlyDescription:
+        'A menu of plain links still earns the shared styling and keyboard behaviour; mark the current destination active so the bar shows where the user is.',
+      ordersLink: 'Orders',
+      customersLink: 'Customers',
+      reportsLink: 'Reports',
+    },
+    pagination: {
+      title: 'Pagination',
+      description:
+        'Page controls for a list the user reads a screen at a time. Keep the current page marked, disable the edges instead of removing them, and always say where in the set the reader is.',
+      basic: 'Basic',
+      basicDescription:
+        'List every page while the range is short, and dim previous or next at the ends so the control keeps its width.',
+      pageOf: 'Page {{page}} of {{total}}',
+      ellipsis: 'Long ranges',
+      ellipsisDescription:
+        'Past a handful of pages, show the first, the last and a window around the current page, with an ellipsis standing in for the gaps.',
+      compact: 'Compact control',
+      compactDescription:
+        'Two icon buttons and a counter fit in a toolbar or a card footer where a full page list would not.',
+      list: 'Paging a list',
+      listDescription:
+        'Drive the rows from the same state the pager writes, and show the visible range beside it so the count is never inferred from the page number.',
+      range: 'Showing {{from}}–{{to}} of {{total}} invoices',
+    },
+    popover: {
+      title: 'Popover',
+      description:
+        'A small panel anchored to the control that opened it, for detail or a short edit that should not take over the screen. Anything the user must answer before continuing belongs in a Dialog instead.',
+      basic: 'Basic',
+      basicDescription:
+        'Give the panel a title and a description so its content is announced, and keep it to what fits without scrolling.',
+      viewOrder: 'Order summary',
+      orderSummary:
+        'Placed by {{customer}}, picked from the Oakland warehouse.',
+      placement: 'Placement',
+      placementDescription:
+        'Set side and align when the trigger sits at an edge; the popover flips on its own only when there is no room.',
+      alignStart: 'Aligned to start',
+      alignEnd: 'Aligned to end',
+      sideTop: 'Opens above',
+      placementHint: 'This panel is positioned with {{align}}.',
+      form: 'Inline edit',
+      formDescription:
+        'Control the open state so the draft value resets each time the panel opens and only a save writes it back.',
+      quantityValue: '{{quantity}} units',
+      adjustQuantity: 'Adjust quantity',
+      adjustQuantityDescription:
+        'Changing the quantity updates the order total when you save.',
+      contact: 'Contact preview',
+      contactDescription:
+        'Hang a preview off a name so a reader can check who it is without leaving the list they are working through.',
+      contactRole: 'Purchasing manager at {{company}}',
+      viewCustomer: 'Open customer record',
+    },
+    progress: {
+      title: 'Progress',
+      description:
+        'Show how far along a task is when the remaining work is measurable. Pair the bar with a label and a value — a bar on its own says something is happening but not what, or how much is left.',
+      basic: 'Determinate values',
+      basicDescription:
+        'Pass a value between 0 and 100. Constrain the width so the bar reads as part of the layout rather than stretching across the page.',
+      label: 'Label and value',
+      labelDescription:
+        'ProgressLabel names the task and ProgressValue prints the percentage, both inside the same Progress so they are announced together.',
+      storageUsed: 'Storage used',
+      running: 'A task in progress',
+      runningDescription:
+        'Update the value as the work advances and say what the number counts; keep the control reachable so the user can restart or reset.',
+      importLabel: 'Importing {{file}}',
+      importRunning: '{{rows}} of {{total}} rows imported.',
+      importDone: 'All {{rows}} rows imported.',
+      startImport: 'Start import',
+      fulfilment: 'Comparing several tracks',
+      fulfilmentDescription:
+        'Stacked bars compare progress across records; render the value yourself when the raw counts mean more to the reader than a percentage.',
+      pickedOf: '{{picked}} / {{ordered}} picked',
+    },
+    questionnaire: {
+      title: 'Questionnaire',
+      description:
+        'Ask a few questions one at a time, with progress, skipping and validation handled for you. Use it for onboarding or a short survey; a form the user fills in at their own pace is still a form.',
+      onboarding: 'Onboarding survey',
+      onboardingDescription:
+        'One required single choice, an optional multiple choice and a free-text answer, ending in a summary of what was submitted rather than an empty form.',
+      role: {
+        legend: 'Team',
+        title: 'Which team will use this workspace?',
+        description: 'We use this to decide which pages open by default.',
+        operations: {
+          label: 'Operations',
+          hint: 'Picking, packing and shipping orders.',
+        },
+        finance: {
+          label: 'Finance',
+          hint: 'Invoicing, payments and reconciliation.',
+        },
+        support: {
+          label: 'Customer support',
+          hint: 'Order lookups, returns and refunds.',
+        },
+      },
+      goals: {
+        legend: 'Goals',
+        title: 'What should improve first?',
+        description: 'Select everything that applies, or skip this question.',
+        fulfilment: {
+          label: 'Faster fulfilment',
+        },
+        errors: {
+          label: 'Fewer picking errors',
+        },
+        reporting: {
+          label: 'Clearer reporting',
+        },
+        cost: {
+          label: 'Lower shipping cost',
+        },
+      },
+      tools: {
+        legend: 'Current tools',
+        title: 'What are you using today?',
+        description: 'Optional — it helps us prepare the right import.',
+        placeholder: 'Spreadsheets, another order system…',
+      },
+      skip: 'Skip',
+      finish: 'Finish setup',
+      completedTitle: 'Setup saved',
+      startOver: 'Run the survey again',
+      shortcuts: 'Keyboard shortcuts',
+      shortcutsDescription:
+        'Letter shortcuts let someone answer without reaching for the mouse; keep them for short lists where every choice fits on one line.',
+      source: {
+        title: 'How did you hear about us?',
+        search: {
+          label: 'Web search',
+        },
+        partner: {
+          label: 'Implementation partner',
+        },
+        conference: {
+          label: 'Industry conference',
+        },
+        colleague: {
+          label: 'A colleague',
+        },
+      },
+      sourceSaved: 'Thanks — recorded as “{{answer}}”.',
+      customProgress: 'Custom progress',
+      customProgressDescription:
+        'The progress render state gives the current step and the total, which is enough to draw a segmented bar in place of the default counter.',
+      step: 'Step {{current}} of {{total}}',
+      reminders: {
+        title: 'How often should we send invoice reminders?',
+        daily: {
+          label: 'Every day an invoice is overdue',
+        },
+        weekly: {
+          label: 'Once a week',
+        },
+        never: {
+          label: 'Never — we chase them ourselves',
+        },
+      },
+      format: {
+        title: 'How should the monthly report arrive?',
+        csv: {
+          label: 'CSV attachment',
+        },
+        pdf: {
+          label: 'PDF summary',
+        },
+        dashboard: {
+          label: 'A link to the dashboard',
+        },
+      },
+    },
+    radioGroup: {
+      title: 'Radio Group',
+      description:
+        'One choice out of a few, all visible at once. Use it up to about six options where comparing them matters; beyond that a Select keeps the form short, and independent toggles are checkboxes.',
+      basic: 'Basic',
+      basicDescription:
+        'Pair each item with a Field label so the text is part of the hit area, and preselect the option most people want.',
+      shippingEconomy: 'Economy · 5–7 business days',
+      shippingStandard: 'Standard · 2–3 business days',
+      shippingExpress: 'Express · next business day',
+      descriptions: 'With descriptions',
+      descriptionsDescription:
+        'Put the label and its explanation in FieldContent when the difference between options is not obvious from a few words.',
+      notifyEmail: 'Every order event',
+      notifyEmailDescription:
+        'An email each time an order is placed, shipped or refunded.',
+      notifyDigest: 'Daily digest',
+      notifyDigestDescription:
+        'One summary at 08:00 covering the previous day.',
+      notifyNone: 'No email',
+      notifyNoneDescription:
+        'Order events stay in the notification centre only.',
+      cards: 'Choice cards',
+      cardsDescription:
+        'Wrapping the whole Field in a FieldLabel turns each option into a card the user can click anywhere on — worth it when the options carry a price or a trade-off.',
+      plan: {
+        starter: {
+          name: 'Starter',
+          description: 'Up to 500 orders a month and one warehouse.',
+        },
+        growth: {
+          name: 'Growth',
+          description: 'Unlimited orders, three warehouses and API access.',
+        },
+        enterprise: {
+          name: 'Enterprise',
+          description: 'Custom terms, audit logs and a named support contact.',
+        },
+      },
+      perMonth: '{{price}} / month',
+      fieldset: 'Fieldset and controlled value',
+      fieldsetDescription:
+        'FieldSet with a legend names the group for assistive technology; control the value when the rest of the form reacts to the choice.',
+      termsLegend: 'Payment terms',
+      termsDescription: 'Applied to every invoice issued to this customer.',
+      terms: {
+        net15: 'Net 15',
+        net30: 'Net 30',
+        net60: 'Net 60',
+      },
+      termsSummary: 'Invoices will be due {{terms}} after the issue date.',
+      states: 'Disabled and invalid',
+      statesDescription:
+        'Disable the group while the value is fixed elsewhere, and mark the items aria-invalid with one error for the group rather than one per option.',
+      warehouseLegend: 'Fulfilment warehouse',
+      warehouseDescription:
+        "Set by the routing rule for this customer's region.",
+      refundLegend: 'Refund method',
+      refundCredit: 'Store credit',
+      refundOriginal: 'Original payment method',
+      refundError: 'Choose how this refund should be issued.',
+    },
+    resizable: {
+      title: 'Resizable',
+      description:
+        'Lets the reader decide how much room each pane gets. Use it for list-and-detail screens and editors where one side needs more space than the layout can guess.',
+      horizontal: 'Horizontal panels',
+      horizontalDescription:
+        'Give every panel a defaultSize and a minSize so dragging the handle can never collapse a pane into nothing.',
+      orderList: 'Orders',
+      vertical: 'Vertical panels',
+      verticalDescription:
+        'Set orientation to vertical when the split stacks, such as a record header above its activity feed.',
+      customerRecord: 'Customer record',
+      activity: 'Activity',
+      nested: 'Nested groups',
+      nestedDescription:
+        'Put a panel group inside a panel to build a workspace: navigation on the left, a preview and a notes pane on the right.',
+      navigation: 'Billing',
+      invoices: 'Invoices',
+      payments: 'Payments',
+      creditNotes: 'Credit notes',
+      invoicePreview: 'Invoice preview',
+      collapsible: 'Collapsible panel',
+      collapsibleDescription:
+        'Mark a side panel collapsible so dragging it past its minimum hides it entirely, and drag the handle back to bring it out.',
+      filterHint: 'Narrow the invoice list by status, owner and due date.',
+      resultsHint: 'Drag the handle to the left edge to hide the filter panel.',
+    },
+    scrollArea: {
+      title: 'Scroll Area',
+      description:
+        'Keeps a long list inside a fixed box with a scrollbar that matches the theme. Reach for it when the surrounding page must not grow, not as a substitute for pagination.',
+      vertical: 'Vertical scrolling',
+      verticalDescription:
+        'Give the area an explicit height; without one there is nothing to scroll and the content simply grows.',
+      auditTrail: 'Audit trail',
+      horizontal: 'Horizontal scrolling',
+      horizontalDescription:
+        'Add a ScrollBar with orientation horizontal, and let the inner row size itself with w-max so it can overflow.',
+      list: 'Inside a list',
+      listDescription:
+        'A scroll area around a divided list keeps a long roster from pushing the rest of the page down.',
+      prose: 'Long-form text',
+      proseDescription:
+        'Terms, policies and release notes read better in a scrollable box than behind a link, because the reader keeps their place on the page.',
+      termsTitle: 'Standard terms of supply',
+    },
+    select: {
+      title: 'Select',
+      description:
+        'Picks one value from a known, short list. Use a combobox once the reader would rather type than scroll, and radio buttons when every option should stay visible.',
+      basic: 'Basic',
+      basicDescription:
+        'Pass the options to Select as items so the trigger can show the chosen label, and give the list a null entry to act as the placeholder.',
+      groups: 'Groups',
+      groupsDescription:
+        'Group related options under a SelectLabel and separate the groups; it is faster to scan than one long alphabetical list.',
+      teamSales: 'Sales',
+      teamSupport: 'Support',
+      disabledItem: 'Disabled option',
+      disabledItemDescription:
+        'Keep an unavailable option in the list and disable it, so the reader can see it exists rather than wondering where it went.',
+      shippingMethod: 'Shipping method',
+      shippingStandard: 'Standard delivery',
+      shippingExpress: 'Express delivery',
+      shippingSameDay: 'Same-day courier',
+      shippingPickup: 'Collect from warehouse',
       controlled: 'Controlled',
       controlledDescription:
-        'Hold the value in state when you need to normalise or limit what is typed, and keep maxLength on the element so the browser enforces it too.',
-      reference: 'Purchase order reference',
-      referenceHint: 'Letters, digits and hyphens.',
+        'Hold the value in state when the rest of the page reacts to it. onValueChange can report null, so fall back to a value you accept.',
+      termsPrepaid: 'Payment in advance',
+      termsNet14: 'Net 14 days',
+      termsNet30: 'Net 30 days',
+      termsNet60: 'Net 60 days',
+      dueHint: 'Invoices on this account are issued as {{terms}}.',
+      inForm: 'In a form',
+      inFormDescription:
+        'Inside a Field, give the trigger w-full so it lines up with the inputs above and below it, and connect the label with htmlFor.',
+      region: 'Billing region',
+      regionHint: 'Tax rules and invoice templates follow the billing region.',
     },
     separator: {
       title: 'Separator',
@@ -1954,6 +3123,261 @@ const enUS = {
       recentOrders: 'Recent orders',
       recentOrdersDescription: 'The last five orders placed by any customer.',
       order: 'Order',
+    },
+    tabs: {
+      title: 'Tabs',
+      description:
+        'Splits one record into a few views the reader switches between. Keep the panels peers of each other; a tab that navigates somewhere else should be a link.',
+      basic: 'Basic',
+      basicDescription:
+        'Give every trigger a value matching its panel, and set defaultValue to the view the reader needs first.',
+      summary: 'Summary',
+      summaryDescription: 'The order total, the customer and who owns it.',
+      items: 'Items',
+      itemsDescription:
+        'Everything on the order with its quantity and line total.',
+      shipping: 'Shipping',
+      shippingDescription:
+        'Where the order is going and when it should arrive.',
+      variants: 'Variants',
+      variantsDescription:
+        'The default list sits on a filled track; the line variant underlines the active tab and suits a page that already has a card around it.',
+      openInvoices: 'Open',
+      overdueInvoices: 'Overdue',
+      invoiceCount: '{{count}} invoices in this view',
+      withIcons: 'With icons',
+      withIconsDescription:
+        'An icon before the label helps the reader find a tab again, as long as every tab has one.',
+      fulfilment: 'Fulfilment',
+      fulfilmentBody: 'Picked and packed at the Auckland warehouse.',
+      delivery: 'Delivery',
+      deliveryBody: 'Handed to the carrier, tracking sent to the customer.',
+      billing: 'Billing',
+      billingBody: 'Invoiced on dispatch and paid by card on file.',
+      vertical: 'Vertical',
+      verticalDescription:
+        'Set orientation to vertical when the labels are long or the list is more of a settings menu than a row of views.',
+      companyProfile: 'Company profile',
+      contacts: 'Contacts',
+      paymentTerms: 'Payment terms',
+      paymentTermsBody:
+        'Net 30 days from the invoice date, reviewed each year.',
+      disabled: 'Disabled tab',
+      disabledDescription:
+        'Disable a tab whose content does not exist yet, rather than removing it and changing the shape of the page.',
+      invoice: 'Invoice',
+      creditNote: 'Credit note',
+      creditNoteBody: 'No credit note has been raised against this order.',
+    },
+    textarea: {
+      title: 'Textarea',
+      description:
+        'Collects text that runs to more than one line. Size it to the answer you expect, and keep single-line values such as a name or reference in an Input.',
+      basic: 'Basic',
+      basicDescription:
+        'The field grows with its content, so set a width rather than a height and let the rows follow what the reader types.',
+      notePlaceholder: 'Add a note about this order…',
+      withLabel: 'With a label',
+      withLabelDescription:
+        'Wrap it in a Field so the label, the hint and the control line up with the rest of the form, and point htmlFor at the textarea id.',
+      deliveryInstructions: 'Delivery instructions',
+      deliveryPlaceholder:
+        'Gate code, loading dock, preferred delivery window…',
+      deliveryHint: 'Printed on the packing slip and shown to the carrier.',
+      states: 'Disabled and invalid',
+      statesDescription:
+        'Mirror the control state on the Field with data-disabled or data-invalid so the label and hint dim or turn red with it.',
+      archivedNote: 'Archive note',
+      archivedHint: 'Archived orders are read-only.',
+      refundReason: 'Refund reason',
+      refundPlaceholder: 'Why is this order being refunded?',
+      refundRequired:
+        'A refund reason is required before the credit note is issued.',
+      counter: 'With a counter',
+      counterDescription:
+        'When a length limit exists, set maxLength and show what is left; a limit the reader only discovers by hitting it is a trap.',
+      internalNote: 'Internal note',
+      remaining: '{{remaining}} of {{limit}} characters left',
+      inForm: 'In a form',
+      inFormDescription:
+        'Put the textarea last in the group and the actions under it, so the reader finishes writing and lands on the buttons.',
+      messageToCustomer: 'Message to the customer',
+      messagePlaceholder:
+        'Write the message that goes out with the shipping confirmation…',
+      messageHint: 'Sent to {{email}} when the order ships.',
+    },
+    toast: {
+      title: 'Toast',
+      description:
+        'Confirms that something happened without taking the reader out of what they are doing. Keep it to one sentence, and never put a decision in one — that belongs in a dialog.',
+      basic: 'Basic',
+      basicDescription:
+        'Mount Toaster once in the page or layout, then call toast.add from anywhere; the manager is a module singleton.',
+      savedTitle: 'Order saved',
+      savedBody: 'ORD-1042 was updated a moment ago.',
+      types: 'Types',
+      typesDescription:
+        'Set type to pick the status icon. Use error for something that failed, and warning only when the reader has to act.',
+      type: {
+        success: 'Success',
+        info: 'Info',
+        warning: 'Warning',
+        error: 'Error',
+      },
+      headline: {
+        success: 'Invoice sent',
+        info: 'Delivery rescheduled',
+        warning: 'Stock running low',
+        error: 'Invoice could not be sent',
+      },
+      body: {
+        success: 'INV-2041 was emailed to Northwind Trading.',
+        info: 'ORD-1042 now arrives Sep 26 instead of Sep 24.',
+        warning: 'Only 3 units of POS Terminal Pro remain in Auckland.',
+        error: 'The customer has no billing email on file.',
+      },
+      withAction: 'With an action',
+      withActionDescription:
+        'Pass actionProps to offer one way back. Close the toast from the handler using the id that add returns.',
+      archiveOrder: 'Archive order',
+      archivedTitle: 'Order {{number}} archived',
+      archivedBody: 'It no longer appears in the open orders list.',
+      undo: 'Undo',
+      longDescription: 'Long description',
+      longDescriptionDescription:
+        'When the reader needs the detail to fix the problem, set a high priority and a timeout of 0 so the toast waits for them.',
+      retryPayment: 'Retry payment',
+      paymentFailedTitle: 'Payment declined',
+      paymentFailedBody:
+        'The card ending 4242 was declined by the issuing bank as expired. Ask the customer for a new card, or issue the invoice with net 30 terms and retry the charge after it is settled.',
+      promise: 'Following a task',
+      promiseDescription:
+        'toast.promise keeps one toast on screen through loading, success and failure, so a slow job does not stack up three of them.',
+      exportInvoices: 'Export invoices',
+      exportLoading: 'Exporting invoices…',
+      exportSuccess: '{{count}} invoices exported to CSV.',
+      exportError: 'The export failed. Nothing was downloaded.',
+    },
+    toggle: {
+      title: 'Toggle',
+      description:
+        'A button that stays pressed, for an option that takes effect the moment it is pressed. Use a Switch for a setting the reader saves, and a Checkbox inside a form.',
+      basic: 'Basic',
+      basicDescription:
+        'The default variant is transparent until it is pressed; the outline variant keeps a border so it reads as a control on an empty surface.',
+      followCustomer: 'Follow',
+      priorityAccount: 'Priority account',
+      sizes: 'Sizes',
+      sizesDescription:
+        'Match the size to its neighbours: sm beside a table header, default in a toolbar, lg when the toggle stands alone.',
+      showArchived: 'Show archived',
+      iconOnly: 'Icon only',
+      iconOnlyDescription:
+        'An icon-only toggle needs an aria-label, because the icon alone tells a screen reader nothing about what it turns on.',
+      controlled: 'Controlled',
+      controlledDescription:
+        'Hold the pressed state when the page has to act on it, and show the result next to the toggle so the effect is visible.',
+      onlyMyOrders: 'Only my orders',
+      resultsMine: '{{count}} orders assigned to you',
+      resultsAll: '{{count}} orders across the team',
+      states: 'States',
+      statesDescription:
+        'Swap the icon and the label with the state so the toggle says what is true now, and disable it when the option is unavailable.',
+      notificationsOn: 'Email updates on',
+      notificationsOff: 'Email updates off',
+      smsAlerts: 'SMS alerts',
+    },
+    toggleGroup: {
+      title: 'Toggle Group',
+      description:
+        'A row of toggles that share one value, for picking a view or narrowing a list. Use tabs when the choice swaps whole panels of content.',
+      single: 'Single selection',
+      singleDescription:
+        'Without multiple, pressing one item releases the others, which is what a view switcher wants.',
+      tableView: 'Table',
+      boardView: 'Board',
+      calendarView: 'Calendar',
+      multiple: 'Multiple selection',
+      multipleDescription:
+        'Add multiple and the value becomes every pressed item, so the group works as a set of filters.',
+      filterCount: '{{count}} status filters applied',
+      noFilters: 'Showing every status',
+      joined: 'Joined',
+      joinedDescription:
+        'Set spacing to 0 to butt the items together into a segmented control; keep an aria-label on each icon-only item.',
+      alignLeft: 'Align left',
+      alignCenter: 'Align center',
+      alignRight: 'Align right',
+      vertical: 'Vertical',
+      verticalDescription:
+        'Stack the group when it sits in a sidebar or beside a form, and give it a little spacing so the items stay readable.',
+      channelEmail: 'Email',
+      channelSms: 'SMS',
+      channelWebhook: 'Webhook',
+      disabled: 'Disabled item',
+      disabledDescription:
+        'Disable a range the data does not cover yet rather than hiding it, so the group keeps its shape as more data arrives.',
+    },
+    tooltip: {
+      title: 'Tooltip',
+      description:
+        'Names a control or adds a short hint on hover and focus. It is never the only place information lives, because a touch user may never see it.',
+      basic: 'Basic',
+      basicDescription:
+        'Mount one TooltipProvider around the page, then pass the trigger a real control through render so it keeps its own styling and semantics.',
+      exportHint: 'Downloads the current view as CSV',
+      sides: 'Sides',
+      sidesDescription:
+        'Set side to keep the tooltip away from the edge of the screen or from whatever the control sits next to.',
+      side: {
+        top: 'Top',
+        right: 'Right',
+        bottom: 'Bottom',
+        left: 'Left',
+      },
+      lastSynced: 'Last synced at {{time}}',
+      shortcut: 'With a shortcut',
+      shortcutDescription:
+        'A Kbd inside the content is the cheapest way to teach a shortcut, because it appears exactly where the reader is already looking.',
+      saveHint: 'Save changes',
+      refreshHint: 'Reload the order list',
+      iconButtons: 'Icon buttons',
+      iconButtonsDescription:
+        'An icon button needs both: an aria-label for assistive technology and a tooltip for everyone else.',
+      printInvoice: 'Print invoice',
+      downloadPdf: 'Download as PDF',
+      shareInvoice: 'Copy a share link',
+      disabled: 'On a disabled control',
+      disabledDescription:
+        'A disabled button fires no pointer events, so wrap it in a span and make the span the trigger — and say why it is disabled.',
+      deleteInvoice: 'Delete invoice',
+      deleteBlocked:
+        'A paid invoice cannot be deleted. Issue a credit note instead.',
+    },
+    typography: {
+      title: 'Typography',
+      description:
+        'Prose primitives for the long-form text a product still needs: a policy, release notes, a printed report. Compose them instead of repeating utility classes on every page.',
+      article: 'A whole article',
+      articleDescription:
+        'Used together in reading order, the primitives already carry their own vertical rhythm; give the article a max width so the lines stay readable.',
+      headings: 'Headings',
+      headingsDescription:
+        'One H1 per page, then step down without skipping a level — the outline is what a screen reader navigates by.',
+      body: 'Body text',
+      bodyDescription:
+        'Lead opens a page, P carries it, Large and Small pull out a figure and its caption, Muted holds the footnote nobody has to read.',
+      lists: 'Lists',
+      listsDescription:
+        'The default is bulleted; pass ordered when the sequence matters, as it does in a procedure someone follows step by step.',
+      unordered: 'Before sending an invoice',
+      ordered: 'Issuing a refund',
+      table: 'Table',
+      tableDescription:
+        'For a fixed comparison inside prose. A list of records the reader sorts, filters or pages through is a DataTable, not this.',
+      inline: 'Inline code',
+      inlineDescription:
+        'Mark commands, field names and stored values so the reader can tell what to type literally from what to read as prose.',
     },
   },
 };

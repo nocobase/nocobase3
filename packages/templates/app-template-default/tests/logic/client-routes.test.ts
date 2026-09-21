@@ -63,9 +63,8 @@ describe('app client routes', () => {
       'components',
     ]);
     const pages = groups.flatMap((group) => group.children ?? []);
-    // The reference set is filled in page by page, so this count moves as pages land. It covers the 44 component
-    // pages and the single example that ship today; `client/routes.ts` declares no route without its page.
-    expect(pages).toHaveLength(45);
+    // Every shadcn's ui primitive has a page and every example is a complete screen, so this covers the whole set.
+    expect(pages).toHaveLength(72);
     for (const page of pages) {
       // Every reference page is reachable by any signed-in user, and none of them is a page-authorization resource:
       // they are working material for building the application, not a feature anyone grants access to.
@@ -95,7 +94,14 @@ describe('app client routes', () => {
       // signed-in user and no grant names them.
       [
         'home',
+        'examples-dashboard',
         'examples-orders',
+        'examples-customers',
+        'examples-product-form',
+        'examples-inbox',
+        'examples-survey',
+        'examples-team-settings',
+        'examples-schedule',
         'components-accordion',
         'components-alert',
         'components-alert-dialog',
@@ -126,12 +132,25 @@ describe('app client routes', () => {
         'components-field',
         'components-hover-card',
         'components-input',
+        'components-input-group',
+        'components-input-otp',
+        'components-item',
         'components-kbd',
         'components-label',
         'components-marker',
         'components-menubar',
         'components-message',
         'components-message-scroller',
+        'components-native-select',
+        'components-navigation-menu',
+        'components-pagination',
+        'components-popover',
+        'components-progress',
+        'components-questionnaire',
+        'components-radio-group',
+        'components-resizable',
+        'components-scroll-area',
+        'components-select',
         'components-separator',
         'components-sheet',
         'components-sidebar',
@@ -140,6 +159,13 @@ describe('app client routes', () => {
         'components-spinner',
         'components-switch',
         'components-table',
+        'components-tabs',
+        'components-textarea',
+        'components-toast',
+        'components-toggle',
+        'components-toggle-group',
+        'components-tooltip',
+        'components-typography',
       ].map((name) => ({ name, authorizedAs: null })),
     );
   });

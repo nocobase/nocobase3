@@ -46,8 +46,14 @@ const namespaces = new Set(Object.keys(enUS as Record<string, unknown>));
 /** A dotted string literal, which is how a page spells a key whether it hands it to `t()` or holds it in data. */
 const quotedKey = /'([a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9]+)+)'/gu;
 
-/** A key a page completes at runtime, such as the status label of the orders table: only its prefix is static. */
-const interpolatedKey = /\bt\(\s*\x60([^\x60]*)\x24\{/gu;
+/**
+ * A key a page completes at runtime, such as the status label of the orders table: only its prefix is static.
+ *
+ * The capture is lazy because a key can interpolate more than once — the product form reads
+ * `errors.${field}.${code}` — and a greedy one would run to the last `${` and take a literal `${field}` into the
+ * prefix, which matches no key and reports the family as missing.
+ */
+const interpolatedKey = /\bt\(\s*\x60([^\x60]*?)\x24\{/gu;
 
 interface References {
   readonly file: string;
