@@ -8,3 +8,10 @@ pnpm-lock.yaml
 
 # Applied seed: preserve its recorded source checksum.
 database/main/seeds/202609080001_seed_articles.ts
+
+# Synchronized by `pnpm skills:sync` from the installed NocoBase packages: `.agents/skills/` is copied from them and
+# `.claude/skills/` holds symbolic links into it. They are upstream prose, replaced wholesale on the next sync, so
+# formatting them rewrites files this application does not own and the change disappears anyway. `.gitignore` lists
+# both, but a `--ignore-path` run replaces `.gitignore` rather than adding to it, so they are named here as well.
+.agents/
+.claude/skills/
