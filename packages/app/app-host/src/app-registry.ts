@@ -189,6 +189,27 @@ export class AppRuntimeRegistry {
     });
   }
 
+  /**
+   * Toggles whether requests may activate the App without changing anything
+   * else about its definition. A disabled App is rejected by `dispatch` and
+   * `ensureActive` even while it stays registered, which is what a stopped
+   * deployment needs: eviction alone would let the next request start it again.
+   */
+  async setEnabled(id: string, enabled: boolean): Promise<AppDefinition> {
+    return this.withAppLock(id, async () => {
+      const definition = this.definitions.get(id);
+      if (!definition) {
+        throw new AppNotFoundError(id);
+      }
+      if (definition.enabled === enabled) {
+        return definition;
+      }
+      const next: AppDefinition = { ...definition, enabled };
+      this.definitions.set(id, next);
+      return next;
+    });
+  }
+
   async replaceDefinition(
     definition: AppDefinition,
     replaceOptions: ReplaceAppDefinitionOptions = {},
