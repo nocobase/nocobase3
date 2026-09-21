@@ -40,6 +40,11 @@ const defaultIgnores: string[] = [
   '**/generated/**',
   '**/playwright-report/**',
   '**/test-results/**',
+  // Skills are prose for agents to read. `.claude/skills/` additionally holds symbolic links into `.agents/skills/`,
+  // written by `nocobase skills sync` in an application and by `scripts/link-claude-skills.mjs` in the monorepo, so
+  // linting through one reports the same file twice under two paths and `--fix` would edit the committed original.
+  '**/.agents/skills/**',
+  '**/.claude/skills/**',
 ];
 
 const scopeConfigs = (
