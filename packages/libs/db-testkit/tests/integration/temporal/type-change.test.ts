@@ -22,53 +22,73 @@ const wall = '2026-08-24T01:18:19.007';
 const instant = `${wall}Z`;
 
 describeIntegrationDatabases('Temporal field type changes', (context) => {
-  it('reads a datetime widened to datetimeTz as the same wall clock in UTC', async () => {
-    await context.builder.createCollection('temporalWidened', (collection) => {
-      collection.string('id').primary();
-      collection.datetime('at').nullable();
-      collection.datetime('empty').nullable();
-    });
-    const repository = context.database.repository('temporalWidened');
-    await repository.createOne({ values: { id: 'row', at: wall } });
+  /**
+   * Oracle cannot run this contract at all. Every case here converts a column that holds rows, which is the
+   * whole point, and Oracle answers `ORA-01439: column to be modified must be empty to change datatype`.
+   * Supporting it means the dialect rebuilding the column — add, copy, drop, rename — instead of issuing the
+   * plain MODIFY it issues today; until then the conversion is simply not available there.
+   */
+  const unsupported = context.spec.dialect === 'oracle';
 
-    await context.builder.alterField('temporalWidened', 'at', {
-      type: 'datetimeTz',
-    });
-    await context.builder.alterField('temporalWidened', 'empty', {
-      type: 'datetimeTz',
-    });
+  it.skipIf(unsupported)(
+    'reads a datetime widened to datetimeTz as the same wall clock in UTC',
+    async () => {
+      await context.builder.createCollection(
+        'temporalWidened',
+        (collection) => {
+          collection.string('id').primary();
+          collection.datetime('at').nullable();
+          collection.datetime('empty').nullable();
+        },
+      );
+      const repository = context.database.repository('temporalWidened');
+      await repository.createOne({ values: { id: 'row', at: wall } });
 
-    await expect(
-      repository.findOne({
-        filter: { id: 'row' },
-        select: (select) => select.fields('at', 'empty'),
-      }),
-    ).resolves.toEqual({ at: instant, empty: null });
-  });
+      await context.builder.alterField('temporalWidened', 'at', {
+        type: 'datetimeTz',
+      });
+      await context.builder.alterField('temporalWidened', 'empty', {
+        type: 'datetimeTz',
+      });
 
-  it('reads a datetimeTz narrowed to datetime as the UTC wall clock of the instant', async () => {
-    await context.builder.createCollection('temporalNarrowed', (collection) => {
-      collection.string('id').primary();
-      collection.datetimeTz('at').nullable();
-      collection.datetimeTz('empty').nullable();
-    });
-    const repository = context.database.repository('temporalNarrowed');
-    await repository.createOne({ values: { id: 'row', at: instant } });
+      await expect(
+        repository.findOne({
+          filter: { id: 'row' },
+          select: (select) => select.fields('at', 'empty'),
+        }),
+      ).resolves.toEqual({ at: instant, empty: null });
+    },
+  );
 
-    await context.builder.alterField('temporalNarrowed', 'at', {
-      type: 'datetime',
-    });
-    await context.builder.alterField('temporalNarrowed', 'empty', {
-      type: 'datetime',
-    });
+  it.skipIf(unsupported)(
+    'reads a datetimeTz narrowed to datetime as the UTC wall clock of the instant',
+    async () => {
+      await context.builder.createCollection(
+        'temporalNarrowed',
+        (collection) => {
+          collection.string('id').primary();
+          collection.datetimeTz('at').nullable();
+          collection.datetimeTz('empty').nullable();
+        },
+      );
+      const repository = context.database.repository('temporalNarrowed');
+      await repository.createOne({ values: { id: 'row', at: instant } });
 
-    await expect(
-      repository.findOne({
-        filter: { id: 'row' },
-        select: (select) => select.fields('at', 'empty'),
-      }),
-    ).resolves.toEqual({ at: wall, empty: null });
-  });
+      await context.builder.alterField('temporalNarrowed', 'at', {
+        type: 'datetime',
+      });
+      await context.builder.alterField('temporalNarrowed', 'empty', {
+        type: 'datetime',
+      });
+
+      await expect(
+        repository.findOne({
+          filter: { id: 'row' },
+          select: (select) => select.fields('at', 'empty'),
+        }),
+      ).resolves.toEqual({ at: wall, empty: null });
+    },
+  );
 
   // PostgreSQL does not satisfy this yet, and neither does Kingbase, which inherits its casts: widening a
   // zone-free timestamp there reads each value in the session time zone, so a server that is not on UTC moves
@@ -76,7 +96,8 @@ describeIntegrationDatabases('Temporal field type changes', (context) => {
   // makes it deterministic; until the schema layer emits that, a migration has to pin the session itself, as
   // `202609110001_workflow_instant_columns` in `@nocobase/app-plugin-workflow` does.
   it.skipIf(
-    context.profile.temporal.sessionTimezone === 'unsupported' ||
+    unsupported ||
+      context.profile.temporal.sessionTimezone === 'unsupported' ||
       ['postgres', 'kingbase'].includes(context.spec.dialect),
   )(
     'converts on the UTC pivot whatever the database session time zone says',
@@ -115,40 +136,43 @@ describeIntegrationDatabases('Temporal field type changes', (context) => {
     },
   );
 
-  it('returns the original value when a Field is converted and converted back', async () => {
-    await context.builder.createCollection(
-      'temporalRoundTrip',
-      (collection) => {
-        collection.string('id').primary();
-        collection.datetime('local').nullable();
-        collection.datetimeTz('instant').nullable();
-      },
-    );
-    const repository = context.database.repository('temporalRoundTrip');
-    await repository.createOne({
-      values: { id: 'row', local: wall, instant },
-    });
-
-    for (const [field, to] of [
-      ['local', 'datetimeTz'],
-      ['instant', 'datetime'],
-    ] as const)
-      await context.builder.alterField('temporalRoundTrip', field, {
-        type: to,
-      });
-    for (const [field, back] of [
-      ['local', 'datetime'],
-      ['instant', 'datetimeTz'],
-    ] as const)
-      await context.builder.alterField('temporalRoundTrip', field, {
-        type: back,
+  it.skipIf(unsupported)(
+    'returns the original value when a Field is converted and converted back',
+    async () => {
+      await context.builder.createCollection(
+        'temporalRoundTrip',
+        (collection) => {
+          collection.string('id').primary();
+          collection.datetime('local').nullable();
+          collection.datetimeTz('instant').nullable();
+        },
+      );
+      const repository = context.database.repository('temporalRoundTrip');
+      await repository.createOne({
+        values: { id: 'row', local: wall, instant },
       });
 
-    await expect(
-      repository.findOne({
-        filter: { id: 'row' },
-        select: (select) => select.fields('local', 'instant'),
-      }),
-    ).resolves.toEqual({ local: wall, instant });
-  });
+      for (const [field, to] of [
+        ['local', 'datetimeTz'],
+        ['instant', 'datetime'],
+      ] as const)
+        await context.builder.alterField('temporalRoundTrip', field, {
+          type: to,
+        });
+      for (const [field, back] of [
+        ['local', 'datetime'],
+        ['instant', 'datetimeTz'],
+      ] as const)
+        await context.builder.alterField('temporalRoundTrip', field, {
+          type: back,
+        });
+
+      await expect(
+        repository.findOne({
+          filter: { id: 'row' },
+          select: (select) => select.fields('local', 'instant'),
+        }),
+      ).resolves.toEqual({ local: wall, instant });
+    },
+  );
 });

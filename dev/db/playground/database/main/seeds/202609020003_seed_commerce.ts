@@ -4,7 +4,9 @@ const seed: SeedDefinition = defineSeed({
   name: '202609020003_seed_commerce',
 
   async run({ query }) {
-    const createdAt = '2026-09-02 09:00:00';
+    // The portable contract is ISO-8601 with the `T`; a space separator is a
+    // dialect literal the query builder no longer accepts on a temporal column.
+    const createdAt = '2026-09-02T09:00:00';
     await query
       .insertInto('products')
       .values([
