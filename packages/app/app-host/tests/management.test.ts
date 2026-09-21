@@ -685,50 +685,6 @@ describe('managed host reconciliation', () => {
     });
   });
 
-  it('refuses requests for a stopped deployment until it is started again', async () => {
-    const { deploymentsDir, volumesDir, artifact, artifactDir } =
-      await createFixture();
-    const host = createAppHost({
-      mode: 'managed',
-      host: '127.0.0.1',
-      port: 0,
-      appRevisionsDir: deploymentsDir,
-      appVolumesDir: volumesDir,
-      artifact: fsArtifact(artifactDir),
-      evictionIntervalMs: 0,
-    });
-    hosts.push(host);
-    await host.start();
-    const set = deploymentSet(1, artifact, { activation: 'eager' });
-    await host.management.applyDeploymentSet(set);
-
-    const address = host.server.address();
-    if (!address || typeof address !== 'object') {
-      throw new Error('App host did not expose a TCP address');
-    }
-    const url = `http://127.0.0.1:${address.port}/customer/api/health`;
-    expect((await fetch(url)).status).toBe(200);
-
-    const stopped = await host.management.stopDeployment('customer');
-    expect(stopped.deployments[0]).toMatchObject({
-      appId: 'customer',
-      desiredState: 'stopped',
-      observedState: 'stopped',
-    });
-    // Eviction alone is not enough: the request must not cold-start the App.
-    expect((await fetch(url)).status).toBe(404);
-    expect(host.registry.isActive('customer')).toBe(false);
-    expect(host.registry.definition('customer')?.enabled).toBe(false);
-
-    const started = await host.management.startDeployment(set.deployments[0]!);
-    expect(started.deployments[0]).toMatchObject({
-      appId: 'customer',
-      observedState: 'running',
-    });
-    expect(host.registry.definition('customer')?.enabled).toBe(true);
-    expect((await fetch(url)).status).toBe(200);
-  });
-
   it('routes a managed deployment by its configured base path', async () => {
     const { deploymentsDir, volumesDir, artifact, artifactDir } =
       await createFixture();

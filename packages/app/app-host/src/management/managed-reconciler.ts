@@ -116,9 +116,6 @@ export class ManagedReconciler {
       const revision = this.nextRevision();
       if (this.registry.has(deployment.appId)) {
         this.markPending(revision, running);
-        // A stopped deployment left its definition disabled; re-enable it before
-        // reading the definition back so the update below does not carry the flag.
-        await this.registry.setEnabled(deployment.appId, true);
         const previousDefinition = this.registry.definition(deployment.appId);
         const previousConfigPath = previousDefinition?.configPath;
         let candidateConfigPath: string | undefined;
@@ -230,8 +227,6 @@ export class ManagedReconciler {
     return this.enqueue(async () => {
       const status = this.requireStatus(appId);
       const revision = this.nextRevision();
-      // Disable before evicting so no request re-activates the App in between.
-      await this.registry.setEnabled(appId, false);
       await this.registry.evict(appId, {
         reason: `deployment ${status.id} stopped`,
       });
@@ -399,9 +394,6 @@ export class ManagedReconciler {
     restoring: boolean = false,
   ): Promise<void> {
     if (spec.desiredState === 'stopped') {
-      if (this.registry.has(spec.appId)) {
-        await this.registry.setEnabled(spec.appId, false);
-      }
       await this.registry.evict(spec.appId, {
         reason: `deployment ${spec.id} stopped`,
       });
