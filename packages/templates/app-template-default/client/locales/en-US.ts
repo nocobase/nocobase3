@@ -294,7 +294,7 @@ const enUS = {
       cancelOrder: 'Cancel order',
       cancelTitle: 'Cancel this order?',
       cancelDescription:
-        'Order {number} is marked as cancelled, the customer is notified, and the order cannot be reopened.',
+        'Order {{number}} is marked as cancelled, the customer is notified, and the order cannot be reopened.',
       newOrder: 'New order',
       newOrderDescription:
         'Record an order taken outside the shop, such as one placed by phone.',
@@ -402,7 +402,8 @@ const enUS = {
       basicDescription:
         'A title and a sentence of detail. Reach for a toast when the message does not need to persist.',
       paymentReceivedTitle: 'Payment received',
-      paymentReceivedDescription: 'We received {amount} for invoice {invoice}.',
+      paymentReceivedDescription:
+        'We received {{amount}} for invoice {{invoice}}.',
       maintenanceTitle: 'Scheduled maintenance',
       maintenanceDescription:
         'Orders are still accepted; reporting stays read-only until 04:00 UTC on Sunday.',
@@ -427,11 +428,11 @@ const enUS = {
       withAction: 'With an action',
       withActionDescription:
         'Put the recovery step in the alert rather than behind a menu.',
-      storageTitle: 'Storage {percent} full',
+      storageTitle: 'Storage {{percent}} full',
       storageDescription: 'New uploads are paused for this workspace.',
       manageStorage: 'Manage storage',
       exportReadyTitle: 'Export ready',
-      exportReadyDescription: 'The file {file} is ready to download.',
+      exportReadyDescription: 'The file {{file}} is ready to download.',
       webhookFailedTitle: 'Webhook failed',
       webhookFailedDescription:
         'Delivery to the orders endpoint returned 502 four times in a row.',
@@ -462,22 +463,23 @@ const enUS = {
       smallDescription:
         'A one-line consequence needs no media; keep the dialog to the width of its sentence.',
       sendInvoice: 'Send invoice',
-      sendTitle: 'Send invoice {invoice}?',
-      sendDescription: 'The customer at {email} receives it immediately.',
+      sendTitle: 'Send invoice {{invoice}}?',
+      sendDescription: 'The customer at {{email}} receives it immediately.',
       notNow: 'Not now',
       send: 'Send',
       withMedia: 'With media',
       withMediaDescription:
         'A thumbnail of the item being deleted makes the consequence unmistakable.',
       shareTitle: 'Share with the finance team?',
-      shareDescription: 'Everyone in {team} gains edit access to this report.',
+      shareDescription:
+        'Everyone in {{team}} gains edit access to this report.',
       destructive: 'Destructive',
       destructiveDescription:
         'Phrase the title as the action, name the records it touches, and keep the confirm button red.',
       deleteCustomer: 'Delete customer',
-      deleteTitle: 'Delete {customer}?',
+      deleteTitle: 'Delete {{customer}}?',
       deleteDescription:
-        'This also removes {count} related records, and deleting cannot be undone.',
+        'This also removes {{count}} related records, and deleting cannot be undone.',
       deleting: 'Deleting…',
       withoutTrigger: 'Controlled',
       withoutTriggerDescription:
@@ -514,10 +516,10 @@ const enUS = {
       cardAlt: 'Team meeting in the Lisbon office',
       recorded: 'Recorded Sep 4',
       cardTitle: 'Design review',
-      cardDescription: '{date} · {duration}',
+      cardDescription: '{{date}} · {{duration}}',
     },
     attachment: {
-      removeFile: 'Remove {file}',
+      removeFile: 'Remove {{file}}',
       title: 'Attachment',
       description:
         'Represents an uploaded file in a list, a conversation or a composer, including its size and its progress.',
@@ -528,19 +530,19 @@ const enUS = {
       statesDescription:
         'One component covers the whole life of an upload: waiting, in flight, processing, failed and done.',
       readyToUpload: 'Ready to upload',
-      uploadingProgress: 'Uploading {percent}',
+      uploadingProgress: 'Uploading {{percent}}',
       cancelUpload: 'Cancel upload',
       processingDocument: 'Processing document…',
       uploadFailed: 'Upload failed',
       retryUpload: 'Retry upload',
-      uploadedMeta: 'PDF · {size}',
+      uploadedMeta: 'PDF · {{size}}',
       sizes: 'Sizes',
       sizesDescription:
         'Size the row to the surface: compact in tables, default in lists and cards.',
       images: 'Images',
       imagesDescription:
         'Image attachments show a thumbnail and open in a preview dialog.',
-      openFile: 'Open {file}',
+      openFile: 'Open {{file}}',
       conversation: 'In a conversation',
       conversationDescription:
         'Inside a message, an attachment sits with the text it belongs to rather than in a separate list.',
@@ -648,9 +650,9 @@ const enUS = {
       conversation: 'Conversation',
       conversationDescription:
         'Direction expresses the speaker, and the time sits under each group.',
-      customerAsks: 'Where is my order {order}?',
+      customerAsks: 'Where is my order {{order}}?',
       agentChecking: 'Checking with the courier now — one moment.',
-      agentShipped: 'It shipped this morning. Tracking number {tracking}.',
+      agentShipped: 'It shipped this morning. Tracking number {{tracking}}.',
       reactionThumbsUp: 'Helpful',
       customerThanks: 'Perfect, thank you!',
       variants: 'Variants',
@@ -671,7 +673,7 @@ const enUS = {
       reactionsTopMessage: 'This one has the most reactions.',
       reactionsReadMessage: 'Read receipts are reactions too.',
       readReceipt: 'Read',
-      readAt: 'Read {time}',
+      readAt: 'Read {{time}}',
       quickReplies: 'Quick replies',
       quickRepliesDescription:
         'Suggested answers save typing on mobile and keep the reply on topic.',
@@ -807,9 +809,9 @@ const enUS = {
       statRevenue: 'Revenue',
       statOrders: 'Orders',
       statCustomers: 'Customers',
-      activityPaid: '{customer} paid invoice {invoice}',
-      activityShipped: 'Order {order} shipped',
-      activityJoined: '{name} joined the workspace',
+      activityPaid: '{{customer}} paid invoice {{invoice}}',
+      activityShipped: 'Order {{order}} shipped',
+      activityJoined: '{{name}} joined the workspace',
     },
     carousel: {
       title: 'Carousel',
@@ -827,8 +829,8 @@ const enUS = {
       api: 'Controlled',
       apiDescription:
         'The carousel api reports the current step and scrolls to any other, which is what a step counter needs.',
-      stepOf: 'Step {current} of {total}',
-      goToStep: 'Go to step {step}',
+      stepOf: 'Step {{current}} of {{total}}',
+      goToStep: 'Go to step {{step}}',
       announcementMaintenance: 'Scheduled maintenance on Sunday',
       announcementExports: 'CSV exports now include custom fields',
       announcementRoles: 'Role permissions were updated',
@@ -870,7 +872,7 @@ const enUS = {
         'An area chart shows a total and how it changes; stack the series when they add up to something.',
       signupsTitle: 'Signups',
       signupsDescription: 'Free and Pro accounts created each month.',
-      trendingUp: 'Up {percent} this month',
+      trendingUp: 'Up {{percent}} this month',
       line: 'Line',
       lineDescription:
         'A line suits several series measured the same way, where the trend matters more than the totals.',
@@ -899,7 +901,7 @@ const enUS = {
       controlledDescription:
         'Keep the value in state when something else on the page has to react to it.',
       sendCopy: 'Send a copy to billing',
-      sendCopyOn: 'A copy goes to {email}',
+      sendCopyOn: 'A copy goes to {{email}}',
       sendCopyOff: 'No copy is sent',
       group: 'A group of options',
       groupDescription:
@@ -913,7 +915,7 @@ const enUS = {
       indeterminate: 'Indeterminate',
       indeterminateDescription:
         'A parent box shows a dash while only some of its children are checked, and clearing it clears all of them.',
-      allPermissions: 'All {resource} permissions',
+      allPermissions: 'All {{resource}} permissions',
       permissionRead: 'Read',
       cards: 'As cards',
       cardsDescription:
@@ -929,9 +931,9 @@ const enUS = {
       table: 'In a table',
       tableDescription:
         'A select-all box in the header and one per row, with the count of what is selected above.',
-      selectedCount: '{selected} of {total} selected',
+      selectedCount: '{{selected}} of {{total}} selected',
       selectAll: 'Select every row',
-      selectRow: 'Select {name}',
+      selectRow: 'Select {{name}}',
       roleEditor: 'Editor',
       roleViewer: 'Viewer',
     },
@@ -986,13 +988,13 @@ const enUS = {
       assignee: 'Assignee',
       assigneePlaceholder: 'Search people',
       empty: 'No matches.',
-      assignedTo: 'Assigned to {name}',
+      assignedTo: 'Assigned to {{name}}',
       unassigned: 'Nobody is assigned yet',
       objectItems: 'Object values',
       objectItemsDescription:
         'The selection can be a record rather than a string: give the combobox a value per item and render the object in the list.',
       customerPlaceholder: 'Search customers',
-      shipsTo: 'Ships to {city}',
+      shipsTo: 'Ships to {{city}}',
       noCustomer: 'Choose a customer to see the delivery address',
       groups: 'Grouped options',
       groupsDescription:
@@ -1002,7 +1004,7 @@ const enUS = {
       multipleDescription:
         'Chips keep the chosen values visible while the field stays open for the next one.',
       addTag: 'Add a tag',
-      tagCount: '{count} tags',
+      tagCount: '{{count}} tags',
       popup: 'As a button',
       popupDescription:
         'A trigger button opens the same list, which is what a toolbar or a filter control needs.',
@@ -1034,7 +1036,7 @@ const enUS = {
       dialogDescription:
         'Wrap the same list in a dialog and bind it to a keyboard shortcut, which is what a command palette is.',
       openPalette: 'Open palette',
-      lastRun: 'Ran {command}',
+      lastRun: 'Ran {{command}}',
       nothingRun: 'Nothing has run yet',
       paletteTitle: 'Command palette',
       paletteDescription: 'Search for a command, an order or a customer.',
@@ -1085,7 +1087,7 @@ const enUS = {
       duplicate: 'Duplicate',
       markShipped: 'Mark as shipped',
       cancelOrder: 'Cancel order',
-      lastAction: 'Ran {action}',
+      lastAction: 'Ran {{action}}',
       noAction: 'Right-click a record to act on it.',
     },
     dataTable: {
@@ -1097,7 +1099,7 @@ const enUS = {
         'The toolbar filters by customer and toggles columns, and the footer carries the paging controls.',
       orderNumber: 'Order',
       filterPlaceholder: 'Filter by customer',
-      lastAction: 'Ran {action}',
+      lastAction: 'Ran {{action}}',
       noAction: 'Open a row menu to act on an order.',
       viewDetails: 'View details',
       copyNumber: 'Copy number',
@@ -1108,7 +1110,7 @@ const enUS = {
       compact: 'Compact',
       compactDescription:
         'Without pagination and with four columns, the same table fits inside a card or a side panel.',
-      selectedOrder: 'Selected {number} · {customer}',
+      selectedOrder: 'Selected {{number}} · {{customer}}',
       clickRow: 'Click a row to select it.',
       empty: 'Empty state',
       emptyDescription:
@@ -1122,12 +1124,12 @@ const enUS = {
       single: 'Single date',
       singleDescription:
         'Keep the formatted value visible beside the field so the reader can check what was chosen.',
-      selected: 'Selected {date}',
+      selected: 'Selected {{date}}',
       nothingSelected: 'Nothing selected',
       range: 'Date range',
       rangeDescription:
         'A range picker writes both ends at once, which is what a report period needs.',
-      rangeSelected: '{from} to {to}',
+      rangeSelected: '{{from}} to {{to}}',
       pickBothEnds: 'Pick a start and an end date',
       field: 'In a form',
       fieldDescription:
@@ -1166,17 +1168,17 @@ const enUS = {
       confirmDescription:
         'Ask before anything that cannot be undone, put the destructive button last, and name the record in the question.',
       deleteInvoice: 'Delete invoice',
-      deleteInvoiceTitle: 'Delete invoice {number}?',
+      deleteInvoiceTitle: 'Delete invoice {{number}}?',
       deleteInvoiceDescription:
         'The invoice and its payment history are removed. This cannot be undone.',
-      deleted: 'Invoice {number} deleted',
+      deleted: 'Invoice {{number}} deleted',
       undo: 'Undo',
       scrollable: 'Long content',
       scrollableDescription:
         'When the content is taller than the viewport, let the body scroll and keep the header and footer in place.',
       viewOrderItems: 'View order items',
-      orderItems: 'Order {number}',
-      orderItemsDescription: '{count} items in this order',
+      orderItems: 'Order {{number}}',
+      orderItemsDescription: '{{count}} items in this order',
       share: 'Share',
       shareDescription:
         'A dialog is also a good home for a value the reader has to copy, because it stays open while they copy it.',
@@ -1186,7 +1188,7 @@ const enUS = {
       sizesDescription:
         'Set the width with a max-width on the content: sm for a confirmation, lg for a form, and wider only for a table.',
       small: 'Small',
-      sizeHint: 'This dialog is {width}',
+      sizeHint: 'This dialog is {{width}}',
       medium: 'Medium',
       large: 'Large',
     },
@@ -1406,7 +1408,7 @@ const enUS = {
       selectable: 'Selectable rows',
       selectableDescription:
         'Select all sits in the header and one box in each row, with the count above the table.',
-      selectedCount: '{selected} of {total} selected',
+      selectedCount: '{{selected}} of {{total}} selected',
       selectAll: 'Select every row',
       inCard: 'Inside a card',
       inCardDescription:
