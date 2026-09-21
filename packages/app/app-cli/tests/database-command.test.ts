@@ -7,10 +7,20 @@ import { IdGeneratorProvider } from '@nocobase/app-server/id-generator';
 import { ServiceProvider } from '../../../libs/service-provider/src/index.js';
 import type { Application } from '@nocobase/app-server';
 // @vitest-environment node
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { runDatabaseCommand } from '../src/database-command.js';
+import {
+  runDatabaseCommand,
+  runDatabaseRepairCommand,
+} from '../src/database-command.js';
 import { createAppPaths, AppConfig } from '@nocobase/app-server/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
 import sqlite, { type SqliteConnectionConfig } from '@nocobase/db-sqlite';
@@ -110,7 +120,25 @@ ${fail ? "throw new Error('failed migration');" : "await builder.createCollectio
 }, async down({ builder }) { await builder.dropCollection('rows'); } });`,
     );
   }
-  return { runtime, command, migration };
+  function seed(connection: string) {
+    const directory = paths.database(`${connection}/seeds`);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      path.join(directory, '001_defaults.ts'),
+      `import { defineSeed } from '@nocobase/db';
+export default defineSeed({ name: '001_defaults', async run() {} });`,
+    );
+  }
+  /** Edit both sources after execution, the way a reformat or a comment would. */
+  function rewrite(connection: string) {
+    for (const file of [
+      paths.database(`${connection}/migrations/001_create.ts`),
+      paths.database(`${connection}/seeds/001_defaults.ts`),
+    ])
+      if (existsSync(file))
+        appendFileSync(file, '\n// changed after execution\n');
+  }
+  return { runtime, command, migration, seed, rewrite };
 }
 
 it('retains single-connection JSON fields and honors manual selection', async () => {
@@ -129,6 +157,7 @@ it('retains single-connection JSON fields and honors manual selection', async ()
     batch: 1,
     executed: ['001_create'],
     skipped: [],
+    warnings: [],
   });
   expect(command.exit).not.toHaveBeenCalled();
 });
@@ -330,4 +359,140 @@ it('uses migration sources contributed by the application factory', async () => 
   expect(command.logJson).toHaveBeenCalledWith(
     expect.objectContaining({ executed: ['001_create'] }),
   );
+});
+
+it('warns about checksum drift and repairs it across both task kinds', async () => {
+  const { runtime, command, migration, seed, rewrite } = fixture();
+  migration('main');
+  seed('main');
+  await runDatabaseCommand(
+    command,
+    'migrations',
+    { json: false, all: false },
+    runtime,
+  );
+  await runDatabaseCommand(
+    command,
+    'seeds',
+    { json: false, all: false },
+    runtime,
+  );
+  rewrite('main');
+
+  // The default policy reports the drift without stopping the run.
+  command.log.mockClear();
+  await runDatabaseCommand(
+    command,
+    'migrations',
+    { json: false, all: false },
+    runtime,
+  );
+  expect(command.log.mock.calls.flat().join('\n')).toContain(
+    'WARNING: checksum changed since it was executed: 001_create',
+  );
+  expect(command.exit).not.toHaveBeenCalled();
+
+  // A dry run reports both kinds and writes nothing.
+  command.logJson.mockClear();
+  await runDatabaseRepairCommand(
+    command,
+    { json: true, all: false, dryRun: true },
+    runtime,
+  );
+  const preview = command.logJson.mock.calls.at(-1)?.[0];
+  expect(preview).toMatchObject({ ok: true, status: 'completed' });
+  expect(
+    preview.results.map((entry: { kind: string; repaired: unknown[] }) => [
+      entry.kind,
+      entry.repaired.length,
+    ]),
+  ).toEqual([
+    ['migrations', 1],
+    ['seeds', 1],
+  ]);
+  expect(
+    preview.results.every((entry: { dryRun: boolean }) => entry.dryRun),
+  ).toBe(true);
+
+  command.logJson.mockClear();
+  await runDatabaseRepairCommand(
+    command,
+    { json: true, all: false, force: true },
+    runtime,
+  );
+  const repaired = command.logJson.mock.calls.at(-1)?.[0];
+  expect(
+    repaired.results.flatMap(
+      (entry: { repaired: { name: string }[] }) => entry.repaired,
+    ),
+  ).toHaveLength(2);
+
+  // Nothing is left to repair, and the run no longer warns.
+  command.log.mockClear();
+  await runDatabaseCommand(
+    command,
+    'migrations',
+    { json: false, all: false },
+    runtime,
+  );
+  expect(command.log.mock.calls.flat().join('\n')).not.toContain('WARNING');
+  command.logJson.mockClear();
+  await runDatabaseRepairCommand(
+    command,
+    { json: true, all: false, force: true },
+    runtime,
+  );
+  expect(
+    command.logJson.mock.calls
+      .at(-1)?.[0]
+      .results.flatMap((entry: { repaired: unknown[] }) => entry.repaired),
+  ).toEqual([]);
+});
+
+it('repairs only the requested kind', async () => {
+  const { runtime, command, migration, seed, rewrite } = fixture();
+  migration('main');
+  seed('main');
+  await runDatabaseCommand(
+    command,
+    'migrations',
+    { json: false, all: false },
+    runtime,
+  );
+  await runDatabaseCommand(
+    command,
+    'seeds',
+    { json: false, all: false },
+    runtime,
+  );
+  rewrite('main');
+
+  command.logJson.mockClear();
+  await runDatabaseRepairCommand(
+    command,
+    { json: true, all: false, kind: 'seeds', force: true },
+    runtime,
+  );
+  const result = command.logJson.mock.calls.at(-1)?.[0];
+  expect(result.results.map((entry: { kind: string }) => entry.kind)).toEqual([
+    'seeds',
+  ]);
+
+  command.logJson.mockClear();
+  await runDatabaseRepairCommand(
+    command,
+    { json: true, all: false, dryRun: true },
+    runtime,
+  );
+  expect(
+    command.logJson.mock.calls
+      .at(-1)?.[0]
+      .results.map((entry: { kind: string; repaired: unknown[] }) => [
+        entry.kind,
+        entry.repaired.length,
+      ]),
+  ).toEqual([
+    ['migrations', 1],
+    ['seeds', 0],
+  ]);
 });

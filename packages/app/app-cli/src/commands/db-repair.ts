@@ -1,0 +1,74 @@
+import { AppCommand } from '../context.js';
+import { type Command, Flags } from '@oclif/core';
+import type { Interfaces } from '@oclif/core';
+import type { AppDatabaseTaskKind } from '@nocobase/app-server/database';
+
+import { runDatabaseRepairCommand } from '../database-command.js';
+
+export default class AppDbRepair extends AppCommand {
+  static override summary =
+    'Realign recorded migration and seed checksums with the current sources.';
+  static override description =
+    'Rewrites the checksum stored for each executed migration and seed whose source has since changed, clearing the drift that a run reports. It executes nothing and changes no schema or data. History records with no matching source are left untouched, because removing one would let the task run again. Preview with --dry-run before writing.';
+
+  static override examples: Command.Example[] = [
+    '<%= config.bin %> <%= command.id %> --dry-run',
+    '<%= config.bin %> <%= command.id %>',
+    '<%= config.bin %> <%= command.id %> --kind seeds',
+    '<%= config.bin %> <%= command.id %> --all --force --json',
+  ];
+
+  static override flags: {
+    json: Interfaces.BooleanFlag<boolean>;
+    all: Interfaces.BooleanFlag<boolean>;
+    connection: Interfaces.OptionFlag<string | undefined>;
+    kind: Interfaces.OptionFlag<string | undefined>;
+    'dry-run': Interfaces.BooleanFlag<boolean>;
+    force: Interfaces.BooleanFlag<boolean>;
+  } = {
+    json: Flags.boolean({
+      default: false,
+      description: 'Print one machine-readable JSON result.',
+    }),
+    all: Flags.boolean({
+      default: false,
+      exclusive: ['connection'],
+      description:
+        'Run all managed connections; report external connections as skipped.',
+    }),
+    connection: Flags.string({
+      exclusive: ['all'],
+      description: 'Target a named managed connection, regardless of autoRun.',
+    }),
+    kind: Flags.string({
+      options: ['migrations', 'seeds'],
+      description:
+        'Repair only one kind of task. Both are repaired by default.',
+    }),
+    'dry-run': Flags.boolean({
+      default: false,
+      description: 'Report what would be rewritten without writing anything.',
+    }),
+    force: Flags.boolean({
+      default: false,
+      description: 'Skip the confirmation prompt.',
+    }),
+  };
+
+  public async run(): Promise<void> {
+    const { flags } = await this.parse(AppDbRepair);
+    await runDatabaseRepairCommand(
+      {
+        log: (message) => this.log(message),
+        logJson: (value) => this.logJson(value),
+        exit: (code) => this.exit(code),
+      },
+      {
+        ...flags,
+        kind: flags.kind as AppDatabaseTaskKind | undefined,
+        dryRun: flags['dry-run'],
+      },
+      this.appContext,
+    );
+  }
+}

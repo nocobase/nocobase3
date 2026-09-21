@@ -122,9 +122,17 @@ Different explicit old/new directories, two explicit source arrays, or a combine
 
 No command moves source files or rewrites history. When moving a directory, preserve the target database, package identity, filenames, exported names, file contents and history/lock table configuration. Do not copy already-applied migrations to another database as an upgrade. Verify a repeat run executes nothing. An explicitly configured source missing from a release is an error; an absent conventional source is permitted for applications with no owned tasks. Verify release packaging separately to catch accidental omission of conventional sources.
 
-Checksums are based on file contents. Moving unchanged files preserves them; compiling TypeScript into different JavaScript is not guaranteed to preserve an existing development database's checksums. Verify upgrades against the same execution artifact format, and never rewrite checksums to bypass a mismatch.
+Checksums are based on file contents. Moving unchanged files preserves them; compiling TypeScript into different JavaScript is not guaranteed to preserve an existing development database's checksums. Verify upgrades against the same execution artifact format.
 
 Review `server/plugins.ts` and each registered plugin’s migration declarations to identify migration contributions.
+
+## Checksum drift
+
+A checksum recorded when a migration or seed ran no longer matching its current source means the file changed after it was executed. By default the run reports the drift and continues: `pnpm migrate` and `pnpm seed` print a warning, startup logs one through the application logger, and `--json` carries it in `warnings`. Set `onChecksumMismatch: 'error'` on a connection's `migrations` or `seeds` configuration — or at the top level — to refuse to run instead. A record whose migration is missing from the sources entirely always fails, whatever the policy says.
+
+`pnpm db:repair` (`nocobase app db repair`) rewrites the recorded checksums to match the current sources, which is how the warning is cleared once the change is confirmed intentional. One command covers both migrations and seeds; `--kind migrations` or `--kind seeds` narrows it. It executes nothing and changes no schema or data. Preview with `--dry-run` first; `--dry-run --json` is the form to run in CI when drift should gate a deploy. It never deletes a history record, so a repair cannot make an executed migration run again.
+
+Repair records a decision; it does not make one. It is the right tool for drift you can explain — a reformat, a comment, a rebuild that produced different output. It is not a way to edit a merged migration: the applied database still has the old schema, and rewriting the checksum only hides that. Correct a merged migration with a new migration.
 
 ## Seeds
 
@@ -170,7 +178,7 @@ Check that `up` produces the expected tables, columns, types, indexes, and const
 
 The application build generates `.manifest.json` in each compiled migrations and seeds directory after server compilation, path rewriting, and `afterServerBuild` hooks. Keep the manifest generator in the build when customizing it. Plugins generate their own manifests when built; an application must not regenerate manifests for installed dependencies.
 
-TypeScript and compiled JavaScript use the same source checksum for migration history, while the loader separately verifies emitted JavaScript. Marked JavaScript requires its manifest. For a database with old raw JavaScript checksums, first run the compiled representation with matching original output; verified legacy hashes are converted under the task lock. Unreproducible old output remains an error. Never edit historical migrations or replace checksums by hand to resolve an upgrade failure.
+TypeScript and compiled JavaScript use the same source checksum for migration history, while the loader separately verifies emitted JavaScript. Marked JavaScript requires its manifest. For a database with old raw JavaScript checksums, first run the compiled representation with matching original output; verified legacy hashes are converted under the task lock. Never edit historical migrations, and never edit the history table by hand, to resolve an upgrade failure.
 
 ## Reading runtime configuration
 

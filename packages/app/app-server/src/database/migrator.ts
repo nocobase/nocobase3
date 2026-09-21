@@ -6,8 +6,11 @@ import { existsSync } from 'node:fs';
 
 import {
   createMigrator,
+  type ChecksumMismatch,
   type CreateMigratorOptions,
   type DatabaseManager,
+  type MigrationRepairOptions,
+  type MigrationRepairResult,
   type MigrationSource,
   type MigrationRollbackResult,
   type MigrationRunResult,
@@ -19,6 +22,7 @@ export interface AppMigrator {
   latest(): Promise<AppMigrationRunResult>;
   fresh(): Promise<AppMigrationRunResult>;
   rollback(): Promise<AppMigrationRollbackResult>;
+  repair(options?: MigrationRepairOptions): Promise<AppMigrationRepairResult>;
 }
 
 export type AppMigrationSkippedReason = 'missing-directory';
@@ -29,6 +33,7 @@ export interface AppMigrationRunResult {
   batch?: number;
   executed?: string[];
   skipped?: string[];
+  warnings?: ChecksumMismatch[];
 }
 
 export interface AppMigrationRollbackResult {
@@ -36,6 +41,14 @@ export interface AppMigrationRollbackResult {
   reason?: AppMigrationSkippedReason;
   batch?: number;
   rolledBack?: string[];
+  warnings?: ChecksumMismatch[];
+}
+
+export interface AppMigrationRepairResult {
+  status: 'completed' | 'skipped';
+  reason?: AppMigrationSkippedReason;
+  repaired?: ChecksumMismatch[];
+  dryRun?: boolean;
 }
 
 export interface CreateAppMigratorOptions {
@@ -82,6 +95,18 @@ export function createAppMigrator(
         await createDatabaseMigrator(options).rollback(),
       );
     },
+
+    async repair(
+      repairOptions?: MigrationRepairOptions,
+    ): Promise<AppMigrationRepairResult> {
+      if (!hasMigrationDirectory(options)) {
+        return skippedMigrationResult();
+      }
+
+      return completedRepairResult(
+        await createDatabaseMigrator(options).repair(repairOptions),
+      );
+    },
   };
 }
 
@@ -100,6 +125,7 @@ function createDatabaseMigratorOptions(
     tableName: options.config.tableName,
     lockTableName: options.config.lockTableName,
     extensions: options.config.extensions,
+    onChecksumMismatch: options.config.onChecksumMismatch,
   };
 
   if (options.sources) {
@@ -125,7 +151,8 @@ function hasMigrationDirectory(options: CreateAppMigratorOptions): boolean {
 }
 
 function skippedMigrationResult(): AppMigrationRunResult &
-  AppMigrationRollbackResult {
+  AppMigrationRollbackResult &
+  AppMigrationRepairResult {
   return {
     status: 'skipped',
     reason: 'missing-directory',
@@ -138,6 +165,7 @@ function completedRunResult(result: MigrationRunResult): AppMigrationRunResult {
     batch: result.batch,
     executed: result.executed,
     skipped: result.skipped,
+    warnings: result.warnings,
   };
 }
 
@@ -148,5 +176,16 @@ function completedRollbackResult(
     status: 'completed',
     batch: result.batch,
     rolledBack: result.rolledBack,
+    warnings: result.warnings,
+  };
+}
+
+function completedRepairResult(
+  result: MigrationRepairResult,
+): AppMigrationRepairResult {
+  return {
+    status: 'completed',
+    repaired: result.repaired,
+    dryRun: result.dryRun,
   };
 }

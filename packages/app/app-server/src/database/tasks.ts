@@ -11,6 +11,7 @@ import {
 } from './plan.js';
 import {
   resolveDatabaseDriver,
+  type ChecksumMismatch,
   type DatabaseDriverRegistration,
   type DatabaseManager,
 } from '@nocobase/db';
@@ -22,6 +23,9 @@ import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
 import type { AppDatabaseConfig } from './types.js';
 
+/** `repair` realigns recorded checksums; it executes no migration or seed. */
+export type AppDatabaseTaskOperation = 'run' | 'repair';
+
 export interface AppDatabaseTaskResult {
   connection: string;
   kind: AppDatabaseTaskKind;
@@ -32,6 +36,11 @@ export interface AppDatabaseTaskResult {
   executed?: string[];
   skipped?: string[];
   fresh?: boolean;
+  /** Checksum drift tolerated by the `warn` policy during a run. */
+  warnings?: ChecksumMismatch[];
+  /** Records a repair rewrote, or that a dry run would rewrite. */
+  repaired?: ChecksumMismatch[];
+  dryRun?: boolean;
 }
 
 export interface AppDatabaseTasksResult {
@@ -60,6 +69,9 @@ export interface AppDatabasePlanExecutionOptions {
   readonly paths?: AppPaths;
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
   readonly fresh?: boolean;
+  readonly operation?: AppDatabaseTaskOperation;
+  /** Repair only: report what would be rewritten without writing anything. */
+  readonly dryRun?: boolean;
 }
 
 /** Manual commands and startup share the same resolved, connection-bound plan. */
@@ -71,12 +83,17 @@ export async function executeAppDatabasePlan(
     paths,
     drivers,
     fresh = false,
+    operation = 'run',
+    dryRun = false,
     runtimeConfig,
     container,
   }: AppDatabasePlanExecutionOptions = {},
 ): Promise<AppDatabaseTasksResult> {
   if (fresh && plan.some((task) => task.kind !== 'migrations')) {
     throw new Error('--fresh is only supported for migrations.');
+  }
+  if (fresh && operation !== 'run') {
+    throw new Error('--fresh cannot be combined with repair.');
   }
   const taskContainer = createTaskServiceResolver(container);
   const taskConfig = snapshotDatabaseTaskConfig(runtimeConfig);
@@ -111,11 +128,15 @@ export async function executeAppDatabasePlan(
         sources: task.config.sources,
       };
       const completed =
-        task.kind === 'migrations'
-          ? await (fresh
-              ? createAppMigrator(options).fresh()
-              : createAppMigrator(options).latest())
-          : await createAppSeeder(options).run();
+        operation === 'repair'
+          ? task.kind === 'migrations'
+            ? await createAppMigrator(options).repair({ dryRun })
+            : await createAppSeeder(options).repair({ dryRun })
+          : task.kind === 'migrations'
+            ? await (fresh
+                ? createAppMigrator(options).fresh()
+                : createAppMigrator(options).latest())
+            : await createAppSeeder(options).run();
       result.results.push({
         ...identity,
         ...completed,
@@ -148,6 +169,9 @@ export interface AppDatabaseTaskRunOptions extends AppRuntimeDatabaseTaskPlanOpt
   readonly database?: () => DatabaseManager;
   readonly container?: ServiceResolver;
   readonly kind: AppDatabaseTaskKind;
+  readonly operation?: AppDatabaseTaskOperation;
+  /** Repair only: report what would be rewritten without writing anything. */
+  readonly dryRun?: boolean;
 }
 
 export async function runAppDatabaseTasks(
@@ -198,6 +222,8 @@ export async function runAppDatabaseTasks(
       paths,
       drivers,
       fresh: options.fresh,
+      operation: options.operation,
+      dryRun: options.dryRun,
       runtimeConfig: options.runtimeConfig,
       container: options.container,
     });

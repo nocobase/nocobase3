@@ -101,11 +101,17 @@ export { loadMigrations, validateMigrations } from './migration/loader.js';
 export { createMigrator } from './migration/migrator.js';
 export type { Migrator } from './migration/migrator.js';
 export type {
+  ChecksumMismatch,
+  ChecksumMismatchPolicy,
+} from './migration/checksum-history.js';
+export type {
   CreateMigratorOptions,
   DatabaseMigratorOptions,
   MigrationContext,
   MigrationHistoryRecord,
   MigrationDefinition,
+  MigrationRepairOptions,
+  MigrationRepairResult,
   MigrationRollbackResult,
   MigrationRunResult,
   MigrationSource,
@@ -121,6 +127,8 @@ export type {
   DatabaseSeederOptions,
   SeedContext,
   SeedDefinition,
+  SeedRepairOptions,
+  SeedRepairResult,
   SeedRunResult,
   SeedSource,
   SeedTransactionMode,
