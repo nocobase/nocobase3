@@ -142,6 +142,21 @@ function sharedFrameworkSource(template, file) {
     }, source);
   }
 
+  // The pm2 configuration names the process after the template; everything else about how it starts is shared.
+  if (file === 'ecosystem.config.js') {
+    const processName = (manifest) =>
+      `nocobase-${manifest.name.replace(/^@nocobase\//u, '')}`;
+    const name = processName(template.manifest);
+    assert.ok(
+      source.includes(`name: '${name}',`),
+      `${template.kind}: ecosystem.config.js must name the process ${name}`,
+    );
+    return source.replace(
+      `name: '${name}',`,
+      `name: '${processName(baseline.manifest)}',`,
+    );
+  }
+
   // Keep product identity and Hub's deliberate menu order local while comparing the shared layout.
   if (file === 'client/layouts/components/sidebar-footer.tsx') {
     source = source
@@ -251,6 +266,7 @@ for (const template of templates) {
       'eslint.config.js',
       'vitest.config.ts',
       'vite.config.ts',
+      'ecosystem.config.js',
       'server/app.ts',
       'server/embedded.ts',
       'server/standalone.ts',

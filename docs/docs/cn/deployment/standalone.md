@@ -63,7 +63,7 @@ database:
   connections:
     main:
       dialect: sqlite
-      filename: /srv/nocobase/crm/storage/database.sqlite
+      database: /srv/nocobase/crm/storage/database.sqlite
       schemaManagement: managed
       migrations:
         autoRun: true
@@ -71,7 +71,7 @@ database:
         autoRun: true
 ```
 
-SQLite 使用 `filename` 指定文件。若使用 PostgreSQL、MySQL 等数据库，还需确认构建产物具有相应驱动，配置真实连接信息，并验证连通性；驱动要求见[运行配置](./configuration#连接前检查)。需要控制发布迁移时机时，关闭相应自动执行选项，由发布人员执行迁移。
+SQLite 使用 `database` 指定文件路径。若使用 PostgreSQL、MySQL 等数据库，还需确认构建产物具有相应驱动，配置真实连接信息，并验证连通性；驱动要求见[运行配置](./configuration#连接前检查)。需要控制发布迁移时机时，关闭相应自动执行选项，由发布人员执行迁移。
 
 **前台验证启动。** 在部署根目录执行：
 
@@ -114,6 +114,20 @@ WantedBy=multi-user.target
 ```
 
 由管理员执行 `systemctl daemon-reload` 和 `systemctl enable --now nocobase-crm`。检查 `systemctl status nocobase-crm` 与 `journalctl -u nocobase-crm`。重启使用 `systemctl restart nocobase-crm`。
+
+**使用 pm2 运行。** 不使用 systemd 时，可以用 [pm2](https://pm2.keymetrics.io/) 管理进程。应用项目根目录自带 `ecosystem.config.js`，它以 `node` 启动 `./dist/server/standalone.js` 并设置 `NODE_ENV=production`；该文件不在部署包内，需要从项目复制到部署根目录，与 `dist` 并列。其余运行参数通过环境变量传入，或补充到文件的 `env` 中。在部署根目录执行：
+
+```bash
+APP_CONFIG_FILE=/srv/nocobase/crm/config.yml \
+APP_BASE_PATH=/crm \
+APP_PUBLIC_ORIGIN=https://apps.example.com \
+APP_SERVER_HOST=127.0.0.1 \
+APP_SERVER_PORT=13000 \
+pm2 start ecosystem.config.js
+pm2 save
+```
+
+进程名为文件中的 `name` 字段，模板默认为 `nocobase-app-template-default`，可按应用修改。使用 `pm2 restart <name>` 重启，`pm2 logs <name>` 查看日志，`pm2 startup` 生成开机自启命令。
 
 ## 配置 HTTPS
 

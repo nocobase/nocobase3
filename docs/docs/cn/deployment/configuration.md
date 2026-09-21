@@ -58,7 +58,7 @@ database:
         autoRun: true
 ```
 
-数据库文件默认位于应用持久目录的 `database.sqlite`。独立部署时可通过 `database.connections.main.filename` 指定绝对路径；Hub 托管时通常沿用 Host 分配的目录。具体路径分别见下方[独立部署配置](#独立部署配置)和[Hub 托管应用配置](#hub-托管应用配置)。
+数据库文件默认位于应用持久目录的 `database.sqlite`。独立部署时可通过 `database.connections.main.database` 指定绝对路径；Hub 托管时通常沿用 Host 分配的目录。具体路径分别见下方[独立部署配置](#独立部署配置)和[Hub 托管应用配置](#hub-托管应用配置)。
 
 #### 使用 PostgreSQL
 
@@ -213,14 +213,14 @@ Docker 中填写容器内路径，例如 `/app/config.yml`，并将宿主机上�
 
 ### 持久目录
 
-`storage` 需要保留在代码更新范围之外，并允许应用进程写入。SQLite 使用 `database.connections.main.filename` 指定文件路径：
+`storage` 需要保留在代码更新范围之外，并允许应用进程写入。SQLite 使用 `database.connections.main.database` 指定文件路径：
 
 | 运行方式 | 路径示例                                                              |
 | -------- | --------------------------------------------------------------------- |
 | Node.js  | `/srv/nocobase/crm/storage/database.sqlite`                           |
 | Docker   | `/app/storage/database.sqlite`，将宿主机持久目录挂载到 `/app/storage` |
 
-SQLite 的文件路径使用 `filename`，不能用 `database` 字段代替。完整目录与挂载示例见[独立部署](./standalone)和[Docker 部署](./docker)。
+SQLite 的文件路径写在 `database` 字段，与模板自带的 `config.example.yml` 一致；旧配置中的 `filename` 仍被接受，两者同时存在时以 `database` 为准。完整目录与挂载示例见[独立部署](./standalone)和[Docker 部署](./docker)。
 
 ### 配置访问地址
 

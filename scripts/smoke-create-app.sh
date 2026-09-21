@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #
-# Generates an application with create-app, runs its tests, checks dev, then builds and starts it in production mode.
+# Generates an application with create-app, runs its tests, checks dev, builds it with --tar, starts it in production
+# mode, deploys the resulting dist.tar.gz the way a server would and starts that copy, then retargets the native
+# modules for another platform.
 # Every package can build, typecheck and test in this repository and still produce an application that
 # does not start, because what a generated application installs is decided by published manifests rather than by the
 # workspace links everything resolves through here.
@@ -41,7 +43,7 @@ while [ $# -gt 0 ]; do
     --config) CONFIG="$2"; shift 2 ;;
     --json) JSON_OUTPUT=1; shift ;;
     --app-name) APP_NAME="$2"; shift 2 ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -150,6 +152,9 @@ echo "::group::Boot the application with pnpm dev"
 # dies, so the two outcomes this loop watches for are the two the script actually has.
 READY_MARKER='App dev server ready'
 
+# Every request here goes to the loopback address the application was told to listen on, so a proxy configured in
+# the shell must not see it: routed through one, a refused connection becomes a timeout and a healthy server an
+# unreachable one. `--noproxy '*'` is on every curl for that reason.
 # Job control, so the background job becomes its own process group and the whole tree can be signalled at the end.
 # Killing the pnpm process alone would leave vite and tsx running, and the job would hang waiting on them. `setsid`
 # would do the same thing but does not exist on macOS, where this script is also run by hand.
@@ -173,6 +178,75 @@ stop_app() {
 trap stop_app EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+# Asks the OS for an available loopback port rather than assuming the development or default port is free.
+free_port() {
+  node --input-type=module -e '
+    import net from "node:net";
+    const server = net.createServer();
+    server.listen(0, "127.0.0.1", () => {
+      console.log(server.address().port);
+      server.close();
+    });
+  '
+}
+
+# Waits for a production process started in the background as $APP_PID to answer /api/healthz, then checks that it
+# serves its homepage, is still alive, and discovered its jobs. Shared by `pnpm start` and the deployed archive so
+# the two are judged by the same evidence. Arguments: label for messages, base URL, log file.
+wait_for_production() {
+  local label="$1" url="$2" log="$3"
+  local ready=0 exited=0 deadline next_progress http_status=''
+  echo "Waiting up to ${TIMEOUT}s for $url/api/healthz"
+  deadline=$((SECONDS + TIMEOUT))
+  next_progress=$SECONDS
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if ! kill -0 "$APP_PID" 2>/dev/null; then
+      exited=1
+      break
+    fi
+    if http_status=$(curl -sS --noproxy '*' --max-time 2 --write-out '%{http_code}' "$url/api/healthz" -o "$WORKDIR/health.json" 2>/dev/null) \
+      && [ "$http_status" = '200' ] \
+      && node -e 'const fs = require("node:fs"); try { process.exit(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).ok === true ? 0 : 1); } catch { process.exit(1); }' "$WORKDIR/health.json"; then
+      ready=1
+      break
+    fi
+    if [ "$SECONDS" -ge "$next_progress" ]; then
+      echo "Still waiting for production health: HTTP ${http_status:-000}; $((deadline - SECONDS))s remaining"
+      # Progress diagnostics must not abort the readiness check when the log is temporarily unavailable.
+      tail -n 10 "$log" || true
+      next_progress=$((SECONDS + 15))
+    fi
+    sleep 1
+  done
+
+  if [ "$ready" != "1" ]; then
+    echo "::endgroup::"
+    if [ "$exited" = "1" ]; then
+      echo "::error::$label exited before the application became ready"
+    else
+      echo "::error::$label did not become ready within ${TIMEOUT}s"
+    fi
+    cat "$log"
+    exit 1
+  fi
+
+  if ! curl -fsS --noproxy '*' --max-time 30 "$url/" -o /dev/null || ! kill -0 "$APP_PID" 2>/dev/null; then
+    echo "::endgroup::"
+    echo "::error::The production application started by $label did not serve its homepage or exited after becoming ready"
+    cat "$log"
+    exit 1
+  fi
+
+  if grep -qF 'Failed to load job from ' "$log"; then
+    echo "::error::Job discovery failed during production startup ($label)"
+    cat "$log"
+    exit 1
+  fi
+
+  cat "$log"
+  echo "Production application started by $label is serving at $url/"
+}
 
 READY=0
 EXITED=0
@@ -220,7 +294,7 @@ fi
 
 echo "Application is serving at $APP_URL"
 
-if ! curl -fsS --max-time 30 "$APP_URL" -o /dev/null; then
+if ! curl -fsS --noproxy '*' --max-time 30 "$APP_URL" -o /dev/null; then
   echo "::endgroup::"
   echo "::error::$APP_URL did not answer after the application reported ready"
   cat "$DEV_LOG"
@@ -233,8 +307,9 @@ echo "::endgroup::"
 stop_app
 trap - EXIT
 
-echo "::group::Build the application with pnpm build"
-if ! pnpm build 2>&1 | tee "$BUILD_LOG"; then
+echo "::group::Build the application with pnpm build --tar"
+# --tar is what a deployment build runs: the archive it produces is deployed below the way a server would deploy it.
+if ! pnpm build --tar 2>&1 | tee "$BUILD_LOG"; then
   echo "::endgroup::"
   echo "::error::pnpm build failed"
   exit 1
@@ -242,19 +317,10 @@ fi
 echo "::endgroup::"
 
 echo "::group::Boot the application with pnpm start"
-# Ask the OS for an available loopback port rather than assuming the development or default port is free.
-START_PORT=$(node --input-type=module -e '
-  import net from "node:net";
-  const server = net.createServer();
-  server.listen(0, "127.0.0.1", () => {
-    console.log(server.address().port);
-    server.close();
-  });
-')
+START_PORT=$(free_port)
 # Reuse the generated application's public path from dev; the default template mounts at /main, not at /.
 APP_PATH=$(node -e 'console.log(new URL(process.argv[1]).pathname.replace(/\/+$/, ""))' "$APP_URL")
 START_URL="http://127.0.0.1:$START_PORT$APP_PATH"
-echo "Waiting up to ${TIMEOUT}s for $START_URL/api/healthz"
 # Create the log before forking so the progress loop cannot race the child's output redirection.
 : > "$START_LOG"
 set -m
@@ -262,56 +328,118 @@ NOCOBASE_STRICT_STARTUP=true APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$START_P
 APP_PID=$!
 set +m
 trap stop_app EXIT
-
-READY=0
-EXITED=0
-DEADLINE=$((SECONDS + TIMEOUT))
-NEXT_PROGRESS=$SECONDS
-while [ "$SECONDS" -lt "$DEADLINE" ]; do
-  if ! kill -0 "$APP_PID" 2>/dev/null; then
-    EXITED=1
-    break
-  fi
-  if HTTP_STATUS=$(curl -sS --max-time 2 --write-out '%{http_code}' "$START_URL/api/healthz" -o "$WORKDIR/health.json" 2>/dev/null) \
-    && [ "$HTTP_STATUS" = '200' ] \
-    && node -e 'const fs = require("node:fs"); try { process.exit(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).ok === true ? 0 : 1); } catch { process.exit(1); }' "$WORKDIR/health.json"; then
-    READY=1
-    break
-  fi
-  if [ "$SECONDS" -ge "$NEXT_PROGRESS" ]; then
-    echo "Still waiting for production health: HTTP ${HTTP_STATUS:-000}; $((DEADLINE - SECONDS))s remaining"
-    # Progress diagnostics must not abort the readiness check when the log is temporarily unavailable.
-    tail -n 10 "$START_LOG" || true
-    NEXT_PROGRESS=$((SECONDS + 15))
-  fi
-  sleep 1
-done
-
-if [ "$READY" != "1" ]; then
-  echo "::endgroup::"
-  if [ "$EXITED" = "1" ]; then
-    echo "::error::pnpm start exited before the application became ready"
-  else
-    echo "::error::pnpm start did not become ready within ${TIMEOUT}s"
-  fi
-  cat "$START_LOG"
-  exit 1
-fi
-
-if ! curl -fsS --max-time 30 "$START_URL/" -o /dev/null || ! kill -0 "$APP_PID" 2>/dev/null; then
-  echo "::endgroup::"
-  echo "::error::The production application did not serve its homepage or exited after becoming ready"
-  cat "$START_LOG"
-  exit 1
-fi
-
-if grep -qF 'Failed to load job from ' "$START_LOG"; then
-  echo "::error::Job discovery failed during production startup"
-  cat "$START_LOG"
-  exit 1
-fi
-
-cat "$START_LOG"
-echo "Production application is serving at $START_URL/"
+wait_for_production 'pnpm start' "$START_URL" "$START_LOG"
 echo "::endgroup::"
-echo "create-app smoke test passed: $TEMPLATE passed test, dev, build, and start."
+
+# The production process must be gone before the deployed copy starts, so a request cannot be answered by the wrong one.
+stop_app
+trap - EXIT
+
+echo "::group::Deploy the dist.tar.gz archive"
+# What `pnpm build --tar` packed is what a server receives. Deploying it into an empty directory the way the deployment
+# guide describes — extract, add config.yml, add storage, start `node ./dist/server/standalone.js` — is the only check
+# that the archive is complete: a file that `pnpm start` finds in the application checkout and the archive omits fails
+# only here.
+ARCHIVE="$APP_DIR/storage/exports/dist.tar.gz"
+ARCHIVE_LIST="$WORKDIR/archive.txt"
+DEPLOY_DIR="$WORKDIR/deploy"
+DEPLOY_LOG="$WORKDIR/deploy.log"
+if [ ! -f "$ARCHIVE" ]; then
+  echo "::endgroup::"
+  echo "::error::pnpm build --tar did not produce storage/exports/dist.tar.gz"
+  exit 1
+fi
+if ! tar -tzf "$ARCHIVE" > "$ARCHIVE_LIST"; then
+  echo "::endgroup::"
+  echo "::error::storage/exports/dist.tar.gz cannot be read to the end"
+  exit 1
+fi
+for entry in 'config\.example\.yml' 'dist/package\.json' 'dist/server/standalone\.js'; do
+  if ! grep -qE "^(\./)?${entry}$" "$ARCHIVE_LIST"; then
+    echo "::endgroup::"
+    echo "::error::dist.tar.gz does not contain ${entry//\\/}"
+    head -n 30 "$ARCHIVE_LIST"
+    exit 1
+  fi
+done
+# The archive carries code and an example configuration, never the real configuration or data of the machine that
+# built it: a config.yml holds secrets, and storage holds the database of the checkout.
+if grep -qE '^(\./)?(config\.yml|\.env|storage(/|$))' "$ARCHIVE_LIST"; then
+  echo "::endgroup::"
+  echo "::error::dist.tar.gz contains runtime configuration or data that must stay out of a deployment package"
+  grep -E '^(\./)?(config\.yml|\.env|storage(/|$))' "$ARCHIVE_LIST"
+  exit 1
+fi
+echo "Archive holds $(wc -l < "$ARCHIVE_LIST" | tr -d ' ') entries"
+
+mkdir "$DEPLOY_DIR"
+tar -xzf "$ARCHIVE" -C "$DEPLOY_DIR"
+# The generated application's config.yml is reused as the deployment's configuration: the same database and secrets
+# `pnpm start` ran with, placed beside dist where the deployment guide puts it and named through APP_CONFIG_FILE.
+cp "$APP_DIR/config.yml" "$DEPLOY_DIR/config.yml"
+mkdir -p "$DEPLOY_DIR/storage"
+
+DEPLOY_PORT=$(free_port)
+DEPLOY_URL="http://127.0.0.1:$DEPLOY_PORT$APP_PATH"
+: > "$DEPLOY_LOG"
+cd "$DEPLOY_DIR"
+set -m
+NODE_ENV=production NOCOBASE_STRICT_STARTUP=true APP_CONFIG_FILE="$DEPLOY_DIR/config.yml" \
+  APP_SERVER_HOST=127.0.0.1 APP_SERVER_PORT="$DEPLOY_PORT" \
+  node ./dist/server/standalone.js > "$DEPLOY_LOG" 2>&1 &
+APP_PID=$!
+set +m
+cd "$APP_DIR"
+trap stop_app EXIT
+wait_for_production 'the deployed archive' "$DEPLOY_URL" "$DEPLOY_LOG"
+echo "::endgroup::"
+
+stop_app
+trap - EXIT
+
+echo "::group::Retarget native modules for another platform"
+# A deployment build targets the server it is shipped to, which is rarely the machine that builds it. Retargeting the
+# installed tree for a platform this machine is not exercises the cross-platform path — fetching the target's binaries
+# and dropping the others — and records what was targeted. Last, because the tree no longer runs here afterwards.
+OTHER_TARGET=$(node -e 'console.log(process.platform === "linux" && process.arch === "x64" ? "linux-arm64" : "linux-x64")')
+RETARGET_LOG="$WORKDIR/retarget.log"
+echo "Retargeting for $OTHER_TARGET"
+if ! pnpm server:deps:retarget --target "$OTHER_TARGET" --node-version 24 2>&1 | tee "$RETARGET_LOG"; then
+  echo "::endgroup::"
+  echo "::error::Retargeting native modules for $OTHER_TARGET failed"
+  exit 1
+fi
+if ! node --input-type=module -e '
+  import fs from "node:fs";
+  import path from "node:path";
+  const [distDir, target] = process.argv.slice(1);
+  const [platform, arch] = target.split("-");
+  const recorded = JSON.parse(fs.readFileSync(path.join(distDir, "package.json"), "utf8")).nocobase?.buildTarget;
+  if (recorded?.platform !== platform || recorded?.arch !== arch || recorded?.nodeMajor !== 24) {
+    console.error(`dist/package.json records build target ${JSON.stringify(recorded)}, expected ${target} for Node 24`);
+    process.exit(1);
+  }
+  // A binary whose name identifies another platform is dead weight the retarget promised to remove.
+  const wanted = `${platform}-${arch}`;
+  const foreign = [];
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) walk(file);
+      else if (entry.name.endsWith(".node") && /(darwin|linux|linuxmusl|win32|android)-/u.test(entry.name) && !entry.name.includes(wanted)) foreign.push(path.relative(distDir, file));
+    }
+  };
+  walk(path.join(distDir, "node_modules"));
+  if (foreign.length > 0) {
+    console.error(`Binaries for other platforms remain after retargeting for ${target}:\n  ${foreign.join("\n  ")}`);
+    process.exit(1);
+  }
+  console.log(`dist/package.json records ${target} (Node ABI ${recorded.nodeAbi}) and no binary names another platform.`);
+' "$APP_DIR/dist" "$OTHER_TARGET"; then
+  echo "::endgroup::"
+  echo "::error::The retargeted build is not consistent with $OTHER_TARGET"
+  exit 1
+fi
+echo "::endgroup::"
+echo "create-app smoke test passed: $TEMPLATE passed test, dev, build, start, archive deployment, and retarget for $OTHER_TARGET."

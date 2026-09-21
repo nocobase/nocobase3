@@ -11,7 +11,7 @@ Hub manages Releases, deployments, configuration and runtime operations. The cur
 
 The repository provides `Dockerfile.hub` and an image publishing workflow for `ghcr.io/nocobase/hub` and `registry.cn-beijing.aliyuncs.com/nocobase/hub`, targeting amd64 and arm64. Verify an available tag or digest before use; workflow configuration alone does not prove a tag was published. Alternatively, scaffold the Hub template and build for the target platform with Node 24.
 
-Configure a persistent storage directory, database and stable authentication/session secrets before starting. Set `APP_CONFIG_FILE` to the runtime configuration file and `HUB_STORAGE_DIR` to a writable persistent directory. With Docker, mount both explicitly and set SQLite's filename to a path inside the persistent mount. The image contains `/app/config.example.yml` as a configuration reference. Do not replace an existing runtime configuration with the template on upgrade.
+Configure a persistent storage directory, database and stable authentication/session secrets before starting. Set `APP_CONFIG_FILE` to the runtime configuration file and `HUB_STORAGE_DIR` to a writable persistent directory. With Docker, mount both explicitly and set the SQLite `database` path to a location inside the persistent mount. The image contains `/app/config.example.yml` as a configuration reference. Do not replace an existing runtime configuration with the template on upgrade.
 
 ## Public access
 
