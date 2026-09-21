@@ -161,7 +161,7 @@ export function createUserStore(
       );
       const patch = normalizeUserWrite(update, field, false);
       const changesIdentity = ['email', 'username'].some(
-        (name) => patch[field(name)] !== undefined,
+        (name) => patch[field(name)] != null,
       );
       if (!changesIdentity) {
         // Status and profile changes apply as one statement.

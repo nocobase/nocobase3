@@ -64,6 +64,7 @@ const zhCN: UsersResource = {
     save: '保存',
     create: '创建用户',
     selectRole: '选择角色',
+    noRole: '不分配角色',
   },
   password: {
     title: '重置密码',

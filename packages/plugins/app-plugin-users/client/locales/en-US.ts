@@ -66,6 +66,7 @@ const enUS = {
     save: 'Save',
     create: 'Create user',
     selectRole: 'Select a role',
+    noRole: 'No role',
   },
   password: {
     title: 'Reset password',

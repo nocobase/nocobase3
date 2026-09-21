@@ -9,6 +9,7 @@ import { createAdapterFactory, type CustomAdapter } from 'better-auth/adapters';
 import {
   UserStoreError,
   type UserStore,
+  type UserStoreFactory,
   type UserStoreSource,
 } from '../user-store.js';
 import {
@@ -310,24 +311,32 @@ export function databaseAdapter(
           (model, field) =>
             getFieldName({ model: getDefaultModelName(model), field }),
         );
-        // Resolved when Better Auth initializes the adapter, after every
-        // provider has registered, so the users plugin is seen whenever it is
-        // installed regardless of provider order.
-        const userStore =
-          typeof options.userStore === 'function'
-            ? options.userStore
-            : options.userStore?.resolve();
-        if (!userStore) return generic;
+        // The users plugin's store is looked up on the first user operation,
+        // never at construction: by then every provider has registered, so
+        // the order in which providers resolve authentication cannot bypass
+        // the store. Absence is final, because nothing registers later.
+        let lookedUp = false;
+        let factory: UserStoreFactory | undefined;
+        const userStoreFactory = (): UserStoreFactory | undefined => {
+          if (!lookedUp) {
+            lookedUp = true;
+            factory =
+              typeof options.userStore === 'function'
+                ? options.userStore
+                : options.userStore?.resolve();
+          }
+          return factory;
+        };
         // The users plugin owns the `user` table: its store applies identity
         // normalization, uniqueness and soft-delete filtering to every user
         // read and write Better Auth performs. Other models stay here.
-        const isUser = (model: string): boolean =>
-          getDefaultModelName(model) === 'user';
         const stores = new Map<string, UserStore>();
-        const users = (model: string): UserStore => {
+        const users = (model: string): UserStore | undefined => {
+          const build = userStoreFactory();
+          if (!build || getDefaultModelName(model) !== 'user') return undefined;
           let store = stores.get(model);
           if (!store) {
-            store = userStore(currentConnection, {
+            store = build(currentConnection, {
               model,
               fields: fieldsForModel(model),
               field: (name) =>
@@ -341,72 +350,79 @@ export function databaseAdapter(
         };
         // The store hides soft-deleted users from Better Auth's own
         // pre-checks, so a reserved identity surfaces here as the same API
-        // error Better Auth raises for a live duplicate. The original error
-        // stays attached for callers that run Better Auth's flows from
-        // server code and map it themselves.
+        // error Better Auth raises for a live duplicate; an identity rule
+        // violation is a bad request. The original error stays attached for
+        // callers that run Better Auth's flows from server code.
         const guarded = async <T>(run: () => Promise<T>): Promise<T> => {
           try {
             return await run();
           } catch (error) {
             if (!(error instanceof UserStoreError)) throw error;
             throw Object.assign(
-              error.code === 'USER_NOT_FOUND'
-                ? APIError.from('NOT_FOUND', {
-                    code: 'USER_NOT_FOUND',
+              error.code === 'INVALID_USER_INPUT'
+                ? APIError.from('BAD_REQUEST', {
+                    code: 'INVALID_USER_INPUT',
                     message: error.message,
                   })
-                : error.code === 'INVALID_USER_INPUT'
-                  ? APIError.from('BAD_REQUEST', {
-                      code: 'INVALID_USER_INPUT',
-                      message: error.message,
-                    })
-                  : APIError.from('UNPROCESSABLE_ENTITY', {
-                      code: 'USER_ALREADY_EXISTS',
-                      message: error.message,
-                    }),
+                : APIError.from('UNPROCESSABLE_ENTITY', {
+                    code: 'USER_ALREADY_EXISTS',
+                    message: error.message,
+                  }),
               { cause: error },
             );
           }
         };
         const routed: CustomAdapter = {
-          create: (input) =>
-            isUser(input.model)
-              ? guarded(() => users(input.model).create(input))
-              : generic.create(input),
-          findOne: (input) =>
-            isUser(input.model) && !input.join
-              ? users(input.model).findOne(input)
-              : generic.findOne(input),
-          findMany: (input) =>
-            isUser(input.model) && !input.join
-              ? users(input.model).findMany(input)
-              : generic.findMany(input),
-          count: (input) =>
-            isUser(input.model)
-              ? users(input.model).count(input)
-              : generic.count(input),
-          update: (input) =>
-            isUser(input.model)
-              ? guarded(() => users(input.model).update(input))
-              : generic.update(input),
-          updateMany: (input) =>
-            isUser(input.model)
-              ? guarded(() => users(input.model).updateMany(input))
-              : generic.updateMany(input),
-          delete: (input) =>
-            isUser(input.model)
-              ? guarded(() => users(input.model).delete(input))
-              : generic.delete(input),
-          deleteMany: (input) =>
-            isUser(input.model)
-              ? guarded(() => users(input.model).deleteMany(input))
-              : generic.deleteMany(input),
-          incrementOne: (input) =>
-            isUser(input.model)
-              ? users(input.model).incrementOne(input)
-              : generic.incrementOne(input),
+          create: (input) => {
+            const store = users(input.model);
+            return store
+              ? guarded(() => store.create(input))
+              : generic.create(input);
+          },
+          findOne: (input) => {
+            const store = input.join ? undefined : users(input.model);
+            return store ? store.findOne(input) : generic.findOne(input);
+          },
+          findMany: (input) => {
+            const store = input.join ? undefined : users(input.model);
+            return store ? store.findMany(input) : generic.findMany(input);
+          },
+          count: (input) => {
+            const store = users(input.model);
+            return store ? store.count(input) : generic.count(input);
+          },
+          update: (input) => {
+            const store = users(input.model);
+            return store
+              ? guarded(() => store.update(input))
+              : generic.update(input);
+          },
+          updateMany: (input) => {
+            const store = users(input.model);
+            return store
+              ? guarded(() => store.updateMany(input))
+              : generic.updateMany(input);
+          },
+          delete: (input) => {
+            const store = users(input.model);
+            return store
+              ? guarded(() => store.delete(input))
+              : generic.delete(input);
+          },
+          deleteMany: (input) => {
+            const store = users(input.model);
+            return store
+              ? guarded(() => store.deleteMany(input))
+              : generic.deleteMany(input);
+          },
+          incrementOne: (input) => {
+            const store = users(input.model);
+            return store
+              ? store.incrementOne(input)
+              : generic.incrementOne(input);
+          },
           consumeOne: (input) => {
-            if (isUser(input.model))
+            if (users(input.model))
               throw new Error('Users cannot be consumed.');
             return generic.consumeOne(input);
           },
