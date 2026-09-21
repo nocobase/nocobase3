@@ -323,6 +323,9 @@ export class AgentService {
     const config = {
       context: {
         ...(request.context ?? {}),
+        // Fixed when this service was created. Listed after the request spread
+        // so a request can never substitute another execution context.
+        agentContext: context.toolRuntimeContext(),
         agentRequest: request,
         decisions: request.userDecisions,
       },

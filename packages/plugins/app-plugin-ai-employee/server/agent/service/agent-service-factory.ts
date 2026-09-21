@@ -13,7 +13,7 @@ import {
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { cachingToken } from '@nocobase/app-server/caching';
-import type { AIManager, ToolsEntity } from '@nocobase/ai-employee';
+import type { AgentState, AIManager, ToolsEntity } from '@nocobase/ai-employee';
 import type { Caching } from '@nocobase/caching';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
@@ -27,7 +27,12 @@ import { NativeCollectionSaver } from '../checkpoint/index.js';
 import type { ConversationPersistence } from '../contracts/persistence.js';
 import { DatabaseConversationPersistence } from '../conversation/persistence/database.js';
 import { ConversationProvider } from '../conversation/conversation-provider.js';
-import { createAgentContext, type AppAgentContext } from '../context.js';
+import {
+  createAgentContext,
+  toAgentState,
+  type AppAgentContext,
+} from '../context.js';
+import type { ConversationExecution } from '../contracts.js';
 import type { Actor, ModelRef, Translate } from '../../types.js';
 import {
   repositoryFactoryToken,
@@ -56,6 +61,10 @@ export interface CreateEmployeeOptions {
   readonly skillSettings?: AIEmployeeSkillSettings;
   readonly webSearch?: boolean;
   readonly tools?: { name: string }[];
+  /** Runtime details of the request this agent runs for. */
+  readonly execution?: ConversationExecution;
+  /** Explicit agent state, applied over `execution`. */
+  readonly state?: Partial<AgentState>;
 }
 
 export interface CreateAgentOptions {
@@ -66,6 +75,13 @@ export interface CreateAgentOptions {
   readonly tools?: readonly string[];
   readonly skills?: readonly string[];
   readonly persistence?: ConversationPersistence;
+  readonly actor?: Actor;
+  readonly translate?: Translate;
+  readonly getHeader?: (name: string) => string | undefined;
+  /** Runtime details of the request this agent runs for. */
+  readonly execution?: ConversationExecution;
+  /** Explicit agent state, applied over `execution`. */
+  readonly state?: Partial<AgentState>;
 }
 
 export class AgentServiceFactory {
@@ -106,6 +122,7 @@ export class AgentServiceFactory {
       actor,
       options.translate,
       options.getHeader,
+      this.resolveState(sessionId, options),
     );
     const employee = await managers.aiEmployeesManager.getEmployee(
       options.username,
@@ -124,6 +141,8 @@ export class AgentServiceFactory {
       actor,
       translate: options.translate,
       toolRuntimeContext: agentContext,
+      resolveModel: (model?: ModelRef | null) =>
+        managers.aiEmployeesManager.resolveModel(employee, model),
       llmProviderManager: this.aiManager.llmProviderManager,
       toolsManager: this.aiManager.toolsManager,
       skillsManager: this.aiManager.skillsManager,
@@ -236,6 +255,15 @@ export class AgentServiceFactory {
     const context = new FixedAgentContextProvider({
       sessionId,
       username: options.username,
+      toolRuntimeContext: this.createContext(
+        options.actor ?? { id: 0, roles: [], isRoot: true },
+        options.translate,
+        options.getHeader,
+        this.resolveState(sessionId, {
+          ...options,
+          state: { model: { ...model }, ...options.state },
+        }),
+      ),
       model,
       provider: resolved.provider,
       providerName: resolved.service.provider,
@@ -271,14 +299,41 @@ export class AgentServiceFactory {
     );
   }
 
+  /**
+   * The agent state a tool sees. It is resolved once here and never again: the
+   * AgentService reads it back through `AgentContextProvider`, so no request
+   * can supply a different one.
+   */
+  private resolveState(
+    sessionId: string,
+    options: {
+      readonly execution?: ConversationExecution;
+      readonly state?: Partial<AgentState>;
+      readonly webSearch?: boolean;
+      readonly frontendTools?: readonly unknown[];
+    },
+  ): Partial<AgentState> {
+    const state = toAgentState(options.execution, options.state);
+    return {
+      ...state,
+      sessionId: options.state?.sessionId ?? sessionId,
+      webSearch: state.webSearch ?? options.webSearch,
+      frontendTools:
+        state.frontendTools ??
+        (options.frontendTools ? [...options.frontendTools] : undefined),
+    };
+  }
+
   private createContext(
     actor: Actor,
     translate?: Translate,
     getHeader?: (name: string) => string | undefined,
+    state?: Partial<AgentState>,
   ): AppAgentContext {
     const managers = this.managerFactory;
     return createAgentContext({
       actor,
+      state,
       ai: this.aiManager,
       database: this.databaseManager,
       authorization: this.container.has(authorizationToken)

@@ -4,6 +4,7 @@ import type {
   AgentState,
   AIManager,
 } from '@nocobase/ai-employee';
+import type { ConversationExecution } from './contracts.js';
 import type { DatabaseManager } from '@nocobase/db';
 import type { Logger } from '@nocobase/logging';
 import type { RepositoryFactory } from '../factory/repository-factory.js';
@@ -61,6 +62,33 @@ export interface CreateAgentContextOptions {
   readonly subAgentsDispatcher: SubAgentsDispatcher;
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
+}
+
+/**
+ * Folds one request's execution details into the agent state. The result is
+ * handed to `createAgentContext` once, when the AgentService is created; no
+ * later call may replace it.
+ */
+export function toAgentState(
+  execution?: ConversationExecution,
+  overrides?: Partial<AgentState>,
+): Partial<AgentState> {
+  return {
+    sessionId: execution?.sessionId,
+    messageId: execution?.messageId,
+    messages: execution?.messages ? [...execution.messages] : undefined,
+    model: execution?.model ? { ...execution.model } : undefined,
+    webSearch: execution?.webSearch,
+    important: execution?.important,
+    frontendTools: execution?.frontendTools
+      ? [...execution.frontendTools]
+      : undefined,
+    toolCallResults: execution?.toolCallResults
+      ? [...execution.toolCallResults]
+      : undefined,
+    timezone: execution?.timezone,
+    ...overrides,
+  };
 }
 
 export function createAgentContext({

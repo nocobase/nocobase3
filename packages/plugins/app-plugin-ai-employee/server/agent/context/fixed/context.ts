@@ -24,6 +24,7 @@ export interface FixedAgentContextOptions {
   readonly systemPrompt?: string;
   readonly tools?: ReadonlyMap<string, ToolsEntity>;
   readonly activeTools?: ReadonlySet<string>;
+  readonly toolRuntimeContext?: unknown;
 }
 
 export class FixedAgentContextProvider implements AgentContextProvider {
@@ -38,6 +39,7 @@ export class FixedAgentContextProvider implements AgentContextProvider {
   private readonly prompt?: string;
   private readonly tools: ReadonlyMap<string, ToolsEntity>;
   private readonly activeToolNames: ReadonlySet<string>;
+  private readonly runtimeContext: unknown;
   public constructor(options: FixedAgentContextOptions) {
     this.conversation = {
       sessionId: options.sessionId,
@@ -52,10 +54,15 @@ export class FixedAgentContextProvider implements AgentContextProvider {
     this.prompt = options.systemPrompt;
     this.tools = options.tools ?? new Map();
     this.activeToolNames = options.activeTools ?? new Set(this.tools.keys());
+    this.runtimeContext = options.toolRuntimeContext;
   }
 
   public currentConversation(): CurrentConversation {
     return this.conversation;
+  }
+
+  public toolRuntimeContext(): unknown {
+    return this.runtimeContext;
   }
 
   public async resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {

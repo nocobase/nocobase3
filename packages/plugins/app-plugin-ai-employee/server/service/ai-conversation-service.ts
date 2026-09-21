@@ -36,6 +36,7 @@ import type {
 import { AgentSSEAdapter } from '../agent/transport/sse.js';
 import {
   createAgentContext,
+  toAgentState,
   type AppAgentContext,
   type CreateAgentContextOptions,
 } from '../agent/context.js';
@@ -299,22 +300,7 @@ export class AIConversationService {
   }): AppAgentContext {
     return createAgentContext({
       actor,
-      state: {
-        sessionId: execution?.sessionId,
-        messageId: execution?.messageId,
-        messages: execution?.messages ? [...execution.messages] : undefined,
-        model: execution?.model ? { ...execution.model } : undefined,
-        webSearch: execution?.webSearch,
-        important: execution?.important,
-        frontendTools: execution?.frontendTools
-          ? [...execution.frontendTools]
-          : undefined,
-        toolCallResults: execution?.toolCallResults
-          ? [...execution.toolCallResults]
-          : undefined,
-        timezone: execution?.timezone,
-        ...state,
-      },
+      state: toAgentState(execution, state),
       ai: this.ai,
       database: this.databaseManager,
       authorization: this.authorization,
@@ -843,8 +829,8 @@ export class AIConversationService {
         employee,
         model,
       );
-      const agentContext = this.createAgentContext({
-        actor,
+      const agentOptions = {
+        username: employee.username,
         execution,
         state: {
           sessionId,
@@ -852,11 +838,6 @@ export class AIConversationService {
           model: { ...resolvedModel },
           webSearch,
         },
-        translate,
-        getHeader,
-      });
-      const agentOptions = {
-        username: employee.username,
         actor,
         translate,
         getHeader,
@@ -888,7 +869,6 @@ export class AIConversationService {
           model: resolvedModel,
           context: {
             ...(request.context ?? {}),
-            agentContext,
             important: execution.important,
             timezone: execution.timezone,
           },
@@ -912,7 +892,6 @@ export class AIConversationService {
           model: resolvedModel,
           context: {
             ...(request.context ?? {}),
-            agentContext,
             important: execution.important,
             timezone: execution.timezone,
           },
@@ -1177,8 +1156,8 @@ export class AIConversationService {
         employee,
         model,
       );
-      const agentContext = this.createAgentContext({
-        actor,
+      const agentOptions = {
+        username: employee.username,
         execution,
         state: {
           sessionId,
@@ -1187,11 +1166,6 @@ export class AIConversationService {
           model: { ...resolvedModel },
           webSearch,
         },
-        translate,
-        getHeader,
-      });
-      const agentOptions = {
-        username: employee.username,
         actor,
         translate,
         getHeader,
@@ -1229,7 +1203,6 @@ export class AIConversationService {
               model: resolvedModel,
               userMessages: resendMessages.length ? resendMessages : undefined,
               context: {
-                agentContext,
                 important: execution.important,
                 timezone: execution.timezone,
               },
@@ -1245,7 +1218,6 @@ export class AIConversationService {
           model: resolvedModel,
           userMessages: resendMessages.length ? resendMessages : undefined,
           context: {
-            agentContext,
             important: execution.important,
             timezone: execution.timezone,
           },
@@ -1476,8 +1448,8 @@ export class AIConversationService {
         employee,
         model,
       );
-      const agentContext = this.createAgentContext({
-        actor,
+      const agentOptions = {
+        username: employee.username,
         execution,
         state: {
           sessionId,
@@ -1485,11 +1457,6 @@ export class AIConversationService {
           model: { ...resolvedModel },
           webSearch,
         },
-        translate,
-        getHeader,
-      });
-      const agentOptions = {
-        username: employee.username,
         actor,
         translate,
         getHeader,
@@ -1527,7 +1494,6 @@ export class AIConversationService {
           service.resumeStream({
             model: resolvedModel,
             userDecisions,
-            context: { agentContext },
           }),
         );
         streamTarget(execution).end();

@@ -15,6 +15,11 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
     })),
   };
   const toolRuntimeContext = { actor, ai: {} };
+  const employeeModel = {
+    llmService: 'employee-service',
+    model: 'employee-model',
+  };
+  const resolveModel = vi.fn(async (model?: unknown) => model ?? employeeModel);
   const options = {
     employee: {
       username: 'dara',
@@ -25,6 +30,7 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
     sessionId: 'session-1',
     actor,
     toolRuntimeContext,
+    resolveModel,
     llmProviderManager,
     toolsManager: {},
     skillsManager: {},
@@ -57,7 +63,14 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
       .spyOn(context, 'getActivatedSkillToolNames')
       .mockResolvedValue(new Set()),
   };
-  return { provider, context, toolContext, llmProviderManager };
+  return {
+    provider,
+    context,
+    toolContext,
+    llmProviderManager,
+    resolveModel,
+    employeeModel,
+  };
 };
 
 describe('AIEmployeeAgentContextProvider', () => {
@@ -68,18 +81,28 @@ describe('AIEmployeeAgentContextProvider', () => {
     expect(await none.context.getSystemPrompt([])).toBe('');
   });
 
-  it('resolves the model selected by each request', async () => {
-    const { context, llmProviderManager } = createFixture();
+  it('resolves the model selected by each request through the employee policy', async () => {
+    const { context, llmProviderManager, resolveModel } = createFixture();
     const first = { llmService: 'service-1', model: 'model-1' };
     const second = { llmService: 'service-2', model: 'model-2' };
 
     await context.resolveLLM({ model: first });
     await context.resolveLLM({ model: second });
 
+    expect(resolveModel).toHaveBeenNthCalledWith(1, first);
+    expect(resolveModel).toHaveBeenNthCalledWith(2, second);
     expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(1, first);
     expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(2, second);
-    await expect(context.resolveLLM({})).rejects.toThrow(
-      'AI employee model is required',
+  });
+
+  it('falls back to the employee model when a request selects none', async () => {
+    const { context, llmProviderManager, employeeModel } = createFixture();
+
+    await expect(context.resolveLLM({})).resolves.toMatchObject({
+      llmService: 'test-service',
+    });
+    expect(llmProviderManager.getLLMService).toHaveBeenCalledWith(
+      employeeModel,
     );
   });
 

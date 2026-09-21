@@ -199,6 +199,8 @@ interface CreateAIEmployeeOptions {
   readonly skillSettings?: AIEmployeeSkillSettings;
   readonly webSearch?: boolean;
   readonly tools?: readonly { name: string }[];
+  readonly execution?: ConversationExecution;
+  readonly state?: Partial<AgentState>;
 }
 
 createAIEmployee(options: CreateAIEmployeeOptions): Promise<AgentService>;
@@ -214,8 +216,14 @@ Parameter rules:
 - `from` identifies main-agent versus sub-agent execution and affects persistence/checkpoint behavior.
 - `translate` and `getHeader` are optional App adapters for localization and trusted request headers.
 - `skillSettings`, `webSearch`, and `tools` narrow or extend the employee's configured capabilities; they do not bypass permission checks.
+- The model is the employee's, not the caller's: the service applies the employee's model policy to `AgentRequest.model` on every execution, honours a requested model only when the employee's configuration allows it, and resolves the employee's own model when a request selects none. Do not pre-resolve a model to work around a missing one.
+- `execution` and `state` describe the request this agent runs for. Together they become the agent context every backend tool receives, so supply them here: `state` is applied over `execution`, and the factory fills in `sessionId`, `webSearch`, and `frontendTools` from the options above when neither supplies them.
 
-The factory resolves the employee, model, tools, skills, knowledge-base behavior, conversation persistence, and default middleware. The caller should not instantiate those internal objects separately.
+The factory resolves the employee, model, tools, skills, knowledge-base behavior, conversation persistence, default middleware, and the tool context. The caller should not instantiate those internal objects separately.
+
+### The tool context is fixed here
+
+Every backend tool declares `requiresContext` and receives the agent context the service was created with. `AgentServiceFactory` builds that context once, from `actor`, `translate`, `getHeader`, `execution`, and `state`, and the service supplies it on every execution. A caller never passes it: an `agentContext` key on `AgentRequest.context` is ignored, so request data cannot substitute another actor, session, or set of services. A tool that needs a model, a session id, or the current messages reads them from `state`, which is why an integration that activates tools should pass `execution`/`state` rather than leaving them empty.
 
 ## `AgentServiceFactory.createAgent()`
 
@@ -230,6 +238,11 @@ interface CreateAgentOptions {
   readonly tools?: readonly string[];
   readonly skills?: readonly string[];
   readonly persistence?: ConversationPersistence;
+  readonly actor?: Actor;
+  readonly translate?: Translate;
+  readonly getHeader?: (name: string) => string | undefined;
+  readonly execution?: ConversationExecution;
+  readonly state?: Partial<AgentState>;
 }
 
 createAgent(options?: CreateAgentOptions): Promise<AgentService>;
@@ -243,6 +256,7 @@ Rules:
 - `systemPrompt` is the fixed context prompt.
 - `tools` contains registered tool names to activate; `skills` contains registered skill names whose tools should be activated.
 - `persistence` replaces the default database persistence. Use it only when the integration owns a compatible storage implementation; see the Persistence section below.
+- `actor`, `translate`, `getHeader`, `execution`, and `state` build the tool context for this service exactly as they do for `createAIEmployee()`. Supply `actor` whenever `tools` or `skills` are activated; the default is a root actor.
 - If no model is supplied, the service must receive a usable model through the supported configuration path before execution.
 
 ## Executing `AgentService`
@@ -290,6 +304,8 @@ interface AIMessageInput {
 }
 ```
 
+`context` carries per-call values only. The agent context that backend tools run with is not one of them: it is fixed when the service is created (see [the tool context is fixed here](#the-tool-context-is-fixed-here)), and an `agentContext` key here is ignored.
+
 Use `userMessages` for the current user turn. Use `messageId` when the plugin must load a persisted history/thread. Use `userDecisions` only to resume an interrupt. Use `signal` for request cancellation and consume `stream()` with `for await`. Do not parse or persist stream events manually when the surrounding App service already owns that transport.
 
 Direct `agent.invoke()`/`forkInvoke()` returns an in-process execution result, not the HTTP history envelope. Do not infer HTTP behavior from that return value: [`sendMessages` with `stream: false`](api-reference.md#5-send-a-message-with-stream-false) currently invokes internally but still returns an SSE response without serializing the result. Use the [authenticated HTTP walkthrough](api-reference.md#http-conversation-walkthrough) for external callers, or this trusted server API when an App-owned integration genuinely needs the direct result.
@@ -306,6 +322,7 @@ interface AgentContextProvider {
     messages: readonly AIMessageInput[],
   ): Promise<string | undefined>;
   discoveredTools(): Promise<DiscoveredTools>;
+  toolRuntimeContext(): unknown;
 }
 
 interface CurrentConversation {
@@ -331,12 +348,13 @@ interface DiscoveredTools {
 Implementations should follow these rules:
 
 1. Keep `currentConversation()` stable for the lifetime of the service. Its `sessionId` must match the ConversationPersistence/session created for the agent.
-2. Resolve the model from the request first, then from the provider's fixed/default context. Throw a clear error when no model can be resolved; do not silently create another AI manager.
+2. Resolve the model by applying the provider's own policy to the request's model, falling back to the provider's fixed/default context. Do not reject a request that selects no model while the provider can resolve one, and do not accept a requested model the policy disallows. Throw a clear error when no model can be resolved; do not silently create another AI manager.
 3. Return a prompt string or `undefined`. Do not put authorization decisions solely in a prompt; enforce them in tool code and service policy.
 4. Return only registered, serializable tool definitions. `activeTools()` controls which discovered tools are enabled for this execution.
-5. Do not load or save messages in the context provider. Message history and tool state belong to the ConversationProvider.
-6. Do not put `DatabaseManager`, repositories, `ServiceFactory`, `ConversationProvider`, or a mutable aggregate options object into the public context contract. Keep infrastructure dependencies private inside the App-owned adapter and expose only the four results above.
-7. If context is request-sensitive, snapshot the trusted actor/request data when constructing the provider and never trust equivalent fields from model output.
+5. Return the same `toolRuntimeContext()` for the lifetime of the service, snapshotting the trusted actor and request state when the provider is constructed. It is the only context a backend tool receives; a provider that returns nothing makes every tool with `requiresContext` fail.
+6. Do not load or save messages in the context provider. Message history and tool state belong to the ConversationProvider.
+7. Do not put `DatabaseManager`, repositories, `ServiceFactory`, `ConversationProvider`, or a mutable aggregate options object into the public context contract. Keep infrastructure dependencies private inside the App-owned adapter and expose only the results above.
+8. If context is request-sensitive, snapshot the trusted actor/request data when constructing the provider and never trust equivalent fields from model output.
 
 A fixed context normally stores `sessionId`, optional `username`, optional `from`, a default `ModelRef`, a resolved `LLMProvider`, prompt text, a read-only tool map, and active tool names. An employee context additionally resolves the employee, model, configured skills/tools, knowledge-base prompt, frontend-tool manifest, and actor policy. These are implementation choices behind the contract, not extra fields for callers to pass to `AgentService`.
 

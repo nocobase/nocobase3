@@ -90,6 +90,9 @@ describe('AI employee container-scoped factories', () => {
   });
   it('creates a Fixed AgentService through the registered container factory', async () => {
     const container = createContainer();
+    container
+      .resolve(managerFactoryToken)
+      .configure({ aiStorageDisk: 'local' });
     const factory = container.resolve(agentServiceFactoryToken);
     const ai = container.resolve(aiManagerToken);
     const provider = {

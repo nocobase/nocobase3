@@ -147,7 +147,8 @@ describe('fixed AgentService contracts', () => {
     expect(options).not.toContain('model?: ModelRef');
     expect(providers).not.toContain('private readonly model');
     expect(providers).not.toContain('model: options.model');
-    expect(providers).toContain('getLLMService(request.model)');
+    expect(providers).toContain('this.resolveModel(request.model)');
+    expect(providers).toContain('getLLMService(model)');
     expect(conversationService).toContain('const agentRequest = {');
     expect(conversationService).toContain('model: resolvedModel,');
     expect(conversationService).toContain('userDecisions');
@@ -470,6 +471,9 @@ describe('fixed AgentService contracts', () => {
       readonly marker = 'base';
       currentConversation(): CurrentConversation {
         return { sessionId: 'contract' };
+      }
+      toolRuntimeContext(): unknown {
+        return {};
       }
       resolveLLM(): Promise<ResolvedAgentLLM> {
         return Promise.resolve({

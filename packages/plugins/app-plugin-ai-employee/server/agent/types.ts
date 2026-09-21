@@ -331,6 +331,12 @@ export interface AgentContextProvider {
     messages: readonly AIMessageInput[],
   ): Promise<string | undefined>;
   discoveredTools(): Promise<DiscoveredTools>;
+  /**
+   * The context every discovered tool receives when it executes. It is fixed
+   * when the AgentService is created and is never taken from a request, so a
+   * caller cannot swap the actor, session, or services a tool runs with.
+   */
+  toolRuntimeContext(): unknown;
 }
 
 export interface ChatMessageConverter<TSource, TResult> {

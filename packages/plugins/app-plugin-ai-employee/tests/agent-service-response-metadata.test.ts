@@ -68,6 +68,7 @@ const createFixture = (chunks: StreamChunk[]): Fixture => {
         provider,
       })),
       getSystemPrompt: vi.fn(async () => undefined),
+      toolRuntimeContext: vi.fn(() => ({})),
       currentConversation: vi.fn(() => ({
         sessionId: 'session-1',
         username: 'dara',

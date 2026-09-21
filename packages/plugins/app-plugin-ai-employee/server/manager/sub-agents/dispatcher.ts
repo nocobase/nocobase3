@@ -7,7 +7,6 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 import type { AIManager, FileStorage } from '@nocobase/ai-employee';
 import type { Caching } from '@nocobase/caching';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
@@ -29,7 +28,6 @@ import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import type { ModelRef } from '../../types.js';
 import { agentServiceFactoryToken } from '../../agent/service/agent-service-factory.js';
-import { createAgentContext } from '../../agent/context.js';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
   SubAgentConversationMetadata,
@@ -259,42 +257,6 @@ export class SubAgentsDispatcher {
       model,
     );
     const execution = options.execution;
-    const agentContext = createAgentContext({
-      actor: options.actor,
-      state: {
-        sessionId,
-        messageId: execution?.messageId,
-        messages: messages
-          ? [...messages]
-          : execution?.messages
-            ? [...execution.messages]
-            : undefined,
-        model: { ...resolvedModel },
-        webSearch: webSearch ?? execution?.webSearch,
-        important: execution?.important,
-        frontendTools: execution?.frontendTools
-          ? [...execution.frontendTools]
-          : undefined,
-        toolCallResults: execution?.toolCallResults
-          ? [...execution.toolCallResults]
-          : undefined,
-        timezone: execution?.timezone,
-      },
-      ai: this.ai,
-      database: this.databaseManager,
-      authorization: this.container?.has(authorizationToken)
-        ? this.container.resolve(authorizationToken)
-        : undefined,
-      logger: this.logger,
-      repositories: this.repositories,
-      aiEmployeesManager: this.aiEmployeesManager,
-      aiConversationsManager: this.aiConversationsManager,
-      builtInManager: this.builtInManager,
-      knowledgeBaseManager: this.knowledgeBaseManager,
-      subAgentsDispatcher: this,
-      translate: options.translate,
-      getHeader: options.getHeader,
-    });
     if (!this.container) {
       throw new Error('SubAgentsDispatcher requires an App container');
     }
@@ -311,6 +273,17 @@ export class SubAgentsDispatcher {
       skillSettings,
       webSearch,
       tools: undefined,
+      execution,
+      state: {
+        sessionId,
+        messages: messages
+          ? [...messages]
+          : execution?.messages
+            ? [...execution.messages]
+            : undefined,
+        model: { ...resolvedModel },
+        webSearch: webSearch ?? execution?.webSearch,
+      },
     });
     const lastMessage = await this.repositories.aiMessages.findOne({
       filter: {
@@ -323,7 +296,7 @@ export class SubAgentsDispatcher {
           lastMessage.messageId,
         )
       : null;
-    const context: Record<string, unknown> = { agentContext };
+    const context: Record<string, unknown> = {};
     if (
       messages &&
       decisions?.decisions?.some(

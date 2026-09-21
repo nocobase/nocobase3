@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { authorizationToken } from '@nocobase/app-plugin-authorization/server';
 
 import { SubAgentsDispatcher } from '../server/manager/sub-agents/dispatcher.js';
 
@@ -58,7 +57,6 @@ describe('SubAgentsDispatcher direct dependencies', () => {
     });
     const resolvedModel = { llmService: 'openai', model: 'gpt-5' };
     const createAIEmployee = vi.fn().mockResolvedValue({ invoke });
-    const has = vi.fn(() => false);
     const dispatcher = new SubAgentsDispatcher({
       ai: {} as never,
       database: {} as never,
@@ -82,7 +80,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
       workContextHandler: {} as never,
       documentLoaders: {} as never,
       container: {
-        has,
+        has: vi.fn(() => false),
         resolve: vi.fn(() => ({ createAIEmployee })),
       } as never,
     });
@@ -109,23 +107,23 @@ describe('SubAgentsDispatcher direct dependencies', () => {
       ),
     ).resolves.toBe('Search result');
 
-    const request = invoke.mock.calls[0][0];
-    expect(request.context.agentContext.state).toMatchObject({
-      sessionId: 'sub-session',
-      model: resolvedModel,
-      webSearch: true,
-      timezone: 'Asia/Shanghai',
-    });
-    expect(request.context.agentContext.state.messages).toHaveLength(1);
-    expect(has).toHaveBeenCalledWith(authorizationToken);
-    expect(request.context.agentContext.actor.id).toBe('user-1');
+    // The tool context is fixed when the AgentService is created, so the
+    // dispatcher hands the execution state to the factory instead of putting a
+    // context on the request.
     expect(createAIEmployee).toHaveBeenCalledWith(
       expect.objectContaining({
         actor: { id: 'user-1', roles: ['member'], isRoot: false },
+        sessionId: 'sub-session',
+        execution: { timezone: 'Asia/Shanghai' },
+        state: expect.objectContaining({
+          sessionId: 'sub-session',
+          model: resolvedModel,
+          webSearch: true,
+        }),
       }),
     );
-    await expect(
-      request.context.agentContext.services.data.getDataSources({}),
-    ).rejects.toThrow('Data access denied');
+    expect(createAIEmployee.mock.calls[0][0].state.messages).toHaveLength(1);
+    const request = invoke.mock.calls[0][0];
+    expect(request.context).not.toHaveProperty('agentContext');
   });
 });

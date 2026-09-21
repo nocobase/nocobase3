@@ -19,7 +19,7 @@ import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import type { AIEmployeeSkillSettings } from './options.js';
 import type { AppAgentContext } from '../../context.js';
-import type { Actor, Translate } from '../../../types.js';
+import type { Actor, ModelRef, Translate } from '../../../types.js';
 import type { BuiltInManager } from '../../../manager/built-in-manager.js';
 import type { KnowledgeBaseManager } from '../../../manager/knowledge-base-manager.js';
 import type {
@@ -53,6 +53,11 @@ export interface AIEmployeeAgentContextProviderOptions {
   readonly actor: Actor;
   readonly translate?: Translate;
   readonly toolRuntimeContext: AppAgentContext;
+  /**
+   * Applies the employee's model policy to an optionally requested model. A
+   * caller may ask for a model but never widen what the employee allows.
+   */
+  readonly resolveModel: (model?: ModelRef | null) => Promise<ModelRef>;
   readonly llmProviderManager: LLMProviderManager;
   readonly toolsManager: ToolsManager;
   readonly skillsManager: SkillsManager;
@@ -76,7 +81,8 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly conversation: CurrentConversation;
   private readonly actor: Actor;
   private readonly translate?: Translate;
-  private readonly toolRuntimeContext: AppAgentContext;
+  private readonly runtimeContext: AppAgentContext;
+  private readonly resolveModel: (model?: ModelRef | null) => Promise<ModelRef>;
   private readonly llmProviderManager: LLMProviderManager;
   private readonly toolsManager: ToolsManager;
   private readonly skillsManager: SkillsManager;
@@ -99,7 +105,8 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     this.conversation = options.currentConversation;
     this.actor = options.actor;
     this.translate = options.translate;
-    this.toolRuntimeContext = options.toolRuntimeContext;
+    this.runtimeContext = options.toolRuntimeContext;
+    this.resolveModel = options.resolveModel;
     this.llmProviderManager = options.llmProviderManager;
     this.toolsManager = options.toolsManager;
     this.skillsManager = options.skillsManager;
@@ -125,9 +132,16 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     return this.conversation;
   }
 
+  public toolRuntimeContext(): AppAgentContext {
+    return this.runtimeContext;
+  }
+
   public async resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    if (!request.model) throw new Error('AI employee model is required');
-    const resolved = await this.llmProviderManager.getLLMService(request.model);
+    // The employee's own configuration decides the model. A request may ask for
+    // one, but only a model the employee allows is honoured, and a request that
+    // asks for none is resolved rather than rejected.
+    const model = await this.resolveModel(request.model);
+    const resolved = await this.llmProviderManager.getLLMService(model);
     return {
       providerName: resolved.service.provider,
       llmService: resolved.service.name,
@@ -281,14 +295,14 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     )
       return undefined;
     return this.toolsManager.getTools(SYSTEM_TOOLS.KNOWLEDGE_BASE, {
-      ctx: this.toolRuntimeContext,
+      ctx: this.runtimeContext,
     });
   }
 
   private listTools(filter?: ToolsFilter): Promise<ToolsEntity[]> {
     return this.toolsManager.listTools({
       ...filter,
-      ctx: this.toolRuntimeContext,
+      ctx: this.runtimeContext,
     });
   }
 
@@ -343,14 +357,14 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     );
     const tools = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
-      ctx: this.toolRuntimeContext,
+      ctx: this.runtimeContext,
     });
     if (getSkill) tools.push(getSkill);
     if (this.webSearch === true) {
       const webSearch = await this.toolsManager.getTools(
         SYSTEM_TOOLS.WEB_SEARCH,
         {
-          ctx: this.toolRuntimeContext,
+          ctx: this.runtimeContext,
         },
       );
       if (webSearch) tools.push(webSearch);

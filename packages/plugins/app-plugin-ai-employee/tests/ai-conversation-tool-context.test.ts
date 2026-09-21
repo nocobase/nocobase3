@@ -72,16 +72,22 @@ describe('AIConversationService tool context', () => {
       translate: (key) => key,
     });
 
+    // The tool context is fixed when the AgentService is created, so the state
+    // reaches the factory rather than the request.
     expect(createAIEmployee).toHaveBeenCalledWith(
-      expect.objectContaining({ webSearch: true }),
+      expect.objectContaining({
+        webSearch: true,
+        execution: expect.objectContaining({ timezone: 'Asia/Shanghai' }),
+        state: {
+          sessionId: 'session-1',
+          messages,
+          model: resolvedModel,
+          webSearch: true,
+        },
+      }),
     );
     const request = invoke.mock.calls[0][0];
-    expect(request.context.agentContext.state).toMatchObject({
-      sessionId: 'session-1',
-      messages,
-      model: resolvedModel,
-      webSearch: true,
-      timezone: 'Asia/Shanghai',
-    });
+    expect(request.context).not.toHaveProperty('agentContext');
+    expect(request.context.timezone).toBe('Asia/Shanghai');
   });
 });
