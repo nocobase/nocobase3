@@ -74,7 +74,7 @@ Then verify the actual behavior. Green commands mean the code compiles and the a
 
 - Open the page and use it, in both light and dark themes.
 - Confirm the endpoint's responses for signed-out, unpermitted, and permitted callers.
-- Confirm `pnpm migrate` applies cleanly.
+- Confirm `pnpm db:apply` applies cleanly.
 - Switch language and confirm the text changes.
 
 ## Reporting

@@ -18,6 +18,8 @@ describe('application command factories', () => {
       'info',
       'migrate',
       'seed',
+      'db:apply',
+      'db:reset',
       'db:repair',
       'collections:generate',
       'i18n:check',

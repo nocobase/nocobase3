@@ -235,6 +235,70 @@ describe('connection-bound application database tasks', () => {
     expect(seeds.results.map((r) => r.executed)).toEqual([[], []]);
   });
 
+  it('plans migrations and seeds together, and reseeds after a fresh rebuild', async () => {
+    const { config, paths, contributions } = fixture();
+    migration(paths.database('main/migrations'), '001_main', 'mainRows');
+    seed(paths.database('main/seeds'), 'mainRows');
+    const both = ['migrations', 'seeds'] as const;
+
+    const applied = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: both,
+    });
+    expect(applied.results.map((r) => [r.kind, r.executed])).toEqual([
+      ['migrations', ['001_main']],
+      ['seeds', ['002_seed']],
+    ]);
+    await inspect(config, 'main', async (client) => {
+      expect(await client('main_rows').select('value')).toEqual([
+        { value: 'initial' },
+      ]);
+    });
+
+    // Nothing is pending on a second run.
+    const again = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: both,
+    });
+    expect(again.results.flatMap((r) => r.executed ?? [])).toEqual([]);
+
+    // A reset drops the managed schema, including both history tables, then
+    // runs migrations and seeds again from empty.
+    await inspect(config, 'main', async (client) => {
+      await client('main_rows').update({ value: 'edited' });
+    });
+    const reset = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: both,
+      fresh: true,
+    });
+    expect(reset.results.map((r) => [r.kind, r.executed])).toEqual([
+      ['migrations', ['001_main']],
+      ['seeds', ['002_seed']],
+    ]);
+    await inspect(config, 'main', async (client) => {
+      expect(await client('main_rows').select('value')).toEqual([
+        { value: 'initial' },
+      ]);
+    });
+  });
+
+  it('refuses a fresh run that would seed a connection it never rebuilds', async () => {
+    const { config, paths, contributions } = fixture();
+    seed(paths.database('main/seeds'), 'mainRows');
+    await expect(
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: 'seeds',
+        fresh: true,
+      }),
+    ).rejects.toThrow('A fresh run must include migrations.');
+  });
+
   it('resolves onChecksumMismatch from connection and legacy configuration', async () => {
     const { config, paths, contributions } = fixture();
     const directory = paths.database('main/migrations');

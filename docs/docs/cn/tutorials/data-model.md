@@ -61,8 +61,7 @@ description: '固定客户、订单、金额和归属字段，为后面的页面
 迁移放在 `database/main/migrations/`，种子放在 `database/main/seeds/`。迁移负责结构，种子负责练习数据。AI Agent 生成迁移后，执行：
 
 ```bash
-pnpm migrate
-pnpm seed
+pnpm db:apply
 pnpm collections:generate
 ```
 

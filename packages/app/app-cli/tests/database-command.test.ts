@@ -18,6 +18,7 @@ import {
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
+  runDatabaseApplyCommand,
   runDatabaseCommand,
   runDatabaseRepairCommand,
 } from '../src/database-command.js';
@@ -228,21 +229,66 @@ it('reports invalid selection as JSON and exits nonzero', async () => {
   );
 });
 
-it('requires force for fresh migrations in CI', async () => {
+it('requires force for a reset in CI', async () => {
   const { runtime, command } = fixture();
   vi.stubEnv('CI', '1');
   await expect(
-    runDatabaseCommand(
+    runDatabaseApplyCommand(
       command,
-      'migrations',
       { json: true, all: false, fresh: true },
       runtime,
     ),
   ).rejects.toThrow('exit 1');
   expect(command.log).toHaveBeenCalledWith(
-    '--fresh requires --force in CI or a non-interactive terminal.',
+    'Reset requires --force in CI or a non-interactive terminal.',
   );
   expect(command.logJson).not.toHaveBeenCalled();
+});
+
+it('applies migrations and seeds as one plan, and resets from empty', async () => {
+  const { runtime, command, migration, seed } = fixture();
+  migration('main');
+  seed('main');
+  command.logJson.mockClear();
+  await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
+  const applied = command.logJson.mock.calls.at(-1)?.[0];
+  expect(
+    applied.results.map((entry: { kind: string; executed: string[] }) => [
+      entry.kind,
+      entry.executed,
+    ]),
+  ).toEqual([
+    ['migrations', ['001_create']],
+    ['seeds', ['001_defaults']],
+  ]);
+
+  // Repeating it runs nothing; both halves report the task as skipped.
+  command.logJson.mockClear();
+  await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
+  expect(
+    command.logJson.mock.calls
+      .at(-1)?.[0]
+      .results.flatMap((entry: { executed: string[] }) => entry.executed),
+  ).toEqual([]);
+
+  // A reset rebuilds the schema and reruns both, seeds included — which is
+  // what `migrate --fresh` could not do.
+  command.logJson.mockClear();
+  await runDatabaseApplyCommand(
+    command,
+    { json: true, all: false, fresh: true, force: true },
+    runtime,
+  );
+  const reset = command.logJson.mock.calls.at(-1)?.[0];
+  expect(
+    reset.results.map((entry: { kind: string; executed: string[] }) => [
+      entry.kind,
+      entry.executed,
+    ]),
+  ).toEqual([
+    ['migrations', ['001_create']],
+    ['seeds', ['001_defaults']],
+  ]);
 });
 
 it('uses and disposes the factory application and its scope without autoRun', async () => {
@@ -495,4 +541,18 @@ it('repairs only the requested kind', async () => {
     ['migrations', 1],
     ['seeds', 0],
   ]);
+});
+
+it('points migrate --fresh at the reset command', async () => {
+  const { runtime, command } = fixture();
+  for (const flags of [
+    { json: false, all: false, fresh: true },
+    { json: false, all: false, force: true },
+  ])
+    await expect(
+      runDatabaseCommand(command, 'migrations', flags, runtime),
+    ).rejects.toThrow('exit 1');
+  expect(command.log).toHaveBeenCalledWith(
+    'migrate --fresh has moved to "db reset", which also reruns seeds.',
+  );
 });

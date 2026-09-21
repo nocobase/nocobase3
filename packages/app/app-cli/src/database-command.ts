@@ -32,24 +32,14 @@ interface DatabaseSelectionFlags {
 export async function runDatabaseCommand(
   command: CommandOutput,
   kind: AppDatabaseTaskKind,
-  flags: DatabaseSelectionFlags & {
-    fresh?: boolean;
-    force?: boolean;
-  },
+  flags: DatabaseSelectionFlags & { fresh?: boolean; force?: boolean },
   context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
 ): Promise<void> {
-  if (flags.force && !flags.fresh) {
-    command.log('--force can only be used together with --fresh.');
-    command.exit(1);
-    return;
-  }
-  if (
-    flags.fresh &&
-    !flags.force &&
-    (Boolean(process.env.CI) || !process.stdin.isTTY || !process.stdout.isTTY)
-  ) {
+  if (flags.fresh || flags.force) {
+    // `migrate --fresh` rebuilt the schema without reseeding, leaving the seed
+    // history cleared and no seed executed. `db reset` does both halves.
     command.log(
-      '--fresh requires --force in CI or a non-interactive terminal.',
+      'migrate --fresh has moved to "db reset", which also reruns seeds.',
     );
     command.exit(1);
     return;
@@ -58,15 +48,6 @@ export async function runDatabaseCommand(
     runAppDatabaseTasks(app.config.get<AppDatabaseConfig>('database')!, {
       ...planOptions(app, flags),
       kind,
-      ...(flags.fresh
-        ? {
-            fresh: true,
-            confirmFresh: flags.force
-              ? undefined
-              : (plan: readonly AppDatabaseTask[]) =>
-                  confirmFresh(command, plan),
-          }
-        : {}),
     }),
   );
   if (!result) return;
@@ -88,7 +69,6 @@ export async function runDatabaseCommand(
               executed: entry.executed ?? [],
               skipped: entry.skipped ?? [],
               warnings: entry.warnings ?? [],
-              ...(entry.fresh ? { fresh: true } : {}),
             }
           : {}),
       });
@@ -98,6 +78,68 @@ export async function runDatabaseCommand(
     for (const entry of result.results) {
       command.log(
         `[${entry.connection}] ${kind}: ${entry.status}${entry.reason ? ` (${entry.reason})` : ''}${entry.error ? `: ${entry.error}` : ''}`,
+      );
+      if (entry.batch !== undefined) command.log(`Batch: ${entry.batch}`);
+      if (entry.executed)
+        command.log(`Executed: ${entry.executed.join(', ') || 'none'}`);
+      if (entry.skipped)
+        command.log(`Skipped: ${entry.skipped.join(', ') || 'none'}`);
+      for (const warning of entry.warnings ?? [])
+        command.log(
+          `WARNING: checksum changed since it was executed: ${describe(warning)}`,
+        );
+      if (entry.warnings?.length)
+        command.log(
+          'Run "nocobase app db repair" to realign the history once the change is confirmed intentional.',
+        );
+    }
+  }
+  if (!result.ok) command.exit(1);
+}
+
+/**
+ * Runs migrations and seeds as one plan, which is the same shape startup
+ * executes. One plan is what makes `fresh` correct: a connection's schema is
+ * rebuilt by its migrations task, and its seeds run after, against the
+ * rebuilt schema.
+ */
+export async function runDatabaseApplyCommand(
+  command: CommandOutput,
+  flags: DatabaseSelectionFlags & { fresh?: boolean; force?: boolean },
+  context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
+): Promise<void> {
+  if (
+    flags.fresh &&
+    !flags.force &&
+    (Boolean(process.env.CI) || !process.stdin.isTTY || !process.stdout.isTTY)
+  ) {
+    command.log('Reset requires --force in CI or a non-interactive terminal.');
+    command.exit(1);
+    return;
+  }
+  const result = await executeWithApplication(command, flags, context, (app) =>
+    runAppDatabaseTasks(app.config.get<AppDatabaseConfig>('database')!, {
+      ...planOptions(app, flags),
+      kind: ['migrations', 'seeds'],
+      ...(flags.fresh
+        ? {
+            fresh: true,
+            confirmFresh: flags.force
+              ? undefined
+              : (plan: readonly AppDatabaseTask[]) =>
+                  confirmFresh(command, plan),
+          }
+        : {}),
+    }),
+  );
+  if (!result) return;
+
+  if (flags.json) command.logJson(result);
+  else {
+    if (!result.results.length) command.log('No database is configured.');
+    for (const entry of result.results) {
+      command.log(
+        `[${entry.connection}] ${entry.kind}: ${entry.status}${entry.reason ? ` (${entry.reason})` : ''}${entry.error ? `: ${entry.error}` : ''}`,
       );
       if (entry.batch !== undefined) command.log(`Batch: ${entry.batch}`);
       if (entry.executed)
@@ -350,18 +392,26 @@ async function confirmFresh(
 ): Promise<boolean> {
   if (process.env.CI || !process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error(
-      '--fresh requires --force in CI or a non-interactive terminal.',
+      'Reset requires --force in CI or a non-interactive terminal.',
     );
   }
-  const targets = plan
-    .filter((task) => !task.skipReason)
-    .map((task) => task.connection);
-  const skipped = plan
-    .filter((task) => task.skipReason)
-    .map((task) => `${task.connection} (${task.skipReason})`);
+  // One line per connection: a plan covering both kinds lists each twice.
+  const targets = [
+    ...new Set(
+      plan.filter((task) => !task.skipReason).map((task) => task.connection),
+    ),
+  ];
+  const skipped = [
+    ...new Set(
+      plan
+        .filter((task) => task.skipReason)
+        .map((task) => `${task.connection} (${task.skipReason})`),
+    ),
+  ];
   command.log(
-    `WARNING: --fresh will delete all managed schema objects for: ${targets.join(', ') || 'none'}.`,
+    `WARNING: this will delete all managed schema objects for: ${targets.join(', ') || 'none'}.`,
   );
+  command.log('Every migration and seed then runs again from an empty schema.');
   if (skipped.length) command.log(`Skipped: ${skipped.join(', ')}.`);
   const prompt = createInterface({
     input: process.stdin,

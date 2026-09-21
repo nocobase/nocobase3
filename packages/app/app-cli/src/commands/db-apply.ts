@@ -2,12 +2,12 @@ import { AppCommand } from '../context.js';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { runDatabaseCommand } from '../database-command.js';
+import { runDatabaseApplyCommand } from '../database-command.js';
 
-export default class AppMigrate extends AppCommand {
-  static override summary = 'Run pending database migrations.';
+export default class AppDbApply extends AppCommand {
+  static override summary = 'Apply pending database migrations and seeds.';
   static override description =
-    'Runs the default connection unless --connection or --all is specified. Plugins belong to the default connection. Stops on the first failure. Use "db apply" to run migrations and seeds together, and "db reset" to start from an empty schema.';
+    'Runs both in one plan, the same order startup runs them: each connection is migrated, then seeded. Only pending tasks run, so repeating it is safe. Runs the default connection unless --connection or --all is specified. Plugins belong to the default connection. Stops on the first failure. To discard the current schema and start over, use "db reset".';
 
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %>',
@@ -19,8 +19,6 @@ export default class AppMigrate extends AppCommand {
     json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
-    fresh: Interfaces.BooleanFlag<boolean>;
-    force: Interfaces.BooleanFlag<boolean>;
   } = {
     json: Flags.boolean({
       default: false,
@@ -36,21 +34,16 @@ export default class AppMigrate extends AppCommand {
       exclusive: ['all'],
       description: 'Target a named managed connection, regardless of autoRun.',
     }),
-    // Retired in favour of "db reset", which also reseeds. Kept out of help
-    // so a script still carrying them gets a pointer rather than a parse error.
-    fresh: Flags.boolean({ default: false, hidden: true }),
-    force: Flags.boolean({ default: false, hidden: true }),
   };
 
   public async run(): Promise<void> {
-    const { flags } = await this.parse(AppMigrate);
-    await runDatabaseCommand(
+    const { flags } = await this.parse(AppDbApply);
+    await runDatabaseApplyCommand(
       {
         log: (message) => this.log(message),
         logJson: (value) => this.logJson(value),
         exit: (code) => this.exit(code),
       },
-      'migrations',
       flags,
       this.appContext,
     );

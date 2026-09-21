@@ -2,24 +2,24 @@ import { AppCommand } from '../context.js';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { runDatabaseCommand } from '../database-command.js';
+import { runDatabaseApplyCommand } from '../database-command.js';
 
-export default class AppMigrate extends AppCommand {
-  static override summary = 'Run pending database migrations.';
+export default class AppDbReset extends AppCommand {
+  static override summary =
+    'Delete every managed schema object, then apply all migrations and seeds.';
   static override description =
-    'Runs the default connection unless --connection or --all is specified. Plugins belong to the default connection. Stops on the first failure. Use "db apply" to run migrations and seeds together, and "db reset" to start from an empty schema.';
+    'Destructive. Each connection has its managed schema dropped and is then migrated and seeded from empty, so every row in a managed table is lost. Prompts before doing anything, and requires --force in CI or a non-interactive terminal. External connections are skipped. Use "db apply" to run only what is pending.';
 
   static override examples: Command.Example[] = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --connection analytics --json',
-    '<%= config.bin %> <%= command.id %> --all',
+    '<%= config.bin %> <%= command.id %> --connection analytics',
+    '<%= config.bin %> <%= command.id %> --all --force',
   ];
 
   static override flags: {
     json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
-    fresh: Interfaces.BooleanFlag<boolean>;
     force: Interfaces.BooleanFlag<boolean>;
   } = {
     json: Flags.boolean({
@@ -36,22 +36,21 @@ export default class AppMigrate extends AppCommand {
       exclusive: ['all'],
       description: 'Target a named managed connection, regardless of autoRun.',
     }),
-    // Retired in favour of "db reset", which also reseeds. Kept out of help
-    // so a script still carrying them gets a pointer rather than a parse error.
-    fresh: Flags.boolean({ default: false, hidden: true }),
-    force: Flags.boolean({ default: false, hidden: true }),
+    force: Flags.boolean({
+      default: false,
+      description: 'Skip the confirmation prompt.',
+    }),
   };
 
   public async run(): Promise<void> {
-    const { flags } = await this.parse(AppMigrate);
-    await runDatabaseCommand(
+    const { flags } = await this.parse(AppDbReset);
+    await runDatabaseApplyCommand(
       {
         log: (message) => this.log(message),
         logJson: (value) => this.logJson(value),
         exit: (code) => this.exit(code),
       },
-      'migrations',
-      flags,
+      { ...flags, fresh: true },
       this.appContext,
     );
   }

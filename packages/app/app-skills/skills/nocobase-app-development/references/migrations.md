@@ -86,10 +86,10 @@ Set `tableName` or `columnName` explicitly when you need to override the derivat
 ## Running
 
 ```bash
-pnpm migrate
+pnpm db:apply
 ```
 
-This applies pending migrations for `database.default`, including registered plugins, ordered by name across all sources. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
+This applies pending migrations and then pending seeds for `database.default`, including registered plugins, ordered by name across all sources. `pnpm nocobase app migrate` and `pnpm nocobase app seed` run one half on its own when a deployment needs to separate them. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
 
 ## Multiple connections
 
@@ -100,15 +100,15 @@ Configure `connections.<name>.migrations` and `.seeds` in the database section. 
 The default connection runs migrations and seeds automatically unless disabled; other connections default to `autoRun: false`. Startup runs the default connection first, then other names in stable ascending order, migrations before seeds within each connection. A failure stops startup; completed database changes remain committed. No cross-connection transaction or rollback is provided.
 
 ```bash
-pnpm migrate --connection analytics
-pnpm seed --connection analytics
-pnpm migrate --all --json
-pnpm seed --all --json
+pnpm db:apply --connection analytics
+pnpm db:apply --all --json
 ```
 
-Manual execution ignores `autoRun`. `--connection` and `--all` are mutually exclusive. `--all` uses the same connection order and stops at the first failure. Its JSON result includes completed, skipped, failed and not-run entries; failures exit nonzero. Single-connection JSON retains `status`, `batch` (migrations), `executed`, and `skipped`, with an added `connection` field.
+Manual execution ignores `autoRun`. `--connection` and `--all` are mutually exclusive. `--all` uses the same connection order and stops at the first failure. JSON results include completed, skipped, failed and not-run entries, one per connection and kind; failures exit nonzero. Single-connection JSON from `migrate` and `seed` retains `status`, `batch` (migrations), `executed`, and `skipped`, with an added `connection` field.
 
-`pnpm migrate --fresh` is a destructive reset for managed connections. It removes the managed schema objects, clears migration history as part of that reset, and reruns all currently visible migrations; it never calls migration `down()` and never runs seeds. In an interactive terminal it asks for confirmation. CI and non-interactive terminals require `--force`, so use `pnpm migrate --fresh --force` only when the target is intentionally disposable. `--fresh` is rejected for an explicitly selected external connection; `--all` processes managed connections and reports external connections as skipped. It is limited to connections with a registered driver reset capability.
+`pnpm db:reset` is a destructive reset for managed connections. It removes the managed schema objects — which clears migration and seed history along with every row in a managed table — then reruns all currently visible migrations and seeds from empty. It never calls migration `down()`. In an interactive terminal it asks for confirmation. CI and non-interactive terminals require `--force`, so use `pnpm db:reset --force` only when the target is intentionally disposable. It is rejected for an explicitly selected external connection; `--all` processes managed connections and reports external connections as skipped. It is limited to connections with a registered driver reset capability.
+
+`migrate --fresh` was the earlier form and is gone. It reset the schema without reseeding, so it left the seed history cleared but no seed executed; the default connection recovered on the next startup and a connection with `autoRun: false` did not.
 
 `schemaManagement: external` describes ownership, not read-only credentials. Startup and `--all` skip external connections; explicitly targeting one for migrations or seeds is an error. The application resolves a metadata store for runtime access, using `database/<connectionName>/collections/` when neither a connection-level nor shared store is configured; see [database connections](database-connections.md#add-managed-or-external-connections). Seeds also use history and lock tables, so they are not a workaround for external schema ownership.
 
@@ -128,7 +128,7 @@ Review `server/plugins.ts` and each registered plugin’s migration declarations
 
 ## Checksum drift
 
-A checksum recorded when a migration or seed ran no longer matching its current source means the file changed after it was executed. By default the run reports the drift and continues: `pnpm migrate` and `pnpm seed` print a warning, startup logs one through the application logger, and `--json` carries it in `warnings`. Set `onChecksumMismatch: 'error'` on a connection's `migrations` or `seeds` configuration — or at the top level — to refuse to run instead. A record whose migration is missing from the sources entirely always fails, whatever the policy says.
+A checksum recorded when a migration or seed ran no longer matching its current source means the file changed after it was executed. By default the run reports the drift and continues: `pnpm db:apply` prints a warning, startup logs one through the application logger, and `--json` carries it in `warnings`. Set `onChecksumMismatch: 'error'` on a connection's `migrations` or `seeds` configuration — or at the top level — to refuse to run instead. A record whose migration is missing from the sources entirely always fails, whatever the policy says.
 
 `pnpm db:repair` (`nocobase app db repair`) rewrites the recorded checksums to match the current sources, which is how the warning is cleared once the change is confirmed intentional. One command covers both migrations and seeds; `--kind migrations` or `--kind seeds` narrows it. It executes nothing and changes no schema or data. Preview with `--dry-run` first; `--dry-run --json` is the form to run in CI when drift should gate a deploy. It never deletes a history record, so a repair cannot make an executed migration run again.
 
@@ -156,7 +156,7 @@ const seed: SeedDefinition = defineSeed({
 export default seed;
 ```
 
-Run with `pnpm seed`. The structure a seed writes into must already exist from an earlier migration.
+Seeds run as the second half of `pnpm db:apply`, or on their own with `pnpm nocobase app seed`. The structure a seed writes into must already exist from an earlier migration.
 
 Keep seed data fixed and reproducible — no current timestamps or random values in identifying fields. Decide explicitly what a repeat run does: skip on a unique key, or update deterministically. Never silently overwrite data a user has edited.
 
@@ -171,7 +171,7 @@ Check that `up` produces the expected tables, columns, types, indexes, and const
 - The filename and exported `name` match, and the prefix sorts correctly.
 - The migration imports no evolving definition.
 - `down` reverses `up` in a safe order.
-- `pnpm migrate` applies cleanly on an empty database and on an already-migrated one.
+- `pnpm db:apply` applies cleanly on an empty database and on an already-migrated one.
 - The physical schema matches what the migration declared.
 
 ## Compiled migration and seed manifests
