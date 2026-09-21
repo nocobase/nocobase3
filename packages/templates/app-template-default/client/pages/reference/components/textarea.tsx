@@ -28,7 +28,6 @@ export default function TextareaExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.textarea.title')}
       description={t('components.textarea.description')}
-      source='client/pages/reference/components/textarea.tsx'
       docs='https://ui.shadcn.com/docs/components/textarea'
     >
       <ExampleSection

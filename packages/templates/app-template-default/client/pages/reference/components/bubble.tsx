@@ -43,7 +43,6 @@ export default function BubbleExamplePage(): ReactElement {
       <ExamplePage
         title={t('components.bubble.title')}
         description={t('components.bubble.description')}
-        source='client/pages/reference/components/bubble.tsx'
         docs='https://ui.shadcn.com/docs/components/bubble'
       >
         <ExampleSection

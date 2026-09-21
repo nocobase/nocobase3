@@ -7,12 +7,11 @@ import {
 } from '../../client/pages/reference/shared';
 
 describe('reference page frame', () => {
-  it('renders the header, source path and docs link around its sections', () => {
+  it('renders the header and docs link around its sections', () => {
     render(
       <ExamplePage
         title='Button'
         description='Triggers an action.'
-        source='client/pages/reference/components/button.tsx'
         docs='https://ui.shadcn.com/docs/components/button'
       >
         <ExampleSection title='Variants' description='Six variants.'>
@@ -25,9 +24,6 @@ describe('reference page frame', () => {
       screen.getByRole('heading', { level: 1, name: 'Button' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Triggers an action.')).toBeInTheDocument();
-    expect(
-      screen.getByText('client/pages/reference/components/button.tsx'),
-    ).toBeInTheDocument();
     expect(screen.getByRole('link')).toHaveAttribute(
       'href',
       'https://ui.shadcn.com/docs/components/button',
@@ -38,7 +34,7 @@ describe('reference page frame', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
-  it('omits the header actions and source line when nothing is given', () => {
+  it('omits the header actions when nothing is given', () => {
     render(
       <ExamplePage title='Orders'>
         <ExampleSection title='Table'>rows</ExampleSection>
@@ -46,6 +42,5 @@ describe('reference page frame', () => {
     );
 
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
-    expect(screen.queryByText('Source')).not.toBeInTheDocument();
   });
 });

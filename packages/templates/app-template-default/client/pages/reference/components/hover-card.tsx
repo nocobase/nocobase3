@@ -43,7 +43,6 @@ export default function HoverCardExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.hoverCard.title')}
       description={t('components.hoverCard.description')}
-      source='client/pages/reference/components/hover-card.tsx'
       docs='https://ui.shadcn.com/docs/components/hover-card'
     >
       <ExampleSection

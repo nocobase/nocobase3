@@ -70,7 +70,6 @@ export default function AvatarExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.avatar.title')}
       description={t('components.avatar.description')}
-      source='client/pages/reference/components/avatar.tsx'
       docs='https://ui.shadcn.com/docs/components/avatar'
     >
       <ExampleSection

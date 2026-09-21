@@ -35,7 +35,6 @@ export default function AlertExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.alert.title')}
       description={t('components.alert.description')}
-      source='client/pages/reference/components/alert.tsx'
       docs='https://ui.shadcn.com/docs/components/alert'
     >
       <ExampleSection

@@ -376,7 +376,6 @@ export default function ScheduleExamplePage(): ReactElement {
     <ExamplePage
       title={t('examples.schedule.title')}
       description={t('examples.schedule.description')}
-      source='client/pages/reference/examples/schedule/schedule.tsx'
       actions={
         <>
           <ToggleGroup

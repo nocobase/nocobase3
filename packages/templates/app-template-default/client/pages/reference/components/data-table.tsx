@@ -414,7 +414,6 @@ export default function DataTableExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.dataTable.title')}
       description={t('components.dataTable.description')}
-      source='client/pages/reference/components/data-table.tsx'
       docs='https://ui.shadcn.com/docs/components/data-table'
     >
       <ExampleSection

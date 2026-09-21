@@ -31,7 +31,6 @@ export default function ToggleGroupExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.toggleGroup.title')}
       description={t('components.toggleGroup.description')}
-      source='client/pages/reference/components/toggle-group.tsx'
       docs='https://ui.shadcn.com/docs/components/toggle-group'
     >
       <ExampleSection

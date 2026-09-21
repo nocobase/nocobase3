@@ -32,7 +32,6 @@ export default function InputOtpExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.inputOtp.title')}
       description={t('components.inputOtp.description')}
-      source='client/pages/reference/components/input-otp.tsx'
       docs='https://ui.shadcn.com/docs/components/input-otp'
     >
       <ExampleSection

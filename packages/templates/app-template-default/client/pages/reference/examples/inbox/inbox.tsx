@@ -406,7 +406,6 @@ export default function InboxExamplePage(): ReactElement {
     <ExamplePage
       title={t('examples.inbox.title')}
       description={t('examples.inbox.description')}
-      source='client/pages/reference/examples/inbox/inbox.tsx'
       actions={
         <>
           <Button

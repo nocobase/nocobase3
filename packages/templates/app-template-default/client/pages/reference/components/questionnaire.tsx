@@ -101,7 +101,6 @@ export default function QuestionnaireExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.questionnaire.title')}
       description={t('components.questionnaire.description')}
-      source='client/pages/reference/components/questionnaire.tsx'
       docs='https://ui.shadcn.com/docs/components/questionnaire'
     >
       <ExampleSection

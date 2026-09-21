@@ -51,7 +51,6 @@ export default function ToastExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.toast.title')}
       description={t('components.toast.description')}
-      source='client/pages/reference/components/toast.tsx'
       docs='https://ui.shadcn.com/docs/components/toast'
     >
       <Toaster />

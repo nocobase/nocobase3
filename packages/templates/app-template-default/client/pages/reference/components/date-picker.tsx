@@ -30,7 +30,6 @@ export default function DatePickerExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.datePicker.title')}
       description={t('components.datePicker.description')}
-      source='client/pages/reference/components/date-picker.tsx'
       docs='https://ui.shadcn.com/docs/components/date-picker'
     >
       <ExampleSection

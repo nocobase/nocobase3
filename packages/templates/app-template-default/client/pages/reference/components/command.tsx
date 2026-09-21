@@ -64,7 +64,6 @@ export default function CommandExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.command.title')}
       description={t('components.command.description')}
-      source='client/pages/reference/components/command.tsx'
       docs='https://ui.shadcn.com/docs/components/command'
     >
       <ExampleSection

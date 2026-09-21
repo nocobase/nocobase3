@@ -1,5 +1,5 @@
 import { useTranslation } from '@nocobase/i18n/client';
-import { ExternalLinkIcon, FileCode2Icon } from 'lucide-react';
+import { ExternalLinkIcon } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 
 import { PageContainer } from '@/components/page-container';
@@ -16,8 +16,6 @@ import { cn } from '@/lib/utils';
 export interface ExamplePageProps {
   readonly title: ReactNode;
   readonly description?: ReactNode;
-  /** Path of the file behind the page, relative to the application root. */
-  readonly source?: string;
   /** The shadcn documentation page the component gallery entry follows. */
   readonly docs?: string;
   readonly actions?: ReactNode;
@@ -28,7 +26,6 @@ export interface ExamplePageProps {
 export function ExamplePage({
   title,
   description,
-  source,
   docs,
   actions,
   className,
@@ -59,15 +56,6 @@ export function ExamplePage({
           ) : undefined
         }
       />
-      {source ? (
-        <p className='flex items-center gap-1.5 text-xs text-muted-foreground'>
-          <FileCode2Icon className='size-3.5' aria-hidden='true' />
-          <span>{t('reference.source')}</span>
-          <code className='rounded bg-muted px-1.5 py-0.5 font-mono'>
-            {source}
-          </code>
-        </p>
-      ) : null}
       <div className='space-y-8'>{children}</div>
     </PageContainer>
   );

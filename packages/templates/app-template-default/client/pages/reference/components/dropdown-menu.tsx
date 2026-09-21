@@ -60,7 +60,6 @@ export default function DropdownMenuExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.dropdownMenu.title')}
       description={t('components.dropdownMenu.description')}
-      source='client/pages/reference/components/dropdown-menu.tsx'
       docs='https://ui.shadcn.com/docs/components/dropdown-menu'
     >
       <ExampleSection

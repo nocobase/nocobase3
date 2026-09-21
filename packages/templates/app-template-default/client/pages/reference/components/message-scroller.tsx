@@ -253,7 +253,6 @@ export default function MessageScrollerExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.messageScroller.title')}
       description={t('components.messageScroller.description')}
-      source='client/pages/reference/components/message-scroller.tsx'
       docs='https://ui.shadcn.com/docs/components/message-scroller'
     >
       <ExampleSection

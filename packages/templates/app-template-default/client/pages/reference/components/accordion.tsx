@@ -21,7 +21,6 @@ export default function AccordionExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.accordion.title')}
       description={t('components.accordion.description')}
-      source='client/pages/reference/components/accordion.tsx'
       docs='https://ui.shadcn.com/docs/components/accordion'
     >
       <ExampleSection

@@ -41,7 +41,6 @@ export default function AlertDialogExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.alertDialog.title')}
       description={t('components.alertDialog.description')}
-      source='client/pages/reference/components/alert-dialog.tsx'
       docs='https://ui.shadcn.com/docs/components/alert-dialog'
     >
       <ExampleSection

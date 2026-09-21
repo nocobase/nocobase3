@@ -38,7 +38,6 @@ export default function TypographyExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.typography.title')}
       description={t('components.typography.description')}
-      source='client/pages/reference/components/typography.tsx'
       docs='https://ui.shadcn.com/docs/components/typography'
     >
       <ExampleSection

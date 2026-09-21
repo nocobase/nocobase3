@@ -130,7 +130,6 @@ export default function DrawerExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.drawer.title')}
       description={t('components.drawer.description')}
-      source='client/pages/reference/components/drawer.tsx'
       docs='https://ui.shadcn.com/docs/components/drawer'
     >
       <Toaster />

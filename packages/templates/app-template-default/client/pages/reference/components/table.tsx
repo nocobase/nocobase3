@@ -273,7 +273,6 @@ export default function TableExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.table.title')}
       description={t('components.table.description')}
-      source='client/pages/reference/components/table.tsx'
       docs='https://ui.shadcn.com/docs/components/table'
     >
       <ExampleSection

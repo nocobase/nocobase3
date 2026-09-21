@@ -21,7 +21,6 @@ export default function SpinnerExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.spinner.title')}
       description={t('components.spinner.description')}
-      source='client/pages/reference/components/spinner.tsx'
       docs='https://ui.shadcn.com/docs/components/spinner'
     >
       <ExampleSection

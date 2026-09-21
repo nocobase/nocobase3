@@ -56,7 +56,6 @@ export default function TabsExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.tabs.title')}
       description={t('components.tabs.description')}
-      source='client/pages/reference/components/tabs.tsx'
       docs='https://ui.shadcn.com/docs/components/tabs'
     >
       <ExampleSection

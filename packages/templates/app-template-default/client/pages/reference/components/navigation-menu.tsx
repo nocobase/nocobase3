@@ -50,7 +50,6 @@ export default function NavigationMenuExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.navigationMenu.title')}
       description={t('components.navigationMenu.description')}
-      source='client/pages/reference/components/navigation-menu.tsx'
       docs='https://ui.shadcn.com/docs/components/navigation-menu'
     >
       <ExampleSection

@@ -37,7 +37,6 @@ export default function EmptyExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.empty.title')}
       description={t('components.empty.description')}
-      source='client/pages/reference/components/empty.tsx'
       docs='https://ui.shadcn.com/docs/components/empty'
     >
       <ExampleSection

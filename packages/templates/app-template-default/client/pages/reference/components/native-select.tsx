@@ -37,7 +37,6 @@ export default function NativeSelectExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.nativeSelect.title')}
       description={t('components.nativeSelect.description')}
-      source='client/pages/reference/components/native-select.tsx'
       docs='https://ui.shadcn.com/docs/components/native-select'
     >
       <ExampleSection

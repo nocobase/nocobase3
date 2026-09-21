@@ -37,7 +37,6 @@ export default function ResizableExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.resizable.title')}
       description={t('components.resizable.description')}
-      source='client/pages/reference/components/resizable.tsx'
       docs='https://ui.shadcn.com/docs/components/resizable'
     >
       <ExampleSection

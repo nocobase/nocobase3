@@ -43,7 +43,6 @@ export default function AspectRatioExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.aspectRatio.title')}
       description={t('components.aspectRatio.description')}
-      source='client/pages/reference/components/aspect-ratio.tsx'
       docs='https://ui.shadcn.com/docs/components/aspect-ratio'
     >
       <ExampleSection

@@ -74,7 +74,6 @@ export default function AttachmentExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.attachment.title')}
       description={t('components.attachment.description')}
-      source='client/pages/reference/components/attachment.tsx'
       docs='https://ui.shadcn.com/docs/components/attachment'
     >
       <ExampleSection

@@ -248,7 +248,6 @@ export default function ProductFormExamplePage(): ReactElement {
     <ExamplePage
       title={t('examples.productForm.title')}
       description={t('examples.productForm.description')}
-      source='client/pages/reference/examples/product-form/product-form.tsx'
       actions={
         <>
           <Badge variant={STATUS_BADGE[draft.status]}>

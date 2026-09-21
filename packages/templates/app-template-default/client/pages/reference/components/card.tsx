@@ -84,7 +84,6 @@ export default function CardExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.card.title')}
       description={t('components.card.description')}
-      source='client/pages/reference/components/card.tsx'
       docs='https://ui.shadcn.com/docs/components/card'
     >
       <ExampleSection

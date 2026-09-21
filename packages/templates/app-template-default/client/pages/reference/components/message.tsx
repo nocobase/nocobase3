@@ -44,7 +44,6 @@ export default function MessageExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.message.title')}
       description={t('components.message.description')}
-      source='client/pages/reference/components/message.tsx'
       docs='https://ui.shadcn.com/docs/components/message'
     >
       <ExampleSection

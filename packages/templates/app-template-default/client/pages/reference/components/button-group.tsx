@@ -37,7 +37,6 @@ export default function ButtonGroupExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.buttonGroup.title')}
       description={t('components.buttonGroup.description')}
-      source='client/pages/reference/components/button-group.tsx'
       docs='https://ui.shadcn.com/docs/components/button-group'
     >
       <ExampleSection

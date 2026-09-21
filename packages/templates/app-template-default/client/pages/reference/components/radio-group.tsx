@@ -31,7 +31,6 @@ export default function RadioGroupExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.radioGroup.title')}
       description={t('components.radioGroup.description')}
-      source='client/pages/reference/components/radio-group.tsx'
       docs='https://ui.shadcn.com/docs/components/radio-group'
     >
       <ExampleSection

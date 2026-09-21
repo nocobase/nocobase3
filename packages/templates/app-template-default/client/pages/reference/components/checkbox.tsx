@@ -112,7 +112,6 @@ export default function CheckboxExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.checkbox.title')}
       description={t('components.checkbox.description')}
-      source='client/pages/reference/components/checkbox.tsx'
       docs='https://ui.shadcn.com/docs/components/checkbox'
     >
       <ExampleSection

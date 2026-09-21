@@ -146,7 +146,6 @@ export default function PaginationExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.pagination.title')}
       description={t('components.pagination.description')}
-      source='client/pages/reference/components/pagination.tsx'
       docs='https://ui.shadcn.com/docs/components/pagination'
     >
       <ExampleSection

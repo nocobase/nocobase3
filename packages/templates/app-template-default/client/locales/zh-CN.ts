@@ -148,7 +148,6 @@ const zhCN: AppResource = {
   },
   reference: {
     docs: 'shadcn 文档',
-    source: '源码',
     preview: '预览',
     save: '保存',
     cancel: '取消',

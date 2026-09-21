@@ -27,7 +27,6 @@ export default function SliderExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.slider.title')}
       description={t('components.slider.description')}
-      source='client/pages/reference/components/slider.tsx'
       docs='https://ui.shadcn.com/docs/components/slider'
     >
       <ExampleSection

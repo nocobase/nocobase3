@@ -24,7 +24,6 @@ export default function ToggleExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.toggle.title')}
       description={t('components.toggle.description')}
-      source='client/pages/reference/components/toggle.tsx'
       docs='https://ui.shadcn.com/docs/components/toggle'
     >
       <ExampleSection

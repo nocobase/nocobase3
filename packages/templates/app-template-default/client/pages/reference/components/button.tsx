@@ -20,7 +20,6 @@ export default function ButtonExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.button.title')}
       description={t('components.button.description')}
-      source='client/pages/reference/components/button.tsx'
       docs='https://ui.shadcn.com/docs/components/button'
     >
       <ExampleSection

@@ -48,7 +48,6 @@ export default function ContextMenuExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.contextMenu.title')}
       description={t('components.contextMenu.description')}
-      source='client/pages/reference/components/context-menu.tsx'
       docs='https://ui.shadcn.com/docs/components/context-menu'
     >
       <ExampleSection

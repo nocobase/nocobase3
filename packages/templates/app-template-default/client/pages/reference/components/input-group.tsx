@@ -56,7 +56,6 @@ export default function InputGroupExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.inputGroup.title')}
       description={t('components.inputGroup.description')}
-      source='client/pages/reference/components/input-group.tsx'
       docs='https://ui.shadcn.com/docs/components/input-group'
     >
       <ExampleSection

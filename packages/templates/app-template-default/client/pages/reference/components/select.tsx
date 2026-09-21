@@ -68,7 +68,6 @@ export default function SelectExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.select.title')}
       description={t('components.select.description')}
-      source='client/pages/reference/components/select.tsx'
       docs='https://ui.shadcn.com/docs/components/select'
     >
       <ExampleSection

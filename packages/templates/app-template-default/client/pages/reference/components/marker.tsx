@@ -25,7 +25,6 @@ export default function MarkerExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.marker.title')}
       description={t('components.marker.description')}
-      source='client/pages/reference/components/marker.tsx'
       docs='https://ui.shadcn.com/docs/components/marker'
     >
       <ExampleSection

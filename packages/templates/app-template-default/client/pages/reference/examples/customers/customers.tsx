@@ -397,7 +397,6 @@ export default function CustomersExamplePage(): ReactElement {
     <ExamplePage
       title={t('examples.customers.title')}
       description={t('examples.customers.description')}
-      source='client/pages/reference/examples/customers/customers.tsx'
       actions={
         <>
           <Button variant='outline'>

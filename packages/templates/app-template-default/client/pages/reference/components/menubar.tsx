@@ -38,7 +38,6 @@ export default function MenubarExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.menubar.title')}
       description={t('components.menubar.description')}
-      source='client/pages/reference/components/menubar.tsx'
       docs='https://ui.shadcn.com/docs/components/menubar'
     >
       <ExampleSection

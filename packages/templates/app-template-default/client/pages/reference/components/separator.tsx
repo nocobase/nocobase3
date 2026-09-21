@@ -20,7 +20,6 @@ export default function SeparatorExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.separator.title')}
       description={t('components.separator.description')}
-      source='client/pages/reference/components/separator.tsx'
       docs='https://ui.shadcn.com/docs/components/separator'
     >
       <ExampleSection

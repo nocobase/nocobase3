@@ -157,7 +157,6 @@ const enUS = {
   },
   reference: {
     docs: 'shadcn docs',
-    source: 'Source',
     preview: 'Preview',
     save: 'Save',
     cancel: 'Cancel',

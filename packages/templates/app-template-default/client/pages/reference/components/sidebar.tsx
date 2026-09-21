@@ -70,7 +70,6 @@ export default function SidebarExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.sidebar.title')}
       description={t('components.sidebar.description')}
-      source='client/pages/reference/components/sidebar.tsx'
       docs='https://ui.shadcn.com/docs/components/sidebar'
     >
       <ExampleSection

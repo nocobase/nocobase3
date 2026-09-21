@@ -102,7 +102,6 @@ export default function ComboboxExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.combobox.title')}
       description={t('components.combobox.description')}
-      source='client/pages/reference/components/combobox.tsx'
       docs='https://ui.shadcn.com/docs/components/combobox'
     >
       <ExampleSection

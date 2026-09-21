@@ -332,7 +332,6 @@ export default function SurveyExamplePage(): ReactElement {
     <ExamplePage
       title={t('examples.survey.title')}
       description={t('examples.survey.description')}
-      source='client/pages/reference/examples/survey/survey.tsx'
       actions={
         <Button variant='outline' onClick={startOver}>
           <RotateCcwIcon data-icon='inline-start' />

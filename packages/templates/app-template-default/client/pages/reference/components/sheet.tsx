@@ -57,7 +57,6 @@ export default function SheetExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.sheet.title')}
       description={t('components.sheet.description')}
-      source='client/pages/reference/components/sheet.tsx'
       docs='https://ui.shadcn.com/docs/components/sheet'
     >
       <ExampleSection

@@ -126,7 +126,6 @@ export default function ScrollAreaExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.scrollArea.title')}
       description={t('components.scrollArea.description')}
-      source='client/pages/reference/components/scroll-area.tsx'
       docs='https://ui.shadcn.com/docs/components/scroll-area'
     >
       <ExampleSection

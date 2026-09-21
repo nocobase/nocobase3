@@ -71,7 +71,6 @@ export default function ItemExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.item.title')}
       description={t('components.item.description')}
-      source='client/pages/reference/components/item.tsx'
       docs='https://ui.shadcn.com/docs/components/item'
     >
       <ExampleSection

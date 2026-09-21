@@ -145,7 +145,6 @@ export default function ChartExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.chart.title')}
       description={t('components.chart.description')}
-      source='client/pages/reference/components/chart.tsx'
       docs='https://ui.shadcn.com/docs/components/chart'
     >
       <ExampleSection

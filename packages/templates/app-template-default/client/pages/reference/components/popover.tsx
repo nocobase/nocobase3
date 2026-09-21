@@ -35,7 +35,6 @@ export default function PopoverExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.popover.title')}
       description={t('components.popover.description')}
-      source='client/pages/reference/components/popover.tsx'
       docs='https://ui.shadcn.com/docs/components/popover'
     >
       <ExampleSection

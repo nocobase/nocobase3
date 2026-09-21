@@ -22,7 +22,6 @@ export default function InputExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.input.title')}
       description={t('components.input.description')}
-      source='client/pages/reference/components/input.tsx'
       docs='https://ui.shadcn.com/docs/components/input'
     >
       <ExampleSection

@@ -32,7 +32,6 @@ export default function BreadcrumbExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.breadcrumb.title')}
       description={t('components.breadcrumb.description')}
-      source='client/pages/reference/components/breadcrumb.tsx'
       docs='https://ui.shadcn.com/docs/components/breadcrumb'
     >
       <ExampleSection

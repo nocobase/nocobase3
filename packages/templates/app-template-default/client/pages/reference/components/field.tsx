@@ -125,7 +125,6 @@ export default function FieldExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.field.title')}
       description={t('components.field.description')}
-      source='client/pages/reference/components/field.tsx'
       docs='https://ui.shadcn.com/docs/components/field'
     >
       <ExampleSection

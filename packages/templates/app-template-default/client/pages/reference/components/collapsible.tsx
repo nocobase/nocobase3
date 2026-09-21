@@ -131,7 +131,6 @@ export default function CollapsibleExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.collapsible.title')}
       description={t('components.collapsible.description')}
-      source='client/pages/reference/components/collapsible.tsx'
       docs='https://ui.shadcn.com/docs/components/collapsible'
     >
       <ExampleSection

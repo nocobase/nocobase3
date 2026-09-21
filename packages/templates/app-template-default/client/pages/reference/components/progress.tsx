@@ -55,7 +55,6 @@ export default function ProgressExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.progress.title')}
       description={t('components.progress.description')}
-      source='client/pages/reference/components/progress.tsx'
       docs='https://ui.shadcn.com/docs/components/progress'
     >
       <ExampleSection

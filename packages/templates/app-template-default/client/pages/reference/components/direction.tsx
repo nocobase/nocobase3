@@ -188,7 +188,6 @@ export default function DirectionExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.direction.title')}
       description={t('components.direction.description')}
-      source='client/pages/reference/components/direction.tsx'
       docs='https://ui.shadcn.com/docs/components/direction'
     >
       <ExampleSection

@@ -23,7 +23,6 @@ export default function LabelExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.label.title')}
       description={t('components.label.description')}
-      source='client/pages/reference/components/label.tsx'
       docs='https://ui.shadcn.com/docs/components/label'
     >
       <ExampleSection

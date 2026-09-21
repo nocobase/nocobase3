@@ -341,7 +341,6 @@ export default function DashboardExamplePage(): ReactElement {
     <ExamplePage
       title={t('examples.dashboard.title')}
       description={t('examples.dashboard.description')}
-      source='client/pages/reference/examples/dashboard/dashboard.tsx'
       actions={
         <>
           <ToggleGroup

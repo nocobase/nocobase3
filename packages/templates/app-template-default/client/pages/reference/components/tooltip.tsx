@@ -30,7 +30,6 @@ export default function TooltipExamplePage(): ReactElement {
       <ExamplePage
         title={t('components.tooltip.title')}
         description={t('components.tooltip.description')}
-        source='client/pages/reference/components/tooltip.tsx'
         docs='https://ui.shadcn.com/docs/components/tooltip'
       >
         <ExampleSection

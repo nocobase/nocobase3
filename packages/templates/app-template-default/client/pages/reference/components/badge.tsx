@@ -79,7 +79,6 @@ export default function BadgeExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.badge.title')}
       description={t('components.badge.description')}
-      source='client/pages/reference/components/badge.tsx'
       docs='https://ui.shadcn.com/docs/components/badge'
     >
       <ExampleSection

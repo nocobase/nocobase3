@@ -58,7 +58,6 @@ export default function CalendarExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.calendar.title')}
       description={t('components.calendar.description')}
-      source='client/pages/reference/components/calendar.tsx'
       docs='https://ui.shadcn.com/docs/components/calendar'
     >
       <ExampleSection

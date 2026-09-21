@@ -285,7 +285,6 @@ export default function TeamSettingsExamplePage(): ReactElement {
     <ExamplePage
       title={t('examples.teamSettings.title')}
       description={t('examples.teamSettings.description')}
-      source='client/pages/reference/examples/team-settings/team-settings.tsx'
       actions={
         <>
           <Badge variant='secondary'>

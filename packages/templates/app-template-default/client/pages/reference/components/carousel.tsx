@@ -118,7 +118,6 @@ export default function CarouselExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.carousel.title')}
       description={t('components.carousel.description')}
-      source='client/pages/reference/components/carousel.tsx'
       docs='https://ui.shadcn.com/docs/components/carousel'
     >
       <ExampleSection

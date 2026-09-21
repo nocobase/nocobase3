@@ -23,7 +23,6 @@ export default function SwitchExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.switch.title')}
       description={t('components.switch.description')}
-      source='client/pages/reference/components/switch.tsx'
       docs='https://ui.shadcn.com/docs/components/switch'
     >
       <ExampleSection

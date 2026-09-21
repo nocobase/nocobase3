@@ -47,7 +47,6 @@ export default function KbdExamplePage(): ReactElement {
       <ExamplePage
         title={t('components.kbd.title')}
         description={t('components.kbd.description')}
-        source='client/pages/reference/components/kbd.tsx'
         docs='https://ui.shadcn.com/docs/components/kbd'
       >
         <ExampleSection

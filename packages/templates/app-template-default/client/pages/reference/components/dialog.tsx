@@ -98,7 +98,6 @@ export default function DialogExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.dialog.title')}
       description={t('components.dialog.description')}
-      source='client/pages/reference/components/dialog.tsx'
       docs='https://ui.shadcn.com/docs/components/dialog'
     >
       <ExampleSection

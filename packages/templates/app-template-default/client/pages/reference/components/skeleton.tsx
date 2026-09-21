@@ -34,7 +34,6 @@ export default function SkeletonExamplePage(): ReactElement {
     <ExamplePage
       title={t('components.skeleton.title')}
       description={t('components.skeleton.description')}
-      source='client/pages/reference/components/skeleton.tsx'
       docs='https://ui.shadcn.com/docs/components/skeleton'
     >
       <ExampleSection
