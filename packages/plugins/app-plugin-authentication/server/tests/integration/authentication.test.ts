@@ -435,6 +435,28 @@ describe('Authentication', () => {
     });
   });
 
+  it('turns a rejected Better Auth user deletion into an API error and keeps the user', async () => {
+    const users = new UserService(database.connection());
+    const user = await users.create({
+      name: 'Kept',
+      email: 'kept@example.com',
+    });
+    const context = await auth.credentialContext();
+
+    // This Auth was built without a deletion policy, so the users lifecycle
+    // refuses; Better Auth sees a stable error instead of a crash.
+    await expect(
+      context.adapter.delete({
+        model: 'user',
+        where: [{ field: 'id', value: user.id }],
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      body: { code: 'USER_DELETION_NOT_CONFIGURED' },
+    });
+    await expect(users.get(user.id)).resolves.toMatchObject({ id: user.id });
+  });
+
   /**
    * What the authentication provider wires at boot: the users plugin owns the
    * status change and this plugin's lifecycle handler revokes sessions and,

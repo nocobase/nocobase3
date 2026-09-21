@@ -6,6 +6,7 @@ import {
   UserError,
   UserLifecycleError,
 } from '@nocobase/app-plugin-users/server';
+import { TransactionPostCommitError } from '@nocobase/db';
 import {
   authorizationToken,
   type AuthorizationEnv,
@@ -40,6 +41,19 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       : undefined;
 
     routes.onError((error, context) => {
+      // The database change is committed; only a post-commit effect such as a
+      // realtime disconnect failed. Tell the client not to retry the write.
+      if (error instanceof TransactionPostCommitError) {
+        return context.json(
+          {
+            code: 'USER_POST_COMMIT_FAILED',
+            committed: true,
+            retryScheduled: false,
+            message: error.message,
+          },
+          202,
+        );
+      }
       if (error instanceof AuthorizationDeniedError) {
         return context.json({ code: 'FORBIDDEN', message: error.message }, 403);
       }

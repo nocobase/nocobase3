@@ -3,6 +3,7 @@ import {
   type Auth,
 } from '@nocobase/app-plugin-authentication';
 import { UserError } from '@nocobase/app-plugin-users/server';
+import { TransactionPostCommitError } from '@nocobase/db';
 import {
   authorizationToken,
   type Authorization,
@@ -103,6 +104,27 @@ describe('@nocobase/app-plugin-users API routes', () => {
     expect(JSON.stringify(logger.info.mock.calls)).not.toContain(
       'do-not-log-this',
     );
+  });
+
+  it('answers 202 when the change committed but a post-commit effect failed', async () => {
+    const service = userService();
+    vi.mocked(service.disable).mockRejectedValue(
+      new TransactionPostCommitError([new Error('realtime unavailable')]),
+    );
+    const router = await apiRoutes.createRouter(
+      createApplication('allowed', service),
+    );
+
+    const response = await router.request('/users/user-1/disable', {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'USER_POST_COMMIT_FAILED',
+      committed: true,
+      retryScheduled: false,
+    });
   });
 
   it('returns 409 when an administrator creates a duplicate identity', async () => {
