@@ -135,7 +135,7 @@
     "directory": "packages/templates/app-template-examples"
   },
   "scripts": {
-    "dev": "tsx ./scripts/dev.mjs",
+    "dev": "node --import tsx ./scripts/dev.mjs",
     "build": "node ./scripts/build.mjs",
     "start": "node ./scripts/start.mjs",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
