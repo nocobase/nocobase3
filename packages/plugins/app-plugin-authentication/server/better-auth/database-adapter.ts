@@ -1,18 +1,24 @@
-import type {
-  ComparisonOperator,
-  DatabaseConnection,
-  DeleteQuery,
-  Expression,
-  ExpressionBuilder,
-  SelectQuery,
-  SqlBool,
-  UpdateQuery,
-} from '@nocobase/db';
-import type { BetterAuthOptions, DBAdapterInstance, Where } from 'better-auth';
+import type { DatabaseConnection } from '@nocobase/db';
+import {
+  APIError,
+  type BetterAuthOptions,
+  type DBAdapterInstance,
+} from 'better-auth';
 import { createAdapterFactory, type CustomAdapter } from 'better-auth/adapters';
-import type { Knex } from 'knex';
 
-import type { UserStoreFactory } from '../user-store.js';
+import {
+  UserStoreError,
+  type UserStore,
+  type UserStoreFactory,
+} from '../user-store.js';
+import {
+  applyDeleteWhere,
+  applySelectWhere,
+  applyUpdateWhere,
+  equalityCondition,
+  resolveInsensitiveWhere,
+  type WhereCondition as CleanWhere,
+} from './where.js';
 
 export interface DatabaseAdapterOptions {
   debugLogs?: boolean;
@@ -21,184 +27,6 @@ export interface DatabaseAdapterOptions {
    * table; without it the adapter reads and writes the table directly.
    */
   userStore?: UserStoreFactory;
-}
-
-type CleanWhere = Required<Where>;
-
-function conditionExpression(
-  eb: ExpressionBuilder,
-  condition: CleanWhere,
-): Expression<SqlBool> {
-  const { field, value, operator } = condition;
-  if (value === null) {
-    return eb(field, operator === 'ne' ? 'is not' : 'is', null);
-  }
-  if (operator === 'in' || operator === 'not_in') {
-    return eb(
-      field,
-      operator === 'in' ? 'in' : 'not in',
-      Array.isArray(value) ? value : [value],
-    );
-  }
-  if (
-    operator === 'contains' ||
-    operator === 'starts_with' ||
-    operator === 'ends_with'
-  ) {
-    const pattern =
-      operator === 'contains'
-        ? `%${value}%`
-        : operator === 'starts_with'
-          ? `${value}%`
-          : `%${value}`;
-    return eb(field, 'like', pattern);
-  }
-  const sqlOperator = {
-    eq: '=',
-    ne: '<>',
-    lt: '<',
-    lte: '<=',
-    gt: '>',
-    gte: '>=',
-  }[operator] as ComparisonOperator | undefined;
-  if (!sqlOperator) {
-    throw new Error(`Unsupported Better Auth operator: ${operator}`);
-  }
-  return eb(field, sqlOperator, value);
-}
-
-function whereExpression(
-  eb: ExpressionBuilder,
-  where: CleanWhere[],
-): Expression<SqlBool> {
-  const branches: Array<Array<Expression<SqlBool>>> = [[]];
-  for (const condition of where) {
-    if (condition.connector === 'OR' && branches.at(-1)!.length) {
-      branches.push([]);
-    }
-    branches.at(-1)!.push(conditionExpression(eb, condition));
-  }
-  const expressions = branches
-    .filter((branch) => branch.length)
-    .map((branch) => (branch.length === 1 ? branch[0] : eb.and(branch)));
-  return expressions.length === 1 ? expressions[0] : eb.or(expressions);
-}
-
-function applySelectWhere(
-  query: SelectQuery,
-  where: CleanWhere[],
-): SelectQuery {
-  return where.length ? query.where((eb) => whereExpression(eb, where)) : query;
-}
-
-function applyUpdateWhere(
-  query: UpdateQuery,
-  where: CleanWhere[],
-): UpdateQuery {
-  return where.length ? query.where((eb) => whereExpression(eb, where)) : query;
-}
-
-function applyDeleteWhere(
-  query: DeleteQuery,
-  where: CleanWhere[],
-): DeleteQuery {
-  return where.length ? query.where((eb) => whereExpression(eb, where)) : query;
-}
-
-function equalityCondition(field: string, value: unknown): CleanWhere {
-  return {
-    field,
-    value: value as CleanWhere['value'],
-    operator: 'eq',
-    connector: 'AND',
-    mode: 'sensitive',
-  };
-}
-
-async function resolveInsensitiveWhere(
-  connection: DatabaseConnection,
-  model: string,
-  where: CleanWhere[] = [],
-): Promise<CleanWhere[]> {
-  if (
-    !where.some(
-      (condition) =>
-        condition.mode === 'insensitive' && typeof condition.value === 'string',
-    )
-  ) {
-    return where;
-  }
-  const knex = await connection.client<Knex>();
-  return Promise.all(
-    where.map(async (condition) => {
-      const { field, value, operator, mode } = condition;
-      if (mode !== 'insensitive' || typeof value !== 'string') {
-        return condition;
-      }
-
-      // Let the Database Query API resolve logical model/field names first. The
-      // stable lowercase aliases keep this small raw fallback independent of the
-      // configured naming strategy.
-      const source = connection.query
-        .selectFrom(model)
-        .select(['id as authrecordid', `${field} as authcomparevalue`])
-        .compile();
-      const query = knex
-        .from(
-          knex.raw(`(${source.sql}) as ??`, [
-            ...(source.parameters as readonly Knex.RawBinding[]),
-            'authsource',
-          ]),
-        )
-        .select({ id: 'authrecordid' });
-      if (
-        operator === 'contains' ||
-        operator === 'starts_with' ||
-        operator === 'ends_with'
-      ) {
-        const pattern =
-          operator === 'contains'
-            ? `%${value}%`
-            : operator === 'starts_with'
-              ? `${value}%`
-              : `%${value}`;
-        query.whereRaw('lower(??) like lower(?)', [
-          'authcomparevalue',
-          pattern,
-        ]);
-      } else {
-        const sqlOperator =
-          operator === 'eq'
-            ? '='
-            : operator === 'ne'
-              ? '<>'
-              : operator === 'lt'
-                ? '<'
-                : operator === 'lte'
-                  ? '<='
-                  : operator === 'gt'
-                    ? '>'
-                    : operator === 'gte'
-                      ? '>='
-                      : undefined;
-        if (!sqlOperator) {
-          return condition;
-        }
-        query.whereRaw(`lower(??) ${sqlOperator} lower(?)`, [
-          'authcomparevalue',
-          value,
-        ]);
-      }
-      const ids = (await query).map((row) => row.id);
-      return {
-        ...condition,
-        field: 'id',
-        value: ids,
-        operator: 'in',
-        mode: 'sensitive',
-      };
-    }),
-  );
 }
 
 function buildCustomAdapter(
@@ -489,19 +317,50 @@ export function databaseAdapter(
         // read and write Better Auth performs. Other models stay here.
         const isUser = (model: string): boolean =>
           getDefaultModelName(model) === 'user';
-        const users = (model: string) =>
-          userStore(currentConnection, {
-            model,
-            fields: fieldsForModel(model),
-            field: (name) =>
-              name === 'id' || schema.user?.fields[name]
-                ? getFieldName({ model: 'user', field: name })
-                : name,
-          });
+        const stores = new Map<string, UserStore>();
+        const users = (model: string): UserStore => {
+          let store = stores.get(model);
+          if (!store) {
+            store = userStore(currentConnection, {
+              model,
+              fields: fieldsForModel(model),
+              field: (name) =>
+                name === 'id' || schema.user?.fields[name]
+                  ? getFieldName({ model: 'user', field: name })
+                  : name,
+            });
+            stores.set(model, store);
+          }
+          return store;
+        };
+        // The store hides soft-deleted users from Better Auth's own
+        // pre-checks, so a reserved identity surfaces here as the same API
+        // error Better Auth raises for a live duplicate. The original error
+        // stays attached for callers that run Better Auth's flows from
+        // server code and map it themselves.
+        const guarded = async <T>(run: () => Promise<T>): Promise<T> => {
+          try {
+            return await run();
+          } catch (error) {
+            if (!(error instanceof UserStoreError)) throw error;
+            throw Object.assign(
+              error.code === 'USER_NOT_FOUND'
+                ? APIError.from('NOT_FOUND', {
+                    code: 'USER_NOT_FOUND',
+                    message: error.message,
+                  })
+                : APIError.from('UNPROCESSABLE_ENTITY', {
+                    code: 'USER_ALREADY_EXISTS',
+                    message: error.message,
+                  }),
+              { cause: error },
+            );
+          }
+        };
         const routed: CustomAdapter = {
           create: (input) =>
             isUser(input.model)
-              ? users(input.model).create(input)
+              ? guarded(() => users(input.model).create(input))
               : generic.create(input),
           findOne: (input) =>
             isUser(input.model) && !input.join
@@ -517,19 +376,19 @@ export function databaseAdapter(
               : generic.count(input),
           update: (input) =>
             isUser(input.model)
-              ? users(input.model).update(input)
+              ? guarded(() => users(input.model).update(input))
               : generic.update(input),
           updateMany: (input) =>
             isUser(input.model)
-              ? users(input.model).updateMany(input)
+              ? guarded(() => users(input.model).updateMany(input))
               : generic.updateMany(input),
           delete: (input) =>
             isUser(input.model)
-              ? users(input.model).delete(input)
+              ? guarded(() => users(input.model).delete(input))
               : generic.delete(input),
           deleteMany: (input) =>
             isUser(input.model)
-              ? users(input.model).deleteMany(input)
+              ? guarded(() => users(input.model).deleteMany(input))
               : generic.deleteMany(input),
           incrementOne: (input) =>
             isUser(input.model)

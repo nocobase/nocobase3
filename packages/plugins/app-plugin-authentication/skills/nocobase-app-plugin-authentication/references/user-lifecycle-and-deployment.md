@@ -9,7 +9,10 @@ administrator flows: `list`, `get`, `create`, `update`, `disable`, `enable`,
 `userAuthenticationServiceToken` from this plugin owns what only
 authentication can do to that user, and the users plugin calls it from those
 flows: `assertPasswordAllowed`, `createPasswordCredential`, `resetPassword`,
-`revokeSessions`, `deleteCredentials`.
+`revokeSessions`, `deleteCredentials`, plus `createUser` and `updateUser`,
+which run Better Auth's own user write flow (database hooks, plugin field
+defaults, cached session refresh) while the users plugin's store writes the
+row.
 
 ```ts
 import {

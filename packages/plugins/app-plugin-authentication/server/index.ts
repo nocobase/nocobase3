@@ -3,6 +3,7 @@ export * from './auth.js';
 export * from './auth-storage.js';
 export { resolveAuthSecret } from './config.js';
 export * from './better-auth/database-adapter.js';
+export * from './better-auth/where.js';
 export {
   AuthenticationProvider,
   createCookiePrefix,

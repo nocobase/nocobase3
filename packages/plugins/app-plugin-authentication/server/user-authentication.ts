@@ -1,7 +1,18 @@
 import type { DatabaseConnection } from '@nocobase/db';
 import type { RealtimeService } from '@nocobase/app-server/realtime';
+import { APIError } from 'better-auth';
 
 import type { Auth } from './auth.js';
+import { UserStoreError } from './user-store.js';
+
+/** Fields Better Auth accepts when a user is created from server code. */
+export interface CreateUserRecordInput {
+  readonly name: string;
+  readonly email: string;
+  readonly username?: string | null;
+  readonly emailVerified?: boolean;
+  readonly disabledAt?: Date | null;
+}
 
 /**
  * What only authentication can do to a user: passwords, credential accounts
@@ -9,6 +20,14 @@ import type { Auth } from './auth.js';
  */
 export interface UserAuthenticationService {
   withConnection(connection: DatabaseConnection): UserAuthenticationService;
+  /**
+   * Runs Better Auth's user creation flow (hooks, plugin field defaults,
+   * cached session bookkeeping). The row itself is written by the users
+   * plugin's store, which applies the identity rules and raises conflicts.
+   */
+  createUser(input: CreateUserRecordInput): Promise<{ readonly id: string }>;
+  /** Runs Better Auth's user update flow; also refreshes the user cached with each session. */
+  updateUser(userId: string, data: Record<string, unknown>): Promise<void>;
   /** Rejects a password the configured policy does not allow, without touching the database. */
   assertPasswordAllowed(password: string): Promise<void>;
   createPasswordCredential(userId: string, password: string): Promise<void>;
@@ -54,6 +73,33 @@ class DefaultUserAuthenticationService implements UserAuthenticationService {
       connection,
       auth: this.options.auth.forConnection(connection),
     });
+  }
+
+  async createUser(
+    input: CreateUserRecordInput,
+  ): Promise<{ readonly id: string }> {
+    const context = await this.options.auth.administrationContext();
+    const user = await unwrapStoreError(() =>
+      context.internalAdapter.createUser(
+        {
+          ...input,
+          emailVerified: input.emailVerified ?? false,
+          disabledAt: input.disabledAt ?? null,
+        },
+        { method: 'admin' },
+      ),
+    );
+    return { id: String(user.id) };
+  }
+
+  async updateUser(
+    userId: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    const context = await this.options.auth.administrationContext();
+    await unwrapStoreError(() =>
+      context.internalAdapter.updateUser(userId, data),
+    );
   }
 
   async assertPasswordAllowed(password: string): Promise<void> {
@@ -123,6 +169,18 @@ class DefaultUserAuthenticationService implements UserAuthenticationService {
         `Unknown user: ${userId}`,
       );
     }
+  }
+}
+
+/** The adapter wraps store errors for Better Auth; server-side callers get the original. */
+async function unwrapStoreError<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof APIError && error.cause instanceof UserStoreError) {
+      throw error.cause;
+    }
+    throw error;
   }
 }
 

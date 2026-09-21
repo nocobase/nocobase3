@@ -1,3 +1,4 @@
+import { UserStoreError } from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { Knex } from 'knex';
 
@@ -13,16 +14,10 @@ export interface AdministratedUser {
   readonly updatedAt: Date;
 }
 
-export class UserAdministrationError extends Error {
-  constructor(
-    readonly code:
-      | 'USER_NOT_FOUND'
-      | 'USER_EMAIL_CONFLICT'
-      | 'USER_USERNAME_CONFLICT'
-      | 'USER_IDENTITY_CONFLICT',
-    message: string,
-  ) {
-    super(message);
+/** Identity and existence errors of the user record; the store raises them on every write path. */
+export class UserAdministrationError extends UserStoreError {
+  constructor(code: UserStoreError['code'], message: string) {
+    super(code, message);
     this.name = 'UserAdministrationError';
   }
 }
@@ -90,20 +85,18 @@ function dateValue(value: unknown, label: string): Date {
   return date;
 }
 
-export function requiredText(value: string, label: string): string {
+function requiredText(value: string, label: string): string {
   const normalized = value.trim();
   if (!normalized) throw new TypeError(`${label} must not be empty`);
   return normalized;
 }
 
-export function optionalUsername(
-  value: string | undefined,
-): string | undefined {
+function optionalUsername(value: string | undefined): string | undefined {
   const normalized = value?.trim().toLowerCase();
   return normalized || undefined;
 }
 
-export function normalizedEmail(value: string): string {
+function normalizedEmail(value: string): string {
   return requiredText(value, 'User email').toLowerCase();
 }
 

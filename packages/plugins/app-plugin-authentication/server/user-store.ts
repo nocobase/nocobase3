@@ -78,6 +78,26 @@ export interface UserStore {
   }): Promise<T | null>;
 }
 
+/**
+ * Raised by a store implementation when a user cannot be written: the
+ * identity is taken (also by a soft-deleted user) or the user does not
+ * exist. The adapter turns it into a Better Auth API error inside Better
+ * Auth flows; server-side callers receive it as thrown.
+ */
+export class UserStoreError extends Error {
+  constructor(
+    readonly code:
+      | 'USER_NOT_FOUND'
+      | 'USER_EMAIL_CONFLICT'
+      | 'USER_USERNAME_CONFLICT'
+      | 'USER_IDENTITY_CONFLICT',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'UserStoreError';
+  }
+}
+
 /** Builds a store bound to a connection; the adapter calls it again inside transactions. */
 export type UserStoreFactory = (
   connection: DatabaseConnection,

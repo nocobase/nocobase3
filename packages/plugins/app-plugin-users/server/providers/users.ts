@@ -9,7 +9,6 @@ import {
   userStoreToken,
 } from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection } from '@nocobase/db';
-import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
@@ -55,7 +54,6 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
       createUserAdministrationService({
         connection: resolver.resolve(databaseManagerToken).connection(),
         credentials: resolver.resolve(userAuthenticationServiceToken),
-        generateId: () => resolver.resolve(idGeneratorToken).generateString(),
       }),
     );
     this.app.container.singleton(userRoleScopeRegistryToken, () =>

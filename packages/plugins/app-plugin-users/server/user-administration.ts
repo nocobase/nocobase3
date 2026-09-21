@@ -5,11 +5,7 @@ import {
   administratedUserColumns,
   assertIdentityAvailable,
   lockUser,
-  normalizedEmail,
   normalizeUserWrite,
-  optionalUsername,
-  requiredText,
-  throwIdentityConflict,
   toAdministratedUser,
   USER_MODEL,
   UserAdministrationError,
@@ -46,8 +42,10 @@ export interface UpdateAdministratedUserInput {
 
 /**
  * The user record and the administrator flows on it. This plugin owns the
- * `user` table; passwords, credential accounts and sessions are authentication's
- * and are reached through `UserAuthenticationService`.
+ * `user` table: reads query it here, and writes run Better Auth's user write
+ * flow through `UserAuthenticationService` so hooks, plugin field defaults and
+ * cached sessions stay consistent, while the row is written by this plugin's
+ * store. Passwords, credential accounts and sessions are authentication's.
  */
 export interface UserAdministrationService {
   withConnection(connection: DatabaseConnection): UserAdministrationService;
@@ -68,17 +66,16 @@ export interface UserAdministrationService {
 export interface CreateUserAdministrationServiceOptions {
   readonly connection: DatabaseConnection;
   readonly credentials: UserAuthenticationService;
-  /** Defaults to a random UUID; the provider supplies the application's ID generator. */
-  readonly generateId?: () => string;
 }
+
+/** The administration service addresses the default model, whose columns carry their logical names. */
+const column = (name: string): string => name;
 
 export function createUserAdministrationService(
   options: CreateUserAdministrationServiceOptions,
 ): UserAdministrationService {
   return new DefaultUserAdministrationService(options);
 }
-
-const field = (name: string): string => name;
 
 class DefaultUserAdministrationService implements UserAdministrationService {
   constructor(
@@ -155,35 +152,29 @@ class DefaultUserAdministrationService implements UserAdministrationService {
   async create(
     input: CreateAdministratedUserInput,
   ): Promise<AdministratedUser> {
-    // Refuse a bad password before anything is written.
+    // Refuse a bad password or a taken identity before anything is written;
+    // the store enforces the same rules again when the row is inserted.
     await this.options.credentials.assertPasswordAllowed(input.password);
-    const now = new Date();
     const data = normalizeUserWrite(
       {
-        id: (this.options.generateId ?? (() => crypto.randomUUID()))(),
         name: input.name,
         username: input.username ?? null,
         email: input.email,
-        emailVerified: false,
-        disabledAt: null,
-        createdAt: now,
-        updatedAt: now,
       },
-      field,
+      column,
       true,
     );
-    await assertIdentityAvailable(this.connection, USER_MODEL, field, data);
-    await this.connection.query
-      .insertInto(USER_MODEL)
-      .values(data)
-      .execute()
-      .catch(throwIdentityConflict);
-    const userId = String(data.id);
+    await assertIdentityAvailable(this.connection, USER_MODEL, column, data);
+    const user = await this.options.credentials.createUser({
+      name: String(data.name),
+      username: (data.username as string | null) ?? null,
+      email: String(data.email),
+    });
     await this.options.credentials.createPasswordCredential(
-      userId,
+      user.id,
       input.password,
     );
-    return (await this.get(userId))!;
+    return (await this.get(user.id))!;
   }
 
   async update(
@@ -191,32 +182,23 @@ class DefaultUserAdministrationService implements UserAdministrationService {
     input: UpdateAdministratedUserInput,
   ): Promise<AdministratedUser> {
     await this.requireUser(userId);
-    const patch = {
-      ...(input.name === undefined
-        ? {}
-        : { name: requiredText(input.name, 'User name') }),
-      ...(input.username === undefined
-        ? {}
-        : { username: optionalUsername(input.username ?? undefined) ?? null }),
-      ...(input.email === undefined
-        ? {}
-        : { email: normalizedEmail(input.email) }),
-      updatedAt: new Date(),
-    };
+    const data = normalizeUserWrite(
+      {
+        ...(input.name === undefined ? {} : { name: input.name }),
+        ...(input.username === undefined ? {} : { username: input.username }),
+        ...(input.email === undefined ? {} : { email: input.email }),
+      },
+      column,
+      false,
+    );
     await assertIdentityAvailable(
       this.connection,
       USER_MODEL,
-      field,
-      patch,
+      column,
+      data,
       userId,
     );
-    await this.connection.query
-      .updateTable(USER_MODEL)
-      .set(patch)
-      .where('id', '=', userId)
-      .where('deletedAt', 'is', null)
-      .execute()
-      .catch(throwIdentityConflict);
+    await this.options.credentials.updateUser(userId, data);
     return (await this.get(userId))!;
   }
 
@@ -255,16 +237,11 @@ class DefaultUserAdministrationService implements UserAdministrationService {
     await this.options.credentials.deleteCredentials(userId);
   }
 
-  private async setStatus(
+  private setStatus(
     userId: string,
     status: Record<string, Date | string | null>,
   ): Promise<void> {
-    await this.connection.query
-      .updateTable(USER_MODEL)
-      .set({ ...status, updatedAt: new Date() })
-      .where('id', '=', userId)
-      .where('deletedAt', 'is', null)
-      .execute();
+    return this.options.credentials.updateUser(userId, status);
   }
 
   private async requireUser(userId: string): Promise<AdministratedUser> {

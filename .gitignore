@@ -24,4 +24,4 @@ packages/app/app-host/fixtures/app-dist/hub/dist/**
 packages/templates/app-template-default/server/workflows
 
 # Local design notes and imported knowledge stay out of the repository.
-internal-docs/
+/internal-docs/

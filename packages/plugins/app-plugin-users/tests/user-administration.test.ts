@@ -214,6 +214,21 @@ describe('user administration owns the user record', () => {
         password,
       }),
     ).rejects.toMatchObject({ code: 'USER_EMAIL_CONFLICT' });
+    // Better Auth's own sign-up cannot see the deleted user either, so the
+    // store's refusal reaches the client as the usual duplicate error.
+    const signUp = await router.request('/api/auth/sign-up/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Alice again',
+        email: 'alice@example.com',
+        password,
+      }),
+    });
+    expect(signUp.status).toBe(422);
+    await expect(signUp.json()).resolves.toMatchObject({
+      code: 'USER_ALREADY_EXISTS',
+    });
     await expect(users.enable(alice.id)).rejects.toMatchObject({
       code: 'USER_NOT_FOUND',
     });
