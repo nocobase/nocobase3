@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { expect, it, vi } from 'vitest';
 
@@ -17,10 +18,11 @@ it.each([true, false])(
     runInNewContext(
       source.slice(
         source.indexOf('  const serverChild = spawnDevProcess('),
-        source.indexOf('\n}\n\ntry {\n  await Promise.all'),
+        source.indexOf('\n}\n\ntry {\n  progress('),
       ),
       {
         strictStartup,
+        path,
         serverEnv: {},
         spawnDevProcess,
         pluginWatchIncludes: ['plugin/server/**'],
@@ -38,36 +40,22 @@ it.each([true, false])(
   },
 );
 
-it('keeps exit status 1 when child termination lets the parent exit naturally', () => {
+it('preserves startup failure and delegates descendant cleanup to the supervisor', () => {
   const processMock = { exitCode: 0, exit: vi.fn() };
-  const child = {
-    killed: false,
-    exitCode: null,
-    signalCode: null,
-    kill: vi.fn(),
-  };
   const close = vi.fn();
-  const timeout = vi.fn(() => ({ unref: vi.fn() }));
   runInNewContext(
     source.slice(
       source.indexOf('const shutdown ='),
-      source.indexOf("process.once('SIGINT'"),
+      source.indexOf("process.on('SIGINT'"),
     ) + '\nshutdown(1);',
     {
       shuttingDown: false,
       envRestartTimer: undefined,
       envWatcher: { close },
-      children: [child],
       process: processMock,
-      setTimeout: timeout,
     },
   );
   expect(processMock.exitCode).toBe(1);
   expect(close).toHaveBeenCalledOnce();
-  expect(child.kill).toHaveBeenCalledWith('SIGTERM');
-  // child.killed only means a signal was sent, not that the process has exited.
-  child.killed = true;
-  (timeout.mock.calls[0] as unknown as [() => void])[0]();
-  expect(child.kill).toHaveBeenCalledWith('SIGKILL');
   expect(processMock.exit).toHaveBeenCalledWith(1);
 });

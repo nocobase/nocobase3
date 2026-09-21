@@ -70,6 +70,7 @@
   },
   "dependencies": {
     "cross-spawn": "^7.0.6",
+    "execa": "^10.0.1",
     "typescript": "catalog:",
     "tar": "^7.5.22",
     "@nocobase/dev-config": "workspace:*"

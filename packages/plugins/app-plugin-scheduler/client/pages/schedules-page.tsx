@@ -1,3 +1,8 @@
+import { EmptyState } from '../components/empty-state.js';
+import { PageSection } from '../components/page-section.js';
+import { StatusBadge } from '../components/status-badge.js';
+import { Badge } from '../components/ui/badge.js';
+import { Button } from '../components/ui/button.js';
 import { Input } from '../components/ui/input.js';
 import {
   Select,
@@ -7,18 +12,20 @@ import {
   SelectGroup,
   SelectItem,
 } from '../components/ui/select.js';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table.js';
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
-import { CalendarClock, CircleAlert, Search } from 'lucide-react';
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from 'react';
+import { CircleAlert, Search } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Link } from 'react-router';
 
 import { DateTimeValue } from './date-time-value.js';
@@ -61,69 +68,12 @@ function viewStatus(item: ScheduleItem): ViewStatus {
   return 'active';
 }
 
-function Card({
-  children,
-  className = '',
-}: {
-  readonly children: ReactNode;
-  readonly className?: string;
-}): ReactElement {
-  return (
-    <section
-      className={`rounded-xl border border-border bg-card text-card-foreground shadow-sm ${className}`}
-    >
-      {children}
-    </section>
-  );
-}
-
-function EmptyState({
-  children,
-}: {
-  readonly children: ReactNode;
-}): ReactElement {
-  return (
-    <div className='flex flex-col items-center gap-3 px-6 py-14 text-center text-sm text-muted-foreground'>
-      <span className='grid size-11 place-items-center rounded-full bg-muted'>
-        <CalendarClock className='size-5' />
-      </span>
-      {children}
-    </div>
-  );
-}
-
 /** The list names an execution target by kind; its own name belongs on the detail page. */
 function TypeTag({ label }: { readonly label: string }): ReactElement {
   return (
-    <span className='inline-flex max-w-full truncate whitespace-nowrap rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground'>
+    <Badge className='max-w-full truncate border border-border text-muted-foreground'>
       {label}
-    </span>
-  );
-}
-
-function StatusBadge({
-  label,
-  status,
-}: {
-  readonly label: string;
-  readonly status: string;
-}): ReactElement {
-  const tone =
-    status === 'active' || status === 'triggered'
-      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-      : status === 'failed' || status === 'targetIssue'
-        ? 'bg-destructive/10 text-destructive'
-        : status === 'running'
-          ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300'
-          : status === 'inactive'
-            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-            : 'bg-muted text-muted-foreground';
-  return (
-    <span
-      className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}
-    >
-      {label}
-    </span>
+    </Badge>
   );
 }
 
@@ -243,9 +193,6 @@ export default function SchedulesPage(): ReactElement {
     t(`page.targets.${type}`, { defaultValue: type });
   const targetStateLabel = (state: TargetState): string =>
     t(`page.targetStates.${state}`);
-  const pagerButtonClassName =
-    'h-8 rounded-lg border border-input bg-background px-3 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
-
   return (
     <PageContainer>
       <PageHeader title={t('page.title')} />
@@ -256,7 +203,7 @@ export default function SchedulesPage(): ReactElement {
         </div>
       ) : null}
 
-      <Card>
+      <PageSection className='overflow-hidden'>
         <div className='flex flex-col gap-3 border-b border-border p-4 md:flex-row'>
           <label className='relative flex-1'>
             <span className='sr-only'>{t('page.filters.searchLabel')}</span>
@@ -350,108 +297,106 @@ export default function SchedulesPage(): ReactElement {
           </EmptyState>
         ) : (
           <>
-            <div className='overflow-hidden'>
-              <table className='w-full table-fixed text-left text-sm'>
-                <colgroup>
-                  <col className='w-[31%]' />
-                  <col className='w-[16%]' />
-                  <col className='w-[6%]' />
-                  <col className='w-[16%]' />
-                  <col className='w-[10%]' />
-                  <col className='w-[21%]' />
-                </colgroup>
-                <thead className='border-b bg-muted/30 text-xs tracking-wide text-muted-foreground uppercase'>
-                  <tr>
-                    {(
-                      [
-                        'name',
-                        'target',
-                        'status',
-                        'scheduleTimezone',
-                        'triggered',
-                        'nextRun',
-                      ] as const
-                    ).map((column) => (
-                      <th className='px-5 py-3 font-medium' key={column}>
-                        {t(`page.columns.${column}`)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className='divide-y divide-border'>
-                  {pagedItems.map((item) => {
-                    const href = `/settings/schedules/${encodeURIComponent(item.id)}`;
-                    return (
-                      <tr key={item.id} className='hover:bg-muted/30'>
-                        <td className='break-words px-5 py-4'>
-                          <Link
-                            className='block break-words font-medium text-primary underline-offset-4 hover:underline focus-visible:underline'
-                            to={href}
-                          >
-                            {item.title}
-                          </Link>
-                        </td>
-                        <td className='px-5 py-4'>
-                          <TypeTag label={targetTypeLabel(item.targetType)} />
-                          {item.targetState !== 'ready' ? (
-                            <div className='mt-1'>
-                              <StatusBadge
-                                label={targetStateLabel(item.targetState)}
-                                status='targetIssue'
-                              />
-                            </div>
-                          ) : null}
-                        </td>
-                        <td className='px-5 py-4'>
-                          <ScheduleSwitch
-                            checked={item.enabled}
-                            disabled={
-                              updating.has(item.id) ||
-                              item.lifecycleState === 'inactive'
-                            }
-                            label={
-                              item.enabled
-                                ? t('page.actions.disable')
-                                : t('page.actions.enable')
-                            }
-                            onChange={(enabled) =>
-                              setScheduleEnabled(item, enabled)
-                            }
-                          />
-                        </td>
-                        <td className='break-words px-5 py-4'>
-                          <span className='font-medium break-words'>
-                            {formatCronDescription(
-                              item.cron,
-                              i18n.resolvedLanguage ?? i18n.language,
-                            ) ?? t('page.invalidSchedule')}
-                          </span>
-                          <p className='mt-1 text-xs text-muted-foreground'>
-                            {item.timezone}
-                          </p>
-                        </td>
-                        <td className='break-words px-5 py-4'>
-                          <span className='tabular-nums'>{item.runCount}</span>
-                          <p className='mt-1 text-xs text-muted-foreground'>
-                            {item.lastRunAt
-                              ? (formatClientRelativeTime(item.lastRunAt) ??
-                                t('page.unavailable'))
-                              : t('page.unavailable')}
-                          </p>
-                        </td>
-                        <td className='break-words px-5 py-4'>
-                          {item.nextRunAt ? (
-                            <DateTimeValue value={item.nextRunAt} />
-                          ) : (
-                            t('page.unavailable')
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <Table className='table-fixed text-left'>
+              <colgroup>
+                <col className='w-[31%]' />
+                <col className='w-[16%]' />
+                <col className='w-[6%]' />
+                <col className='w-[16%]' />
+                <col className='w-[10%]' />
+                <col className='w-[21%]' />
+              </colgroup>
+              <TableHeader className='bg-muted/30 tracking-wide uppercase'>
+                <TableRow>
+                  {(
+                    [
+                      'name',
+                      'target',
+                      'status',
+                      'scheduleTimezone',
+                      'triggered',
+                      'nextRun',
+                    ] as const
+                  ).map((column) => (
+                    <TableHead key={column}>
+                      {t(`page.columns.${column}`)}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pagedItems.map((item) => {
+                  const href = `/settings/schedules/${encodeURIComponent(item.id)}`;
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className='break-words'>
+                        <Link
+                          className='block break-words font-medium text-primary underline-offset-4 hover:underline focus-visible:underline'
+                          to={href}
+                        >
+                          {item.title}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <TypeTag label={targetTypeLabel(item.targetType)} />
+                        {item.targetState !== 'ready' ? (
+                          <div className='mt-1'>
+                            <StatusBadge
+                              label={targetStateLabel(item.targetState)}
+                              status='targetIssue'
+                            />
+                          </div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell>
+                        <ScheduleSwitch
+                          checked={item.enabled}
+                          disabled={
+                            updating.has(item.id) ||
+                            item.lifecycleState === 'inactive'
+                          }
+                          label={
+                            item.enabled
+                              ? t('page.actions.disable')
+                              : t('page.actions.enable')
+                          }
+                          onChange={(enabled) =>
+                            setScheduleEnabled(item, enabled)
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className='break-words'>
+                        <span className='font-medium break-words'>
+                          {formatCronDescription(
+                            item.cron,
+                            i18n.resolvedLanguage ?? i18n.language,
+                          ) ?? t('page.invalidSchedule')}
+                        </span>
+                        <p className='mt-1 text-xs text-muted-foreground'>
+                          {item.timezone}
+                        </p>
+                      </TableCell>
+                      <TableCell className='break-words'>
+                        <span className='tabular-nums'>{item.runCount}</span>
+                        <p className='mt-1 text-xs text-muted-foreground'>
+                          {item.lastRunAt
+                            ? (formatClientRelativeTime(item.lastRunAt) ??
+                              t('page.unavailable'))
+                            : t('page.unavailable')}
+                        </p>
+                      </TableCell>
+                      <TableCell className='break-words'>
+                        {item.nextRunAt ? (
+                          <DateTimeValue value={item.nextRunAt} />
+                        ) : (
+                          t('page.unavailable')
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
             {visibleItems.length > PAGE_SIZE ? (
               <div className='flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm'>
                 <p className='text-muted-foreground'>
@@ -461,28 +406,26 @@ export default function SchedulesPage(): ReactElement {
                   })}
                 </p>
                 <div className='flex gap-2'>
-                  <button
-                    className={pagerButtonClassName}
+                  <Button
                     disabled={currentPage <= 1}
                     onClick={() => setPage(currentPage - 1)}
-                    type='button'
+                    size='sm'
                   >
                     {t('page.pagination.previous')}
-                  </button>
-                  <button
-                    className={pagerButtonClassName}
+                  </Button>
+                  <Button
                     disabled={currentPage >= pageCount}
                     onClick={() => setPage(currentPage + 1)}
-                    type='button'
+                    size='sm'
                   >
                     {t('page.pagination.next')}
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : null}
           </>
         )}
-      </Card>
+      </PageSection>
     </PageContainer>
   );
 }
