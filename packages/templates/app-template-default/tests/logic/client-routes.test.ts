@@ -15,14 +15,21 @@ describe('app client routes', () => {
   });
 
   it('declares application and settings route contributions', async () => {
-    expect(applicationRoutes).toHaveLength(3);
-    expect(applicationRoutes[0]).toMatchObject({
+    expect(applicationRoutes).toHaveLength(2);
+    const [app, settings] = applicationRoutes;
+    expect(app).toMatchObject({
       parent: 'app',
       routes: [
+        { auth: 'required', authz: 'skip', name: 'home', path: '/' },
         {
           auth: 'required',
-          name: 'home',
-          path: '/',
+          name: 'examples',
+          navigation: { title: 'examples.title' },
+        },
+        {
+          auth: 'required',
+          name: 'components',
+          navigation: { title: 'components.title' },
         },
         { auth: 'guest', name: 'login', path: '/login' },
         { auth: 'guest', name: 'register', path: '/register' },
@@ -34,41 +41,38 @@ describe('app client routes', () => {
         { auth: 'guest', name: 'reset-password', path: '/reset-password' },
       ],
     });
-    expect(applicationRoutes[1]).toEqual({
-      parent: 'settings',
-      routes: [],
-    });
-    // The reference pages live under `/dev` so a production build drops them; see `defineDevRoutes`.
-    expect(applicationRoutes[2]).toMatchObject({
-      parent: 'dev',
-      routes: [
-        { name: 'dev-examples', navigation: { title: 'devExamples.title' } },
-        {
-          name: 'dev-components',
-          navigation: { title: 'devComponents.title' },
-        },
-      ],
-    });
-    expect(Object.isFrozen(applicationRoutes[0])).toBe(true);
-    expect(Object.isFrozen(applicationRoutes[1])).toBe(true);
-    expect(Object.isFrozen(applicationRoutes[2])).toBe(true);
-    for (const route of applicationRoutes[0].routes) {
+    expect(settings).toEqual({ parent: 'settings', routes: [] });
+    expect(Object.isFrozen(app)).toBe(true);
+    expect(Object.isFrozen(settings)).toBe(true);
+    for (const route of app.routes) {
+      if (!route.componentLoader) continue;
       await expect(route.componentLoader()).resolves.toMatchObject({
         default: expect.any(Function),
       });
     }
   });
 
-  it('loads a page for every dev reference route', async () => {
-    const pages = applicationRoutes[2].routes.flatMap(
-      (group) => group.children ?? [],
+  it('loads a page for every reference route', async () => {
+    // The reference pages are application pages under two groups; neither group carries a page of its own, and the
+    // two are declared in navigation order.
+    const groups = applicationRoutes[0].routes.filter(
+      (route) => route.children,
     );
+    expect(groups.map((group) => group.name)).toEqual([
+      'examples',
+      'components',
+    ]);
+    const pages = groups.flatMap((group) => group.children ?? []);
     // The reference set is filled in page by page, so this count moves as pages land. It covers the 31 component
-    // pages and the single example that ship today; `client/routes.ts` declares no dev route without its page.
+    // pages and the single example that ship today; `client/routes.ts` declares no route without its page.
     expect(pages).toHaveLength(32);
     for (const page of pages) {
+      // Every reference page is reachable by any signed-in user, and none of them is a page-authorization resource:
+      // they are working material for building the application, not a feature anyone grants access to.
+      expect(page.auth).toBe('required');
+      expect(page.authz).toBe('skip');
       expect(page.path).toMatch(/^\/(examples|components)\/[a-z-]+$/);
-      if (!page.componentLoader) throw new Error(`${page.name} has no page`);
+      if (!page.componentLoader) throw new Error(`\${page.name} has no page`);
       await expect(page.componentLoader()).resolves.toMatchObject({
         default: expect.any(Function),
       });
@@ -86,10 +90,45 @@ describe('app client routes', () => {
       },
     ]);
 
-    expect(pageAuthorizations(resolved.routes)).toEqual([
-      // The landing page opted out of page authorization, so it is reachable by every signed-in user.
-      { name: 'home', authorizedAs: null },
-    ]);
+    expect(pageAuthorizations(resolved.routes)).toEqual(
+      // The landing page and every reference page opted out of page authorization, so they are reachable by every
+      // signed-in user and no grant names them.
+      [
+        'home',
+        'examples-orders',
+        'components-accordion',
+        'components-alert',
+        'components-alert-dialog',
+        'components-aspect-ratio',
+        'components-attachment',
+        'components-avatar',
+        'components-badge',
+        'components-breadcrumb',
+        'components-bubble',
+        'components-button',
+        'components-button-group',
+        'components-calendar',
+        'components-card',
+        'components-carousel',
+        'components-chart',
+        'components-checkbox',
+        'components-collapsible',
+        'components-combobox',
+        'components-command',
+        'components-context-menu',
+        'components-data-table',
+        'components-date-picker',
+        'components-dialog',
+        'components-separator',
+        'components-sheet',
+        'components-sidebar',
+        'components-skeleton',
+        'components-slider',
+        'components-spinner',
+        'components-switch',
+        'components-table',
+      ].map((name) => ({ name, authorizedAs: null })),
+    );
   });
 });
 
@@ -107,7 +146,7 @@ function pageAuthorizations(
                 ? null
                 : route.authz.resource.type === 'page'
                   ? route.authz.resource.id
-                  : `${route.authz.resource.type}:${route.authz.resource.id}`,
+                  : `\${route.authz.resource.type}:\${route.authz.resource.id}`,
           },
         ]
       : []),
