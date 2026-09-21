@@ -14,8 +14,9 @@ current user, changing the sign-in pages, adding a sign-in method, disabling
 accounts, or preparing authentication for deployment.
 
 Do not use it for what a signed-in user may do — that is
-`nocobase-app-plugin-authorization` — or for the user administration page,
-which is `nocobase-app-plugin-users`. Do not modify the plugin's own source,
+`nocobase-app-plugin-authorization` — for the user record itself, which is
+`nocobase-app-plugin-users`, or for the user administration page, which is
+`nocobase-app-plugin-user-management`. Do not modify the plugin's own source,
 migrations, or `dist/`; everything below is done in the application.
 
 The plugin wraps Better Auth. Application configuration is Better Auth
@@ -32,9 +33,11 @@ server entry) or `@nocobase/app-plugin-authentication/server`:
 - `authenticationToken` resolves the `Auth` instance: `required()`,
   `optional()`, `getSession(headers)`, `handler(request)`.
 - `AuthEnv` types a Hono router whose routes read `context.get('auth')`.
-- `userAdministrationServiceToken` resolves `UserAdministrationService`:
-  `list`, `get`, `create`, `update`, `disable`, `enable`, `resetPassword`,
-  `revokeSessions`, `withConnection`; errors are `UserAdministrationError`.
+- `authenticationCredentialServiceToken` resolves
+  `AuthenticationCredentialService`: `createPasswordCredential`,
+  `resetPassword`, `revokeSessions`, `deleteCredentials`, `withConnection`;
+  errors are `AuthenticationCredentialError`. The user record itself is read
+  and changed through `userServiceToken` from `@nocobase/app-plugin-users`.
 - `AuthConfig` is Better Auth's `BetterAuthOptions`, the type of the application's `server/config/auth.ts`. User initialization configuration lives separately under `users.initialAdmin`.
 - `createAuthentication`, `databaseAdapter`, `createAuthStorage` build an
   instance outside the application runtime, mainly in tests.
@@ -74,15 +77,19 @@ Read only the reference the task needs.
 
 ## Ownership
 
-- The plugin owns the protocol, the `user`, `session`, `account`, and
-  `verification` collections and their migrations, session validation, the
-  guards, the headless actions, and the `/api/auth/*` route.
+- The plugin owns the protocol, the `session`, `account`, and `verification`
+  collections, session validation, the guards, the headless actions, and the
+  `/api/auth/*` route. The `user` record belongs to `@nocobase/app-plugin-users`;
+  Better Auth reads and writes it through that plugin's storage contract. The
+  historical migrations that created the `user` table stay in this plugin and
+  are never edited.
 - The application owns `server/config/auth.ts`, `client/config/auth.ts`, the
   four guest routes in `client/routes.ts`, the pages in `client/pages/auth/`,
   the UI in `client/extensions/nocobase-auth-ui/`, its own migrations for any
   schema a sign-in method adds, and every environment variable and secret.
-- Authorization owns permissions. Users owns the administration page. The
-  application's own code decides which roles exist.
+- Authorization owns permissions. Users owns the user record and its
+  lifecycle. User management owns the administration page. The application's
+  own code decides which roles exist.
 - The plugin's `skills/` source is authoritative. `.agents/skills/` is a
   synchronized copy and must not be edited.
 

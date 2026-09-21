@@ -2,6 +2,10 @@ import type { DatabaseConnection } from '@nocobase/db';
 import type { RealtimeService } from '@nocobase/app-server/realtime';
 import type { Auth } from './auth.js';
 
+/** Lifecycle handler key authentication registers with the users plugin. */
+export const AUTHENTICATION_USER_LIFECYCLE_KEY =
+  'authentication.credentials' as const;
+
 export class AuthenticationCredentialError extends Error {
   constructor(
     readonly code:
@@ -108,9 +112,9 @@ class DefaultAuthenticationCredentialService implements AuthenticationCredential
   }
 
   private async context(): Promise<
-    Awaited<ReturnType<Auth['administrationContext']>>
+    Awaited<ReturnType<Auth['credentialContext']>>
   > {
-    return this.options.auth.administrationContext();
+    return this.options.auth.credentialContext();
   }
 
   private async requireUser(userId: string): Promise<void> {

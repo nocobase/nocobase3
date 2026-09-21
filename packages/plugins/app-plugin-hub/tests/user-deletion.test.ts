@@ -8,6 +8,7 @@ import {
 } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import {
+  AUTHENTICATION_USER_LIFECYCLE_KEY,
   createAuthentication,
   createAuthenticationCredentialService,
   authenticationToken,
@@ -16,6 +17,7 @@ import {
 import {
   UserLifecycleRegistry,
   UserService,
+  userLifecycleToken,
 } from '@nocobase/app-plugin-users/server';
 import {
   createAppAuthorization,
@@ -23,22 +25,23 @@ import {
 } from '@nocobase/app-plugin-authorization';
 import { ApiKeyService } from '@nocobase/app-plugin-api-keys/server';
 import {
+  createPermissionSetProtectionHandler,
   createUserManagementService,
+  createUserQueryService,
   createUserRoleScopeRegistry,
   userManagementServiceToken,
   userQueryServiceToken,
   userRoleScopeRegistryToken,
+  type UserQueryService,
 } from '@nocobase/app-plugin-user-management/server';
 import { UsersProvider } from '../../app-plugin-user-management/server/providers/users.js';
-import {
-  createUserQueryService,
-  type UserQueryService,
-} from '../../app-plugin-user-management/server/user-queries.js';
 import { apiRoutes } from '../../app-plugin-user-management/server/routes/index.js';
 import { ServiceContainer } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
+  createHubUserLifecycleHandler,
   createHubUserRoleScope,
+  HUB_USER_LIFECYCLE_KEY,
   registerHubResources,
   protectHubPermissionSets,
 } from '../server/authorization.js';
@@ -59,6 +62,7 @@ let queries: UserQueryService;
 let credentials: AuthenticationCredentialService;
 let keys: HubApiKeyService;
 let roles: ReturnType<typeof createUserRoleScopeRegistry>;
+let lifecycle: UserLifecycleRegistry;
 let target: string;
 let registered = false;
 const secret = 'test-only-user-deletion-secret-at-least-32';
@@ -77,9 +81,17 @@ beforeEach(async () => {
       directory: fileURLToPath(new URL(directory, import.meta.url)),
     }).latest();
   }
-  // Wire the users lifecycle the way the authentication provider does at boot:
-  // disabling revokes sessions, deleting also removes credential accounts.
-  const lifecycle = new UserLifecycleRegistry();
+  // Wire the users lifecycle the way the providers do at boot: authentication
+  // revokes sessions and accounts, User management protects Permission Sets,
+  // Hub checks the operator and App ownership. The Hub template enables
+  // deletion with exactly these participants.
+  lifecycle = new UserLifecycleRegistry({
+    enabled: true,
+    requiredHandlers: [
+      AUTHENTICATION_USER_LIFECYCLE_KEY,
+      HUB_USER_LIFECYCLE_KEY,
+    ],
+  });
   auth = createAuthentication({
     connection: db.connection(),
     secret,
@@ -94,9 +106,9 @@ beforeEach(async () => {
     connection: db.connection(),
   });
   lifecycle.register({
-    key: 'authentication.credentials',
+    key: AUTHENTICATION_USER_LIFECYCLE_KEY,
     order: -100,
-    before: async (context) => {
+    after: async (context) => {
       const scoped = credentials.withConnection(context.connection);
       if (context.operation === 'delete') {
         await scoped.deleteCredentials(context.userId);
@@ -111,13 +123,17 @@ beforeEach(async () => {
 
   roles = createUserRoleScopeRegistry();
   roles.register(createHubUserRoleScope(authz.permissionSets));
+  lifecycle.register(
+    createPermissionSetProtectionHandler(authz.permissionSets),
+  );
+  lifecycle.register(createHubUserLifecycleHandler(authz.permissionSets));
   management = createUserManagementService({
     database: db,
     users,
     userQueries: queries,
     credentials,
     roleScopes: roles,
-    permissionSets: authz.permissionSets,
+    lifecycle,
   });
   for (const id of ['admin', 'admin-two']) {
     await db
@@ -199,6 +215,7 @@ async function router(actorId?: string) {
       },
     });
   container.instance(userQueryServiceToken, queries);
+  container.instance(userLifecycleToken, lifecycle);
   container.instance(authenticationToken, sessionAuth);
   container.instance(authorizationToken, authz);
   container.instance(userManagementServiceToken, management);
@@ -260,9 +277,9 @@ describe('Hub user deletion', () => {
       .set({ disabledAt: new Date() })
       .where('id', '=', 'admin-two')
       .execute();
-    await expect(
-      roles.get('hub')!.assertCanDisable!('admin', db.connection()),
-    ).rejects.toMatchObject({ name: 'PermissionSetLastAssignmentError' });
+    await expect(management.disable('admin')).rejects.toMatchObject({
+      name: 'PermissionSetLastAssignmentError',
+    });
     await expect(management.remove('admin', 'admin-two')).rejects.toMatchObject(
       { code: 'HUB_ADMIN_REQUIRED' },
     );
@@ -280,7 +297,7 @@ describe('Hub user deletion', () => {
     });
     const normal = new ApiKeyService(auth, 'default');
     const generic = await normal.create({ userId: target, name: 'Normal key' });
-    const ctx = await auth.administrationContext();
+    const ctx = await auth.credentialContext();
     const session = await ctx.internalAdapter.createSession(target);
     expect(await ctx.internalAdapter.findSession(session.token)).not.toBeNull();
     const before = await db.query().selectFrom('hubApps').selectAll().execute();
@@ -381,7 +398,7 @@ describe('Hub user deletion', () => {
         },
       },
     });
-    const ctx = await gated.administrationContext();
+    const ctx = await gated.credentialContext();
     await expect(
       ctx.internalAdapter.createSession(target),
     ).rejects.toMatchObject({ body: { code: 'ACCOUNT_DISABLED' } });
@@ -451,15 +468,10 @@ describe('Hub user deletion', () => {
   it('rolls back credential removal when a later lifecycle hook fails', async () => {
     const normal = new ApiKeyService(auth, 'default');
     const key = await normal.create({ userId: target, name: 'Keep' });
-    roles.register({
+    lifecycle.register({
       key: 'failing',
-      label: 'Failing',
-      selection: 'single',
-      options: async () => [],
-      get: async () => '',
-      findUserIds: async () => [],
-      replace: async () => {},
-      onDelete: async () => {
+      order: 100,
+      after: async () => {
         throw new Error('cleanup failed');
       },
     });

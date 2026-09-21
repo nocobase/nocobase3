@@ -1,6 +1,6 @@
 # 用户领域与认证职责拆分方案
 
-> 状态：待审计，尚未实施。本文中的接口、目录和行为变更均为方案，不代表当前已有能力。
+> 状态：主线运行时拆分已在 `refactor/users-auth-separation` 实现，见第 14 节；第 8.3 节独立安装与第 7.4 节 202 协议仍为待实施方案。第 2 节的“当前实现”描述的是实施前的代码基线。
 >
 > 日期：2026-09-20。代码基线：`origin/develop`，提交 `9dbe2252326b5df7d3a6a0f9f2ca7bd0a868bab6`。工作分支：`refactor/users-auth-separation`。
 
@@ -12,16 +12,16 @@
 
 当前 `user-administration.ts` 同时承担用户数据管理和认证操作，必须拆解，不能整体换目录。由于现有 users 插件已经依赖 authentication 和 authorization，本方案明确拆出 `app-plugin-user-management`，避免包级循环依赖。
 
-| 决策 | 建议 |
-| --- | --- |
-| 用户数据归属 | users 拥有 User 类型、字段定义、存储、身份约束和后续用户表变更 |
-| 管理能力归属 | 现有管理页面、管理 API、管理 DTO、分页搜索、角色编排迁入 user-management |
-| 认证能力归属 | 密码、凭据、会话、认证缓存和 Better Auth hooks 留在 authentication |
-| 数据表 | 保留一张 `user` 表，不复制用户，不改变已有 ID |
-| 跨插件协作 | users 定义生命周期契约，其他插件主动注册自己的检查和处理 |
-| 事务 | 用户、凭据、授权、API Key 的数据库变更加入同一事务；外部副作用在最外层事务提交后执行 |
-| 实施次序 | 先验证存储适配边界，再迁移上层管理和生命周期，最后单独完成迁移历史交接 |
-| 兼容策略 | 保留管理 URL、API 路径及业务结果；公开包导入路径变化通过发布说明和模板同步处理 |
+| 决策         | 建议                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------ |
+| 用户数据归属 | users 拥有 User 类型、字段定义、存储、身份约束和后续用户表变更                       |
+| 管理能力归属 | 现有管理页面、管理 API、管理 DTO、分页搜索、角色编排迁入 user-management             |
+| 认证能力归属 | 密码、凭据、会话、认证缓存和 Better Auth hooks 留在 authentication                   |
+| 数据表       | 保留一张 `user` 表，不复制用户，不改变已有 ID                                        |
+| 跨插件协作   | users 定义生命周期契约，其他插件主动注册自己的检查和处理                             |
+| 事务         | 用户、凭据、授权、API Key 的数据库变更加入同一事务；外部副作用在最外层事务提交后执行 |
+| 实施次序     | 先验证存储适配边界，再迁移上层管理和生命周期，最后单独完成迁移历史交接               |
+| 兼容策略     | 保留管理 URL、API 路径及业务结果；公开包导入路径变化通过发布说明和模板同步处理       |
 
 ### 1.1 主线与后续交付边界
 
@@ -45,21 +45,21 @@
 
 以下路径相对本仓库根目录，均是上述代码基线下的实现依据。实施前如 develop 有变化，需要重新核对，不能套用其他工作树的旧结论。
 
-| 文件 | 当前事实 | 对改造的影响 |
-| --- | --- | --- |
-| [authentication/server/user-administration.ts](../packages/plugins/app-plugin-authentication/server/user-administration.ts) | 定义管理 DTO；实现用户查询、身份规范化、密码用户创建、密码重置、会话撤销、状态变更、软删除和用户锁 | 需要按职责拆解 |
-| [users/server/services/users.ts](../packages/plugins/app-plugin-users/server/services/users.ts) | 注入 `UserAdministrationService`；创建用户和分配角色使用数据库事务；禁用、删除调用角色扩展及 `assertSubjectRemovable` | 管理编排已有基础，应迁移并改接独立服务 |
-| [users/server/providers/users.ts](../packages/plugins/app-plugin-users/server/providers/users.ts) | 注册管理服务、授权资源、用户主体类型和默认 Permission Set 选择器 | 需要拆分管理 UI 集成与用户主体基础集成 |
-| [users/server/tokens.ts](../packages/plugins/app-plugin-users/server/tokens.ts) | `UserRoleScope` 包含 `assertCanDelete`、`onDelete`、`assertCanDisable` | 角色接口混入用户生命周期 |
-| [authentication/server/better-auth/database-adapter.ts](../packages/plugins/app-plugin-authentication/server/better-auth/database-adapter.ts) | 直接读写各模型；支持条件、字段选择、大小写比较、批量操作、消费与递增操作；事务中重新构建适配器 | 必须完整盘点操作面，不可用管理 CRUD 简单替换 |
-| [authentication/server/auth.ts](../packages/plugins/app-plugin-authentication/server/auth.ts) | 使用 Better Auth 用户类型；注册用户附加字段；部分会话检查直接查询 `user`；提供 `administrationContext` 和 `forConnection` | 不仅适配器，认证内部直接读用户的路径也要改接 users |
-| [authentication/server/providers/authentication.ts](../packages/plugins/app-plugin-authentication/server/providers/authentication.ts) | 注册认证服务和用户管理底层服务 | 移除用户管理服务注册，增加认证操作服务及生命周期注册 |
-| [hub/server/authorization.ts](../packages/plugins/app-plugin-hub/server/authorization.ts) | 角色扩展中检查操作者、最后管理员和应用归属，并删除用户 API Key | 角色职责与生命周期职责分开，保留已有保护语义 |
-| [hub/server/providers/hub-authorization.ts](../packages/plugins/app-plugin-hub/server/providers/hub-authorization.ts) | 注册 Hub 角色作用域 | 增加独立生命周期处理器注册及注销 |
-| [notification-in-app/server/providers/in-app-notification.ts](../packages/plugins/app-plugin-notification-in-app/server/providers/in-app-notification.ts) | 从 authentication 解析用户管理服务，只为检查用户是否存在 | 改为依赖 users 查询能力，不应依赖管理插件 |
-| [db/src/database/internal/knex/connection.ts](../packages/libs/db/src/database/internal/knex/connection.ts) | 事务创建连接并处理元数据失效；当前实现未提供这里所需的公开提交后回调机制 | 需要明确事务完成机制，不能假设现成 afterCommit 可用 |
-| [db/src/migration/loader.ts](../packages/libs/db/src/migration/loader.ts) | 跨迁移来源按迁移名称排序 | 插件注册顺序不能替代迁移执行顺序设计 |
-| [db/src/migration/migrator.ts](../packages/libs/db/src/migration/migrator.ts) | 校验执行记录、来源包及校验和 | 直接挪历史迁移会造成升级兼容风险 |
+| 文件                                                                                                                                                      | 当前事实                                                                                                                  | 对改造的影响                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| [authentication/server/user-administration.ts](../packages/plugins/app-plugin-authentication/server/user-administration.ts)                               | 定义管理 DTO；实现用户查询、身份规范化、密码用户创建、密码重置、会话撤销、状态变更、软删除和用户锁                        | 需要按职责拆解                                       |
+| [users/server/services/users.ts](../packages/plugins/app-plugin-users/server/services/users.ts)                                                           | 注入 `UserAdministrationService`；创建用户和分配角色使用数据库事务；禁用、删除调用角色扩展及 `assertSubjectRemovable`     | 管理编排已有基础，应迁移并改接独立服务               |
+| [users/server/providers/users.ts](../packages/plugins/app-plugin-users/server/providers/users.ts)                                                         | 注册管理服务、授权资源、用户主体类型和默认 Permission Set 选择器                                                          | 需要拆分管理 UI 集成与用户主体基础集成               |
+| [users/server/tokens.ts](../packages/plugins/app-plugin-users/server/tokens.ts)                                                                           | `UserRoleScope` 包含 `assertCanDelete`、`onDelete`、`assertCanDisable`                                                    | 角色接口混入用户生命周期                             |
+| [authentication/server/better-auth/database-adapter.ts](../packages/plugins/app-plugin-authentication/server/better-auth/database-adapter.ts)             | 直接读写各模型；支持条件、字段选择、大小写比较、批量操作、消费与递增操作；事务中重新构建适配器                            | 必须完整盘点操作面，不可用管理 CRUD 简单替换         |
+| [authentication/server/auth.ts](../packages/plugins/app-plugin-authentication/server/auth.ts)                                                             | 使用 Better Auth 用户类型；注册用户附加字段；部分会话检查直接查询 `user`；提供 `administrationContext` 和 `forConnection` | 不仅适配器，认证内部直接读用户的路径也要改接 users   |
+| [authentication/server/providers/authentication.ts](../packages/plugins/app-plugin-authentication/server/providers/authentication.ts)                     | 注册认证服务和用户管理底层服务                                                                                            | 移除用户管理服务注册，增加认证操作服务及生命周期注册 |
+| [hub/server/authorization.ts](../packages/plugins/app-plugin-hub/server/authorization.ts)                                                                 | 角色扩展中检查操作者、最后管理员和应用归属，并删除用户 API Key                                                            | 角色职责与生命周期职责分开，保留已有保护语义         |
+| [hub/server/providers/hub-authorization.ts](../packages/plugins/app-plugin-hub/server/providers/hub-authorization.ts)                                     | 注册 Hub 角色作用域                                                                                                       | 增加独立生命周期处理器注册及注销                     |
+| [notification-in-app/server/providers/in-app-notification.ts](../packages/plugins/app-plugin-notification-in-app/server/providers/in-app-notification.ts) | 从 authentication 解析用户管理服务，只为检查用户是否存在                                                                  | 改为依赖 users 查询能力，不应依赖管理插件            |
+| [db/src/database/internal/knex/connection.ts](../packages/libs/db/src/database/internal/knex/connection.ts)                                               | 事务创建连接并处理元数据失效；当前实现未提供这里所需的公开提交后回调机制                                                  | 需要明确事务完成机制，不能假设现成 afterCommit 可用  |
+| [db/src/migration/loader.ts](../packages/libs/db/src/migration/loader.ts)                                                                                 | 跨迁移来源按迁移名称排序                                                                                                  | 插件注册顺序不能替代迁移执行顺序设计                 |
+| [db/src/migration/migrator.ts](../packages/libs/db/src/migration/migrator.ts)                                                                             | 校验执行记录、来源包及校验和                                                                                              | 直接挪历史迁移会造成升级兼容风险                     |
 
 ### 2.1 当前文件中需要特别处理的行为
 
@@ -128,12 +128,12 @@ flowchart TD
 
 ### 4.1 用户存储与领域服务分开
 
-| 契约 | 主要能力 | 调用者 |
-| --- | --- | --- |
-| `UserStore` | 有类型的条件查询、字段选择、计数、创建、更新及删除语义；绑定指定事务 | 认证适配器、users 服务、管理查询层 |
-| `UserService` | 基础创建、资料更新、启用、禁用、软删除；执行生命周期 | 管理服务、可信服务器集成 |
-| `UserLifecycleRegistry` | 注册检查、事务内处理及提交后处理；支持注销和重复注册检测 | authentication、authorization、Hub |
-| `UserAuthenticationService` | 创建/更新密码凭据、重置密码、撤销会话、清理认证数据 | 管理服务及认证生命周期处理器 |
+| 契约                        | 主要能力                                                             | 调用者                             |
+| --------------------------- | -------------------------------------------------------------------- | ---------------------------------- |
+| `UserStore`                 | 有类型的条件查询、字段选择、计数、创建、更新及删除语义；绑定指定事务 | 认证适配器、users 服务、管理查询层 |
+| `UserService`               | 基础创建、资料更新、启用、禁用、软删除；执行生命周期                 | 管理服务、可信服务器集成           |
+| `UserLifecycleRegistry`     | 注册检查、事务内处理及提交后处理；支持注销和重复注册检测             | authentication、authorization、Hub |
+| `UserAuthenticationService` | 创建/更新密码凭据、重置密码、撤销会话、清理认证数据                  | 管理服务及认证生命周期处理器       |
 
 `UserStore` 不暴露 Better Auth 的 `Where`、`CustomAdapter`、internal adapter 或 hooks。认证层负责转换为 users 自己的条件表示或数据库查询表达式。不能通过返回裸数据库连接让认证层继续任意写 user 表，绕过公共约束。
 
@@ -167,22 +167,22 @@ type UserLifecycleContext = {
 
 ### 4.4 契约方法及结果约定
 
-| 接口方法 | 输入和返回约定 | 事务及约束 |
-| --- | --- | --- |
-| `UserStore.withConnection(connection)` | 返回新绑定实例，不修改原实例 | 保留生命周期注册表与事务上下文，不重新解析默认数据库 |
-| `UserStore.findOne(query)` | 返回请求字段投影或 `null` | 默认只查未删除用户；省略 select 使用明确字段集合 |
-| `UserStore.findMany(query)` | 返回投影数组，空匹配为 `[]` | offset 下保留稳定排序；条件、排序及 select 仅接受注册字段 |
-| `UserStore.count(query)` | 返回非负 number | 与 findMany 同条件和删除过滤，不接受分页影响计数 |
-| `UserStore.create(record, options)` | 返回创建后的请求投影 | 接受可信调用方 ID；省略 ID 时使用 users 配置的生成器；不替换已有 ID |
-| `UserStore.updateOne(query, patch, context)` | 返回更新后记录或 `null` | 状态字段进入统一生命周期；保留适配器单条更新的无条件保护 |
-| `UserStore.updateMany(query, patch, context)` | 返回匹配并完成写入的数量 | 批量状态变更稳定加锁，任一保护失败整批回滚 |
-| `UserStore.softDelete(query, context)` | 返回新转为删除状态的数量 | 不物理删除；需合法操作上下文；重复删除返回 0 |
-| `UserService.get(userId)` | 返回基础 User 或 `undefined` | 已删除返回 undefined；适配器自行转换为 null |
-| `UserService.create(input, context)` | 输入不含密码、角色，返回 User | 补默认状态和时间；可信认证创建保留验证结果及允许的扩展字段 |
-| `UserService.updateProfile(userId, input, context)` | 返回 User，不存在抛 `USER_NOT_FOUND` | 仅资料字段，不接受密码、角色或任意状态标记 |
-| `UserService.disable/enable(userId, context)` | 返回 User，不存在抛 `USER_NOT_FOUND` | 幂等状态设置；首次状态变更触发生命周期，失败任务使用原操作 ID 重试 |
-| `UserService.remove(userId, context)` | 返回 void，重复删除成功 | 管理自删策略由入口检查，底层不可绕过删除就绪与领域保护 |
-| `lockUser(connection, userId)` | 返回 void | 仅事务内调用，与 Hub 资源创建共享锁协议；不同时负责鉴权 |
+| 接口方法                                            | 输入和返回约定                       | 事务及约束                                                          |
+| --------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------- |
+| `UserStore.withConnection(connection)`              | 返回新绑定实例，不修改原实例         | 保留生命周期注册表与事务上下文，不重新解析默认数据库                |
+| `UserStore.findOne(query)`                          | 返回请求字段投影或 `null`            | 默认只查未删除用户；省略 select 使用明确字段集合                    |
+| `UserStore.findMany(query)`                         | 返回投影数组，空匹配为 `[]`          | offset 下保留稳定排序；条件、排序及 select 仅接受注册字段           |
+| `UserStore.count(query)`                            | 返回非负 number                      | 与 findMany 同条件和删除过滤，不接受分页影响计数                    |
+| `UserStore.create(record, options)`                 | 返回创建后的请求投影                 | 接受可信调用方 ID；省略 ID 时使用 users 配置的生成器；不替换已有 ID |
+| `UserStore.updateOne(query, patch, context)`        | 返回更新后记录或 `null`              | 状态字段进入统一生命周期；保留适配器单条更新的无条件保护            |
+| `UserStore.updateMany(query, patch, context)`       | 返回匹配并完成写入的数量             | 批量状态变更稳定加锁，任一保护失败整批回滚                          |
+| `UserStore.softDelete(query, context)`              | 返回新转为删除状态的数量             | 不物理删除；需合法操作上下文；重复删除返回 0                        |
+| `UserService.get(userId)`                           | 返回基础 User 或 `undefined`         | 已删除返回 undefined；适配器自行转换为 null                         |
+| `UserService.create(input, context)`                | 输入不含密码、角色，返回 User        | 补默认状态和时间；可信认证创建保留验证结果及允许的扩展字段          |
+| `UserService.updateProfile(userId, input, context)` | 返回 User，不存在抛 `USER_NOT_FOUND` | 仅资料字段，不接受密码、角色或任意状态标记                          |
+| `UserService.disable/enable(userId, context)`       | 返回 User，不存在抛 `USER_NOT_FOUND` | 幂等状态设置；首次状态变更触发生命周期，失败任务使用原操作 ID 重试  |
+| `UserService.remove(userId, context)`               | 返回 void，重复删除成功              | 管理自删策略由入口检查，底层不可绕过删除就绪与领域保护              |
+| `lockUser(connection, userId)`                      | 返回 void                            | 仅事务内调用，与 Hub 资源创建共享锁协议；不同时负责鉴权             |
 
 `UserQuery` 至少表达完整布尔条件树、比较模式、select、sortBy、limit、offset，支持现有 eq/ne/lt/lte/gt/gte/in/not_in/contains/starts_with/ends_with。认证层将 Better Auth 的线性 AND/OR 输入翻译成条件树。默认查询不暴露 `includeDeleted` 给普通管理调用，审计读取使用单独可信入口，避免一个布尔参数意外关闭认证过滤。
 
@@ -190,13 +190,13 @@ type UserLifecycleContext = {
 
 ### 4.5 认证服务与错误契约
 
-| 方法 | 行为 |
-| --- | --- |
-| `UserAuthenticationService.withConnection(connection)` | 绑定同一连接和事务上下文，保留认证配置与缓存服务 |
-| `createPasswordCredential(userId, password)` | 校验策略并创建 credential；凭据已存在时明确冲突，不隐式重置密码 |
-| `resetPassword(userId, password)` | 保留现有“有凭据更新、无凭据创建”的结果，更新后统一撤销会话 |
-| `revokeSessions(userId)` | 撤销数据库及缓存路径的会话；提交后安排断连，支持幂等重试 |
-| 认证生命周期私有处理器 | 禁用时执行会话失效；删除时再清理 account，不重新发起用户删除 |
+| 方法                                                   | 行为                                                            |
+| ------------------------------------------------------ | --------------------------------------------------------------- |
+| `UserAuthenticationService.withConnection(connection)` | 绑定同一连接和事务上下文，保留认证配置与缓存服务                |
+| `createPasswordCredential(userId, password)`           | 校验策略并创建 credential；凭据已存在时明确冲突，不隐式重置密码 |
+| `resetPassword(userId, password)`                      | 保留现有“有凭据更新、无凭据创建”的结果，更新后统一撤销会话      |
+| `revokeSessions(userId)`                               | 撤销数据库及缓存路径的会话；提交后安排断连，支持幂等重试        |
+| 认证生命周期私有处理器                                 | 禁用时执行会话失效；删除时再清理 account，不重新发起用户删除    |
 
 密码哈希准备可在事务外执行，但账号唯一性和用户状态仍在事务内验证。准备结果只在可信服务器内部传递，不新增浏览器提交“已哈希密码”的接口。
 
@@ -210,16 +210,16 @@ users 使用 `UserError` 承载现有 `USER_NOT_FOUND`、`USER_EMAIL_CONFLICT`�
 
 使用 Better Auth 提供的逻辑模型解析能力识别 user，不能只判断物理模型名是否等于字符串 `user`。字段映射在 authentication 边界完成，避免自定义模型名或字段名导致查询落回通用数据库分支。
 
-| 操作 | users 路径要求 |
-| --- | --- |
-| create | 统一规范化和唯一性约束；保留调用方生成的 ID；按 select 返回 |
-| findOne / findMany | 保留条件组合、字段选择、排序、offset/limit；默认排除软删除 |
-| count | 与对应查询使用同一过滤语义 |
-| update / updateMany | 统一约束；无匹配返回值及影响行数与既有协议一致；状态变更走生命周期 |
-| delete / deleteMany | 明确 user 删除为领域软删除；不能直接物理删除 |
-| consumeOne | 先核实是否用于 user；不能把用户当一次性令牌消费。若无合理领域语义，对 user 明确拒绝，对其他模型保留原能力 |
-| incrementOne | 保留合法用户扩展数值字段的原子条件更新；身份和状态字段不得通过此接口绕过约束 |
-| transaction | 创建绑定同一事务连接的 users store 和认证存储；不得回退到默认连接 |
+| 操作                | users 路径要求                                                                                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------- |
+| create              | 统一规范化和唯一性约束；保留调用方生成的 ID；按 select 返回                                               |
+| findOne / findMany  | 保留条件组合、字段选择、排序、offset/limit；默认排除软删除                                                |
+| count               | 与对应查询使用同一过滤语义                                                                                |
+| update / updateMany | 统一约束；无匹配返回值及影响行数与既有协议一致；状态变更走生命周期                                        |
+| delete / deleteMany | 明确 user 删除为领域软删除；不能直接物理删除                                                              |
+| consumeOne          | 先核实是否用于 user；不能把用户当一次性令牌消费。若无合理领域语义，对 user 明确拒绝，对其他模型保留原能力 |
+| incrementOne        | 保留合法用户扩展数值字段的原子条件更新；身份和状态字段不得通过此接口绕过约束                              |
+| transaction         | 创建绑定同一事务连接的 users store 和认证存储；不得回退到默认连接                                         |
 
 需验证 AND/OR 组合不会让 `deletedAt IS NULL` 被 OR 分支绕过；删除过滤应包在整个调用方条件之外。大小写查询中间查询也必须使用同一个连接和字段映射。
 
@@ -272,25 +272,25 @@ users 使用 `UserError` 承载现有 `USER_NOT_FOUND`、`USER_EMAIL_CONFLICT`�
 
 ### 7.1 生命周期阶段
 
-| 阶段 | 内容 | 失败行为 |
-| --- | --- | --- |
-| before | 授权保护、应用归属、参与者就绪检查 | 整体拒绝，不进入后续处理 |
-| transactional | 状态写入及各插件数据库清理 | 整体回滚 |
-| afterCommit | 认证/授权缓存失效、实时断连 | 记录明确的提交后失败，进入重试；不能谎报数据库回滚 |
+| 阶段          | 内容                               | 失败行为                                           |
+| ------------- | ---------------------------------- | -------------------------------------------------- |
+| before        | 授权保护、应用归属、参与者就绪检查 | 整体拒绝，不进入后续处理                           |
+| transactional | 状态写入及各插件数据库清理         | 整体回滚                                           |
+| afterCommit   | 认证/授权缓存失效、实时断连        | 记录明确的提交后失败，进入重试；不能谎报数据库回滚 |
 
 扩展使用稳定名称，重复注册报错，shutdown 时注销。处理顺序应明确且可测试，不能依赖插件偶然导入顺序。多个用户批量处理必须使用稳定 ID 排序和一致锁顺序。
 
 ### 7.2 唯一执行位置与注册约束
 
-| 动作 | 唯一执行位置 | 其他层禁止重复做的事 |
-| --- | --- | --- |
-| 管理入口鉴权、禁止自删、输入校验 | user-management 路由/服务 | 不把前端按钮状态当成服务端保护 |
-| 用户字段规范化、唯一性及状态写入 | users 私有写入管线 | 认证或管理服务不另写 user 表 |
-| 受保护授权检查与授权清理 | authorization 注册的用户生命周期处理器 | 管理服务和 Hub 不再重复调用同一删除/禁用保护 |
-| Hub 操作者资格、应用归属及 API Key 清理 | Hub 注册的用户生命周期处理器 | UserRoleScope 不保留相同处理 |
-| 禁用/删除后的会话撤销、删除凭据 | authentication 注册的生命周期处理器 | 管理服务调用 users.disable/remove 后不再手动撤销或清理 |
-| 创建密码用户和分配角色 | 管理服务在一个事务中调用三个所属服务 | users 的创建生命周期不默认创建凭据或自动赋予管理角色 |
-| 重置密码和主动撤销会话 | authentication 的认证操作服务 | 不通过虚构一次 disable 操作来触发清理 |
+| 动作                                    | 唯一执行位置                           | 其他层禁止重复做的事                                   |
+| --------------------------------------- | -------------------------------------- | ------------------------------------------------------ |
+| 管理入口鉴权、禁止自删、输入校验        | user-management 路由/服务              | 不把前端按钮状态当成服务端保护                         |
+| 用户字段规范化、唯一性及状态写入        | users 私有写入管线                     | 认证或管理服务不另写 user 表                           |
+| 受保护授权检查与授权清理                | authorization 注册的用户生命周期处理器 | 管理服务和 Hub 不再重复调用同一删除/禁用保护           |
+| Hub 操作者资格、应用归属及 API Key 清理 | Hub 注册的用户生命周期处理器           | UserRoleScope 不保留相同处理                           |
+| 禁用/删除后的会话撤销、删除凭据         | authentication 注册的生命周期处理器    | 管理服务调用 users.disable/remove 后不再手动撤销或清理 |
+| 创建密码用户和分配角色                  | 管理服务在一个事务中调用三个所属服务   | users 的创建生命周期不默认创建凭据或自动赋予管理角色   |
+| 重置密码和主动撤销会话                  | authentication 的认证操作服务          | 不通过虚构一次 disable 操作来触发清理                  |
 
 管理层“完整流程”指鉴权、选择用例、开启共享事务、调用领域服务并组装响应，不表示它重复执行各插件的生命周期步骤。`UserService` 和认证适配器的状态更新都进入 users 同一私有状态管线；users 自己的服务不能再经公共 store 入口递归触发同一次转换。
 
@@ -366,16 +366,16 @@ Better Auth 自身协议不直接套用管理 API 的 202 约定。它触发用�
 
 ## 9. 消费者与发布兼容
 
-| 消费者 | 调整 |
-| --- | --- |
-| authentication | 依赖 users 契约；移除用户管理注册与导出 |
-| 原 users 客户端与服务器管理入口 | 迁入 user-management；保留现有 URL/API 行为 |
-| authorization 用户集成 | 使用 users 判断主体状态和执行生命周期保护，核验可选依赖场景 |
-| Hub | 用户锁、存在性和生命周期从 users 导入；管理角色 UI 从 user-management 导入 |
-| notification-in-app | 仅依赖 users 查询，不依赖管理服务 |
-| default、examples、Hub 模板 | 更新客户端/服务端插件注册、依赖、配置、构建和相关测试 |
-| 认证及用户种子、应用初始化 | 盘点创建管理员等直接写 user/account 的路径，按新服务或明确历史种子职责处理 |
-| 插件 Skills 和开发文档 | 更新公开导入、安装组合、初始化和升级限制 |
+| 消费者                          | 调整                                                                       |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| authentication                  | 依赖 users 契约；移除用户管理注册与导出                                    |
+| 原 users 客户端与服务器管理入口 | 迁入 user-management；保留现有 URL/API 行为                                |
+| authorization 用户集成          | 使用 users 判断主体状态和执行生命周期保护，核验可选依赖场景                |
+| Hub                             | 用户锁、存在性和生命周期从 users 导入；管理角色 UI 从 user-management 导入 |
+| notification-in-app             | 仅依赖 users 查询，不依赖管理服务                                          |
+| default、examples、Hub 模板     | 更新客户端/服务端插件注册、依赖、配置、构建和相关测试                      |
+| 认证及用户种子、应用初始化      | 盘点创建管理员等直接写 user/account 的路径，按新服务或明确历史种子职责处理 |
+| 插件 Skills 和开发文档          | 更新公开导入、安装组合、初始化和升级限制                                   |
 
 不在 users 重新导出管理插件实现来维持旧路径，那会重新引入循环依赖。公开导入变更属于兼容变化，需同步 source/publish exports、peerDependencies、锁文件、changeset 和发布说明。管理页面 route ID、locale namespace 等字符串是否迁名应逐项核对；没有必要时保留稳定标识，不能全局替换包名导致权限或导航失效。
 
@@ -385,41 +385,41 @@ Better Auth 自身协议不直接套用管理 API 的 202 约定。它触发用�
 
 以下均为拟新增/迁移后的公共入口，当前文件存在不等于入口已经发布。新 token 只在所属包定义一次；类型导出与运行时导出分别检查，不通过 users 兼容转发管理实现。
 
-| 旧入口或符号 | 新入口或替代调用 |
-| --- | --- |
-| authentication 的 `userAdministrationServiceToken` | 删除；读用户改 `users/server` 的 `userServiceToken`，管理查询改 `user-management/server` 的 `userAdministrationQueryToken`，凭据操作改 authentication 的 `userAuthenticationServiceToken` |
-| `createUserAdministrationService` | 删除；管理服务组合 `createUserService`、`createUserAuthenticationService` 和管理查询服务 |
-| `UserAdministrationService.list` | `UserAdministrationQuery.list`；保留 page=1、pageSize=20、上限 100、搜索、状态及 userIds 过滤语义 |
-| `UserAdministrationService.get/update/enable/disable/remove` | `UserService.get/updateProfile/enable/disable/remove`；上下文由可信调用方提供 |
-| `UserAdministrationService.create` | 管理服务执行基础用户创建、密码凭据创建和角色分配，不再有含密码的基础 users.create |
-| `UserAdministrationService.resetPassword/revokeSessions` | `UserAuthenticationService.resetPassword/revokeSessions` |
-| authentication 的 `AdministratedUser`、`AdministratedUserPage`、`ListAdministratedUsersInput` | 移至 `user-management/server`；管理 DTO 通过明确白名单从基础 User 映射，不泄漏全部新增字段 |
-| `CreateAdministratedUserInput`、`UpdateAdministratedUserInput` | 迁入管理包保留管理输入语义；基础 users 另定义不含密码的创建和资料输入 |
-| `lockUserForAdministration` | `users/server` 的 `lockUser`；Hub 三处调用同步迁移 |
-| `UserAdministrationError` | 拆成 users 的 `UserError` 和 authentication 的 `UserAuthenticationError`；管理路由按第 4.5 节映射 |
-| 原 `users/server` 的 `userManagementServiceToken`、`userRoleScopeRegistryToken` 与管理类型 | 改从 `user-management/server` 或 `user-management/server/tokens` 导入 |
-| 原 `users/client`、`users/client/plugin`、`users/client/routes`、`users/client/user-client` | 改为 user-management 的同名子路径；保留 `UsersClientOptions`、路由工厂和 HTTP 客户端功能 |
-| `UserRoleScope.assertCanDelete/onDelete/assertCanDisable` | 删除，分别迁至授权或 Hub 生命周期处理器；角色操作仍保留 replace/get/findUserIds |
-| `Auth.administrationContext` | 改成仅供认证包内部凭据实现使用的 `credentialContext`；管理包和 users 不导入 Better Auth context |
+| 旧入口或符号                                                                                  | 新入口或替代调用                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| authentication 的 `userAdministrationServiceToken`                                            | 删除；读用户改 `users/server` 的 `userServiceToken`，管理查询改 `user-management/server` 的 `userAdministrationQueryToken`，凭据操作改 authentication 的 `userAuthenticationServiceToken` |
+| `createUserAdministrationService`                                                             | 删除；管理服务组合 `createUserService`、`createUserAuthenticationService` 和管理查询服务                                                                                                  |
+| `UserAdministrationService.list`                                                              | `UserAdministrationQuery.list`；保留 page=1、pageSize=20、上限 100、搜索、状态及 userIds 过滤语义                                                                                         |
+| `UserAdministrationService.get/update/enable/disable/remove`                                  | `UserService.get/updateProfile/enable/disable/remove`；上下文由可信调用方提供                                                                                                             |
+| `UserAdministrationService.create`                                                            | 管理服务执行基础用户创建、密码凭据创建和角色分配，不再有含密码的基础 users.create                                                                                                         |
+| `UserAdministrationService.resetPassword/revokeSessions`                                      | `UserAuthenticationService.resetPassword/revokeSessions`                                                                                                                                  |
+| authentication 的 `AdministratedUser`、`AdministratedUserPage`、`ListAdministratedUsersInput` | 移至 `user-management/server`；管理 DTO 通过明确白名单从基础 User 映射，不泄漏全部新增字段                                                                                                |
+| `CreateAdministratedUserInput`、`UpdateAdministratedUserInput`                                | 迁入管理包保留管理输入语义；基础 users 另定义不含密码的创建和资料输入                                                                                                                     |
+| `lockUserForAdministration`                                                                   | `users/server` 的 `lockUser`；Hub 三处调用同步迁移                                                                                                                                        |
+| `UserAdministrationError`                                                                     | 拆成 users 的 `UserError` 和 authentication 的 `UserAuthenticationError`；管理路由按第 4.5 节映射                                                                                         |
+| 原 `users/server` 的 `userManagementServiceToken`、`userRoleScopeRegistryToken` 与管理类型    | 改从 `user-management/server` 或 `user-management/server/tokens` 导入                                                                                                                     |
+| 原 `users/client`、`users/client/plugin`、`users/client/routes`、`users/client/user-client`   | 改为 user-management 的同名子路径；保留 `UsersClientOptions`、路由工厂和 HTTP 客户端功能                                                                                                  |
+| `UserRoleScope.assertCanDelete/onDelete/assertCanDisable`                                     | 删除，分别迁至授权或 Hub 生命周期处理器；角色操作仍保留 replace/get/findUserIds                                                                                                           |
+| `Auth.administrationContext`                                                                  | 改成仅供认证包内部凭据实现使用的 `credentialContext`；管理包和 users 不导入 Better Auth context                                                                                           |
 
 上表不能机械替换整个旧 token：原 users provider 的主体启用过滤改用 users 的批量查询，管理选择器改用管理查询服务，通知检查只需 `UserService.get`。这些调用不能全部继续依赖一个改名后的“大服务”。
 
 ### 9.2 文件级迁移清单
 
-| 当前文件或目录 | 拟实施操作 | 验证重点 |
-| --- | --- | --- |
-| `app-plugin-users/client/**`、`server/routes/**`、`server/locales/**` | 移入 user-management，调整包导入及错误处理 | 页面路径、角色抽屉、componentLoader 覆盖、错误提示 |
-| `app-plugin-users/server/services/users.ts` | 移入 user-management 后改注入用户服务、管理查询、认证服务 | 不重复清理，不直接操作内部表 |
-| `app-plugin-users/server/services/permission-set-scope.ts` | 移入 user-management，保留角色选择能力 | 角色选项与已有权限保持一致 |
-| `app-plugin-users/server/providers/users.ts` | 管理注册迁入管理包，主体基础过滤移到授权用户集成；users 新增纯基础 provider | 不重复注册主体类型；不构造依赖循环 |
-| `app-plugin-authentication/server/user-administration.ts` | 按第 9.1 节分拆，阶段 3 最后删除 | 所有运行时及测试旧消费者清零 |
-| `app-plugin-authentication/server/auth.ts`、`better-auth/database-adapter.ts`、`providers/authentication.ts`、`tokens.ts`、`index.ts` | 接入 user store、认证操作服务和生命周期，删除管理出口 | 注册/OAuth/验证及缓存会话行为 |
-| `app-plugin-hub/server/services/hub.ts`、`services/api-keys.ts` | 改用 users 用户锁，保留资源创建与删除的竞争保护 | 同事务连接、锁顺序和归属检查 |
-| `app-plugin-hub/server/authorization.ts`、`providers/hub-authorization.ts` | 角色工厂与生命周期工厂分开，分别注册 | 最后管理员、有应用拒删、API Key 清理 |
-| `app-plugin-notification-in-app/server/providers/in-app-notification.ts` | 替换旧 token，并调整插件 peer | 接收人存在性及软删除行为保持一致 |
-| 三个模板 `client/plugins.ts`、`server/plugins.ts`、`package.json` | 注册新组合并同步依赖 | 真实打包安装，不能只验证 workspace 源码解析 |
-| Hub 模板 `server/config/users.ts` | 仅迁移 `UsersConfig` 类型导入至管理包，保留配置键及 `permissionSets: false` | 不意外添加默认 app 权限作用域 |
-| 各受影响包的 tests、README、skills、exports、publishConfig | 同步新归属及版本变更 | 发布入口、token 单实例、升级说明 |
+| 当前文件或目录                                                                                                                        | 拟实施操作                                                                  | 验证重点                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------- |
+| `app-plugin-users/client/**`、`server/routes/**`、`server/locales/**`                                                                 | 移入 user-management，调整包导入及错误处理                                  | 页面路径、角色抽屉、componentLoader 覆盖、错误提示 |
+| `app-plugin-users/server/services/users.ts`                                                                                           | 移入 user-management 后改注入用户服务、管理查询、认证服务                   | 不重复清理，不直接操作内部表                       |
+| `app-plugin-users/server/services/permission-set-scope.ts`                                                                            | 移入 user-management，保留角色选择能力                                      | 角色选项与已有权限保持一致                         |
+| `app-plugin-users/server/providers/users.ts`                                                                                          | 管理注册迁入管理包，主体基础过滤移到授权用户集成；users 新增纯基础 provider | 不重复注册主体类型；不构造依赖循环                 |
+| `app-plugin-authentication/server/user-administration.ts`                                                                             | 按第 9.1 节分拆，阶段 3 最后删除                                            | 所有运行时及测试旧消费者清零                       |
+| `app-plugin-authentication/server/auth.ts`、`better-auth/database-adapter.ts`、`providers/authentication.ts`、`tokens.ts`、`index.ts` | 接入 user store、认证操作服务和生命周期，删除管理出口                       | 注册/OAuth/验证及缓存会话行为                      |
+| `app-plugin-hub/server/services/hub.ts`、`services/api-keys.ts`                                                                       | 改用 users 用户锁，保留资源创建与删除的竞争保护                             | 同事务连接、锁顺序和归属检查                       |
+| `app-plugin-hub/server/authorization.ts`、`providers/hub-authorization.ts`                                                            | 角色工厂与生命周期工厂分开，分别注册                                        | 最后管理员、有应用拒删、API Key 清理               |
+| `app-plugin-notification-in-app/server/providers/in-app-notification.ts`                                                              | 替换旧 token，并调整插件 peer                                               | 接收人存在性及软删除行为保持一致                   |
+| 三个模板 `client/plugins.ts`、`server/plugins.ts`、`package.json`                                                                     | 注册新组合并同步依赖                                                        | 真实打包安装，不能只验证 workspace 源码解析        |
+| Hub 模板 `server/config/users.ts`                                                                                                     | 仅迁移 `UsersConfig` 类型导入至管理包，保留配置键及 `permissionSets: false` | 不意外添加默认 app 权限作用域                      |
+| 各受影响包的 tests、README、skills、exports、publishConfig                                                                            | 同步新归属及版本变更                                                        | 发布入口、token 单实例、升级说明                   |
 
 `authentication/database/seeds` 的现有默认用户种子直接写 user/account；该文件属于有历史记录的初始化任务，先核对种子历史和重放策略，不把运行时改造当作改写历史任务的授权。主线保留已发布种子并明确为历史初始化例外，新增可信运行时用户创建不得复制这种直接写表方式。种子归属的彻底交接与独立安装基线一起审计。
 
@@ -444,12 +444,12 @@ Better Auth 自身协议不直接套用管理 API 的 202 约定。它触发用�
 
 本轮仅完善本文，不执行下面的代码实验。实施获准后先在隔离测试环境完成 G1、G2、G3，输出可复现命令、测试结果及选定实现；不能仅凭阅读代码把关卡标成通过。G4 是后续独立安装工作，不阻塞主线。
 
-| 关卡 | 要查什么、做什么实验 | 通过标准 | 不通过时 |
-| --- | --- | --- | --- |
-| G1 事务完成契约 | 沿 DatabaseConnection、Knex 连接、policy-bound connection 检查嵌套传播；编写外层回滚、内层回滚被捕获、成功提交及 callback 异常测试；检查 queue 公共派发接口是否接收事务 | 选择一个覆盖所有连接包装的实现；提交后错误不误报回滚；外部事务无静默降级 | 阻塞生命周期切换；形成数据库运行时最小补丁设计，不用局部数组绕过 |
-| G2 Better Auth 边界 | 在锁定依赖版本检查 user 各方法、模型映射、公开删除/插件删除顺序及 secondary storage；模拟清理失败和已提交失败 | 所有用户写入可统一约束；删除清理可回滚；旧会话不会因缓存继续有效；hooks 无重复 | 记录具体不兼容入口并补事务包装/适配；未经批准不关闭现有对外功能 |
-| G3 主线安装与注册 | 先在空库及基线数据库运行现有迁移链并检查 seeds；用最小隔离组合验证惰性 token 与主体注册方案；新包形成后再复验三个模板 | 原历史任务内容不变，迁移重复执行无变化；试验无构造循环，后续真实新入口可解析、主体只注册一次 | 阻塞主线发布，修复组合或迁移顺序；不伪造历史 |
-| G4 独立安装基线 | 验证显式历史链替代、校验和、异常历史及 users 后加认证 | 第 8.3 节七项条件全部通过 | 保持后续状态，不引入试探性的独立建表迁移 |
+| 关卡                | 要查什么、做什么实验                                                                                                                                                    | 通过标准                                                                                     | 不通过时                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| G1 事务完成契约     | 沿 DatabaseConnection、Knex 连接、policy-bound connection 检查嵌套传播；编写外层回滚、内层回滚被捕获、成功提交及 callback 异常测试；检查 queue 公共派发接口是否接收事务 | 选择一个覆盖所有连接包装的实现；提交后错误不误报回滚；外部事务无静默降级                     | 阻塞生命周期切换；形成数据库运行时最小补丁设计，不用局部数组绕过 |
+| G2 Better Auth 边界 | 在锁定依赖版本检查 user 各方法、模型映射、公开删除/插件删除顺序及 secondary storage；模拟清理失败和已提交失败                                                           | 所有用户写入可统一约束；删除清理可回滚；旧会话不会因缓存继续有效；hooks 无重复               | 记录具体不兼容入口并补事务包装/适配；未经批准不关闭现有对外功能  |
+| G3 主线安装与注册   | 先在空库及基线数据库运行现有迁移链并检查 seeds；用最小隔离组合验证惰性 token 与主体注册方案；新包形成后再复验三个模板                                                   | 原历史任务内容不变，迁移重复执行无变化；试验无构造循环，后续真实新入口可解析、主体只注册一次 | 阻塞主线发布，修复组合或迁移顺序；不伪造历史                     |
+| G4 独立安装基线     | 验证显式历史链替代、校验和、异常历史及 users 后加认证                                                                                                                   | 第 8.3 节七项条件全部通过                                                                    | 保持后续状态，不引入试探性的独立建表迁移                         |
 
 G1 的优先级是复用可证明的现有事务能力，其次增加最小公共完成契约；持久化任务另评估。G2 必须使用真实 Better Auth 流程加可控 OAuth/邮件替身，不能只 mock 一个 `createUser` 调用。
 
@@ -496,25 +496,25 @@ G1 的优先级是复用可证明的现有事务能力，其次增加最小公�
 
 ## 11. 验证矩阵
 
-| 类别 | 必测场景 | 期望 |
-| --- | --- | --- |
-| 基础用户 | 无密码创建、更新、启停、重复删除 | users 可独立执行基础操作，状态和幂等语义明确 |
-| 身份约束 | 大小写、空白、并发重复邮箱/用户名、软删除身份冲突 | 管理与认证使用同一约束，数据库索引兜底 |
-| 注册 | 邮箱注册、用户名注册、重复身份 | 路由结果正确，最终写入 users |
-| OAuth | 模拟提供方首次回调、再次登录、已有账号关联 | 不依赖真实外部账号；用户只创建一次，凭据引用正确 |
-| 邮箱验证 | 发起验证、有效令牌、重复/过期令牌、修改邮箱 | 验证状态正确，用户写入经过 users，hooks 不重复 |
-| 适配器 | select、字段映射、AND/OR、大小写比较、排序、分页、count、批量操作 | 输出和计数协议保持一致，删除过滤无绕过 |
-| 回滚 | 用户写入后凭据失败、凭据成功后角色失败、生命周期清理失败 | 不留下部分数据库状态 |
-| 嵌套事务 | 内层成功外层失败、内层失败被捕获、外部事务调用 | 只为真正提交的操作执行副作用 |
-| 软删除 | 管理列表、认证查询、OAuth、公开删除端点、重复删除 | 已删除用户不可登录，身份复用规则一致，无物理误删 |
-| 会话 | 数据库会话、secondary storage、cookie 缓存、登录与禁用/删除并发 | 撤销后所有受保护入口拒绝旧身份/会话 |
-| 并发权限 | 两个管理员互相禁用、删人与撤角色并发 | 最后一个受保护主体不丢失 |
-| Hub | 用户有应用、删人与创建应用/API Key 并发 | 有资产时拒绝删除，无删除后的孤立资源 |
-| 副作用 | 缓存不可用、断连失败、进程中断、重试；持久化实现另测重复投递 | 提交状态明确，安全检查不依赖可能丢失的通知；可靠投递范围如实标注 |
-| API 边界 | 未登录、无权限、伪造 actorId、越权字段、直接服务集成 | 入口鉴权和公共不变量同时成立 |
-| 主线迁移 | 空库组合安装、当前版本升级、重复升级、异常历史 | 一张用户表、相同用户 ID、历史校验完整 |
-| 后续迁移 | 独立 users 安装后加认证及基线汇合 | 通过 G4 后实施和验收，不计入主线已完成能力 |
-| 发布 | 包入口、token 单实例、依赖无环、模板安装及构建 | 开发工作区与发布安装结果一致 |
+| 类别     | 必测场景                                                          | 期望                                                             |
+| -------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 基础用户 | 无密码创建、更新、启停、重复删除                                  | users 可独立执行基础操作，状态和幂等语义明确                     |
+| 身份约束 | 大小写、空白、并发重复邮箱/用户名、软删除身份冲突                 | 管理与认证使用同一约束，数据库索引兜底                           |
+| 注册     | 邮箱注册、用户名注册、重复身份                                    | 路由结果正确，最终写入 users                                     |
+| OAuth    | 模拟提供方首次回调、再次登录、已有账号关联                        | 不依赖真实外部账号；用户只创建一次，凭据引用正确                 |
+| 邮箱验证 | 发起验证、有效令牌、重复/过期令牌、修改邮箱                       | 验证状态正确，用户写入经过 users，hooks 不重复                   |
+| 适配器   | select、字段映射、AND/OR、大小写比较、排序、分页、count、批量操作 | 输出和计数协议保持一致，删除过滤无绕过                           |
+| 回滚     | 用户写入后凭据失败、凭据成功后角色失败、生命周期清理失败          | 不留下部分数据库状态                                             |
+| 嵌套事务 | 内层成功外层失败、内层失败被捕获、外部事务调用                    | 只为真正提交的操作执行副作用                                     |
+| 软删除   | 管理列表、认证查询、OAuth、公开删除端点、重复删除                 | 已删除用户不可登录，身份复用规则一致，无物理误删                 |
+| 会话     | 数据库会话、secondary storage、cookie 缓存、登录与禁用/删除并发   | 撤销后所有受保护入口拒绝旧身份/会话                              |
+| 并发权限 | 两个管理员互相禁用、删人与撤角色并发                              | 最后一个受保护主体不丢失                                         |
+| Hub      | 用户有应用、删人与创建应用/API Key 并发                           | 有资产时拒绝删除，无删除后的孤立资源                             |
+| 副作用   | 缓存不可用、断连失败、进程中断、重试；持久化实现另测重复投递      | 提交状态明确，安全检查不依赖可能丢失的通知；可靠投递范围如实标注 |
+| API 边界 | 未登录、无权限、伪造 actorId、越权字段、直接服务集成              | 入口鉴权和公共不变量同时成立                                     |
+| 主线迁移 | 空库组合安装、当前版本升级、重复升级、异常历史                    | 一张用户表、相同用户 ID、历史校验完整                            |
+| 后续迁移 | 独立 users 安装后加认证及基线汇合                                 | 通过 G4 后实施和验收，不计入主线已完成能力                       |
+| 发布     | 包入口、token 单实例、依赖无环、模板安装及构建                    | 开发工作区与发布安装结果一致                                     |
 
 验证应以行为和数据库结果为准，不仅检查某个 mock 方法被调用。真实数据库至少覆盖现有 SQLite 集成场景；涉及通用事务运行时或锁语义时，按仓库数据库测试规范扩展到 PostgreSQL、MySQL 及相应方言契约，不能用 SQLite 结果代替跨数据库并发证明。
 
@@ -522,16 +522,16 @@ G1 的优先级是复用可证明的现有事务能力，其次增加最小公�
 
 ## 12. 风险与待审计决策
 
-| 编号 | 待审计项 | 推荐方案 | 未决定时的边界 |
-| --- | --- | --- | --- |
-| D1 | 是否拆独立管理插件 | 拆分，避免现有包级反向依赖 | 不采用只拆目录的最终结构 |
-| D2 | users 独立安装 | 主线保留历史链，独立安装列后续 G4 | 不宣称初始化归属完全交接 |
-| D3 | 修改邮箱后的验证状态 | 主线保持现有行为，重置验证另作行为修复 | 不混入未批准的业务变化 |
-| D4 | Better Auth 的用户删除 | 统一进入领域软删除和生命周期 | 不允许保留绕过领域保护的物理删除入口 |
-| D5 | 无管理插件时的授权保护 | authorization 用户集成仍注册基础保护 | 不能只在管理页面/管理服务检查 |
-| D6 | 提交后处理可靠性 | G1 决定最小实现，按第 7.4 节区分已提交失败；持久化另审计 | 安全不得依赖可丢失任务，否则主线阻塞 |
-| D7 | 管理创建原有认证 hooks 兼容 | 公共用户业务迁到 users 扩展 | 不自动双调 hooks，需盘点使用方 |
-| D8 | 删除能力配置 | 保留显式就绪检查及服务端拒绝策略 | 不能因拆掉 UserRoleScope 方法而默认放开删除 |
+| 编号 | 待审计项                    | 推荐方案                                                 | 未决定时的边界                              |
+| ---- | --------------------------- | -------------------------------------------------------- | ------------------------------------------- |
+| D1   | 是否拆独立管理插件          | 拆分，避免现有包级反向依赖                               | 不采用只拆目录的最终结构                    |
+| D2   | users 独立安装              | 主线保留历史链，独立安装列后续 G4                        | 不宣称初始化归属完全交接                    |
+| D3   | 修改邮箱后的验证状态        | 主线保持现有行为，重置验证另作行为修复                   | 不混入未批准的业务变化                      |
+| D4   | Better Auth 的用户删除      | 统一进入领域软删除和生命周期                             | 不允许保留绕过领域保护的物理删除入口        |
+| D5   | 无管理插件时的授权保护      | authorization 用户集成仍注册基础保护                     | 不能只在管理页面/管理服务检查               |
+| D6   | 提交后处理可靠性            | G1 决定最小实现，按第 7.4 节区分已提交失败；持久化另审计 | 安全不得依赖可丢失任务，否则主线阻塞        |
+| D7   | 管理创建原有认证 hooks 兼容 | 公共用户业务迁到 users 扩展                              | 不自动双调 hooks，需盘点使用方              |
+| D8   | 删除能力配置                | 保留显式就绪检查及服务端拒绝策略                         | 不能因拆掉 UserRoleScope 方法而默认放开删除 |
 
 ## 13. 完成定义
 
@@ -544,6 +544,16 @@ G1 的优先级是复用可证明的现有事务能力，其次增加最小公�
 - 独立安装若尚未完成，明确标记阶段限制，不宣称完整改造完成。
 - 相关测试、模板、包契约、文档、Skills、锁文件和发布说明同步。
 
-## 14. 当前实现状态（阶段性）
+## 14. 当前实现状态
 
-本轮已在新分支实现阶段 1 的基础能力：users 基础服务、用户存储契约、Better Auth user 模型分流、事务提交后效果收集器，以及 user-management 包的代码迁移骨架。认证、users、user-management、Hub、通知包的类型检查或相关测试已执行并记录在任务进展中。旧 `user-administration.ts`、旧 token 和管理消费者仍保留为过渡层，管理流程与生命周期全部迁移尚未完成；因此当前不能宣称最终依赖方向、删除流程或迁移归属交接已经完成。后续必须按阶段 2 和阶段 3 先切换管理服务与生命周期，再删除旧接口；遇到行为或迁移边界不确定时停止扩展范围并补验证。
+分支 `refactor/users-auth-separation` 已完成主线运行时拆分，对应第 13 节除独立安装以外的各项：
+
+- users 拥有 `User` 类型、存储契约、身份规范化、软删除过滤、用户锁、`UserService` 和 `UserLifecycleRegistry`；不依赖 Better Auth、authentication、authorization 或 user-management。
+- authentication 的 Better Auth `user` 模型操作全部经 users 存储契约；`getSession` 与会话创建检查改用 users 并覆盖 `deletedAt`。`user-administration.ts`、`userAdministrationServiceToken`、`lockUserForAdministration` 已删除，凭据与会话操作由 `authenticationCredentialServiceToken` 提供，`Auth.administrationContext` 改名 `credentialContext`。
+- 生命周期只有一条执行链：users 在事务内先锁用户，再执行 `before`，写入状态，再执行 `after`。authentication 注册 `authentication.credentials`（禁用撤销会话，删除再清理 account），user-management 注册 `authorization.permission-sets`（受保护授权检查），Hub 注册 `hub.ownership`（操作者资格、应用归属、API Key 清理）。`UserRoleScope` 的 `assertCanDelete/onDelete/assertCanDisable` 已删除。
+- 删除就绪由 `users.deletion` 配置（`UserDeletionPolicy`）决定：显式启用并列出必需处理器；users Provider 在 ready 阶段校验，缺失即启动失败；任何写入路径的删除都会先执行 `assertDeletionReady()`。Hub 模板已启用并声明 `authentication.credentials` 与 `hub.ownership`；default 与 examples 模板保持删除不可用。
+- 数据库事务提供 `inTransaction` 与 `afterCommit`，savepoint 的效果在根事务提交后执行，回滚即丢弃；提交后失败抛 `TransactionPostCommitError`（`committed: true`）。第 7.4 节的管理 API 202 协议尚未实现，提交后失败目前作为普通错误返回。
+- 管理页面、API、role scope 与客户端入口迁入 `@nocobase/app-plugin-user-management`，locale 命名空间与 token 名称随包名迁移，路由 ID `@nocobase/app-plugin-users:users` 保持不变。
+- 三个模板已同步注册；相关包与模板的 lint、typecheck、test 通过。
+
+未完成并明确列为后续的项目：第 8.3 节 users 独立安装与迁移基线（G4）；第 7.4 节的 `UserPostCommitError` / 202 响应协议与客户端提示；第 7.3 节的持久化提交后任务；authorization 插件自身对 users 的可选集成（当前受保护授权检查由 user-management 注册，未安装 user-management 的应用不会获得该保护）。

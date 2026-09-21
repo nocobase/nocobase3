@@ -7,10 +7,12 @@ import {
   userRoleScopeRegistryToken,
   type UserRoleScopeRegistry,
 } from '@nocobase/app-plugin-user-management/server/tokens';
+import { userLifecycleToken } from '@nocobase/app-plugin-users/server';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import {
+  createHubUserLifecycleHandler,
   createHubUserRoleScope,
   protectHubPermissionSets,
   registerHubResources,
@@ -20,6 +22,7 @@ export class HubAuthorizationProvider extends ServiceProvider<AppPluginApplicati
   public readonly name: string = '@nocobase/app-plugin-hub/authorization';
   private unregisterProtection?: () => void;
   private unregisterRoleScope?: () => void;
+  private unregisterUserLifecycle?: () => void;
 
   public override boot(): Promise<void> {
     const authorization = this.app.container.resolve(authorizationToken);
@@ -32,10 +35,15 @@ export class HubAuthorizationProvider extends ServiceProvider<AppPluginApplicati
     this.unregisterRoleScope = this.app.container
       .resolve<UserRoleScopeRegistry>(userRoleScopeRegistryToken)
       .register(createHubUserRoleScope(permissionSets));
+    this.unregisterUserLifecycle = this.app.container
+      .resolve(userLifecycleToken)
+      .register(createHubUserLifecycleHandler(permissionSets));
     return Promise.resolve();
   }
 
   public override shutdown(): Promise<void> {
+    this.unregisterUserLifecycle?.();
+    this.unregisterUserLifecycle = undefined;
     this.unregisterRoleScope?.();
     this.unregisterRoleScope = undefined;
     this.unregisterProtection?.();

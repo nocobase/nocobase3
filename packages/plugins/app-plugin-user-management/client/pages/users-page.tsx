@@ -98,7 +98,7 @@ const EMPTY_PAGE: ManagedUserPage = {
 
 export default function UsersPage(): ReactElement {
   const { session } = useAuthentication();
-  const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { t } = useTranslation('@nocobase/app-plugin-user-management');
   const api = useApiClient();
   const authorization = useService(authorizationClientToken);
   const users = useMemo(() => new UsersClient(api), [api]);
@@ -605,7 +605,7 @@ function RoleValue({
   readonly scope: UserRoleScopeOption;
   readonly value: UserRoleValue;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { t } = useTranslation('@nocobase/app-plugin-user-management');
   const values = roleValues(value);
   if (!values.length) {
     return (
@@ -666,7 +666,7 @@ function UserDialog({
   readonly onClose: () => void;
   readonly onSubmit: (input: UserDialogSubmitInput) => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { t } = useTranslation('@nocobase/app-plugin-user-management');
   const [name, setName] = useState(user?.name ?? '');
   const [username, setUsername] = useState(user?.username ?? '');
   const [email, setEmail] = useState(user?.email ?? '');
@@ -805,7 +805,7 @@ function PasswordDialog({
   readonly onClose: () => void;
   readonly onSubmit: (password: string) => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { t } = useTranslation('@nocobase/app-plugin-user-management');
   const [password, setPassword] = useState('');
   return (
     <Dialog
@@ -864,7 +864,7 @@ function ConfirmStateDialog({
   readonly onClose: () => void;
   readonly onConfirm: () => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { t } = useTranslation('@nocobase/app-plugin-user-management');
   const enabling = Boolean(user.disabledAt);
   return (
     <Dialog
@@ -935,7 +935,7 @@ export function ConfirmDeleteDialog({
   readonly onClose: () => void;
   readonly onConfirm: () => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { t } = useTranslation('@nocobase/app-plugin-user-management');
   return (
     <Dialog
       open

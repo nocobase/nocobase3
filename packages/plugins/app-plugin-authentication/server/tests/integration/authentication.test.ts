@@ -15,7 +15,15 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Auth, type AuthEnv } from '../../../index.js';
 import { createAuthStorage } from '../../auth-storage.js';
 import { databaseAdapter } from '../../better-auth/database-adapter.js';
-import { createUserAdministrationService } from '../../user-administration.js';
+import {
+  UserLifecycleRegistry,
+  UserService,
+} from '@nocobase/app-plugin-users/server';
+import {
+  AUTHENTICATION_USER_LIFECYCLE_KEY,
+  createAuthenticationCredentialService,
+  type AuthenticationCredentialService,
+} from '../../credentials.js';
 
 async function migrateAuthentication(
   database: ReturnType<typeof createDatabaseManager>,
@@ -137,17 +145,13 @@ describe('Authentication', () => {
   });
 
   it('reports stable conflicts for duplicate administrator-created identities', async () => {
-    const users = createUserAdministrationService({
-      auth,
-      connection: database.connection(),
-    });
+    const users = new UserService(database.connection());
 
     await expect(
       users.create({
         name: 'Duplicate email',
         username: 'another.user',
         email: 'ALICE@EXAMPLE.COM',
-        password: 'correct horse battery staple',
       }),
     ).rejects.toMatchObject({ code: 'USER_EMAIL_CONFLICT' });
     await expect(
@@ -155,7 +159,6 @@ describe('Authentication', () => {
         name: 'Duplicate username',
         username: 'ALICE.ADMIN',
         email: 'another@example.com',
-        password: 'correct horse battery staple',
       }),
     ).rejects.toMatchObject({ code: 'USER_USERNAME_CONFLICT' });
   });
@@ -228,11 +231,7 @@ describe('Authentication', () => {
       .where('email', '=', 'alice@example.com')
       .executeTakeFirstOrThrow();
     const disconnectUser = vi.fn();
-    const users = createUserAdministrationService({
-      auth,
-      connection: database.connection(),
-      realtime: { disconnectUser } as never,
-    });
+    const users = usersWithCredentialLifecycle({ disconnectUser } as never);
     const sessions = await database
       .connection()
       .query.selectFrom('session')
@@ -360,6 +359,115 @@ describe('Authentication', () => {
       message: 'Authentication required',
     });
   });
+
+  it('keeps a soft-deleted user out of sign-in, sessions and accounts', async () => {
+    const user = await database
+      .connection()
+      .query.selectFrom('user')
+      .select('id')
+      .where('email', '=', 'alice@example.com')
+      .executeTakeFirstOrThrow();
+    const userId = String(user.id);
+    const disconnectUser = vi.fn();
+    const users = usersWithCredentialLifecycle({ disconnectUser } as never, {
+      enabled: true,
+      requiredHandlers: [AUTHENTICATION_USER_LIFECYCLE_KEY],
+    });
+    const signedIn = await router.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: 'alice@example.com',
+        password: 'correct horse battery staple',
+      }),
+    });
+    expect(signedIn.status).toBe(200);
+    const deletedCookie = signedIn.headers.get('set-cookie') ?? '';
+
+    await users.remove(userId, 'operator');
+    await users.remove(userId, 'operator');
+
+    expect(disconnectUser).toHaveBeenCalledWith(userId);
+    expect(await users.get(userId)).toBeUndefined();
+    await expect(
+      database
+        .connection()
+        .query.selectFrom('user')
+        .select(['deletedAt', 'deletedBy', 'disabledAt'])
+        .where('id', '=', userId)
+        .executeTakeFirstOrThrow(),
+    ).resolves.toMatchObject({ deletedBy: 'operator' });
+    for (const table of ['session', 'account'] as const) {
+      await expect(
+        database
+          .connection()
+          .query.selectFrom(table)
+          .select('id')
+          .where('userId', '=', userId)
+          .execute(),
+      ).resolves.toEqual([]);
+    }
+    expect(
+      (
+        await router.request('/api/private', {
+          headers: { cookie: deletedCookie },
+        })
+      ).status,
+    ).toBe(401);
+    const signIn = await router.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        email: 'alice@example.com',
+        password: 'correct horse battery staple',
+      }),
+    });
+    expect(signIn.status).toBeGreaterThanOrEqual(400);
+    // The identity stays reserved: a deleted email cannot be registered again.
+    await expect(
+      new UserService(database.connection()).create({
+        name: 'Alice again',
+        email: 'alice@example.com',
+      }),
+    ).rejects.toMatchObject({ code: 'USER_EMAIL_CONFLICT' });
+    await expect(users.enable(userId)).rejects.toMatchObject({
+      code: 'USER_NOT_FOUND',
+    });
+  });
+
+  /**
+   * What the authentication provider wires at boot: the users plugin owns the
+   * status change and this plugin's lifecycle handler revokes sessions and,
+   * on deletion, removes the sign-in accounts in the same transaction.
+   */
+  function usersWithCredentialLifecycle(
+    realtime: Parameters<
+      typeof createAuthenticationCredentialService
+    >[0]['realtime'],
+    deletion: { enabled: boolean; requiredHandlers?: readonly string[] } = {
+      enabled: false,
+    },
+  ): UserService {
+    const lifecycle = new UserLifecycleRegistry(deletion);
+    const credentials: AuthenticationCredentialService =
+      createAuthenticationCredentialService({
+        auth,
+        connection: database.connection(),
+        ...(realtime ? { realtime } : {}),
+      });
+    lifecycle.register({
+      key: AUTHENTICATION_USER_LIFECYCLE_KEY,
+      after: async (context) => {
+        const scoped = credentials.withConnection(context.connection);
+        if (context.operation === 'delete') {
+          await scoped.deleteCredentials(context.userId);
+        } else {
+          await scoped.revokeSessions(context.userId);
+        }
+      },
+    });
+    return new UserService(database.connection(), { lifecycle });
+  }
 });
 
 describe('Authentication naming strategy', () => {

@@ -11,7 +11,6 @@ export {
   type AuthenticationProviderConfig,
 } from './providers/authentication.js';
 export * from './tokens.js';
-export * from './user-administration.js';
 export * from './credentials.js';
 
 export type { AuthConfig } from './config.js';

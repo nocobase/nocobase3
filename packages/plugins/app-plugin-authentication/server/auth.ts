@@ -1,4 +1,7 @@
-import { UserService, UserLifecycleRegistry } from '@nocobase/app-plugin-users/server';
+import {
+  UserService,
+  UserLifecycleRegistry,
+} from '@nocobase/app-plugin-users/server';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   APIError,
@@ -172,7 +175,8 @@ export class Auth {
   }
 
   /** @internal Used by the Authentication-owned administration service. */
-  administrationContext(): typeof this.auth.$context {
+  /** Better Auth internals for the plugin's own credential and session operations. */
+  credentialContext(): typeof this.auth.$context {
     return this.auth.$context;
   }
 

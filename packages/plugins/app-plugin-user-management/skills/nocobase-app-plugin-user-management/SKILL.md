@@ -1,26 +1,28 @@
 ---
-name: nocobase-app-plugin-users
-description: Integrate the Users plugin into a NocoBase App, configure its page placement and permissions, or add an application-owned role scope through the public Server contracts.
+name: nocobase-app-plugin-user-management
+description: Integrate the User management plugin into a NocoBase App, configure its page placement and permissions, or add an application-owned role scope through the public Server contracts.
 metadata:
   short-description: Integrate reusable user administration
+  domain-owner: '@nocobase/app-plugin-user-management'
 ---
 
 # User Management App Plugin
 
 Use this Skill when an application needs a user management page or API, or when
 another plugin needs to expose application-specific roles in the Users page. Do
-not use it to modify the Users plugin source or to replace Authentication's
-user, account, or Session storage.
+not use it to modify the plugin source, to change the user record itself (that
+is `nocobase-app-plugin-users`), or to replace Authentication's account or
+Session storage.
 
 ## Public surfaces
 
 - Client registration factory and `UsersClientOptions`:
-  `@nocobase/app-plugin-users/client`.
+  `@nocobase/app-plugin-user-management/client`.
 - Typed API client: `UsersClient` and its types from
-  `@nocobase/app-plugin-users/client/user-client`.
+  `@nocobase/app-plugin-user-management/client/user-client`.
 - Server contracts: `userManagementServiceToken`,
   `userRoleScopeRegistryToken`, `UserRoleScope`, and related types from
-  `@nocobase/app-plugin-users/server/tokens`.
+  `@nocobase/app-plugin-user-management/server/tokens`.
 - HTTP API: `/api/users`, `/api/users/options`, and the user-specific update,
   enable, disable, role-scope, password-reset, and Session-revocation routes.
 
@@ -31,8 +33,9 @@ both `create` and `assign-role`.
 
 ## Register and place the page
 
-1. Register Authentication, Authorization, and then Users in the App's Client
-   and Server plugin arrays.
+1. Register Users, Authentication, Authorization, and then User management in
+   the App's Server plugin array; the Client array lists Authentication,
+   Authorization, and User management.
 2. Configure the Client factory. `users({ mount: 'settings', path: '/users' })`
    produces `/settings/users`; `mount: 'app'` makes the path App-relative and
    registers a primary-navigation entry protected by the same page access rule.
@@ -48,8 +51,11 @@ The default `app` permission-set scope is supplied by Users whenever `permission
 
 Resolve `userRoleScopeRegistryToken` in an application or business plugin
 ServiceProvider and register one `UserRoleScope` during `boot()`. The scope owns
-its available options, current assignment lookup, role filtering, atomic
-replacement, and any disable guard. Unregister it during `shutdown()`.
+its available options, current assignment lookup, role filtering, and atomic
+replacement. Unregister it during `shutdown()`. Guards that must reject
+disabling or deleting a user, and cleanup that must run with those changes,
+are user lifecycle handlers registered with `userLifecycleToken` from
+`@nocobase/app-plugin-users`, not scope methods.
 
 Use the `DatabaseConnection` passed to each scope method. This is the
 caller-owned transaction used to keep account creation or state changes atomic
@@ -73,11 +79,12 @@ uses it for list pages and falls back to `get()` for existing scopes.
 
 ## Ownership
 
-- Authentication owns user identity, credentials, account state, password
-  hashing, and Sessions.
+- Users (`@nocobase/app-plugin-users`) owns the user record, identity
+  constraints, enabled and deleted state, and the lifecycle registry.
+- Authentication owns credentials, password hashing, accounts, and Sessions.
 - Authorization owns Permission Sets, grants, and assignments.
-- Users owns the management API, built-in page, orchestration transaction,
-  `user` authorization handler, and role-scope registry.
+- User management owns the management API, built-in page, orchestration
+  transaction, `user` authorization handler, and role-scope registry.
 - The App or business plugin owns role definitions, role grants, assignments,
   page placement, and role-specific invariants.
 - The plugin's `skills/` source is authoritative. `.agents/skills/` is a
@@ -92,7 +99,9 @@ uses it for list pages and falls back to `get()` for existing scopes.
   the Client Route.
 - A conditional grant is not accepted as an unrestricted user-management
   grant; use explicit static grants for this resource.
-- The plugin does not provide user deletion or invitations.
+- The plugin does not provide invitations. Deletion is offered only when the
+  application enables `users.deletion` and its required lifecycle handlers
+  are registered.
 - Disabled users are rejected by Authentication and lose their existing HTTP
   Sessions and Realtime connections.
 - Password hashes, Session tokens, reset tokens, and submitted passwords are
@@ -114,4 +123,4 @@ uses it for list pages and falls back to `get()` for existing scopes.
 - The target App passes its relevant tests, typecheck, and build. Skill
   synchronization alone proves only that the copy matches this source.
 
-Deletion uses `DELETE /api/users/:userId` with `{ "confirm": true }` and `user/delete` authorization. Obtain an explicit user deletion request before calling it. Application role scopes can guard deletion and clean dependent credentials transactionally. Hub blocks self-deletion, deleting its last active administrator, and deleting owners of Apps. Historical user identities are retained but cannot sign in or appear in management lists.
+Deletion uses `DELETE /api/users/:userId` with `{ "confirm": true }` and `user/delete` authorization. Obtain an explicit user deletion request before calling it. Guards and cleanup are lifecycle handlers in the users plugin: authentication removes sessions and accounts, this plugin protects the last assignment of a protected Permission Set, and Hub blocks deletion by anyone but an enabled platform administrator, keeps owners of Apps, and removes their API Keys. Self-deletion is refused by the management service. Historical user identities are retained but cannot sign in or appear in management lists.

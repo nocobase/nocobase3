@@ -18,7 +18,7 @@ describe('@nocobase/app-plugin-user-management', () => {
     const skill = await readFile(
       fileURLToPath(
         new URL(
-          '../skills/nocobase-app-plugin-users/SKILL.md',
+          '../skills/nocobase-app-plugin-user-management/SKILL.md',
           import.meta.url,
         ),
       ),

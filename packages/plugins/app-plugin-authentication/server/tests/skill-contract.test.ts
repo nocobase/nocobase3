@@ -25,7 +25,7 @@ describe('@nocobase/app-plugin-authentication Agent Skill contract', () => {
 
     for (const surface of [
       'authenticationToken',
-      'userAdministrationServiceToken',
+      'authenticationCredentialServiceToken',
       'authenticationClientToken',
       'useAuthentication',
       'RequiredAuthentication',

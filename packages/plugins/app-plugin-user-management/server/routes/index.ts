@@ -1,9 +1,11 @@
 import {
   authenticationToken,
   AuthenticationCredentialError,
-  UserAdministrationError,
 } from '@nocobase/app-plugin-authentication';
-import { UserError } from '@nocobase/app-plugin-users/server';
+import {
+  UserError,
+  UserLifecycleError,
+} from '@nocobase/app-plugin-users/server';
 import {
   authorizationToken,
   type AuthorizationEnv,
@@ -55,16 +57,18 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           409,
         );
       }
-      if (error instanceof UserRoleScopeError) {
+      // Role scopes and lifecycle handlers reject with their own code and status.
+      if (
+        error instanceof UserRoleScopeError ||
+        error instanceof UserLifecycleError
+      ) {
         return context.json(
           { code: error.code, message: error.message },
           error.status,
         );
       }
-      // Identity errors come from users, credential errors from authentication;
-      // both keep the HTTP mapping the administration service used to own.
+      // Identity errors come from users, credential errors from authentication.
       if (
-        error instanceof UserAdministrationError ||
         error instanceof UserError ||
         error instanceof AuthenticationCredentialError
       ) {

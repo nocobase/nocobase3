@@ -5,7 +5,10 @@ import {
   permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
 import { authenticationCredentialServiceToken } from '@nocobase/app-plugin-authentication';
-import { userServiceToken } from '@nocobase/app-plugin-users/server';
+import {
+  userLifecycleToken,
+  userServiceToken,
+} from '@nocobase/app-plugin-users/server';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
@@ -17,6 +20,7 @@ import {
   userRoleScopeRegistryToken,
 } from '../tokens.js';
 import {
+  createPermissionSetProtectionHandler,
   createUserManagementService,
   createUserRoleScopeRegistry,
 } from '../services/users.js';
@@ -40,6 +44,7 @@ const ACCOUNT_PAGE_SIZE = 100;
 export class UsersProvider extends ServiceProvider<AppPluginApplication> {
   public readonly name: string = '@nocobase/app-plugin-user-management';
   private releasePermissionSetScope?: () => void;
+  private releasePermissionSetProtection?: () => void;
   private releaseSubjectType?: () => void;
 
   public override register(): void {
@@ -60,7 +65,7 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
         userQueries: resolver.resolve(userQueryServiceToken),
         credentials: resolver.resolve(authenticationCredentialServiceToken),
         roleScopes: resolver.resolve(userRoleScopeRegistryToken),
-        ...(permissionSets === undefined ? {} : { permissionSets }),
+        lifecycle: resolver.resolve(userLifecycleToken),
         onRoleScopesChanged: (userId) =>
           permissionSets?.notifyAssignmentsChanged({
             type: 'user',
@@ -76,6 +81,19 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
   }
 
   public override boot(): Promise<void> {
+    if (
+      !this.releasePermissionSetProtection &&
+      this.app.container.has(permissionSetsToken) &&
+      this.app.container.has(userLifecycleToken)
+    ) {
+      this.releasePermissionSetProtection = this.app.container
+        .resolve(userLifecycleToken)
+        .register(
+          createPermissionSetProtectionHandler(
+            this.app.container.resolve(permissionSetsToken),
+          ),
+        );
+    }
     if (
       !this.releasePermissionSetScope &&
       this.app.container.has(permissionSetsToken) &&
@@ -137,22 +155,15 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
         },
       },
     );
-    const scopes = this.app.container.has(userRoleScopeRegistryToken)
-      ? this.app.container.resolve(userRoleScopeRegistryToken)
+    const lifecycle = this.app.container.has(userLifecycleToken)
+      ? this.app.container.resolve(userLifecycleToken)
       : undefined;
     authorization.resourceTypes.add({
       resourceType: 'user',
       async authorize(request, context) {
         if (
           !USER_ACTIONS.has(request.action) ||
-          (request.action === 'delete' &&
-            !scopes
-              ?.list()
-              .some(
-                (scope) =>
-                  typeof scope.assertCanDelete === 'function' &&
-                  typeof scope.onDelete === 'function',
-              ))
+          (request.action === 'delete' && !lifecycle?.deletionReady())
         ) {
           return {
             effect: 'deny',
@@ -160,7 +171,7 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
               {
                 code: 'USER_ACTION_NOT_SUPPORTED',
                 message: `User authorization does not support action "${request.action}"`,
-                plugin: '@nocobase/app-plugin-users',
+                plugin: '@nocobase/app-plugin-user-management',
               },
             ],
           };
@@ -180,7 +191,7 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
               reasons: staticGrants.map((grant) => ({
                 code: 'USER_ACCESS_GRANTED',
                 message: `${grant.source.plugin}:${grant.source.id} allows user access`,
-                plugin: '@nocobase/app-plugin-users',
+                plugin: '@nocobase/app-plugin-user-management',
               })),
             }
           : {
@@ -189,7 +200,7 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
                 {
                   code: 'USER_ACCESS_DENIED',
                   message: 'User access is not allowed',
-                  plugin: '@nocobase/app-plugin-users',
+                  plugin: '@nocobase/app-plugin-user-management',
                 },
               ],
             };
@@ -201,6 +212,8 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
   public override shutdown(): Promise<void> {
     this.releasePermissionSetScope?.();
     this.releasePermissionSetScope = undefined;
+    this.releasePermissionSetProtection?.();
+    this.releasePermissionSetProtection = undefined;
     this.releaseSubjectType?.();
     this.releaseSubjectType = undefined;
     return Promise.resolve();

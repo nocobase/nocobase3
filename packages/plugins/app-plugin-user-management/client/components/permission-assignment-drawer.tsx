@@ -27,7 +27,7 @@ export function PermissionAssignmentDrawer({
   onClose: () => void;
   onSave: (value: UserRoleValue) => Promise<void>;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { t } = useTranslation('@nocobase/app-plugin-user-management');
   const value = user.roleScopes[scope.key] ?? [];
   const initial = typeof value === 'string' ? (value ? [value] : []) : value;
   const [selected, setSelected] = useState<readonly string[]>(initial);

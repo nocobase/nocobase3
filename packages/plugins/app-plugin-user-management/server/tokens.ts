@@ -7,6 +7,7 @@ import type {
   User,
   UserService,
   UpdateUserInput,
+  UsersDeletionConfig,
 } from '@nocobase/app-plugin-users/server';
 import type { UserQueryService } from './user-queries.js';
 
@@ -47,16 +48,6 @@ export interface UserRoleScope {
   replace(
     userId: string,
     value: UserRoleValue,
-    connection: DatabaseConnection,
-  ): Promise<void>;
-  assertCanDelete?(
-    userId: string,
-    actorId: string,
-    connection: DatabaseConnection,
-  ): Promise<void>;
-  onDelete?(userId: string, connection: DatabaseConnection): Promise<void>;
-  assertCanDisable?(
-    userId: string,
     connection: DatabaseConnection,
   ): Promise<void>;
 }
@@ -112,10 +103,7 @@ export interface UserManagementService {
   options(): Promise<UserManagementOptions>;
   list(input?: ListManagedUsersInput): Promise<ManagedUserPage>;
   create(input: CreateManagedUserInput): Promise<ManagedUser>;
-  update(
-    userId: string,
-    input: UpdateUserInput,
-  ): Promise<ManagedUser>;
+  update(userId: string, input: UpdateUserInput): Promise<ManagedUser>;
   disable(userId: string): Promise<ManagedUser>;
   enable(userId: string): Promise<ManagedUser>;
   replaceRoleScope(
@@ -131,7 +119,6 @@ export interface UserManagementService {
 export class UserManagementError extends Error {
   constructor(
     readonly code:
-      | 'USER_DELETION_NOT_CONFIGURED'
       | 'SELF_DELETE_NOT_ALLOWED'
       | 'USER_NOT_FOUND'
       | 'ROLE_SCOPE_NOT_FOUND'
@@ -159,20 +146,23 @@ export class UserRoleScopeError extends Error {
 
 export const userRoleScopeRegistryToken: ServiceToken<UserRoleScopeRegistry> =
   createServiceToken<UserRoleScopeRegistry>(
-    '@nocobase/app-plugin-users/role-scopes',
+    '@nocobase/app-plugin-user-management/role-scopes',
   );
 
 export const userManagementServiceToken: ServiceToken<UserManagementService> =
   createServiceToken<UserManagementService>(
-    '@nocobase/app-plugin-users/service',
+    '@nocobase/app-plugin-user-management/service',
   );
 
 export const userQueryServiceToken: ServiceToken<UserQueryService> =
-  createServiceToken<UserQueryService>('@nocobase/app-plugin-users/query');
+  createServiceToken<UserQueryService>(
+    '@nocobase/app-plugin-user-management/query',
+  );
 
 export type { UserService };
 
-export interface UsersConfig {
+/** The `users` application configuration node shared with `@nocobase/app-plugin-users`. */
+export interface UsersConfig extends UsersDeletionConfig {
   /** Disable when an application provides its own assignment scope, such as Hub. */
   readonly permissionSets?: boolean;
 }

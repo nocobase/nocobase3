@@ -1,8 +1,8 @@
 import {
   authenticationToken,
   type Auth,
-  UserAdministrationError,
 } from '@nocobase/app-plugin-authentication';
+import { UserError } from '@nocobase/app-plugin-users/server';
 import {
   authorizationToken,
   type Authorization,
@@ -108,7 +108,7 @@ describe('@nocobase/app-plugin-users API routes', () => {
   it('returns 409 when an administrator creates a duplicate identity', async () => {
     const service = userService();
     vi.mocked(service.create).mockRejectedValue(
-      new UserAdministrationError(
+      new UserError(
         'USER_EMAIL_CONFLICT',
         'A user with this email already exists',
       ),

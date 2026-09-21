@@ -1,13 +1,15 @@
-# @nocobase/app-plugin-users
+# @nocobase/app-plugin-user-management
 
 Reusable user administration for NocoBase applications. The plugin provides a
 Settings or App page, authenticated and authorized HTTP APIs, and a role-scope
-extension point. Authentication remains the source of user and session data;
-applications and business plugins remain responsible for roles and grants.
+extension point. `@nocobase/app-plugin-users` owns the user record,
+authentication owns credentials and sessions, and applications and business
+plugins remain responsible for roles and grants.
 
 ## Register the plugin
 
-Register Authentication and Authorization before Users on both runtimes:
+Register Users, Authentication and Authorization before User management on the
+server, and Authentication and Authorization before it on the client:
 
 ```ts
 // client/plugins.ts
@@ -44,19 +46,20 @@ Users does not create roles or grant access by itself.
   `user:<id>:<action>` grant. Creating a user requires both `create` and
   `assign-role`.
 
-Authentication owns the `user`, `account`, and `session` tables. This plugin
-uses Authentication's public administration service and never duplicates or
-directly owns those records. Creating a user and assigning application roles
-uses one database transaction. Password reset and database Session revocation
-also share a transaction, so a revocation failure does not leave the new
-password committed. Duplicate administrator-created emails or usernames return
-a stable `409` conflict instead of exposing a database error.
+This plugin never writes the `user`, `account`, or `session` tables. It
+composes `userServiceToken` from `@nocobase/app-plugin-users` with
+`authenticationCredentialServiceToken` from authentication: creating a user,
+its password credential and its application roles is one database
+transaction. Password reset and database Session revocation also share a
+transaction, so a revocation failure does not leave the new password
+committed. Duplicate administrator-created emails or usernames return a stable
+`409` conflict instead of exposing a database error.
 
 ## Client contract
 
 `UsersClient` is available from
-`@nocobase/app-plugin-users/client/user-client` for App-owned UI that needs the
-same API contract. The built-in page supports pagination, search, status and
+`@nocobase/app-plugin-user-management/client/user-client` for App-owned UI that
+needs the same API contract. The built-in page supports pagination, search, status and
 role filters, account editing, enable/disable, password reset, Session
 revocation, and application-provided role scopes. Empty scopes are shown as
 unassigned rather than silently disappearing from the user row.
@@ -64,15 +67,15 @@ unassigned rather than silently disappearing from the user row.
 ## Verification
 
 ```bash
-pnpm --filter @nocobase/app-plugin-users lint
-pnpm --filter @nocobase/app-plugin-users typecheck
-pnpm --filter @nocobase/app-plugin-users test
-pnpm --filter @nocobase/app-plugin-users build
+pnpm --filter @nocobase/app-plugin-user-management lint
+pnpm --filter @nocobase/app-plugin-user-management typecheck
+pnpm --filter @nocobase/app-plugin-user-management test
+pnpm --filter @nocobase/app-plugin-user-management build
 ```
 
 ## Authorization subject selector
 
-When authorization is installed, the plugin registers the `user` subject type with its active-account filter and an administration selector. Searches reuse the user administration service with server-side pagination and return enabled accounts. Name resolution queries the requested IDs, including disabled accounts already referenced by a saved rule. Both callbacks require `user` resource read permission before querying; the authorization plugin separately checks settings-page access and assignment writes.
+When authorization is installed, the plugin registers the `user` subject type with its active-account filter and an administration selector. Searches reuse the plugin's user query service with server-side pagination and return enabled accounts. Name resolution queries the requested IDs, including disabled accounts already referenced by a saved rule. Both callbacks require `user` resource read permission before querying; the authorization plugin separately checks settings-page access and assignment writes.
 
 ## Permission-set integration
 
@@ -82,6 +85,6 @@ The Settings page uses a searchable selection list for both user creation and th
 
 ## User deletion
 
-`DELETE /api/users/:userId` requires the `user/delete` action and `{ "confirm": true }`. The service also rejects deleting the acting user. Application role scopes can implement `assertCanDelete(userId, actorId, connection)` and `onDelete(userId, connection)` to protect owned resources and remove credentials in the same transaction. Hub grants deletion only to its Platform Administrator and registers those lifecycle rules; Users does not grant access by default. Failed cleanup rolls back the deletion. Repeating deletion is safe.
+`DELETE /api/users/:userId` requires the `user/delete` action and `{ "confirm": true }`. The action is offered only when the application has enabled deletion under `users.deletion` in `@nocobase/app-plugin-users` and every required lifecycle handler is registered. The service also rejects deleting the acting user. Everything else happens as lifecycle handlers inside the users plugin: authentication removes sessions and sign-in accounts, this plugin protects the last assignment of a protected Permission Set, and an application such as Hub checks the operator, keeps users who still own Apps, and removes their API Keys. All of it runs in one transaction, so a failed cleanup rolls back the deletion. Repeating deletion is safe.
 
-Deletion removes the user from management lists, revokes sessions and removes sign-in accounts. Authentication retains a disabled identity with `deletedAt` and `deletedBy` for historical attribution; it cannot be re-enabled through user management. Email and username remain reserved. The authenticated deletion route emits a structured `user.delete` security event without credentials. The UI requires confirmation and reports failures through the application's notification host.
+Deletion removes the user from management lists. The users plugin retains a disabled identity with `deletedAt` and `deletedBy` for historical attribution; it cannot be re-enabled through user management. Email and username remain reserved. The authenticated deletion route emits a structured `user.delete` security event without credentials. The UI requires confirmation and reports failures through the application's notification host.

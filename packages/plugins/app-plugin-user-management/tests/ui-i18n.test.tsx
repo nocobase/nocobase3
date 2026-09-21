@@ -19,7 +19,7 @@ it('translates dialog controls in the plugin namespace', async () => {
   runtime.registerApplicationNamespace('app', {
     'en-US': async () => ({ default: {} }),
   });
-  runtime.registerNamespace('@nocobase/app-plugin-users', locales);
+  runtime.registerNamespace('@nocobase/app-plugin-user-management', locales);
   await runtime.init('zh-CN');
 
   try {

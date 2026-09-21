@@ -13,7 +13,7 @@ export function Dialog(props: DialogPrimitive.Root.Props): ReactElement {
 export function DialogContent(
   inputProps: DialogPrimitive.Popup.Props,
 ): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { t } = useTranslation('@nocobase/app-plugin-user-management');
   const { className, children, ...props } = inputProps;
 
   return (

@@ -6,7 +6,7 @@ import {
   type UserRoleValue,
 } from '../tokens.js';
 import type { DatabaseConnection } from '@nocobase/db';
-const USERS_I18N_NAMESPACE = '@nocobase/app-plugin-users';
+const USERS_I18N_NAMESPACE = '@nocobase/app-plugin-user-management';
 /**
  * The role picker for the Permission Sets this application assigns directly.
  * A set that confers unrestricted access is shown but never assigned or

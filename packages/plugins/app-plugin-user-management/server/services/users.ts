@@ -2,6 +2,8 @@ import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import {
   lockUser,
   type User,
+  type UserLifecycleHandler,
+  type UserLifecycleRegistry,
   type UserService,
 } from '@nocobase/app-plugin-users/server';
 import type { AuthenticationCredentialService } from '@nocobase/app-plugin-authentication/server';
@@ -37,18 +39,42 @@ export function createUserRoleScopeRegistry(): UserRoleScopeRegistry {
   };
 }
 
+/** Lifecycle handler key of the Permission Set protection User management registers. */
+export const PERMISSION_SET_PROTECTION_LIFECYCLE_KEY =
+  'authorization.permission-sets' as const;
+
+/**
+ * A disabled or deleted account can no longer act, so either change removes
+ * the subject from every Permission Set as surely as revoking would. The
+ * check runs for every write path through the users plugin, not only for the
+ * management API.
+ */
+export function createPermissionSetProtectionHandler(
+  permissionSets: Pick<
+    PermissionSetsApi<DatabaseConnection>,
+    'withTransaction'
+  >,
+): UserLifecycleHandler {
+  return {
+    key: PERMISSION_SET_PROTECTION_LIFECYCLE_KEY,
+    // After application handlers that decide who may operate at all.
+    order: -100,
+    before: async ({ userId, connection }) => {
+      await permissionSets
+        .withTransaction(connection)
+        .assertSubjectRemovable({ type: 'user', id: userId });
+    },
+  };
+}
+
 export interface CreateUserManagementServiceOptions {
   readonly database: DatabaseManager;
   readonly users: UserService;
   readonly userQueries: UserQueryService;
   readonly credentials: AuthenticationCredentialService;
   readonly roleScopes: UserRoleScopeRegistry;
-  /**
-   * Absent in an application assembled without authorization. When present,
-   * disabling an account asks it whether that account is the last one able to
-   * use a Permission Set the application must always keep in use.
-   */
-  readonly permissionSets?: PermissionSetsApi<DatabaseConnection>;
+  /** Decides whether deletion is configured; the handlers it lists run inside the users plugin. */
+  readonly lifecycle: UserLifecycleRegistry;
   readonly onRoleScopesChanged?: (userId: string) => void | Promise<void>;
 }
 
@@ -147,16 +173,10 @@ class DefaultUserManagementService implements UserManagementService {
   }
 
   async disable(userId: string): Promise<ManagedUser> {
+    // Protection and session revocation run as lifecycle handlers inside the
+    // users plugin, in the same transaction as the status write.
     const user = await this.services.database.transaction(
       async (connection) => {
-        for (const scope of this.services.roleScopes.list()) {
-          await scope.assertCanDisable?.(userId, connection);
-        }
-        // A disabled account can no longer act, so disabling it removes the
-        // subject from every Permission Set as surely as revoking would.
-        await this.services.permissionSets
-          ?.withTransaction(connection)
-          .assertSubjectRemovable({ type: 'user', id: userId });
         await lockUser(connection, userId);
         return this.services.users.withConnection(connection).disable(userId);
       },
@@ -165,39 +185,18 @@ class DefaultUserManagementService implements UserManagementService {
   }
 
   async remove(userId: string, actorId: string): Promise<void> {
-    if (
-      !this.services.roleScopes
-        .list()
-        .some(
-          (scope) =>
-            typeof scope.assertCanDelete === 'function' &&
-            typeof scope.onDelete === 'function',
-        )
-    )
-      throw new UserManagementError(
-        'USER_DELETION_NOT_CONFIGURED',
-        'User deletion is not configured for this application.',
-        409,
-      );
+    this.services.lifecycle.assertDeletionReady();
     if (userId === actorId)
       throw new UserManagementError(
         'SELF_DELETE_NOT_ALLOWED',
         'You cannot delete your own account.',
         409,
       );
-    await this.services.database.transaction(async (connection) => {
-      for (const scope of this.services.roleScopes.list()) {
-        await scope.assertCanDelete?.(userId, actorId, connection);
-      }
-      await this.services.permissionSets
-        ?.withTransaction(connection)
-        .assertSubjectRemovable({ type: 'user', id: userId });
-      const users = this.services.users.withConnection(connection);
-      if (!(await users.get(userId))) return;
-      for (const scope of this.services.roleScopes.list())
-        await scope.onDelete?.(userId, connection);
-      await users.remove(userId, actorId);
-    });
+    // Operator eligibility, resource ownership, credential and API key cleanup
+    // are lifecycle handlers; repeating a deletion finds no user and does nothing.
+    await this.services.database.transaction((connection) =>
+      this.services.users.withConnection(connection).remove(userId, actorId),
+    );
     await this.services.onRoleScopesChanged?.(userId);
   }
 

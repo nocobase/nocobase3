@@ -1,6 +1,10 @@
 import createAuthenticationTables from '../../app-plugin-authentication/database/migrations/202608200001_create_authentication_tables.js';
 import type { AuthenticationCredentialService } from '@nocobase/app-plugin-authentication/server';
-import type { User, UserService } from '@nocobase/app-plugin-users/server';
+import {
+  UserLifecycleRegistry,
+  type User,
+  type UserService,
+} from '@nocobase/app-plugin-users/server';
 import {
   authorizationToken,
   type Authorization,
@@ -398,11 +402,13 @@ function fakeServices(connection: DatabaseConnection): {
   users: UserService;
   userQueries: UserQueryService;
   credentials: AuthenticationCredentialService;
+  lifecycle: UserLifecycleRegistry;
 } {
   return {
     users: fakeUsers(connection),
     userQueries: fakeQueries(),
     credentials: fakeCredentials(connection),
+    lifecycle: new UserLifecycleRegistry(),
   };
 }
 

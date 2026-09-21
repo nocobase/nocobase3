@@ -2,45 +2,61 @@
 
 ## Account state from server code
 
-`userAdministrationServiceToken` is the plugin's administration contract. The
-Users plugin builds its page and API on it; application code that needs the
-same operations, such as an onboarding job or a compliance workflow, resolves
-it too.
+Two contracts share the work. `userServiceToken` from
+`@nocobase/app-plugin-users` owns the user record: profile, enabled state and
+soft deletion. `authenticationCredentialServiceToken` from this plugin owns
+what only authentication can do to that user: passwords, sessions and sign-in
+accounts. The User management plugin composes both; application code that
+needs the same operations, such as an onboarding job, resolves them too.
 
 ```ts
+import { userServiceToken, UserError } from '@nocobase/app-plugin-users/server';
 import {
-  userAdministrationServiceToken,
-  UserAdministrationError,
+  authenticationCredentialServiceToken,
+  AuthenticationCredentialError,
 } from '@nocobase/app-plugin-authentication';
 
-const users = app.container.resolve(userAdministrationServiceToken);
-await users.disable(userId);
+const users = app.container.resolve(userServiceToken);
+const credentials = app.container.resolve(authenticationCredentialServiceToken);
+await users.disable(userId); // sessions are revoked by the lifecycle handler
+await credentials.resetPassword(userId, newPassword);
 ```
 
-| Method                                              | Effect                                                                                                 |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `list({ page, pageSize, search, status, userIds })` | Paged users; `pageSize` caps at 100; `status` is `'enabled'` or `'disabled'`                           |
-| `get(userId)`                                       | One user or `undefined`                                                                                |
-| `create({ name, email, username?, password })`      | Creates the user and a credential account; email and username are normalized to lower case             |
-| `update(userId, { name?, email?, username? })`      | `username: null` clears it                                                                             |
-| `disable(userId)`                                   | Sets `disabledAt`, deletes every session, disconnects realtime; sign-in returns `403 ACCOUNT_DISABLED` |
-| `enable(userId)`                                    | Clears `disabledAt`; the user signs in again, old sessions stay gone                                   |
-| `resetPassword(userId, password)`                   | Rehashes and revokes sessions                                                                          |
-| `revokeSessions(userId)`                            | Deletes sessions and disconnects realtime without changing state                                       |
-| `withConnection(connection)`                        | Binds every operation to a caller-owned transaction                                                    |
+| Service       | Method                                                | Effect                                                                                                               |
+| ------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `UserService` | `get(userId)`                                         | One user or `undefined`; deleted users are `undefined`                                                               |
+| `UserService` | `create({ name, email, username? })`                  | Creates the user without credentials; email and username are normalized to lower case                                |
+| `UserService` | `updateProfile(userId, { name?, email?, username? })` | `username: null` clears it                                                                                           |
+| `UserService` | `disable(userId)` / `enable(userId)`                  | Sets or clears `disabledAt`; disabling runs the lifecycle, so sessions go and sign-in returns `403 ACCOUNT_DISABLED` |
+| `UserService` | `remove(userId, actorId?)`                            | Soft-deletes when the application enables deletion; the lifecycle removes sessions and accounts                      |
+| `UserService` | `withConnection(connection)`                          | Binds every operation to a caller-owned transaction                                                                  |
+| Credentials   | `createPasswordCredential(userId, password)`          | Validates the password policy and creates the credential account                                                     |
+| Credentials   | `resetPassword(userId, password)`                     | Rehashes, creates the credential if missing, and revokes sessions                                                    |
+| Credentials   | `revokeSessions(userId)`                              | Deletes sessions and disconnects realtime after the commit                                                           |
+| Credentials   | `withConnection(connection)`                          | Same binding as the user service                                                                                     |
 
-Errors are `UserAdministrationError` with a `code` of `USER_NOT_FOUND`,
-`USER_EMAIL_CONFLICT`, `USER_USERNAME_CONFLICT`, `USER_IDENTITY_CONFLICT`,
-`PASSWORD_TOO_SHORT`, or `PASSWORD_TOO_LONG`. Map them to stable HTTP
-responses; do not surface database errors.
+`UserError` carries `USER_NOT_FOUND`, `USER_EMAIL_CONFLICT`,
+`USER_USERNAME_CONFLICT` or `USER_IDENTITY_CONFLICT`;
+`AuthenticationCredentialError` carries `USER_NOT_FOUND`, `PASSWORD_TOO_SHORT`
+or `PASSWORD_TOO_LONG`. Map them to stable HTTP responses; do not surface
+database errors.
+
+This plugin registers the `authentication.credentials` user lifecycle handler
+at boot: when a user is disabled it revokes sessions, when a user is deleted
+it also removes the sign-in accounts, all in the transaction that writes the
+status. Do not revoke or clean up again after calling `disable` or `remove`.
+Realtime disconnects run after the commit; a failure there surfaces as
+`TransactionPostCommitError` with `committed: true` and must not be answered
+by retrying the user write.
 
 Use `withConnection` when a user change must commit with other rows, for
-example creating a user together with its role assignment. The Users plugin's
-role scope registry is the place to hook application roles into that flow;
-read `nocobase-app-plugin-users` for it. There is no user deletion.
+example creating a user together with its role assignment. The User
+management plugin's role scope registry is the place to hook application
+roles into that flow; read `nocobase-app-plugin-user-management` for it.
+Deletion is off unless the application enables it under `users.deletion`.
 
-The service does not delete a user and does not send email. Compose a
-notification yourself after `resetPassword` when the flow needs one.
+Neither service sends email. Compose a notification yourself after
+`resetPassword` when the flow needs one.
 
 ## Extending the user record
 

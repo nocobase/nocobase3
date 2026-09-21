@@ -25,10 +25,11 @@ import {
 } from '../auth.js';
 import { createAuthStorage } from '../auth-storage.js';
 import { authenticationToken } from '../tokens.js';
-import { userAdministrationServiceToken } from '../tokens.js';
-import { createUserAdministrationService } from '../user-administration.js';
 import { authenticationCredentialServiceToken } from '../tokens.js';
-import { createAuthenticationCredentialService } from '../credentials.js';
+import {
+  AUTHENTICATION_USER_LIFECYCLE_KEY,
+  createAuthenticationCredentialService,
+} from '../credentials.js';
 import { type AuthConfig, resolveAuthSecret } from '../config.js';
 
 interface RequestInitWithDuplex extends RequestInit {
@@ -62,19 +63,6 @@ export class AuthenticationProvider<
   public override register(): void {
     this.app.container.singleton(authenticationToken, (container) =>
       this.createAuthentication(container),
-    );
-    this.app.container.singleton(
-      userAdministrationServiceToken,
-      (container) => {
-        const database = container.resolve(databaseManagerToken);
-        return createUserAdministrationService({
-          auth: container.resolve(authenticationToken),
-          connection: database.connection(),
-          ...(container.has(realtimeServiceToken)
-            ? { realtime: container.resolve(realtimeServiceToken) }
-            : {}),
-        });
-      },
     );
     this.app.container.singleton(
       authenticationCredentialServiceToken,
@@ -113,15 +101,20 @@ export class AuthenticationProvider<
   }
 
   public override boot(): Promise<void> {
-    if (this.releaseUserLifecycle || !this.app.container.has(userLifecycleToken)) {
+    if (
+      this.releaseUserLifecycle ||
+      !this.app.container.has(userLifecycleToken)
+    ) {
       return Promise.resolve();
     }
     this.releaseUserLifecycle = this.app.container
       .resolve(userLifecycleToken)
       .register({
-        key: 'authentication.credentials',
+        key: AUTHENTICATION_USER_LIFECYCLE_KEY,
         order: -100,
-        before: async (context) => {
+        // Runs after the status is written, in the same transaction: a
+        // disabled user loses sessions, a deleted user also loses accounts.
+        after: async (context) => {
           const credentials = this.app.container.resolve(
             authenticationCredentialServiceToken,
           );

@@ -1,6 +1,9 @@
 import { removeUserApiKeys } from '@nocobase/app-plugin-api-keys/server';
 import { HUB_API_KEY_CONFIG_ID } from './api-key-auth.js';
-import { lockUser } from '@nocobase/app-plugin-users/server';
+import {
+  UserLifecycleError,
+  type UserLifecycleHandler,
+} from '@nocobase/app-plugin-users/server';
 import { HUB_RELEASE_ACTIONS } from '../shared/permissions.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import type {
@@ -9,10 +12,12 @@ import type {
 } from '@nocobase/app-plugin-authorization';
 import {
   UserManagementError,
-  UserRoleScopeError,
   type UserRoleScope,
   type UserRoleValue,
 } from '@nocobase/app-plugin-user-management/server/tokens';
+
+/** Lifecycle handler key Hub registers with the users plugin. */
+export const HUB_USER_LIFECYCLE_KEY = 'hub.ownership' as const;
 
 export const HUB_PERMISSION_SET_KEYS: readonly [
   'hub-administrator',
@@ -271,53 +276,64 @@ export function createHubUserRoleScope(
           permissionSets: [role],
         });
     },
-    onDelete: (userId, connection) =>
-      removeUserApiKeys(connection, userId, ['default', HUB_API_KEY_CONFIG_ID]),
-    async assertCanDelete(userId, actorId, connection) {
-      const actor = await connection.query
-        .selectFrom('user')
-        .select('disabledAt')
-        .where('id', '=', actorId)
-        .executeTakeFirst();
+  };
+}
+
+/**
+ * Hub's part in deleting a user: only an enabled platform administrator may
+ * delete, a user who still owns Apps is kept, and a deleted user's API Keys
+ * go with the user in the same transaction. Protecting the last
+ * administrator is the Permission Set protection User management registers.
+ */
+export function createHubUserLifecycleHandler(
+  permissionSets: PermissionSetsApi,
+): UserLifecycleHandler {
+  return {
+    key: HUB_USER_LIFECYCLE_KEY,
+    // Operator eligibility is decided before any protection of the target.
+    order: -200,
+    async before({ operation, userId, actorId, connection }) {
+      if (operation !== 'delete') return;
+      const actor = actorId
+        ? await connection.query
+            .selectFrom('user')
+            .select('disabledAt')
+            .where('id', '=', actorId)
+            .executeTakeFirst()
+        : undefined;
       if (
+        !actorId ||
         !actor ||
         actor.disabledAt != null ||
         (await currentHubRole(permissionSets, actorId, connection)) !==
           HUB_ADMINISTRATOR
       ) {
-        throw new UserRoleScopeError(
+        throw new UserLifecycleError(
           'HUB_ADMIN_REQUIRED',
           'Only a platform administrator can delete users.',
           409,
         );
       }
-      if (
-        (await currentHubRole(permissionSets, userId, connection)) ===
-        HUB_ADMINISTRATOR
-      )
-        await permissionSets
-          .withTransaction(connection)
-          .assertSubjectRemovable({ type: 'user', id: userId });
-      await lockUser(connection, userId);
+      // The users plugin holds the user lock here, so no App can be created
+      // for this owner between the check and the status write.
       const app = await connection.query
         .selectFrom('hubApps')
         .select('id')
         .where('createdBy', '=', userId)
         .executeTakeFirst();
       if (app)
-        throw new UserRoleScopeError(
+        throw new UserLifecycleError(
           'USER_HAS_APPS',
           'Transfer or delete this user’s applications before deleting the user.',
           409,
         );
     },
-    async assertCanDisable(userId, connection) {
-      const current = await currentHubRole(permissionSets, userId, connection);
-      if (current === HUB_ADMINISTRATOR) {
-        await permissionSets
-          .withTransaction(connection)
-          .assertSubjectRemovable({ type: 'user', id: userId });
-      }
+    async after({ operation, userId, connection }) {
+      if (operation !== 'delete') return;
+      await removeUserApiKeys(connection, userId, [
+        'default',
+        HUB_API_KEY_CONFIG_ID,
+      ]);
     },
   };
 }

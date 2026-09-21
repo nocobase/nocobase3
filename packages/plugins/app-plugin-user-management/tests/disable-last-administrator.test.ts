@@ -2,7 +2,10 @@ import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 
 import type { AuthenticationCredentialService } from '@nocobase/app-plugin-authentication/server';
-import { UserService } from '@nocobase/app-plugin-users/server';
+import {
+  UserLifecycleRegistry,
+  UserService,
+} from '@nocobase/app-plugin-users/server';
 import {
   createAppAuthorization,
   type Authorization,
@@ -19,6 +22,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  createPermissionSetProtectionHandler,
   createUserManagementService,
   createUserRoleScopeRegistry,
 } from '../server/services/users.js';
@@ -96,13 +100,19 @@ describe('disabling an account that holds a protected Permission Set', () => {
     permissionSets:
       PermissionSetsAuthorizationApi['permissionSets'] | undefined,
   ): UserManagementService {
+    // The provider registers this protection at boot; the service under test
+    // is built by hand, so the registry is assembled the same way here.
+    const lifecycle = new UserLifecycleRegistry();
+    if (permissionSets) {
+      lifecycle.register(createPermissionSetProtectionHandler(permissionSets));
+    }
     return createUserManagementService({
       database,
-      users: new UserService(database.connection()),
+      users: new UserService(database.connection(), { lifecycle }),
       userQueries: createUserQueryService(database.connection()),
       credentials: unusedCredentials(),
       roleScopes: createUserRoleScopeRegistry(),
-      ...(permissionSets === undefined ? {} : { permissionSets }),
+      lifecycle,
     });
   }
 

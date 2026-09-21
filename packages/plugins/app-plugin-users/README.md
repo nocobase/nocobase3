@@ -1,65 +1,43 @@
 # @nocobase/app-plugin-users
 
-Reusable user administration for NocoBase applications. The plugin provides a
-Settings or App page, authenticated and authorized HTTP APIs, and a role-scope
-extension point. Authentication remains the source of user and session data;
-applications and business plugins remain responsible for roles and grants.
+The user record of a NocoBase application: its type, identity constraints, status fields, soft deletion, locking, and the lifecycle other plugins take part in when a user is disabled or deleted. Authentication reads and writes users through this plugin; user management builds its page and API on it. This plugin has no page, no HTTP API, and no dependency on Better Auth, authorization, or user management.
 
 ## Register the plugin
 
-Register Authentication and Authorization before Users on both runtimes:
+Register Users before Authentication and User management in the server plugin list. There is no client plugin.
 
 ```ts
-// client/plugins.ts
-users({ mount: 'settings', path: '/users' });
-
 // server/plugins.ts
 users;
 ```
 
-The default route is `/settings/users`. Set `mount: 'app'` to mount the same
-owned route under the App and add its protected primary-navigation entry. The
-route and navigation use the same `page:users/access` check. Provide
-`componentLoader` to replace only the page implementation without changing its
-identity, path, or navigation.
-
-The application must grant `page:users/access` and the required `user` actions.
-Users does not create roles or grant access by itself.
-
 ## Server contracts
 
-- `userManagementServiceToken` provides list, create, update, enable, disable,
-  password reset, Session revocation, and role-scope replacement operations.
-- `userRoleScopeRegistryToken` lets an application plugin expose its own role
-  choices and assignment implementation through `UserRoleScope`.
-- Role options may be marked non-assignable or non-removable when a scope needs
-  to display protected assignments without letting the Users page change them.
-  A scope can also declare that authenticated-subject defaults apply separately
-  so the page does not present inherited access as a direct user role.
-  Application-owned labels can provide an i18n key and namespace while keeping
-  the plain label as a fallback.
-- Scopes backed by a shared assignment store should implement optional
-  `getMany()` so one user-list page does not issue one role query per user.
-- All `/api/users/*` routes require an authenticated session and a matching
-  `user:<id>:<action>` grant. Creating a user requires both `create` and
-  `assign-role`.
+- `userServiceToken` resolves `UserService`: `get`, `require`, `create`, `updateProfile`, `enable`, `disable`, `remove`, and `withConnection` for a caller-owned transaction. Creation takes no password and no roles; deleted users read as `undefined`.
+- `userLifecycleToken` resolves `UserLifecycleRegistry`. A plugin registers one `UserLifecycleHandler` with a stable key during `boot()` and releases it during `shutdown()`. `before` runs after the user row is locked and may reject the change; `after` runs in the same transaction once the status is written. Effects that must wait for the commit use `connection.afterCommit`.
+- `createUserStore` is the storage contract authentication's database adapter uses for the Better Auth `user` model: typed conditions, field selection, sorting, paging, counting, and the same normalization, uniqueness, and soft-delete filtering as the service. Every status write through it runs the lifecycle, so no path bypasses the registered protections.
+- `lockUser(connection, userId)` serializes a user's deletion with the creation of resources that user owns. Call it inside a transaction.
+- `UserError` carries `USER_NOT_FOUND`, `USER_EMAIL_CONFLICT`, `USER_USERNAME_CONFLICT`, or `USER_IDENTITY_CONFLICT`. `UserLifecycleError` carries a handler's own code and HTTP status.
 
-Authentication owns the `user`, `account`, and `session` tables. This plugin
-uses Authentication's public administration service and never duplicates or
-directly owns those records. Creating a user and assigning application roles
-uses one database transaction. Password reset and database Session revocation
-also share a transaction, so a revocation failure does not leave the new
-password committed. Duplicate administrator-created emails or usernames return
-a stable `409` conflict instead of exposing a database error.
+Emails and usernames are trimmed and lower-cased; a friendly conflict is raised before the write and the database unique index remains the guarantee under concurrency. A soft-deleted user keeps its email and username reserved.
 
-## Client contract
+## Deletion policy
 
-`UsersClient` is available from
-`@nocobase/app-plugin-users/client/user-client` for App-owned UI that needs the
-same API contract. The built-in page supports pagination, search, status and
-role filters, account editing, enable/disable, password reset, Session
-revocation, and application-provided role scopes. Empty scopes are shown as
-unassigned rather than silently disappearing from the user row.
+Deletion is off until the application enables it:
+
+```ts
+// server/config/users.ts
+deletion: {
+  enabled: true,
+  requiredHandlers: ['authentication.credentials', 'hub.ownership'],
+},
+```
+
+`requiredHandlers` names the lifecycle participants that must be registered before any deletion runs; an application that enables deletion without them fails to start. A deletion through any path with the policy off is rejected with `USER_DELETION_NOT_CONFIGURED`.
+
+## Data ownership
+
+This plugin owns the runtime contract for the `user` table. The historical migrations that created and extended that table live in `@nocobase/app-plugin-authentication` and are never edited; new user columns are added by migrations in this plugin. Installing this plugin without authentication is not yet supported.
 
 ## Verification
 
@@ -69,19 +47,3 @@ pnpm --filter @nocobase/app-plugin-users typecheck
 pnpm --filter @nocobase/app-plugin-users test
 pnpm --filter @nocobase/app-plugin-users build
 ```
-
-## Authorization subject selector
-
-When authorization is installed, the plugin registers the `user` subject type with its active-account filter and an administration selector. Searches reuse the user administration service with server-side pagination and return enabled accounts. Name resolution queries the requested IDs, including disabled accounts already referenced by a saved rule. Both callbacks require `user` resource read permission before querying; the authorization plugin separately checks settings-page access and assignment writes.
-
-## Permission-set integration
-
-When the authorization plugin is installed, Users automatically registers the `app` permission-set scope. No application Provider is needed. Set `users.permissionSets: false` in application configuration when providing a replacement scope, as Hub does. Direct assignments remain separate from permissions inherited through authenticated users or other subjects. Protected unrestricted assignments cannot be changed through this scope.
-
-The Settings page uses a searchable selection list for both user creation and the assignment drawer. Changes are saved together; labels use permission-set presentation metadata and update with the client locale while custom titles remain unchanged.
-
-## User deletion
-
-`DELETE /api/users/:userId` requires the `user/delete` action and `{ "confirm": true }`. The service also rejects deleting the acting user. Application role scopes can implement `assertCanDelete(userId, actorId, connection)` and `onDelete(userId, connection)` to protect owned resources and remove credentials in the same transaction. Hub grants deletion only to its Platform Administrator and registers those lifecycle rules; Users does not grant access by default. Failed cleanup rolls back the deletion. Repeating deletion is safe.
-
-Deletion removes the user from management lists, revokes sessions and removes sign-in accounts. Authentication retains a disabled identity with `deletedAt` and `deletedBy` for historical attribution; it cannot be re-enabled through user management. Email and username remain reserved. The authenticated deletion route emits a structured `user.delete` security event without credentials. The UI requires confirmation and reports failures through the application's notification host.

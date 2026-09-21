@@ -101,7 +101,7 @@ describe('built-in user permission-set scope', () => {
     expect(scope).toMatchObject({
       key: 'app',
       labelI18nKey: 'page.roles',
-      labelI18nNs: '@nocobase/app-plugin-users',
+      labelI18nNs: '@nocobase/app-plugin-user-management',
       selection: 'multiple',
       hasAuthenticatedDefaultAccess: true,
     });

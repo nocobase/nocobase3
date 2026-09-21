@@ -19,7 +19,7 @@ export function PermissionSelection({
   disabled?: boolean;
   onChange: (value: readonly string[]) => void;
 }): ReactElement {
-  const { t } = useTranslation('@nocobase/app-plugin-users');
+  const { t } = useTranslation('@nocobase/app-plugin-user-management');
   const [search, setSearch] = useState('');
   const [selectedOnly, setSelectedOnly] = useState(false);
   const [limit, setLimit] = useState(30);
