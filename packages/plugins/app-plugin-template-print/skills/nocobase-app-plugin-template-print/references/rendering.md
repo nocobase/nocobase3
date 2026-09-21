@@ -1,5 +1,12 @@
 # Rendering engine and core examples
 
+## Table of Contents
+
+- [Dependencies](#dependencies)
+- [Minimal public-API adapter](#minimal-public-api-adapter)
+- [Data and tag examples](#data-and-tag-examples)
+- [Extended legacy pipeline](#extended-legacy-pipeline)
+
 ## Dependencies
 
 These ranges come from the inspected legacy plugin manifest, not a recommendation to install today's latest versions. The Skill package installs none of them. Select dependencies only for the target implementation, inspect the resolved version and public APIs, and lock/test the chosen combination.
