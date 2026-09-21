@@ -1,5 +1,5 @@
 import createAuthenticationTables from '../../app-plugin-authentication/database/migrations/202608200001_create_authentication_tables.js';
-import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
+import type { UserAdministrationService } from '../server/user-administration.js';
 import {
   authorizationToken,
   type Authorization,

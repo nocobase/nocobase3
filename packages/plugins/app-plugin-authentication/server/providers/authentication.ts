@@ -23,9 +23,12 @@ import {
   type CreateAuthenticationOptions,
 } from '../auth.js';
 import { createAuthStorage } from '../auth-storage.js';
-import { authenticationToken } from '../tokens.js';
-import { userAdministrationServiceToken } from '../tokens.js';
-import { createUserAdministrationService } from '../user-administration.js';
+import {
+  authenticationToken,
+  userAuthenticationServiceToken,
+  userStoreToken,
+} from '../tokens.js';
+import { createUserAuthenticationService } from '../user-authentication.js';
 import { type AuthConfig, resolveAuthSecret } from '../config.js';
 
 interface RequestInitWithDuplex extends RequestInit {
@@ -60,10 +63,10 @@ export class AuthenticationProvider<
       this.createAuthentication(container),
     );
     this.app.container.singleton(
-      userAdministrationServiceToken,
+      userAuthenticationServiceToken,
       (container) => {
         const database = container.resolve(databaseManagerToken);
-        return createUserAdministrationService({
+        return createUserAuthenticationService({
           auth: container.resolve(authenticationToken),
           connection: database.connection(),
           ...(container.has(realtimeServiceToken)
@@ -112,6 +115,16 @@ export class AuthenticationProvider<
       : undefined;
     const auth = createAuthentication({
       connection: database?.connection(),
+      // Present when the users plugin is installed: it owns the user table.
+      ...(container.has(userStoreToken)
+        ? {
+            userStore: ((connection, model) =>
+              container.resolve(userStoreToken)(
+                connection,
+                model,
+              )) satisfies CreateAuthenticationOptions['userStore'],
+          }
+        : {}),
       secondaryStorage: createAuthStorage(caching),
       appName: app.name,
       ...authConfig,

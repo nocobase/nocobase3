@@ -110,6 +110,7 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "eslint": "catalog:",
+    "knex": "catalog:",
     "prettier": "catalog:",
     "shadcn": "catalog:",
     "tailwindcss": "catalog:",

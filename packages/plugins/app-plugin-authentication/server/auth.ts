@@ -12,9 +12,12 @@ import { username } from 'better-auth/plugins';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { databaseAdapter } from './better-auth/database-adapter.js';
+import type { UserStoreFactory } from './user-store.js';
 
 export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
   connection: DatabaseConnection;
+  /** The users plugin's storage for the `user` model; see `userStoreToken`. */
+  userStore?: UserStoreFactory;
 }
 
 export interface CreateAuthenticationOptions extends Omit<
@@ -36,12 +39,10 @@ export interface AuthMiddlewareOptions {
 
 export class Auth {
   private readonly auth;
-  private readonly connection: DatabaseConnection;
   private readonly options: AuthOptions;
 
   constructor(options: AuthOptions) {
-    const { connection, ...config } = options;
-    this.connection = connection;
+    const { connection, userStore, ...config } = options;
     this.options = options;
     if (!config.secret || config.secret.trim().length === 0) {
       throw new Error('Authentication secret is required.');
@@ -55,7 +56,7 @@ export class Auth {
     this.auth = betterAuth({
       ...config,
       appName: config.appName ?? 'NocoBase3',
-      database: databaseAdapter(connection),
+      database: databaseAdapter(connection, userStore ? { userStore } : {}),
       plugins,
       emailAndPassword: {
         ...config.emailAndPassword,
@@ -82,16 +83,11 @@ export class Auth {
             ...configuredSessionCreate,
             after: async (session, context) => {
               await configuredSessionCreate?.after?.(session, context);
-              const user = context
-                ? await context.context.internalAdapter.findUserById(
-                    session.userId,
-                  )
-                : await connection.query
-                    .selectFrom('user')
-                    .select('disabledAt')
-                    .where('id', '=', session.userId)
-                    .executeTakeFirst();
-              if (!user || Reflect.get(user, 'disabledAt') != null) {
+              const user = await (
+                context?.context.internalAdapter ??
+                (await this.auth.$context).internalAdapter
+              ).findUserById(session.userId);
+              if (!isActiveUser(user)) {
                 // A login already in flight may persist after user deletion.
                 // Remove its new session before returning it to the caller.
                 const adapter =
@@ -116,16 +112,11 @@ export class Auth {
                 'data' in configuredResult
                   ? { ...session, ...configuredResult.data }
                   : session;
-              const user = context
-                ? await context.context.internalAdapter.findUserById(
-                    candidate.userId,
-                  )
-                : await connection.query
-                    .selectFrom('user')
-                    .select(['id', 'disabledAt'])
-                    .where('id', '=', candidate.userId)
-                    .executeTakeFirst();
-              if (!user || Reflect.get(user, 'disabledAt') != null) {
+              const user = await (
+                context?.context.internalAdapter ??
+                (await this.auth.$context).internalAdapter
+              ).findUserById(candidate.userId);
+              if (!isActiveUser(user)) {
                 throw APIError.from('FORBIDDEN', {
                   code: 'ACCOUNT_DISABLED',
                   message: 'This account is disabled.',
@@ -155,12 +146,12 @@ export class Auth {
   async getSession(headers: Headers): Promise<AuthSession> {
     const session = await this.auth.api.getSession({ headers });
     if (!session) return null;
-    const user = await this.connection.query
-      .selectFrom('user')
-      .select(['id', 'disabledAt'])
-      .where('id', '=', session.user.id)
-      .executeTakeFirst();
-    if (!user || user.disabledAt != null) return null;
+    // Read the user through the adapter, so the users plugin's store decides
+    // what a live user is; a cached session must not outlive its account.
+    const user = await (
+      await this.auth.$context
+    ).internalAdapter.findUserById(session.user.id);
+    if (!isActiveUser(user)) return null;
     return session;
   }
 
@@ -179,7 +170,7 @@ export class Auth {
     return api as FilteredAPI<NonNullable<TPlugin['endpoints']>>;
   }
 
-  /** @internal Used by the Authentication-owned administration service. */
+  /** @internal Better Auth internals for this plugin's own credential and session operations. */
   administrationContext(): typeof this.auth.$context {
     return this.auth.$context;
   }
@@ -242,6 +233,15 @@ export class Auth {
       await next();
     };
   }
+}
+
+/** Enabled and not soft-deleted. The store already hides deleted users; the generic adapter does not. */
+function isActiveUser(user: object | null | undefined): boolean {
+  return (
+    user != null &&
+    Reflect.get(user, 'disabledAt') == null &&
+    Reflect.get(user, 'deletedAt') == null
+  );
 }
 
 export function createAuthentication(

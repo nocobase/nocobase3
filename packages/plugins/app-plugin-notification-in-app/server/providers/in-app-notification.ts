@@ -1,5 +1,5 @@
 import { databaseManagerToken } from '@nocobase/db';
-import { userAdministrationServiceToken } from '@nocobase/app-plugin-authentication';
+import { userAdministrationServiceToken } from '@nocobase/app-plugin-users/server';
 import { notificationExtensionRegistryToken } from '@nocobase/app-plugin-notification';
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';

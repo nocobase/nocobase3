@@ -9,9 +9,8 @@ import {
 import sqlite from '@nocobase/db-sqlite';
 import {
   createAuthentication,
-  createUserAdministrationService,
+  createUserAuthenticationService,
   authenticationToken,
-  userAdministrationServiceToken,
 } from '@nocobase/app-plugin-authentication';
 import {
   createAppAuthorization,
@@ -19,8 +18,11 @@ import {
 } from '@nocobase/app-plugin-authorization';
 import { ApiKeyService } from '@nocobase/app-plugin-api-keys/server';
 import {
+  createUserAdministrationService,
   createUserManagementService,
   createUserRoleScopeRegistry,
+  createUserStore,
+  userAdministrationServiceToken,
   userManagementServiceToken,
   userRoleScopeRegistryToken,
 } from '@nocobase/app-plugin-users/server';
@@ -71,10 +73,14 @@ beforeEach(async () => {
     secret,
     baseURL: 'http://localhost:3000',
     plugins: hubApiKeyAuthentication(),
+    userStore: createUserStore,
   });
   users = createUserAdministrationService({
-    auth,
     connection: db.connection(),
+    credentials: createUserAuthenticationService({
+      auth,
+      connection: db.connection(),
+    }),
   });
   authz = createAppAuthorization({ connection: db.connection() });
   registerHubResources(authz, db.connection());

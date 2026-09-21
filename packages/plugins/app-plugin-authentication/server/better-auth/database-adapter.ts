@@ -12,8 +12,15 @@ import type { BetterAuthOptions, DBAdapterInstance, Where } from 'better-auth';
 import { createAdapterFactory, type CustomAdapter } from 'better-auth/adapters';
 import type { Knex } from 'knex';
 
+import type { UserStoreFactory } from '../user-store.js';
+
 export interface DatabaseAdapterOptions {
   debugLogs?: boolean;
+  /**
+   * Serves the `user` model. Provided by the users plugin, which owns the
+   * table; without it the adapter reads and writes the table directly.
+   */
+  userStore?: UserStoreFactory;
 }
 
 type CleanWhere = Required<Where>;
@@ -469,12 +476,72 @@ export function databaseAdapter(
             getFieldName({ model: defaultModel, field }),
           );
         };
-        return buildCustomAdapter(
+        const generic = buildCustomAdapter(
           currentConnection,
           fieldsForModel,
           (model, field) =>
             getFieldName({ model: getDefaultModelName(model), field }),
         );
+        const userStore = options.userStore;
+        if (!userStore) return generic;
+        // The users plugin owns the `user` table: its store applies identity
+        // normalization, uniqueness and soft-delete filtering to every user
+        // read and write Better Auth performs. Other models stay here.
+        const isUser = (model: string): boolean =>
+          getDefaultModelName(model) === 'user';
+        const users = (model: string) =>
+          userStore(currentConnection, {
+            model,
+            fields: fieldsForModel(model),
+            field: (name) =>
+              name === 'id' || schema.user?.fields[name]
+                ? getFieldName({ model: 'user', field: name })
+                : name,
+          });
+        const routed: CustomAdapter = {
+          create: (input) =>
+            isUser(input.model)
+              ? users(input.model).create(input)
+              : generic.create(input),
+          findOne: (input) =>
+            isUser(input.model) && !input.join
+              ? users(input.model).findOne(input)
+              : generic.findOne(input),
+          findMany: (input) =>
+            isUser(input.model) && !input.join
+              ? users(input.model).findMany(input)
+              : generic.findMany(input),
+          count: (input) =>
+            isUser(input.model)
+              ? users(input.model).count(input)
+              : generic.count(input),
+          update: (input) =>
+            isUser(input.model)
+              ? users(input.model).update(input)
+              : generic.update(input),
+          updateMany: (input) =>
+            isUser(input.model)
+              ? users(input.model).updateMany(input)
+              : generic.updateMany(input),
+          delete: (input) =>
+            isUser(input.model)
+              ? users(input.model).delete(input)
+              : generic.delete(input),
+          deleteMany: (input) =>
+            isUser(input.model)
+              ? users(input.model).deleteMany(input)
+              : generic.deleteMany(input),
+          incrementOne: (input) =>
+            isUser(input.model)
+              ? users(input.model).incrementOne(input)
+              : generic.incrementOne(input),
+          consumeOne: (input) => {
+            if (isUser(input.model))
+              throw new Error('Users cannot be consumed.');
+            return generic.consumeOne(input);
+          },
+        };
+        return routed;
       },
     });
   return factory(connection);

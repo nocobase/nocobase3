@@ -1,0 +1,217 @@
+import type { DatabaseConnection } from '@nocobase/db';
+import type { Knex } from 'knex';
+
+/** The user record as administration APIs expose it. */
+export interface AdministratedUser {
+  readonly id: string;
+  readonly name: string;
+  readonly username?: string;
+  readonly email: string;
+  readonly emailVerified: boolean;
+  readonly disabledAt: Date | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export class UserAdministrationError extends Error {
+  constructor(
+    readonly code:
+      | 'USER_NOT_FOUND'
+      | 'USER_EMAIL_CONFLICT'
+      | 'USER_USERNAME_CONFLICT'
+      | 'USER_IDENTITY_CONFLICT',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'UserAdministrationError';
+  }
+}
+
+/** The physical model Better Auth and this plugin agree on by default. */
+export const USER_MODEL = 'user';
+
+export const administratedUserColumns = [
+  'id',
+  'name',
+  'username',
+  'email',
+  'emailVerified',
+  'disabledAt',
+  'createdAt',
+  'updatedAt',
+] as const;
+
+export function toAdministratedUser(
+  row: Record<string, unknown>,
+): AdministratedUser {
+  return {
+    id: scalarString(row.id, 'user ID'),
+    name: scalarString(row.name, 'user name'),
+    ...(row.username == null
+      ? {}
+      : { username: scalarString(row.username, 'username') }),
+    email: scalarString(row.email, 'user email'),
+    emailVerified: Boolean(row.emailVerified),
+    disabledAt:
+      row.disabledAt == null ? null : dateValue(row.disabledAt, 'disabledAt'),
+    createdAt: dateValue(row.createdAt, 'createdAt'),
+    updatedAt: dateValue(row.updatedAt, 'updatedAt'),
+  };
+}
+
+function scalarString(value: unknown, label: string): string {
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'boolean'
+  ) {
+    return String(value);
+  }
+  throw new Error(`Invalid ${label}`);
+}
+
+function dateValue(value: unknown, label: string): Date {
+  if (value instanceof Date) return value;
+  const numericString =
+    typeof value === 'string' && /^-?\d+(?:\.\d+)?$/u.test(value.trim())
+      ? Number(value)
+      : undefined;
+  const date =
+    typeof value === 'number'
+      ? new Date(value)
+      : typeof value === 'bigint'
+        ? new Date(Number(value))
+        : typeof value === 'string'
+          ? new Date(numericString ?? value)
+          : undefined;
+  if (!date) throw new Error(`Invalid ${label}`);
+  if (Number.isNaN(date.getTime())) throw new Error(`Invalid ${label}`);
+  return date;
+}
+
+export function requiredText(value: string, label: string): string {
+  const normalized = value.trim();
+  if (!normalized) throw new TypeError(`${label} must not be empty`);
+  return normalized;
+}
+
+export function optionalUsername(
+  value: string | undefined,
+): string | undefined {
+  const normalized = value?.trim().toLowerCase();
+  return normalized || undefined;
+}
+
+export function normalizedEmail(value: string): string {
+  return requiredText(value, 'User email').toLowerCase();
+}
+
+/**
+ * Applies the identity rules to a write: trimmed name, lower-cased email and
+ * username. `field` maps logical names to the physical columns of the write.
+ */
+export function normalizeUserWrite(
+  input: Record<string, unknown>,
+  field: (name: string) => string,
+  create: boolean,
+): Record<string, unknown> {
+  const data = { ...input };
+  for (const name of ['email', 'username', 'name'] as const) {
+    const key = field(name);
+    const value = data[key];
+    if (value === undefined) continue;
+    if (name === 'username' && value === null) continue;
+    if (typeof value !== 'string') throw new TypeError(`Invalid user ${name}`);
+    data[key] =
+      name === 'email'
+        ? normalizedEmail(value)
+        : name === 'username'
+          ? (optionalUsername(value) ?? null)
+          : requiredText(value, 'User name');
+  }
+  if (create && (!data[field('email')] || !data[field('name')])) {
+    throw new TypeError('User name and email are required.');
+  }
+  return data;
+}
+
+/** A friendly conflict before the write; the unique index still guards concurrency. */
+export async function assertIdentityAvailable(
+  connection: DatabaseConnection,
+  model: string,
+  field: (name: string) => string,
+  data: Record<string, unknown>,
+  excludeId?: string,
+): Promise<void> {
+  for (const name of ['email', 'username'] as const) {
+    const value = data[field(name)];
+    if (value == null) continue;
+    let query = connection.query
+      .selectFrom(model)
+      .select('id')
+      .where(field(name), '=', value);
+    if (excludeId !== undefined) query = query.where('id', '<>', excludeId);
+    if (await query.executeTakeFirst()) {
+      throw new UserAdministrationError(
+        name === 'email' ? 'USER_EMAIL_CONFLICT' : 'USER_USERNAME_CONFLICT',
+        `A user with this ${name} already exists`,
+      );
+    }
+  }
+}
+
+export function throwIdentityConflict(error: unknown): never {
+  if (isUniqueConstraintViolation(error)) {
+    throw new UserAdministrationError(
+      'USER_IDENTITY_CONFLICT',
+      'A user with this email or username already exists',
+    );
+  }
+  throw error;
+}
+
+function isUniqueConstraintViolation(error: unknown): boolean {
+  const visited = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current);
+    const record = current as Record<string, unknown>;
+    const number = record.errno ?? record.number ?? record.errorNum;
+    if (
+      record.code === '23505' ||
+      record.code === 'ER_DUP_ENTRY' ||
+      record.code === 'SQLITE_CONSTRAINT' ||
+      record.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+      record.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
+      number === 1 ||
+      number === 1062 ||
+      number === 2601 ||
+      number === 2627
+    ) {
+      return true;
+    }
+    current = record.cause ?? record.originalError;
+  }
+  return false;
+}
+
+/** Serialize account deletion with creation of resources owned by that account. Use inside a transaction. */
+export async function lockUser(
+  connection: DatabaseConnection,
+  userId: string,
+  model: string = USER_MODEL,
+): Promise<void> {
+  if (connection.dialect === 'sqlite') {
+    await connection.query
+      .updateTable(model)
+      .set({ id: userId })
+      .where('id', '=', userId)
+      .execute();
+    return;
+  }
+  const physical = await connection.collections.getPhysical(model);
+  if (!physical) throw new Error('User schema is unavailable');
+  const knex = await connection.client<Knex>();
+  await knex(physical.tableName).where({ id: userId }).select('id').forUpdate();
+}

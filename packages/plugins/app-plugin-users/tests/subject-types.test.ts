@@ -1,9 +1,9 @@
+import type { AdministratedUser } from '../server/user-record.js';
 import type {
-  AdministratedUser,
   ListAdministratedUsersInput,
   UserAdministrationService,
-} from '@nocobase/app-plugin-authentication';
-import { userAdministrationServiceToken } from '@nocobase/app-plugin-authentication';
+} from '../server/user-administration.js';
+import { userAdministrationServiceToken } from '../server/tokens.js';
 import {
   authorizationToken,
   createAppAuthorization,

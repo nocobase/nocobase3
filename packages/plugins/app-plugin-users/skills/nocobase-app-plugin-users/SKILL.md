@@ -10,7 +10,7 @@ metadata:
 Use this Skill when an application needs a user management page or API, or when
 another plugin needs to expose application-specific roles in the Users page. Do
 not use it to modify the Users plugin source or to replace Authentication's
-user, account, or Session storage.
+account or Session storage.
 
 ## Public surfaces
 
@@ -73,11 +73,13 @@ uses it for list pages and falls back to `get()` for existing scopes.
 
 ## Ownership
 
-- Authentication owns user identity, credentials, account state, password
-  hashing, and Sessions.
+- Users owns the user record (`user` table, identity normalization, enabled
+  and deleted state), the management API, built-in page, orchestration
+  transaction, `user` authorization handler, and role-scope registry.
+  `userAdministrationServiceToken` is the server-side entry for the record.
+- Authentication owns credentials, password hashing, accounts, and Sessions,
+  exposed through `userAuthenticationServiceToken`.
 - Authorization owns Permission Sets, grants, and assignments.
-- Users owns the management API, built-in page, orchestration transaction,
-  `user` authorization handler, and role-scope registry.
 - The App or business plugin owns role definitions, role grants, assignments,
   page placement, and role-specific invariants.
 - The plugin's `skills/` source is authoritative. `.agents/skills/` is a

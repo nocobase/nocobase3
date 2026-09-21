@@ -1,4 +1,4 @@
-import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
+import { lockUser } from '@nocobase/app-plugin-users/server';
 import { createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { receiveArtifact, validateIdempotencyKey } from './artifact-upload.js';
@@ -561,7 +561,7 @@ export class DefaultHubService implements HubService {
     try {
       await this.options.database.transaction(async (connection) => {
         if (createdBy) {
-          await lockUserForAdministration(connection, createdBy);
+          await lockUser(connection, createdBy);
           const owner = await connection.query
             .selectFrom('user')
             .select('disabledAt')

@@ -1,10 +1,7 @@
-import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { PermissionSetsApi } from '@nocobase/authorization/permissions';
-import type {
-  AdministratedUser,
-  UserAdministrationService,
-} from '@nocobase/app-plugin-authentication';
+import { lockUser, type AdministratedUser } from '../user-record.js';
+import type { UserAdministrationService } from '../user-administration.js';
 
 import {
   UserManagementError,
@@ -130,7 +127,7 @@ class DefaultUserManagementService implements UserManagementService {
   ) {
     const user = await this.services.database.transaction(
       async (connection) => {
-        await lockUserForAdministration(connection, userId);
+        await lockUser(connection, userId);
         return this.services.users
           .withConnection(connection)
           .update(userId, input);
@@ -150,7 +147,7 @@ class DefaultUserManagementService implements UserManagementService {
         await this.services.permissionSets
           ?.withTransaction(connection)
           .assertSubjectRemovable({ type: 'user', id: userId });
-        await lockUserForAdministration(connection, userId);
+        await lockUser(connection, userId);
         return this.services.users.withConnection(connection).disable(userId);
       },
     );
@@ -197,7 +194,7 @@ class DefaultUserManagementService implements UserManagementService {
   async enable(userId: string): Promise<ManagedUser> {
     const user = await this.services.database.transaction(
       async (connection) => {
-        await lockUserForAdministration(connection, userId);
+        await lockUser(connection, userId);
         return this.services.users.withConnection(connection).enable(userId);
       },
     );
@@ -238,7 +235,7 @@ class DefaultUserManagementService implements UserManagementService {
 
   async resetPassword(userId: string, password: string): Promise<void> {
     await this.services.database.transaction(async (connection) => {
-      await lockUserForAdministration(connection, userId);
+      await lockUser(connection, userId);
       await this.services.users
         .withConnection(connection)
         .resetPassword(userId, password);

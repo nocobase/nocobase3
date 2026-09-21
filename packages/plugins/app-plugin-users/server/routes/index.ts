@@ -1,6 +1,6 @@
 import {
   authenticationToken,
-  UserAdministrationError,
+  UserAuthenticationError,
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
@@ -16,6 +16,7 @@ import { AuthorizationDeniedError } from '@nocobase/authorization/core';
 import { PermissionSetLastAssignmentError } from '@nocobase/authorization/permissions';
 import { Hono } from 'hono';
 
+import { UserAdministrationError } from '../user-record.js';
 import {
   UserManagementError,
   UserRoleScopeError,
@@ -59,7 +60,11 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           error.status,
         );
       }
-      if (error instanceof UserAdministrationError) {
+      // Identity errors are this plugin's, password errors authentication's.
+      if (
+        error instanceof UserAdministrationError ||
+        error instanceof UserAuthenticationError
+      ) {
         const status =
           error.code === 'USER_NOT_FOUND'
             ? 404

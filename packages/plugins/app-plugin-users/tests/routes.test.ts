@@ -1,8 +1,8 @@
 import {
   authenticationToken,
   type Auth,
-  UserAdministrationError,
 } from '@nocobase/app-plugin-authentication';
+import { UserAdministrationError } from '../server/user-record.js';
 import {
   authorizationToken,
   type Authorization,

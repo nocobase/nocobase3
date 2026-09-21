@@ -1,7 +1,7 @@
 import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 
-import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
+import type { UserAdministrationService } from '../server/user-administration.js';
 import {
   createAppAuthorization,
   type Authorization,

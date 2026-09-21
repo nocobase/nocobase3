@@ -7,7 +7,7 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import {
   userAdministrationServiceToken,
   type UserAdministrationService,
-} from '@nocobase/app-plugin-authentication';
+} from '@nocobase/app-plugin-users/server';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import {

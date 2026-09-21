@@ -4,13 +4,18 @@ import {
   authorizationToken,
   permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
-import { userAdministrationServiceToken } from '@nocobase/app-plugin-authentication';
+import {
+  userAuthenticationServiceToken,
+  userStoreToken,
+} from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection } from '@nocobase/db';
+import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 
 import {
   type UsersConfig,
+  userAdministrationServiceToken,
   userManagementServiceToken,
   userRoleScopeRegistryToken,
 } from '../tokens.js';
@@ -18,6 +23,8 @@ import {
   createUserManagementService,
   createUserRoleScopeRegistry,
 } from '../services/users.js';
+import { createUserAdministrationService } from '../user-administration.js';
+import { createUserStore } from '../user-store.js';
 
 const USER_ACTIONS = new Set([
   'read',
@@ -40,6 +47,17 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
   private releaseSubjectType?: () => void;
 
   public override register(): void {
+    // This plugin owns the `user` table: Better Auth reads and writes users
+    // through this store, and the administration service below is the
+    // server-side entry for the user record.
+    this.app.container.instance(userStoreToken, createUserStore);
+    this.app.container.singleton(userAdministrationServiceToken, (resolver) =>
+      createUserAdministrationService({
+        connection: resolver.resolve(databaseManagerToken).connection(),
+        credentials: resolver.resolve(userAuthenticationServiceToken),
+        generateId: () => resolver.resolve(idGeneratorToken).generateString(),
+      }),
+    );
     this.app.container.singleton(userRoleScopeRegistryToken, () =>
       createUserRoleScopeRegistry(),
     );

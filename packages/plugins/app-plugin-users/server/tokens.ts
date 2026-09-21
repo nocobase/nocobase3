@@ -3,11 +3,12 @@ import {
   createServiceToken,
   type ServiceToken,
 } from '@nocobase/service-provider';
+import type { AdministratedUser } from './user-record.js';
 import type {
-  AdministratedUser,
   CreateAdministratedUserInput,
   UpdateAdministratedUserInput,
-} from '@nocobase/app-plugin-authentication';
+  UserAdministrationService,
+} from './user-administration.js';
 
 export type UserRoleSelection = 'single' | 'multiple';
 export type UserRoleValue = string | readonly string[];
@@ -166,3 +167,9 @@ export interface UsersConfig {
   /** Disable when an application provides its own assignment scope, such as Hub. */
   readonly permissionSets?: boolean;
 }
+
+/** The user record and administrator flows this plugin owns; see `UserAdministrationService`. */
+export const userAdministrationServiceToken: ServiceToken<UserAdministrationService> =
+  createServiceToken<UserAdministrationService>(
+    '@nocobase/app-plugin-users/administration',
+  );

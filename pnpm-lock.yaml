@@ -3467,6 +3467,9 @@ importers:
       '@nocobase/app-plugin-notification':
         specifier: workspace:^
         version: link:../app-plugin-notification
+      '@nocobase/app-plugin-users':
+        specifier: workspace:^
+        version: link:../app-plugin-users
       '@nocobase/app-server':
         specifier: workspace:^
         version: link:../../app/app-server
@@ -3847,6 +3850,9 @@ importers:
       jsdom:
         specifier: 'catalog:'
         version: 30.0.1(@noble/hashes@2.3.0)
+      knex:
+        specifier: 'catalog:'
+        version: 3.3.0(better-sqlite3@12.11.1)(mysql2@3.23.3(@types/node@24.13.3))(pg-query-stream@4.17.0(pg@8.23.0))(pg@8.23.0)
       prettier:
         specifier: 'catalog:'
         version: 3.9.6

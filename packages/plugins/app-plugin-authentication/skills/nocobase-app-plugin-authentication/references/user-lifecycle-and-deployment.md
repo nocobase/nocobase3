@@ -2,45 +2,38 @@
 
 ## Account state from server code
 
-`userAdministrationServiceToken` is the plugin's administration contract. The
-Users plugin builds its page and API on it; application code that needs the
-same operations, such as an onboarding job or a compliance workflow, resolves
-it too.
+Two services share the work. `userAdministrationServiceToken` from
+`@nocobase/app-plugin-users/server` owns the user record and the complete
+administrator flows: `list`, `get`, `create`, `update`, `disable`, `enable`,
+`remove`, `resetPassword`, `revokeSessions`, `withConnection`.
+`userAuthenticationServiceToken` from this plugin owns what only
+authentication can do to that user, and the users plugin calls it from those
+flows: `assertPasswordAllowed`, `createPasswordCredential`, `resetPassword`,
+`revokeSessions`, `deleteCredentials`.
 
 ```ts
 import {
   userAdministrationServiceToken,
   UserAdministrationError,
-} from '@nocobase/app-plugin-authentication';
+} from '@nocobase/app-plugin-users/server';
 
 const users = app.container.resolve(userAdministrationServiceToken);
-await users.disable(userId);
+await users.disable(userId); // revokes sessions and disconnects realtime
 ```
 
-| Method                                              | Effect                                                                                                 |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `list({ page, pageSize, search, status, userIds })` | Paged users; `pageSize` caps at 100; `status` is `'enabled'` or `'disabled'`                           |
-| `get(userId)`                                       | One user or `undefined`                                                                                |
-| `create({ name, email, username?, password })`      | Creates the user and a credential account; email and username are normalized to lower case             |
-| `update(userId, { name?, email?, username? })`      | `username: null` clears it                                                                             |
-| `disable(userId)`                                   | Sets `disabledAt`, deletes every session, disconnects realtime; sign-in returns `403 ACCOUNT_DISABLED` |
-| `enable(userId)`                                    | Clears `disabledAt`; the user signs in again, old sessions stay gone                                   |
-| `resetPassword(userId, password)`                   | Rehashes and revokes sessions                                                                          |
-| `revokeSessions(userId)`                            | Deletes sessions and disconnects realtime without changing state                                       |
-| `withConnection(connection)`                        | Binds every operation to a caller-owned transaction                                                    |
-
-Errors are `UserAdministrationError` with a `code` of `USER_NOT_FOUND`,
-`USER_EMAIL_CONFLICT`, `USER_USERNAME_CONFLICT`, `USER_IDENTITY_CONFLICT`,
-`PASSWORD_TOO_SHORT`, or `PASSWORD_TOO_LONG`. Map them to stable HTTP
-responses; do not surface database errors.
+Errors from the users plugin are `UserAdministrationError` with a `code` of
+`USER_NOT_FOUND`, `USER_EMAIL_CONFLICT`, `USER_USERNAME_CONFLICT` or
+`USER_IDENTITY_CONFLICT`; password errors from this plugin are
+`UserAuthenticationError` with `PASSWORD_TOO_SHORT` or `PASSWORD_TOO_LONG`.
+Map them to stable HTTP responses; do not surface database errors.
 
 Use `withConnection` when a user change must commit with other rows, for
-example creating a user together with its role assignment. The Users plugin's
-role scope registry is the place to hook application roles into that flow;
-read `nocobase-app-plugin-users` for it. There is no user deletion.
+example creating a user together with its role assignment. The users
+plugin's role scope registry is the place to hook application roles into that
+flow; read `nocobase-app-plugin-users` for it.
 
-The service does not delete a user and does not send email. Compose a
-notification yourself after `resetPassword` when the flow needs one.
+Neither service sends email. Compose a notification yourself after
+`resetPassword` when the flow needs one.
 
 ## Extending the user record
 

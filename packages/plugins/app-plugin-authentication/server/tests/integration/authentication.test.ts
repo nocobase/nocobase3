@@ -11,11 +11,10 @@ import {
 import { createCaching } from '@nocobase/caching';
 import { Hono } from 'hono';
 import type { Knex } from 'knex';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Auth, type AuthEnv } from '../../../index.js';
 import { createAuthStorage } from '../../auth-storage.js';
 import { databaseAdapter } from '../../better-auth/database-adapter.js';
-import { createUserAdministrationService } from '../../user-administration.js';
 
 async function migrateAuthentication(
   database: ReturnType<typeof createDatabaseManager>,
@@ -136,30 +135,6 @@ describe('Authentication', () => {
     });
   });
 
-  it('reports stable conflicts for duplicate administrator-created identities', async () => {
-    const users = createUserAdministrationService({
-      auth,
-      connection: database.connection(),
-    });
-
-    await expect(
-      users.create({
-        name: 'Duplicate email',
-        username: 'another.user',
-        email: 'ALICE@EXAMPLE.COM',
-        password: 'correct horse battery staple',
-      }),
-    ).rejects.toMatchObject({ code: 'USER_EMAIL_CONFLICT' });
-    await expect(
-      users.create({
-        name: 'Duplicate username',
-        username: 'ALICE.ADMIN',
-        email: 'another@example.com',
-        password: 'correct horse battery staple',
-      }),
-    ).rejects.toMatchObject({ code: 'USER_USERNAME_CONFLICT' });
-  });
-
   it('signs in with a normalized username without a display username field', async () => {
     const response = await router.request('/api/auth/sign-in/username', {
       method: 'POST',
@@ -218,97 +193,6 @@ describe('Authentication', () => {
         session: { id: expect.any(String) },
       },
     });
-  });
-
-  it('invalidates disabled accounts and permits login again after enabling', async () => {
-    const user = await database
-      .connection()
-      .query.selectFrom('user')
-      .select('id')
-      .where('email', '=', 'alice@example.com')
-      .executeTakeFirstOrThrow();
-    const disconnectUser = vi.fn();
-    const users = createUserAdministrationService({
-      auth,
-      connection: database.connection(),
-      realtime: { disconnectUser } as never,
-    });
-    const sessions = await database
-      .connection()
-      .query.selectFrom('session')
-      .select('token')
-      .where('userId', '=', String(user.id))
-      .execute();
-    expect(sessions.length).toBeGreaterThan(0);
-    for (const session of sessions) {
-      await expect(
-        authStorage.get(String(session.token)),
-      ).resolves.not.toBeNull();
-    }
-    await expect(
-      authStorage.get(`active-sessions-${String(user.id)}`),
-    ).resolves.not.toBeNull();
-
-    await users.disable(String(user.id));
-
-    expect(disconnectUser).toHaveBeenCalledWith(String(user.id));
-    await expect(
-      database
-        .connection()
-        .query.selectFrom('session')
-        .select('id')
-        .where('userId', '=', String(user.id))
-        .execute(),
-    ).resolves.toEqual([]);
-    for (const session of sessions) {
-      await expect(authStorage.get(String(session.token))).resolves.toBeNull();
-    }
-    await expect(
-      authStorage.get(`active-sessions-${String(user.id)}`),
-    ).resolves.toBeNull();
-    const previousSession = await router.request('/api/private', {
-      headers: { cookie },
-    });
-    expect(previousSession.status).toBe(401);
-
-    for (const [path, credentials] of [
-      [
-        '/api/auth/sign-in/email',
-        {
-          email: 'alice@example.com',
-          password: 'correct horse battery staple',
-        },
-      ],
-      [
-        '/api/auth/sign-in/username',
-        {
-          username: 'alice.admin',
-          password: 'correct horse battery staple',
-        },
-      ],
-    ] as const) {
-      const response = await router.request(path, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(credentials),
-      });
-      expect(response.status).toBe(403);
-      await expect(response.json()).resolves.toMatchObject({
-        code: 'ACCOUNT_DISABLED',
-      });
-    }
-
-    await users.enable(String(user.id));
-    const enabled = await router.request('/api/auth/sign-in/username', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        username: 'alice.admin',
-        password: 'correct horse battery staple',
-      }),
-    });
-    expect(enabled.status).toBe(200);
-    cookie = enabled.headers.get('set-cookie') ?? '';
   });
 
   it('matches email credentials case-insensitively', async () => {

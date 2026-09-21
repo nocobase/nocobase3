@@ -1,9 +1,10 @@
 # @nocobase/app-plugin-users
 
-Reusable user administration for NocoBase applications. The plugin provides a
-Settings or App page, authenticated and authorized HTTP APIs, and a role-scope
-extension point. Authentication remains the source of user and session data;
-applications and business plugins remain responsible for roles and grants.
+Reusable user administration for NocoBase applications. The plugin owns the
+user record and provides a Settings or App page, authenticated and authorized
+HTTP APIs, and a role-scope extension point. Authentication owns credentials
+and sessions; applications and business plugins remain responsible for roles
+and grants.
 
 ## Register the plugin
 
@@ -44,13 +45,22 @@ Users does not create roles or grant access by itself.
   `user:<id>:<action>` grant. Creating a user requires both `create` and
   `assign-role`.
 
-Authentication owns the `user`, `account`, and `session` tables. This plugin
-uses Authentication's public administration service and never duplicates or
-directly owns those records. Creating a user and assigning application roles
-uses one database transaction. Password reset and database Session revocation
-also share a transaction, so a revocation failure does not leave the new
-password committed. Duplicate administrator-created emails or usernames return
-a stable `409` conflict instead of exposing a database error.
+This plugin owns the `user` table. `userAdministrationServiceToken` is the
+server-side entry for the user record (list, get, create, update, enable,
+disable, remove) and `createUserStore` is the storage contract it registers
+under authentication's `userStoreToken`, so Better Auth reads and writes users
+through the same identity normalization, uniqueness checks and soft-delete
+filtering. Authentication keeps the `account` and `session` tables and exposes
+passwords, credential accounts and sessions through
+`userAuthenticationServiceToken`; the administration service calls it from its
+flows. The historical migrations that created the `user` table stay in
+authentication and are never edited; new user columns are added here.
+
+Creating a user and assigning application roles uses one database
+transaction. Password reset and database Session revocation also share a
+transaction, so a revocation failure does not leave the new password
+committed. Duplicate administrator-created emails or usernames return a stable
+`409` conflict instead of exposing a database error.
 
 ## Client contract
 
@@ -72,7 +82,7 @@ pnpm --filter @nocobase/app-plugin-users build
 
 ## Authorization subject selector
 
-When authorization is installed, the plugin registers the `user` subject type with its active-account filter and an administration selector. Searches reuse the user administration service with server-side pagination and return enabled accounts. Name resolution queries the requested IDs, including disabled accounts already referenced by a saved rule. Both callbacks require `user` resource read permission before querying; the authorization plugin separately checks settings-page access and assignment writes.
+When authorization is installed, the plugin registers the `user` subject type with its active-account filter and an administration selector. Searches reuse this plugin's user administration service with server-side pagination and return enabled accounts. Name resolution queries the requested IDs, including disabled accounts already referenced by a saved rule. Both callbacks require `user` resource read permission before querying; the authorization plugin separately checks settings-page access and assignment writes.
 
 ## Permission-set integration
 
@@ -84,4 +94,4 @@ The Settings page uses a searchable selection list for both user creation and th
 
 `DELETE /api/users/:userId` requires the `user/delete` action and `{ "confirm": true }`. The service also rejects deleting the acting user. Application role scopes can implement `assertCanDelete(userId, actorId, connection)` and `onDelete(userId, connection)` to protect owned resources and remove credentials in the same transaction. Hub grants deletion only to its Platform Administrator and registers those lifecycle rules; Users does not grant access by default. Failed cleanup rolls back the deletion. Repeating deletion is safe.
 
-Deletion removes the user from management lists, revokes sessions and removes sign-in accounts. Authentication retains a disabled identity with `deletedAt` and `deletedBy` for historical attribution; it cannot be re-enabled through user management. Email and username remain reserved. The authenticated deletion route emits a structured `user.delete` security event without credentials. The UI requires confirmation and reports failures through the application's notification host.
+Deletion removes the user from management lists, revokes sessions and removes sign-in accounts. The user record keeps a disabled identity with `deletedAt` and `deletedBy` for historical attribution; it cannot be re-enabled through user management. Email and username remain reserved. The authenticated deletion route emits a structured `user.delete` security event without credentials. The UI requires confirmation and reports failures through the application's notification host.
