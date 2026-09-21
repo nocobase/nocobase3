@@ -20,7 +20,7 @@ client:
 users:
   # Used only when seeding an empty user table.
   initialAdmin:
-    username: noco
+    username: nocobase
     password: admin123
 
 auth:
