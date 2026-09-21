@@ -76,7 +76,7 @@ Hub 镜像发布到以下两个仓库。目前两者均提供 `latest` 标签，
 | GitHub Container Registry | `ghcr.io/nocobase/hub`                          |
 | 阿里云镜像仓库            | `registry.cn-beijing.aliyuncs.com/nocobase/hub` |
 
-首次试用可将下方 `YOUR_VERSION` 替换为 `latest`；固定部署版本时，使用仓库中实际存在的标签或镜像 digest。不要直接将 npm 包版本作为镜像标签。
+首次试用可将下方 `YOUR_VERSION` 替换为 `latest`；固定部署版本时，使用仓库中实际存在的标签或镜像 digest；每次构建还会打上形如 `run-<运行ID>-<尝试号>` 的固定标签。不要直接将 npm 包版本作为镜像标签。
 
 ```bash
 hub_image=ghcr.io/nocobase/hub:YOUR_VERSION
@@ -108,7 +108,7 @@ test -s config.example.yml && { test -e config.yml || cp config.example.yml conf
 
 首次启动前，按[配置初始管理员](./configuration#配置初始管理员)设置 `users.initialAdmin` 中的用户名和密码。
 
-`database` 是容器内路径。下一步将服务器上的 `storage` 挂载到 `/data`，Hub 数据库和托管应用数据将保存在该持久目录中。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并确认所选镜像包含对应驱动。
+`database` 是容器内路径。下一步将服务器上的 `storage` 挂载到 `/data`，Hub 数据库和托管应用数据将保存在该持久目录中。官方镜像只内置 SQLite 驱动。使用其他数据库时，按[数据库配置](./configuration#配置数据库)填写连接信息，并自行构建包含对应驱动的镜像，或改用应用模板方式并在创建时指定 `--dialect`。
 
 镜像以 `node` 用户运行。可用以下命令确认 UID 和 GID，并为该用户设置 `config.yml` 的读取权限及 `storage` 的写入权限：
 

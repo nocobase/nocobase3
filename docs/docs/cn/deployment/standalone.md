@@ -11,7 +11,7 @@ description: 不使用 Hub，构建部署包并在服务器独立运行应用。
 
 构建与运行采用 Node.js 24；构建工具版本参照项目 `packageManager`。确认服务器 CPU 架构、操作系统及 libc。本文采用 Linux x64、glibc；ARM64 选 `linux-arm64`，Alpine 等 musl 环境必须选择对应目标并核验原生依赖。
 
-区分三类内容：`dist` 是可替换代码，`config.yml` 是目标环境配置，`storage` 是需要保留的数据库、文件和会话等数据。本文使用固定部署根目录，升级时仅替换 `dist`，不覆盖配置和 storage。
+区分三类内容：`dist` 是可替换代码，`config.yml` 是目标环境配置，`storage` 是需要保留的数据库、上传文件和日志等数据；默认会话保存在内存中，重启后需要重新登录。本文使用固定部署根目录，升级时仅替换 `dist`，不覆盖配置和 storage。
 
 ```text
 /srv/nocobase/crm/
@@ -37,7 +37,7 @@ APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
 tar -tzf storage/exports/dist.tar.gz | head -30
 ```
 
-产物为 `storage/exports/dist.tar.gz`，包含 `dist/` 和 `config.example.yml`，其中 dist 带有生产依赖。真实配置和本地业务数据不应加入制品。不能把 macOS 下默认构建的原生依赖直接用于 Linux。构建时明确挂载路径，并在运行时保持一致；路径变化后重新构建并检查静态资源。
+产物为 `storage/exports/dist.tar.gz`，包含 `dist/` 和 `config.example.yml`，其中 dist 带有生产依赖。真实配置和本地业务数据不应加入制品；注意 `pnpm build` 会把项目 `.env` 中白名单键（如 `DB_PASSWORD`、`APP_BASE_PATH`）写入 `dist/.env` 随制品发布，构建前确认其中没有不该带到生产环境的值。不能把 macOS 下默认构建的原生依赖直接用于 Linux。构建时明确挂载路径，并在运行时保持一致；路径变化后重新构建并检查静态资源。
 
 ## 直接使用 Node.js
 
@@ -85,7 +85,7 @@ APP_SERVER_PORT=13000 \
 node ./dist/server/standalone.js
 ```
 
-`APP_PUBLIC_ORIGIN` 不带 `/crm`；挂载路径由 `APP_BASE_PATH` 指定。检查实际页面与日志后停止前台进程，再交给服务管理器，避免启动两个应用处理同一份数据。
+`APP_PUBLIC_ORIGIN` 不带 `/crm`；挂载路径由 `APP_BASE_PATH` 指定。访问 `http://127.0.0.1:13000/crm/api/healthz`，返回 `{"ok":true}` 表示应用就绪；浏览器登录需通过 localhost 或 HTTPS，生产模式下会话 Cookie 带 `Secure` 标记。检查实际页面与日志后停止前台进程，再交给服务管理器，避免启动两个应用处理同一份数据。
 
 **长期运行。** Linux systemd 示例：将以下内容作为 `/etc/systemd/system/nocobase-crm.service`，账号 `nocobase` 必须已创建，并将 Node 路径替换成服务器 `command -v node` 的实际结果。
 
@@ -104,6 +104,7 @@ Environment=APP_BASE_PATH=/crm
 Environment=APP_PUBLIC_ORIGIN=https://apps.example.com
 Environment=APP_SERVER_HOST=127.0.0.1
 Environment=APP_SERVER_PORT=13000
+Environment=NOCOBASE_STRICT_STARTUP=true
 ExecStart=/usr/bin/node /srv/nocobase/crm/dist/server/standalone.js
 Restart=on-failure
 RestartSec=5
@@ -113,7 +114,7 @@ TimeoutStopSec=60
 WantedBy=multi-user.target
 ```
 
-由管理员执行 `systemctl daemon-reload` 和 `systemctl enable --now nocobase-crm`。检查 `systemctl status nocobase-crm` 与 `journalctl -u nocobase-crm`。重启使用 `systemctl restart nocobase-crm`。
+`NOCOBASE_STRICT_STARTUP=true` 让应用在启动失败时以非零状态退出，`Restart=on-failure` 才会真正重启它。由管理员执行 `systemctl daemon-reload` 和 `systemctl enable --now nocobase-crm`。检查 `systemctl status nocobase-crm` 与 `journalctl -u nocobase-crm`。重启使用 `systemctl restart nocobase-crm`。
 
 **使用 pm2 运行。** 不使用 systemd 时，可以用 [pm2](https://pm2.keymetrics.io/) 管理进程。应用项目根目录自带 `ecosystem.config.js`，它以 `node` 启动 `./dist/server/standalone.js` 并设置 `NODE_ENV=production`；该文件不在部署包内，需要从项目复制到部署根目录，与 `dist` 并列。其余运行参数通过环境变量传入，或补充到文件的 `env` 中。在部署根目录执行：
 
@@ -127,7 +128,7 @@ pm2 start ecosystem.config.js
 pm2 save
 ```
 
-进程名为文件中的 `name` 字段，模板默认为 `nocobase-app-template-default`，可按应用修改。使用 `pm2 restart <name>` 重启，`pm2 logs <name>` 查看日志，`pm2 startup` 生成开机自启命令。
+进程名为文件中的 `name` 字段，模板默认为 `nocobase-app-template-default`，可按应用修改。该文件是 ES 模块，若 pm2 在没有 `package.json` 的部署根目录加载它时报语法错误，将其重命名为 `ecosystem.config.mjs`。使用 `pm2 restart <name>` 重启，`pm2 logs <name>` 查看日志，`pm2 startup` 生成开机自启命令。
 
 ## 配置 HTTPS
 
@@ -137,7 +138,7 @@ pm2 save
 
 打开 `https://apps.example.com/crm/`，使用[初始管理员配置](./configuration#配置初始管理员)中的用户名和密码登录。未修改默认配置时，用户名为 `nocobase`、密码为 `admin123`；也可使用邮箱 `admin@nocobase.com` 登录。使用默认密码时，首次登录后立即修改，再开放正式访问。已有应用使用原账号，修改初始化配置不会重置密码；定制初始化任务以实际项目为准。
 
-验证登录、退出、页面刷新、静态资源、API、实时连接及实际业务操作。创建一条测试记录并上传文件，重启服务后确认仍存在。确认外部回调和通知链接使用正确域名及挂载路径。
+先请求 `https://apps.example.com/crm/api/healthz`，返回 `{"ok":true}` 表示应用已就绪，该地址也可作为服务管理器或负载均衡的健康检查。随后验证登录、退出、页面刷新、静态资源、API、实时连接及实际业务操作。创建一条测试记录并上传文件，重启服务后确认仍存在。确认外部回调和通知链接使用正确域名及挂载路径。
 
 ## 更新与版本恢复
 

@@ -14,6 +14,8 @@ From running on your own machine to running on a real server.
 ## In this section
 
 - [Production configuration](./configuration) — How to supply the database address and secrets, and how to confirm they took effect.
-- [Build and run](./standalone) — What the build output looks like, and how to start it on a server.
-- [Deploy with Docker](./docker) — Containerized deployment.
-- [Hub](./hub) — Deploying the Hub platform to manage applications.
+- [Standalone: build and run](./standalone) — What the build output looks like, and how to start it on a server.
+- [Standalone: Docker](./docker) — Containerized deployment of one application.
+- [Deploy Hub](./hub) — Deploying the Hub platform that hosts and manages applications.
+- [Publish applications with Hub](./hub-publishing) — Uploading a release and deploying, updating, stopping and rolling back an application through the UI or CLI.
+- [Backup, recovery and troubleshooting](./operations) — What to back up, how to restore, and where to look when something fails.

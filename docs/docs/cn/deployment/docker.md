@@ -47,10 +47,25 @@ services:
       APP_PUBLIC_ORIGIN: https://apps.example.com
       APP_SERVER_HOST: 0.0.0.0
       APP_SERVER_PORT: '13000'
+      NOCOBASE_STRICT_STARTUP: 'true'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:13000/crm/api/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
     volumes:
       - ./config.yml:/app/config.yml:ro
       - ./storage:/app/storage
 ```
+
+`NOCOBASE_STRICT_STARTUP` 让启动失败的容器退出，配合 `restart: unless-stopped` 自动重试；`healthcheck` 使用应用的 `/crm/api/healthz` 端点，镜像中没有 curl，因此用 Node 发起请求。
 
 ## 4. 启动服务
 
