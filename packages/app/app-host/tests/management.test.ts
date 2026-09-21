@@ -719,6 +719,11 @@ describe('managed host reconciliation', () => {
     expect((await fetch(url)).status).toBe(404);
     expect(host.registry.isActive('customer')).toBe(false);
     expect(host.registry.definition('customer')?.enabled).toBe(false);
+    // The App stays observable as registered-but-stopped while disabled.
+    expect(host.registry.status('customer')).toMatchObject({
+      definition: { id: 'customer', enabled: false },
+      app: null,
+    });
 
     const started = await host.management.startDeployment(set.deployments[0]!);
     expect(started.deployments[0]).toMatchObject({

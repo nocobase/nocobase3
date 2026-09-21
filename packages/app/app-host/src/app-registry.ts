@@ -560,8 +560,16 @@ export class AppRuntimeRegistry {
   }
 
   status(id: string): { definition: AppDefinition; app: AppSnapshot | null } {
+    // Reports a registered App even when it is disabled: `enabled` only gates
+    // activation, and a stopped deployment must still be observable as
+    // registered-but-not-running rather than answering "not found".
+    const definition = this.definitions.get(id);
+    if (!definition) {
+      throw new AppNotFoundError(id);
+    }
+
     return {
-      definition: this.requireDefinition(id),
+      definition,
       app: this.snapshot(id) ?? null,
     };
   }

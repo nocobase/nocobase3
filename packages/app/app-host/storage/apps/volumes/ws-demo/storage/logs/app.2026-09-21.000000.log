@@ -1,3 +1,9 @@
 {"level":30,"time":"2026-09-21T03:34:42.179Z","service":"app","appId":"ws-demo","runtimeId":"93fcf908-6b3e-45f1-a38d-397f4cdb3b94","logger":"lifecycle","msg":"Application initializing"}
 {"level":30,"time":"2026-09-21T03:34:42.183Z","service":"app","appId":"ws-demo","runtimeId":"93fcf908-6b3e-45f1-a38d-397f4cdb3b94","logger":"lifecycle","msg":"Application initialized"}
 {"level":30,"time":"2026-09-21T03:34:42.268Z","service":"app","appId":"ws-demo","runtimeId":"93fcf908-6b3e-45f1-a38d-397f4cdb3b94","logger":"lifecycle","msg":"Application stopped"}
+{"level":30,"time":"2026-09-21T08:23:22.245Z","service":"app","appId":"ws-demo","runtimeId":"a6e5dfb0-465b-4460-a5e2-1ad455086f71","logger":"lifecycle","msg":"Application initializing"}
+{"level":30,"time":"2026-09-21T08:23:22.246Z","service":"app","appId":"ws-demo","runtimeId":"a6e5dfb0-465b-4460-a5e2-1ad455086f71","logger":"lifecycle","msg":"Application initialized"}
+{"level":30,"time":"2026-09-21T08:23:22.265Z","service":"app","appId":"ws-demo","runtimeId":"a6e5dfb0-465b-4460-a5e2-1ad455086f71","logger":"lifecycle","msg":"Application stopped"}
+{"level":30,"time":"2026-09-21T08:24:10.811Z","service":"app","appId":"ws-demo","runtimeId":"90dc2a9b-e2e8-4535-8171-45abcf842299","logger":"lifecycle","msg":"Application initializing"}
+{"level":30,"time":"2026-09-21T08:24:10.812Z","service":"app","appId":"ws-demo","runtimeId":"90dc2a9b-e2e8-4535-8171-45abcf842299","logger":"lifecycle","msg":"Application initialized"}
+{"level":30,"time":"2026-09-21T08:24:10.839Z","service":"app","appId":"ws-demo","runtimeId":"90dc2a9b-e2e8-4535-8171-45abcf842299","logger":"lifecycle","msg":"Application stopped"}

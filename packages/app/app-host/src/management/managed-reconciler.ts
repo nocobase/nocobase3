@@ -118,6 +118,8 @@ export class ManagedReconciler {
         this.markPending(revision, running);
         // A stopped deployment left its definition disabled; re-enable it before
         // reading the definition back so the update below does not carry the flag.
+        const wasEnabled =
+          this.registry.definition(deployment.appId)?.enabled ?? true;
         await this.registry.setEnabled(deployment.appId, true);
         const previousDefinition = this.registry.definition(deployment.appId);
         const previousConfigPath = previousDefinition?.configPath;
@@ -159,6 +161,21 @@ export class ManagedReconciler {
               .catch((restoreError: unknown) => {
                 this.diagnostic.warn(
                   'Failed to restore previous app definition after start failure',
+                  {
+                    appId: deployment.appId,
+                    error: restoreError,
+                  },
+                );
+              });
+          }
+          if (!wasEnabled) {
+            // The start failed, so the App stays stopped: disable it again
+            // instead of leaving a definition the next request can activate.
+            await this.registry
+              .setEnabled(deployment.appId, false)
+              .catch((restoreError: unknown) => {
+                this.diagnostic.warn(
+                  'Failed to disable app definition after start failure',
                   {
                     appId: deployment.appId,
                     error: restoreError,
@@ -231,7 +248,12 @@ export class ManagedReconciler {
       const status = this.requireStatus(appId);
       const revision = this.nextRevision();
       // Disable before evicting so no request re-activates the App in between.
-      await this.registry.setEnabled(appId, false);
+      // A status can exist without a definition when an eager activation
+      // failed, and `setEnabled` throws for an unknown App; stopping such a
+      // deployment has to keep working.
+      if (this.registry.has(appId)) {
+        await this.registry.setEnabled(appId, false);
+      }
       await this.registry.evict(appId, {
         reason: `deployment ${status.id} stopped`,
       });
