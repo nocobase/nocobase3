@@ -1,6 +1,10 @@
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type { DatabaseTaskConfig } from '../task-config.js';
 import type { DatabaseConnection } from '../database/connection.js';
+import type {
+  ChecksumMismatch,
+  ChecksumMismatchPolicy,
+} from '../migration/checksum-history.js';
 import type { MigrationConnection } from '../migration/types.js';
 import type { QueryAdapter } from '../query/types.js';
 
@@ -61,6 +65,11 @@ export interface CreateSeederOptions extends LoadSeedsOptions {
   readonly connection?: string;
   readonly tableName?: string;
   readonly lockTableName?: string;
+  /**
+   * How to react when an executed seed's source no longer hashes to the
+   * checksum recorded for it. Defaults to `warn`.
+   */
+  readonly onChecksumMismatch?: ChecksumMismatchPolicy;
 }
 
 /** Configuration accepted by DatabaseManager.createSeeder(). */
@@ -70,6 +79,21 @@ export type DatabaseSeederOptions = Omit<CreateSeederOptions, 'database'>;
 export interface SeedRunResult {
   readonly executed: string[];
   readonly skipped: string[];
+  /** Checksum drift the `warn` policy allowed the run to continue past. */
+  readonly warnings: ChecksumMismatch[];
+}
+
+/** Options accepted by Seeder.repair(). */
+export interface SeedRepairOptions {
+  /** Report what would be rewritten without writing anything. */
+  readonly dryRun?: boolean;
+}
+
+/** Summary returned after realigning recorded seed checksums. */
+export interface SeedRepairResult {
+  /** Records rewritten, or the records a dry run would rewrite. */
+  readonly repaired: ChecksumMismatch[];
+  readonly dryRun: boolean;
 }
 
 export interface SeedHistoryRecord {

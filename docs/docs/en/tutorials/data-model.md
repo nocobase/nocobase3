@@ -61,8 +61,7 @@ Run the migration and check primary keys, uniqueness, customer references, and a
 Migrations belong in `database/main/migrations/`; seeds belong in `database/main/seeds/`. A migration defines structure; a seed inserts example data.
 
 ```bash
-pnpm migrate
-pnpm seed
+pnpm db:apply
 pnpm collections:generate
 ```
 

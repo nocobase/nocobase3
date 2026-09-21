@@ -86,10 +86,10 @@ Set `tableName` or `columnName` explicitly when you need to override the derivat
 ## Running
 
 ```bash
-pnpm migrate
+pnpm db:apply
 ```
 
-This applies pending migrations for `database.default`, including registered plugins, ordered by name across all sources. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
+This applies pending migrations and then pending seeds for `database.default`, including registered plugins, ordered by name across all sources. Both halves run only what is pending, so on an already-migrated database it applies seeds alone. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
 
 ## Multiple connections
 
@@ -100,15 +100,15 @@ Configure `connections.<name>.migrations` and `.seeds` in the database section. 
 The default connection runs migrations and seeds automatically unless disabled; other connections default to `autoRun: false`. Startup runs the default connection first, then other names in stable ascending order, migrations before seeds within each connection. A failure stops startup; completed database changes remain committed. No cross-connection transaction or rollback is provided.
 
 ```bash
-pnpm migrate --connection analytics
-pnpm seed --connection analytics
-pnpm migrate --all --json
-pnpm seed --all --json
+pnpm db:apply --connection analytics
+pnpm db:apply --all --json
 ```
 
-Manual execution ignores `autoRun`. `--connection` and `--all` are mutually exclusive. `--all` uses the same connection order and stops at the first failure. Its JSON result includes completed, skipped, failed and not-run entries; failures exit nonzero. Single-connection JSON retains `status`, `batch` (migrations), `executed`, and `skipped`, with an added `connection` field.
+Manual execution ignores `autoRun`. `--connection` and `--all` are mutually exclusive. `--all` uses the same connection order and stops at the first failure. JSON results include completed, skipped, failed and not-run entries, one per connection and kind; failures exit nonzero. Single-connection JSON from `migrate` and `seed` retains `status`, `batch` (migrations), `executed`, and `skipped`, with an added `connection` field.
 
-`pnpm migrate --fresh` is a destructive reset for managed connections. It removes the managed schema objects, clears migration history as part of that reset, and reruns all currently visible migrations; it never calls migration `down()` and never runs seeds. In an interactive terminal it asks for confirmation. CI and non-interactive terminals require `--force`, so use `pnpm migrate --fresh --force` only when the target is intentionally disposable. `--fresh` is rejected for an explicitly selected external connection; `--all` processes managed connections and reports external connections as skipped. It is limited to connections with a registered driver reset capability.
+`pnpm db:reset` is a destructive reset for managed connections. It removes the managed schema objects — which clears migration and seed history along with every row in a managed table — then reruns all currently visible migrations and seeds from empty. It never calls migration `down()`. In an interactive terminal it asks for confirmation. CI and non-interactive terminals require `--force`, so use `pnpm db:reset --force` only when the target is intentionally disposable. It is rejected for an explicitly selected external connection; `--all` processes managed connections and reports external connections as skipped. It is limited to connections with a registered driver reset capability.
+
+`migrate --fresh` was the earlier form and is gone. It reset the schema without reseeding, so it left the seed history cleared but no seed executed; the default connection recovered on the next startup and a connection with `autoRun: false` did not.
 
 `schemaManagement: external` describes ownership, not read-only credentials. Startup and `--all` skip external connections; explicitly targeting one for migrations or seeds is an error. The application resolves a metadata store for runtime access, using `database/<connectionName>/collections/` when neither a connection-level nor shared store is configured; see [database connections](database-connections.md#add-managed-or-external-connections). Seeds also use history and lock tables, so they are not a workaround for external schema ownership.
 
@@ -122,9 +122,17 @@ Different explicit old/new directories, two explicit source arrays, or a combine
 
 No command moves source files or rewrites history. When moving a directory, preserve the target database, package identity, filenames, exported names, file contents and history/lock table configuration. Do not copy already-applied migrations to another database as an upgrade. Verify a repeat run executes nothing. An explicitly configured source missing from a release is an error; an absent conventional source is permitted for applications with no owned tasks. Verify release packaging separately to catch accidental omission of conventional sources.
 
-Checksums are based on file contents. Moving unchanged files preserves them; compiling TypeScript into different JavaScript is not guaranteed to preserve an existing development database's checksums. Verify upgrades against the same execution artifact format, and never rewrite checksums to bypass a mismatch.
+Checksums are based on file contents. Moving unchanged files preserves them; compiling TypeScript into different JavaScript is not guaranteed to preserve an existing development database's checksums. Verify upgrades against the same execution artifact format.
 
 Review `server/plugins.ts` and each registered plugin’s migration declarations to identify migration contributions.
+
+## Checksum drift
+
+A checksum recorded when a migration or seed ran no longer matching its current source means the file changed after it was executed. By default the run reports the drift and continues: `pnpm db:apply` prints a warning, startup logs one through the application logger, and `--json` carries it in `warnings`. Set `onChecksumMismatch: 'error'` on a connection's `migrations` or `seeds` configuration — or at the top level — to refuse to run instead. A record whose migration is missing from the sources entirely always fails, whatever the policy says.
+
+`pnpm db:repair` (`nocobase app db repair`) rewrites the recorded checksums to match the current sources, which is how the warning is cleared once the change is confirmed intentional. One command covers both migrations and seeds. It executes nothing and changes no schema or data. Preview with `--dry-run` first; `--dry-run --json` is the form to run in CI when drift should gate a deploy. It never deletes a history record, so a repair cannot make an executed migration run again.
+
+Repair records a decision; it does not make one. It is the right tool for drift you can explain — a reformat, a comment, a rebuild that produced different output. It is not a way to edit a merged migration: the applied database still has the old schema, and rewriting the checksum only hides that. Correct a merged migration with a new migration.
 
 ## Seeds
 
@@ -148,7 +156,7 @@ const seed: SeedDefinition = defineSeed({
 export default seed;
 ```
 
-Run with `pnpm seed`. The structure a seed writes into must already exist from an earlier migration.
+Seeds run as the second half of `pnpm db:apply`. The structure a seed writes into must already exist from an earlier migration.
 
 Keep seed data fixed and reproducible — no current timestamps or random values in identifying fields. Decide explicitly what a repeat run does: skip on a unique key, or update deterministically. Never silently overwrite data a user has edited.
 
@@ -163,14 +171,14 @@ Check that `up` produces the expected tables, columns, types, indexes, and const
 - The filename and exported `name` match, and the prefix sorts correctly.
 - The migration imports no evolving definition.
 - `down` reverses `up` in a safe order.
-- `pnpm migrate` applies cleanly on an empty database and on an already-migrated one.
+- `pnpm db:apply` applies cleanly on an empty database and on an already-migrated one.
 - The physical schema matches what the migration declared.
 
 ## Compiled migration and seed manifests
 
 The application build generates `.manifest.json` in each compiled migrations and seeds directory after server compilation, path rewriting, and `afterServerBuild` hooks. Keep the manifest generator in the build when customizing it. Plugins generate their own manifests when built; an application must not regenerate manifests for installed dependencies.
 
-TypeScript and compiled JavaScript use the same source checksum for migration history, while the loader separately verifies emitted JavaScript. Marked JavaScript requires its manifest. For a database with old raw JavaScript checksums, first run the compiled representation with matching original output; verified legacy hashes are converted under the task lock. Unreproducible old output remains an error. Never edit historical migrations or replace checksums by hand to resolve an upgrade failure.
+TypeScript and compiled JavaScript use the same source checksum for migration history, while the loader separately verifies emitted JavaScript. Marked JavaScript requires its manifest. For a database with old raw JavaScript checksums, first run the compiled representation with matching original output; verified legacy hashes are converted under the task lock. Never edit historical migrations, and never edit the history table by hand, to resolve an upgrade failure.
 
 ## Reading runtime configuration
 

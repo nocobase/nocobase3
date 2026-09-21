@@ -1,4 +1,10 @@
-import { upgradeTaskChecksums } from './checksum-history.js';
+import {
+  collectChecksumMismatches,
+  describeChecksumMismatch,
+  upgradeTaskChecksums,
+  writeTaskChecksums,
+  type ChecksumMismatch,
+} from './checksum-history.js';
 import { assertManagedSchema } from '../database/schema-management.js';
 import type { Knex } from 'knex';
 import {
@@ -22,6 +28,8 @@ import type {
   LoadedMigration,
   MigrationDefinition,
   MigrationHistoryRecord,
+  MigrationRepairOptions,
+  MigrationRepairResult,
   MigrationRollbackResult,
   MigrationRunResult,
 } from './types.js';
@@ -34,6 +42,11 @@ export interface Migrator {
   upTo(name: string): Promise<MigrationRunResult>;
   /** Rolls back the most recently applied migration batch. */
   rollback(): Promise<MigrationRollbackResult>;
+  /**
+   * Rewrites recorded checksums to match the current sources, clearing drift
+   * reported by a run. Executes no migration and changes no schema.
+   */
+  repair(options?: MigrationRepairOptions): Promise<MigrationRepairResult>;
   /**
    * Migrations already applied on the connection, oldest first. Reads only:
    * a connection without a history table yields an empty list rather than
@@ -97,11 +110,7 @@ class DefaultMigrator implements Migrator {
           migrationConnection,
           this.options.tableName,
         );
-        validateAppliedMigrationHistory(
-          migrations,
-          history,
-          participatingPackageNames(this.options),
-        );
+        const warnings = this.validateAppliedHistory(migrations, history);
         await upgradeTaskChecksums(
           migrationConnection,
           this.options.tableName ?? DEFAULT_MIGRATION_TABLE,
@@ -145,7 +154,7 @@ class DefaultMigrator implements Migrator {
           executed.push(migration.name);
         }
 
-        return { batch, executed, skipped };
+        return { batch, executed, skipped, warnings };
       },
     );
     if (result.executed.length > 0) connection.collections.invalidate();
@@ -196,11 +205,7 @@ class DefaultMigrator implements Migrator {
           migrationConnection,
           this.options.tableName,
         );
-        validateAppliedMigrationHistory(
-          migrations,
-          history,
-          participatingPackageNames(this.options),
-        );
+        const warnings = this.validateAppliedHistory(migrations, history);
         await upgradeTaskChecksums(
           migrationConnection,
           this.options.tableName ?? DEFAULT_MIGRATION_TABLE,
@@ -210,7 +215,7 @@ class DefaultMigrator implements Migrator {
 
         const batch = currentBatch(history);
         if (batch === 0) {
-          return { batch: 0, rolledBack: [] };
+          return { batch: 0, rolledBack: [], warnings };
         }
 
         const migrationsByName = new Map(
@@ -236,11 +241,69 @@ class DefaultMigrator implements Migrator {
           rolledBack.push(migration.name);
         }
 
-        return { batch, rolledBack };
+        return { batch, rolledBack, warnings };
       },
     );
     if (result.rolledBack.length > 0) connection.collections.invalidate();
     return result;
+  }
+
+  async repair(
+    options: MigrationRepairOptions = {},
+  ): Promise<MigrationRepairResult> {
+    const connection = this.options.database.connection(
+      this.options.connection,
+    );
+    const tableName = this.options.tableName ?? DEFAULT_MIGRATION_TABLE;
+    const migrations = await loadMigrations(this.options);
+    const migrationConnection = createMigrationConnection(connection);
+
+    return withMigrationLock(
+      migrationConnection,
+      {
+        tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+      },
+      async () => {
+        await ensureMigrationTable(migrationConnection, tableName);
+        const history = await readMigrationHistory(
+          migrationConnection,
+          this.options.tableName,
+        );
+        const repaired = collectChecksumMismatches(migrations, history);
+        if (!options.dryRun)
+          await writeTaskChecksums(migrationConnection, tableName, repaired);
+        return { repaired, dryRun: options.dryRun === true };
+      },
+    );
+  }
+
+  /**
+   * Fails on history the sources cannot explain at all, and applies the
+   * configured policy to executed migrations whose source has since changed.
+   */
+  private validateAppliedHistory(
+    migrations: LoadedMigration[],
+    history: MigrationHistoryRecord[],
+  ): ChecksumMismatch[] {
+    const participatingPackages = participatingPackageNames(this.options);
+    const migrationsByName = new Map(
+      migrations.map((migration) => [migration.name, migration]),
+    );
+    for (const record of history) {
+      if (
+        !migrationsByName.has(record.name) &&
+        participatingPackages.has(record.packageName)
+      ) {
+        throw new Error(
+          `Executed migration "${record.name}" is missing from migration sources. Package: "${record.packageName}".`,
+        );
+      }
+    }
+    const mismatches = collectChecksumMismatches(migrations, history);
+    if (this.options.onChecksumMismatch === 'error' && mismatches.length) {
+      throw new Error(describeChecksumMismatch(mismatches[0], 'migration'));
+    }
+    return mismatches;
   }
 
   private async runUpMigration(
@@ -350,39 +413,6 @@ function selectMigrations(
     throw new Error(`Migration target "${targetName}" was not found.`);
   }
   return migrations.slice(0, targetIndex + 1);
-}
-
-function validateAppliedMigrationHistory(
-  migrations: LoadedMigration[],
-  history: MigrationHistoryRecord[],
-  participatingPackages?: ReadonlySet<string>,
-): void {
-  const migrationsByName = new Map(
-    migrations.map((migration) => [migration.name, migration]),
-  );
-  for (const record of history) {
-    const migration = migrationsByName.get(record.name);
-    if (!migration) {
-      if (
-        participatingPackages &&
-        !participatingPackages.has(record.packageName)
-      ) {
-        continue;
-      }
-      throw new Error(
-        `Executed migration "${record.name}" is missing from migration sources. Package: "${record.packageName}".`,
-      );
-    }
-    if (
-      record.checksum !== migration.checksum &&
-      (record.packageName !== migration.packageName ||
-        record.checksum !== migration.legacyChecksum)
-    ) {
-      throw new Error(
-        `Executed migration "${record.name}" checksum changed. Package: "${record.packageName}".`,
-      );
-    }
-  }
 }
 
 function participatingPackageNames(

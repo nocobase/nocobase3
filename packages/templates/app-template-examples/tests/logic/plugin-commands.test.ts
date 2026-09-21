@@ -33,8 +33,9 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'skills:sync': 'nocobase skills sync',
   'package:remove': 'nocobase package remove',
   nocobase: 'tsx ./cli/index.ts',
-  migrate: 'pnpm nocobase app migrate',
-  seed: 'pnpm nocobase app seed',
+  'db:apply': 'pnpm nocobase app db apply',
+  'db:reset': 'pnpm nocobase app db reset',
+  'db:repair': 'pnpm nocobase app db repair',
 };
 
 describe('documented plugin commands', () => {

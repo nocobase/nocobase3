@@ -1,5 +1,9 @@
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type { DatabaseTaskConfig } from '../task-config.js';
+import type {
+  ChecksumMismatch,
+  ChecksumMismatchPolicy,
+} from './checksum-history.js';
 import type { CollectionBuilder } from '../collection/builder/builder.js';
 import type { DatabaseConnection } from '../database/connection.js';
 import type { DatabaseDialect, DatabaseDriver } from '../database/config.js';
@@ -86,6 +90,11 @@ export interface CreateMigratorOptions extends LoadMigrationsOptions {
   readonly connection?: string;
   readonly tableName?: string;
   readonly lockTableName?: string;
+  /**
+   * How to react when an executed migration's source no longer hashes to the
+   * checksum recorded for it. Defaults to `warn`.
+   */
+  readonly onChecksumMismatch?: ChecksumMismatchPolicy;
 }
 
 /** Configuration accepted by DatabaseManager.createMigrator(). */
@@ -96,12 +105,29 @@ export interface MigrationRunResult {
   readonly batch: number;
   readonly executed: string[];
   readonly skipped: string[];
+  /** Checksum drift the `warn` policy allowed the run to continue past. */
+  readonly warnings: ChecksumMismatch[];
 }
 
 /** Summary returned after rolling back the latest migration batch. */
 export interface MigrationRollbackResult {
   readonly batch: number;
   readonly rolledBack: string[];
+  /** Checksum drift the `warn` policy allowed the rollback to continue past. */
+  readonly warnings: ChecksumMismatch[];
+}
+
+/** Options accepted by Migrator.repair(). */
+export interface MigrationRepairOptions {
+  /** Report what would be rewritten without writing anything. */
+  readonly dryRun?: boolean;
+}
+
+/** Summary returned after realigning recorded migration checksums. */
+export interface MigrationRepairResult {
+  /** Records rewritten, or the records a dry run would rewrite. */
+  readonly repaired: ChecksumMismatch[];
+  readonly dryRun: boolean;
 }
 
 export interface MigrationHistoryRecord {

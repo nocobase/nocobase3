@@ -1,2 +1,2 @@
 import commands from '../standard-commands.js';
-export default commands['migrate'];
+export default commands['db:repair'];

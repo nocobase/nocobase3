@@ -286,25 +286,30 @@ describeIntegrationDatabases('migration runner', (context) => {
       batch: 1,
       executed: migrationNames.slice(0, 2),
       skipped: [],
+      warnings: [],
     });
     await expect(migrator.upTo(migrationNames[1])).resolves.toEqual({
       batch: 1,
       executed: [],
       skipped: migrationNames.slice(0, 2),
+      warnings: [],
     });
     await expect(migrator.latest()).resolves.toEqual({
       batch: 2,
       executed: [migrationNames[2]],
       skipped: migrationNames.slice(0, 2),
+      warnings: [],
     });
     await expect(migrator.upTo(migrationNames[1])).resolves.toEqual({
       batch: 2,
       executed: [],
       skipped: migrationNames.slice(0, 2),
+      warnings: [],
     });
     await expect(migrator.rollback()).resolves.toEqual({
       batch: 2,
       rolledBack: [migrationNames[2]],
+      warnings: [],
     });
     await expect(
       context.db(dataTableName).select('event').orderBy('id'),
@@ -380,6 +385,7 @@ describeIntegrationDatabases('migration runner', (context) => {
       batch: 1,
       executed: [],
       skipped: [migrationName],
+      warnings: [],
     });
     await expect(
       context.db(tableName).select(['package_name', 'name']),
@@ -437,6 +443,7 @@ describeIntegrationDatabases('migration runner', (context) => {
     await expect(migrator.rollback()).resolves.toEqual({
       batch: 1,
       rolledBack: ['202608180002_package_alpha', '202608180001_package_beta'],
+      warnings: [],
     });
     await expect(
       context.db(dataTableName).select('event').orderBy('id'),
@@ -499,6 +506,7 @@ describeIntegrationDatabases('migration runner', (context) => {
       batch: 1,
       executed: [],
       skipped: [],
+      warnings: [],
     });
     await expect(
       context.db(tableName).select(['package_name', 'name']),
@@ -553,6 +561,7 @@ describeIntegrationDatabases('migration runner', (context) => {
     await expect(migrator.rollback()).resolves.toEqual({
       batch: 1,
       rolledBack: ['202608180001_create_rollback_users'],
+      warnings: [],
     });
     expect(
       await context.db.schema.hasTable(context.table('rollbackUsers')),
@@ -616,52 +625,105 @@ describeIntegrationDatabases('migration runner', (context) => {
     await expect(context.db(tableName).select()).resolves.toEqual([]);
   });
 
-  it('rejects checksum changes for already executed migrations', async () => {
+  it('reports, rejects, and repairs checksum changes for executed migrations', async () => {
     const directory = await createTempDirectory();
     const tableName = context.table('checksumHistory');
     const lockTableName = context.table('checksumLock');
     const migrationName = '202608180001_checksum_guard';
-    await writeMigration(
-      directory,
-      migrationName,
-      `
+    const source = (body: string): string => `
       import { defineMigration } from '../../../../db/src/index.js';
 
       export default defineMigration({
         name: '202608180001_checksum_guard',
-        async up() {},
+        async up() {${body}},
         async down() {},
       });
-    `,
-    );
+    `;
+    await writeMigration(directory, migrationName, source(''));
 
-    const migrator = createMigrator({
+    const options = {
       database: context.database,
       connection: context.spec.name,
       directory,
       tableName,
       lockTableName,
-    });
+    };
+    const migrator = createMigrator(options);
 
-    await migrator.latest();
+    const first = await migrator.latest();
+    expect(first.executed).toEqual([migrationName]);
+    expect(first.warnings).toEqual([]);
+    const [recorded] = await context.db(tableName).select();
+
     await writeMigration(
       directory,
       migrationName,
+      source('\n          // changed after execution\n        '),
+    );
+
+    // The default policy reports the drift and lets the run continue.
+    const warned = await migrator.latest();
+    expect(warned.warnings).toEqual([
+      {
+        packageName: 'app',
+        name: migrationName,
+        recordedChecksum: recorded.checksum,
+        sourceChecksum: expect.not.stringMatching(recorded.checksum),
+      },
+    ]);
+
+    await expect(
+      createMigrator({ ...options, onChecksumMismatch: 'error' }).latest(),
+    ).rejects.toThrow(
+      'Executed migration "202608180001_checksum_guard" checksum changed.',
+    );
+
+    // A dry run reports the same records without writing any of them.
+    const preview = await migrator.repair({ dryRun: true });
+    expect(preview).toEqual({ repaired: warned.warnings, dryRun: true });
+    await expect(context.db(tableName).select()).resolves.toEqual([recorded]);
+
+    const repaired = await migrator.repair();
+    expect(repaired).toEqual({ repaired: warned.warnings, dryRun: false });
+
+    const after = await createMigrator({
+      ...options,
+      onChecksumMismatch: 'error',
+    }).latest();
+    expect(after.warnings).toEqual([]);
+    expect(after.skipped).toEqual([migrationName]);
+    expect(await migrator.repair()).toEqual({ repaired: [], dryRun: false });
+  });
+
+  it('fails regardless of policy when executed migrations have no source', async () => {
+    const directory = await createTempDirectory();
+    const tableName = context.table('missingHistory');
+    const lockTableName = context.table('missingLock');
+    await writeMigration(
+      directory,
+      '202608180002_vanishes',
       `
       import { defineMigration } from '../../../../db/src/index.js';
 
       export default defineMigration({
-        name: '202608180001_checksum_guard',
-        async up() {
-          // changed after execution
-        },
+        name: '202608180002_vanishes',
+        async up() {},
         async down() {},
       });
     `,
     );
+    const options = {
+      database: context.database,
+      connection: context.spec.name,
+      directory,
+      tableName,
+      lockTableName,
+    };
+    await createMigrator(options).latest();
+    await rm(join(directory, '202608180002_vanishes.ts'));
 
-    await expect(migrator.latest()).rejects.toThrow(
-      'Executed migration "202608180001_checksum_guard" checksum changed.',
+    await expect(createMigrator(options).latest()).rejects.toThrow(
+      'Executed migration "202608180002_vanishes" is missing from migration sources.',
     );
   });
 });
