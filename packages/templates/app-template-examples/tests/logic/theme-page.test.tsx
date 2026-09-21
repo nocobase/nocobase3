@@ -111,13 +111,22 @@ describe('settings theme page', () => {
     expect(screen.getAllByTestId('theme-selected-indicator')).toHaveLength(1);
   });
 
-  it('keeps a short registry free of search UI', async () => {
+  it('searches a short registry too, and reports what it cannot find', async () => {
     setRegistry(BUILT_IN);
 
     await renderPage();
+    const search = screen.getByRole('searchbox', { name: 'Search themes' });
 
-    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
     expect(screen.getAllByRole('radio')).toHaveLength(2);
+
+    await userEvent.type(search, 'spacious');
+    expect(screen.getAllByRole('radio')).toHaveLength(1);
+    expect(screen.getByRole('radio', { name: 'Spacious' })).toBeVisible();
+
+    await userEvent.clear(search);
+    await userEvent.type(search, 'zzz');
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.getByText('No theme matches “zzz”.')).toBeVisible();
   });
 
   it('filters by theme name and by theme id, and restores the grid when cleared', async () => {

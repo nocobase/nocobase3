@@ -10,12 +10,6 @@ import { themePresets } from '@/theme/theme-presets';
 import { ThemePreviewCard } from './theme-preview-card.js';
 
 /**
- * Below this many themes the grid reads at a glance and a search field would be noise; above it, finding one by name
- * stops being a matter of scanning.
- */
-const SEARCH_THRESHOLD = 8;
-
-/**
  * Application theme settings.
  *
  * A registry with dozens of presets is the case this page is shaped for: the cards wrap into as many columns as the
@@ -46,22 +40,20 @@ export default function ThemePage(): ReactElement {
             'Choose the theme this application uses. Light and dark are switched from the header.',
         })}
         actions={
-          themePresets.length > SEARCH_THRESHOLD ? (
-            <div className='relative w-full sm:w-64'>
-              <Search
-                aria-hidden='true'
-                className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground'
-              />
-              <Input
-                aria-label={search}
-                className='pl-9'
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={search}
-                type='search'
-                value={query}
-              />
-            </div>
-          ) : undefined
+          <div className='relative w-full sm:w-64'>
+            <Search
+              aria-hidden='true'
+              className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground'
+            />
+            <Input
+              aria-label={search}
+              className='pl-9'
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={search}
+              type='search'
+              value={query}
+            />
+          </div>
         }
       />
       {visible.length > 0 ? (
