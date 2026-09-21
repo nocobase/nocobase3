@@ -76,7 +76,11 @@ class DefaultMigrator implements Migrator {
     );
     const migrations = await loadMigrations(this.options);
     const selectedMigrations = selectMigrations(migrations, targetName);
-    const migrationConnection = createMigrationContext(connection).connection;
+    const migrationConnection = createMigrationContext(
+      connection,
+      this.options.config,
+      this.options.container,
+    ).connection;
 
     const result = await withMigrationLock(
       migrationConnection,
@@ -118,7 +122,11 @@ class DefaultMigrator implements Migrator {
         for (const migration of pending) {
           if (migration.migration.shouldRun) {
             const shouldRun = await migration.migration.shouldRun({
-              ...createMigrationContext(connection),
+              ...createMigrationContext(
+                connection,
+                this.options.config,
+                this.options.container,
+              ),
               parameters: migration.parameters,
               configuration: migration.configuration,
             });
@@ -167,7 +175,11 @@ class DefaultMigrator implements Migrator {
       'migration.rollback',
     );
     const migrations = await loadMigrations(this.options);
-    const migrationConnection = createMigrationContext(connection).connection;
+    const migrationConnection = createMigrationContext(
+      connection,
+      this.options.config,
+      this.options.container,
+    ).connection;
 
     const result = await withMigrationLock(
       migrationConnection,
@@ -239,7 +251,11 @@ class DefaultMigrator implements Migrator {
     const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
       const context = {
-        ...createMigrationContext(connection),
+        ...createMigrationContext(
+          connection,
+          this.options.config,
+          this.options.container,
+        ),
         parameters: loaded.parameters,
         configuration: loaded.configuration,
       };
@@ -258,7 +274,11 @@ class DefaultMigrator implements Migrator {
 
     await connection.transaction(async (trxConnection) => {
       const context = {
-        ...createMigrationContext(trxConnection),
+        ...createMigrationContext(
+          trxConnection,
+          this.options.config,
+          this.options.container,
+        ),
         parameters: loaded.parameters,
         configuration: loaded.configuration,
       };
@@ -282,7 +302,11 @@ class DefaultMigrator implements Migrator {
     const mode = loaded.migration.transaction ?? 'auto';
     if (mode === false) {
       const context = {
-        ...createMigrationContext(connection),
+        ...createMigrationContext(
+          connection,
+          this.options.config,
+          this.options.container,
+        ),
         parameters: loaded.parameters,
         configuration: loaded.configuration,
       };
@@ -296,7 +320,11 @@ class DefaultMigrator implements Migrator {
 
     await connection.transaction(async (trxConnection) => {
       const context = {
-        ...createMigrationContext(trxConnection),
+        ...createMigrationContext(
+          trxConnection,
+          this.options.config,
+          this.options.container,
+        ),
         parameters: loaded.parameters,
         configuration: loaded.configuration,
       };

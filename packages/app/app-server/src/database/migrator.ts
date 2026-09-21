@@ -1,3 +1,7 @@
+import { createTaskServiceResolver } from './task-container.js';
+import type { ServiceResolver } from '@nocobase/service-provider';
+import { snapshotDatabaseTaskConfig } from './task-config.js';
+import type { DatabaseTaskConfig } from '@nocobase/db';
 import { existsSync } from 'node:fs';
 
 import {
@@ -35,6 +39,8 @@ export interface AppMigrationRollbackResult {
 }
 
 export interface CreateAppMigratorOptions {
+  runtimeConfig?: DatabaseTaskConfig;
+  container?: ServiceResolver;
   database: DatabaseManager;
   config: AppDatabaseMigrationConfig;
   connection?: string;
@@ -87,6 +93,8 @@ function createDatabaseMigratorOptions(
   options: CreateAppMigratorOptions,
 ): CreateMigratorOptions {
   const common = {
+    config: snapshotDatabaseTaskConfig(options.runtimeConfig),
+    container: createTaskServiceResolver(options.container),
     database: options.database,
     connection: options.connection,
     tableName: options.config.tableName,

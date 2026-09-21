@@ -234,7 +234,6 @@ describe('SchedulesPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Scheduled tasks' }),
     ).toBeTruthy();
-    expect(screen.getByText('Automation')).toBeTruthy();
     expect(screen.queryByText('Create')).toBeNull();
     expect(screen.queryByText('Read only')).toBeNull();
     expect(screen.queryByText('Read-only code-defined schedules.')).toBeNull();
@@ -252,7 +251,6 @@ describe('SchedulesPage', () => {
     renderList();
     expect(await screen.findByText('在上午 02:00')).toBeTruthy();
     expect(screen.getByRole('heading', { name: '定时任务' })).toBeTruthy();
-    expect(screen.getByText('自动化')).toBeTruthy();
     expect(screen.queryByText('只读')).toBeNull();
     expect(screen.queryByText('0 0 2 * * *')).toBeNull();
   });

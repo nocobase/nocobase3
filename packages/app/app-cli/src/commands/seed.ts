@@ -46,7 +46,7 @@ export default class AppSeed extends AppCommand {
       },
       'seeds',
       flags,
-      async () => this.appContext.loadRuntime(),
+      this.appContext,
     );
   }
 }

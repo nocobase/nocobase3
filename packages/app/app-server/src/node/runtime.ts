@@ -161,18 +161,21 @@ export function createStandaloneRuntimeScope(
   return createStandaloneScope(options);
 }
 
-export function resolveStandaloneAppRuntime(
+export async function resolveStandaloneAppRuntime(
   definition: AppRuntimeDefinition,
   options: CreateStandaloneRuntimeScopeOptions,
-): Promise<ResolvedAppRuntime> {
-  return resolveAppRuntime(
-    definition,
-    createStandaloneRuntimeScope({
-      ...options,
-      deploymentRootDir:
-        options.deploymentRootDir ?? definition.deploymentRootDir,
-    }),
-  );
+): Promise<ResolvedAppRuntime & { readonly scope: StandaloneAppScope }> {
+  const scope = createStandaloneRuntimeScope({
+    ...options,
+    deploymentRootDir:
+      options.deploymentRootDir ?? definition.deploymentRootDir,
+  });
+  try {
+    const runtime = await resolveAppRuntime(definition, scope);
+    return Object.assign(runtime, { scope });
+  } catch (error) {
+    return disposeAfterStartupFailure(() => scope.destroy(), error);
+  }
 }
 
 async function startStandaloneServer(

@@ -1,3 +1,6 @@
+import type { Application } from '@nocobase/app-server';
+import { databaseManagerToken } from '@nocobase/db';
+import type { AppCommandContext, AppCommandRuntime } from './context.js';
 import {
   AppDatabaseTaskError,
   type AppDatabaseConfig,
@@ -6,11 +9,6 @@ import {
   type AppDatabaseTasksResult,
 } from '@nocobase/app-server/database';
 import type { AppDatabaseTask } from '@nocobase/app-server/database';
-import type { AppConfigAccessor, AppPaths } from '@nocobase/app-server/config';
-import {
-  createAppDatabaseTaskContributions,
-  type ResolvedAppServerPlugins,
-} from '@nocobase/app-server/plugins';
 import { createInterface } from 'node:readline/promises';
 
 /** Keep single-connection JSON fields compatible while exposing per-connection bulk results. */
@@ -28,11 +26,7 @@ export async function runDatabaseCommand(
     fresh?: boolean;
     force?: boolean;
   },
-  resolveRuntime: () => Promise<{
-    config: AppConfigAccessor;
-    paths: AppPaths;
-    plugins: ResolvedAppServerPlugins;
-  }>,
+  context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
 ): Promise<void> {
   if (flags.force && !flags.fresh) {
     command.log('--force can only be used together with --fresh.');
@@ -50,31 +44,67 @@ export async function runDatabaseCommand(
     command.exit(1);
     return;
   }
-  let result: AppDatabaseTasksResult;
+  let result: AppDatabaseTasksResult | undefined;
+  let runtime: AppCommandRuntime | undefined;
+  let app: Application | undefined;
   try {
-    const runtime = await resolveRuntime();
-    result = await runAppDatabaseTasks(
-      runtime.config.get<AppDatabaseConfig>('database')!,
-      {
-        paths: runtime.paths,
-        runtimeConfig: runtime.config,
-        // Plugin migrations and seeds are resolved from the registered plugins,
-        // never from config.yml, so they cannot be configured away.
-        contributions: createAppDatabaseTaskContributions(runtime.plugins),
-        kind,
-        all: flags.all,
-        connection: flags.connection,
-        ...(flags.fresh
-          ? {
-              fresh: true,
-              confirmFresh: flags.force
-                ? undefined
-                : (plan: readonly AppDatabaseTask[]) =>
-                    confirmFresh(command, plan),
-            }
-          : {}),
-      },
-    );
+    runtime = await context.loadRuntime();
+    let failure: unknown;
+    let failed = false;
+    try {
+      app = await context.createApp(runtime);
+      app.registerProviders();
+      result = await runAppDatabaseTasks(
+        app.config.get<AppDatabaseConfig>('database')!,
+        {
+          paths: app.paths,
+          runtimeConfig: app.config,
+          container: app.container,
+          // Plugin migrations and seeds are resolved from the registered plugins,
+          // never from config.yml, so they cannot be configured away.
+          contributions: app.databaseTaskContributions,
+          database: () => app!.container.resolve(databaseManagerToken),
+          kind,
+          all: flags.all,
+          connection: flags.connection,
+          ...(flags.fresh
+            ? {
+                fresh: true,
+                confirmFresh: flags.force
+                  ? undefined
+                  : (plan: readonly AppDatabaseTask[]) =>
+                      confirmFresh(command, plan),
+              }
+            : {}),
+        },
+      );
+    } catch (error) {
+      failed = true;
+      failure = error;
+    }
+    // A factory may bind runtime.app before throwing. Dispose partial assembly too.
+    const cleanupErrors: unknown[] = [];
+    try {
+      await (app ?? runtime.app)?.shutdown();
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+    try {
+      await runtime.scope.destroy();
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+    delete runtime.app;
+    if (failed && cleanupErrors.length) {
+      throw new AggregateError(
+        [failure, ...cleanupErrors],
+        `${failure instanceof Error ? failure.message : String(failure)}; application cleanup also failed`,
+        { cause: failure },
+      );
+    }
+    if (failed) throw failure;
+    if (cleanupErrors.length)
+      throw new AggregateError(cleanupErrors, 'Application cleanup failed');
   } catch (error) {
     if (!(error instanceof AppDatabaseTaskError)) {
       if (flags.json)
@@ -90,6 +120,7 @@ export async function runDatabaseCommand(
     }
     result = error.result;
   }
+  if (!result) throw new Error('Database task returned no result.');
   if (flags.json) {
     if (flags.all || !result.ok) command.logJson(result);
     else if (!result.results.length)

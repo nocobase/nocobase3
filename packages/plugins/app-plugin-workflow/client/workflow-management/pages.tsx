@@ -97,7 +97,10 @@ function WorkflowBackButton(): React.ReactElement {
 function WorkflowTabs(): React.ReactElement {
   const { t } = useTranslation(WORKFLOW_NS);
   return (
-    <nav aria-label={t('nav.workflows')} className='flex gap-1 overflow-x-auto'>
+    <nav
+      aria-label={t('nav.workflows')}
+      className='flex gap-1 overflow-x-auto border-b border-border'
+    >
       {(['workflows', 'runs'] as const).map((module) => (
         <NavLink
           key={module}
@@ -133,15 +136,9 @@ export function WorkflowManagementPage(): React.ReactElement {
     );
   if (isDetail) return <Outlet />;
   return (
-    <PageContainer
-      className='workflow-page'
-      header={
-        <PageHeader
-          title={t('workflows.title')}
-          navigation={<WorkflowTabs />}
-        />
-      }
-    >
+    <PageContainer className='workflow-page'>
+      <PageHeader title={t('workflows.title')} />
+      <WorkflowTabs />
       {isParent ? (
         <Navigate replace to={`workflows${location.search}`} />
       ) : (
@@ -998,15 +995,9 @@ export function WorkflowDetailPage(): React.ReactElement {
   const identifier = workflow?.id ?? workflow?.hash;
   if (!workflow || !source || !identifier)
     return (
-      <PageContainer
-        className='workflow-page'
-        header={
-          <PageHeader
-            title={workflow?.title ?? t('workflows.title')}
-            back={<WorkflowBackButton />}
-          />
-        }
-      >
+      <PageContainer className='workflow-page'>
+        <WorkflowBackButton />
+        <PageHeader title={workflow?.title ?? t('workflows.title')} />
         <p
           className='text-sm text-muted-foreground'
           role={loaded.error ? 'alert' : 'status'}
@@ -1038,16 +1029,12 @@ export function WorkflowDetailPage(): React.ReactElement {
     });
   };
   return (
-    <PageContainer
-      className='workflow-page'
-      header={
-        <PageHeader
-          back={<WorkflowBackButton />}
-          title={workflow.title ?? workflow.key}
-          description={workflow.description || t('workflows.noDescription')}
-        />
-      }
-    >
+    <PageContainer className='workflow-page'>
+      <WorkflowBackButton />
+      <PageHeader
+        title={workflow.title ?? workflow.key}
+        description={workflow.description || t('workflows.noDescription')}
+      />
       <section ref={canvasCardRef} className='workflow-canvas-card'>
         <header className='workflow-canvas-header'>
           <div className='workflow-canvas-header-leading'>
@@ -1415,15 +1402,11 @@ export function WorkflowRunDetailPage(): React.ReactElement {
   );
   if (!run || !workflow.value || !source)
     return (
-      <PageContainer
-        className='workflow-page'
-        header={
-          <PageHeader
-            title={run?.workflowTitle ?? run?.workflowKey ?? t('nav.runs')}
-            back={<WorkflowBackButton />}
-          />
-        }
-      >
+      <PageContainer className='workflow-page'>
+        <WorkflowBackButton />
+        <PageHeader
+          title={run?.workflowTitle ?? run?.workflowKey ?? t('nav.runs')}
+        />
         <p
           className='text-sm text-muted-foreground'
           role={state.error || (run && workflow.error) ? 'alert' : 'status'}
@@ -1440,23 +1423,19 @@ export function WorkflowRunDetailPage(): React.ReactElement {
   const title = selectedNode?.title ?? selectedNode?.key ?? nodeRun?.nodeKey;
   const description = selectedNode?.description ?? null;
   return (
-    <PageContainer
-      className='workflow-page'
-      header={
-        <PageHeader
-          back={<WorkflowBackButton />}
-          title={
-            <Link
-              className='hover:underline underline-offset-4 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring'
-              to={workflowPath(run.workflowId)}
-            >
-              {run.workflowTitle ?? run.workflowKey}
-            </Link>
-          }
-          description={`${t('workflows.version')}: ${run.workflowVersion ?? t('common.unpublished')}`}
-        />
-      }
-    >
+    <PageContainer className='workflow-page'>
+      <WorkflowBackButton />
+      <PageHeader
+        title={
+          <Link
+            className='hover:underline underline-offset-4 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            to={workflowPath(run.workflowId)}
+          >
+            {run.workflowTitle ?? run.workflowKey}
+          </Link>
+        }
+        description={`${t('workflows.version')}: ${run.workflowVersion ?? t('common.unpublished')}`}
+      />
       <section ref={canvasCardRef} className='workflow-canvas-card'>
         <header className='workflow-canvas-header workflow-run-detail-header'>
           <span className='workflow-run-triggered-at'>

@@ -8,7 +8,7 @@ import { WorkflowAuthorizationProvider } from '../server/authorization.js';
 import routes from '../client/routes.js';
 
 it.each([false, true])(
-  'adds a read resource to Automation (group exists: %s)',
+  'adds a management resource to Automation (group exists: %s)',
   async (exists) => {
     const authz = createAppAuthorization({});
     if (exists)
@@ -30,17 +30,17 @@ it.each([false, true])(
     expect(authz.resources.definitionsList()).toContainEqual(
       expect.objectContaining({ name: 'workflow', group: 'automation' }),
     );
-    expect(authz.resources.operation('workflow', 'read')?.grants).toEqual([
+    expect(authz.resources.operation('workflow', 'manage')?.grants).toEqual([
       {
         resource: { type: 'settings', id: 'workflow' },
-        actions: [{ action: 'read' }],
+        actions: [{ action: 'manage' }],
       },
     ]);
     expect(authz.resources.operation('workflow', 'configure')).toBeUndefined();
   },
 );
 
-it('uses administration read for Settings and standalone detail routes', () => {
+it('uses administration manage for Settings and standalone detail routes', () => {
   const resolved = resolveAppClientContributions([
     { packageName: '@nocobase/app-plugin-workflow', routes },
   ]);
@@ -48,11 +48,11 @@ it('uses administration read for Settings and standalone detail routes', () => {
   for (const route of resolved.routes) {
     expect(route.authz).toEqual({
       resource: { type: 'settings', id: 'workflow' },
-      action: 'read',
+      action: 'manage',
     });
   }
   expect(resolved.settingsRouteTree[0]?.children?.[0]?.authz).toEqual({
     resource: { type: 'settings', id: 'workflow' },
-    action: 'read',
+    action: 'manage',
   });
 });

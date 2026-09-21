@@ -1,3 +1,5 @@
+import { ServiceContainer } from '../../../../service-provider/src/index.js';
+import { databaseManagerToken } from '../../../../db/src/index.js';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -15,6 +17,49 @@ describeIntegrationDatabases('migration runner', (context) => {
         .map((directory) => rm(directory, { recursive: true, force: true })),
     );
   });
+
+  it.each([true, false])(
+    'passes config to callbacks with transaction=%s',
+    async (transaction) => {
+      const directory = await createTempDirectory();
+      const name = '202609200001_runtime_config';
+      const container = new ServiceContainer();
+      container.instance(databaseManagerToken, context.database);
+      await writeFile(
+        join(directory, `${name}.ts`),
+        `
+      import { defineMigration, databaseManagerToken } from '../../../../db/src/index.js';
+      function check(config, container) {
+        if (config.get('initialAdmin.username') !== 'configured-admin') throw new Error('missing config');
+        if (config.get('missing') !== undefined) throw new Error('unexpected config');
+        if (!container.has(databaseManagerToken) || !container.resolve(databaseManagerToken).connection('${context.spec.name}')) throw new Error('missing container');
+      }
+      export default defineMigration({
+        name: '${name}', transaction: ${transaction},
+        shouldRun({ config, container }) { check(config, container); return true; },
+        async up({ config, container }) { check(config, container); },
+        async down({ config, container }) { check(config, container); },
+      });
+    `,
+      );
+      const runner = context.database.createMigrator({
+        connection: context.spec.name,
+        directory,
+        packageName: 'config-test',
+        container,
+        tableName: context.table('runtimeConfigHistory'),
+        lockTableName: context.table('runtimeConfigLock'),
+        config: {
+          get: <T>(key: string): T | undefined =>
+            (key === 'initialAdmin.username'
+              ? 'configured-admin'
+              : undefined) as T | undefined,
+        },
+      });
+      expect((await runner.latest()).executed).toEqual([name]);
+      expect((await runner.rollback()).rolledBack).toEqual([name]);
+    },
+  );
 
   it.each([true, false])(
     'keeps conditionally skipped migrations pending with transaction=%s',
