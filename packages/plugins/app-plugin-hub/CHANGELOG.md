@@ -1,5 +1,17 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.15
+
+### Patch Changes
+
+- 4ffcbc2: Add the user-event development dependency to exercise API key confirmation flows with realistic pointer and focus interactions.
+- Updated dependencies [43592e9]
+- Updated dependencies [43592e9]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.19
+  - @nocobase/app-plugin-authorization@0.2.0-beta.16
+  - @nocobase/db@1.0.0-beta.12
+  - @nocobase/app-server@1.0.0-beta.22
+
 ## 0.1.0-beta.14
 
 ### Patch Changes
