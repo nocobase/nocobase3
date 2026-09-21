@@ -97,8 +97,18 @@ export default class AppCollectionsGenerate extends AppCommand {
       if (entry.unchanged) this.log(`  Unchanged: ${entry.unchanged}`);
       if (entry.differences) {
         if (entry.differences.length === 0) this.log('  Up to date.');
-        for (const difference of entry.differences) {
-          this.log(`  ${difference.kind}: ${difference.path}`);
+        else if (entry.directoryExists === false) {
+          // Nothing has been generated for this connection yet, so every
+          // expected file is missing. Naming them one per line says that
+          // three times per Collection; the count and the command say it
+          // once, and --json still carries the list.
+          this.log(
+            `  Not generated yet: ${entry.differences.length} files to write. Run without --check to write them.`,
+          );
+        } else {
+          for (const difference of entry.differences) {
+            this.log(`  ${difference.kind}: ${difference.path}`);
+          }
         }
       }
     }

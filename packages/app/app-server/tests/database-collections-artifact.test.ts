@@ -231,6 +231,45 @@ describe('generateAppCollectionsArtifact', () => {
     expect(check.results[0].differences).toEqual([]);
   });
 
+  it('separates a connection that has never been generated from one that has drifted', async () => {
+    const { config, paths } = fixture();
+    migration(paths.database('main/migrations'), '001_main', 'mainRows');
+    await migrate(config, paths);
+
+    const check = await generateAppCollectionsArtifact(config, {
+      paths,
+      check: true,
+    });
+    expect(check).toMatchObject({ ok: false, status: 'stale' });
+    expect(check.results[0]).toMatchObject({
+      directoryExists: false,
+      unchanged: 0,
+    });
+    expect(check.results[0].differences).toEqual([
+      { path: '_manifest.json', kind: 'missing' },
+      { path: 'mainRows/collection.json', kind: 'missing' },
+      { path: 'mainRows/metadata.json', kind: 'missing' },
+      { path: 'mainRows/schema.json', kind: 'missing' },
+    ]);
+
+    // Writing reports what it did rather than what it found, so it leaves the
+    // field out; a later check sees the directory it created.
+    const written = await generateAppCollectionsArtifact(config, { paths });
+    expect(written.results[0].directoryExists).toBeUndefined();
+
+    rmSync(
+      path.join(paths.database('main/collections'), 'mainRows/schema.json'),
+    );
+    const drifted = await generateAppCollectionsArtifact(config, {
+      paths,
+      check: true,
+    });
+    expect(drifted.results[0]).toMatchObject({ directoryExists: true });
+    expect(drifted.results[0].differences).toEqual([
+      { path: 'mainRows/schema.json', kind: 'missing' },
+    ]);
+  });
+
   it('reports stale, missing and unexpected files in check mode without touching them, then repairs them', async () => {
     const { config, paths } = fixture();
     migration(paths.database('main/migrations'), '001_main', 'mainRows');
