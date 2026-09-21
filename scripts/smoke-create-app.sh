@@ -374,8 +374,10 @@ echo "Archive holds $(wc -l < "$ARCHIVE_LIST" | tr -d ' ') entries"
 
 mkdir "$DEPLOY_DIR"
 tar -xzf "$ARCHIVE" -C "$DEPLOY_DIR"
-# The generated application's config.yml is reused as the deployment's configuration: the same database and secrets
+# The generated application's config.yml is reused as the deployment's configuration: the same settings and secrets
 # `pnpm start` ran with, placed beside dist where the deployment guide puts it and named through APP_CONFIG_FILE.
+# The sqlite path in it is relative, so it resolves against this deployment root: the extracted copy initialises its
+# own storage rather than opening the database `pnpm start` used.
 cp "$APP_DIR/config.yml" "$DEPLOY_DIR/config.yml"
 mkdir -p "$DEPLOY_DIR/storage"
 

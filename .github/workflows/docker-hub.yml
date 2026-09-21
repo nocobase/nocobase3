@@ -96,7 +96,8 @@ jobs:
       # The image is started once on the runner before anything is pushed. Building it is not proof that it runs:
       # config resolution, the packaged native modules, and the pnpm start entry are only exercised by a container
       # that answers its health check. Only the runner's own platform is built here; the multi-arch build below
-      # shares the amd64 layers through the cache.
+      # repeats the build stage rather than reusing these layers, because both steps pin `no-cache-filters: build`
+      # so every pushed layer resolves the moving registry tags itself.
       - name: Build Hub image for the runner platform
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
