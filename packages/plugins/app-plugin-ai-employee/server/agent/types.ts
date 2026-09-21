@@ -204,6 +204,8 @@ export type AgentStreamEvent =
   | { type: 'sub_agent_completed'; conversation: CurrentConversation };
 
 export type AgentServiceErrorCode =
+  /** The model, LLM service, or provider is not configured or not resolvable. */
+  | 'CONFIGURATION_ERROR'
   | 'MODEL_RESPONSE_ERROR'
   | 'GRAPH_RECURSION_ERROR'
   | 'EMPTY_RESPONSE'
@@ -234,6 +236,23 @@ export class AgentServiceError extends Error {
     this.cause = options.cause;
     this.aborted = options.aborted ?? code === 'ABORTED';
     this.retryable = options.retryable ?? false;
+  }
+
+  /**
+   * The deepest message in the cause chain, falling back to this error's own.
+   * A consumer reporting the failure reads this instead of walking `cause`.
+   */
+  get rootMessage(): string {
+    let current: unknown = this.cause;
+    let message = this.message;
+    const seen = new Set<unknown>();
+    while (current && typeof current === 'object' && !seen.has(current)) {
+      seen.add(current);
+      const candidate = (current as { message?: unknown }).message;
+      if (typeof candidate === 'string' && candidate) message = candidate;
+      current = (current as { cause?: unknown }).cause;
+    }
+    return message;
   }
 }
 

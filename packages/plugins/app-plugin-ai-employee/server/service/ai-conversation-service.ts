@@ -29,6 +29,10 @@ import type {
   Translate,
 } from '../types.js';
 import { ResourceActionError, sendStreamError } from '../types.js';
+import {
+  AgentServiceError,
+  type AgentServiceErrorCode,
+} from '../agent/types.js';
 import type {
   AIMessageEntity,
   AIToolMessageEntity,
@@ -126,6 +130,20 @@ function sendErrorResponse(
 ) {
   sendStreamError(target, errorMessage);
 }
+
+/**
+ * The HTTP status each agent failure reports. A configuration failure is the
+ * server's, not the request's, and retrying it changes nothing.
+ */
+const AGENT_ERROR_STATUS: Record<AgentServiceErrorCode, number> = {
+  CONFIGURATION_ERROR: 503,
+  PROVIDER_ERROR: 502,
+  MODEL_RESPONSE_ERROR: 502,
+  EMPTY_RESPONSE: 502,
+  GRAPH_RECURSION_ERROR: 422,
+  PERSISTENCE_ERROR: 500,
+  ABORTED: 499,
+};
 
 function streamTarget(
   execution: ConversationExecution,
@@ -949,6 +967,9 @@ export class AIConversationService {
       if (err instanceof ResourceActionError) {
         status = err.status;
         message = err.message;
+      } else if (err instanceof AgentServiceError) {
+        status = AGENT_ERROR_STATUS[err.code] ?? 500;
+        message = err.rootMessage;
       } else if (err instanceof Error) {
         status = 500;
         message = err.message;
@@ -1231,6 +1252,9 @@ export class AIConversationService {
       if (err instanceof ResourceActionError) {
         status = err.status;
         message = err.message;
+      } else if (err instanceof AgentServiceError) {
+        status = AGENT_ERROR_STATUS[err.code] ?? 500;
+        message = err.rootMessage;
       } else if (err instanceof Error) {
         status = 500;
         message = err.message;

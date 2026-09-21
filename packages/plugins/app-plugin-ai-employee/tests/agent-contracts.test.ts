@@ -13,6 +13,8 @@ import {
 } from '../server/agent/types.js';
 import { AIEmployeesManager } from '../server/manager/ai-employees-manager.js';
 import { createAgentProviders } from '../server/agent/providers.js';
+import { createAgentService } from '../server/agent/service/agent-service.js';
+import { normalizeAgentError } from '../server/agent/errors.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
 import { DefaultChatMessageConverters } from '../server/agent/message/converters.js';
 import {
@@ -599,6 +601,102 @@ describe('fixed AgentService contracts', () => {
     const error = new AgentServiceError('ABORTED', 'stopped');
     expect(error.aborted).toBe(true);
     expect(error.retryable).toBe(false);
+  });
+
+  it('reads the deepest cause message instead of making a consumer walk the chain', () => {
+    const error = new AgentServiceError(
+      'PROVIDER_ERROR',
+      'Agent execution failed',
+      {
+        cause: new Error('wrapped', {
+          cause: new Error('LLM service not found'),
+        }),
+      },
+    );
+    expect(error.rootMessage).toBe('LLM service not found');
+    expect(new AgentServiceError('ABORTED', 'stopped').rootMessage).toBe(
+      'stopped',
+    );
+  });
+
+  it('keeps the original message when normalizing an unclassified failure', () => {
+    const normalized = normalizeAgentError(
+      new Error('LLM service not configured'),
+      'Agent execution failed',
+    );
+    expect(normalized.code).toBe('PROVIDER_ERROR');
+    expect(normalized.message).toBe('LLM service not configured');
+  });
+});
+
+describe('Agent execution failure classification', () => {
+  const failingContext = (failure: Error): AgentContextProvider => ({
+    currentConversation(): CurrentConversation {
+      return { sessionId: 'configuration' };
+    },
+    toolRuntimeContext(): unknown {
+      return {};
+    },
+    resolveLLM(): Promise<ResolvedAgentLLM> {
+      return Promise.reject(failure);
+    },
+    async getSystemPrompt(): Promise<string> {
+      return '';
+    },
+    discoveredTools(): Promise<DiscoveredTools> {
+      return Promise.resolve({
+        tools: new Map(),
+        activeTools: async () => new Set(),
+      });
+    },
+  });
+
+  const serviceThatCannotResolveItsModel = (failure: Error) =>
+    createAgentService(
+      createAgentProviders({
+        conversation: createTestConversationProvider({
+          sessionId: 'configuration',
+        }),
+        context: failingContext(failure),
+        converters: new DefaultChatMessageConverters(),
+      }),
+    );
+
+  it('reports a model that cannot be resolved as a configuration failure on invoke', async () => {
+    const agent = serviceThatCannotResolveItsModel(
+      new Error('LLM service not found'),
+    );
+    const error = await agent
+      .invoke({ userMessages: [{ role: 'user', content: 'hi' }] })
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+    expect(error).toBeInstanceOf(AgentServiceError);
+    expect((error as AgentServiceError).code).toBe('CONFIGURATION_ERROR');
+    expect((error as AgentServiceError).message).toBe('LLM service not found');
+    expect((error as AgentServiceError).retryable).toBe(false);
+  });
+
+  it('classifies the same failure the same way on stream', async () => {
+    const agent = serviceThatCannotResolveItsModel(
+      new Error('LLM service not configured'),
+    );
+    let caught: unknown;
+    try {
+      for await (const _event of agent.stream({
+        userMessages: [{ role: 'user', content: 'hi' }],
+      })) {
+        // The failure happens before any event is produced.
+      }
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AgentServiceError);
+    expect((caught as AgentServiceError).code).toBe('CONFIGURATION_ERROR');
+    expect((caught as AgentServiceError).message).toBe(
+      'LLM service not configured',
+    );
   });
 });
 

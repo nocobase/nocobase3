@@ -24,7 +24,7 @@ import type {
   ResolvedAgentLLM,
 } from '../types.js';
 import { AgentServiceError } from '../types.js';
-import { normalizeAgentError } from '../errors.js';
+import { normalizeAgentError, toConfigurationError } from '../errors.js';
 import { buildStandardAgentMiddleware } from '../middleware/pipeline.js';
 
 const mergeSignals = (
@@ -398,9 +398,13 @@ export class AgentService {
   ): Promise<unknown> {
     const { conversation } = this.providers;
     const { controller, signal, token } = this.begin(request);
+    let activeProvider: LLMProvider | undefined;
     await conversation.event.beforeExecution('invoking');
     try {
-      const llm = await this.resolveLLM(request);
+      const llm = await this.resolveLLM(request).catch((error: unknown) => {
+        throw toConfigurationError(error);
+      });
+      activeProvider = llm.provider;
       const prepared = await this.prepare(
         operation,
         { ...request, signal },
@@ -418,7 +422,10 @@ export class AgentService {
           cause: error,
           aborted: true,
         });
-      throw normalizeAgentError(error, 'Agent execution failed');
+      throw normalizeAgentError(
+        error,
+        activeProvider?.parseResponseError(error),
+      );
     } finally {
       this.end(token, controller);
       await conversation.event.afterExecution('invoking', {
@@ -454,7 +461,9 @@ export class AgentService {
       await conversation.streamCache.clear();
       await conversation.event.beforeExecution('streaming');
       executionStarted = true;
-      const llm = await this.resolveLLM(request);
+      const llm = await this.resolveLLM(request).catch((error: unknown) => {
+        throw toConfigurationError(error);
+      });
       activeProvider = llm.provider;
       responseMetadata = new ExecutionResponseMetadata();
       const responseMetadataCollector = new ResponseMetadataCollector(
