@@ -99,16 +99,10 @@ export async function runDatabaseApplyCommand(
  */
 export async function runDatabaseRepairCommand(
   command: CommandOutput,
-  flags: DatabaseSelectionFlags & {
-    kind?: AppDatabaseTaskKind;
-    dryRun?: boolean;
-    force?: boolean;
-  },
+  flags: DatabaseSelectionFlags & { dryRun?: boolean; force?: boolean },
   context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
 ): Promise<void> {
-  const kinds: readonly AppDatabaseTaskKind[] = flags.kind
-    ? [flags.kind]
-    : ['migrations', 'seeds'];
+  const kinds: readonly AppDatabaseTaskKind[] = ['migrations', 'seeds'];
   const result = await executeWithApplication(
     command,
     flags,
