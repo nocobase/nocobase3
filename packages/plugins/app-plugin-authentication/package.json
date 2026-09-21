@@ -92,6 +92,7 @@
     "@nocobase/snowflake": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "better-auth": "catalog:",
+    "@better-auth/core": "^1.7.1",
     "hono": "catalog:",
     "knex": "catalog:"
   },

@@ -1,4 +1,8 @@
-import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
+import {
+  TransactionPostCommitError,
+  type DatabaseConnection,
+  type DatabaseManager,
+} from '@nocobase/db';
 import {
   lockUser,
   type User,
@@ -138,23 +142,25 @@ class DefaultUserManagementService implements UserManagementService {
   async create(input: CreateManagedUserInput): Promise<ManagedUser> {
     const submitted = input.roleScopes ?? {};
     this.validateCreateRoleScopes(submitted);
-    const user = await this.services.database.transaction(
-      async (connection) => {
+    let created: User | undefined;
+    const postCommit = await committedDespite(() =>
+      this.services.database.transaction(async (connection) => {
         const users = this.services.users.withConnection(connection);
-        const created = await users.create(input);
+        created = await users.create(input);
         await this.services.credentials
           .withConnection(connection)
           .createPasswordCredential(created.id, input.password);
         for (const [key, value] of Object.entries(submitted)) {
           await this.requireScope(key).replace(created.id, value, connection);
         }
-        return created;
-      },
+      }),
     );
+    if (!created) throw new Error('User creation did not return a user.');
     if (Object.keys(submitted).length > 0) {
-      await this.services.onRoleScopesChanged?.(user.id);
+      await this.services.onRoleScopesChanged?.(created.id);
     }
-    return this.withRoleScopes(user, this.services.database.connection());
+    if (postCommit) throw postCommit;
+    return this.withRoleScopes(created, this.services.database.connection());
   }
 
   async update(
@@ -194,10 +200,13 @@ class DefaultUserManagementService implements UserManagementService {
       );
     // Operator eligibility, resource ownership, credential and API key cleanup
     // are lifecycle handlers; repeating a deletion finds no user and does nothing.
-    await this.services.database.transaction((connection) =>
-      this.services.users.withConnection(connection).remove(userId, actorId),
+    const postCommit = await committedDespite(() =>
+      this.services.database.transaction((connection) =>
+        this.services.users.withConnection(connection).remove(userId, actorId),
+      ),
     );
     await this.services.onRoleScopesChanged?.(userId);
+    if (postCommit) throw postCommit;
   }
 
   async enable(userId: string): Promise<ManagedUser> {
@@ -217,20 +226,23 @@ class DefaultUserManagementService implements UserManagementService {
   ): Promise<ManagedUser> {
     const scope = this.requireScope(scopeKey);
     this.validateRoleScopeValue(scope, value);
-    await this.services.database.transaction(async (connection) => {
-      const user = await this.services.users
-        .withConnection(connection)
-        .get(userId);
-      if (!user) {
-        throw new UserManagementError(
-          'USER_NOT_FOUND',
-          `Unknown user: ${userId}`,
-          404,
-        );
-      }
-      await scope.replace(userId, value, connection);
-    });
+    const postCommit = await committedDespite(() =>
+      this.services.database.transaction(async (connection) => {
+        const user = await this.services.users
+          .withConnection(connection)
+          .get(userId);
+        if (!user) {
+          throw new UserManagementError(
+            'USER_NOT_FOUND',
+            `Unknown user: ${userId}`,
+            404,
+          );
+        }
+        await scope.replace(userId, value, connection);
+      }),
+    );
     await this.services.onRoleScopesChanged?.(userId);
+    if (postCommit) throw postCommit;
     const user = await this.services.users.get(userId);
     if (!user) {
       throw new UserManagementError(
@@ -352,6 +364,23 @@ class DefaultUserManagementService implements UserManagementService {
         ]),
       ),
     }));
+  }
+}
+
+/**
+ * Runs a transaction and reports a post-commit failure instead of throwing
+ * it, so the caller can still run its own follow-ups for a change that did
+ * commit before surfacing the failure. Any other error propagates.
+ */
+async function committedDespite(
+  run: () => Promise<void>,
+): Promise<TransactionPostCommitError | undefined> {
+  try {
+    await run();
+    return undefined;
+  } catch (error) {
+    if (error instanceof TransactionPostCommitError) return error;
+    throw error;
   }
 }
 

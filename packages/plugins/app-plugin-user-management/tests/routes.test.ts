@@ -111,8 +111,9 @@ describe('@nocobase/app-plugin-users API routes', () => {
     vi.mocked(service.disable).mockRejectedValue(
       new TransactionPostCommitError([new Error('realtime unavailable')]),
     );
+    const logger = { info: vi.fn(), warn: vi.fn() };
     const router = await apiRoutes.createRouter(
-      createApplication('allowed', service),
+      createApplication('allowed', service, { logger }),
     );
 
     const response = await router.request('/users/user-1/disable', {
@@ -125,6 +126,20 @@ describe('@nocobase/app-plugin-users API routes', () => {
       committed: true,
       retryScheduled: false,
     });
+    // The account is disabled, so the audit trail records it and the
+    // operator can see which effect failed.
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'user.disable',
+        targetUserId: 'user-1',
+        postCommitFailed: true,
+      }),
+      'user.disable',
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ errors: ['realtime unavailable'] }),
+      expect.any(String),
+    );
   });
 
   it('returns 409 when an administrator creates a duplicate identity', async () => {
@@ -282,7 +297,10 @@ function createApplication(
       readonly resource: { readonly type: string; readonly id: string };
       readonly action: string;
     }) => Promise<void>;
-    readonly logger?: { info: ReturnType<typeof vi.fn> };
+    readonly logger?: {
+      info: ReturnType<typeof vi.fn>;
+      warn?: ReturnType<typeof vi.fn>;
+    };
   } = {},
 ): AppPluginApplication {
   const container = new ServiceContainer();

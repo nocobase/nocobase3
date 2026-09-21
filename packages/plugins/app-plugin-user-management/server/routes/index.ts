@@ -44,6 +44,15 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       // The database change is committed; only a post-commit effect such as a
       // realtime disconnect failed. Tell the client not to retry the write.
       if (error instanceof TransactionPostCommitError) {
+        securityLogger?.warn(
+          {
+            event: 'user.post-commit-failed',
+            errors: error.errors.map((cause) =>
+              cause instanceof Error ? cause.message : String(cause),
+            ),
+          },
+          error.message,
+        );
         return context.json(
           {
             code: 'USER_POST_COMMIT_FAILED',
@@ -108,6 +117,44 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
 
     routes.use('*', authentication.required(), authorization.middleware());
 
+    /**
+     * Audits a change once it is committed, which includes the case where a
+     * post-commit effect failed afterwards: the record changed either way.
+     */
+    const audited = async <T>(
+      context: Parameters<typeof logSecurityEvent>[1],
+      event: string,
+      targetUserId: string | ((result: T) => string),
+      run: () => Promise<T>,
+      details?: Readonly<Record<string, unknown>>,
+    ): Promise<T> => {
+      const target = (result?: T): string =>
+        typeof targetUserId === 'string'
+          ? targetUserId
+          : result === undefined
+            ? 'unknown'
+            : targetUserId(result);
+      try {
+        const result = await run();
+        logSecurityEvent(
+          securityLogger,
+          context,
+          event,
+          target(result),
+          details,
+        );
+        return result;
+      } catch (error) {
+        if (error instanceof TransactionPostCommitError) {
+          logSecurityEvent(securityLogger, context, event, target(), {
+            ...details,
+            postCommitFailed: true,
+          });
+        }
+        throw error;
+      }
+    };
+
     routes.get('/options', async (context) => {
       await requireUserAction(context, '*', 'read');
       return context.json({ data: await users.options() });
@@ -131,10 +178,13 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       await requireUserAction(context, '*', 'create');
       await requireUserAction(context, '*', 'assign-role');
       const input = parseCreateUser(await context.req.json());
-      const user = await users.create(input);
-      logSecurityEvent(securityLogger, context, 'user.create', user.id, {
-        roleScopes: Object.keys(input.roleScopes ?? {}).sort(),
-      });
+      const user = await audited(
+        context,
+        'user.create',
+        (created) => created.id,
+        () => users.create(input),
+        { roleScopes: Object.keys(input.roleScopes ?? {}).sort() },
+      );
       return context.json({ data: user }, 201);
     });
 
@@ -142,20 +192,21 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const userId = context.req.param('userId');
       await requireUserAction(context, userId, 'update');
       const input = record(await context.req.json(), 'User');
-      const user = await users.update(userId, {
-        ...(input.name === undefined
-          ? {}
-          : { name: string(input.name, 'User name') }),
-        ...(input.username === undefined
-          ? {}
-          : input.username === null
-            ? { username: null }
-            : { username: string(input.username, 'Username') }),
-        ...(input.email === undefined
-          ? {}
-          : { email: string(input.email, 'User email') }),
-      });
-      logSecurityEvent(securityLogger, context, 'user.update', userId);
+      const user = await audited(context, 'user.update', userId, () =>
+        users.update(userId, {
+          ...(input.name === undefined
+            ? {}
+            : { name: string(input.name, 'User name') }),
+          ...(input.username === undefined
+            ? {}
+            : input.username === null
+              ? { username: null }
+              : { username: string(input.username, 'Username') }),
+          ...(input.email === undefined
+            ? {}
+            : { email: string(input.email, 'User email') }),
+        }),
+      );
       return context.json({
         data: user,
       });
@@ -166,24 +217,27 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       await requireUserAction(context, userId, 'delete');
       const input = record(await context.req.json(), 'User deletion');
       if (input.confirm !== true) throw new TypeError('Confirm user deletion.');
-      await users.remove(userId, context.get('authz').identity.principal.id);
-      logSecurityEvent(securityLogger, context, 'user.delete', userId);
+      await audited(context, 'user.delete', userId, () =>
+        users.remove(userId, context.get('authz').identity.principal.id),
+      );
       return context.json({ data: { success: true } });
     });
 
     routes.post('/:userId/disable', async (context) => {
       const userId = context.req.param('userId');
       await requireUserAction(context, userId, 'disable');
-      const user = await users.disable(userId);
-      logSecurityEvent(securityLogger, context, 'user.disable', userId);
+      const user = await audited(context, 'user.disable', userId, () =>
+        users.disable(userId),
+      );
       return context.json({ data: user });
     });
 
     routes.post('/:userId/enable', async (context) => {
       const userId = context.req.param('userId');
       await requireUserAction(context, userId, 'enable');
-      const user = await users.enable(userId);
-      logSecurityEvent(securityLogger, context, 'user.enable', userId);
+      const user = await audited(context, 'user.enable', userId, () =>
+        users.enable(userId),
+      );
       return context.json({ data: user });
     });
 
@@ -193,11 +247,16 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const input = record(await context.req.json(), 'User role scope');
       const scope = context.req.param('scope');
       const value = parseRoleValue(input.value);
-      const user = await users.replaceRoleScope(userId, scope, value);
-      logSecurityEvent(securityLogger, context, 'user.role.update', userId, {
-        roleScope: scope,
-        roles: typeof value === 'string' ? [value] : [...value],
-      });
+      const user = await audited(
+        context,
+        'user.role.update',
+        userId,
+        () => users.replaceRoleScope(userId, scope, value),
+        {
+          roleScope: scope,
+          roles: typeof value === 'string' ? [value] : [...value],
+        },
+      );
       return context.json({
         data: user,
       });
@@ -207,16 +266,18 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const userId = context.req.param('userId');
       await requireUserAction(context, userId, 'reset-password');
       const input = record(await context.req.json(), 'Password reset');
-      await users.resetPassword(userId, string(input.password, 'Password'));
-      logSecurityEvent(securityLogger, context, 'user.password.reset', userId);
+      await audited(context, 'user.password.reset', userId, () =>
+        users.resetPassword(userId, string(input.password, 'Password')),
+      );
       return context.json({ data: { success: true } });
     });
 
     routes.post('/:userId/revoke-sessions', async (context) => {
       const userId = context.req.param('userId');
       await requireUserAction(context, userId, 'revoke-sessions');
-      await users.revokeSessions(userId);
-      logSecurityEvent(securityLogger, context, 'user.sessions.revoke', userId);
+      await audited(context, 'user.sessions.revoke', userId, () =>
+        users.revokeSessions(userId),
+      );
       return context.json({ data: { success: true } });
     });
 

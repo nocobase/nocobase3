@@ -15,7 +15,10 @@ import {
 import { username } from 'better-auth/plugins';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import { databaseAdapter } from './better-auth/database-adapter.js';
+import {
+  betterAuthUserError,
+  databaseAdapter,
+} from './better-auth/database-adapter.js';
 
 export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
   connection: DatabaseConnection;
@@ -78,6 +81,21 @@ export class Auth {
             type: 'date',
             required: false,
             input: false,
+          },
+        },
+        deleteUser: {
+          ...config.user?.deleteUser,
+          // Better Auth removes sessions and accounts before it deletes the
+          // user, outside any transaction. Run the users lifecycle first, so a
+          // refusal happens before anything is lost and an accepted deletion
+          // has already cleaned up; Better Auth's own steps then find nothing.
+          beforeDelete: async (user, request) => {
+            await config.user?.deleteUser?.beforeDelete?.(user, request);
+            try {
+              await this.users.remove(user.id);
+            } catch (error) {
+              throw betterAuthUserError(error);
+            }
           },
         },
       },

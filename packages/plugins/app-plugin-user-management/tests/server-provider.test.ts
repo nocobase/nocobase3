@@ -10,7 +10,11 @@ import {
   type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import { createDatabaseManager, type DatabaseConnection } from '@nocobase/db';
+import {
+  createDatabaseManager,
+  TransactionPostCommitError,
+  type DatabaseConnection,
+} from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -121,6 +125,56 @@ describe('@nocobase/app-plugin-users service', () => {
     });
 
     expect(events).toEqual(['role-write', 'notified-after-commit']);
+  });
+
+  it('still notifies permission consumers when a post-commit effect fails after the commit', async () => {
+    const database = createDatabaseManager({
+      drivers: { sqlite },
+      default: 'main',
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    databases.push(database);
+    await database
+      .connection()
+      .builder.createCollection('testManagedUsers', (collection) => {
+        collection.string('id').primary();
+      });
+    const registry = createUserRoleScopeRegistry();
+    registry.register(
+      roleScope({
+        replace: async (_userId, _value, connection) => {
+          connection.afterCommit(() => {
+            throw new Error('cache offline');
+          });
+        },
+      }),
+    );
+    const notified: string[] = [];
+    const service = createUserManagementService({
+      database,
+      ...fakeServices(database.connection()),
+      roleScopes: registry,
+      onRoleScopesChanged: (userId) => {
+        notified.push(userId);
+      },
+    });
+
+    await expect(
+      service.create({
+        name: 'Alice',
+        email: 'alice@example.com',
+        password: 'secret123',
+        roleScopes: { test: 'operator' },
+      }),
+    ).rejects.toBeInstanceOf(TransactionPostCommitError);
+    expect(notified).toEqual(['created-user']);
+    await expect(
+      database
+        .connection()
+        .query.selectFrom('testManagedUsers')
+        .select('id')
+        .execute(),
+    ).resolves.toEqual([{ id: 'created-user' }]);
   });
 
   it('rolls back a password change when Session revocation fails', async () => {

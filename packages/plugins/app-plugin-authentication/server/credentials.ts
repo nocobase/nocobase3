@@ -1,3 +1,4 @@
+import { runWithAdapter } from '@better-auth/core/context';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { RealtimeService } from '@nocobase/app-server/realtime';
 import type { Auth } from './auth.js';
@@ -61,13 +62,16 @@ class DefaultAuthenticationCredentialService implements AuthenticationCredential
     const context = await this.context();
     await this.requireUser(userId);
     validatePassword(password, context.password.config);
-    await context.internalAdapter.createAccount({
-      issuer: 'local:credential',
-      accountId: userId,
-      providerId: 'credential',
-      userId,
-      password: await context.password.hash(password),
-    });
+    const hash = await context.password.hash(password);
+    await this.bound(context, () =>
+      context.internalAdapter.createAccount({
+        issuer: 'local:credential',
+        accountId: userId,
+        providerId: 'credential',
+        userId,
+        password: hash,
+      }),
+    );
   }
 
   async resetPassword(userId: string, password: string): Promise<void> {
@@ -75,25 +79,30 @@ class DefaultAuthenticationCredentialService implements AuthenticationCredential
     await this.requireUser(userId);
     validatePassword(password, context.password.config);
     const hash = await context.password.hash(password);
-    const account = await context.internalAdapter.findCredentialAccount(userId);
-    if (account) {
-      await context.internalAdapter.updatePassword(userId, hash);
-    } else {
-      await context.internalAdapter.linkAccount({
-        issuer: 'local:credential',
-        accountId: userId,
-        providerId: 'credential',
-        userId,
-        password: hash,
-      });
-    }
+    await this.bound(context, async () => {
+      const account =
+        await context.internalAdapter.findCredentialAccount(userId);
+      if (account) {
+        await context.internalAdapter.updatePassword(userId, hash);
+      } else {
+        await context.internalAdapter.linkAccount({
+          issuer: 'local:credential',
+          accountId: userId,
+          providerId: 'credential',
+          userId,
+          password: hash,
+        });
+      }
+    });
     await this.revokeSessions(userId);
   }
 
   async revokeSessions(userId: string): Promise<void> {
     const context = await this.context();
     await this.requireUser(userId);
-    await context.internalAdapter.deleteUserSessions(userId);
+    await this.bound(context, () =>
+      context.internalAdapter.deleteUserSessions(userId),
+    );
     this.afterCommit(() => {
       this.options.realtime?.disconnectUser(userId);
     });
@@ -101,7 +110,9 @@ class DefaultAuthenticationCredentialService implements AuthenticationCredential
 
   async deleteCredentials(userId: string): Promise<void> {
     const context = await this.context();
-    await context.internalAdapter.deleteUserSessions(userId);
+    await this.bound(context, () =>
+      context.internalAdapter.deleteUserSessions(userId),
+    );
     await this.options.connection.query
       .deleteFrom('account')
       .where('userId', '=', userId)
@@ -109,6 +120,19 @@ class DefaultAuthenticationCredentialService implements AuthenticationCredential
     this.afterCommit(() => {
       this.options.realtime?.disconnectUser(userId);
     });
+  }
+
+  /**
+   * Better Auth resolves the adapter its internal operations write through
+   * from the ambient request context, not from the instance they were called
+   * on. Inside a Better Auth request that would send this service's writes to
+   * the request's own connection instead of the transaction it is bound to.
+   */
+  private async bound<T>(
+    context: Awaited<ReturnType<Auth['credentialContext']>>,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    return await runWithAdapter(context.adapter, run);
   }
 
   private async context(): Promise<

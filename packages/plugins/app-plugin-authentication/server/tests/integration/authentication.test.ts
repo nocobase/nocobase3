@@ -435,26 +435,102 @@ describe('Authentication', () => {
     });
   });
 
-  it('turns a rejected Better Auth user deletion into an API error and keeps the user', async () => {
-    const users = new UserService(database.connection());
-    const user = await users.create({
-      name: 'Kept',
-      email: 'kept@example.com',
-    });
-    const context = await auth.credentialContext();
+  it('refuses a Better Auth user deletion before any credential is lost, and runs the lifecycle when allowed', async () => {
+    const password = 'correct horse battery staple';
+    const deleting = (lifecycle?: UserLifecycleRegistry) => {
+      const instance = new Auth({
+        connection: database.connection(),
+        baseURL: 'http://localhost/api/auth',
+        secret: 'development-secret-at-least-32-characters',
+        appName: 'NocoBase3',
+        secondaryStorage: authStorage,
+        session: { storeSessionInDatabase: true },
+        user: { deleteUser: { enabled: true } },
+        ...(lifecycle ? { userLifecycle: lifecycle } : {}),
+      });
+      const app = new Hono();
+      app.on(['GET', 'POST'], '/api/auth/*', (context) =>
+        instance.handler(context.req.raw),
+      );
+      return { instance, app };
+    };
+    const signUp = async (app: Hono, email: string) => {
+      const response = await app.request('/api/auth/sign-up/email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password, name: email }),
+      });
+      expect(response.status).toBe(200);
+      const { user } = (await response.json()) as { user: { id: string } };
+      return { id: user.id, cookie: response.headers.get('set-cookie') ?? '' };
+    };
+    const deleteSelf = (app: Hono, cookie: string) =>
+      app.request('/api/auth/delete-user', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ password }),
+      });
+    const rows = (table: 'session' | 'account', userId: string) =>
+      database
+        .connection()
+        .query.selectFrom(table)
+        .select('id')
+        .where('userId', '=', userId)
+        .execute();
 
-    // This Auth was built without a deletion policy, so the users lifecycle
-    // refuses; Better Auth sees a stable error instead of a crash.
-    await expect(
-      context.adapter.delete({
-        model: 'user',
-        where: [{ field: 'id', value: user.id }],
-      }),
-    ).rejects.toMatchObject({
-      statusCode: 409,
-      body: { code: 'USER_DELETION_NOT_CONFIGURED' },
+    // Deletion is not configured: Better Auth must be stopped before it
+    // removes the sessions and accounts it would otherwise delete first.
+    const refused = deleting();
+    const kept = await signUp(refused.app, 'kept@example.com');
+    const refusal = await deleteSelf(refused.app, kept.cookie);
+    expect(refusal.status).toBe(409);
+    await expect(refusal.json()).resolves.toMatchObject({
+      code: 'USER_DELETION_NOT_CONFIGURED',
     });
-    await expect(users.get(user.id)).resolves.toMatchObject({ id: user.id });
+    await expect(rows('account', kept.id)).resolves.toHaveLength(1);
+    await expect(rows('session', kept.id)).resolves.not.toHaveLength(0);
+    await expect(
+      new UserService(database.connection()).get(kept.id),
+    ).resolves.toMatchObject({ id: kept.id });
+
+    // Deletion configured with the credential handler: the users lifecycle
+    // soft-deletes and cleans up in one transaction before Better Auth runs.
+    const lifecycle = new UserLifecycleRegistry({
+      enabled: true,
+      requiredHandlers: [AUTHENTICATION_USER_LIFECYCLE_KEY],
+    });
+    const allowed = deleting(lifecycle);
+    const credentials = createAuthenticationCredentialService({
+      auth: allowed.instance,
+      connection: database.connection(),
+    });
+    lifecycle.register({
+      key: AUTHENTICATION_USER_LIFECYCLE_KEY,
+      after: async (context) => {
+        const scoped = credentials.withConnection(context.connection);
+        if (context.operation === 'delete') {
+          await scoped.deleteCredentials(context.userId);
+        } else {
+          await scoped.revokeSessions(context.userId);
+        }
+      },
+    });
+    const gone = await signUp(allowed.app, 'gone@example.com');
+    const deleted = await deleteSelf(allowed.app, gone.cookie);
+    expect(deleted.status).toBe(200);
+    await expect(rows('account', gone.id)).resolves.toEqual([]);
+    await expect(rows('session', gone.id)).resolves.toEqual([]);
+    await expect(
+      database
+        .connection()
+        .query.selectFrom('user')
+        .select(['deletedAt'])
+        .where('id', '=', gone.id)
+        .executeTakeFirstOrThrow(),
+    ).resolves.not.toMatchObject({ deletedAt: null });
+    await expect(
+      new UserService(database.connection()).get(gone.id),
+    ).resolves.toBeUndefined();
   });
 
   /**

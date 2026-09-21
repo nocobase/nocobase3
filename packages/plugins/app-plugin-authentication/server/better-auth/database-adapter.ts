@@ -4,15 +4,16 @@ import {
   type UserLifecycleRegistry,
 } from '@nocobase/app-plugin-users/server';
 import { APIError } from 'better-auth';
-import type {
-  ComparisonOperator,
-  DatabaseConnection,
-  DeleteQuery,
-  Expression,
-  ExpressionBuilder,
-  SelectQuery,
-  SqlBool,
-  UpdateQuery,
+import {
+  TransactionPostCommitError,
+  type ComparisonOperator,
+  type DatabaseConnection,
+  type DeleteQuery,
+  type Expression,
+  type ExpressionBuilder,
+  type SelectQuery,
+  type SqlBool,
+  type UpdateQuery,
 } from '@nocobase/db';
 import type { BetterAuthOptions, DBAdapterInstance, Where } from 'better-auth';
 import { createAdapterFactory, type CustomAdapter } from 'better-auth/adapters';
@@ -431,6 +432,32 @@ function buildCustomAdapter(
   };
 }
 
+/**
+ * A users lifecycle outcome expressed as a Better Auth error: a policy
+ * rejection keeps its code and status, and a committed change whose
+ * post-commit effect failed is reported as accepted rather than as a server
+ * failure, so callers do not retry a write that already happened.
+ */
+export function betterAuthUserError(error: unknown): unknown {
+  if (error instanceof UserLifecycleError) {
+    return APIError.from(
+      error.status === 404
+        ? 'NOT_FOUND'
+        : error.status === 400
+          ? 'BAD_REQUEST'
+          : 'CONFLICT',
+      { code: error.code, message: error.message },
+    );
+  }
+  if (error instanceof TransactionPostCommitError) {
+    return APIError.from('ACCEPTED', {
+      code: 'USER_POST_COMMIT_FAILED',
+      message: error.message,
+    });
+  }
+  return error;
+}
+
 export function databaseAdapter(
   connection: DatabaseConnection,
   options: DatabaseAdapterOptions = {},
@@ -500,25 +527,11 @@ export function databaseAdapter(
               'User joins are not enabled by the NocoBase database adapter',
             );
         };
-        // A Better Auth endpoint deleting a user runs the users lifecycle; a
-        // policy rejection there is a stable API error, not a server failure.
-        const lifecycleRejection = async <T>(
-          result: Promise<T>,
-        ): Promise<T> => {
+        const guarded = async <T>(result: Promise<T>): Promise<T> => {
           try {
             return await result;
           } catch (error) {
-            if (error instanceof UserLifecycleError) {
-              throw APIError.from(
-                error.status === 404
-                  ? 'NOT_FOUND'
-                  : error.status === 400
-                    ? 'BAD_REQUEST'
-                    : 'CONFLICT',
-                { code: error.code, message: error.message },
-              );
-            }
-            throw error;
+            throw betterAuthUserError(error);
           }
         };
         const adapter: CustomAdapter = {
@@ -544,19 +557,19 @@ export function databaseAdapter(
               : fallback.count(input),
           update: (input) =>
             userModel(input.model)
-              ? store(input.model).update(input)
+              ? guarded(store(input.model).update(input))
               : fallback.update(input),
           updateMany: (input) =>
             userModel(input.model)
-              ? store(input.model).updateMany(input)
+              ? guarded(store(input.model).updateMany(input))
               : fallback.updateMany(input),
           delete: (input) =>
             userModel(input.model)
-              ? lifecycleRejection(store(input.model).delete(input))
+              ? guarded(store(input.model).delete(input))
               : fallback.delete(input),
           deleteMany: (input) =>
             userModel(input.model)
-              ? lifecycleRejection(store(input.model).deleteMany(input))
+              ? guarded(store(input.model).deleteMany(input))
               : fallback.deleteMany(input),
           incrementOne: (input) =>
             userModel(input.model)
