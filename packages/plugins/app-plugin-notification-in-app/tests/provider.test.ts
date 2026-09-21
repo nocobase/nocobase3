@@ -48,8 +48,7 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
       expect.objectContaining({ type: 'in-app' }),
     );
     expect(registerProvider).toHaveBeenCalledWith(
-      'in-app',
-      expect.objectContaining({ type: 'database' }),
+      expect.objectContaining({ type: 'in-app' }),
     );
     expect(defineTopic).toHaveBeenCalledWith('notifications:in-app', {
       audience: 'user',

@@ -4,31 +4,28 @@ import {
   type NotificationSendInput,
   type ConfiguredNotificationChannels,
 } from '@nocobase/app-plugin-notification';
-import { defineEmailChannelConfig } from '../server/email/channel.js';
-import { defineImChannelConfig } from '../server/im/channel.js';
+import '../server/email/channel.js';
+import '../server/im/channel.js';
 
-const channels = [
-  defineEmailChannelConfig({
-    name: 'system-email',
-    enabled: true,
-    providers: [],
-  }),
-  defineImChannelConfig({ name: 'alerts', enabled: true, providers: [] }),
-] as const;
+const channels = {
+  'system-email': { provider: 'smtp', host: 'localhost', port: 587 },
+  marketing: { provider: 'resend', apiKey: 'key', from: 'a@example.com' },
+  alerts: { provider: 'feishu-webhook', webhookUrl: 'https://example.com' },
+} as const;
+type Input = NotificationSendInput<
+  ConfiguredNotificationChannels<typeof channels>
+>;
 
-type Channels = ConfiguredNotificationChannels<typeof channels>;
-type Input = NotificationSendInput<Channels>;
-
-it('preserves configured names and the message contract of each implementation', () => {
-  expectTypeOf<Input['channels'][number]>().toEqualTypeOf<
-    'system-email' | 'alerts'
+it('infers Channel names, Provider messages and native recipients from configuration', () => {
+  expectTypeOf<keyof Input['messages']>().toEqualTypeOf<
+    'system-email' | 'marketing' | 'alerts'
   >();
   expectTypeOf<
-    NonNullable<Input['channelOverrides']>['system-email']
-  >().toMatchTypeOf<{ subject?: string } | undefined>();
+    NonNullable<Input['messages']['system-email']>['to']
+  >().toEqualTypeOf<string | readonly [string, ...string[]]>();
   expectTypeOf<
-    NonNullable<Input['channelOverrides']>['alerts']
-  >().toMatchTypeOf<{ format?: 'text' | 'markdown' } | undefined>();
+    NonNullable<Input['messages']['alerts']>['to']
+  >().toEqualTypeOf<undefined>();
   expectTypeOf(
     createNotificationManager({
       database: {} as never,
@@ -39,30 +36,39 @@ it('preserves configured names and the message contract of each implementation',
   )
     .parameter(0)
     .toEqualTypeOf<Input>();
-});
-
-it('rejects unknown instance names and message fields belonging to another type', () => {
   const valid: Input = {
     idempotencyKey: 'typed',
-    channels: ['system-email'],
-    content: { body: 'test' },
-    channelOverrides: {
-      'system-email': { subject: 'Hello' },
-      alerts: { format: 'markdown' },
+    messages: {
+      'system-email': {
+        to: ['a@example.com'],
+        subject: 'Hello',
+        html: '<p>Hello</p>',
+      },
+      alerts: { text: 'Hello' },
     },
   };
   const invalidName: Input = {
     ...valid,
-    // @ts-expect-error Dispatch keys are configured names, not implementation types.
-    channels: ['email'],
+    messages: {
+      // @ts-expect-error Dispatch keys are configured Channel names.
+      email: { subject: 'Hello' },
+    },
   };
-  const invalidOverride: Input = {
+  const invalidRecipient: Input = {
     ...valid,
-    channelOverrides: {
-      // @ts-expect-error IM format is not an email message property.
-      'system-email': { format: 'markdown' },
+    messages: {
+      // @ts-expect-error Webhook messages cannot specify a recipient.
+      alerts: { text: 'Hello', to: '123' },
+    },
+  };
+  const emptyRecipients: Input = {
+    ...valid,
+    messages: {
+      // @ts-expect-error Email recipient arrays must be non-empty.
+      'system-email': { to: [], subject: 'Hello', text: 'Hello' },
     },
   };
   expectTypeOf(invalidName).toEqualTypeOf<Input>();
-  expectTypeOf(invalidOverride).toEqualTypeOf<Input>();
+  expectTypeOf(invalidRecipient).toEqualTypeOf<Input>();
+  expectTypeOf(emptyRecipients).toEqualTypeOf<Input>();
 });

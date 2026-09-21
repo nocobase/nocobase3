@@ -161,24 +161,11 @@ Before editing an existing migration, check its Git history and the status of th
 
 ## Database Integration Test Scheduling
 
-Run a dialect integration suite through the package that owns it:
-`pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no
-integration script of its own. It used to forward to each dialect, which made
-`pnpm --filter @nocobase/db test:integration` read as a full run when it only
-ran SQLite, and `test:integration:all` invite an eight-dialect serial run that
-CI performs on every pull request anyway. Run one suite at a time: never start
-two at once, and never leave one in the background. The runners isolate their
-Compose projects and host ports, so the hazard is not a collision but
-contention for one machine's CPU, memory, and Docker I/O, which pushes service
-health checks past their start period and reports a flaky startup failure
-instead of a result. CI parallelizes safely only because its matrix gives each
-dialect its own runner.
+Run a dialect integration suite through the package that owns it: `pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no integration script of its own. Run one suite at a time locally: never start two at once, and never leave one in the background. The runners isolate their Compose projects and host ports, so the hazard is not a collision but contention for one machine's CPU, memory, and Docker I/O, which pushes service health checks past their start period and reports a flaky startup failure instead of a result. CI parallelizes safely because each selected dialect gets its own job and runner.
 
-Which suites a given change actually requires, and the command forms that
-silently run nothing, are in the
-[`nocobase-db-integration-testing` Skill](.agents/skills/nocobase-db-integration-testing/SKILL.md).
-Every pull request already runs all eight dialects unconditionally, so run
-locally only the dialects the change puts at risk.
+On pull requests and pushes to `develop`, `scripts/select-db-integration-matrix.mjs` selects the Quality workflow's database matrix from changed paths. A dialect package change selects that dialect; changes to `db`, `db-testkit`, their shared dependencies, shared development configuration, or dependency/CI inputs select all eight. Unrelated changes skip the matrix. Selection covers entire package directories, including tests and documentation; deletions and both sides of renames count. An unavailable comparison range runs all eight conservatively. Keep the selector's shared paths current when adding database dependencies or changing the test setup.
+
+Which suites to run locally, and the command forms that silently run nothing, are in the [`nocobase-db-integration-testing` Skill](.agents/skills/nocobase-db-integration-testing/SKILL.md). Run locally only the dialects the change puts at risk; CI covers the selected matrix.
 
 ## Native Dependencies in Generated Applications
 

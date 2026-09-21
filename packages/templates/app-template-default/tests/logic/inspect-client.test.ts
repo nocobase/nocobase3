@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +16,12 @@ import {
   parseInspectAppClientArgs,
   selectAppClientInspection,
 } from '../../cli/dev-commands/inspect-client-impl.mjs';
+
+const appPackageName = (
+  JSON.parse(
+    readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+  ) as { name: string }
+).name;
 
 async function createInspectionApp(pluginsSource?: string): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'client-inspect-'));
@@ -98,7 +105,7 @@ describe('client inspection', () => {
     const inspection = await inspectAppClient();
 
     expect(inspection.app).toMatchObject({
-      packageName: '@nocobase/app-template-default',
+      packageName: appPackageName,
     });
     expect(inspection.consistent).toBe(true);
     expect(inspection.settings).toEqual(
@@ -121,27 +128,27 @@ describe('client inspection', () => {
     ).toEqual([
       {
         auth: 'required',
-        id: '@nocobase/app-template-default:home',
+        id: `${appPackageName}:home`,
         path: '/',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-template-default:login',
+        id: `${appPackageName}:login`,
         path: '/login',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-template-default:register',
+        id: `${appPackageName}:register`,
         path: '/register',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-template-default:forgot-password',
+        id: `${appPackageName}:forgot-password`,
         path: '/forgot-password',
       },
       {
         auth: 'guest',
-        id: '@nocobase/app-template-default:reset-password',
+        id: `${appPackageName}:reset-password`,
         path: '/reset-password',
       },
       {
@@ -168,7 +175,7 @@ describe('client inspection', () => {
     expect(
       inspection.reactProviders.map(({ id, order }) => ({ id, order })),
     ).toEqual([
-      { id: '@nocobase/app-template-default:theme', order: 1 },
+      { id: `${appPackageName}:theme`, order: 1 },
       {
         id: '@nocobase/app-plugin-authentication:authentication',
         order: 2,
@@ -185,7 +192,7 @@ describe('client inspection', () => {
         order,
       })),
     ).toEqual([
-      { packageName: '@nocobase/app-template-default', order: 1 },
+      { packageName: appPackageName, order: 1 },
       { packageName: '@nocobase/app-plugin-authentication', order: 2 },
       { packageName: '@nocobase/app-plugin-authorization', order: 3 },
       { packageName: '@nocobase/app-plugin-notification-provider', order: 4 },
@@ -195,14 +202,14 @@ describe('client inspection', () => {
     ]);
     expect(inspection.configs[0]).toMatchObject({
       kind: 'factory',
-      packageName: '@nocobase/app-template-default',
+      packageName: appPackageName,
       source: 'application',
     });
     expect(inspection.locales).toEqual(
       expect.arrayContaining([
         {
           order: 1,
-          packageName: '@nocobase/app-template-default',
+          packageName: appPackageName,
           source: 'application',
         },
         expect.objectContaining({
@@ -258,9 +265,9 @@ describe('client inspection', () => {
       inspection.settings
         .filter(
           ({ packageName }) =>
-            packageName !== '@nocobase/app-plugin-ai-employee',
+            packageName === '@nocobase/app-plugin-authorization' ||
+            packageName.startsWith('@nocobase/app-plugin-authz-'),
         )
-        .slice(0, 9)
         .map(({ id }) => id),
     ).toEqual([
       'permission-sets',

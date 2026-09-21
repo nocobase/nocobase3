@@ -1,9 +1,4 @@
-import {
-  type NotificationChannelDefinition,
-  type NotificationContent,
-  type NotificationProviderIdentity,
-  type NotificationRecipient,
-} from '@nocobase/app-plugin-notification';
+import { type NotificationChannelDefinition } from '@nocobase/app-plugin-notification';
 import { notificationProviderText } from '../i18n.js';
 
 import type {
@@ -13,22 +8,7 @@ import type {
   PreparedEmailMessage,
 } from './types.js';
 
-export interface EmailChannelDefinitionOptions {
-  readonly resolveUserEmail?: (
-    userId: string,
-    provider: NotificationProviderIdentity,
-  ) => Promise<string | undefined>;
-}
-
-export function defineEmailChannelConfig<const TName extends string>(
-  input: Omit<EmailChannelConfig, 'type' | 'name'> & { readonly name: TName },
-): EmailChannelConfig & { readonly name: TName } {
-  return { type: 'email', ...input };
-}
-
-export function createEmailChannelDefinition(
-  options: EmailChannelDefinitionOptions = {},
-): NotificationChannelDefinition<
+export function createEmailChannelDefinition(): NotificationChannelDefinition<
   EmailChannelConfig,
   EmailRecipient,
   EmailMessage,
@@ -51,8 +31,8 @@ export function createEmailChannelDefinition(
           maxLength: 320,
         },
         {
-          name: 'title',
-          label: notificationProviderText('test.fields.title', 'Title'),
+          name: 'subject',
+          label: notificationProviderText('test.fields.subject', 'Subject'),
           type: 'text',
           required: true,
           defaultValue: notificationProviderText(
@@ -62,15 +42,20 @@ export function createEmailChannelDefinition(
           maxLength: 200,
         },
         {
-          name: 'body',
-          label: notificationProviderText('test.fields.message', 'Message'),
+          name: 'text',
+          label: notificationProviderText('test.fields.text', 'Text'),
           type: 'textarea',
-          required: true,
           defaultValue: notificationProviderText(
             'test.defaults.body',
             'This is a test notification from NocoBase.',
           ),
           maxLength: 2000,
+        },
+        {
+          name: 'html',
+          label: notificationProviderText('test.fields.html', 'HTML'),
+          type: 'textarea',
+          maxLength: 10000,
         },
       ],
       toSendInput({ values }) {
@@ -79,38 +64,69 @@ export function createEmailChannelDefinition(
           throw new Error('Recipient must be a valid email address.');
         }
         return {
-          to: { type: 'email', address },
-          content: requiredContent(values),
+          to: address,
+          subject: values.subject?.trim(),
+          text: values.text?.trim(),
+          ...(values.html?.trim() ? { html: values.html.trim() } : {}),
         };
       },
     },
     async createChannel() {
       return {
         type: 'email',
-        async resolveRecipient(input: {
-          readonly recipient?: NotificationRecipient;
-          readonly provider: NotificationProviderIdentity;
-        }): Promise<EmailRecipient | undefined> {
-          const { recipient } = input;
-          if (!recipient) return undefined;
-          if (recipient.type === 'user') {
-            const address = await options.resolveUserEmail?.(
-              recipient.id,
-              input.provider,
-            );
-            return address ? { address } : undefined;
+        validateMessage(value: unknown) {
+          if (!value || typeof value !== 'object' || Array.isArray(value))
+            throw new Error('Email message is required.');
+          for (const key of Object.keys(value)) {
+            if (
+              ![
+                'to',
+                'subject',
+                'text',
+                'html',
+                'from',
+                'replyTo',
+                'actionUrl',
+              ].includes(key)
+            )
+              throw new Error(`Unsupported Email message field "${key}".`);
           }
-          if (recipient.type === 'email') return { address: recipient.address };
-          return undefined;
-        },
-        render(input: {
-          readonly content: NotificationContent;
-          readonly override?: Partial<EmailMessage>;
-        }): EmailMessage {
+          const message = value as EmailMessage;
+          const addresses =
+            typeof message.to === 'string' ? [message.to] : message.to;
+          if (
+            !Array.isArray(addresses) ||
+            !addresses.length ||
+            addresses.some(
+              (address: unknown) =>
+                typeof address !== 'string' || !isEmail(address),
+            )
+          )
+            throw new Error('Email to must contain valid email addresses.');
+          if (
+            typeof message.subject !== 'string' ||
+            !message.subject.trim() ||
+            (message.text !== undefined && typeof message.text !== 'string') ||
+            (message.html !== undefined && typeof message.html !== 'string') ||
+            (!message.text?.trim() && !message.html?.trim())
+          )
+            throw new Error('Email subject and text or html are required.');
+          for (const key of ['from', 'replyTo'] as const)
+            if (
+              message[key] !== undefined &&
+              (typeof message[key] !== 'string' || !isEmail(message[key]))
+            )
+              throw new Error(`Email ${key} must be an email address.`);
           return {
-            subject: input.content.title ?? input.content.body,
-            text: input.content.body,
-            ...input.override,
+            message: {
+              to: message.to,
+              subject: message.subject,
+              text: message.text,
+              html: message.html,
+              from: message.from,
+              replyTo: message.replyTo,
+            },
+            recipients: addresses.map((address: string) => ({ address })),
           };
         },
         async prepare(input: {
@@ -120,22 +136,11 @@ export function createEmailChannelDefinition(
           readonly message: EmailMessage;
           readonly signal: AbortSignal;
         }): Promise<PreparedEmailMessage> {
-          if (!input.message.subject || !input.message.text)
-            throw new Error('Email subject and text are required.');
           return { to: input.recipient.address, content: input.message };
         },
       };
     },
   };
-}
-
-function requiredContent(
-  values: Readonly<Record<string, string>>,
-): NotificationContent {
-  const title = values.title?.trim();
-  const body = values.body?.trim();
-  if (!title || !body) throw new Error('Title and Message are required.');
-  return { title, body };
 }
 
 function isEmail(value: string): boolean {
@@ -144,9 +149,10 @@ function isEmail(value: string): boolean {
 
 declare module '@nocobase/app-plugin-notification' {
   interface NotificationChannelSchemas {
-    email: {
+    smtp: {
       readonly recipient: EmailRecipient;
       readonly message: EmailMessage;
     };
+    resend: NotificationChannelSchemas['smtp'];
   }
 }

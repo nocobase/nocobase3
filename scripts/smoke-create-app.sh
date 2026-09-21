@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Generates an application with create-app, checks dev, then builds and starts it in production mode.
+# Generates an application with create-app, runs its tests, checks dev, then builds and starts it in production mode.
 # Every package can build, typecheck and test in this repository and still produce an application that
 # does not start, because what a generated application installs is decided by published manifests rather than by the
 # workspace links everything resolves through here.
@@ -70,6 +70,7 @@ fi
 
 APP_DIR="$WORKDIR/$APP_NAME"
 DEV_LOG="$WORKDIR/dev.log"
+TEST_LOG="$WORKDIR/test.log"
 BUILD_LOG="$WORKDIR/build.log"
 START_LOG="$WORKDIR/start.log"
 
@@ -131,6 +132,14 @@ echo "::group::Synchronize NocoBase package Skills"
 # create-app reports a synchronization failure as a warning. Exercise the command
 # explicitly so an invalid published Skill cannot pass this smoke test.
 pnpm skills:sync
+echo "::endgroup::"
+
+echo "::group::Test the application with pnpm test"
+if ! pnpm test 2>&1 | tee "$TEST_LOG"; then
+  echo "::endgroup::"
+  echo "::error::pnpm test failed"
+  exit 1
+fi
 echo "::endgroup::"
 
 echo "::group::Boot the application with pnpm dev"
@@ -305,4 +314,4 @@ fi
 cat "$START_LOG"
 echo "Production application is serving at $START_URL/"
 echo "::endgroup::"
-echo "create-app smoke test passed: $TEMPLATE passed dev, build, and start."
+echo "create-app smoke test passed: $TEMPLATE passed test, dev, build, and start."

@@ -20,7 +20,7 @@ const zhCN: InAppNotificationResource = {
       title: '标题',
       message: '消息',
     },
-    placeholders: { currentUser: '默认发送给当前用户' },
+    placeholders: { currentUser: '应用用户 ID' },
     defaults: {
       title: 'NocoBase 通知测试',
       body: '这是一条来自 NocoBase 的测试通知。',

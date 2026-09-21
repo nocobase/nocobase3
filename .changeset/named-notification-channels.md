@@ -6,4 +6,4 @@
 '@nocobase/app-template-default': patch
 ---
 
-Require unique Channel instance names and use them for sending, routing, overrides, test sending, runtime isolation and retries. Preserve implementation types separately in delivery records and reject retries after a Channel type changes. Migrate existing Channel identities and update application configuration and integration guidance.
+Use unique Channel map keys for sending, test sending, runtime isolation and retries. Preserve message types separately in delivery records and reject retries after the original Channel or Provider becomes unavailable. Migrate existing Channel identities and update application configuration and integration guidance.

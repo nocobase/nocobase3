@@ -80,10 +80,10 @@ describe('NotificationLogsPage', () => {
       name: 'Delivery method',
     });
     fireEvent.change(methodSelect, {
-      target: { value: 'in-app:default:database' },
+      target: { value: 'in-app' },
     });
 
-    expect(methodSelect).toHaveDisplayValue('in-app (In-app) (Built-in)');
+    expect(methodSelect).toHaveDisplayValue('in-app');
     expect(screen.queryByText(/default/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Database/)).not.toBeInTheDocument();
   });
@@ -103,7 +103,6 @@ describe('NotificationLogsPage', () => {
             delivery: {
               id: 'delivery-1',
               channelName: 'email',
-              providerName: 'primary-smtp',
               providerType: 'smtp',
               attemptCount: 1,
               status: 'failed',
@@ -114,7 +113,6 @@ describe('NotificationLogsPage', () => {
               {
                 id: 'attempt-1',
                 sequence: 1,
-                providerName: 'primary-smtp',
                 providerType: 'smtp',
                 status: 'failed',
                 startedAt: '2026-08-28T07:00:00.000Z',
@@ -133,7 +131,7 @@ describe('NotificationLogsPage', () => {
     });
     fireEvent.click(expand);
 
-    expect(screen.getAllByText('primary-smtp')).toHaveLength(2);
+    expect(screen.getAllByText('smtp')).toHaveLength(2);
     expect(screen.getByText('Connection refused')).toBeInTheDocument();
     expect(
       screen.getByText('Need attention').previousSibling,
@@ -166,7 +164,6 @@ describe('NotificationLogsPage', () => {
             delivery: {
               id: 'delivery-1',
               channelName: 'in-app',
-              providerName: 'default',
               providerType: 'database',
               attemptCount: 1,
               status: 'completed',
@@ -177,7 +174,6 @@ describe('NotificationLogsPage', () => {
               {
                 id: 'attempt-1',
                 sequence: 1,
-                providerName: 'default',
                 providerType: 'database',
                 status: 'completed',
                 startedAt: '2026-08-28T07:00:00.000Z',
@@ -195,7 +191,7 @@ describe('NotificationLogsPage', () => {
       await screen.findByRole('button', { name: 'Expand notification' }),
     );
 
-    expect(await screen.findByText('in-app (In-app)')).toBeInTheDocument();
+    expect(await screen.findByText('in-app')).toBeInTheDocument();
     expect(screen.getAllByText('Built-in')).toHaveLength(2);
     expect(screen.queryByText('default')).not.toBeInTheDocument();
     expect(screen.queryByText('database')).not.toBeInTheDocument();
@@ -247,15 +243,15 @@ describe('NotificationLogsPage', () => {
     });
     expect(providerSelect).toHaveDisplayValue('Select a delivery method');
     expect(
-      screen.getByRole('group', { name: 'system-email' }),
+      screen.getByRole('option', { name: 'system-email' }),
     ).toBeInTheDocument();
     fireEvent.change(providerSelect, {
-      target: { value: 'system-email:smtp:smtp' },
+      target: { value: 'system-email' },
     });
     expect(
       providerSelect.compareDocumentPosition(screen.getByLabelText('Title')),
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(providerSelect).toHaveDisplayValue('system-email (Email) (SMTP)');
+    expect(providerSelect).toHaveDisplayValue('system-email');
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     fireEvent.change(screen.getByRole('textbox', { name: 'Recipient' }), {
       target: { value: 'recipient@example.com' },
@@ -265,7 +261,6 @@ describe('NotificationLogsPage', () => {
 
     expect(notification.sendTest).toHaveBeenCalledWith({
       channel: 'system-email',
-      provider: { name: 'smtp', type: 'smtp' },
       values: {
         recipient: 'recipient@example.com',
         title: 'NocoBase notification test',

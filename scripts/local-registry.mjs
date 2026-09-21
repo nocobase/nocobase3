@@ -22,7 +22,7 @@ pnpm local-registry:stop
 
 Prepare builds and publishes all workspace packages to a fresh loopback registry.
 Use --reset to stop the previous session and clear its snapshot before preparing again.
-Verify runs dev/build/start and retains applications and logs outside the repository.
+Verify runs test/dev/build/start and retains applications and logs outside the repository.
 Non-SQLite verification requires --config pointing to a dedicated test database;
 application migrations and seeds may modify it. Stop removes registry state, not test applications.
 `;

@@ -179,7 +179,6 @@ function localizeTestTarget(
       label: translateText(target.channel.label, t),
     },
     provider: {
-      name: target.provider.name,
       type: target.provider.type,
       label: translateText(target.provider.label, t),
     },

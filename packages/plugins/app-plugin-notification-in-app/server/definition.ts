@@ -1,37 +1,23 @@
 import { validateNotificationTarget } from '@nocobase/app-plugin-notification';
 import {
-  type NotificationContent,
   type NotificationChannelDefinition,
   type NotificationProviderDefinition,
-  type NotificationRecipient,
 } from '@nocobase/app-plugin-notification';
 import { inAppNotificationText } from './i18n.js';
 import type { InAppStore } from './store.js';
 import type { InAppMessage, InAppRecipient } from './types.js';
 
 export interface InAppProviderConfig {
-  readonly type: 'database';
-  readonly name: string;
+  readonly provider: 'in-app';
   readonly enabled?: boolean;
 }
-export interface InAppChannelConfig {
-  readonly name: string;
-  readonly type: 'in-app';
-  readonly enabled: boolean;
-  readonly providers: readonly InAppProviderConfig[];
-}
+export type InAppChannelConfig = InAppProviderConfig;
 
 export interface PreparedInAppMessage {
   readonly deliveryId: string;
   readonly notificationId: string;
   readonly recipient: InAppRecipient;
   readonly content: InAppMessage;
-}
-
-export function defineInAppChannelConfig<const TName extends string>(
-  input: Omit<InAppChannelConfig, 'type' | 'name'> & { readonly name: TName },
-): InAppChannelConfig & { readonly name: TName } {
-  return { type: 'in-app', ...input };
 }
 
 export function createInAppChannelDefinition(): NotificationChannelDefinition<
@@ -52,9 +38,10 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
             'Recipient user ID',
           ),
           type: 'text',
+          required: true,
           placeholder: inAppNotificationText(
             'test.placeholders.currentUser',
-            'Defaults to the current user',
+            'Application user ID',
           ),
           maxLength: 255,
         },
@@ -96,7 +83,7 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
           maxLength: 2000,
         },
       ],
-      toSendInput({ actor, values }) {
+      toSendInput({ values }) {
         const title = values.title?.trim();
         const body = values.body?.trim();
         if (!title || !body) throw new Error('Title and Message are required.');
@@ -112,34 +99,50 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
               : undefined,
         );
         return {
-          to: {
-            type: 'user',
-            id: values.recipient?.trim() || actor.userId,
-          },
-          content: { title, body, ...(target ? { target } : {}) },
+          to: values.recipient?.trim(),
+          title,
+          body,
+          ...(target ? { target } : {}),
         };
       },
     },
     async createChannel() {
       return {
         type: 'in-app',
-        resolveRecipient(input: {
-          readonly recipient?: NotificationRecipient;
-        }): InAppRecipient | undefined {
-          const { recipient } = input;
-          return recipient?.type === 'user'
-            ? { userId: recipient.id }
-            : undefined;
-        },
-        render(input: {
-          readonly content: NotificationContent;
-          readonly override?: Partial<InAppMessage>;
-        }): InAppMessage {
+        validateMessage(value: unknown) {
+          if (!value || typeof value !== 'object' || Array.isArray(value))
+            throw new Error('In-app message is required.');
+          for (const key of Object.keys(value)) {
+            if (!['to', 'title', 'body', 'target', 'actionUrl'].includes(key))
+              throw new Error(`Unsupported In-app message field "${key}".`);
+          }
+          const message = value as InAppMessage;
+          const ids =
+            typeof message.to === 'string' ? [message.to] : message.to;
+          if (
+            !Array.isArray(ids) ||
+            !ids.length ||
+            ids.some(
+              (id: unknown) =>
+                typeof id !== 'string' || !id.trim() || id !== id.trim(),
+            )
+          )
+            throw new Error('In-app to must contain application user IDs.');
+          if (
+            typeof message.title !== 'string' ||
+            !message.title.trim() ||
+            typeof message.body !== 'string' ||
+            !message.body.trim()
+          )
+            throw new Error('In-app title and body are required.');
           return {
-            title: input.content.title,
-            body: input.content.body,
-            target: input.content.target,
-            ...input.override,
+            message: {
+              to: message.to,
+              title: message.title,
+              body: message.body,
+              target: validateNotificationTarget(message.target),
+            },
+            recipients: ids.map((userId: string) => ({ userId })),
           };
         },
         async prepare(input: {
@@ -171,16 +174,16 @@ export function createDatabaseProviderDefinition(options: {
   readonly recipientExists: (userId: string) => Promise<boolean>;
 }): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
-    type: 'database',
+    type: 'in-app',
+    messageType: 'in-app',
     capabilities: {
       idempotency: { supported: true },
     },
     label: inAppNotificationText('test.providers.builtIn', 'Built-in'),
-    async createProvider(context, config) {
+    async createProvider(context) {
       const { store } = options;
       return {
-        name: config.name,
-        type: 'database',
+        type: 'in-app',
         capabilities: {
           idempotency: { supported: true },
         },

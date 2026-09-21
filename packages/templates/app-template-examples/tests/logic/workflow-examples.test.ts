@@ -1,4 +1,7 @@
 // @vitest-environment node
+// The installed workflow plugin uses native import() for run modules. Match pnpm dev's loader so .js specifiers resolve adjacent .ts sources.
+import 'tsx/esm';
+
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';

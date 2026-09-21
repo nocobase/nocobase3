@@ -2,19 +2,15 @@ import {
   validateNotificationTarget,
   type NotificationTarget,
 } from '@nocobase/app-plugin-notification';
-import {
-  type NotificationChannelDefinition,
-  type NotificationContent,
-  type NotificationProviderIdentity,
-  type NotificationRecipient,
-} from '@nocobase/app-plugin-notification';
+import { type NotificationChannelDefinition } from '@nocobase/app-plugin-notification';
 import { notificationProviderText } from '../i18n.js';
 
 export interface ImRecipient {
-  readonly provider: NotificationProviderIdentity;
+  readonly webhook: true;
 }
 
 export interface ImMessage {
+  readonly to?: never;
   readonly text: string;
   readonly title?: string;
   readonly target?: Extract<NotificationTarget, { type: 'url' }>;
@@ -31,34 +27,12 @@ export interface PreparedImMessage {
 }
 
 export interface ImProviderConfig {
-  readonly type: string;
-  readonly name: string;
+  readonly provider: string;
   readonly enabled?: boolean;
 }
+export type ImChannelConfig = ImProviderConfig;
 
-export interface ImChannelConfig {
-  readonly name: string;
-  readonly type: 'im';
-  readonly enabled: boolean;
-  readonly providers: readonly ImProviderConfig[];
-}
-
-export interface ImChannelDefinitionOptions {
-  readonly resolveUserTarget?: (
-    userId: string,
-    provider: NotificationProviderIdentity,
-  ) => Promise<ImRecipient | undefined>;
-}
-
-export function defineImChannelConfig<const TName extends string>(
-  input: Omit<ImChannelConfig, 'type' | 'name'> & { readonly name: TName },
-): ImChannelConfig & { readonly name: TName } {
-  return { type: 'im', ...input };
-}
-
-export function createImChannelDefinition(
-  options: ImChannelDefinitionOptions = {},
-): NotificationChannelDefinition<
+export function createImChannelDefinition(): NotificationChannelDefinition<
   ImChannelConfig,
   ImRecipient,
   ImMessage,
@@ -73,7 +47,6 @@ export function createImChannelDefinition(
           name: 'title',
           label: notificationProviderText('test.fields.title', 'Title'),
           type: 'text',
-          required: true,
           defaultValue: notificationProviderText(
             'test.defaults.title',
             'NocoBase notification test',
@@ -81,7 +54,7 @@ export function createImChannelDefinition(
           maxLength: 200,
         },
         {
-          name: 'body',
+          name: 'text',
           label: notificationProviderText('test.fields.message', 'Message'),
           type: 'textarea',
           required: true,
@@ -91,58 +64,101 @@ export function createImChannelDefinition(
           ),
           maxLength: 2000,
         },
+        {
+          name: 'url',
+          label: notificationProviderText(
+            'test.fields.url',
+            'Full HTTP(S) URL',
+          ),
+          type: 'text',
+          maxLength: 2000,
+        },
       ],
       toSendInput({ values }) {
         const title = values.title?.trim();
-        const body = values.body?.trim();
-        if (!title || !body) throw new Error('Title and Message are required.');
+        const text = values.text?.trim();
+        if (!text) throw new Error('IM text is required.');
         return {
-          content: { title, body },
+          title,
+          text,
+          ...(values.url?.trim()
+            ? {
+                target: validateNotificationTarget({
+                  type: 'url',
+                  url: values.url.trim(),
+                }),
+              }
+            : {}),
         };
       },
     },
     async createChannel() {
       return {
         type: 'im',
-        async resolveRecipient(input: {
-          readonly recipient?: NotificationRecipient;
-          readonly provider: NotificationProviderIdentity;
-        }): Promise<ImRecipient | undefined> {
-          if (!input.recipient) return { provider: input.provider };
-          if (input.recipient.type === 'user') {
-            const resolved = await options.resolveUserTarget?.(
-              input.recipient.id,
-              input.provider,
-            );
-            return sameProvider(resolved?.provider, input.provider)
-              ? resolved
-              : undefined;
+        validateMessage(value: unknown) {
+          if (!value || typeof value !== 'object' || Array.isArray(value))
+            throw new Error('IM message is required.');
+          for (const key of Object.keys(value)) {
+            if (
+              ![
+                'to',
+                'text',
+                'title',
+                'target',
+                'format',
+                'payloads',
+                'actionUrl',
+              ].includes(key)
+            )
+              throw new Error(`Unsupported IM message field "${key}".`);
           }
-          return undefined;
-        },
-        render(input: {
-          readonly content: NotificationContent;
-          readonly override?: Partial<ImMessage>;
-        }): ImMessage {
+          const message = value as ImMessage;
+          if ('to' in message)
+            throw new Error('Webhook messages do not accept to.');
+          if (typeof message.text !== 'string' || !message.text.trim())
+            throw new Error('IM text is required.');
+          if (message.title !== undefined && typeof message.title !== 'string')
+            throw new Error('IM title must be a string.');
+          if (
+            message.format !== undefined &&
+            message.format !== 'text' &&
+            message.format !== 'markdown'
+          )
+            throw new Error('Unsupported IM format.');
+          if (message.payloads !== undefined) {
+            if (
+              !message.payloads ||
+              typeof message.payloads !== 'object' ||
+              Array.isArray(message.payloads)
+            )
+              throw new Error('IM payloads must be an object.');
+            for (const payload of Object.values(message.payloads)) {
+              if (
+                !payload ||
+                typeof payload !== 'object' ||
+                Array.isArray(payload)
+              )
+                throw new Error('IM Provider payload must be an object.');
+            }
+          }
+          const target = validateNotificationTarget(message.target);
+          if (target?.type === 'route')
+            throw new Error('IM notifications require a full URL target.');
           return {
-            text: input.content.body,
-            title: input.content.title,
-            target:
-              input.content.target?.type === 'url'
-                ? input.content.target
-                : undefined,
-            ...input.override,
+            message: {
+              text: message.text,
+              title: message.title,
+              target: message.target,
+              format: message.format,
+              payloads: message.payloads,
+            },
+            recipients: [{ webhook: true as const }],
           };
         },
         async prepare(input: {
           readonly recipient: ImRecipient;
           readonly message: ImMessage;
-          readonly provider: NotificationProviderIdentity;
         }): Promise<PreparedImMessage> {
-          if (!sameProvider(input.recipient.provider, input.provider))
-            throw new Error(
-              `IM webhook recipient must select Provider "${input.provider.name}".`,
-            );
           if (!input.message.text.trim() && !input.message.payloads)
             throw new Error('IM text or provider payload is required.');
           const target = validateNotificationTarget(input.message.target);
@@ -164,11 +180,14 @@ export function formatImText(message: ImMessage): string {
     .join('\n');
 }
 
-function sameProvider(
-  left: NotificationProviderIdentity | undefined,
-  right: NotificationProviderIdentity,
-): boolean {
-  return left?.name === right.name && left.type === right.type;
+declare module '@nocobase/app-plugin-notification' {
+  interface NotificationChannelSchemas {
+    'feishu-webhook': {
+      readonly recipient: ImRecipient;
+      readonly message: ImMessage;
+    };
+    'dingtalk-webhook': NotificationChannelSchemas['feishu-webhook'];
+  }
 }
 
 declare module '@nocobase/app-plugin-notification' {

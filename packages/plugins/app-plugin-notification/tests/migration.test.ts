@@ -1,3 +1,4 @@
+import singleProviderMigration from '../database/migrations/202609200003_notification_single_provider.js';
 import { resolve } from 'node:path';
 
 import sqlite from '@nocobase/db-sqlite';
@@ -35,6 +36,7 @@ const MIGRATION_NAMES = [
   '202609080001_create_notification_idempotency',
   '202609130001_notification_instant_columns',
   '202609200001_notification_channel_names',
+  '202609200003_notification_single_provider',
 ] as const;
 
 interface DispatchRow extends Row {
@@ -678,3 +680,54 @@ async function migrateDown(database: DatabaseManager): Promise<void> {
     connection,
   });
 }
+
+it('removes Provider instance names from physical schema and metadata and restores columns on rollback', async () => {
+  const database = createDatabaseManager({
+    drivers: { sqlite },
+    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+  });
+  const connection = database.connection();
+  const context = {
+    connection,
+    builder: connection.builder,
+    query: connection.query,
+  };
+  try {
+    await migration.up(context);
+    await singleProviderMigration.up(context);
+    for (const name of [
+      'notificationDeliveries',
+      'notificationDeliveryAttempts',
+    ]) {
+      expect(
+        (await connection.collections.get(name))?.fields?.some(
+          (field) => field.name === 'providerName',
+        ),
+      ).toBe(false);
+      expect(
+        (await connection.collections.getPhysical(name))?.columns.some(
+          (column) => column.columnName === 'provider_name',
+        ),
+      ).toBe(false);
+    }
+    await singleProviderMigration.down?.(context);
+    for (const name of [
+      'notificationDeliveries',
+      'notificationDeliveryAttempts',
+    ]) {
+      expect((await connection.collections.get(name))?.fields).toContainEqual(
+        expect.objectContaining({ name: 'providerName' }),
+      );
+      expect(
+        (await connection.collections.getPhysical(name))?.columns,
+      ).toContainEqual(
+        expect.objectContaining({
+          columnName: 'provider_name',
+          nullable: false,
+        }),
+      );
+    }
+  } finally {
+    await database.destroy();
+  }
+});

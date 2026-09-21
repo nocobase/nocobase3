@@ -123,7 +123,6 @@ async function createProvider(): Promise<
   return createResendProviderDefinition().createProvider(
     providerContext(),
     defineResendProviderConfig({
-      name: 'primary',
       apiKey: 're_test',
       from: 'NocoBase <notifications@example.com>',
       replyTo: 'support@example.com',

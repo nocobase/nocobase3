@@ -1,3 +1,4 @@
+import singleProviderMigration from '../database/migrations/202609200003_notification_single_provider.js';
 import type { MysqlConnectionConfig } from '@nocobase/db-mysql';
 import type { OracleConnectionConfig } from '@nocobase/db-oracle';
 import { resolve } from 'node:path';
@@ -95,6 +96,7 @@ describe.skipIf(!dialect)(
           idempotencyMigration.name,
           instantMigration.name,
           namesMigration.name,
+          singleProviderMigration.name,
         ],
         skipped: [baseMigration.name],
       });
@@ -154,6 +156,7 @@ describe.skipIf(!dialect)(
       await expect(migrator.rollback()).resolves.toEqual({
         batch: 2,
         rolledBack: [
+          singleProviderMigration.name,
           namesMigration.name,
           instantMigration.name,
           idempotencyMigration.name,

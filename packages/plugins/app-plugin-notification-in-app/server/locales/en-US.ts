@@ -20,7 +20,7 @@ const enUS = {
       title: 'Title',
       message: 'Message',
     },
-    placeholders: { currentUser: 'Defaults to the current user' },
+    placeholders: { currentUser: 'Application user ID' },
     defaults: {
       title: 'NocoBase notification test',
       body: 'This is a test notification from NocoBase.',

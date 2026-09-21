@@ -213,19 +213,6 @@ function TestNotificationDialog({
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
 
-  const channels = useMemo(
-    () => [...new Set((targets ?? []).map((item) => item.channel.name))],
-    [targets],
-  );
-  const providerCounts = useMemo(
-    () =>
-      (targets ?? []).reduce<Record<string, number>>((counts, item) => {
-        counts[item.channel.name] = (counts[item.channel.name] ?? 0) + 1;
-        return counts;
-      }, {}),
-    [targets],
-  );
-
   const send = (): void => {
     if (!selected) return;
     setSending(true);
@@ -234,10 +221,6 @@ function TestNotificationDialog({
     void notification
       .sendTest({
         channel: selected.channel.name,
-        provider: {
-          name: selected.provider.name,
-          type: selected.provider.type,
-        },
         values,
       })
       .then(
@@ -285,7 +268,7 @@ function TestNotificationDialog({
             <p className='mt-1 text-sm text-muted-foreground'>
               {t('test.description', {
                 defaultValue:
-                  'Select a Channel and Provider, then click Send. The message is sent to the recipient you provide and recorded below.',
+                  'Select a Channel, then click Send. The message is sent to the recipient you provide and recorded below.',
               })}
             </p>
           </div>
@@ -355,34 +338,10 @@ function TestNotificationDialog({
                     defaultValue: 'Select a delivery method',
                   })}
                 </option>
-                {channels.map((channel) => (
-                  <optgroup
-                    key={channel}
-                    label={
-                      targets?.find((item) => item.channel.name === channel)
-                        ?.channel.name ?? channel
-                    }
-                  >
-                    {targets
-                      .filter((item) => item.channel.name === channel)
-                      .map((item) => (
-                        <option
-                          key={providerKey(item)}
-                          value={providerKey(item)}
-                        >
-                          {providerLabel(
-                            item,
-                            providerCounts[item.channel.name] ?? 0,
-                            (channel, provider) =>
-                              t('test.singleProviderLabel', {
-                                defaultValue: `${channel} (${provider})`,
-                                channel,
-                                provider,
-                              }),
-                          )}
-                        </option>
-                      ))}
-                  </optgroup>
+                {targets.map((item) => (
+                  <option key={item.channel.name} value={item.channel.name}>
+                    {item.channel.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -474,20 +433,7 @@ function TestNotificationDialog({
 }
 
 function providerKey(item: NotificationTestTarget): string {
-  return `${item.channel.name}:${item.provider.name}:${item.provider.type}`;
-}
-
-function providerLabel(
-  item: NotificationTestTarget,
-  providerCount: number,
-  formatSingleProvider: (channel: string, provider: string) => string,
-): string {
-  return providerCount === 1
-    ? formatSingleProvider(
-        `${item.channel.name} (${item.channel.label})`,
-        item.provider.label,
-      )
-    : `${item.provider.name} (${item.provider.label})`;
+  return item.channel.name;
 }
 
 function Metric({
@@ -677,7 +623,6 @@ function DeliveryTable({
           {deliveries.map((details) => {
             const presentation = providerPresentation(
               details.delivery.channelName,
-              details.delivery.providerName,
               details.delivery.providerType,
               targets,
             );
@@ -737,7 +682,6 @@ function AttemptList({
       {details.attempts.map((attempt) => {
         const presentation = providerPresentation(
           details.delivery.channelName,
-          attempt.providerName,
           attempt.providerType,
           targets,
         );
@@ -772,7 +716,6 @@ function AttemptList({
 
 function providerPresentation(
   channel: string,
-  providerName: string,
   providerType: string,
   targets?: readonly NotificationTestTarget[],
 ): {
@@ -783,25 +726,9 @@ function providerPresentation(
   const target = targets?.find(
     (candidate) =>
       candidate.channel.name === channel &&
-      candidate.provider.name === providerName &&
       candidate.provider.type === providerType,
   );
-  if (!target) {
-    return { channel, provider: providerName, detail: providerType };
-  }
-  const providerCount = targets?.filter(
-    (candidate) => candidate.channel.name === channel,
-  ).length;
-  return providerCount === 1
-    ? {
-        channel: `${target.channel.name} (${target.channel.label})`,
-        provider: target.provider.label,
-      }
-    : {
-        channel: `${target.channel.name} (${target.channel.label})`,
-        provider: target.provider.name,
-        detail: target.provider.label,
-      };
+  return { channel, provider: target?.provider.label ?? providerType };
 }
 
 function StatusBadge({

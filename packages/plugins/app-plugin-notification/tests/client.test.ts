@@ -82,7 +82,6 @@ describe('@nocobase/app-plugin-notification client', () => {
     await expect(
       client.sendTest({
         channel: 'im',
-        provider: { name: 'feishu', type: 'feishu-webhook' },
         values: { title: 'Test', body: 'Hello' },
       }),
     ).resolves.toEqual(result);
@@ -94,7 +93,6 @@ describe('@nocobase/app-plugin-notification client', () => {
       headers: { 'x-nocobase-notification-test': '1' },
       json: {
         channel: 'im',
-        provider: { name: 'feishu', type: 'feishu-webhook' },
         values: { title: 'Test', body: 'Hello' },
       },
       method: 'POST',
@@ -120,7 +118,6 @@ describe('@nocobase/app-plugin-notification client', () => {
     await expect(
       new NotificationClient({ request }).sendTest({
         channel: 'email',
-        provider: { name: 'primary', type: 'smtp' },
         values: { recipient: 'test@example.com' },
       }),
     ).rejects.toEqual(

@@ -38,7 +38,6 @@ export interface NotificationDeliveryRecord {
   readonly channelType: string;
   readonly recipientSnapshot: object;
   readonly messageSnapshot: object;
-  readonly providerName: string;
   readonly providerType: string;
   readonly attemptCount: number;
   readonly status: NotificationDeliveryStatus;
@@ -61,7 +60,6 @@ export interface NotificationAttemptRecord {
   readonly id: string;
   readonly deliveryId: string;
   readonly sequence: number;
-  readonly providerName: string;
   readonly providerType: string;
   readonly status: NotificationAttemptStatus;
   readonly startedAt: string;
@@ -184,7 +182,6 @@ interface DeliveryRow extends Row {
   channelType: string;
   recipientSnapshot: object | string;
   messageSnapshot: object | string;
-  providerName: string;
   providerType: string;
   attemptCount: number;
   status: NotificationDeliveryStatus;
@@ -202,7 +199,6 @@ interface AttemptRow extends Row {
   id: string;
   deliveryId: string;
   sequence: number;
-  providerName: string;
   providerType: string;
   status: NotificationAttemptStatus;
   startedAt: string;
@@ -830,7 +826,6 @@ function toDeliveryRow(record: NotificationDeliveryRecord): DeliveryRow {
     channelType: record.channelType,
     recipientSnapshot: JSON.stringify(record.recipientSnapshot),
     messageSnapshot: JSON.stringify(record.messageSnapshot),
-    providerName: record.providerName,
     providerType: record.providerType,
     attemptCount: record.attemptCount,
     status: record.status,
@@ -857,7 +852,6 @@ function fromDeliveryRow(row: DeliveryRow): NotificationDeliveryRecord {
     channelType: row.channelType,
     recipientSnapshot: parseObject(row.recipientSnapshot, 'recipient'),
     messageSnapshot: parseObject(row.messageSnapshot, 'message'),
-    providerName: row.providerName,
     providerType: row.providerType,
     attemptCount: row.attemptCount,
     status: row.status,
@@ -913,7 +907,6 @@ function toAttemptRow(record: NotificationAttemptRecord): AttemptRow {
     id: record.id,
     deliveryId: record.deliveryId,
     sequence: record.sequence,
-    providerName: record.providerName,
     providerType: record.providerType,
     status: record.status,
     startedAt: record.startedAt,
@@ -941,7 +934,6 @@ function fromAttemptRow(row: AttemptRow): NotificationAttemptRecord {
     id: row.id,
     deliveryId: row.deliveryId,
     sequence: row.sequence,
-    providerName: row.providerName,
     providerType: row.providerType,
     status: row.status,
     startedAt: row.startedAt,

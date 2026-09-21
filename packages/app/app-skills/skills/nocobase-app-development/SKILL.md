@@ -53,6 +53,8 @@ NocoBase packages may publish Skills under `.agents/skills/`. Run `pnpm skills:s
 
 Read the relevant Skill before writing the feature, but treat this table as a map rather than an installed-package list. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 
+For notification configuration or sending, follow the notification plugin Skill: `notification.channels` maps each name to one flat Provider configuration, and `send({ idempotencyKey, messages })` supplies a complete message per Channel. Use native addresses; email and in-app arrays create independent deliveries, while Webhooks forbid `to`.
+
 Skills synchronization reads direct `@nocobase/*` dependencies from the application manifest and retains compatibility with explicitly registered plugins. It does not make an unregistered runtime plugin active; the composition roots remain the authority for registration and contribution order.
 
 Install plugins with `pnpm plugin:register <name>`. All application plugins belong in `dependencies`, including client-only and disabled plugins, because deployment dependencies come from that field. Plugin frontend libraries remain peers and are not automatically installed in the deployment. Re-registering migrates legacy `devDependencies` entries while preserving the declared range; verify the manifest and lockfile afterward. With an older CLI, use `pnpm add --save-prod <package>@<declared-range>` to correct the declaration; `--no-install` leaves lockfile synchronization to the caller.

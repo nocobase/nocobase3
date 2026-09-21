@@ -1,5 +1,7 @@
 // @vitest-environment node
 
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,11 +9,17 @@ import {
   inspectAppServer,
 } from '../../cli/dev-commands/inspect-server-impl.mjs';
 
+const appPackageName = (
+  JSON.parse(
+    readFileSync(new URL('../../package.json', import.meta.url), 'utf8'),
+  ) as { name: string }
+).name;
+
 describe('Server inspection', () => {
   it('inspects the real Server composition without runtime execution', async () => {
     const inspection = await inspectAppServer();
 
-    expect(inspection.app.packageName).toBe('@nocobase/app-template-hub');
+    expect(inspection.app.packageName).toBe(appPackageName);
     expect(inspection.issues).toEqual([]);
     expect(
       inspection.routes.filter(

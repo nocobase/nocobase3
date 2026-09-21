@@ -1,6 +1,7 @@
 import type { NotificationTarget } from '@nocobase/app-plugin-notification';
 export interface InAppMessage {
-  readonly title?: string;
+  readonly to: string | readonly [string, ...string[]];
+  readonly title: string;
   readonly body: string;
   readonly target?: NotificationTarget;
 }

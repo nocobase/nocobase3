@@ -58,7 +58,6 @@ export class InAppNotificationProvider<
     const store = container.resolve(inAppNotificationStoreToken);
     const users = container.resolve(userAdministrationServiceToken);
     registry.registerChannel(createInAppChannelDefinition()).registerProvider(
-      'in-app',
       createDatabaseProviderDefinition({
         store,
         async recipientExists(userId) {

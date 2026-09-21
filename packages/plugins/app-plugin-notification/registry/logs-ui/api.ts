@@ -14,7 +14,6 @@ export type NotificationStatus =
 export interface NotificationAttempt {
   readonly id: string;
   readonly sequence: number;
-  readonly providerName: string;
   readonly providerType: string;
   readonly status: NotificationStatus;
   readonly startedAt: string;
@@ -28,7 +27,6 @@ export interface NotificationDeliveryDetails {
     readonly id: string;
     readonly channelName: string;
     readonly channelType: string;
-    readonly providerName: string;
     readonly providerType: string;
     readonly attemptCount: number;
     readonly status: NotificationStatus;

@@ -23,7 +23,7 @@ describe('In-app Channel common input', () => {
         logger: {} as NotificationProviderContext['logger'],
         now: async () => '2026-09-18T00:00:00.000Z',
       },
-      { type: 'database', name: 'default' },
+      { provider: 'in-app' },
     );
     const input = {
       notificationId: 'notification-1',
@@ -87,23 +87,18 @@ describe('In-app Channel common input', () => {
     });
   });
 
-  it('defaults test delivery to the authenticated user', () => {
+  it('uses the explicitly provided user ID for test delivery', () => {
     const adapter = createInAppChannelDefinition().test;
     expect(
       adapter?.toSendInput({
         actor: { userId: 'user-1' },
-        values: { title: 'Test', body: 'Hello' },
-        channelConfig: {
-          name: 'in-app',
-          type: 'in-app',
-          enabled: true,
-          providers: [],
-        },
-        providerConfig: { type: 'database', name: 'default' },
+        values: { recipient: 'user-1', title: 'Test', body: 'Hello' },
+        channelConfig: { provider: 'in-app' as const },
       }),
     ).toEqual({
-      to: { type: 'user', id: 'user-1' },
-      content: { title: 'Test', body: 'Hello' },
+      to: 'user-1',
+      title: 'Test',
+      body: 'Hello',
     });
   });
 
@@ -111,13 +106,7 @@ describe('In-app Channel common input', () => {
     const adapter = createInAppChannelDefinition().test!;
     const input = {
       actor: { userId: 'u' },
-      channelConfig: {
-        name: 'in-app',
-        type: 'in-app' as const,
-        enabled: true,
-        providers: [],
-      },
-      providerConfig: { type: 'database', name: 'default' },
+      channelConfig: { provider: 'in-app' as const },
     };
     for (const [fields, target] of [
       [
@@ -134,7 +123,7 @@ describe('In-app Channel common input', () => {
           ...input,
           values: { title: 'Test', body: 'Body', ...fields },
         }),
-      ).toMatchObject({ content: { target } });
+      ).toMatchObject({ target });
     }
     expect(() =>
       adapter.toSendInput({
@@ -155,43 +144,33 @@ describe('In-app Channel common input', () => {
     ).toThrow('Invalid notification target');
   });
 
-  it('resolves user recipients and renders content with overrides', async () => {
-    const definition = createInAppChannelDefinition();
-    const channel = await definition.createChannel(
+  it('validates native IDs, complete content and targets before enqueueing', async () => {
+    const channel = await createInAppChannelDefinition().createChannel(
       { logger: {} } as NotificationChannelContext,
-      { name: 'in-app', type: 'in-app', enabled: true, providers: [] },
+      { provider: 'in-app' },
     );
-    const provider = { name: 'default', type: 'database' };
-
-    expect(
-      channel.resolveRecipient?.({
-        recipient: { type: 'user', id: 'user-1' },
-        provider,
-      }),
-    ).toEqual({ userId: 'user-1' });
-    expect(
-      channel.resolveRecipient?.({
-        recipient: {
-          type: 'email',
-          address: 'alice@example.com',
-        },
-        provider,
-      }),
-    ).toBeUndefined();
-    expect(
-      channel.render?.({
-        content: {
-          title: 'Approval complete',
-          body: 'Review the result.',
-          target: { type: 'url', url: 'https://example.com/approvals/1' },
-        },
-        override: { title: 'In-app title' },
-      }),
-    ).toEqual({
-      title: 'In-app title',
-      body: 'Review the result.',
-      target: { type: 'url', url: 'https://example.com/approvals/1' },
+    const message = {
+      to: ['u1', 'u2'] as const,
+      title: 'Approved',
+      body: 'Review',
+      target: { type: 'route', path: '/approvals/1' } as const,
+    };
+    expect(channel.validateMessage(message)).toMatchObject({
+      message,
+      recipients: [{ userId: 'u1' }, { userId: 'u2' }],
     });
+    for (const to of [
+      undefined,
+      '',
+      [],
+      ['u1', ''],
+      { type: 'user', id: 'u1' },
+    ])
+      expect(() => channel.validateMessage({ ...message, to })).toThrow();
+    expect(() => channel.validateMessage({ ...message, title: '' })).toThrow();
+    expect(
+      channel.validateMessage({ ...message, actionUrl: '/ignored' }).message,
+    ).not.toHaveProperty('actionUrl');
   });
 
   it('delivers through an explicitly injected store with the minimal Provider context', async () => {
@@ -206,7 +185,7 @@ describe('In-app Channel common input', () => {
           return '2026-08-27T00:00:00.000Z';
         },
       },
-      { type: 'database', name: 'default' },
+      { provider: 'in-app' },
     );
 
     expect(provider.capabilities).toEqual({

@@ -64,7 +64,6 @@ describe('@nocobase/app-plugin-notification routes', () => {
           label: notificationI18nText('test.channels.email', 'Email'),
         },
         provider: {
-          name: 'primary',
           type: 'smtp',
           label: notificationI18nText('test.providers.smtp', 'SMTP'),
         },
@@ -91,7 +90,7 @@ describe('@nocobase/app-plugin-notification routes', () => {
       data: [
         {
           channel: { name: 'email', type: 'email', label: 'Email' },
-          provider: { name: 'primary', type: 'smtp', label: 'SMTP' },
+          provider: { type: 'smtp', label: 'SMTP' },
           fields: [{ name: 'recipient', label: 'Recipient', type: 'email' }],
         },
       ],
@@ -104,7 +103,6 @@ describe('@nocobase/app-plugin-notification routes', () => {
     const { router, sendTest } = await createRouter();
     const input = {
       channel: 'email',
-      provider: { name: 'primary', type: 'smtp' },
       values: { recipient: 'test@example.com' },
     };
 
@@ -135,13 +133,12 @@ describe('@nocobase/app-plugin-notification routes', () => {
 
     const legacy = await request({
       channel: 'email',
-      providerName: 'primary',
       providerType: 'smtp',
       values: { recipient: 'test@example.com' },
     });
     const extended = await request({
       channel: 'email',
-      provider: { name: 'primary', type: 'smtp', label: 'SMTP' },
+      provider: { type: 'smtp', label: 'SMTP' },
       values: { recipient: 'test@example.com' },
     });
 
@@ -190,7 +187,6 @@ describe('@nocobase/app-plugin-notification routes', () => {
           },
           body: JSON.stringify({
             channel: 'email',
-            provider: { name: 'primary', type: 'smtp' },
             values: { recipient: 'test@example.com' },
           }),
         })
@@ -214,7 +210,6 @@ describe('@nocobase/app-plugin-notification routes', () => {
           },
           body: JSON.stringify({
             channel: 'email',
-            provider: { name: 'primary', type: 'smtp' },
             values: { recipient: 'test@example.com' },
           }),
         })
@@ -279,7 +274,7 @@ async function createRouter(options: RouterOptions = {}): Promise<{
     publicBasePath: '',
     config: {
       get: () => ({
-        channels: [],
+        channels: {},
       }),
     },
     paths: {} as never,

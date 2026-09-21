@@ -19,7 +19,7 @@ Channel and Provider contribution is skipped in that case.
 The plugin registers:
 
 - the `in-app` Channel and database Provider;
-- a test adapter whose optional recipient defaults to the authenticated user;
+- a test adapter requiring an explicit application user ID;
 - the `notificationInAppItems` migration;
 - authenticated inbox routes under `/api/notifications/in-app`.
 
@@ -86,4 +86,6 @@ Final delivery checks that the recipient exists through Authentication’s user 
 
 Pass `target: { type: 'route', path: '/topics/123' }` for application navigation. Do not include the deployment prefix: the inbox Router adds its basename. Pass `target: { type: 'url', url: 'https://example.com/main/topics/123' }` for a complete HTTP(S) link, opened through a native anchor in the current page. Query strings and fragments are supported. Without a target, no Open link is shown.
 
-Run the target-column migration before using the updated inbox. It adds nullable JSON storage; existing `actionUrl` values are ignored and never converted. The old column is left unused. For multi-channel sends, use channel overrides to provide an IM URL and include complete links in email bodies.
+Run the target-column migration before using the updated inbox. It adds nullable JSON storage; existing `actionUrl` values are ignored and never converted. The old column is left unused. For multi-Channel sends, provide a complete message under each `messages` key, with an IM URL or links in email bodies as appropriate.
+
+Configure `notification.channels.inbox: { provider: 'in-app' }` and send `messages: { inbox: { to: '123', title: 'Approved', body: 'Review the result' } }`. The native `to` value accepts one application user ID or a non-empty readonly array. Each user receives an independent Delivery and retry; no current user is inferred.
