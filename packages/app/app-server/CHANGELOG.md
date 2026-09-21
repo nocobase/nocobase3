@@ -1,5 +1,28 @@
 # @nocobase/app-server
 
+## 1.0.0-beta.22
+
+### Minor Changes
+
+- 43592e9: Expose a read-only config.get() reader and service container to migration and seed callbacks. Inject application configuration snapshots for startup and CLI database tasks and document configuration and rollback semantics.
+
+  Restrict application database task service access to the ID generator and reuse the templates’ application factory for CLI migrations and seeds. CLI tasks share the application database manager and dispose application and scope resources without booting providers or triggering autoRun.
+
+  Simplify createAppCommands to one options object with lazy rootDir-based runtime and application discovery and optional factory overrides.
+
+### Patch Changes
+
+- Updated dependencies [43592e9]
+  - @nocobase/db@1.0.0-beta.12
+  - @nocobase/db-dameng@0.1.0-beta.2
+  - @nocobase/db-kingbase@0.1.0-beta.2
+  - @nocobase/db-mssql@0.1.0-beta.1
+  - @nocobase/db-mysql@0.1.0-beta.2
+  - @nocobase/db-oceanbase@0.1.0-beta.1
+  - @nocobase/db-oracle@0.1.0-beta.2
+  - @nocobase/db-postgres@0.1.0-beta.2
+  - @nocobase/db-sqlite@0.1.0-beta.2
+
 ## 1.0.0-beta.21
 
 ### Patch Changes
