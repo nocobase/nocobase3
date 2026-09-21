@@ -27,7 +27,7 @@ Read these App-local files when present:
 - `AGENTS.md`: App-specific coding rules.
 - `package.json`: enabled plugins, dependencies, and scripts.
 - `ai/README.md`: AI resource layer and build behavior.
-- `client/extensions/nocobase-ai/README.md`: installed AI frontend capabilities.
+- `client/extensions/nocobase-ai/README.md`: installed AI frontend capabilities. Its absence means the Registry item is not installed yet, not that the App lacks AI UI support.
 
 ## App AI resources
 
@@ -65,7 +65,7 @@ Inside the AI frontend extension, inspect:
 - `components/tools/`: result renderers.
 - `demo/` or example pages: complete integration examples when installed.
 
-If `client/extensions/nocobase-ai` is not installed, inspect the App's Registry/extension installation mechanism rather than importing UI from `@nocobase/ai-employee`.
+If `client/extensions/nocobase-ai` is not installed, install the `nocobase-ai` Registry item that `@nocobase/app-plugin-ai-employee` owns before doing frontend work. The Skill's "Install the AI Frontend Extension" section gives the ordered options; inside a generated App, install from the plugin already resolved in the App's `node_modules` so the UI matches the installed plugin version. A missing extension is never a reason to import UI from `@nocobase/ai-employee` or to rebuild chat under `client/`.
 
 ## App server
 

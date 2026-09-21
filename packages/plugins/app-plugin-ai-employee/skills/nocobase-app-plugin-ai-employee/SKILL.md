@@ -4,8 +4,8 @@ description: Use when code agents develop a CLI-created NocoBase App and need to
 argument-hint: '[area: resources|frontend|api|settings|runtime] [task: inspect|implement|extend|verify]'
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: platform-tools
-version: 1.4.0
-last-reviewed: 2026-04-09
+version: 1.5.0
+last-reviewed: 2026-09-21
 risk-level: low
 ---
 
@@ -29,7 +29,7 @@ Use these layers in order:
 1. **App source** — edit the current App's `ai/`, `client/`, `server/`, and tests.
 2. **Core dependency** — import framework-neutral definitions and managers from the public root `@nocobase/ai-employee`.
 3. **AI Employee App plugin** — keep `@nocobase/app-plugin-ai-employee` enabled for application resource loading, conversation persistence, and `/api/ai`.
-4. **AI frontend extension** — use the App-owned `client/extensions/nocobase-ai` source for chat, context, forms, and browser tools.
+4. **AI frontend extension** — use the App-owned `client/extensions/nocobase-ai` source for chat, context, forms, and browser tools; install it from the `nocobase-ai` Registry item when the App does not have it yet.
 5. **Framework internals** — never deep-import or modify internal dependency/plugin source to complete an App feature.
 
 `@nocobase/ai-employee` provides contracts, resource definitions/loaders/managers, LLM providers, repositories, and helpers. The enabled `@nocobase/app-plugin-ai-employee` additionally provides authenticated `/api/ai`, database-backed conversations, and a public server-container integration surface: `AIConversationsManager` and `AgentServiceFactory`.
@@ -81,7 +81,7 @@ Clarification bounds: max clarification rounds = 2; max questions per round = 3.
 # Workflow
 
 1. Confirm the current directory is the CLI-created App root (`client/`, `server/`, `package.json`).
-2. Read App-local `ai/README.md` and `client/extensions/nocobase-ai/README.md` when present.
+2. Read App-local `ai/README.md` and `client/extensions/nocobase-ai/README.md` when present. Before frontend work, confirm `client/extensions/nocobase-ai/` is installed, and install it first when it is missing; see [Install the AI Frontend Extension](#install-the-ai-frontend-extension).
 3. Load [Exact contracts](references/contracts.md). If installed declarations are available, compare them before coding; otherwise treat the documented shapes as authoritative and never guess a field name, enum, nullability, default, request body, or return shape.
 4. Choose an App-owned extension point; never start by editing a dependency.
 5. Implement the smallest App change and add tests in the App's existing test layout.
@@ -213,9 +213,96 @@ Common built-ins include:
 
 Do not import their implementation modules. Activate them through employee/skill settings or page context.
 
+# Install the AI Frontend Extension
+
+The React UI is a shadcn Registry item named `nocobase-ai`, owned by `@nocobase/app-plugin-ai-employee` and installed as App source at `client/extensions/nocobase-ai`. It is application-owned: install it once, then edit and commit it like any other App file. The plugin package exports no chat UI, so a missing extension is never a reason to import React components from `@nocobase/ai-employee`, to patch the plugin package, or to rebuild chat in `client/`.
+
+Before any frontend task, check whether `client/extensions/nocobase-ai/index.ts` exists. When it does, reuse it and skip installation. When it does not, install it with the first option below that applies to the current working tree.
+
+## Option 1 — install from the App's installed package
+
+Preferred inside a generated App. The published plugin ships its canonical source and a self-contained Registry JSON, so the App can install from the copy already resolved in its own `node_modules`: the installed UI then matches the plugin version the App actually runs, with no network access and no NocoBase source checkout.
+
+Run from the App root:
+
+```bash
+node --input-type=module -e '
+import fs from "node:fs";
+import path from "node:path";
+import { createRequire } from "node:module";
+
+const require = createRequire(path.join(process.cwd(), "package.json"));
+const manifest = require.resolve("@nocobase/app-plugin-ai-employee/package.json");
+const item = JSON.parse(
+  fs.readFileSync(path.join(path.dirname(manifest), "public/r/nocobase-ai.json"), "utf8"),
+);
+for (const file of item.files) {
+  const target = path.resolve(process.cwd(), file.target);
+  if (!target.startsWith(process.cwd() + path.sep)) {
+    throw new Error(`Unsafe Registry target: ${file.target}`);
+  }
+  if (fs.existsSync(target)) {
+    throw new Error(`Refusing to overwrite: ${file.target}`);
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, file.content);
+}
+console.log(`Installed ${item.files.length} files into client/extensions/nocobase-ai.`);
+'
+```
+
+Resolve the JSON through the package manifest, not through a hand-written `node_modules` path; pnpm does not place the package at a predictable depth. Take every destination from `files[].target` and never invent one. The refusal on an existing target is deliberate: installation must not overwrite App-owned source.
+
+## Option 2 — materialize from a NocoBase source workspace
+
+Use this only when the current tree is the NocoBase source repository, such as when preinstalling the extension into an application template:
+
+```bash
+pnpm registry materialize \
+  --package @nocobase/app-plugin-ai-employee \
+  --item nocobase-ai \
+  --output-root /absolute/path/to/app
+```
+
+It copies source only and refuses an existing target. It does not run from a generated App, because it reads `registry.config.json` from the workspace rather than from an installed package.
+
+## Option 3 — install from a hosted Registry
+
+`shadcn add <registry-url>/nocobase-ai.json` works only after the Registry JSON is published behind an HTTP(S) URL; an npm tarball containing `public/r/` is not a Registry. It resolves the item's declared npm dependencies, but it installs whatever version that URL currently serves, which can differ from the plugin version the App has installed. Prefer Option 1 whenever the plugin is already a dependency, and state the version risk explicitly when only this option is available.
+
+## After installing
+
+The item declares npm `dependencies` that the App must provide; its `registryDependencies` list is empty, so no shadcn primitive is required. Verify the declarations from the App root and add whatever is reported:
+
+```bash
+node --input-type=module -e '
+import fs from "node:fs";
+import path from "node:path";
+import { createRequire } from "node:module";
+
+const require = createRequire(path.join(process.cwd(), "package.json"));
+const manifest = require.resolve("@nocobase/app-plugin-ai-employee/package.json");
+const item = JSON.parse(
+  fs.readFileSync(path.join(path.dirname(manifest), "public/r/nocobase-ai.json"), "utf8"),
+);
+const app = JSON.parse(fs.readFileSync("package.json", "utf8"));
+const declared = { ...app.dependencies, ...app.devDependencies };
+const missing = item.dependencies
+  .map((spec) => spec.slice(0, spec.lastIndexOf("@")))
+  .filter((name) => !declared[name]);
+console.log(missing.length ? `Missing: ${missing.join(" ")}` : "All Registry dependencies are declared.");
+'
+```
+
+This client source is compiled by the App's own Vite build, so its npm dependencies belong in the App's `devDependencies` unless the App already depends on the package at runtime. Then read `client/extensions/nocobase-ai/README.md`, confirm the import alias the App uses for the extension, and run the App's lint, typecheck, test, and build commands before building UI on top of it.
+
+## Upgrading an installed extension
+
+Never rerun an installer over an installed copy; both installers refuse it precisely because the App may have edited that source. Install the new version into a separate temporary directory, three-way merge the previous Registry source, the new Registry source, and the App copy, and preserve App customizations. Keep the extension's declared dependencies in step with the merged source.
+
 # Frontend App Integration
 
-Use the installed `client/extensions/nocobase-ai` source. React UI does not come from `@nocobase/ai-employee`. Employee and model discovery is asynchronous: mount `AIChatProvider` only after `useAI()` reports `configurationStatus === 'ready'`, at least one employee, and `hasEnabledModels`. Keep the readiness check inside `NocoBaseAIRootProvider` and outside `AIChatProvider`; a loading overlay over an already mounted chat does not defer its initialization.
+Use the installed `client/extensions/nocobase-ai` source; install it first when it is missing. React UI does not come from `@nocobase/ai-employee`. Employee and model discovery is asynchronous: mount `AIChatProvider` only after `useAI()` reports `configurationStatus === 'ready'`, at least one employee, and `hasEnabledModels`. Keep the readiness check inside `NocoBaseAIRootProvider` and outside `AIChatProvider`; a loading overlay over an already mounted chat does not defer its initialization.
 
 The following minimal page includes the required loading and unavailable states. Adapt the import alias to the App's installed extension path, and localize the messages using the App's existing i18n setup.
 
@@ -369,6 +456,7 @@ The direct `AgentService` API is server-only. It is intentionally not a client/b
 - All changes are App-owned or belong to an App plugin.
 - `@nocobase/ai-employee` imports use its public root.
 - `ai/` resources default-export valid definitions and built-ins are not copied.
+- The AI extension is installed at `client/extensions/nocobase-ai` from the App's own installed plugin version, its declared npm dependencies are present in the App manifest, and no installer overwrote existing App source.
 - Frontend uses the installed AI extension and existing service/transport.
 - Chat mounts only after employee/model discovery is usable; loading, failed discovery, missing employees, and unavailable models show explicit states rather than an enabled composer.
 - On first entry and after a full page reload, the displayed default employee/model can send immediately without switching either selection; verify conversation creation, the stream request, and the cleared draft.
@@ -405,6 +493,7 @@ Final response must include:
 # References
 
 - [App source map](references/source-map.md): use before choosing an extension point.
+- [Install the AI Frontend Extension](#install-the-ai-frontend-extension): use before any frontend task, to confirm or install `client/extensions/nocobase-ai`.
 - [Frontend guide](references/frontend-registry.md): use for chat, context, forms, tools, tasks, and settings.
 - [API guide](references/api-reference.md): use for `/api/ai` behavior and service mapping.
 - [Runtime boundaries](references/agent-service.md): use before direct manager or custom agent work.

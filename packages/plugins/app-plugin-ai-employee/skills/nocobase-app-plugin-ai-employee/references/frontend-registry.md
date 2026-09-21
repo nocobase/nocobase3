@@ -17,6 +17,8 @@
 
 Work in the CLI-created App's installed `client/extensions/nocobase-ai` source. It is App-owned and may be edited and committed for App-specific behavior.
 
+This guide assumes the extension is already installed. When `client/extensions/nocobase-ai/index.ts` is missing, install the `nocobase-ai` Registry item first, following the Skill's "Install the AI Frontend Extension" section; in a generated App that means installing from the plugin version resolved in the App's own `node_modules`, not from a hosted Registry URL. Upgrade an installed copy with a three-way merge rather than rerunning an installer over it.
+
 Do not add React UI to `@nocobase/ai-employee`; that dependency is framework-neutral. Do not patch the AI Employee plugin's client package to customize one App.
 
 ## Provider hierarchy
