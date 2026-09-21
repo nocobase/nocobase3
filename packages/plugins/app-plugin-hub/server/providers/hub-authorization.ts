@@ -6,7 +6,7 @@ import {
 import {
   userRoleScopeRegistryToken,
   type UserRoleScopeRegistry,
-} from '@nocobase/app-plugin-users/server/tokens';
+} from '@nocobase/app-plugin-user-management/server/tokens';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
 

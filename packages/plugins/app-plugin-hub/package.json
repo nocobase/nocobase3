@@ -109,7 +109,8 @@
     "tailwind-merge": "catalog:",
     "@nocobase/app-plugin-api-keys": "workspace:^",
     "@nocobase/authorization": "workspace:^",
-    "react-day-picker": "10.0.1"
+    "react-day-picker": "10.0.1",
+    "@nocobase/app-plugin-user-management": "workspace:^"
   },
   "devDependencies": {
     "@nocobase/db-sqlite": "workspace:*",

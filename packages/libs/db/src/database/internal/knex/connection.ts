@@ -53,6 +53,7 @@ import type {
 } from '../../connection.js';
 import { SchemaManagementSchemaAdapter } from '../../schema-management.js';
 import { createKnexClient } from './client.js';
+import { TransactionCompletion } from '../../transaction-completion.js';
 import {
   resolveKnexConnectionConfig,
   type KnexConnectionConfig,
@@ -83,6 +84,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     transactionInvalidations?: TransactionInvalidationCollector,
     private readonly dialectDriver:
       DatabaseDriverDefinition | undefined = undefined,
+    private readonly completion: TransactionCompletion | undefined = undefined,
   ) {
     this.knexInstance = knexInstance;
     this.config = resolveKnexConnectionConfig(sourceConfig, dialectDriver);
@@ -295,12 +297,22 @@ export class KnexDatabaseConnection implements DatabaseConnection {
     this.collections.invalidate();
   }
 
+  get inTransaction(): boolean {
+    return this.completion !== undefined;
+  }
+
+  afterCommit(effect: () => void | Promise<void>): void {
+    if (!this.completion) throw new Error('afterCommit requires a tracked transaction.');
+    this.completion.add(effect);
+  }
+
   async transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T> {
     const client = await this.resolveClient();
     let stagedMetadata: TransactionCollectionMetadataStore | undefined;
     const invalidations = new TransactionInvalidationCollector();
+    const completion = new TransactionCompletion();
     let result: T;
     try {
       result = await client.transaction(async (trx) => {
@@ -317,6 +329,7 @@ export class KnexDatabaseConnection implements DatabaseConnection {
           trx,
           invalidations,
           this.dialectDriver,
+          completion,
         );
         const transactionResult = await fn(connection);
         await invalidations.validateRelations(connection.collections);
@@ -324,11 +337,13 @@ export class KnexDatabaseConnection implements DatabaseConnection {
         return transactionResult;
       });
     } catch (error) {
+      completion.rollback();
       await stagedMetadata?.rollbackCommitted();
       invalidations.clear();
       throw error;
     }
     invalidations.apply(this.collections as CollectionRegistry);
+    await completion.commit(this.completion);
     return result;
   }
 

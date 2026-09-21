@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { ConfirmDeleteDialog } from '../../app-plugin-users/client/pages/users-page.js';
-import enUS from '../../app-plugin-users/client/locales/en-US.js';
+import { ConfirmDeleteDialog } from '../../app-plugin-user-management/client/pages/users-page.js';
+import enUS from '../../app-plugin-user-management/client/locales/en-US.js';
 vi.mock('@nocobase/i18n/client', () => ({
   useTranslation: () => ({
     t: (key: string, values?: { name?: string }) => {

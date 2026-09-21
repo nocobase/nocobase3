@@ -17,7 +17,7 @@ export interface UsersClientOptions {
 }
 
 const users: AppClientPluginFactory<UsersClientOptions> = defineClientPlugin({
-  packageName: '@nocobase/app-plugin-users',
+  packageName: '@nocobase/app-plugin-user-management',
   locales,
   routes: (options) => createUsersRoutes(options),
   routeComponentOverrides: (options) =>

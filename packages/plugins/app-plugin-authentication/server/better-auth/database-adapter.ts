@@ -1,3 +1,4 @@
+import { createUserStore, type UserLifecycleRegistry } from '@nocobase/app-plugin-users/server';
 import type {
   ComparisonOperator,
   DatabaseConnection,
@@ -14,6 +15,7 @@ import type { Knex } from 'knex';
 
 export interface DatabaseAdapterOptions {
   debugLogs?: boolean;
+  lifecycle?: UserLifecycleRegistry;
 }
 
 type CleanWhere = Required<Where>;
@@ -469,12 +471,28 @@ export function databaseAdapter(
             getFieldName({ model: defaultModel, field }),
           );
         };
-        return buildCustomAdapter(
+        const fallback = buildCustomAdapter(
           currentConnection,
           fieldsForModel,
           (model, field) =>
             getFieldName({ model: getDefaultModelName(model), field }),
         );
+        const store = (model: string) => createUserStore(currentConnection, { model, fields: fieldsForModel(model), field: (field) => field === 'id' || schema.user?.fields[field] ? getFieldName({ model: 'user', field }) : field, lifecycle: options.lifecycle });
+        const userModel = (model: string) => getDefaultModelName(model) === 'user';
+        const rejectJoin = (join: unknown): void => { if (join) throw new Error('User joins are not enabled by the NocoBase database adapter'); };
+        const adapter: CustomAdapter = {
+          create: (input) => userModel(input.model) ? store(input.model).create(input) : fallback.create(input),
+          findOne: (input) => { rejectJoin(input.join); return userModel(input.model) ? store(input.model).findOne(input) : fallback.findOne(input); },
+          findMany: (input) => { rejectJoin(input.join); return userModel(input.model) ? store(input.model).findMany(input) : fallback.findMany(input); },
+          count: (input) => userModel(input.model) ? store(input.model).count(input) : fallback.count(input),
+          update: (input) => userModel(input.model) ? store(input.model).update(input) : fallback.update(input),
+          updateMany: (input) => userModel(input.model) ? store(input.model).updateMany(input) : fallback.updateMany(input),
+          delete: (input) => userModel(input.model) ? store(input.model).delete(input) : fallback.delete(input),
+          deleteMany: (input) => userModel(input.model) ? store(input.model).deleteMany(input) : fallback.deleteMany(input),
+          incrementOne: (input) => userModel(input.model) ? store(input.model).incrementOne(input) : fallback.incrementOne(input),
+          consumeOne: (input) => { if (userModel(input.model)) throw new Error('Users cannot be consumed.'); return fallback.consumeOne(input); },
+        };
+        return adapter;
       },
     });
   return factory(connection);

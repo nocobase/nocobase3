@@ -64,6 +64,11 @@ export interface DatabaseConnection {
   /** Destructively clears the objects owned by this managed connection. */
   resetManagedSchema(): Promise<void>;
 
+  /** True only for a connection bound to a tracked transaction/savepoint. */
+  readonly inTransaction: boolean;
+  /** Register on the current transaction. Runs only after the root commit. */
+  afterCommit(effect: () => void | Promise<void>): void;
+
   transaction<T>(
     fn: (connection: DatabaseConnection) => Promise<T>,
   ): Promise<T>;

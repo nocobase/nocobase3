@@ -85,7 +85,8 @@
     "@nocobase/service-provider": "workspace:^",
     "react": "^19.0.0",
     "react-router": "^7.0.0",
-    "@nocobase/caching": "workspace:^"
+    "@nocobase/caching": "workspace:^",
+    "@nocobase/app-plugin-users": "workspace:^"
   },
   "dependencies": {
     "@nocobase/snowflake": "workspace:^",

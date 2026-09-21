@@ -1,4 +1,4 @@
-import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
+import { lockUser } from '@nocobase/app-plugin-users/server';
 import { encryptKey, decryptKey } from './key-secret.js';
 import type {
   ApiKeyService,
@@ -164,7 +164,7 @@ export class HubApiKeyService {
         await this.requirePermission(userId, appId, scope);
     }
     return this.database.transaction(async (connection) => {
-      await lockUserForAdministration(connection, userId);
+      await lockUser(connection, userId);
       const owner = await connection.query
         .selectFrom('user')
         .select('disabledAt')

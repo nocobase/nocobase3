@@ -1,6 +1,6 @@
 import { removeUserApiKeys } from '@nocobase/app-plugin-api-keys/server';
 import { HUB_API_KEY_CONFIG_ID } from './api-key-auth.js';
-import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
+import { lockUser } from '@nocobase/app-plugin-users/server';
 import { HUB_RELEASE_ACTIONS } from '../shared/permissions.js';
 import type { DatabaseConnection } from '@nocobase/db';
 import type {
@@ -12,7 +12,7 @@ import {
   UserRoleScopeError,
   type UserRoleScope,
   type UserRoleValue,
-} from '@nocobase/app-plugin-users/server/tokens';
+} from '@nocobase/app-plugin-user-management/server/tokens';
 
 export const HUB_PERMISSION_SET_KEYS: readonly [
   'hub-administrator',
@@ -298,7 +298,7 @@ export function createHubUserRoleScope(
         await permissionSets
           .withTransaction(connection)
           .assertSubjectRemovable({ type: 'user', id: userId });
-      await lockUserForAdministration(connection, userId);
+      await lockUser(connection, userId);
       const app = await connection.query
         .selectFrom('hubApps')
         .select('id')

@@ -197,7 +197,8 @@
     "@nocobase/i18n": "workspace:^",
     "@nocobase/caching": "workspace:^",
     "@nocobase/repository-input": "workspace:^",
-    "@nocobase/app-cli": "workspace:^"
+    "@nocobase/app-cli": "workspace:^",
+    "@nocobase/app-plugin-user-management": "workspace:^"
   },
   "description": "NocoBase 3 Hub for managing and hosting applications."
 }

@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 import plugin from '../server/index.js';
 
-describe('@nocobase/app-plugin-users', () => {
+describe('@nocobase/app-plugin-user-management', () => {
   it('declares only its selected Server capabilities', () => {
     expect(plugin).toMatchObject({
-      packageName: '@nocobase/app-plugin-users',
+      packageName: '@nocobase/app-plugin-user-management',
       locales: expect.any(Function),
       serviceProviders: expect.any(Array),
       routes: expect.any(Array),

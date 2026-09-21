@@ -4,6 +4,7 @@ export {
   createDatabaseManager,
 } from './database/manager.js';
 export { upsertPhysicalRow } from './database/upsert-physical-row.js';
+export { TransactionPostCommitError } from './database/transaction-completion.js';
 export type { UpsertPhysicalRowOptions } from './database/upsert-physical-row.js';
 export { databaseManagerToken } from './database/token.js';
 export { resolveDatabaseDriver } from './database/resolve-driver.js';

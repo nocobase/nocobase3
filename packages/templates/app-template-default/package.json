@@ -209,7 +209,8 @@
     "@nocobase/caching": "workspace:^",
     "@nocobase/ai-employee": "workspace:^",
     "@nocobase/repository-input": "workspace:^",
-    "@nocobase/app-cli": "workspace:^"
+    "@nocobase/app-cli": "workspace:^",
+    "@nocobase/app-plugin-user-management": "workspace:^"
   },
   "description": "NocoBase 3 application template with the standard product capabilities."
 }

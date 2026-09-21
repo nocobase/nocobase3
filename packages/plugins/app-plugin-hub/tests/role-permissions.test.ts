@@ -19,7 +19,7 @@ import {
 import usersPlugin, {
   userManagementServiceToken,
   type UserManagementService,
-} from '@nocobase/app-plugin-users/server';
+} from '@nocobase/app-plugin-user-management/server';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { createDatabaseManager, createMigrator } from '@nocobase/db';
 import sqlite from '@nocobase/db-sqlite';

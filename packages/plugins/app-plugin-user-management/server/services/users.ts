@@ -1,10 +1,8 @@
-import { lockUserForAdministration } from '@nocobase/app-plugin-authentication';
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
+import { lockUser, UserError, type User, type UserService } from '@nocobase/app-plugin-users/server';
+import type { AuthenticationCredentialService } from '@nocobase/app-plugin-authentication/server';
 import type { PermissionSetsApi } from '@nocobase/authorization/permissions';
-import type {
-  AdministratedUser,
-  UserAdministrationService,
-} from '@nocobase/app-plugin-authentication';
+import type { UserQueryService } from '../user-queries.js';
 
 import {
   UserManagementError,
@@ -37,7 +35,9 @@ export function createUserRoleScopeRegistry(): UserRoleScopeRegistry {
 
 export interface CreateUserManagementServiceOptions {
   readonly database: DatabaseManager;
-  readonly users: UserAdministrationService;
+  readonly users: UserService;
+  readonly userQueries: UserQueryService;
+  readonly credentials: AuthenticationCredentialService;
   readonly roleScopes: UserRoleScopeRegistry;
   /**
    * Absent in an application assembled without authorization. When present,
@@ -92,7 +92,7 @@ class DefaultUserManagementService implements UserManagementService {
       const scope = this.requireScope(input.roleScope);
       userIds = await scope.findUserIds(input.role, connection);
     }
-    const page = await this.services.users.list({
+    const page = await this.services.userQueries.list({
       page: input.page,
       pageSize: input.pageSize,
       search: input.search,
@@ -112,6 +112,9 @@ class DefaultUserManagementService implements UserManagementService {
       async (connection) => {
         const users = this.services.users.withConnection(connection);
         const created = await users.create(input);
+        await this.services.credentials
+          .withConnection(connection)
+          .createPasswordCredential(created.id, input.password);
         for (const [key, value] of Object.entries(submitted)) {
           await this.requireScope(key).replace(created.id, value, connection);
         }
@@ -130,10 +133,10 @@ class DefaultUserManagementService implements UserManagementService {
   ) {
     const user = await this.services.database.transaction(
       async (connection) => {
-        await lockUserForAdministration(connection, userId);
+        await lockUser(connection, userId);
         return this.services.users
           .withConnection(connection)
-          .update(userId, input);
+          .updateProfile(userId, input);
       },
     );
     return this.withRoleScopes(user, this.services.database.connection());
@@ -150,7 +153,7 @@ class DefaultUserManagementService implements UserManagementService {
         await this.services.permissionSets
           ?.withTransaction(connection)
           .assertSubjectRemovable({ type: 'user', id: userId });
-        await lockUserForAdministration(connection, userId);
+        await lockUser(connection, userId);
         return this.services.users.withConnection(connection).disable(userId);
       },
     );
@@ -197,7 +200,7 @@ class DefaultUserManagementService implements UserManagementService {
   async enable(userId: string): Promise<ManagedUser> {
     const user = await this.services.database.transaction(
       async (connection) => {
-        await lockUserForAdministration(connection, userId);
+        await lockUser(connection, userId);
         return this.services.users.withConnection(connection).enable(userId);
       },
     );
@@ -238,15 +241,15 @@ class DefaultUserManagementService implements UserManagementService {
 
   async resetPassword(userId: string, password: string): Promise<void> {
     await this.services.database.transaction(async (connection) => {
-      await lockUserForAdministration(connection, userId);
-      await this.services.users
+      await lockUser(connection, userId);
+      await this.services.credentials
         .withConnection(connection)
         .resetPassword(userId, password);
     });
   }
 
   revokeSessions(userId: string): Promise<void> {
-    return this.services.users.revokeSessions(userId);
+    return this.services.credentials.revokeSessions(userId);
   }
 
   private validateCreateRoleScopes(
@@ -300,7 +303,7 @@ class DefaultUserManagementService implements UserManagementService {
   }
 
   private async withRoleScopes(
-    user: AdministratedUser,
+    user: User,
     connection: ReturnType<DatabaseManager['connection']>,
   ): Promise<ManagedUser> {
     const entries = await Promise.all(
@@ -315,7 +318,7 @@ class DefaultUserManagementService implements UserManagementService {
   }
 
   private async withRoleScopesForUsers(
-    users: readonly AdministratedUser[],
+    users: readonly User[],
     connection: ReturnType<DatabaseManager['connection']>,
   ): Promise<readonly ManagedUser[]> {
     const scopes = this.services.roleScopes.list();

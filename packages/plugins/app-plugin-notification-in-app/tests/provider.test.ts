@@ -5,9 +5,9 @@ import {
 } from '@nocobase/app-plugin-notification';
 import { ServiceContainer } from '@nocobase/service-provider';
 import {
-  userAdministrationServiceToken,
-  type UserAdministrationService,
-} from '@nocobase/app-plugin-authentication';
+  userServiceToken,
+  type UserService,
+} from '@nocobase/app-plugin-users/server';
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -29,9 +29,9 @@ describe('@nocobase/app-plugin-notification-in-app provider', () => {
     container.instance(notificationExtensionRegistryToken, {
       registerChannel,
     } as unknown as NotificationExtensionRegistry);
-    container.instance(userAdministrationServiceToken, {
+    container.instance(userServiceToken, {
       get: vi.fn(),
-    } as unknown as UserAdministrationService);
+    } as unknown as UserService);
     container.instance(realtimeServiceToken, {
       defineTopic,
     } as unknown as RealtimeService);

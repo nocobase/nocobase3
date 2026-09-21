@@ -16,6 +16,7 @@ import {
   type RealtimePrincipal,
 } from '@nocobase/app-server/realtime';
 import { APIError } from 'better-auth';
+import { userLifecycleToken } from '@nocobase/app-plugin-users/server';
 
 import {
   createAuthentication,
@@ -26,6 +27,8 @@ import { createAuthStorage } from '../auth-storage.js';
 import { authenticationToken } from '../tokens.js';
 import { userAdministrationServiceToken } from '../tokens.js';
 import { createUserAdministrationService } from '../user-administration.js';
+import { authenticationCredentialServiceToken } from '../tokens.js';
+import { createAuthenticationCredentialService } from '../credentials.js';
 import { type AuthConfig, resolveAuthSecret } from '../config.js';
 
 interface RequestInitWithDuplex extends RequestInit {
@@ -54,6 +57,7 @@ export class AuthenticationProvider<
     AuthenticationProviderApplication<TConfig>,
 > extends ServiceProvider<TApplication> {
   public readonly name: string = '@nocobase/app-plugin-authentication';
+  private releaseUserLifecycle?: () => void;
 
   public override register(): void {
     this.app.container.singleton(authenticationToken, (container) =>
@@ -64,6 +68,19 @@ export class AuthenticationProvider<
       (container) => {
         const database = container.resolve(databaseManagerToken);
         return createUserAdministrationService({
+          auth: container.resolve(authenticationToken),
+          connection: database.connection(),
+          ...(container.has(realtimeServiceToken)
+            ? { realtime: container.resolve(realtimeServiceToken) }
+            : {}),
+        });
+      },
+    );
+    this.app.container.singleton(
+      authenticationCredentialServiceToken,
+      (container) => {
+        const database = container.resolve(databaseManagerToken);
+        return createAuthenticationCredentialService({
           auth: container.resolve(authenticationToken),
           connection: database.connection(),
           ...(container.has(realtimeServiceToken)
@@ -95,6 +112,36 @@ export class AuthenticationProvider<
     }
   }
 
+  public override boot(): Promise<void> {
+    if (this.releaseUserLifecycle || !this.app.container.has(userLifecycleToken)) {
+      return Promise.resolve();
+    }
+    this.releaseUserLifecycle = this.app.container
+      .resolve(userLifecycleToken)
+      .register({
+        key: 'authentication.credentials',
+        order: -100,
+        before: async (context) => {
+          const credentials = this.app.container.resolve(
+            authenticationCredentialServiceToken,
+          );
+          const scoped = credentials.withConnection(context.connection);
+          if (context.operation === 'delete') {
+            await scoped.deleteCredentials(context.userId);
+          } else {
+            await scoped.revokeSessions(context.userId);
+          }
+        },
+      });
+    return Promise.resolve();
+  }
+
+  public override shutdown(): Promise<void> {
+    this.releaseUserLifecycle?.();
+    this.releaseUserLifecycle = undefined;
+    return Promise.resolve();
+  }
+
   private createAuthentication(container: ServiceResolver): Auth {
     const app = this.app.config.get<AppIdentityConfig>('app')!;
     const configuredAuth = this.app.config.get<AuthConfig>('auth') ?? {};
@@ -112,6 +159,9 @@ export class AuthenticationProvider<
       : undefined;
     const auth = createAuthentication({
       connection: database?.connection(),
+      ...(container.has(userLifecycleToken)
+        ? { userLifecycle: container.resolve(userLifecycleToken) }
+        : {}),
       secondaryStorage: createAuthStorage(caching),
       appName: app.name,
       ...authConfig,

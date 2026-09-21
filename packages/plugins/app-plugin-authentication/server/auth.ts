@@ -1,3 +1,4 @@
+import { UserService, UserLifecycleRegistry } from '@nocobase/app-plugin-users/server';
 import type { DatabaseConnection } from '@nocobase/db';
 import {
   APIError,
@@ -15,6 +16,7 @@ import { databaseAdapter } from './better-auth/database-adapter.js';
 
 export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
   connection: DatabaseConnection;
+  userLifecycle?: UserLifecycleRegistry;
 }
 
 export interface CreateAuthenticationOptions extends Omit<
@@ -36,13 +38,15 @@ export interface AuthMiddlewareOptions {
 
 export class Auth {
   private readonly auth;
-  private readonly connection: DatabaseConnection;
   private readonly options: AuthOptions;
+  readonly users: UserService;
+  readonly userLifecycle: UserLifecycleRegistry;
 
   constructor(options: AuthOptions) {
-    const { connection, ...config } = options;
-    this.connection = connection;
-    this.options = options;
+    const { connection, userLifecycle, ...config } = options;
+    this.userLifecycle = userLifecycle ?? new UserLifecycleRegistry();
+    this.options = { ...options, userLifecycle: this.userLifecycle };
+    this.users = new UserService(connection, { lifecycle: this.userLifecycle });
     if (!config.secret || config.secret.trim().length === 0) {
       throw new Error('Authentication secret is required.');
     }
@@ -55,7 +59,7 @@ export class Auth {
     this.auth = betterAuth({
       ...config,
       appName: config.appName ?? 'NocoBase3',
-      database: databaseAdapter(connection),
+      database: databaseAdapter(connection, { lifecycle: this.userLifecycle }),
       plugins,
       emailAndPassword: {
         ...config.emailAndPassword,
@@ -86,11 +90,7 @@ export class Auth {
                 ? await context.context.internalAdapter.findUserById(
                     session.userId,
                   )
-                : await connection.query
-                    .selectFrom('user')
-                    .select('disabledAt')
-                    .where('id', '=', session.userId)
-                    .executeTakeFirst();
+                : await this.users.get(session.userId);
               if (!user || Reflect.get(user, 'disabledAt') != null) {
                 // A login already in flight may persist after user deletion.
                 // Remove its new session before returning it to the caller.
@@ -120,11 +120,7 @@ export class Auth {
                 ? await context.context.internalAdapter.findUserById(
                     candidate.userId,
                   )
-                : await connection.query
-                    .selectFrom('user')
-                    .select(['id', 'disabledAt'])
-                    .where('id', '=', candidate.userId)
-                    .executeTakeFirst();
+                : await this.users.get(candidate.userId);
               if (!user || Reflect.get(user, 'disabledAt') != null) {
                 throw APIError.from('FORBIDDEN', {
                   code: 'ACCOUNT_DISABLED',
@@ -155,11 +151,7 @@ export class Auth {
   async getSession(headers: Headers): Promise<AuthSession> {
     const session = await this.auth.api.getSession({ headers });
     if (!session) return null;
-    const user = await this.connection.query
-      .selectFrom('user')
-      .select(['id', 'disabledAt'])
-      .where('id', '=', session.user.id)
-      .executeTakeFirst();
+    const user = await this.users.get(session.user.id);
     if (!user || user.disabledAt != null) return null;
     return session;
   }

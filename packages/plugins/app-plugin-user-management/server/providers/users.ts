@@ -4,7 +4,10 @@ import {
   authorizationToken,
   permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
-import { userAdministrationServiceToken } from '@nocobase/app-plugin-authentication';
+import {
+  authenticationCredentialServiceToken,
+} from '@nocobase/app-plugin-authentication';
+import { userServiceToken } from '@nocobase/app-plugin-users/server';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceProvider } from '@nocobase/service-provider';
@@ -12,12 +15,14 @@ import { ServiceProvider } from '@nocobase/service-provider';
 import {
   type UsersConfig,
   userManagementServiceToken,
+  userQueryServiceToken,
   userRoleScopeRegistryToken,
 } from '../tokens.js';
 import {
   createUserManagementService,
   createUserRoleScopeRegistry,
 } from '../services/users.js';
+import { createUserQueryService } from '../user-queries.js';
 
 const USER_ACTIONS = new Set([
   'read',
@@ -49,9 +54,13 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
       const permissionSets = resolver.has(permissionSetsToken)
         ? resolver.resolve(permissionSetsToken)
         : undefined;
+      const users = resolver.resolve(userServiceToken);
+      const database = resolver.resolve(databaseManagerToken);
       return createUserManagementService({
-        database: resolver.resolve(databaseManagerToken),
-        users: resolver.resolve(userAdministrationServiceToken),
+        database,
+        users,
+        userQueries: resolver.resolve(userQueryServiceToken),
+        credentials: resolver.resolve(authenticationCredentialServiceToken),
         roleScopes: resolver.resolve(userRoleScopeRegistryToken),
         ...(permissionSets === undefined ? {} : { permissionSets }),
         onRoleScopesChanged: (userId) =>
@@ -61,6 +70,9 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
           }),
       });
     });
+    this.app.container.singleton(userQueryServiceToken, (resolver) =>
+      createUserQueryService(resolver.resolve(databaseManagerToken).connection()),
+    );
   }
 
   public override boot(): Promise<void> {
@@ -97,9 +109,7 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
                 resource: { type: 'user', id: '*' },
                 action: 'read',
               });
-              const users = this.app.container.resolve(
-                userAdministrationServiceToken,
-              );
+              const users = this.app.container.resolve(userQueryServiceToken);
               const result = await users.list({ ...query, status: 'enabled' });
               return {
                 items: result.items.map((user) => ({
@@ -115,9 +125,7 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
                 resource: { type: 'user', id: '*' },
                 action: 'read',
               });
-              const users = this.app.container.resolve(
-                userAdministrationServiceToken,
-              );
+              const users = this.app.container.resolve(userQueryServiceToken);
               const result = await users.list({ userIds: ids, pageSize: 100 });
               return result.items.map((user) => ({
                 id: user.id,
@@ -206,7 +214,7 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
     ids: readonly string[],
     connection?: DatabaseConnection,
   ): Promise<readonly string[]> {
-    const service = this.app.container.resolve(userAdministrationServiceToken);
+    const service = this.app.container.resolve(userQueryServiceToken);
     const users = connection ? service.withConnection(connection) : service;
     const enabled: string[] = [];
     for (let start = 0; start < ids.length; start += ACCOUNT_PAGE_SIZE) {

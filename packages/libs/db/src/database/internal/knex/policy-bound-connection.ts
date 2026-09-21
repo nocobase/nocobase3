@@ -53,6 +53,12 @@ export class PolicyBoundConnection implements ScopedDatabaseConnection {
   get name(): string {
     return this.inner.name;
   }
+  get inTransaction(): boolean {
+    return this.inner.inTransaction;
+  }
+  afterCommit(effect: () => void | Promise<void>): void {
+    this.inner.afterCommit(effect);
+  }
   get driver(): DatabaseDriver {
     return this.inner.driver;
   }

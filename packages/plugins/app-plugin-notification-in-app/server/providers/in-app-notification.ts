@@ -1,5 +1,5 @@
 import { databaseManagerToken } from '@nocobase/db';
-import { userAdministrationServiceToken } from '@nocobase/app-plugin-authentication';
+import { userServiceToken } from '@nocobase/app-plugin-users/server';
 import { notificationExtensionRegistryToken } from '@nocobase/app-plugin-notification';
 import { ServiceProvider } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -56,7 +56,7 @@ export class InAppNotificationProvider<
     if (!container.has(notificationExtensionRegistryToken)) return;
     const registry = container.resolve(notificationExtensionRegistryToken);
     const store = container.resolve(inAppNotificationStoreToken);
-    const users = container.resolve(userAdministrationServiceToken);
+    const users = container.resolve(userServiceToken);
     registry.registerChannel(createInAppChannelDefinition()).registerProvider(
       'in-app',
       createDatabaseProviderDefinition({

@@ -23,9 +23,9 @@ import {
   createUserRoleScopeRegistry,
   userManagementServiceToken,
   userRoleScopeRegistryToken,
-} from '@nocobase/app-plugin-users/server';
-import { UsersProvider } from '../../app-plugin-users/server/providers/users.js';
-import { apiRoutes } from '../../app-plugin-users/server/routes/index.js';
+} from '@nocobase/app-plugin-user-management/server';
+import { UsersProvider } from '../../app-plugin-user-management/server/providers/users.js';
+import { apiRoutes } from '../../app-plugin-user-management/server/routes/index.js';
 import { ServiceContainer } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import {
