@@ -143,10 +143,11 @@ export function createUserStore(
         where: [equalityCondition('id', existing.id)],
         update: update as Record<string, unknown>,
       });
+      // The row was live when matched; return it even when this very update
+      // soft-deleted it, so Better Auth's update flow sees the record it wrote.
       return (
         (await connection.query
           .selectFrom(model)
-          .where(field('deletedAt'), 'is', null)
           .select(fieldsForModel())
           .where('id', '=', existing.id)
           .executeTakeFirst<T>()) ?? null
@@ -158,6 +159,21 @@ export function createUserStore(
         model,
         where,
       );
+      const patch = normalizeUserWrite(update, field, false);
+      const changesIdentity = ['email', 'username'].some(
+        (name) => patch[field(name)] !== undefined,
+      );
+      if (!changesIdentity) {
+        // Status and profile changes apply as one statement.
+        const result = await applyUpdateWhere(
+          connection.query.updateTable(model).set(patch),
+          normalized,
+        )
+          .where(field('deletedAt'), 'is', null)
+          .execute();
+        return result.updatedCount ?? 0;
+      }
+      // An identity change is checked per row against every other user.
       const rows = await applySelectWhere(
         connection.query
           .selectFrom(model)
@@ -167,7 +183,6 @@ export function createUserStore(
         .select('id')
         .orderBy('id')
         .execute<{ id: unknown }>();
-      const patch = normalizeUserWrite(update, field, false);
       let updated = 0;
       for (const row of rows) {
         const id = String(row.id);

@@ -2,9 +2,11 @@
 import { fileURLToPath } from 'node:url';
 import {
   Auth,
+  createAuthStorage,
   createUserAuthenticationService,
   type AuthEnv,
 } from '@nocobase/app-plugin-authentication';
+import { createCaching } from '@nocobase/caching';
 import {
   createDatabaseManager,
   createMigrator,
@@ -28,6 +30,8 @@ describe('user administration owns the user record', () => {
   let users: UserAdministrationService;
   let router: Hono<AuthEnv>;
   const disconnectUser = vi.fn();
+  // Production always has a session cache; the tests must cover it too.
+  const authStorage = createAuthStorage(createCaching());
 
   beforeEach(async () => {
     disconnectUser.mockReset();
@@ -54,6 +58,8 @@ describe('user administration owns the user record', () => {
       baseURL: 'http://localhost/api/auth',
       secret: 'development-secret-at-least-32-characters',
       appName: 'NocoBase3',
+      secondaryStorage: authStorage,
+      session: { storeSessionInDatabase: true },
     });
     users = createUserAdministrationService({
       connection,
@@ -150,11 +156,17 @@ describe('user administration owns the user record', () => {
     const signedIn = await signIn('alice@example.com');
     const cookie = signedIn.headers.get('set-cookie') ?? '';
     expect((await rows('session', alice.id)).length).toBeGreaterThan(0);
+    await expect(
+      authStorage.get(`active-sessions-${alice.id}`),
+    ).resolves.not.toBeNull();
 
     await users.disable(alice.id);
 
     expect(disconnectUser).toHaveBeenCalledWith(alice.id);
     await expect(rows('session', alice.id)).resolves.toEqual([]);
+    await expect(
+      authStorage.get(`active-sessions-${alice.id}`),
+    ).resolves.toBeNull();
     expect(
       (await router.request('/api/private', { headers: { cookie } })).status,
     ).toBe(401);
@@ -187,6 +199,9 @@ describe('user administration owns the user record', () => {
     await users.remove(alice.id, 'operator');
 
     expect(disconnectUser).toHaveBeenCalledWith(alice.id);
+    await expect(
+      authStorage.get(`active-sessions-${alice.id}`),
+    ).resolves.toBeNull();
     expect(await users.get(alice.id)).toBeUndefined();
     expect((await users.list()).total).toBe(0);
     await expect(rows('session', alice.id)).resolves.toEqual([]);
@@ -228,6 +243,19 @@ describe('user administration owns the user record', () => {
     expect(signUp.status).toBe(422);
     await expect(signUp.json()).resolves.toMatchObject({
       code: 'USER_ALREADY_EXISTS',
+    });
+    const blank = await router.request('/api/auth/sign-up/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: '  ',
+        email: 'blank@example.com',
+        password,
+      }),
+    });
+    expect(blank.status).toBe(400);
+    await expect(blank.json()).resolves.toMatchObject({
+      code: 'INVALID_USER_INPUT',
     });
     await expect(users.enable(alice.id)).rejects.toMatchObject({
       code: 'USER_NOT_FOUND',

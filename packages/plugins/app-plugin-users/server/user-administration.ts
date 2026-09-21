@@ -152,8 +152,10 @@ class DefaultUserAdministrationService implements UserAdministrationService {
   async create(
     input: CreateAdministratedUserInput,
   ): Promise<AdministratedUser> {
-    // Refuse a bad password or a taken identity before anything is written;
-    // the store enforces the same rules again when the row is inserted.
+    // Refuse a bad password or a taken identity before anything is written.
+    // The store enforces the same rules when the row is inserted, but Better
+    // Auth's username plugin checks first and answers with its own API error,
+    // so the friendly conflict has to be raised here.
     await this.options.credentials.assertPasswordAllowed(input.password);
     const data = normalizeUserWrite(
       {

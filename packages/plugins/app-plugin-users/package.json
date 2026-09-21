@@ -105,6 +105,7 @@
     "@nocobase/authorization": "workspace:^"
   },
   "devDependencies": {
+    "@nocobase/caching": "workspace:*",
     "@nocobase/db-sqlite": "workspace:*",
     "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",

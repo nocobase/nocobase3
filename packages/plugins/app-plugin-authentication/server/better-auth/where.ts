@@ -190,7 +190,7 @@ export async function resolveInsensitiveWhere(
       return {
         ...condition,
         field: 'id',
-        value: ids.filter((id): id is string => typeof id === 'string'),
+        value: ids.map((id) => String(id)),
         operator: 'in',
         mode: 'sensitive',
       };

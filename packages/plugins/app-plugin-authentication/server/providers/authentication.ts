@@ -115,16 +115,15 @@ export class AuthenticationProvider<
       : undefined;
     const auth = createAuthentication({
       connection: database?.connection(),
-      // Present when the users plugin is installed: it owns the user table.
-      ...(container.has(userStoreToken)
-        ? {
-            userStore: ((connection, model) =>
-              container.resolve(userStoreToken)(
-                connection,
-                model,
-              )) satisfies CreateAuthenticationOptions['userStore'],
-          }
-        : {}),
+      // The users plugin, when installed, owns the user table. Looked up when
+      // Better Auth initializes its adapter, so registration order does not
+      // decide whether the store is used.
+      userStore: {
+        resolve: () =>
+          container.has(userStoreToken)
+            ? container.resolve(userStoreToken)
+            : undefined,
+      },
       secondaryStorage: createAuthStorage(caching),
       appName: app.name,
       ...authConfig,

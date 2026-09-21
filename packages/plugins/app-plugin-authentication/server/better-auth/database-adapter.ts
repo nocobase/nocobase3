@@ -9,7 +9,7 @@ import { createAdapterFactory, type CustomAdapter } from 'better-auth/adapters';
 import {
   UserStoreError,
   type UserStore,
-  type UserStoreFactory,
+  type UserStoreSource,
 } from '../user-store.js';
 import {
   applyDeleteWhere,
@@ -26,7 +26,7 @@ export interface DatabaseAdapterOptions {
    * Serves the `user` model. Provided by the users plugin, which owns the
    * table; without it the adapter reads and writes the table directly.
    */
-  userStore?: UserStoreFactory;
+  userStore?: UserStoreSource;
 }
 
 function buildCustomAdapter(
@@ -310,7 +310,13 @@ export function databaseAdapter(
           (model, field) =>
             getFieldName({ model: getDefaultModelName(model), field }),
         );
-        const userStore = options.userStore;
+        // Resolved when Better Auth initializes the adapter, after every
+        // provider has registered, so the users plugin is seen whenever it is
+        // installed regardless of provider order.
+        const userStore =
+          typeof options.userStore === 'function'
+            ? options.userStore
+            : options.userStore?.resolve();
         if (!userStore) return generic;
         // The users plugin owns the `user` table: its store applies identity
         // normalization, uniqueness and soft-delete filtering to every user
@@ -349,10 +355,15 @@ export function databaseAdapter(
                     code: 'USER_NOT_FOUND',
                     message: error.message,
                   })
-                : APIError.from('UNPROCESSABLE_ENTITY', {
-                    code: 'USER_ALREADY_EXISTS',
-                    message: error.message,
-                  }),
+                : error.code === 'INVALID_USER_INPUT'
+                  ? APIError.from('BAD_REQUEST', {
+                      code: 'INVALID_USER_INPUT',
+                      message: error.message,
+                    })
+                  : APIError.from('UNPROCESSABLE_ENTITY', {
+                      code: 'USER_ALREADY_EXISTS',
+                      message: error.message,
+                    }),
               { cause: error },
             );
           }

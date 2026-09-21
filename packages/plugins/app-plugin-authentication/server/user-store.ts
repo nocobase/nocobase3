@@ -79,14 +79,15 @@ export interface UserStore {
 }
 
 /**
- * Raised by a store implementation when a user cannot be written: the
- * identity is taken (also by a soft-deleted user) or the user does not
- * exist. The adapter turns it into a Better Auth API error inside Better
+ * Raised by a store implementation when a user cannot be written: the input
+ * breaks an identity rule, the identity is taken (also by a soft-deleted
+ * user) or the user does not exist. The adapter turns it into a Better Auth API error inside Better
  * Auth flows; server-side callers receive it as thrown.
  */
 export class UserStoreError extends Error {
   constructor(
     readonly code:
+      | 'INVALID_USER_INPUT'
       | 'USER_NOT_FOUND'
       | 'USER_EMAIL_CONFLICT'
       | 'USER_USERNAME_CONFLICT'
@@ -103,3 +104,10 @@ export type UserStoreFactory = (
   connection: DatabaseConnection,
   model: UserStoreModel,
 ) => UserStore;
+
+/**
+ * Either the factory itself or something that looks it up when Better Auth
+ * initializes its adapter, which is after every provider has registered.
+ */
+export type UserStoreSource =
+  UserStoreFactory | { resolve(): UserStoreFactory | undefined };

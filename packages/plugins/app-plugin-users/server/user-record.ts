@@ -87,7 +87,12 @@ function dateValue(value: unknown, label: string): Date {
 
 function requiredText(value: string, label: string): string {
   const normalized = value.trim();
-  if (!normalized) throw new TypeError(`${label} must not be empty`);
+  if (!normalized) {
+    throw new UserAdministrationError(
+      'INVALID_USER_INPUT',
+      `${label} must not be empty`,
+    );
+  }
   return normalized;
 }
 
@@ -115,7 +120,12 @@ export function normalizeUserWrite(
     const value = data[key];
     if (value === undefined) continue;
     if (name === 'username' && value === null) continue;
-    if (typeof value !== 'string') throw new TypeError(`Invalid user ${name}`);
+    if (typeof value !== 'string') {
+      throw new UserAdministrationError(
+        'INVALID_USER_INPUT',
+        `Invalid user ${name}`,
+      );
+    }
     data[key] =
       name === 'email'
         ? normalizedEmail(value)
@@ -124,7 +134,10 @@ export function normalizeUserWrite(
           : requiredText(value, 'User name');
   }
   if (create && (!data[field('email')] || !data[field('name')])) {
-    throw new TypeError('User name and email are required.');
+    throw new UserAdministrationError(
+      'INVALID_USER_INPUT',
+      'User name and email are required.',
+    );
   }
   return data;
 }

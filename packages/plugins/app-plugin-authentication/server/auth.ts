@@ -12,12 +12,12 @@ import { username } from 'better-auth/plugins';
 import type { Context, MiddlewareHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { databaseAdapter } from './better-auth/database-adapter.js';
-import type { UserStoreFactory } from './user-store.js';
+import type { UserStoreSource } from './user-store.js';
 
 export interface AuthOptions extends Omit<BetterAuthOptions, 'database'> {
   connection: DatabaseConnection;
   /** The users plugin's storage for the `user` model; see `userStoreToken`. */
-  userStore?: UserStoreFactory;
+  userStore?: UserStoreSource;
 }
 
 export interface CreateAuthenticationOptions extends Omit<

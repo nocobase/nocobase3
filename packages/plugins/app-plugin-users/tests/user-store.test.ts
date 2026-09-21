@@ -91,7 +91,10 @@ describe('user store', () => {
     ).rejects.toMatchObject({ code: 'USER_USERNAME_CONFLICT' });
     await expect(
       store.create({ data: { ...record('u4', 'x@example.com'), name: '  ' } }),
-    ).rejects.toThrow('User name must not be empty');
+    ).rejects.toMatchObject({
+      code: 'INVALID_USER_INPUT',
+      message: 'User name must not be empty',
+    });
   });
 
   it('hides soft-deleted users from every read, including OR branches', async () => {
