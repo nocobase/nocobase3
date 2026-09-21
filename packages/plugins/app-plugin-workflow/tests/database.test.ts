@@ -1,4 +1,5 @@
 import sqlite from '@nocobase/db-sqlite';
+import type { Knex } from 'knex';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -71,9 +72,15 @@ describe('@nocobase/app-plugin-workflow database', () => {
       // has to read it back as the same instant, whatever time zone the
       // database server happens to be configured with.
       const legacy = '2026-08-24T01:18:19.007Z';
-      // Written through the query builder on purpose: before the columns were
-      // `datetimeTz` this is the shape the engine stored, and the migration has
-      // to read it back as the same instant.
+      // Bound as raw SQL on purpose. These bytes were written by an older build,
+      // through a query builder that passed strings to the driver untouched, so
+      // they must not go through the temporal encoder of the build under test —
+      // it would resolve the offset against the host and store a wall clock,
+      // which is a different row from the one the migration has to convert.
+      const legacyBinding = (await database.connection().client<Knex>()).raw(
+        '?',
+        [legacy],
+      );
       await database
         .query()
         .insertInto('workflowRuns')
@@ -87,7 +94,7 @@ describe('@nocobase/app-plugin-workflow database', () => {
           output: JSON.stringify(null),
           dispatched: false,
           manually: false,
-          createdAt: legacy,
+          createdAt: legacyBinding,
         })
         .execute();
 

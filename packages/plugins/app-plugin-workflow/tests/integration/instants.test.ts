@@ -1,4 +1,5 @@
 import type { DatabaseManager } from '@nocobase/db';
+import type { Knex } from 'knex';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { workflowStore } from '../../server/collections/store.js';
@@ -322,7 +323,11 @@ describe(`workflow instants [${dialect}]`, () => {
 
   it('converts a row written before the columns carried a zone', async () => {
     // The value the engine used to store: a UTC wall clock with nothing saying
-    // so. Written through the query builder because that is what wrote it then.
+    // so. Bound as raw SQL because these bytes were written by an older build,
+    // through a query builder that passed strings to the driver untouched; the
+    // temporal encoder of the build under test would resolve the offset against
+    // the host and store a wall clock instead, which is a different row from the
+    // one the migration has to convert.
     // On PostgreSQL the migration widens the column, and widening reads each
     // value in the session time zone — which is why it pins that to UTC.
     const legacy = '2026-08-24T01:18:19.007Z';
@@ -331,6 +336,8 @@ describe(`workflow instants [${dialect}]`, () => {
       key: 'instant-legacy',
       nodes: [],
     });
+    const client = await db.connection().client<Knex>();
+    const written = client.raw('?', [legacyTimestamp(legacy)]);
     await db
       .query()
       .insertInto('workflowRuns')
@@ -344,8 +351,8 @@ describe(`workflow instants [${dialect}]`, () => {
         output: JSON.stringify(null),
         dispatched: false,
         manually: false,
-        startedAt: legacyTimestamp(legacy),
-        createdAt: legacyTimestamp(legacy),
+        startedAt: written,
+        createdAt: written,
       })
       .execute();
 
