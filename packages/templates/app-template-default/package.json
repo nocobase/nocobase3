@@ -98,7 +98,6 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "zod": "catalog:",
     "@nocobase/app-tools": "workspace:^"
   },
   "files": [
@@ -177,6 +176,7 @@
     ]
   },
   "dependencies": {
+    "zod": "catalog:",
     "@nocobase/app-plugin-ai-employee": "workspace:^",
     "@nocobase/app-plugin-api-keys": "workspace:^",
     "@nocobase/app-plugin-authentication": "workspace:^",
