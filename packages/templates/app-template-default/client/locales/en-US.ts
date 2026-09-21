@@ -1192,6 +1192,544 @@ const enUS = {
       medium: 'Medium',
       large: 'Large',
     },
+    direction: {
+      title: 'Direction',
+      description:
+        'Wrap a subtree in DirectionProvider so Base UI knows which way keyboard navigation and popup alignment run, and set the dir attribute so the layout itself flips. An application sets both once from the active locale.',
+      ltr: 'Left to right',
+      rtl: 'Right to left',
+      current: 'dir="{{direction}}"',
+      sideBySide: 'Side by side',
+      sideBySideDescription:
+        'The same form in both directions. Labels, controls and the primary action move to the other edge without a single conditional.',
+      searchPlaceholder: 'Search orders…',
+      notifyByEmail: 'Email me about order updates',
+      notifyByEmailHint: 'One message per status change, never marketing.',
+      twoFactor: 'Two-factor authentication',
+      twoFactorHint:
+        'Ask for a verification code when signing in from a new device.',
+      continue: 'Continue',
+      menus: 'Menus and submenus',
+      menusDescription:
+        'A popup opens toward the reading direction and a submenu flies out the other way; the arrow keys follow.',
+      invite: 'Invite member',
+      inviteByEmail: 'Invite by email',
+      inviteByLink: 'Copy invite link',
+      assignRole: 'Assign a role',
+      roleViewer: 'Viewer',
+      roleEditor: 'Editor',
+      roleAdmin: 'Administrator',
+      logical: 'Logical properties',
+      logicalDescription:
+        'Use ms/me, ps/pe and border-s/border-e instead of left and right, so one class works in both directions.',
+      logicalHint:
+        'text-start, ps-3 and border-s-2 flip with the direction; rtl:rotate-180 turns the chevron.',
+    },
+    empty: {
+      title: 'Empty',
+      description:
+        'The state a list shows before it holds anything. Say why it is empty and offer the one action that fills it, rather than leaving a blank panel.',
+      basic: 'First run',
+      basicDescription:
+        'Nothing has been created yet, so lead with the action that creates the first record.',
+      noOrders: 'No orders yet',
+      noOrdersDescription:
+        'Orders appear here as soon as your first customer checks out. You can also import a spreadsheet from your previous system.',
+      createOrder: 'Create order',
+      importOrders: 'Import orders',
+      outline: 'No results',
+      outlineDescription:
+        'A filtered list is empty for a different reason, so offer to widen the search rather than to create something.',
+      noResults: 'No matching products',
+      noResultsDescription:
+        'Nothing matches “{{query}}”. Try a shorter term or clear the filters.',
+      clearFilters: 'Clear filters',
+      avatar: 'With an avatar',
+      avatarDescription:
+        'When the empty state is about one person or one record, show it instead of a generic icon.',
+      noMembers: 'No teammates yet',
+      noMembersDescription:
+        '{{name}} is the only member of this workspace. Invite the people you work with to share orders and reports.',
+      inviteMember: 'Invite a teammate',
+      inputGroup: 'With the action inline',
+      inputGroupDescription:
+        'When the action needs one value, put the field in the empty state so the user never leaves it.',
+      inviteByEmail: 'Invite by email',
+      inviteByEmailDescription:
+        'Send an invitation and the teammate joins with viewer access until you change it.',
+      invitationSent: 'Invitation sent to {{email}}.',
+      emailPlaceholder: 'teammate@example.com',
+      invite: 'Invite',
+      background: 'Filling a panel',
+      backgroundDescription:
+        'Give the empty state a height and a soft gradient when it stands in for a whole region rather than a few rows.',
+      noAttachments: 'No attachments',
+      noAttachmentsDescription:
+        'Drop a file here, or upload a signed delivery note so it travels with the order.',
+      uploadFile: 'Upload a file',
+    },
+    hoverCard: {
+      title: 'Hover Card',
+      description:
+        'Previews what is behind a link while the pointer rests on it. It enriches, never carries anything essential: a touch user never opens it.',
+      basic: 'A person preview',
+      basicDescription:
+        'The canonical use: a mention that expands into who the person is.',
+      roleAccountManager: 'Account manager',
+      joined: 'Joined {{date}}',
+      delays: 'Open and close delays',
+      delaysDescription:
+        'A short open delay stops the card firing as the pointer crosses the link; a close delay lets the pointer travel into the card.',
+      instant: 'Opens instantly',
+      delayed: 'Opens after 700ms',
+      sides: 'Sides',
+      sidesDescription:
+        'The card flips to the opposite side when there is no room; choose the side that keeps the trigger visible.',
+      top: 'Top',
+      right: 'Right',
+      bottom: 'Bottom',
+      left: 'Left',
+      sideHint: 'side="{{side}}" anchors the card on this edge of the trigger.',
+      business: 'Inside a sentence',
+      businessDescription:
+        'Record references in prose expand without leaving the page, which keeps a summary short and still answerable.',
+      sentenceStart: 'The escalation concerns order',
+      items: 'Items',
+      sentenceMiddle: 'placed by',
+      sentenceEnd: ', who is waiting on a replacement shipment.',
+    },
+    kbd: {
+      title: 'Kbd',
+      description:
+        'Renders a physical key or a chord. Use it wherever you tell someone which keys to press, so keys look the same in menus, tooltips and help text.',
+      basic: 'Single keys and chords',
+      basicDescription:
+        'One Kbd holds one key. Wrap several in KbdGroup for a chord, and add a separator only when the keys are pressed in sequence rather than together.',
+      inText: 'In running text',
+      inTextDescription:
+        'Keep the keys inline with the sentence so the hint reads as a sentence rather than as a legend.',
+      hintBefore: 'Press',
+      hintAfter:
+        'to open the command palette from anywhere in the application.',
+      inButton: 'In a button',
+      inButtonDescription:
+        'Mark the Kbd with data-icon so the button tightens the padding on that side, exactly as it does for a trailing icon.',
+      inTooltip: 'In a tooltip',
+      inTooltipDescription:
+        'An icon button has no visible label, so name the action and its shortcut together in the tooltip.',
+      saveChanges: 'Save changes',
+      print: 'Print',
+      printInvoice: 'Print invoice',
+      inInput: 'In an input',
+      inInputDescription:
+        'A trailing addon showing the shortcut tells the reader the field is reachable without the mouse.',
+      searchPlaceholder: 'Search orders, customers, invoices…',
+      shortcutList: 'A shortcut list',
+      shortcutListDescription:
+        'A definition list pairs each action with its keys; keep the keys aligned to the trailing edge so they scan as a column.',
+      shortcutNewOrder: 'New order',
+      shortcutSearch: 'Open search',
+      shortcutSidebar: 'Toggle sidebar',
+      shortcutSaveDraft: 'Save draft',
+      shortcutHelp: 'Keyboard shortcuts',
+    },
+    label: {
+      title: 'Label',
+      description:
+        "Names a form control. Point htmlFor at the control's id so clicking the text focuses or toggles it, and a screen reader announces the two together.",
+      basic: 'With an input',
+      basicDescription:
+        'The plain pairing: a label above the control it names.',
+      withCheckbox: 'With a checkbox',
+      withCheckboxDescription:
+        'Put the label after the box and keep them on one line; the whole phrase becomes the click target.',
+      acceptTerms: 'I accept the terms of service',
+      sendCopy: 'Email me a copy of this order',
+      withSwitch: 'With a switch',
+      withSwitchDescription:
+        'A switch takes effect immediately, so its label states what is on rather than what will be saved.',
+      autoRenew: 'Renew this subscription automatically',
+      withRadio: 'With a radio group',
+      withRadioDescription:
+        'Every option needs its own label and id; the group as a whole is named by a legend or a FieldLabel.',
+      shippingStandard: 'Standard shipping',
+      shippingExpress: 'Express shipping',
+      shippingPickup: 'Collect in store',
+      states: 'Required, optional and disabled',
+      statesDescription:
+        'Mark a required field with an asterisk plus text for screen readers, say “optional” in words, and let a disabled control dim its label through the group.',
+      poNumber: 'Purchase order number',
+      internalReference: 'Internal reference',
+      taxId: 'Tax ID',
+      notesPlaceholder:
+        'Delivery instructions, access codes, anything the driver needs.',
+      inField: 'Inside Field',
+      inFieldDescription:
+        'FieldLabel is this same label wired into the Field layout, so spacing, description text and error state come with it.',
+      phoneHint:
+        'Include the country code so delivery updates reach the customer.',
+    },
+    marker: {
+      title: 'Marker',
+      description:
+        'A one-line note in a stream of content: who joined, when the day changed, what the system just did. It sits between messages rather than inside one.',
+      basic: 'Event notes',
+      basicDescription:
+        'An icon and a sentence. Keep it to one line and name the actor, so the note reads as part of the history.',
+      assigned: '{{agent}} was assigned to this ticket',
+      tagged: 'Tagged as {{tag}}',
+      priorityChanged: 'Priority changed from {{from}} to {{to}}',
+      variants: 'Variants',
+      variantsDescription:
+        'Default is a plain line, separator draws a rule through it for a day break, and border boxes it for a log entry.',
+      variantDefault: 'Delivery address updated',
+      variantSeparator: 'Monday, 21 September',
+      variantBorder: 'Exported 240 orders to CSV',
+      status: 'Live status',
+      statusDescription:
+        'Add role="status" so a screen reader announces the change, and pair a spinner with the shimmer class while the work is still running.',
+      agentTyping: '{{agent}} is typing…',
+      syncingOrders: 'Syncing orders from the storefront…',
+      syncComplete: 'Synced {{count}} orders',
+      inConversation: 'In a conversation',
+      inConversationDescription:
+        'Separator markers break a thread into days and a plain marker records who joined it. Neither is a message, so neither takes a bubble.',
+      customerAsks: 'My order still says processing. Has it shipped yet?',
+      joined: '{{agent}} joined the conversation',
+      agentReplies:
+        'It left the warehouse this morning. I will send the tracking number shortly.',
+      activityLog: 'An activity log',
+      activityLogDescription:
+        'The border variant turns a stream of markers into a record list, where each entry keeps its own outline.',
+      invoiceCreated: 'Invoice {{invoice}} was created',
+      statusChanged: 'Status changed from {{from}} to {{to}}',
+      paymentReceived: 'Payment of {{amount}} received',
+      interactive: 'Interactive markers',
+      interactiveDescription:
+        'Pass an anchor or a button through render when the note leads somewhere: the marker keeps its layout and the element keeps its semantics.',
+      viewTicket: 'View the full ticket history',
+      reopenTicket: 'Reopen this ticket',
+      ticketReopened: 'Ticket reopened',
+    },
+    menubar: {
+      title: 'Menubar',
+      description:
+        'A persistent row of menus for an editor-style screen. Reach for it when a page has many commands; a single button with a dropdown is enough for a few.',
+      basic: 'Menus, groups and shortcuts',
+      basicDescription:
+        'Group related commands, separate the groups, and show the shortcut on the trailing edge of the item that has one.',
+      invoice: 'Invoice',
+      newInvoice: 'New invoice',
+      duplicate: 'Duplicate',
+      archive: 'Archive',
+      print: 'Print',
+      deleteInvoice: 'Delete invoice',
+      undo: 'Undo',
+      redo: 'Redo',
+      cut: 'Cut',
+      paste: 'Paste',
+      help: 'Help',
+      documentation: 'Documentation',
+      keyboardShortcuts: 'Keyboard shortcuts',
+      contactSupport: 'Contact support',
+      submenu: 'Submenus',
+      submenuDescription:
+        'Nest one level for a set of formats or destinations. Deeper nesting is hard to reach with a pointer.',
+      sendToCustomer: 'Send to customer',
+      copyLink: 'Copy link',
+      emailLink: 'Email link',
+      checkbox: 'Checkbox items',
+      checkboxDescription:
+        'Each item toggles on its own and the menu stays open; disable the one that must always stay on.',
+      view: 'View',
+      columns: 'Columns',
+      tax: 'Tax',
+      discount: 'Discount',
+      visibleColumns: 'Visible columns: {{columns}}',
+      radio: 'Radio items',
+      radioDescription:
+        'One choice out of a set. The group holds the value, so the items only name the options.',
+      density: 'Density',
+      densityCompact: 'Compact',
+      densityComfortable: 'Comfortable',
+      currentDensity: 'Rows render at {{density}} density.',
+    },
+    message: {
+      title: 'Message',
+      description:
+        'The layout of one turn in a conversation: avatar, header, bubble and footer. Bubble carries the text; Message positions the turn and its metadata.',
+      conversation: 'A support thread',
+      conversationDescription:
+        'align="end" puts the customer on the trailing edge, markers break the thread into days, and a status marker shows who is typing.',
+      customerAsks:
+        'Order {{order}} still says processing. Has it shipped yet?',
+      agentChecking:
+        'Let me check with the warehouse and come back to you today.',
+      agentShipped:
+        'It shipped this morning. The tracking number is {{tracking}}.',
+      agentEta: 'It should arrive on Wednesday before 18:00.',
+      reactionThumbsUp: 'Thumbs up reaction',
+      customerThanks: 'Perfect, thank you for checking.',
+      read: 'Read {{time}}',
+      typing: '{{agent}} is typing…',
+      group: 'Consecutive messages',
+      groupDescription:
+        'MessageGroup tightens the spacing between turns from the same person; leave MessageAvatar empty on the ones that follow so the column stays aligned.',
+      groupFirst: 'I have pulled up the order.',
+      groupSecond: 'Two of the three items shipped yesterday.',
+      groupThird: 'The third is on back order until Friday.',
+      headerFooter: 'Header and footer',
+      headerFooterDescription:
+        'The header names the sender and their team; the footer carries the time and the delivery state. Keep both out of the bubble.',
+      supportTeam: 'Support team',
+      refundOffer:
+        'I can refund the shipping fee or send a replacement. Which would you prefer?',
+      refundAccept: 'A replacement would be great.',
+      actions: 'Message actions',
+      actionsDescription:
+        'Put per-message actions in the footer: copy, feedback, and a retry when sending failed.',
+      assistantAnswer:
+        'An order moves to processing once payment clears, and to shipped when the warehouse scans the label.',
+      helpful: 'Helpful',
+      notHelpful: 'Not helpful',
+      followUp: 'And how long does the warehouse usually take?',
+      failedToSend: 'Not sent',
+      retry: 'Retry sending',
+      withAttachment: 'With an attachment',
+      withAttachmentDescription:
+        'An Attachment sits beside the bubble inside MessageContent, so the file belongs to the turn rather than to the text.',
+      sendsInvoice: 'Here is the invoice for the replacement order.',
+      confirmsInvoice:
+        'Received, thank you. I have forwarded it to accounts payable.',
+    },
+    messageScroller: {
+      title: 'Message Scroller',
+      description:
+        'A scroll viewport for a conversation: it follows new messages while the reader is at the bottom, and stops following the moment they scroll up.',
+      liveThread: 'A live thread',
+      liveThreadDescription:
+        'Append a message and the viewport follows it. Scroll up first and it holds your place, showing the jump button instead.',
+      ticketTitle: 'Ticket {{ticket}}',
+      ticketSubject: 'Damaged item in delivery',
+      scrollToLatest: 'Scroll to the latest message',
+      appendMessage: 'Append a reply',
+      appendHint:
+        'Scroll up before appending to watch the viewport hold its position.',
+      customerReport:
+        'The parcel arrived today but the monitor screen is cracked.',
+      agentAck: 'I am sorry about that. Could you send a photo of the damage?',
+      customerDetails:
+        'Just sent it. The box was dented on the left side as well.',
+      agentInvestigating: 'Thank you. I am raising this with the carrier now.',
+      agentFound: 'The carrier confirmed the damage happened in transit.',
+      customerConfirm: 'Good to know. What happens next?',
+      appendAgentFix: 'A replacement is on its way and arrives Thursday.',
+      appendCustomerThanks: 'Thank you for sorting it out so quickly.',
+      appendAgentClose:
+        'I will close the ticket once you confirm the replacement arrived.',
+      appendCustomerFollowUp:
+        'Will do. One more thing: may I keep the damaged one?',
+      ticketOpened: 'Ticket opened · 12 September',
+      ticketClosed: 'Ticket closed · 15 September',
+      jumpToStart: 'Jump to the first message',
+      jumpToEnd: 'Jump to the last message',
+      savedTranscript: 'A saved transcript',
+      savedTranscriptDescription:
+        'defaultScrollPosition="start" with autoScroll off opens a closed conversation at its beginning, which is how a record is read.',
+      closedTranscript: 'Closed · read from the top',
+      compact: 'Without a card',
+      compactDescription:
+        'The scroller is only a viewport, so it works inside any bordered box; add a start button when the reader may want to go back to the beginning.',
+    },
+    drawer: {
+      title: 'Drawer',
+      description:
+        'A panel that slides in from an edge and can be dismissed with a swipe. Use it for a task the user finishes and leaves; Sheet is the plainer desktop-side variant.',
+      basic: 'A bottom drawer',
+      basicDescription:
+        'The default rises from the bottom edge. showSwipeHandle adds the grab bar that tells a touch user it can be dragged away.',
+      openOrderSummary: 'Open order summary',
+      orderSummary: 'Order summary',
+      orderSummaryDescription:
+        'Three items in order {{number}}, ready to confirm.',
+      confirmOrder: 'Confirm order',
+      positions: 'Four edges',
+      positionsDescription:
+        'swipeDirection decides both the edge the panel sits on and the direction that dismisses it.',
+      top: 'Top',
+      right: 'Right',
+      bottom: 'Bottom',
+      left: 'Left',
+      panelDescription: 'swipeDirection="{{direction}}" dismisses this panel.',
+      controlled: 'Controlled, and responsive',
+      controlledDescription:
+        'Hold open in state when the drawer closes on a successful action. useIsMobile picks the edge, so one drawer rises on a phone and slides in on a desktop.',
+      pickDeliveryTime: 'Pick a delivery time',
+      deliveryDescription:
+        'Choose a window for tomorrow. You can change it until the parcel is picked up.',
+      standardDelivery: 'Standard delivery',
+      fastest: 'Fastest',
+      slotStandard: 'Arrives within two working days',
+      slotAfterWork: 'Right after the working day',
+      slotPopular: 'The most requested window',
+      slotLast: 'The last run of the evening',
+      confirmDelivery: 'Confirm this time',
+      deliveryConfirmed: 'Delivery time confirmed',
+      responsiveHint:
+        'Resize the window: below 768px the drawer rises from the bottom instead.',
+      snapPoints: 'Snap points',
+      snapPointsDescription:
+        'A partly open drawer shows a summary and expands to full height when the user drags it up.',
+      openActivity: "Open today's activity",
+      activity: "Today's activity",
+      activityDescription: 'Drag the panel up to read the whole day.',
+      paymentReceived: 'Payment received at {{time}}',
+      nonModal: 'Non-modal',
+      nonModalDescription:
+        'modal={false} leaves the page behind it usable, so the reader can keep working while the panel stays open.',
+      openNotes: 'Open notes',
+      notesDescription:
+        'The order stays readable behind this panel, so you can copy a detail straight into the note.',
+      notesPlaceholder:
+        'Anything the next person handling this order should know.',
+    },
+    dropdownMenu: {
+      title: 'Dropdown Menu',
+      description:
+        'A menu of commands anchored to the control that opened it. Commands act; they do not hold a value the way a Select does.',
+      basic: 'Groups, labels and shortcuts',
+      basicDescription:
+        'Group commands that belong together, separate the groups, and show the keyboard shortcut of the item that has one.',
+      myAccount: 'My account',
+      billing: 'Billing',
+      team: 'Team',
+      newTeam: 'New team',
+      support: 'Support',
+      apiAccess: 'API access',
+      icons: 'With icons and a submenu',
+      iconsDescription:
+        'A leading icon speeds up recognition, and one level of nesting covers an action with a few destinations.',
+      inviteUsers: 'Invite people',
+      message: 'Message',
+      copyInviteLink: 'Copy invite link',
+      checkboxes: 'Checkbox items',
+      checkboxesDescription:
+        'Each item toggles independently and the menu stays open, which is what makes it right for column visibility.',
+      columns: 'Columns',
+      toggleColumns: 'Toggle columns',
+      radio: 'Radio items',
+      radioDescription:
+        'One choice out of a set. The group holds the value and closes on selection, so the trigger can show the current choice.',
+      sortBy: 'Sort by',
+      rowActions: 'Row actions',
+      rowActionsDescription:
+        'An icon button opens the commands for one row; align the menu to the trailing edge and give the trigger an aria-label.',
+      viewDetails: 'View details',
+      duplicate: 'Duplicate',
+      cancelOrder: 'Cancel order',
+      lastAction: 'Last action: {{action}}',
+      noAction: 'Open the menu and pick an action.',
+    },
+    field: {
+      title: 'Field',
+      description:
+        'The layout of one control with its label, description and error. It wires the three together, so the control announces itself correctly without extra aria attributes.',
+      form: 'A complete form',
+      formDescription:
+        'FieldSet and FieldLegend name a section, FieldGroup spaces the fields inside it, and FieldSeparator divides two sections.',
+      customerDetails: 'Customer details',
+      customerDetailsDescription:
+        'Used on the invoice and on the shipping label.',
+      fullName: 'Full name',
+      namePlaceholder: 'Ava Chen',
+      emailPlaceholder: 'ava.chen@northwind.example',
+      emailHint: 'Order confirmations and delivery updates go here.',
+      region: 'Region',
+      notesPlaceholder:
+        'Delivery instructions, access codes, anything the driver needs.',
+      nameRequired: 'Enter the customer name.',
+      emailRequired: 'Enter an email address.',
+      emailInvalid: 'This does not look like an email address.',
+      regionRequired: 'Choose a region.',
+      preferences: 'Preferences',
+      preferencesDescription:
+        'These can be changed at any time from the customer record.',
+      marketing: 'Send product news',
+      marketingHint:
+        'About one email a month. Unsubscribing never affects order updates.',
+      invoiceCopy: 'Email a copy of every invoice',
+      invoiceCopyHint: 'A PDF goes out as soon as the invoice is issued.',
+      submitted: 'Saved.',
+      orientations: 'Orientations',
+      orientationsDescription:
+        'Vertical stacks the label above the control, horizontal sits them on one line, and responsive switches between the two at the sm breakpoint.',
+      vertical: 'Company name',
+      companyPlaceholder: 'Northwind Traders',
+      verticalHint: 'Appears on the invoice exactly as typed.',
+      agreeTerms: 'I agree to the processing terms',
+      responsive: 'Tax ID',
+      responsiveHint:
+        'Stacks on a narrow screen and sits on one line from sm upwards.',
+      taxIdPlaceholder: 'DE 811 234 567',
+      choiceCards: 'Choice cards',
+      choiceCardsDescription:
+        'Wrap a Field in FieldLabel to turn each option into a card, so the whole card becomes the click target.',
+      shippingMethod: 'Shipping method',
+      shippingStandard: 'Standard',
+      shippingStandardHint: 'Arrives in three to five working days.',
+      shippingExpress: 'Express',
+      shippingExpressHint: 'Arrives the next working day before 18:00.',
+      shippingOvernight: 'Overnight',
+      shippingOvernightHint:
+        'Ordered before 16:00, delivered by 09:00 tomorrow.',
+      errors: 'Errors',
+      errorsDescription:
+        'FieldError renders one message, or a list when several rules fail at once. Set data-invalid on the Field and aria-invalid on the control.',
+      password: 'Password',
+      passwordTooShort: 'Use at least 12 characters.',
+      passwordNeedsNumber: 'Include a number.',
+      passwordNeedsSymbol: 'Include a symbol.',
+    },
+    input: {
+      title: 'Input',
+      description:
+        'A single-line text field. Set type so the browser offers the right keyboard, validation and autofill, and pair it with Field for the label, hint and error.',
+      types: 'Types',
+      typesDescription:
+        'The type is not decoration: it changes the on-screen keyboard, the autofill entry the browser offers, and the value the field reports.',
+      namePlaceholder: 'Ava Chen',
+      emailPlaceholder: 'ava.chen@northwind.example',
+      password: 'Password',
+      passwordPlaceholder: 'At least 12 characters',
+      website: 'Website',
+      search: 'Search',
+      field: 'With a label and a hint',
+      fieldDescription:
+        'Field supplies the label, the description and the error slot, and connects all three to the input for a screen reader.',
+      companyName: 'Company name',
+      companyPlaceholder: 'Northwind Traders',
+      companyHint: 'Appears on the invoice exactly as typed.',
+      taxId: 'Tax ID',
+      taxIdHint: 'Required for customers inside the EU.',
+      states: 'States',
+      statesDescription:
+        'Disabled takes the field out of the form, read-only keeps its value submitted, and aria-invalid with data-invalid styles the error.',
+      disabled: 'Order number',
+      disabledHint: 'Assigned when the order is created.',
+      readOnly: 'Customer ID',
+      readOnlyHint: 'Submitted with the form but not editable.',
+      emailInvalid: 'This does not look like an email address.',
+      file: 'File input',
+      fileDescription:
+        'accept narrows the picker to the formats you can actually process. It is a hint, so the server still validates what arrives.',
+      attachment: 'Signed delivery note',
+      attachmentHint: 'PDF, PNG or JPG, up to 10 MB.',
+      controlled: 'Controlled',
+      controlledDescription:
+        'Hold the value in state when you need to normalise or limit what is typed, and keep maxLength on the element so the browser enforces it too.',
+      reference: 'Purchase order reference',
+      referenceHint: 'Letters, digits and hyphens.',
+    },
     separator: {
       title: 'Separator',
       description:

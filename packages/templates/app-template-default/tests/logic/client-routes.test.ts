@@ -63,9 +63,9 @@ describe('app client routes', () => {
       'components',
     ]);
     const pages = groups.flatMap((group) => group.children ?? []);
-    // The reference set is filled in page by page, so this count moves as pages land. It covers the 31 component
+    // The reference set is filled in page by page, so this count moves as pages land. It covers the 44 component
     // pages and the single example that ship today; `client/routes.ts` declares no route without its page.
-    expect(pages).toHaveLength(32);
+    expect(pages).toHaveLength(45);
     for (const page of pages) {
       // Every reference page is reachable by any signed-in user, and none of them is a page-authorization resource:
       // they are working material for building the application, not a feature anyone grants access to.
@@ -119,6 +119,19 @@ describe('app client routes', () => {
         'components-data-table',
         'components-date-picker',
         'components-dialog',
+        'components-direction',
+        'components-drawer',
+        'components-dropdown-menu',
+        'components-empty',
+        'components-field',
+        'components-hover-card',
+        'components-input',
+        'components-kbd',
+        'components-label',
+        'components-marker',
+        'components-menubar',
+        'components-message',
+        'components-message-scroller',
         'components-separator',
         'components-sheet',
         'components-sidebar',
