@@ -106,7 +106,7 @@ Use shadcn/ui for UI. Check `client/components/ui/` first; if the primitive is n
 pnpm exec shadcn add card
 ```
 
-Build your own components by composing these primitives, and put them in `client/components/`.
+Build your own components by composing these primitives, and put them in `client/components/`. A few such compositions ship with the template for the shadcn documentation pages that describe a pattern rather than a registry item: `DataTable` with `DataTableColumnHeader`, `DataTablePagination` and `DataTableViewOptions` in `client/components/data-table*.tsx`, `DatePicker` and `DateRangePicker` in `client/components/date-picker.tsx`, and the `Typography*` prose primitives in `client/components/typography.tsx`. Reach for these before writing a table, a date field or long-form text from scratch.
 
 Style with the semantic Tailwind tokens — `bg-background`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary` — so pages follow the light and dark themes. Do not hard-code colors like `bg-white` or `text-gray-900`; they break the moment someone switches theme.
 

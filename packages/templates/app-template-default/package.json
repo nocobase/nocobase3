@@ -98,7 +98,8 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@nocobase/app-tools": "workspace:^"
+    "@nocobase/app-tools": "workspace:^",
+    "@shadcn/react": "^0.3.1"
   },
   "files": [
     ".prettierignore",

@@ -5,7 +5,7 @@ This directory is the application's browser client. Read the application's root 
 ## What lives where
 
 - `routes.ts` declares your page routes. `pages/` holds the components they load.
-- `components/` holds your components; `components/ui/` holds shadcn/ui primitives added with `pnpm exec shadcn add`.
+- `components/` holds your components; `components/ui/` holds shadcn/ui primitives added with `pnpm exec shadcn add`. The compositions shadcn documents without publishing — `DataTable` and its column header, pagination and view options, `DatePicker` and `DateRangePicker`, and the `Typography*` prose primitives — live in `components/` as ordinary components you may edit.
 - `locales/` holds every user-visible string.
 - `runtime.ts` is the composition root. `service-provider.ts` holds startup logic and Refine resources for CRUD integration. `react-providers.ts` holds your React context providers, and `plugins.ts` lists the plugins the browser loads. Sidebar entries come from route `navigation` declarations.
 - `routing/`, `layouts/`, and `theme/` are the framework structure: route rendering and access checks, the App, Settings and Dev layouts, their shared components in `layouts/components/`, and the theme provider. The template evolves these, so an edit here is what a future upgrade has to reconcile — prefer the built-in mechanism, and when you do change them, comment why. Do not declare product routes in any of them.
