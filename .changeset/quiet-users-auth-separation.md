@@ -1,6 +1,6 @@
 ---
-'@nocobase/app-plugin-users': major
-'@nocobase/app-plugin-authentication': major
+'@nocobase/app-plugin-users': minor
+'@nocobase/app-plugin-authentication': minor
 '@nocobase/app-plugin-user-management': minor
 '@nocobase/app-plugin-hub': minor
 '@nocobase/app-plugin-notification-in-app': patch
