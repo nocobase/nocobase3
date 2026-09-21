@@ -18,7 +18,7 @@ The protected logs API intentionally omits message and recipient snapshots plus 
 - Confirm the queue manager and worker are started.
 - Look for `notification.delivery.enqueue_failed`; the reconciler should redispatch ready work.
 - Confirm the reconciler interval and ready batch are advancing.
-- For `failed` with `nextRunAt`, the Delivery is scheduled for retry and the Notification remains processing.
+- For `retrying`, the Delivery is scheduled for retry and `nextRunAt` records its earliest execution time.
 - For a long `preparing`/`submitting` state, inspect lease heartbeat, worker health, Provider timeout, and application shutdown.
 
 An expired preparation lease returns to pending. An expired submission lease becomes unknown because the worker may have completed the external request before losing persistence.
@@ -29,7 +29,7 @@ An expired preparation lease returns to pending. An expired submission lease bec
 - `configuration`: definition, Provider identity, sender, or runtime configuration is missing/invalid.
 - `authentication`: Provider credentials were rejected.
 - `content`: rendered/prepared message violates Provider constraints.
-- `network`, `rate_limit`, or `timeout`: inspect retry disposition and `nextRunAt`.
+- `network`, `rate_limit`, or `timeout`: inspect the Provider result, attempt count, and `nextRunAt`.
 - `storage`: persistence or in-app inbox delivery failed.
 - `provider` or `unknown`: inspect the Provider's sanitized response and correlated logs.
 
@@ -41,7 +41,7 @@ Treat every Delivery independently. Identify exactly which recipient/Channel/Pro
 
 ### Unknown
 
-Do not retry automatically. Use Provider message id when available, external Provider dashboards, target inbox/group evidence, and timestamps to determine whether submission happened. `retryDelivery` always requires an auditable reason. It uses the Provider's declared `deliveryId` idempotency when still valid; otherwise invoking it accepts possible duplication. If proof remains unavailable, report an indeterminate external effect and ask the business owner whether a possible duplicate is safer than a possible omission.
+Do not retry an unknown Delivery directly. Use Provider message id when available, external Provider dashboards, target inbox/group evidence, and timestamps to determine whether submission happened. If proof remains unavailable, report an indeterminate external effect. If evidence confirms that no message was submitted, create a new logical Notification with the original business idempotency policy.
 
 ## Common symptoms
 
@@ -54,7 +54,7 @@ Do not retry automatically. Use Provider message id when available, external Pro
 | Runtime identity mismatch             | Definition returns the registered Provider identifier exactly           |
 | Unsupported recipient                 | Native recipient address and message validation contract                |
 | Queue dispatch warning                | Reconciler recovery, worker availability, persistent ready Delivery     |
-| Repeated retry                        | Attempt categories, disposition, retry delay, and max attempts          |
+| Repeated retry                        | Attempt categories, configured retry interval, and maximum attempts     |
 | Submission timeout                    | Provider timeout, abort handling, remote latency, and unknown risk      |
 | Log route 401/403                     | Authentication and `page:notification.logs` `access` permission         |
 | Notification test 403                 | Authentication, test header, and `notification:test/send` on submission |
@@ -64,10 +64,10 @@ Do not retry automatically. Use Provider message id when available, external Pro
 - Correct configuration or restore a missing definition, restart through the normal lifecycle, and allow reconciliation to process pending/retryable Deliveries.
 - Do not rewrite Provider identifier on persisted Deliveries.
 - Do not mark a failed or unknown Delivery accepted by hand.
-- After correcting the cause, retry a terminal failed Delivery with `retryDelivery({ deliveryId, reason })`; do not retry one that already has `nextRunAt`. An unsupported recipient cannot be repaired in-place and requires a corrected new logical send.
-- For unknown, use `retryDelivery` only after checking Provider evidence. Valid Provider idempotency makes the retry safe; otherwise the invocation accepts possible duplication and its required reason must record the evidence and decision. Never create a new Notification merely to bypass this gate.
+- After correcting the cause, retry a terminal failed Delivery with `retryDelivery({ deliveryId, reason })`; a Delivery in `retrying` is already scheduled. An unsupported recipient cannot be repaired in-place and requires a corrected new logical send.
+- For unknown, inspect Provider evidence first. If the evidence confirms that no message was submitted, create a new logical Notification; if the result remains uncertain, keep the Delivery as `unknown` and report the external effect as indeterminate.
 - Preserve all prior history and document possible duplicates for any recovery after an unknown submission.
 
 ## Diagnostic report
 
-Report Notification id/status, each relevant Delivery id/status, Channel, Provider identifier, Retry Audit resolution/reason/evidence, Attempt sequence/status/timestamps, sanitized error category/code/message, `nextRunAt`, queue/reconciler evidence, and the safest recovery. State explicitly whether final downstream delivery is proven, merely Provider-accepted, failed, or unknown.
+Report Notification id/status, each relevant Delivery id/status, Channel, Provider identifier, Retry Audit reason/evidence, Attempt sequence/status/timestamps, sanitized error category/code/message, `nextRunAt`, queue/reconciler evidence, and the safest recovery. State explicitly whether final downstream delivery is proven, merely Provider-accepted, failed, or unknown.

@@ -169,17 +169,6 @@ export interface NotificationErrorSnapshot {
   readonly category?: NotificationProviderErrorCategory;
 }
 
-export interface NotificationDeliveryRetryDecision {
-  readonly allowed: boolean;
-  readonly mode:
-    | 'safe'
-    | 'automatic_retry_scheduled'
-    | 'duplicate_risk_confirmation_required'
-    | 'not_allowed';
-  readonly nextRunAt?: string;
-  readonly reason?: string;
-}
-
 export interface NotificationDeliveryStatusSnapshot {
   readonly id: string;
   readonly channelName: string;
@@ -189,7 +178,6 @@ export interface NotificationDeliveryStatusSnapshot {
   readonly status: NotificationDeliveryStatus;
   readonly nextRunAt?: string;
   readonly error?: NotificationErrorSnapshot;
-  readonly retry: NotificationDeliveryRetryDecision;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -198,6 +186,7 @@ export interface NotificationStatusSummary {
   readonly total: number;
   readonly pending: number;
   readonly processing: number;
+  readonly retrying: number;
   readonly accepted: number;
   readonly failed: number;
   readonly unknown: number;
@@ -241,6 +230,10 @@ export type NotificationChannelConfig = NotificationProviderConfig;
 
 export interface NotificationConfig {
   readonly channels: Readonly<Record<string, NotificationChannelConfig>>;
+  readonly retry?: {
+    readonly maxAttempts?: number;
+    readonly intervalMs?: number;
+  };
 }
 
 export interface NotificationProviderSendError {
@@ -405,10 +398,4 @@ export interface NotificationManagerOptions<
   readonly reconcileBatchSize?: number;
   readonly providerTimeoutMs?: number;
   readonly leaseMs?: number;
-  readonly retry?: {
-    readonly maxAttemptsPerProvider?: number;
-    readonly initialDelayMs?: number;
-    readonly maxDelayMs?: number;
-    readonly jitterRatio?: number;
-  };
 }

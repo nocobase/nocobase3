@@ -7,6 +7,7 @@ export type NotificationStatus =
   | 'partial'
   | 'preparing'
   | 'submitting'
+  | 'retrying'
   | 'accepted'
   | 'failed'
   | 'unknown';

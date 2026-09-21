@@ -74,6 +74,7 @@ const enUS = {
     unknown: 'unknown',
     preparing: 'preparing',
     submitting: 'submitting',
+    retrying: 'retrying',
     accepted: 'accepted',
   },
   errors: {

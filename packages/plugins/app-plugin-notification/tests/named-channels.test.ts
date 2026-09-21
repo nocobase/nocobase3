@@ -199,8 +199,9 @@ it.each(['removed', 'disabled', 'changed'])(
   async (kind) => {
     const first = harness({ channels: { original: { provider: 'fake' } } });
     first.sent.mockResolvedValue({
-      status: 'submission_unknown',
-      error: { message: 'lost response' },
+      status: 'failed',
+      disposition: 'never',
+      error: { message: 'rejected' },
     });
     const result = await first.manager.send({
       idempotencyKey: kind,
@@ -222,8 +223,8 @@ it.each(['removed', 'disabled', 'changed'])(
     try {
       expect(
         (await current.manager.getNotification(result.notificationId))
-          ?.deliveries[0].retry.allowed,
-      ).toBe(false);
+          ?.deliveries[0].status,
+      ).toBe('failed');
       await expect(
         current.manager.retryDelivery({
           deliveryId: result.deliveries[0].id,
@@ -262,6 +263,15 @@ it('requires globally unique Provider identifiers', () => {
   expect(() =>
     registry.registerProvider({ ...definition, messageType: 'im' }),
   ).toThrow('already registered');
+});
+
+it('allows disabled Channels whose Provider is not registered', () => {
+  const registry = createNotificationRegistry();
+  expect(() =>
+    registry.validate({
+      channels: { disabled: { provider: 'missing', enabled: false } },
+    }),
+  ).not.toThrow();
 });
 
 it('does not start persistence or queue resources with an empty Channel map', async () => {

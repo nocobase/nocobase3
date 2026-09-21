@@ -74,6 +74,27 @@ export class NotificationRegistry implements NotificationExtensionRegistry {
 
   validate(config: NotificationConfig): void {
     if (
+      config.retry !== undefined &&
+      (!config.retry ||
+        typeof config.retry !== 'object' ||
+        Array.isArray(config.retry))
+    )
+      throw new Error('Notification retry must be an object.');
+    if (
+      config.retry?.maxAttempts !== undefined &&
+      (!Number.isInteger(config.retry.maxAttempts) ||
+        config.retry.maxAttempts < 1)
+    )
+      throw new Error(
+        'Notification retry maxAttempts must be an integer >= 1.',
+      );
+    if (
+      config.retry?.intervalMs !== undefined &&
+      (!Number.isInteger(config.retry.intervalMs) ||
+        config.retry.intervalMs < 0)
+    )
+      throw new Error('Notification retry intervalMs must be an integer >= 0.');
+    if (
       !config.channels ||
       typeof config.channels !== 'object' ||
       Array.isArray(config.channels)
@@ -104,6 +125,7 @@ export class NotificationRegistry implements NotificationExtensionRegistry {
         typeof channelConfig.enabled !== 'boolean'
       )
         throw new Error('Notification Channel enabled must be a boolean.');
+      if (channelConfig.enabled === false) continue;
       const provider = this.provider(channelConfig.provider);
       if (!provider)
         throw new Error(
@@ -114,7 +136,6 @@ export class NotificationRegistry implements NotificationExtensionRegistry {
         throw new Error(
           `Notification message type "${provider.messageType}" is not registered.`,
         );
-      if (channelConfig.enabled === false) continue;
       channel.validateConfig?.(channelConfig);
       provider.validateConfig?.(channelConfig);
     }

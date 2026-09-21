@@ -27,7 +27,6 @@ import {
   type NotificationStore,
 } from './store.js';
 import type {
-  NotificationDeliveryRetryDecision,
   NotificationDeliveryStatusSnapshot,
   NotificationManagerOptions,
   NotificationProviderIdentity,
@@ -59,6 +58,8 @@ interface StatusSubscription {
   readonly listener: NotificationStatusChangedListener;
   lastDeliveredSequence: number;
 }
+
+const MAX_RETRY_TIMER_MS = 2_147_483_647;
 
 export class NotificationIdempotencyConflictError extends Error {
   readonly code = 'IDEMPOTENCY_KEY_CONFLICT';
@@ -97,6 +98,10 @@ export class NotificationManager<
   private readonly queueJob: DeliveryJobClass;
   private readonly reconcileJob: NotificationReconcileJob;
   private readonly runtimePromises = new Map<string, Promise<void>>();
+  private readonly retryTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
   private readonly statusSubscriptions = new Map<string, StatusSubscription>();
   private nextStatusSequence = 0;
   private activated = false;
@@ -114,10 +119,11 @@ export class NotificationManager<
       store: this.store,
       leaseMs: options.leaseMs,
       providerTimeoutMs: options.providerTimeoutMs,
-      retry: options.retry,
+      retry: options.config.retry,
       resolveRuntime: async (type): Promise<void> => this.ensureRuntime(type),
       onDeliveryChanged: (delivery): void => {
         this.scheduleStatusChanged(delivery.notificationId);
+        this.scheduleRetry(delivery);
       },
     });
     this.queueJob = createDeliveryJob(this.channelManager);
@@ -543,29 +549,31 @@ export class NotificationManager<
       throw new Error(
         `Notification Channel "${delivery.channelName}" type has changed.`,
       );
-    const decision = await this.retryDecision(delivery);
-    if (delivery.status !== 'failed' && delivery.status !== 'unknown') {
+    if (delivery.status !== 'failed') {
       throw new NotificationDeliveryRetryError(
         delivery.id,
-        decision.reason ?? 'Notification Delivery is not retryable.',
+        'Only a failed Notification Delivery can be retried.',
       );
     }
-    if (!decision.allowed)
+    if (
+      this.channelManager.providerIdentities(delivery.channelName)[0]?.type !==
+      delivery.providerType
+    )
       throw new NotificationDeliveryRetryError(
         delivery.id,
-        decision.reason ?? 'Retry is unavailable.',
+        'The original Notification Provider is unavailable.',
       );
-    const resolution = this.retryResolution(
-      delivery,
-      decision,
+    if (delivery.lastError?.code === 'RECIPIENT_UNSUPPORTED')
+      throw new NotificationDeliveryRetryError(
+        delivery.id,
+        'An unsupported recipient must be corrected with a new logical send.',
+      );
+    const resolution: NotificationRetryResolutionRecord = {
+      type: 'terminal_failure',
       reason,
-      await this.store.now(),
-    );
-    const retried = await this.store.retryDelivery(
-      delivery.id,
-      delivery.status,
-      resolution,
-    );
+      requestedAt: await this.store.now(),
+    };
+    const retried = await this.store.retryDelivery(delivery.id, resolution);
     if (!retried) {
       throw new NotificationDeliveryRetryError(
         delivery.id,
@@ -582,10 +590,11 @@ export class NotificationManager<
   async close(): Promise<void> {
     await this.startPromise?.catch(() => undefined);
     const wasActive = this.activated;
+    this.activated = false;
+    this.clearRetryTimers();
     await this.reconcileJob.stop();
     await this.channelManager.close();
     this.runtimePromises.clear();
-    this.activated = false;
     this.started = false;
     this.statusSubscriptions.clear();
     if (wasActive) {
@@ -609,6 +618,43 @@ export class NotificationManager<
         'Failed to enqueue notification Delivery; reconciler will enqueue it later.',
       );
     }
+  }
+
+  private scheduleRetry(delivery: NotificationDeliveryRecord): void {
+    const existing = this.retryTimers.get(delivery.id);
+    if (existing) {
+      clearTimeout(existing);
+      this.retryTimers.delete(delivery.id);
+    }
+    if (
+      !this.activated ||
+      delivery.status !== 'retrying' ||
+      !delivery.nextRunAt
+    )
+      return;
+    const nextRunAt = Date.parse(delivery.nextRunAt);
+    if (!Number.isFinite(nextRunAt)) return;
+    const delay = Math.max(0, nextRunAt - Date.now());
+    const timer = setTimeout(
+      () => {
+        this.retryTimers.delete(delivery.id);
+        if (delay > MAX_RETRY_TIMER_MS) {
+          void this.store.getDelivery(delivery.id).then((current) => {
+            if (current) this.scheduleRetry(current);
+          });
+          return;
+        }
+        void this.dispatch(delivery.id);
+      },
+      Math.min(delay, MAX_RETRY_TIMER_MS),
+    );
+    timer.unref?.();
+    this.retryTimers.set(delivery.id, timer);
+  }
+
+  private clearRetryTimers(): void {
+    for (const timer of this.retryTimers.values()) clearTimeout(timer);
+    this.retryTimers.clear();
   }
 
   private async reconcile(): Promise<void> {
@@ -650,6 +696,7 @@ export class NotificationManager<
       processing: snapshots.filter((item) =>
         ['preparing', 'submitting'].includes(item.status),
       ).length,
+      retrying: snapshots.filter((item) => item.status === 'retrying').length,
       accepted: snapshots.filter((item) => item.status === 'accepted').length,
       failed: snapshots.filter((item) => item.status === 'failed').length,
       unknown: snapshots.filter((item) => item.status === 'unknown').length,
@@ -665,13 +712,7 @@ export class NotificationManager<
       idempotencyKey: log.idempotencyKey,
       status,
       terminal: ['completed', 'partial', 'failed', 'unknown'].includes(status),
-      requiresAction:
-        summary.unknown > 0 ||
-        snapshots.some(
-          (item) =>
-            item.status === 'failed' &&
-            item.retry.mode !== 'automatic_retry_scheduled',
-        ),
+      requiresAction: summary.failed > 0 || summary.unknown > 0,
       updatedAt,
       summary,
       deliveries: snapshots,
@@ -692,113 +733,8 @@ export class NotificationManager<
       status: delivery.status,
       nextRunAt: delivery.nextRunAt,
       error: delivery.lastError,
-      retry: await this.retryDecision(delivery),
       createdAt: delivery.createdAt,
       updatedAt: delivery.updatedAt,
-    };
-  }
-
-  private async retryDecision(
-    delivery: NotificationDeliveryRecord,
-  ): Promise<NotificationDeliveryRetryDecision> {
-    const config = this.options.config.channels[delivery.channelName];
-    if (
-      !config ||
-      config.enabled === false ||
-      config.provider !== delivery.providerType
-    ) {
-      return {
-        allowed: false,
-        mode: 'not_allowed',
-        reason:
-          'The original Channel instance is unavailable or its type has changed.',
-      };
-    }
-    if (delivery.status === 'failed' && delivery.nextRunAt) {
-      return {
-        allowed: false,
-        mode: 'automatic_retry_scheduled',
-        nextRunAt: delivery.nextRunAt,
-        reason: 'The Provider already scheduled an automatic retry.',
-      };
-    }
-    if (delivery.status === 'failed') {
-      if (delivery.lastError?.code === 'RECIPIENT_UNSUPPORTED') {
-        return {
-          allowed: false,
-          mode: 'not_allowed',
-          reason:
-            'An unsupported recipient must be corrected with a new logical send.',
-        };
-      }
-      return {
-        allowed: true,
-        mode: 'safe',
-        reason: 'The previous attempt is known to have failed.',
-      };
-    }
-    if (delivery.status === 'unknown') {
-      const idempotency = delivery.providerIdempotency;
-      const capabilities = this.channelManager.providerCapabilities(
-        delivery.channelName,
-        { type: delivery.providerType },
-      ).idempotency;
-      if (
-        idempotency &&
-        capabilities.supported &&
-        (idempotency.expiresAt === undefined ||
-          idempotency.expiresAt > (await this.store.now()))
-      ) {
-        return {
-          allowed: true,
-          mode: 'safe',
-          reason: 'The Provider can retry with the original deliveryId.',
-        };
-      }
-      return {
-        allowed: true,
-        mode: 'duplicate_risk_confirmation_required',
-        reason:
-          'The Provider cannot guarantee an idempotent retry for this unknown submission.',
-      };
-    }
-    return {
-      allowed: false,
-      mode: 'not_allowed',
-      reason: `A Delivery in status "${delivery.status}" cannot be retried.`,
-    };
-  }
-
-  private retryResolution(
-    delivery: NotificationDeliveryRecord,
-    decision: NotificationDeliveryRetryDecision,
-    reason: string,
-    requestedAt: string,
-  ): NotificationRetryResolutionRecord {
-    if (delivery.status === 'failed') {
-      if (!decision.allowed) {
-        throw new NotificationDeliveryRetryError(
-          delivery.id,
-          decision.reason ?? 'Notification Delivery is not retryable.',
-        );
-      }
-      return {
-        type: 'terminal_failure',
-        reason,
-        requestedAt,
-      };
-    }
-    if (decision.allowed && decision.mode === 'safe') {
-      return {
-        type: 'safe_provider_idempotency',
-        reason,
-        requestedAt,
-      };
-    }
-    return {
-      type: 'duplicate_risk_accepted',
-      reason,
-      requestedAt,
     };
   }
 

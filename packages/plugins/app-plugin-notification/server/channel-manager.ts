@@ -10,7 +10,6 @@ import type {
 import type {
   NotificationChannel,
   NotificationProvider,
-  NotificationProviderCapabilities,
   NotificationProviderErrorCategory,
   NotificationProviderIdentity,
   NotificationProviderSendError,
@@ -30,15 +29,15 @@ export interface ChannelManagerOptions {
   readonly leaseMs?: number;
   readonly providerTimeoutMs?: number;
   readonly retry?: {
-    readonly maxAttemptsPerProvider?: number;
-    readonly initialDelayMs?: number;
-    readonly maxDelayMs?: number;
-    readonly jitterRatio?: number;
+    readonly maxAttempts?: number;
+    readonly intervalMs?: number;
   };
 }
 
 const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_PROVIDER_TIMEOUT_MS = 20_000;
+const DEFAULT_MAX_ATTEMPTS = 1;
+const DEFAULT_RETRY_INTERVAL_MS = 5_000;
 
 export class ChannelManager {
   private readonly runtimes = new Map<string, ChannelRuntime>();
@@ -75,16 +74,6 @@ export class ChannelManager {
   providerIdentities(name: string): readonly NotificationProviderIdentity[] {
     const provider = this.runtimes.get(name)?.provider;
     return provider ? [{ type: provider.type }] : [];
-  }
-
-  providerCapabilities(
-    channel: string,
-    provider: NotificationProviderIdentity,
-  ): NotificationProviderCapabilities {
-    const runtime = this.runtimes.get(channel);
-    return runtime?.provider.type === provider.type
-      ? (runtime.provider.capabilities ?? { idempotency: { supported: false } })
-      : { idempotency: { supported: false } };
   }
 
   async send(
@@ -215,11 +204,7 @@ export class ChannelManager {
       });
 
     const startedAt = await this.options.store.now();
-    const retryResolution = retryResolutionForAttempt(
-      provider,
-      claimed,
-      startedAt,
-    );
+    const retryResolution = claimed.retryResolution;
     const delivery = {
       ...claimed,
       retryResolution,
@@ -229,7 +214,7 @@ export class ChannelManager {
         startedAt,
       ),
     };
-    let attempt: NotificationAttemptRecord = {
+    const attempt: NotificationAttemptRecord = {
       id: randomUUID(),
       deliveryId: claimed.id,
       sequence: claimed.attemptCount + 1,
@@ -244,23 +229,9 @@ export class ChannelManager {
       await this.leaseExpiry(),
     );
     if (!started) return undefined;
-    let current = started;
+    const current = started;
 
     const submittedAt = await this.options.store.now();
-    const submittedResolution = retryResolutionForAttempt(
-      provider,
-      current,
-      submittedAt,
-    );
-    if (submittedResolution?.type !== current.retryResolution?.type) {
-      attempt = { ...attempt, retryResolution: submittedResolution };
-      const updated = await this.options.store.updateAttemptRetryResolution(
-        { ...current, retryResolution: submittedResolution },
-        attempt,
-      );
-      if (!updated) return undefined;
-      current = updated;
-    }
     this.changed(current);
 
     const result = await this.invoke(
@@ -319,18 +290,14 @@ export class ChannelManager {
       error: result.error,
     };
     if (result.disposition === 'same_provider') {
-      const providerAttempts = (
-        await this.options.store.listAttempts(current.id)
-      ).filter((item) => item.providerType === provider.type).length;
-      if (providerAttempts < this.maxAttemptsPerProvider) {
+      if (current.attemptCount < this.maxAttempts) {
         const retryAt = new Date(
-          Date.parse(finishedAt) +
-            this.retryDelay(providerAttempts, result.retryAfterMs),
+          Date.parse(finishedAt) + this.retryDelay(result.retryAfterMs),
         ).toISOString();
         return this.finishAttemptAndDelivery(
           failedAttempt,
           current,
-          'failed',
+          'retrying',
           result.error,
           retryAt,
         );
@@ -395,7 +362,7 @@ export class ChannelManager {
   private async finishAttemptAndDelivery(
     attempt: NotificationAttemptRecord,
     delivery: NotificationDeliveryRecord,
-    status: 'accepted' | 'failed' | 'unknown',
+    status: 'accepted' | 'failed' | 'retrying' | 'unknown',
     error?: NotificationProviderSendError,
     nextRunAt?: string,
   ): Promise<NotificationDeliveryRecord | undefined> {
@@ -450,13 +417,9 @@ export class ChannelManager {
     return (): void => clearInterval(interval);
   }
 
-  private retryDelay(attempt: number, retryAfterMs?: number): number {
+  private retryDelay(retryAfterMs?: number): number {
     if (retryAfterMs !== undefined) return Math.max(0, retryAfterMs);
-    const initial = this.options.retry?.initialDelayMs ?? 1_000;
-    const maximum = this.options.retry?.maxDelayMs ?? 60_000;
-    const base = Math.min(maximum, initial * 2 ** Math.max(0, attempt - 1));
-    const ratio = this.options.retry?.jitterRatio ?? 0.2;
-    return Math.round(base * (1 + (Math.random() * 2 - 1) * ratio));
+    return this.options.retry?.intervalMs ?? DEFAULT_RETRY_INTERVAL_MS;
   }
 
   private async leaseExpiry(): Promise<string> {
@@ -483,25 +446,9 @@ export class ChannelManager {
     return this.options.providerTimeoutMs ?? DEFAULT_PROVIDER_TIMEOUT_MS;
   }
 
-  private get maxAttemptsPerProvider(): number {
-    return this.options.retry?.maxAttemptsPerProvider ?? 3;
+  private get maxAttempts(): number {
+    return this.options.retry?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   }
-}
-
-function retryResolutionForAttempt(
-  provider: NotificationProvider,
-  delivery: NotificationDeliveryRecord,
-  startedAt: string,
-): NotificationDeliveryRecord['retryResolution'] {
-  const resolution = delivery.retryResolution;
-  if (
-    resolution?.type !== 'safe_provider_idempotency' ||
-    (providerSupportsIdempotency(provider, delivery.providerIdempotency) &&
-      isProviderIdempotencyActive(delivery.providerIdempotency, startedAt))
-  ) {
-    return resolution;
-  }
-  return { ...resolution, type: 'duplicate_risk_accepted' };
 }
 
 function providerIdempotencyForAttempt(
@@ -525,14 +472,6 @@ function providerIdempotencyForAttempt(
   };
 }
 
-function providerSupportsIdempotency(
-  provider: NotificationProvider,
-  record: NotificationDeliveryRecord['providerIdempotency'],
-): boolean {
-  const idempotency = provider.capabilities?.idempotency;
-  return Boolean(record && idempotency?.supported);
-}
-
 function isProviderIdempotencyActive(
   record: NotificationDeliveryRecord['providerIdempotency'],
   now: string,
@@ -549,7 +488,7 @@ function isRunnable(
 ): boolean {
   return (
     delivery.status === 'pending' ||
-    (delivery.status === 'failed' &&
+    (delivery.status === 'retrying' &&
       delivery.nextRunAt !== undefined &&
       delivery.nextRunAt <= now)
   );

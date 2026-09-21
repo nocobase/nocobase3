@@ -41,8 +41,12 @@ describe('ChannelManager', () => {
       logger: createLogger({ level: 'silent' }),
     });
     manager.register('email', {
-      channel: { type: 'im', prepare: async ({ message }) => message },
-      providers: [{ name: 'primary', type: 'fake', send }],
+      channel: {
+        type: 'im',
+        validateMessage: (message: object) => ({ message, recipients: [{}] }),
+        prepare: async ({ message }) => message,
+      },
+      provider: { type: 'fake', send },
     });
     expect(await manager.send(delivery.id)).toMatchObject({
       status: 'failed',
@@ -116,7 +120,7 @@ describe('ChannelManager', () => {
     const manager = new ChannelManager({
       logger: createLogger({ level: 'silent' }),
       store,
-      retry: { initialDelayMs: 0, jitterRatio: 0 },
+      retry: { maxAttempts: 2, intervalMs: 0 },
     });
     manager.register('email', {
       channel: {
@@ -135,7 +139,6 @@ describe('ChannelManager', () => {
                 status: 'failed',
                 error: { message: 'temporarily unavailable' },
                 disposition: 'same_provider',
-                retryAfterMs: 0,
               }
             : { status: 'accepted' };
         },
@@ -143,11 +146,44 @@ describe('ChannelManager', () => {
     });
 
     const scheduled = await manager.send(delivery.id);
-    expect(scheduled).toMatchObject({ status: 'failed' });
+    expect(scheduled).toMatchObject({ status: 'retrying' });
     expect(scheduled?.nextRunAt).toBeDefined();
 
     const accepted = await manager.send(delivery.id);
     expect(accepted?.status).toBe('accepted');
+  });
+
+  it('does not retry by default', async () => {
+    const store = new FakeNotificationStore();
+    const delivery = await seed(store);
+    const send = vi.fn(async (): Promise<ProviderSendResult> => ({
+      status: 'failed',
+      error: { message: 'temporarily unavailable' },
+      disposition: 'same_provider',
+    }));
+    const manager = new ChannelManager({
+      logger: createLogger({ level: 'silent' }),
+      store,
+    });
+    manager.register('email', {
+      channel: {
+        type: 'email',
+        validateMessage: (message: object) => ({ message, recipients: [{}] }),
+        async prepare(input): Promise<object> {
+          return input.message;
+        },
+      },
+      provider: { type: 'fake', send },
+    });
+
+    await expect(manager.send(delivery.id)).resolves.toMatchObject({
+      status: 'failed',
+      nextRunAt: undefined,
+    });
+    await expect(manager.send(delivery.id)).resolves.toMatchObject({
+      status: 'failed',
+    });
+    expect(send).toHaveBeenCalledOnce();
   });
 
   it('marks a timed-out Provider submission as unknown', async () => {

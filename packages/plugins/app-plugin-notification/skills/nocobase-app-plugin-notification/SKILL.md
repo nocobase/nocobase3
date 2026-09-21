@@ -5,7 +5,7 @@ argument-hint: '[action: explain|integrate|configure|send|inspect|diagnose] [cha
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: notification
 version: 1.0.1
-last-reviewed: 2026-08-31
+last-reviewed: 2026-09-21
 risk-level: medium
 metadata:
   domain-owner: '@nocobase/app-plugin-notification'
@@ -27,6 +27,6 @@ The test API requires authentication and its test header; submission additionall
 
 ## High-impact actions and rollback
 
-For bulk sends, live configuration changes, and unknown-submission retries, establish the intended recipients, Channels, and external effect from the user's authorization. An unknown result may already have reached its recipient; record the evidence and duplication decision in the required retry reason. Never create a new send merely to bypass that uncertainty.
+For bulk sends and live configuration changes, establish the intended recipients, Channels, and external effect from the user's authorization. An unknown result may already have reached its recipient; confirm the external effect before creating a new logical send.
 
 Rollback source/configuration through the application's normal deployment process. A submitted notification cannot be recalled by this plugin. Preserve its history and report the observed status. Keep message bodies, recipient snapshots, credentials, and Webhook URLs out of logs and reports.

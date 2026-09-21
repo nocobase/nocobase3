@@ -13,6 +13,7 @@ export type NotificationStatus =
   | 'partial'
   | 'preparing'
   | 'submitting'
+  | 'retrying'
   | 'accepted'
   | 'failed'
   | 'unknown';
@@ -32,10 +33,7 @@ export interface NotificationRetryAudit {
   readonly id: string;
   readonly deliveryId: string;
   readonly resolution: {
-    readonly type:
-      | 'safe_provider_idempotency'
-      | 'duplicate_risk_accepted'
-      | 'terminal_failure';
+    readonly type: 'terminal_failure';
     readonly reason: string;
     readonly requestedAt: string;
   };
