@@ -79,6 +79,7 @@ describe.skipIf(!dialect)(
         batch: 1,
         executed: [baseMigration.name],
         skipped: [],
+        warnings: [],
       });
       await connection.query
         .insertInto<DispatchRow>('notificationDispatches')
@@ -92,6 +93,7 @@ describe.skipIf(!dialect)(
         batch: 2,
         executed: [idempotencyMigration.name, instantMigration.name],
         skipped: [baseMigration.name],
+        warnings: [],
       });
       await expect(
         connection.schemaInspector.getPhysicalCollection({
@@ -149,6 +151,7 @@ describe.skipIf(!dialect)(
       await expect(migrator.rollback()).resolves.toEqual({
         batch: 2,
         rolledBack: [instantMigration.name, idempotencyMigration.name],
+        warnings: [],
       });
       const client = await connection.client<SchemaClient>();
       await expect(
@@ -178,6 +181,7 @@ describe.skipIf(!dialect)(
       await expect(migrator.rollback()).resolves.toEqual({
         batch: 1,
         rolledBack: [baseMigration.name],
+        warnings: [],
       });
     });
   },
