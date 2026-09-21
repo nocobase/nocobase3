@@ -2951,8 +2951,15 @@ function encodeQueryBoolean(
  * Every other dialect took it too and silently dropped the offset. Normalizing here converts it instead, and
  * `temporalBinding` keeps receiving the canonical string each dialect's formatting is written against.
  *
- * Only the value shapes a caller writes are normalized. Anything else — a `Knex.Raw`, a column reference, a
- * subquery — is a SQL expression the builder composes, not a value to validate, and is passed through.
+ * A `Knex.Raw`, a column reference or a subquery is SQL the builder composes rather than a value, and returning
+ * it untouched is the only correct thing to do with it. Passing one to `temporalBinding` is not: every dialect's
+ * strategy starts with `String(value)`, which renders the object as SQL text and then binds that text as a
+ * parameter, so `now()` arrives as the literal `'now()'`. MySQL and OceanBase go further and apply
+ * `.replace('T', ' ')` to it, which rewrites the first `T` in the SQL itself — `CURRENT_TIMESTAMP(3)` becomes
+ * `CURREN _TIMESTAMP(3)`.
+ *
+ * Primitives other than a string keep reaching `temporalBinding` unvalidated, which is what they did before.
+ * A number is the shape legacy rows hold, and rejecting it here is a separate decision from this one.
  */
 function encodeQueryTemporal(
   client: Knex,
@@ -2960,6 +2967,7 @@ function encodeQueryTemporal(
   value: unknown,
 ): unknown {
   if (value === null) return null;
+  if (typeof value === 'object' && !(value instanceof Date)) return value;
   const temporalBinding =
     getDatabaseDriverRuntime(client)?.repository?.temporalBinding;
   if (!(value instanceof Date) && typeof value !== 'string') {
