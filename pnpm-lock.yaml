@@ -3188,6 +3188,9 @@ importers:
         specifier: ^2.8.1
         version: 2.9.0
     devDependencies:
+      '@nocobase/app-cli':
+        specifier: workspace:^
+        version: link:../../app/app-cli
       '@nocobase/db-sqlite':
         specifier: workspace:*
         version: link:../../libs/db-sqlite
