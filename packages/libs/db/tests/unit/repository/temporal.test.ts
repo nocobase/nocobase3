@@ -116,11 +116,28 @@ describe('datetime values carrying a zone offset', () => {
     );
   });
 
-  it('reads a stored offset back the same way it would have been written', () => {
-    // What `database.query()` left in a SQLite TEXT column before it normalized strings.
+  // Reading is not writing. A caller's offset is resolved against the host, because the caller is present and
+  // an equivalent `Date` lands there too. Stored bytes are resolved against UTC: nobody is present, the same
+  // database has to report the same value on every host, and MySQL's `datetime(3)` already pivots on UTC.
+  it.each([
+    ['2026-09-06T09:30:00.120Z', '2026-09-06T09:30:00.120'],
+    ['2026-09-06T17:30:00.120+08:00', '2026-09-06T09:30:00.120'],
+    ['2026-09-06T04:00:00.120-05:30', '2026-09-06T09:30:00.120'],
+  ])(
+    'reads the stored offset %s as the UTC wall clock %s',
+    (stored, expected) => {
+      expect(normalizeTemporalResultValue(field, stored)).toBe(expected);
+    },
+  );
+
+  it('reads a stored datetimeTz that carries no offset as UTC', () => {
+    // What a `datetime` column holds after the Field is widened, and what MySQL's `datetime(3)` always holds.
     expect(
-      normalizeTemporalResultValue(field, '2026-09-06T09:30:00.120Z'),
-    ).toBe(normalizeTemporalValue(field, '2026-09-06T09:30:00.120Z'));
+      normalizeTemporalResultValue(
+        { name: 'value', type: 'datetimeTz' },
+        '2026-09-06T09:30:00.120',
+      ),
+    ).toBe('2026-09-06T09:30:00.120Z');
   });
 });
 

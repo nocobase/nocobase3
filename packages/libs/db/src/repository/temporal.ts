@@ -137,6 +137,39 @@ function legacyEpochMilliseconds(input: unknown): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
+/**
+ * Resolve stored timestamp text whose offset does not match the Field's logical type.
+ *
+ * Both shapes exist, and neither is something a caller can write today. A `datetimeTz` value carrying no offset
+ * is what a `datetime` column holds after a Field is widened, and on MySQL it is what the column always holds,
+ * since `datetime(3)` records no zone and the projection appends the `Z`. An offset inside a `datetime` value is
+ * the mirror image: the row was narrowed from `datetimeTz`, or the query builder wrote it before it validated
+ * strings and only SQLite could keep it.
+ *
+ * UTC is the pivot in both directions, for the same reason MySQL already uses it: it is the only reading that
+ * does not depend on the host the row is read on, so the same database file reports the same value everywhere
+ * and a Field converted one way and back returns what it started with. The host's zone belongs to the write
+ * path, where a caller is present and `Date` semantics apply; it has no business deciding what stored bytes
+ * already mean.
+ */
+function resolveStoredTimestamp(
+  field: FieldDefinition,
+  local: string,
+  offset: string | undefined,
+): string | null {
+  const code: RepositoryErrorCode = 'FIELD_CAPABILITY_NOT_SUPPORTED';
+  if (field.type === 'datetimeTz')
+    return normalizeTemporalValue(field, `${local}${offset ?? 'Z'}`, code);
+  if (offset === undefined) return normalizeTemporalValue(field, local, code);
+  // Validate and range-check as the instant it names, then keep that instant's UTC wall clock.
+  const resolved = normalizeTemporalValue(
+    { ...field, type: 'datetimeTz' },
+    `${local}${offset}`,
+    code,
+  );
+  return resolved === null ? null : resolved.slice(0, 23);
+}
+
 /** Normalize driver-native temporal results to the portable string contract. */
 export function normalizeTemporalResultValue(
   field: FieldDefinition,
@@ -182,22 +215,17 @@ export function normalizeTemporalResultValue(
   }
   const normalized = input.replace(' ', 'T');
   // Catalogs report more fractional digits than V1 stores, so the stored text is truncated to milliseconds
-  // before validation rather than being reported as invalid. A `datetime` may carry an offset here: rows the
-  // query builder wrote before it validated strings still hold one, and `normalizeTemporalValue` converts it.
+  // before validation rather than being reported as invalid.
   const stamp = normalized.match(
     new RegExp(
       `^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d{1,6}))?${offsetPattern}?$`,
     ),
   );
-  if (
-    stamp &&
-    (field.type === 'datetime' ||
-      (field.type === 'datetimeTz' && stamp[3] !== undefined))
-  )
-    return normalizeTemporalValue(
+  if (stamp && (field.type === 'datetime' || field.type === 'datetimeTz'))
+    return resolveStoredTimestamp(
       field,
-      `${stamp[1]}.${(stamp[2] ?? '').slice(0, 3).padEnd(3, '0')}${stamp[3] ?? ''}`,
-      'FIELD_CAPABILITY_NOT_SUPPORTED',
+      `${stamp[1]}.${(stamp[2] ?? '').slice(0, 3).padEnd(3, '0')}`,
+      stamp[3],
     );
   return normalizeTemporalValue(
     field,
