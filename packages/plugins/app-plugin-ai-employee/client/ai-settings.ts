@@ -5,6 +5,7 @@ import type {
 import {
   Bot,
   BrainCircuit,
+  ChartColumnIncreasing,
   ContactRound,
   Plug,
   Sparkles,
@@ -105,6 +106,17 @@ export function createAISettings(): AppClientSettingsRouteGroupDefinition {
           action: 'access',
         },
         componentLoader: () => import('./pages/mcp-service-settings-page.js'),
+      },
+      {
+        name: 'aiUsage',
+        path: '/ai/usage',
+        navigation: { title: 'Usage statistics', icon: ChartColumnIncreasing },
+        authz: {
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        },
+        componentLoader: () =>
+          import('./pages/usage-statistics-settings-page.js'),
       },
       {
         name: 'aiSettings',
