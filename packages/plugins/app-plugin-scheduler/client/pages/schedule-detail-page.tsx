@@ -215,49 +215,43 @@ export default function ScheduleDetailPage(): ReactElement {
     loadedOccurrencesId === scheduleId ? occurrencesError : undefined;
 
   return (
-    <PageContainer
-      header={
-        <PageHeader
-          eyebrow={t('nav.automation')}
-          title={item?.title ?? t('page.title')}
-          description={item?.description}
-          back={
-            <Link
-              className='inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground'
-              to='/settings/schedules'
-            >
-              <ArrowLeft className='size-4' />
-              {t('page.details.back')}
-            </Link>
-          }
-          actions={
-            item && !scheduleLoading ? (
-              <ScheduleSwitch
-                checked={item.enabled}
-                disabled={updating || item.lifecycleState === 'inactive'}
-                label={
-                  item.enabled
-                    ? t('page.actions.disable')
-                    : t('page.actions.enable')
-                }
-                onChange={(enabled) => {
-                  setItem({ ...item, enabled });
-                  setUpdating(true);
-                  void api
-                    .request<{ data: ScheduleItem }>({
-                      method: 'POST',
-                      path: `schedules/${encodeURIComponent(item.id)}/${enabled ? 'enable' : 'disable'}`,
-                    })
-                    .then((response) => setItem(response.data))
-                    .catch(() => setItem(item))
-                    .finally(() => setUpdating(false));
-                }}
-              />
-            ) : null
-          }
-        />
-      }
-    >
+    <PageContainer>
+      <Link
+        className='inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground'
+        to='/settings/schedules'
+      >
+        <ArrowLeft className='size-4' />
+        {t('page.details.back')}
+      </Link>
+      <PageHeader
+        title={item?.title ?? t('page.title')}
+        description={item?.description}
+        actions={
+          item && !scheduleLoading ? (
+            <ScheduleSwitch
+              checked={item.enabled}
+              disabled={updating || item.lifecycleState === 'inactive'}
+              label={
+                item.enabled
+                  ? t('page.actions.disable')
+                  : t('page.actions.enable')
+              }
+              onChange={(enabled) => {
+                setItem({ ...item, enabled });
+                setUpdating(true);
+                void api
+                  .request<{ data: ScheduleItem }>({
+                    method: 'POST',
+                    path: `schedules/${encodeURIComponent(item.id)}/${enabled ? 'enable' : 'disable'}`,
+                  })
+                  .then((response) => setItem(response.data))
+                  .catch(() => setItem(item))
+                  .finally(() => setUpdating(false));
+              }}
+            />
+          ) : null
+        }
+      />
       {currentError ? (
         <div className='flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive'>
           <CircleAlert className='size-5 shrink-0' />

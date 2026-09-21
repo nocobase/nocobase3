@@ -1,4 +1,5 @@
 import { Toaster, toast } from 'sonner';
+import userEvent from '@testing-library/user-event';
 import {
   fireEvent,
   render,
@@ -212,28 +213,29 @@ describe('App API Keys management', () => {
     });
   });
   it('requires confirmation before disabling or deleting and handles failure', async () => {
+    const user = userEvent.setup();
     mocks.request.mockResolvedValue({ data: [key] });
     render(<ApiKeys apps={apps} capabilities={capabilities} />);
     await screen.findByText('CI');
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for CI' }));
-    fireEvent.click(
+    await user.click(screen.getByRole('button', { name: 'Actions for CI' }));
+    await user.click(
       await screen.findByRole('menuitem', { name: 'Disable', exact: true }),
     );
     expect(mocks.request).toHaveBeenCalledTimes(1);
-    fireEvent.click(
+    await user.click(
       within(screen.getByRole('dialog')).getByRole('button', {
         name: 'Cancel',
       }),
     );
     expect(mocks.request).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for CI' }));
-    fireEvent.click(
+    await user.click(screen.getByRole('button', { name: 'Actions for CI' }));
+    await user.click(
       await screen.findByRole('menuitem', { name: 'Disable', exact: true }),
     );
     mocks.request
       .mockResolvedValueOnce({ data: { success: true } })
       .mockResolvedValue({ data: [{ ...key, status: 'disabled' }] });
-    fireEvent.click(
+    await user.click(
       within(screen.getByRole('dialog')).getByRole('button', {
         name: 'Disable',
         exact: true,
@@ -244,12 +246,12 @@ describe('App API Keys management', () => {
       path: 'hub/api-keys/key-id/disable',
       method: 'POST',
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for CI' }));
-    fireEvent.click(
+    await user.click(screen.getByRole('button', { name: 'Actions for CI' }));
+    await user.click(
       await screen.findByRole('menuitem', { name: 'Delete', exact: true }),
     );
     mocks.request.mockRejectedValueOnce(new Error('failed'));
-    fireEvent.click(
+    await user.click(
       within(screen.getByRole('dialog')).getByRole('button', {
         name: 'Delete',
         exact: true,

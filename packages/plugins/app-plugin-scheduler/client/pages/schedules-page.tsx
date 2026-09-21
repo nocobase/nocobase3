@@ -247,11 +247,8 @@ export default function SchedulesPage(): ReactElement {
     'h-8 rounded-lg border border-input bg-background px-3 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
-    <PageContainer
-      header={
-        <PageHeader eyebrow={t('nav.automation')} title={t('page.title')} />
-      }
-    >
+    <PageContainer>
+      <PageHeader title={t('page.title')} />
       {listError ? (
         <div className='flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive'>
           <CircleAlert className='size-5 shrink-0' />
