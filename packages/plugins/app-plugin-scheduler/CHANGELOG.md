@@ -1,5 +1,17 @@
 # @nocobase/app-plugin-scheduler
 
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- 4ffcbc2: Align workflow and schedule management pages with the standard page container, heading typography, and spacing used by other settings pages.
+- Updated dependencies [43592e9]
+- Updated dependencies [43592e9]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.19
+  - @nocobase/app-plugin-authorization@0.2.0-beta.16
+  - @nocobase/db@1.0.0-beta.12
+  - @nocobase/app-server@1.0.0-beta.22
+
 ## 0.1.0-beta.4
 
 ### Patch Changes
