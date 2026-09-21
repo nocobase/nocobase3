@@ -116,7 +116,7 @@ export async function writeTaskChecksums(
         .update({ checksum: update.sourceChecksum });
       if (updated !== 1)
         throw new Error(
-          `Database task history changed during checksum upgrade: ${update.name}.`,
+          `Database task history changed while rewriting the checksum for "${update.name}". Nothing was written; retry once the concurrent run has finished.`,
         );
     }
   });
