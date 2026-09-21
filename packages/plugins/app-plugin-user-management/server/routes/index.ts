@@ -1,7 +1,9 @@
 import {
   authenticationToken,
+  AuthenticationCredentialError,
   UserAdministrationError,
 } from '@nocobase/app-plugin-authentication';
+import { UserError } from '@nocobase/app-plugin-users/server';
 import {
   authorizationToken,
   type AuthorizationEnv,
@@ -59,7 +61,13 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           error.status,
         );
       }
-      if (error instanceof UserAdministrationError) {
+      // Identity errors come from users, credential errors from authentication;
+      // both keep the HTTP mapping the administration service used to own.
+      if (
+        error instanceof UserAdministrationError ||
+        error instanceof UserError ||
+        error instanceof AuthenticationCredentialError
+      ) {
         const status =
           error.code === 'USER_NOT_FOUND'
             ? 404

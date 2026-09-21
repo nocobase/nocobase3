@@ -1,5 +1,6 @@
 import createAuthenticationTables from '../../app-plugin-authentication/database/migrations/202608200001_create_authentication_tables.js';
-import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
+import type { AuthenticationCredentialService } from '@nocobase/app-plugin-authentication/server';
+import type { User, UserService } from '@nocobase/app-plugin-users/server';
 import {
   authorizationToken,
   type Authorization,
@@ -14,6 +15,7 @@ import { UsersProvider } from '../server/providers/users.js';
 import { createUserManagementService } from '../server/services/users.js';
 import { createUserRoleScopeRegistry } from '../server/services/users.js';
 import type { UserRoleScope } from '../server/tokens.js';
+import type { UserQueryService } from '../server/user-queries.js';
 
 describe('@nocobase/app-plugin-users service', () => {
   const databases: ReturnType<typeof createDatabaseManager>[] = [];
@@ -43,10 +45,9 @@ describe('@nocobase/app-plugin-users service', () => {
         replace: vi.fn(() => Promise.reject(new Error('role failed'))),
       }),
     );
-    const users = administrationService(database.connection());
     const service = createUserManagementService({
       database,
-      users,
+      ...fakeServices(database.connection()),
       roleScopes: registry,
     });
 
@@ -95,7 +96,7 @@ describe('@nocobase/app-plugin-users service', () => {
     );
     const service = createUserManagementService({
       database,
-      users: administrationService(database.connection()),
+      ...fakeServices(database.connection()),
       roleScopes: registry,
       onRoleScopesChanged: async () => {
         const committed = await database
@@ -155,11 +156,11 @@ describe('@nocobase/app-plugin-users service', () => {
       .values({ id: 'user-1', password: 'old-hash', sessionActive: true })
       .execute();
 
-    const createUsers = (
+    const createCredentials = (
       connection: DatabaseConnection,
-    ): UserAdministrationService => ({
-      ...administrationService(connection),
-      withConnection: createUsers,
+    ): AuthenticationCredentialService => ({
+      ...fakeCredentials(connection),
+      withConnection: createCredentials,
       async resetPassword() {
         await connection.query
           .updateTable('testPasswordState')
@@ -171,7 +172,8 @@ describe('@nocobase/app-plugin-users service', () => {
     });
     const service = createUserManagementService({
       database,
-      users: createUsers(database.connection()),
+      ...fakeServices(database.connection()),
+      credentials: createCredentials(database.connection()),
       roleScopes: createUserRoleScopeRegistry(),
     });
 
@@ -226,7 +228,7 @@ describe('@nocobase/app-plugin-users service', () => {
     );
     const service = createUserManagementService({
       database,
-      users: administrationService(database.connection()),
+      ...fakeServices(database.connection()),
       roleScopes: registry,
     });
 
@@ -263,17 +265,15 @@ describe('@nocobase/app-plugin-users service', () => {
     );
     const registry = createUserRoleScopeRegistry();
     registry.register(roleScope({ selection: 'multiple', get, getMany }));
-    const baseUsers = administrationService(database.connection());
+    const fakes = fakeServices(database.connection());
     const service = createUserManagementService({
       database,
-      users: {
-        ...baseUsers,
+      ...fakes,
+      userQueries: {
+        ...fakes.userQueries,
         list: () =>
           Promise.resolve({
-            items: [
-              administratedUser('user-1', now),
-              administratedUser('user-2', now),
-            ],
+            items: [managedUser('user-1', now), managedUser('user-2', now)],
             total: 2,
             page: 1,
             pageSize: 20,
@@ -306,7 +306,7 @@ describe('@nocobase/app-plugin-users service', () => {
     registry.register(roleScope({ selection: 'multiple' }));
     const service = createUserManagementService({
       database,
-      users: administrationService(database.connection()),
+      ...fakeServices(database.connection()),
       roleScopes: registry,
     });
 
@@ -393,46 +393,73 @@ function roleScope(overrides: Partial<UserRoleScope> = {}): UserRoleScope {
   };
 }
 
-function administrationService(
-  initialConnection: DatabaseConnection,
-): UserAdministrationService {
-  const create = (
-    connection: DatabaseConnection,
-  ): UserAdministrationService => ({
-    withConnection: (next) => create(next),
+/** Test doubles for the three services the management layer composes. */
+function fakeServices(connection: DatabaseConnection): {
+  users: UserService;
+  userQueries: UserQueryService;
+  credentials: AuthenticationCredentialService;
+} {
+  return {
+    users: fakeUsers(connection),
+    userQueries: fakeQueries(),
+    credentials: fakeCredentials(connection),
+  };
+}
+
+function fakeUsers(initialConnection: DatabaseConnection): UserService {
+  const create = (connection: DatabaseConnection): UserService =>
+    ({
+      withConnection: (next: DatabaseConnection) => create(next),
+      get: () => Promise.resolve(undefined),
+      require: () => Promise.reject(new Error('not used')),
+      async create(input: { name: string; email: string }) {
+        await connection.query
+          .insertInto('testManagedUsers')
+          .values({ id: 'created-user' })
+          .execute();
+        return managedUser('created-user', new Date(), input);
+      },
+      updateProfile: vi.fn(),
+      disable: vi.fn(),
+      enable: vi.fn(),
+      remove: vi.fn(() => Promise.resolve()),
+    }) as unknown as UserService;
+  return create(initialConnection);
+}
+
+function fakeQueries(): UserQueryService {
+  const service: UserQueryService = {
+    withConnection: () => service,
     list: () => Promise.resolve({ items: [], total: 0, page: 1, pageSize: 20 }),
     get: () => Promise.resolve(undefined),
-    async create(input) {
-      await connection.query
-        .insertInto('testManagedUsers')
-        .values({ id: 'created-user' })
-        .execute();
-      const now = new Date();
-      return {
-        id: 'created-user',
-        name: input.name,
-        email: input.email,
-        emailVerified: false,
-        disabledAt: null,
-        createdAt: now,
-        updatedAt: now,
-      };
-    },
-    update: vi.fn(),
-    disable: vi.fn(),
-    enable: vi.fn(),
-    resetPassword: vi.fn(),
-    remove: vi.fn(() => Promise.resolve()),
-    revokeSessions: vi.fn(),
+  };
+  return service;
+}
+
+function fakeCredentials(
+  initialConnection: DatabaseConnection,
+): AuthenticationCredentialService {
+  const create = (
+    _connection: DatabaseConnection,
+  ): AuthenticationCredentialService => ({
+    withConnection: (next) => create(next),
+    createPasswordCredential: () => Promise.resolve(),
+    resetPassword: () => Promise.reject(new Error('not used')),
+    revokeSessions: () => Promise.reject(new Error('not used')),
+    deleteCredentials: () => Promise.reject(new Error('not used')),
   });
   return create(initialConnection);
 }
 
-function administratedUser(id: string, now: Date) {
+function managedUser(
+  id: string,
+  now: Date,
+  input: { name?: string; email?: string } = {},
+): User {
   return {
     id,
-    name: id,
-    email: `${id}@example.com`,
+    name: input.name ?? id,
+    email: input.email ?? `${id}@example.com`,
     emailVerified: false,
     disabledAt: null,
     createdAt: now,

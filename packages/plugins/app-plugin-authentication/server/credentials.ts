@@ -4,7 +4,8 @@ import type { Auth } from './auth.js';
 
 export class AuthenticationCredentialError extends Error {
   constructor(
-    readonly code: 'USER_NOT_FOUND' | 'PASSWORD_TOO_SHORT' | 'PASSWORD_TOO_LONG',
+    readonly code:
+      'USER_NOT_FOUND' | 'PASSWORD_TOO_SHORT' | 'PASSWORD_TOO_LONG',
     message: string,
   ) {
     super(message);
@@ -13,7 +14,9 @@ export class AuthenticationCredentialError extends Error {
 }
 
 export interface AuthenticationCredentialService {
-  withConnection(connection: DatabaseConnection): AuthenticationCredentialService;
+  withConnection(
+    connection: DatabaseConnection,
+  ): AuthenticationCredentialService;
   createPasswordCredential(userId: string, password: string): Promise<void>;
   resetPassword(userId: string, password: string): Promise<void>;
   revokeSessions(userId: string): Promise<void>;
@@ -32,12 +35,14 @@ export function createAuthenticationCredentialService(
   return new DefaultAuthenticationCredentialService(options);
 }
 
-class DefaultAuthenticationCredentialService
-  implements AuthenticationCredentialService
-{
-  constructor(private readonly options: CreateAuthenticationCredentialServiceOptions) {}
+class DefaultAuthenticationCredentialService implements AuthenticationCredentialService {
+  constructor(
+    private readonly options: CreateAuthenticationCredentialServiceOptions,
+  ) {}
 
-  withConnection(connection: DatabaseConnection): AuthenticationCredentialService {
+  withConnection(
+    connection: DatabaseConnection,
+  ): AuthenticationCredentialService {
     return new DefaultAuthenticationCredentialService({
       ...this.options,
       connection,
@@ -45,7 +50,10 @@ class DefaultAuthenticationCredentialService
     });
   }
 
-  async createPasswordCredential(userId: string, password: string): Promise<void> {
+  async createPasswordCredential(
+    userId: string,
+    password: string,
+  ): Promise<void> {
     const context = await this.context();
     await this.requireUser(userId);
     validatePassword(password, context.password.config);
@@ -82,8 +90,8 @@ class DefaultAuthenticationCredentialService
     const context = await this.context();
     await this.requireUser(userId);
     await context.internalAdapter.deleteUserSessions(userId);
-    this.afterCommit(async () => {
-      await this.options.realtime?.disconnectUser(userId);
+    this.afterCommit(() => {
+      this.options.realtime?.disconnectUser(userId);
     });
   }
 
@@ -94,23 +102,29 @@ class DefaultAuthenticationCredentialService
       .deleteFrom('account')
       .where('userId', '=', userId)
       .execute();
-    this.afterCommit(async () => {
-      await this.options.realtime?.disconnectUser(userId);
+    this.afterCommit(() => {
+      this.options.realtime?.disconnectUser(userId);
     });
   }
 
-  private async context(): Promise<Awaited<ReturnType<Auth['administrationContext']>>> {
+  private async context(): Promise<
+    Awaited<ReturnType<Auth['administrationContext']>>
+  > {
     return this.options.auth.administrationContext();
   }
 
   private async requireUser(userId: string): Promise<void> {
     if (!(await this.options.auth.users.get(userId))) {
-      throw new AuthenticationCredentialError('USER_NOT_FOUND', `Unknown user: ${userId}`);
+      throw new AuthenticationCredentialError(
+        'USER_NOT_FOUND',
+        `Unknown user: ${userId}`,
+      );
     }
   }
 
   private afterCommit(effect: () => void | Promise<void>): void {
-    if (this.options.connection.inTransaction) this.options.connection.afterCommit(effect);
+    if (this.options.connection.inTransaction)
+      this.options.connection.afterCommit(effect);
     else void effect();
   }
 }

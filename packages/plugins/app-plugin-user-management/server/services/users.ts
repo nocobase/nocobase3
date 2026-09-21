@@ -1,5 +1,9 @@
 import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
-import { lockUser, UserError, type User, type UserService } from '@nocobase/app-plugin-users/server';
+import {
+  lockUser,
+  type User,
+  type UserService,
+} from '@nocobase/app-plugin-users/server';
 import type { AuthenticationCredentialService } from '@nocobase/app-plugin-authentication/server';
 import type { PermissionSetsApi } from '@nocobase/authorization/permissions';
 import type { UserQueryService } from '../user-queries.js';

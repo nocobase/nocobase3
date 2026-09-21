@@ -4,9 +4,7 @@ import {
   authorizationToken,
   permissionSetsToken,
 } from '@nocobase/app-plugin-authorization';
-import {
-  authenticationCredentialServiceToken,
-} from '@nocobase/app-plugin-authentication';
+import { authenticationCredentialServiceToken } from '@nocobase/app-plugin-authentication';
 import { userServiceToken } from '@nocobase/app-plugin-users/server';
 import type { DatabaseConnection } from '@nocobase/db';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -36,11 +34,11 @@ const USER_ACTIONS = new Set([
   'revoke-sessions',
 ]);
 
-/** The cap `UserAdministrationService.list` applies to a page. */
+/** The cap `UserQueryService.list` applies to a page. */
 const ACCOUNT_PAGE_SIZE = 100;
 
 export class UsersProvider extends ServiceProvider<AppPluginApplication> {
-  public readonly name: string = '@nocobase/app-plugin-users';
+  public readonly name: string = '@nocobase/app-plugin-user-management';
   private releasePermissionSetScope?: () => void;
   private releaseSubjectType?: () => void;
 
@@ -71,7 +69,9 @@ export class UsersProvider extends ServiceProvider<AppPluginApplication> {
       });
     });
     this.app.container.singleton(userQueryServiceToken, (resolver) =>
-      createUserQueryService(resolver.resolve(databaseManagerToken).connection()),
+      createUserQueryService(
+        resolver.resolve(databaseManagerToken).connection(),
+      ),
     );
   }
 

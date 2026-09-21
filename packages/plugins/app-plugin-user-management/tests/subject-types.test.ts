@@ -1,9 +1,4 @@
-import type {
-  AdministratedUser,
-  ListAdministratedUsersInput,
-  UserAdministrationService,
-} from '@nocobase/app-plugin-authentication';
-import { userAdministrationServiceToken } from '@nocobase/app-plugin-authentication';
+import type { User } from '@nocobase/app-plugin-users/server';
 import {
   authorizationToken,
   createAppAuthorization,
@@ -15,6 +10,11 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AuthorizationScope } from '@nocobase/app-plugin-authorization';
 
 import { UsersProvider } from '../server/providers/users.js';
+import { userQueryServiceToken } from '../server/tokens.js';
+import type {
+  ListManagedUsersQuery,
+  UserQueryService,
+} from '../server/user-queries.js';
 
 /** Permission Sets build their store from it; nothing here queries. */
 const connection = { query: {} } as unknown as DatabaseConnection;
@@ -30,17 +30,17 @@ function provider(container: ServiceContainer): UsersProvider {
   });
 }
 
-function userAdministration(
+function userQueries(
   enabled: ReadonlySet<string>,
-  calls: ListAdministratedUsersInput[],
-): UserAdministrationService {
-  const service: UserAdministrationService = {
+  calls: ListManagedUsersQuery[],
+): UserQueryService {
+  const service: UserQueryService = {
     withConnection: () => service,
     list: (input = {}) => {
       calls.push(input);
       const items = (input.userIds ?? [])
         .filter((id) => enabled.has(id))
-        .map((id) => ({ id }) as AdministratedUser);
+        .map((id) => ({ id }) as User);
       return Promise.resolve({
         items,
         total: items.length,
@@ -49,12 +49,6 @@ function userAdministration(
       });
     },
     get: () => Promise.resolve(undefined),
-    create: () => Promise.reject(new Error('not used')),
-    update: () => Promise.reject(new Error('not used')),
-    disable: () => Promise.reject(new Error('not used')),
-    enable: () => Promise.reject(new Error('not used')),
-    resetPassword: () => Promise.reject(new Error('not used')),
-    revokeSessions: () => Promise.reject(new Error('not used')),
   };
   return service;
 }
@@ -63,11 +57,11 @@ describe('the user subject type this plugin declares', () => {
   it('drops a disabled account and asks for the whole batch at once', async () => {
     const container = new ServiceContainer();
     const authorization = createAppAuthorization({ connection });
-    const calls: ListAdministratedUsersInput[] = [];
+    const calls: ListManagedUsersQuery[] = [];
     container.instance(authorizationToken, authorization);
     container.instance(
-      userAdministrationServiceToken,
-      userAdministration(new Set(['root']), calls),
+      userQueryServiceToken,
+      userQueries(new Set(['root']), calls),
     );
 
     await provider(container).boot();
@@ -90,11 +84,11 @@ describe('the user subject type this plugin declares', () => {
   it('checks read permission for both searches and name resolution before querying users', async () => {
     const container = new ServiceContainer();
     const authorization = createAppAuthorization({ connection });
-    const calls: ListAdministratedUsersInput[] = [];
+    const calls: ListManagedUsersQuery[] = [];
     container.instance(authorizationToken, authorization);
     container.instance(
-      userAdministrationServiceToken,
-      userAdministration(new Set(['one']), calls),
+      userQueryServiceToken,
+      userQueries(new Set(['one']), calls),
     );
     await provider(container).boot();
     const selection =

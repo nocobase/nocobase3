@@ -1,7 +1,8 @@
 import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 
-import type { UserAdministrationService } from '@nocobase/app-plugin-authentication';
+import type { AuthenticationCredentialService } from '@nocobase/app-plugin-authentication/server';
+import { UserService } from '@nocobase/app-plugin-users/server';
 import {
   createAppAuthorization,
   type Authorization,
@@ -13,7 +14,6 @@ import {
 import {
   createDatabaseManager,
   createMigrator,
-  type DatabaseConnection,
   type DatabaseManager,
 } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -23,6 +23,7 @@ import {
   createUserRoleScopeRegistry,
 } from '../server/services/users.js';
 import type { UserManagementService } from '../server/tokens.js';
+import { createUserQueryService } from '../server/user-queries.js';
 
 describe('disabling an account that holds a protected Permission Set', () => {
   let database: DatabaseManager;
@@ -97,7 +98,9 @@ describe('disabling an account that holds a protected Permission Set', () => {
   ): UserManagementService {
     return createUserManagementService({
       database,
-      users: userAdministration(database.connection()),
+      users: new UserService(database.connection()),
+      userQueries: createUserQueryService(database.connection()),
+      credentials: unusedCredentials(),
       roleScopes: createUserRoleScopeRegistry(),
       ...(permissionSets === undefined ? {} : { permissionSets }),
     });
@@ -138,40 +141,16 @@ describe('disabling an account that holds a protected Permission Set', () => {
   }
 });
 
-/** Writes the real disabledAt column through whichever connection it is given. */
-function userAdministration(
-  initialConnection: DatabaseConnection,
-): UserAdministrationService {
-  const create = (
-    connection: DatabaseConnection,
-  ): UserAdministrationService => ({
-    withConnection: (next) => create(next),
-    list: () => Promise.resolve({ items: [], total: 0, page: 1, pageSize: 20 }),
-    get: () => Promise.resolve(undefined),
-    create: () => Promise.reject(new Error('not used')),
-    update: () => Promise.reject(new Error('not used')),
-    async disable(userId) {
-      const now = new Date();
-      await connection.query
-        .updateTable('user')
-        .set({ disabledAt: now, updatedAt: now })
-        .where('id', '=', userId)
-        .execute();
-      return {
-        id: userId,
-        name: userId,
-        email: `${userId}@example.com`,
-        emailVerified: true,
-        disabledAt: now,
-        createdAt: now,
-        updatedAt: now,
-      };
-    },
-    enable: () => Promise.reject(new Error('not used')),
+/** Disabling touches no credentials; the management layer only needs a value. */
+function unusedCredentials(): AuthenticationCredentialService {
+  const service: AuthenticationCredentialService = {
+    withConnection: () => service,
+    createPasswordCredential: () => Promise.reject(new Error('not used')),
     resetPassword: () => Promise.reject(new Error('not used')),
     revokeSessions: () => Promise.reject(new Error('not used')),
-  });
-  return create(initialConnection);
+    deleteCredentials: () => Promise.reject(new Error('not used')),
+  };
+  return service;
 }
 
 async function migratePackage(

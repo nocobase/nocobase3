@@ -9,10 +9,14 @@ import {
 import sqlite from '@nocobase/db-sqlite';
 import {
   createAuthentication,
-  createUserAdministrationService,
+  createAuthenticationCredentialService,
   authenticationToken,
-  userAdministrationServiceToken,
+  type AuthenticationCredentialService,
 } from '@nocobase/app-plugin-authentication';
+import {
+  UserLifecycleRegistry,
+  UserService,
+} from '@nocobase/app-plugin-users/server';
 import {
   createAppAuthorization,
   authorizationToken,
@@ -22,9 +26,14 @@ import {
   createUserManagementService,
   createUserRoleScopeRegistry,
   userManagementServiceToken,
+  userQueryServiceToken,
   userRoleScopeRegistryToken,
 } from '@nocobase/app-plugin-user-management/server';
 import { UsersProvider } from '../../app-plugin-user-management/server/providers/users.js';
+import {
+  createUserQueryService,
+  type UserQueryService,
+} from '../../app-plugin-user-management/server/user-queries.js';
 import { apiRoutes } from '../../app-plugin-user-management/server/routes/index.js';
 import { ServiceContainer } from '@nocobase/service-provider';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
@@ -45,7 +54,9 @@ let db: DatabaseManager;
 let auth: ReturnType<typeof createAuthentication>;
 let authz: ReturnType<typeof createAppAuthorization>;
 let management: ReturnType<typeof createUserManagementService>;
-let users: ReturnType<typeof createUserAdministrationService>;
+let users: UserService;
+let queries: UserQueryService;
+let credentials: AuthenticationCredentialService;
 let keys: HubApiKeyService;
 let roles: ReturnType<typeof createUserRoleScopeRegistry>;
 let target: string;
@@ -66,15 +77,33 @@ beforeEach(async () => {
       directory: fileURLToPath(new URL(directory, import.meta.url)),
     }).latest();
   }
+  // Wire the users lifecycle the way the authentication provider does at boot:
+  // disabling revokes sessions, deleting also removes credential accounts.
+  const lifecycle = new UserLifecycleRegistry();
   auth = createAuthentication({
     connection: db.connection(),
     secret,
     baseURL: 'http://localhost:3000',
     plugins: hubApiKeyAuthentication(),
+    userLifecycle: lifecycle,
   });
-  users = createUserAdministrationService({
+  users = new UserService(db.connection(), { lifecycle });
+  queries = createUserQueryService(db.connection());
+  credentials = createAuthenticationCredentialService({
     auth,
     connection: db.connection(),
+  });
+  lifecycle.register({
+    key: 'authentication.credentials',
+    order: -100,
+    before: async (context) => {
+      const scoped = credentials.withConnection(context.connection);
+      if (context.operation === 'delete') {
+        await scoped.deleteCredentials(context.userId);
+      } else {
+        await scoped.revokeSessions(context.userId);
+      }
+    },
   });
   authz = createAppAuthorization({ connection: db.connection() });
   registerHubResources(authz, db.connection());
@@ -85,6 +114,8 @@ beforeEach(async () => {
   management = createUserManagementService({
     database: db,
     users,
+    userQueries: queries,
+    credentials,
     roleScopes: roles,
     permissionSets: authz.permissionSets,
   });
@@ -167,7 +198,7 @@ async function router(actorId?: string) {
         updatedAt: new Date(),
       },
     });
-  container.instance(userAdministrationServiceToken, users);
+  container.instance(userQueryServiceToken, queries);
   container.instance(authenticationToken, sessionAuth);
   container.instance(authorizationToken, authz);
   container.instance(userManagementServiceToken, management);
@@ -261,7 +292,7 @@ describe('Hub user deletion', () => {
       200,
     );
     expect(await users.get(target)).toBeUndefined();
-    expect((await users.list({ search: 'Deletion target' })).total).toBe(0);
+    expect((await queries.list({ search: 'Deletion target' })).total).toBe(0);
     const tombstone = await db
       .query()
       .selectFrom('user')

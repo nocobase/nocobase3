@@ -33,7 +33,9 @@ const userColumns = [
   'updatedAt',
 ] as const;
 
-export function createUserQueryService(connection: DatabaseConnection): UserQueryService {
+export function createUserQueryService(
+  connection: DatabaseConnection,
+): UserQueryService {
   return new DefaultUserQueryService(connection);
 }
 
@@ -50,10 +52,13 @@ class DefaultUserQueryService implements UserQueryService {
     let query = this.connection.query
       .selectFrom('user')
       .where('deletedAt', 'is', null);
-    if (input.status === 'enabled') query = query.where('disabledAt', 'is', null);
-    if (input.status === 'disabled') query = query.where('disabledAt', 'is not', null);
+    if (input.status === 'enabled')
+      query = query.where('disabledAt', 'is', null);
+    if (input.status === 'disabled')
+      query = query.where('disabledAt', 'is not', null);
     if (input.userIds) {
-      if (input.userIds.length === 0) return { items: [], total: 0, page, pageSize };
+      if (input.userIds.length === 0)
+        return { items: [], total: 0, page, pageSize };
       query = query.where('id', 'in', [...input.userIds]);
     }
     const search = input.search?.trim();
@@ -90,7 +95,7 @@ class DefaultUserQueryService implements UserQueryService {
       .where('id', '=', userId)
       .where('deletedAt', 'is', null)
       .executeTakeFirst();
-    return row ? toUser(row as Record<string, unknown>) : undefined;
+    return row ? toUser(row) : undefined;
   }
 }
 

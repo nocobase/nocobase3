@@ -36,7 +36,7 @@ describe('client plugin registry consistency', () => {
 
   it('mounts the standard user and API key pages under Settings', () => {
     for (const [packageName, routePath] of [
-      ['@nocobase/app-plugin-users', '/users'],
+      ['@nocobase/app-plugin-user-management', '/users'],
       ['@nocobase/app-plugin-api-keys', '/api-keys'],
     ]) {
       const plugin = clientPlugins.plugins.find(
