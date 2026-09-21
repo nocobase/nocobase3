@@ -15,6 +15,6 @@ Add `db apply` and `db reset`, and retire `migrate --fresh`.
 
 `migrate --fresh` is removed and now exits with a pointer to `db reset`. It rebuilt the schema without reseeding, so it left the seed history cleared and no seed executed — the default connection recovered on the next startup, and a connection with `autoRun: false` did not.
 
-The `migrate` and `seed` scripts are gone from the application templates; `pnpm db:apply` replaces both. The commands themselves remain available as `pnpm nocobase app migrate` and `pnpm nocobase app seed` for a deployment that has to run one half at a time.
+The `migrate` and `seed` commands are removed along with their template scripts; `db apply` replaces both. Running one half on its own is not a separate command, because both halves apply only what is pending: on an already-migrated database `db apply` applies seeds alone, and the one case it does not cover — migrating ahead of a deployment without seeding — can be served by a flag later without breaking anything.
 
 `runAppDatabaseTasks` accepts several task kinds in one plan through its `kind` option, which is what makes a reset correct across both kinds: one plan means a connection's schema is rebuilt by its migrations task before its seeds run.

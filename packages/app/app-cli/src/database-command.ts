@@ -13,6 +13,7 @@ import {
   type AppDatabaseTaskResult,
   type AppDatabaseTasksResult,
 } from '@nocobase/app-server/database';
+
 import type { AppDatabaseTask } from '@nocobase/app-server/database';
 import { createInterface } from 'node:readline/promises';
 
@@ -26,75 +27,6 @@ interface DatabaseSelectionFlags {
   json: boolean;
   all: boolean;
   connection?: string;
-}
-
-/** Keep single-connection JSON fields compatible while exposing per-connection bulk results. */
-export async function runDatabaseCommand(
-  command: CommandOutput,
-  kind: AppDatabaseTaskKind,
-  flags: DatabaseSelectionFlags & { fresh?: boolean; force?: boolean },
-  context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
-): Promise<void> {
-  if (flags.fresh || flags.force) {
-    // `migrate --fresh` rebuilt the schema without reseeding, leaving the seed
-    // history cleared and no seed executed. `db reset` does both halves.
-    command.log(
-      'migrate --fresh has moved to "db reset", which also reruns seeds.',
-    );
-    command.exit(1);
-    return;
-  }
-  const result = await executeWithApplication(command, flags, context, (app) =>
-    runAppDatabaseTasks(app.config.get<AppDatabaseConfig>('database')!, {
-      ...planOptions(app, flags),
-      kind,
-    }),
-  );
-  if (!result) return;
-
-  if (flags.json) {
-    if (flags.all || !result.ok) command.logJson(result);
-    else if (!result.results.length)
-      command.logJson({ ok: true, status: 'not-configured' });
-    else {
-      const entry = result.results[0];
-      command.logJson({
-        ok: true,
-        connection: entry.connection,
-        status: entry.status,
-        ...(entry.reason ? { reason: entry.reason } : {}),
-        ...(entry.status === 'completed'
-          ? {
-              ...(kind === 'migrations' ? { batch: entry.batch ?? 0 } : {}),
-              executed: entry.executed ?? [],
-              skipped: entry.skipped ?? [],
-              warnings: entry.warnings ?? [],
-            }
-          : {}),
-      });
-    }
-  } else {
-    if (!result.results.length) command.log('No database is configured.');
-    for (const entry of result.results) {
-      command.log(
-        `[${entry.connection}] ${kind}: ${entry.status}${entry.reason ? ` (${entry.reason})` : ''}${entry.error ? `: ${entry.error}` : ''}`,
-      );
-      if (entry.batch !== undefined) command.log(`Batch: ${entry.batch}`);
-      if (entry.executed)
-        command.log(`Executed: ${entry.executed.join(', ') || 'none'}`);
-      if (entry.skipped)
-        command.log(`Skipped: ${entry.skipped.join(', ') || 'none'}`);
-      for (const warning of entry.warnings ?? [])
-        command.log(
-          `WARNING: checksum changed since it was executed: ${describe(warning)}`,
-        );
-      if (entry.warnings?.length)
-        command.log(
-          'Run "nocobase app db repair" to realign the history once the change is confirmed intentional.',
-        );
-    }
-  }
-  if (!result.ok) command.exit(1);
 }
 
 /**

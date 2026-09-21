@@ -8,8 +8,6 @@ import AppInfo from './info.js';
 import AppDbApply from './db-apply.js';
 import AppDbRepair from './db-repair.js';
 import AppDbReset from './db-reset.js';
-import AppMigrate from './migrate.js';
-import AppSeed from './seed.js';
 
 // Commands this application owns. Each key is the name it answers to under the
 // `app` topic, so `info` becomes `pnpm nocobase app info`.
@@ -19,8 +17,6 @@ const appCommands: AppCliCommands = {
   'collections:generate': AppCollectionsGenerate,
   'i18n:check': AppI18nCheck,
   info: AppInfo,
-  migrate: AppMigrate,
-  seed: AppSeed,
   'db:apply': AppDbApply,
   'db:reset': AppDbReset,
   'db:repair': AppDbRepair,

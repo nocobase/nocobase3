@@ -89,7 +89,7 @@ Set `tableName` or `columnName` explicitly when you need to override the derivat
 pnpm db:apply
 ```
 
-This applies pending migrations and then pending seeds for `database.default`, including registered plugins, ordered by name across all sources. `pnpm nocobase app migrate` and `pnpm nocobase app seed` run one half on its own when a deployment needs to separate them. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
+This applies pending migrations and then pending seeds for `database.default`, including registered plugins, ordered by name across all sources. Both halves run only what is pending, so on an already-migrated database it applies seeds alone. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
 
 ## Multiple connections
 
@@ -156,7 +156,7 @@ const seed: SeedDefinition = defineSeed({
 export default seed;
 ```
 
-Seeds run as the second half of `pnpm db:apply`, or on their own with `pnpm nocobase app seed`. The structure a seed writes into must already exist from an earlier migration.
+Seeds run as the second half of `pnpm db:apply`. The structure a seed writes into must already exist from an earlier migration.
 
 Keep seed data fixed and reproducible — no current timestamps or random values in identifying fields. Decide explicitly what a repeat run does: skip on a unique key, or update deterministically. Never silently overwrite data a user has edited.
 

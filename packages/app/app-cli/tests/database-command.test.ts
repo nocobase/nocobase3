@@ -19,7 +19,6 @@ import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   runDatabaseApplyCommand,
-  runDatabaseCommand,
   runDatabaseRepairCommand,
 } from '../src/database-command.js';
 import { createAppPaths, AppConfig } from '@nocobase/app-server/config';
@@ -142,35 +141,41 @@ export default defineSeed({ name: '001_defaults', async run() {} });`,
   return { runtime, command, migration, seed, rewrite };
 }
 
-it('retains single-connection JSON fields and honors manual selection', async () => {
+it('reports both kinds per connection and honors manual selection', async () => {
   const { runtime, command, migration } = fixture();
   migration('analytics');
-  await runDatabaseCommand(
+  await runDatabaseApplyCommand(
     command,
-    'migrations',
     { json: true, all: false, connection: 'analytics' },
     runtime,
   );
   expect(command.logJson).toHaveBeenCalledWith({
     ok: true,
     status: 'completed',
-    connection: 'analytics',
-    batch: 1,
-    executed: ['001_create'],
-    skipped: [],
-    warnings: [],
+    results: [
+      {
+        connection: 'analytics',
+        kind: 'migrations',
+        status: 'completed',
+        batch: 1,
+        executed: ['001_create'],
+        skipped: [],
+        warnings: [],
+      },
+      {
+        connection: 'analytics',
+        kind: 'seeds',
+        status: 'skipped',
+        reason: 'missing-directory',
+      },
+    ],
   });
   expect(command.exit).not.toHaveBeenCalled();
 });
 
 it('reports external skips in all-connection JSON', async () => {
   const { runtime, command } = fixture();
-  await runDatabaseCommand(
-    command,
-    'seeds',
-    { json: true, all: true },
-    runtime,
-  );
+  await runDatabaseApplyCommand(command, { json: true, all: true }, runtime);
   expect(command.logJson).toHaveBeenCalledWith(
     expect.objectContaining({
       ok: true,
@@ -191,19 +196,30 @@ it('prints partial failure JSON before exiting nonzero', async () => {
   migration('main');
   migration('analytics', true);
   await expect(
-    runDatabaseCommand(
-      command,
-      'migrations',
-      { json: true, all: true },
-      runtime,
-    ),
+    runDatabaseApplyCommand(command, { json: true, all: true }, runtime),
   ).rejects.toThrow('exit 1');
   expect(command.logJson).toHaveBeenCalledWith(
     expect.objectContaining({
       ok: false,
       results: [
-        expect.objectContaining({ connection: 'main', status: 'completed' }),
-        expect.objectContaining({ connection: 'analytics', status: 'failed' }),
+        expect.objectContaining({
+          connection: 'main',
+          kind: 'migrations',
+          status: 'completed',
+        }),
+        expect.objectContaining({ connection: 'main', kind: 'seeds' }),
+        expect.objectContaining({
+          connection: 'analytics',
+          kind: 'migrations',
+          status: 'failed',
+        }),
+        // Everything planned after the failure is reported, not silently dropped.
+        expect.objectContaining({
+          connection: 'analytics',
+          kind: 'seeds',
+          status: 'not-run',
+        }),
+        expect.objectContaining({ connection: 'erp', status: 'not-run' }),
         expect.objectContaining({ connection: 'erp', status: 'not-run' }),
       ],
     }),
@@ -213,9 +229,8 @@ it('prints partial failure JSON before exiting nonzero', async () => {
 it('reports invalid selection as JSON and exits nonzero', async () => {
   const { runtime, command } = fixture();
   await expect(
-    runDatabaseCommand(
+    runDatabaseApplyCommand(
       command,
-      'migrations',
       { json: true, all: false, connection: 'unknown' },
       runtime,
     ),
@@ -324,9 +339,8 @@ it('uses and disposes the factory application and its scope without autoRun', as
     };
     return app;
   };
-  await runDatabaseCommand(
+  await runDatabaseApplyCommand(
     command,
-    'migrations',
     { json: true, all: false, connection: 'analytics' },
     runtime,
   );
@@ -356,7 +370,7 @@ it('cleans partial assembly and retains the factory error when cleanup also fail
     throw new Error('factory failure');
   };
   await expect(
-    runDatabaseCommand(command, 'seeds', { json: true, all: false }, runtime),
+    runDatabaseApplyCommand(command, { json: true, all: false }, runtime),
   ).rejects.toThrow('exit 1');
   expect(shutdown).toHaveBeenCalledOnce();
   expect(destroy).toHaveBeenCalledOnce();
@@ -396,14 +410,16 @@ it('uses migration sources contributed by the application factory', async () => 
     });
     return app;
   };
-  await runDatabaseCommand(
-    command,
-    'migrations',
-    { json: true, all: false },
-    runtime,
-  );
+  await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
   expect(command.logJson).toHaveBeenCalledWith(
-    expect.objectContaining({ executed: ['001_create'] }),
+    expect.objectContaining({
+      results: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'migrations',
+          executed: ['001_create'],
+        }),
+      ]),
+    }),
   );
 });
 
@@ -411,28 +427,12 @@ it('warns about checksum drift and repairs it across both task kinds', async () 
   const { runtime, command, migration, seed, rewrite } = fixture();
   migration('main');
   seed('main');
-  await runDatabaseCommand(
-    command,
-    'migrations',
-    { json: false, all: false },
-    runtime,
-  );
-  await runDatabaseCommand(
-    command,
-    'seeds',
-    { json: false, all: false },
-    runtime,
-  );
+  await runDatabaseApplyCommand(command, { json: false, all: false }, runtime);
   rewrite('main');
 
   // The default policy reports the drift without stopping the run.
   command.log.mockClear();
-  await runDatabaseCommand(
-    command,
-    'migrations',
-    { json: false, all: false },
-    runtime,
-  );
+  await runDatabaseApplyCommand(command, { json: false, all: false }, runtime);
   expect(command.log.mock.calls.flat().join('\n')).toContain(
     'WARNING: checksum changed since it was executed: 001_create',
   );
@@ -475,12 +475,7 @@ it('warns about checksum drift and repairs it across both task kinds', async () 
 
   // Nothing is left to repair, and the run no longer warns.
   command.log.mockClear();
-  await runDatabaseCommand(
-    command,
-    'migrations',
-    { json: false, all: false },
-    runtime,
-  );
+  await runDatabaseApplyCommand(command, { json: false, all: false }, runtime);
   expect(command.log.mock.calls.flat().join('\n')).not.toContain('WARNING');
   command.logJson.mockClear();
   await runDatabaseRepairCommand(
@@ -499,18 +494,7 @@ it('repairs only the requested kind', async () => {
   const { runtime, command, migration, seed, rewrite } = fixture();
   migration('main');
   seed('main');
-  await runDatabaseCommand(
-    command,
-    'migrations',
-    { json: false, all: false },
-    runtime,
-  );
-  await runDatabaseCommand(
-    command,
-    'seeds',
-    { json: false, all: false },
-    runtime,
-  );
+  await runDatabaseApplyCommand(command, { json: false, all: false }, runtime);
   rewrite('main');
 
   command.logJson.mockClear();
@@ -541,18 +525,4 @@ it('repairs only the requested kind', async () => {
     ['migrations', 1],
     ['seeds', 0],
   ]);
-});
-
-it('points migrate --fresh at the reset command', async () => {
-  const { runtime, command } = fixture();
-  for (const flags of [
-    { json: false, all: false, fresh: true },
-    { json: false, all: false, force: true },
-  ])
-    await expect(
-      runDatabaseCommand(command, 'migrations', flags, runtime),
-    ).rejects.toThrow('exit 1');
-  expect(command.log).toHaveBeenCalledWith(
-    'migrate --fresh has moved to "db reset", which also reruns seeds.',
-  );
 });

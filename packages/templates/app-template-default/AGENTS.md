@@ -219,7 +219,7 @@ pnpm nocobase app i18n:check  # languages declared on only one side
 
 Add a command of your own as an oclif `Command` subclass in `cli/commands/`, then list it in `cli/commands/index.ts`; the key becomes its name under `app`. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command.
 
-`cli/` is compiled into `dist` alongside the server, so a deployed application runs the same commands with `node ./cli/index.js`. `pnpm db:apply`, `pnpm db:reset` and `pnpm db:repair` are these commands rather than separate scripts. `db apply` runs migrations and seeds as one plan; `app migrate` and `app seed` still exist under `pnpm nocobase` for a deployment that has to run one half at a time.
+`cli/` is compiled into `dist` alongside the server, so a deployed application runs the same commands with `node ./cli/index.js`. `pnpm db:apply`, `pnpm db:reset` and `pnpm db:repair` are these commands rather than separate scripts. `db apply` runs migrations and seeds as one plan, each half applying only what is pending.
 
 ## Plugins
 

@@ -16,8 +16,6 @@ describe('application command factories', () => {
     expect(loadRuntime).not.toHaveBeenCalled();
     expect(Object.keys(first)).toEqual([
       'info',
-      'migrate',
-      'seed',
       'db:apply',
       'db:reset',
       'db:repair',
