@@ -310,6 +310,25 @@ for (const template of templates) {
     }
   });
 
+  test(`${template.kind} publishes the database directory by part, not whole`, () => {
+    // `files` is a whitelist npm applies ahead of every ignore file, so a bare `database` entry publishes
+    // whatever `collections:generate` happens to have written locally: a snapshot of one developer's database,
+    // in whatever dialect they run it against, shipped to every application scaffolded from the template.
+    // Neither .gitignore nor .npmignore can take it back out. Name the parts that are source instead.
+    const { files } = template.manifest;
+    assert.equal(files.includes('database'), false);
+    for (const entry of [
+      'database/tsconfig.json',
+      'database/*/migrations/**',
+      'database/*/seeds/**',
+    ]) {
+      assert.ok(
+        files.includes(entry),
+        `${template.kind}: files must list ${entry}`,
+      );
+    }
+  });
+
   test(`${template.kind} declares server runtime packages in dependencies only`, () => {
     const { dependencies, devDependencies } = template.manifest;
     const duplicates = Object.keys(dependencies).filter(
