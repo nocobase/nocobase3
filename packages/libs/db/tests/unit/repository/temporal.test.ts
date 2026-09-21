@@ -110,6 +110,20 @@ describe('datetime values carrying a zone offset', () => {
     );
   });
 
+  it.each([
+    ['datetime', '2026-09-06 09:30:00', '2026-09-06T09:30:00.000'],
+    ['datetime', '2026-09-06 09:30:00.120', '2026-09-06T09:30:00.120'],
+    ['datetimeTz', '2026-09-06 09:30:00Z', '2026-09-06T09:30:00.000Z'],
+    ['datetimeTz', '2026-09-06 09:30:00.120+00:00', '2026-09-06T09:30:00.120Z'],
+  ])(
+    'accepts the SQL space separator, writing %s %s as %s',
+    (type, input, expected) => {
+      expect(normalizeTemporalValue({ name: 'value', type }, input)).toBe(
+        expected,
+      );
+    },
+  );
+
   it('leaves an offset-free value on the wall clock it already names', () => {
     expect(normalizeTemporalValue(field, '2026-09-06T09:30:00.120')).toBe(
       '2026-09-06T09:30:00.120',

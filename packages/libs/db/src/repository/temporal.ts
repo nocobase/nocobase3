@@ -73,6 +73,11 @@ export function normalizeTemporalValue(
       return fail();
     return `${time[1]}:${time[2]}:${time[3]}.${(time[4] ?? '').padEnd(3, '0')}`;
   }
+  // `YYYY-MM-DD HH:mm:ss` is the literal every SQL dialect spells and the shape catalogs and drivers hand back,
+  // so reading has always accepted it. Refusing it on the way in only made the two halves of one contract
+  // disagree, and the error named the value rather than the separator. The space is unambiguous: no valid V1
+  // value carries one, so it can only be standing in for the `T`.
+  const text = field.type === 'date' ? value : value.replace(' ', 'T');
   // `datetime` is a wall-clock type, so an offset is not part of what it stores — but a caller holding an
   // instant has nowhere else to put one, and `new Date(...)` is already accepted and read locally. An offset
   // here is therefore converted rather than refused, and lands on exactly the value the equivalent `Date`
@@ -81,7 +86,7 @@ export function normalizeTemporalValue(
     field.type === 'date'
       ? `^${datePattern}$`
       : `^${datePattern}T${timePattern}${offsetPattern}${field.type === 'datetime' ? '?' : ''}$`;
-  const match = value.match(new RegExp(pattern));
+  const match = text.match(new RegExp(pattern));
   if (!match) return fail();
   const year = Number(match[1]);
   const month = Number(match[2]);
@@ -95,7 +100,7 @@ export function normalizeTemporalValue(
     calendar.getUTCDate() !== day
   )
     return fail();
-  if (field.type === 'date') return value;
+  if (field.type === 'date') return text;
   if (Number(match[4]) > 23 || Number(match[5]) > 59 || Number(match[6]) > 59)
     return fail();
   const local = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.${(match[7] ?? '').padEnd(3, '0')}`;
