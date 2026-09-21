@@ -745,26 +745,58 @@ function UserDialog({
                   onChange={(event) => setPassword(event.target.value)}
                 />
               </Field>
-              {creationRoleScopes.map((scope) => (
-                <Field key={scope.key} label={scope.label}>
-                  <div className='flex max-h-80 flex-col overflow-hidden rounded-lg border'>
-                    <PermissionSelection
-                      disabled={busy}
-                      scope={scope}
-                      selected={roleValues(roles[scope.key] ?? '')}
-                      onChange={(value) =>
+              {creationRoleScopes.map((scope) =>
+                scope.selection === 'single' ? (
+                  // One role out of a short list is a plain dropdown; the
+                  // searchable list is for scopes that assign several.
+                  <Field key={scope.key} label={scope.label}>
+                    <Select
+                      items={scope.options
+                        .filter((option) => option.assignable !== false)
+                        .map((option) => ({
+                          value: option.value,
+                          label: option.label,
+                        }))}
+                      value={String(roles[scope.key] ?? '')}
+                      onValueChange={(value) =>
                         setRoles((current) => ({
                           ...current,
-                          [scope.key]:
-                            scope.selection === 'single'
-                              ? (value[0] ?? '')
-                              : value,
+                          [scope.key]: String(value ?? ''),
                         }))
                       }
-                    />
-                  </div>
-                </Field>
-              ))}
+                    >
+                      <SelectTrigger className='w-full' disabled={busy}>
+                        <SelectValue placeholder={t('form.selectRole')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {scope.options
+                          .filter((option) => option.assignable !== false)
+                          .map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                ) : (
+                  <Field key={scope.key} label={scope.label}>
+                    <div className='flex max-h-80 flex-col overflow-hidden rounded-lg border'>
+                      <PermissionSelection
+                        disabled={busy}
+                        scope={scope}
+                        selected={roleValues(roles[scope.key] ?? '')}
+                        onChange={(value) =>
+                          setRoles((current) => ({
+                            ...current,
+                            [scope.key]: value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </Field>
+                ),
+              )}
             </>
           ) : null}
           <DialogFooter>

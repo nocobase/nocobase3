@@ -65,6 +65,7 @@ const enUS = {
     cancel: 'Cancel',
     save: 'Save',
     create: 'Create user',
+    selectRole: 'Select a role',
   },
   password: {
     title: 'Reset password',
