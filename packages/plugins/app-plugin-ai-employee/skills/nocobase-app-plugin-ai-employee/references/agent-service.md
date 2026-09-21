@@ -277,12 +277,29 @@ interface AgentRequest {
   signal?: AbortSignal;
 }
 
+// Only invoke() accepts a schema for the final answer, because only it reports
+// the structured value back.
+interface AgentInvokeRequest<TStructured = never> extends AgentRequest {
+  responseFormat?: ZodType<TStructured>;
+}
+
+interface AgentInvokeResult<TStructured = never> {
+  message: AIMessageInput | null;
+  structuredResponse?: TStructured;
+}
+
 interface AgentService {
-  invoke(request?: AgentRequest): Promise<unknown>;
+  invoke<T = never>(
+    request?: AgentInvokeRequest<T>,
+  ): Promise<AgentInvokeResult<T>>;
   stream(request?: AgentRequest): AsyncGenerator<AgentStreamEvent>;
-  resumeInvoke(request: AgentRequest): Promise<unknown>;
+  resumeInvoke<T = never>(
+    request: AgentInvokeRequest<T>,
+  ): Promise<AgentInvokeResult<T>>;
   resumeStream(request: AgentRequest): AsyncGenerator<AgentStreamEvent>;
-  forkInvoke(request: AgentRequest): Promise<unknown>;
+  forkInvoke<T = never>(
+    request: AgentInvokeRequest<T>,
+  ): Promise<AgentInvokeResult<T>>;
   forkStream(request: AgentRequest): AsyncGenerator<AgentStreamEvent>;
   cancelToolCall(): Promise<AIMessageInput[] | undefined>;
   abort(reason?: unknown): void;
@@ -308,7 +325,23 @@ interface AIMessageInput {
 
 Use `userMessages` for the current user turn. Use `messageId` when the plugin must load a persisted history/thread. Use `userDecisions` only to resume an interrupt. Use `signal` for request cancellation and consume `stream()` with `for await`. Do not parse or persist stream events manually when the surrounding App service already owns that transport.
 
-Direct `agent.invoke()`/`forkInvoke()` returns an in-process execution result, not the HTTP history envelope. Do not infer HTTP behavior from that return value: [`sendMessages` with `stream: false`](api-reference.md#5-send-a-message-with-stream-false) currently invokes internally but still returns an SSE response without serializing the result. Use the [authenticated HTTP walkthrough](api-reference.md#http-conversation-walkthrough) for external callers, or this trusted server API when an App-owned integration genuinely needs the direct result.
+`invoke()` reports the assistant turn it produced as `message`, in the same `AIMessageInput` shape the rest of this API uses. It is not the underlying graph state: the keys this package's own middleware contributes stay internal, so a middleware added later does not change what a caller receives. `message` is `null` when the execution produced no assistant content, which is what an interrupted turn awaiting a tool decision looks like.
+
+Supply `responseFormat` when the integration needs data rather than prose, and read `structuredResponse`; it is absent from the result when the request supplied no schema. The schema is a Zod schema, the same way a tool declares its arguments, and the agent makes one further model call after the loop finishes to produce the value. `stream()` takes no `responseFormat` — it reports the answer as content events and has nowhere to put a structured value.
+
+```ts
+const { structuredResponse } = await agent.invoke({
+  userMessages: [{ role: 'user', content: 'Summarize the open issues.' }],
+  responseFormat: z.object({
+    total: z.number(),
+    highlights: z.array(z.string()),
+  }),
+});
+```
+
+Read the value from `structuredResponse`, never by parsing `message.content`. How the schema is satisfied depends on the model: one that supports JSON schema output natively answers with the JSON as its content, while one that does not is given the schema as a tool, and then the final assistant message is that tool call and its content is empty. `structuredResponse` holds the parsed value either way, and `message` is only the assistant turn that carried it.
+
+Do not infer HTTP behavior from that return value: [`sendMessages` with `stream: false`](api-reference.md#5-send-a-message-with-stream-false) currently invokes internally but still returns an SSE response without serializing the result. Use the [authenticated HTTP walkthrough](api-reference.md#http-conversation-walkthrough) for external callers, or this trusted server API when an App-owned integration genuinely needs the direct result.
 
 ## Implementing `AgentContextProvider`
 

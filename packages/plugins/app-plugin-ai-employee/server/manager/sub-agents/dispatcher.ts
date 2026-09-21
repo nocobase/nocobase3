@@ -27,6 +27,7 @@ import type { WorkContextHandler } from '../work-context/index.js';
 import type { AIEmployeeEntity } from '@nocobase/ai-employee';
 import type { AIMessageEntity } from '../../repository/index.js';
 import type { ModelRef } from '../../types.js';
+import type { AgentInvokeResult } from '../../agent/types.js';
 import { agentServiceFactoryToken } from '../../agent/service/agent-service-factory.js';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
@@ -169,13 +170,8 @@ export class SubAgentsDispatcher {
     return '';
   }
 
-  private extractLastMessageText(result: any): string {
-    const messages = result?.messages;
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return '';
-    }
-
-    return this.extractTextContent(messages.at(-1)?.content);
+  private extractLastMessageText(result: AgentInvokeResult): string {
+    return this.extractTextContent(result.message?.content);
   }
 
   private async resolveSubAgentSessionId(

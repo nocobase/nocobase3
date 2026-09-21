@@ -53,7 +53,10 @@ describe('SubAgentsDispatcher direct dependencies', () => {
 
   it('passes the resolved execution context to sub-agent tools', async () => {
     const invoke = vi.fn().mockResolvedValue({
-      messages: [{ content: 'Search result' }],
+      message: {
+        role: 'assistant',
+        content: { type: 'text', content: 'Search result' },
+      },
     });
     const resolvedModel = { llmService: 'openai', model: 'gpt-5' };
     const createAIEmployee = vi.fn().mockResolvedValue({ invoke });

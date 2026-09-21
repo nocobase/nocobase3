@@ -6,6 +6,7 @@ import type {
 } from '@langchain/core/messages';
 import type { BaseCheckpointSaver, Command } from '@langchain/langgraph';
 import type { CreateAgentParams } from 'langchain';
+import type { ZodType } from 'zod';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
@@ -42,6 +43,25 @@ export interface AgentRequest {
   context?: Record<string, unknown>;
   writer?: (chunk: unknown) => void;
   signal?: AbortSignal;
+}
+
+/**
+ * A request that may ask the final answer to match a schema. Only `invoke()`
+ * accepts one, because only it reports the structured value back; `stream()`
+ * reports the answer as content events and has nowhere to put it.
+ */
+export interface AgentInvokeRequest<TStructured = never> extends AgentRequest {
+  responseFormat?: ZodType<TStructured>;
+}
+
+/**
+ * What one `invoke()` produced, in this package's own message shape rather
+ * than the underlying graph state. `structuredResponse` is present only when
+ * the request supplied a `responseFormat`.
+ */
+export interface AgentInvokeResult<TStructured = never> {
+  message: AIMessageInput | null;
+  structuredResponse?: TStructured;
 }
 
 export interface AgentMessageIndex {
@@ -83,6 +103,7 @@ export type AgentMessageConversionContext = Pick<
  */
 export interface PreparedAgentContext extends AgentMessageConversionContext {
   input: PreparedAgentInput;
+  responseFormat?: ZodType<unknown>;
   systemPrompt?: CreateAgentParams['systemPrompt'];
   tools: CreateAgentParams['tools'];
   discoveredTools: DiscoveredTools;

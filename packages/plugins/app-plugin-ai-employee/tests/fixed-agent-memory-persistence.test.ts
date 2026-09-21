@@ -193,6 +193,9 @@ it('creates a reusable Fixed AgentService through the factory with Memory Persis
         ],
       }),
     resolveTools: () => [],
+    prepareStoredAssistantAdditionalKwargs: (
+      additionalKwargs?: Record<string, unknown>,
+    ) => additionalKwargs,
   } as unknown as LLMProvider;
   vi.spyOn(
     fixture.deps.ai.llmProviderManager,

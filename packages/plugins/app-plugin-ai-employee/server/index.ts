@@ -34,3 +34,12 @@ export {
   type CreateAIConversationParams,
 } from './manager/ai-conversations-manager.js';
 export { agentServiceFactoryToken } from './agent/service/agent-service-factory.js';
+// The execution contract a caller names when it holds a request or a result.
+// The Skill tells integrations to import from this entry rather than deep-import
+// a source file, so the types it documents are exported here.
+export type {
+  AgentInvokeRequest,
+  AgentInvokeResult,
+  AgentRequest,
+  AgentStreamEvent,
+} from './agent/types.js';

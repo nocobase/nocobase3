@@ -11,11 +11,14 @@ import type {
   LLMProvider,
   ToolsEntity,
 } from '@nocobase/ai-employee';
+import type { AIMessage as LangChainAIMessage } from '@langchain/core/messages';
 import type {
   AgentGraphState,
   AgentContextProvider,
   AgentThread,
   AgentInterruptAction,
+  AgentInvokeRequest,
+  AgentInvokeResult,
   AgentOperation,
   AgentProviders,
   AgentRequest,
@@ -109,6 +112,26 @@ const toInterruptActions = (interrupt: Interrupt): AgentInterruptAction[] => {
   });
 };
 
+/**
+ * Asks the provider to describe a failure. An error handler must not raise one
+ * of its own: a provider that does not implement this would otherwise replace
+ * the failure being reported with a TypeError.
+ */
+const describeProviderError = (
+  provider: LLMProvider | undefined,
+  error: unknown,
+): string | undefined =>
+  typeof provider?.parseResponseError === 'function'
+    ? provider.parseResponseError(error)
+    : undefined;
+
+const isLangChainAIMessage = (value: unknown): value is LangChainAIMessage => {
+  const candidate = value as { getType?: () => string } | null;
+  return (
+    typeof candidate?.getType === 'function' && candidate.getType() === 'ai'
+  );
+};
+
 type ResponseMetadata = Record<string, unknown>;
 
 class ExecutionResponseMetadata {
@@ -175,13 +198,19 @@ export class AgentService {
   forkStream(request: AgentRequest): AsyncGenerator<AgentStreamEvent> {
     return this.executeStream('fork', request);
   }
-  invoke(request: AgentRequest = {}): Promise<unknown> {
+  invoke<TStructured = never>(
+    request: AgentInvokeRequest<TStructured> = {},
+  ): Promise<AgentInvokeResult<TStructured>> {
     return this.executeInvoke('invoke', request);
   }
-  resumeInvoke(request: AgentRequest): Promise<unknown> {
+  resumeInvoke<TStructured = never>(
+    request: AgentInvokeRequest<TStructured>,
+  ): Promise<AgentInvokeResult<TStructured>> {
     return this.executeInvoke('resume', request);
   }
-  forkInvoke(request: AgentRequest): Promise<unknown> {
+  forkInvoke<TStructured = never>(
+    request: AgentInvokeRequest<TStructured>,
+  ): Promise<AgentInvokeResult<TStructured>> {
     return this.executeInvoke('fork', request);
   }
 
@@ -254,7 +283,7 @@ export class AgentService {
   }
   private async prepare(
     operation: AgentOperation,
-    request: AgentRequest,
+    request: AgentInvokeRequest<unknown>,
     llm: ResolvedAgentLLM,
     responseMetadataCollector?: BaseCallbackHandler,
   ): Promise<PreparedAgentContext> {
@@ -344,6 +373,7 @@ export class AgentService {
     if (!config.configurable) delete config.configurable;
     return {
       input,
+      responseFormat: request.responseFormat,
       systemPrompt,
       tools: resolvedTools,
       discoveredTools,
@@ -371,6 +401,9 @@ export class AgentService {
       tools: prepared.tools,
       middleware: buildStandardAgentMiddleware(this.providers, prepared),
       systemPrompt: prepared.systemPrompt,
+      ...(prepared.responseFormat
+        ? { responseFormat: prepared.responseFormat as never }
+        : {}),
       ...(prepared.checkpointer ? { checkpointer: prepared.checkpointer } : {}),
     });
   }
@@ -392,10 +425,33 @@ export class AgentService {
     if (this.activeController === controller) this.activeController = undefined;
   }
 
-  private async executeInvoke(
+  /**
+   * Reads one execution's answer out of the graph state. The state also holds
+   * the keys this package's own middleware contributes; they stay internal, so
+   * a middleware added later is not a change to what a caller receives.
+   */
+  private async toInvokeResult<TStructured>(
+    result: unknown,
+    prepared: PreparedAgentContext,
+  ): Promise<AgentInvokeResult<TStructured>> {
+    const state = (result ?? {}) as {
+      messages?: unknown;
+      structuredResponse?: TStructured;
+    };
+    const messages = Array.isArray(state.messages) ? state.messages : [];
+    const answer = messages.filter(isLangChainAIMessage).at(-1);
+    const message = answer
+      ? await this.providers.converters.assistant.convert(answer, prepared)
+      : null;
+    return 'structuredResponse' in state
+      ? { message, structuredResponse: state.structuredResponse as TStructured }
+      : { message };
+  }
+
+  private async executeInvoke<TStructured>(
     operation: AgentOperation,
-    request: AgentRequest,
-  ): Promise<unknown> {
+    request: AgentInvokeRequest<TStructured>,
+  ): Promise<AgentInvokeResult<TStructured>> {
     const { conversation } = this.providers;
     const { controller, signal, token } = this.begin(request);
     let activeProvider: LLMProvider | undefined;
@@ -414,7 +470,7 @@ export class AgentService {
         prepared.input as any,
         { ...prepared.config, signal } as any,
       );
-      return result;
+      return await this.toInvokeResult<TStructured>(result, prepared);
     } catch (error) {
       if ((error as any)?.name === 'GraphInterrupt') throw error;
       if (signal.aborted)
@@ -424,7 +480,7 @@ export class AgentService {
         });
       throw normalizeAgentError(
         error,
-        activeProvider?.parseResponseError(error),
+        describeProviderError(activeProvider, error),
       );
     } finally {
       this.end(token, controller);
@@ -696,7 +752,7 @@ export class AgentService {
       }
       throw normalizeAgentError(
         error,
-        activeProvider?.parseResponseError(error),
+        describeProviderError(activeProvider, error),
       );
     } finally {
       try {
