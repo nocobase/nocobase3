@@ -24,6 +24,7 @@ function runPreflight(result: { status?: number | null; error?: Error }) {
     command: ['pnpm', 'nocobase', 'demo', 'build'],
   };
   runInNewContext(preflight, {
+    progress: vi.fn(),
     spawn: { sync },
     console: { log },
     rootDir: '/app',

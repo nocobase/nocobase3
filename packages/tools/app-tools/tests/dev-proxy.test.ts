@@ -613,6 +613,12 @@ async function runDevMode(
     `(async () => {${helpersSource}\n${runtimeSource}})()`,
     {
       console: { error: vi.fn(), log },
+      path,
+      progress: vi.fn(),
+      performance,
+      startedAt: performance.now(),
+      setInterval,
+      clearInterval,
       findAvailablePort,
       resolveDevTrustedOrigins,
       watchConfigFiles: watch,

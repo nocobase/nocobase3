@@ -11,6 +11,12 @@ import { waitForHttpReady } from './readiness.mjs';
 import { parseProxyTarget } from './proxy.mjs';
 import { resolveDevTrustedOrigins } from './trusted-origins.mjs';
 
+const startedAt = performance.now();
+const progress = (message) =>
+  console.log(
+    `[dev] ${message} (${((performance.now() - startedAt) / 1000).toFixed(1)}s)`,
+  );
+
 // All child commands run from the explicitly supplied application root.
 const rootDir = path.resolve(process.env.NOCOBASE_TOOL_ROOT || process.cwd());
 const viteDevPreferredPort = 5173;
@@ -90,12 +96,10 @@ const spawnDevProcess = (label, command, args, env, options = {}) => {
     shutdown(typeof code === 'number' && code !== 0 ? code : 1);
   });
 
-  children.push(child);
   return child;
 };
 
 let shuttingDown = false;
-const children = [];
 let envRestartTimer;
 let envWatcher;
 
@@ -110,28 +114,19 @@ const shutdown = (exitCode = 0) => {
   }
   envWatcher?.close();
 
-  for (const child of children) {
-    if (!child.killed && child.exitCode === null) {
-      child.kill('SIGTERM');
-    }
-  }
-
-  setTimeout(() => {
-    for (const child of children) {
-      if (child.exitCode === null && child.signalCode === null) {
-        child.kill('SIGKILL');
-      }
-    }
-    process.exit(exitCode);
-  }, 1500).unref();
+  // The supervisor owns the complete process group. Exiting the worker starts
+  // Execa's graceful termination and bounded escalation for all descendants.
+  process.exit(exitCode);
 };
 
-process.once('SIGINT', () => shutdown(0));
-process.once('SIGTERM', () => shutdown(0));
+process.on('SIGINT', () => shutdown(0));
+process.on('SIGTERM', () => shutdown(0));
 
+progress('Loading application environment');
 const env = loadEnv();
 const strictStartup = env.NOCOBASE_STRICT_STARTUP === 'true';
 const watchEnv = await resolveWatchEnvironment(env);
+progress('Selecting development ports');
 const proxyTarget = parseProxyTarget(env.PROXY_TARGET_URL);
 const viteDevHost = env.APP_VITE_DEV_HOST || '0.0.0.0';
 // In proxy mode Vite is the public app server, so it owns APP_SERVER_PORT.
@@ -212,6 +207,7 @@ const runDevHook = (label, command, args) => {
   if (result.status !== 0) process.exit(result.status ?? 1);
 };
 
+progress('Running beforeDev hooks');
 runHookStage(readCliHooks(rootDir).dev, 'beforeDev', runDevHook);
 const pluginWatchIncludes = proxyTarget
   ? []
@@ -221,6 +217,7 @@ console.log(
   `\n  Starting ${proxyTarget ? 'Vite with remote backend' : 'app dev server'}...`,
 );
 
+progress('Starting Vite');
 spawnDevProcess(
   'client',
   'vite',
@@ -247,6 +244,7 @@ if (!proxyTarget) {
       String(nextEnv.APP_PUBLIC_ORIGIN || '').trim() || appOrigin,
   };
 
+  progress('Starting application server');
   const serverChild = spawnDevProcess(
     'server',
     'tsx',
@@ -258,6 +256,9 @@ if (!proxyTarget) {
         ? []
         : [
             '--clear-screen=false',
+            // tsx's cwd-relative default misses pnpm dependencies above the app.
+            '--exclude',
+            `${path.parse(rootDir).root.replaceAll('\\', '/')}**/node_modules/**`,
             '--include',
             'package.json',
             ...pluginWatchIncludes.flatMap((include) => ['--include', include]),
@@ -290,36 +291,47 @@ if (!proxyTarget) {
 }
 
 try {
-  await Promise.all([
-    waitForHttpReady({
-      label: 'Vite dev server',
-      url: viteUrl,
-    }),
-    ...(!proxyTarget
-      ? [
-          waitForHttpReady({
-            isReady: (response, body) => {
-              if (!response.ok) return false;
+  progress('Waiting for Vite and application HTTP readiness');
+  const waiting = setInterval(
+    () => progress('Still waiting for HTTP readiness'),
+    5000,
+  );
+  try {
+    await Promise.all([
+      waitForHttpReady({
+        label: 'Vite dev server',
+        url: viteUrl,
+      }).then(() => progress('Vite HTTP ready')),
+      ...(!proxyTarget
+        ? [
+            waitForHttpReady({
+              isReady: (response, body) => {
+                if (!response.ok) return false;
 
-              try {
-                return JSON.parse(body).ok === true;
-              } catch {
-                return false;
-              }
-            },
-            label: 'Application server',
-            url: healthUrl,
-          }),
-        ]
-      : []),
-  ]);
+                try {
+                  return JSON.parse(body).ok === true;
+                } catch {
+                  return false;
+                }
+              },
+              label: 'Application server',
+              url: healthUrl,
+            }).then(() => progress('Application HTTP ready')),
+          ]
+        : []),
+    ]);
+  } finally {
+    clearInterval(waiting);
+  }
 } catch (error) {
   console.error(`[dev] ${error instanceof Error ? error.message : error}`);
   shutdown(1);
 }
 
 if (!shuttingDown) {
-  console.log(`\n  App dev server ready`);
+  console.log(
+    `\n  App dev server ready in ${((performance.now() - startedAt) / 1000).toFixed(1)}s`,
+  );
   console.log(`  Local:     ${appUrl}`);
   if (proxyTarget) console.log(`  Backend:   ${proxyTarget.href}`);
   console.log();

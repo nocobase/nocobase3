@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const TOOL_ENTRIES = {
-  dev: 'dev/run',
+  dev: 'dev/index',
   build: 'build',
   start: 'start',
   retarget: 'utils/retarget-native',
@@ -22,6 +22,16 @@ export function runAppTool(
   const entry = fileURLToPath(
     new URL(`./scripts/${TOOL_ENTRIES[tool]}.mjs`, import.meta.url),
   );
+  if (tool === 'dev') {
+    return import('./scripts/dev/supervisor.mjs').then(
+      ({ superviseDevelopment }) =>
+        superviseDevelopment({
+          rootDir,
+          entry,
+          baseEnv: { ...process.env, NOCOBASE_TOOL_ROOT: rootDir },
+        }),
+    );
+  }
   return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
