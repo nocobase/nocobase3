@@ -24,8 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   prepare:
@@ -53,6 +52,7 @@ jobs:
           path: release-source
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -95,8 +95,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "nocobase[bot]"
+          git config user.email "179432756+nocobase[bot]@users.noreply.github.com"
 
       - name: Record release base
         id: base
@@ -328,6 +328,7 @@ jobs:
           path: release-source
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -363,8 +364,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "nocobase[bot]"
+          git config user.email "179432756+nocobase[bot]@users.noreply.github.com"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -404,6 +405,26 @@ jobs:
       - name: Note the skipped smoke test
         if: inputs.skip_smoke_test
         run: echo "::warning::The create-app smoke test was skipped for this release."
+
+      # Mint the write token after validation so long builds do not consume its one-hour lifetime.
+      - name: Create a fresh NocoBase release token
+        if: '!inputs.dry_run'
+        id: release_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase3
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Authenticate git writes as nocobase bot
+        if: '!inputs.dry_run'
+        env:
+          RELEASE_TOKEN: ${{ steps.release_token.outputs.token }}
+        run: git remote set-url origin "https://x-access-token:${RELEASE_TOKEN}@github.com/nocobase/nocobase3.git"
 
       # Use full refspecs because the release branch and tag intentionally share a name for a short time.
       - name: Tag and push release branch
@@ -487,19 +508,19 @@ jobs:
         if: '!inputs.dry_run'
         id: merge
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.release_token.outputs.token }}
           RELEASE_BRANCH: ${{ needs.prepare.outputs.release_branch }}
           RELEASE_BATCH: ${{ needs.prepare.outputs.batch }}
         run: |
           PR_URL=$(gh pr create \
-            --title "chore: release $RELEASE_BATCH" \
+            --title "chore: release $RELEASE_BATCH [skip ci]" \
             --body "Prerelease \`$RELEASE_BATCH\` published to npm under the \`beta\` dist-tag. Per-package versions are in the workflow summary." \
             --base develop \
             --head "$RELEASE_BRANCH")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
           set +e
-          gh pr merge "$PR_URL" --merge --delete-branch
+          gh pr merge "$PR_URL" --merge --delete-branch --subject "chore: merge release $RELEASE_BATCH into develop [skip ci]"
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
@@ -590,8 +611,10 @@ jobs:
     uses: ./.github/workflows/github-release.yml
     with:
       tag: ${{ needs.release.outputs.tag }}
+    secrets:
+      NOCOBASE_APP_PRIVATE_KEY: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
     permissions:
-      contents: write
+      contents: read
 
   hub-image:
     name: Publish Hub Docker image

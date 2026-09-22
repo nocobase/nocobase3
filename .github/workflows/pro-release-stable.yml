@@ -143,7 +143,7 @@ jobs:
         id: release
         run: |
           git config user.name 'nocobase[bot]'
-          git config user.email '205678491+nocobase[bot]@users.noreply.github.com'
+          git config user.email '179432756+nocobase[bot]@users.noreply.github.com'
           COUNT=$(find .changeset -maxdepth 1 -name '*.md' ! -name README.md | wc -l | tr -d ' ')
           echo "needs_version=$([ "$COUNT" = 0 ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
           if [ "$COUNT" != 0 ]; then
