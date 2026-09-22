@@ -208,6 +208,8 @@ it('creates a reusable Fixed AgentService through the factory with Memory Persis
   const service = await factory.createAgent({
     sessionId: 'factory-memory',
     persistence,
+    actor: { id: 1, roles: [], isRoot: false },
+    runtime: { logger: fixture.deps.logging.getLogger('ai-employee-test') },
   });
   await service.invoke({ userMessages: [message('factory-one')] });
   await service.invoke({ userMessages: [message('factory-two')] });

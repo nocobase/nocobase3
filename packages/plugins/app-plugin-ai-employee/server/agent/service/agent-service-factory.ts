@@ -76,9 +76,10 @@ export interface CreateAgentOptions {
   readonly tools?: readonly string[];
   readonly skills?: readonly string[];
   readonly persistence?: ConversationPersistence;
-  readonly actor?: Actor;
-  /** Defaults to the application's own logger and no request. */
-  readonly runtime?: AgentRuntime;
+  /** Who this agent runs as. There is no implicit root. */
+  readonly actor: Actor;
+  /** What the host lends it, handed on to every tool of it. */
+  readonly runtime: AgentRuntime;
 }
 
 export class AgentServiceFactory {
@@ -246,11 +247,10 @@ export class AgentServiceFactory {
     }
     const context = new FixedAgentContextProvider({
       sessionId,
-      agentContext: this.createContext(
-        options.actor ?? { id: 0, roles: [], isRoot: true },
-        options.runtime ?? { logger: this.loggerService },
-        { sessionId, model },
-      ),
+      agentContext: this.createContext(options.actor, options.runtime, {
+        sessionId,
+        model,
+      }),
       model,
       provider: resolved.provider,
       providerName: resolved.service.provider,

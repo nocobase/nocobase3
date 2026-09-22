@@ -108,10 +108,18 @@ describe('AI employee container-scoped factories', () => {
       provider,
       service: { name: 'test-service', provider: 'test' },
     } as never);
-    const agent = await factory.createAgent({ sessionId: 'factory-session' });
+    const fixedAgent = {
+      actor: { id: 1, roles: [], isRoot: false },
+      runtime: { logger: { warn: vi.fn(), error: vi.fn() } as never },
+    };
+    const agent = await factory.createAgent({
+      sessionId: 'factory-session',
+      ...fixedAgent,
+    });
     expect(agent).toBeInstanceOf(AgentService);
     const second = await factory.createAgent({
       sessionId: 'factory-session-2',
+      ...fixedAgent,
     });
     const firstProviders = (agent as unknown as { providers: AgentProviders })
       .providers;
