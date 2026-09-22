@@ -28,7 +28,7 @@ This directory is the application's browser client. Read the application's root 
 - Every user-visible string goes through a translation key.
 - React provider layers are outer-to-inner: `root`, `application`, `extension`. Applications use the first two; plugins own the extension layer. `before` and `after` order only within one layer.
 
-Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`.
+Before finishing, run only the formatting, lint, type checking, tests, builds, and runtime checks relevant to the change, scoped to affected files, projects, or packages and their affected consumers. Follow the verification scope rules in the application root `AGENTS.md`; do not default to full-application or workspace-wide checks after each edit.
 
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `.agents/skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
 

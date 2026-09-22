@@ -86,6 +86,10 @@ Read only the reference the task needs.
 - The plugin's `skills/` source is authoritative. `.agents/skills/` is a
   synchronized copy and must not be edited.
 
+## Reversible UI customization
+
+Prefer props and page composition, then new application components outside `client/extensions/nocobase-auth-ui/`, over editing the original extension files. Reuse the headless authentication actions in custom forms. Disabling registration or another feature should preserve its pages and components, conditionally disable the route, and hide its entry points so it can be restored. The server must still reject the disabled operation. Read [client session and pages](references/client-session-and-pages.md) for the implementation and verification rules.
+
 ## Constraints
 
 - Mounting under `/api` authenticates nothing. A route is protected only by
