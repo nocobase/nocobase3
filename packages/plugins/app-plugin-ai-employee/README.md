@@ -37,6 +37,10 @@ ai:
       sort: 10
 ```
 
+The configured service name set is authoritative, including an empty array. Reloading the `ai` application-config namespace reconciles additions, structural updates, and removals without restarting the process or rescanning the AI resource directory, and existing records preserve the user-managed `enabled` and `enabledModels` values. Each configured `enabledModels` array is converted internally to custom mode; `mode` is not part of the application config contract. Environment references are expanded recursively after validation; missing variables become empty strings.
+
+`enabledModels` is the menu a service offers, not an access control boundary. It decides what the model selector and `ai:listAllEnabledModels` list, and which model `resolveModel()` falls back to when a caller names none; a service with an empty list offers nothing and disappears from the selector. It is not checked when a caller does name a model, so a request or a stored employee configuration naming an unlisted model still runs.
+
 ## MCP server configuration
 
 Declare MCP servers in the application's `config.yml`; the settings page is read-only:
@@ -60,9 +64,7 @@ ai:
         Authorization: Bearer ${MCP_SERVER_TOKEN}
 ```
 
-Configuration reload synchronizes the configured server set and rebuilds the MCP client. The UI only provides connection testing and viewing the tools discovered from each configured server.
-
-The configured name set is authoritative, including an empty array. Each configured `enabledModels` array is converted internally to custom mode; `mode` is not part of the application config contract. Reloading the `ai` application-config namespace reconciles additions, structural updates, and removals without restarting the process or rescanning the AI resource directory. Existing records preserve the user-managed `enabled` and `enabledModels` values. Environment references are expanded recursively after validation; missing variables become empty strings.
+Configuration reload synchronizes the configured server set and rebuilds the MCP client. The UI only provides connection testing and viewing the tools discovered from each configured server. The configured server name set is authoritative, including an empty array.
 
 ## Conversation center
 

@@ -267,7 +267,7 @@ type AIEmployeeLLMServiceConfig = {
 
 Configuration rules:
 
-- `ai.llmServices` defaults to an empty array and is authoritative.
+- `ai.llmServices` defaults to an empty array and is authoritative for the set of service names.
 - `name` and `provider` must be non-empty strings; validation rejects the whole snapshot before repository mutation.
 - Duplicate names reject the whole snapshot.
 - `options` and `modelOptions` preserve provider-specific nested values.
@@ -298,7 +298,7 @@ ai:
 
 After editing `config.yml`, invoke the application config reload mechanism. The live subscription reconciles the new snapshot without a process restart or AI resource rescan.
 
-`enabledModels` is always an array of `{ label, value }` entries in application config. The plugin converts it internally to `{ mode: 'custom', models }`. Omit the field to use manager defaults for a new service.
+`enabledModels` is always an array of `{ label, value }` entries in application config. The plugin converts it internally to `{ mode: 'custom', models }`. Omit the field to use manager defaults for a new service. The list scopes what `listAllEnabledModels()` returns and which model `resolveModel()` falls back to when a caller names none; it is not verified when a caller names a model explicitly, so an unlisted model still runs.
 
 ## AIManager Shape
 

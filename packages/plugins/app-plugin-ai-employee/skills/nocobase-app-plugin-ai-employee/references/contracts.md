@@ -209,7 +209,7 @@ type AIEmployeeLLMServiceConfig = {
 };
 ```
 
-The `ai.llmServices` array is authoritative and defaults to empty. Configured `enabledModels` entries are converted internally to `{ mode: 'custom', models }`. Duplicate names or invalid entries reject the snapshot before repository mutation. Environment placeholders use `${NAME}` and are expanded recursively after validation; a missing variable becomes an empty string. Existing names preserve repository `enabled` and `enabledModels`; new names use config values or manager defaults. Reload application config after editing.
+The `ai.llmServices` array is authoritative for the set of service names and defaults to empty. Configured `enabledModels` entries are converted internally to `{ mode: 'custom', models }`. That list scopes what the model selector and `ai:listAllEnabledModels` offer, and which model `resolveModel()` falls back to when a caller names none; it is not checked when a caller names a model, so an unlisted model still runs. Duplicate names or invalid entries reject the snapshot before repository mutation. Environment placeholders use `${NAME}` and are expanded recursively after validation; a missing variable becomes an empty string. Existing names preserve repository `enabled` and `enabledModels`; new names use config values or manager defaults. Reload application config after editing.
 
 Frontend model values are:
 
