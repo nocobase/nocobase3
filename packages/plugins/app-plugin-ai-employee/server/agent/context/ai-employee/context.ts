@@ -1,11 +1,11 @@
 import type {
-  AgentRequest,
   AgentContextProvider,
   CurrentConversation,
   DiscoveredTools,
   ResolvedAgentLLM,
 } from '../../types.js';
 import type {
+  AgentState,
   AIEmployee as AIEmployeeType,
   AIMessageInput,
   LLMProviderManager,
@@ -19,6 +19,7 @@ import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import type { AIEmployeeSkillSettings } from './options.js';
 import type { AppAgentContext } from '../../context.js';
+import { isModelRef } from '../../../types.js';
 import type { Actor, ModelRef, Translate } from '../../../types.js';
 import type { BuiltInManager } from '../../../manager/built-in-manager.js';
 import type { KnowledgeBaseManager } from '../../../manager/knowledge-base-manager.js';
@@ -136,11 +137,18 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     return this.runtimeContext;
   }
 
-  public async resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    // The employee's own configuration decides the model. A request may ask for
-    // one, but only a model the employee allows is honoured, and a request that
+  public state(): AgentState {
+    return this.runtimeContext.state;
+  }
+
+  public async resolveLLM(): Promise<ResolvedAgentLLM> {
+    // The employee's own configuration decides the model. The turn may ask for
+    // one, but only a model the employee allows is honoured, and a turn that
     // asks for none is resolved rather than rejected.
-    const model = await this.resolveModel(request.model);
+    const requested = this.state().model;
+    const model = await this.resolveModel(
+      isModelRef(requested) ? requested : undefined,
+    );
     const resolved = await this.llmProviderManager.getLLMService(model);
     return {
       providerName: resolved.service.provider,

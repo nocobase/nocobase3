@@ -51,7 +51,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
     expect(getUserDecisions).toHaveBeenCalledWith('sub-message');
   });
 
-  it('passes the resolved execution context to sub-agent tools', async () => {
+  it('passes the inherited turn to sub-agent tools', async () => {
     const invoke = vi.fn().mockResolvedValue({
       message: {
         role: 'assistant',
@@ -105,28 +105,32 @@ describe('SubAgentsDispatcher direct dependencies', () => {
         },
         {
           actor: { id: 'user-1', roles: ['member'], isRoot: false },
-          execution: { timezone: 'Asia/Shanghai' },
+          turn: { timezone: 'Asia/Shanghai' },
         },
       ),
     ).resolves.toBe('Search result');
 
-    // The tool context is fixed when the AgentService is created, so the
-    // dispatcher hands the execution state to the factory instead of putting a
-    // context on the request.
+    // The sub-agent inherits the parent's turn but runs in its own session,
+    // and the factory resolves its model. Nothing of this rides the request,
+    // and the turn never carries a session for the agent's own to contradict.
     expect(createAIEmployee).toHaveBeenCalledWith(
       expect.objectContaining({
         actor: { id: 'user-1', roles: ['member'], isRoot: false },
         sessionId: 'sub-session',
-        execution: { timezone: 'Asia/Shanghai' },
-        state: expect.objectContaining({
-          sessionId: 'sub-session',
+        from: 'sub-agent',
+        turn: expect.objectContaining({
+          timezone: 'Asia/Shanghai',
           model: resolvedModel,
           webSearch: true,
         }),
       }),
     );
-    expect(createAIEmployee.mock.calls[0][0].state.messages).toHaveLength(1);
+    expect(createAIEmployee.mock.calls[0][0].turn).not.toHaveProperty(
+      'sessionId',
+    );
+    expect(createAIEmployee.mock.calls[0][0].turn.messages).toHaveLength(1);
     const request = invoke.mock.calls[0][0];
-    expect(request.context).not.toHaveProperty('agentContext');
+    expect(request).not.toHaveProperty('model');
+    expect(request).not.toHaveProperty('context');
   });
 });

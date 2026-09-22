@@ -140,9 +140,8 @@ const tool = (name: string): ToolsEntity =>
     execution: 'backend',
   }) as ToolsEntity;
 
-it('resolves request models over the fixed default and exposes tools', async () => {
+it('runs on the model it was created with and exposes its tools', async () => {
   const defaultProvider = {} as LLMProvider;
-  const overrideProvider = {} as LLMProvider;
   const context = new FixedAgentContextProvider({
     sessionId: 'context-session',
     model: { llmService: 'default-service', model: 'default-model' },
@@ -151,31 +150,19 @@ it('resolves request models over the fixed default and exposes tools', async () 
     systemPrompt: 'fixed prompt',
     tools: new Map([['search', tool('search')]]),
     activeTools: new Set(['search']),
-    resolveLLM: async (model) => ({
-      providerName: 'override-provider',
-      llmService: model.llmService,
-      model: model.model,
-      provider: overrideProvider,
-    }),
   });
   await expect(context.getSystemPrompt([])).resolves.toBe('fixed prompt');
   await expect(context.discoveredTools()).resolves.toMatchObject({
     tools: new Map([['search', tool('search')]]),
   });
-  await expect(context.resolveLLM({})).resolves.toMatchObject({
+  // A request carries no model, so every call resolves the same one.
+  await expect(context.resolveLLM()).resolves.toMatchObject({
     providerName: 'default-provider',
     model: 'default-model',
     provider: defaultProvider,
   });
-  await expect(
-    context.resolveLLM({
-      model: { llmService: 'override-service', model: 'override-model' },
-    }),
-  ).resolves.toMatchObject({
-    providerName: 'override-provider',
-    llmService: 'override-service',
-    model: 'override-model',
-    provider: overrideProvider,
+  await expect(context.resolveLLM()).resolves.toMatchObject({
+    model: 'default-model',
   });
 });
 

@@ -214,8 +214,8 @@ export class AgentService {
     return this.executeInvoke('fork', request);
   }
 
-  private resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    return this.agentContext.resolveLLM(request);
+  private resolveLLM(): Promise<ResolvedAgentLLM> {
+    return this.agentContext.resolveLLM();
   }
 
   private shouldFork(
@@ -307,7 +307,7 @@ export class AgentService {
       (message: any) => message?.role !== 'system',
     );
     const importantPrompt =
-      request.context?.important === 'GraphRecursionError'
+      context.state().important === 'GraphRecursionError'
         ? `<Important>You have already called tools multiple times and gathered sufficient information.\nFirst, provide a summary based on the existing information. Do not call additional tools.\nIf information is missing, clearly state it in the summary.</Important>`
         : undefined;
     const systemPrompt = features.contextEnrichment
@@ -354,11 +354,11 @@ export class AgentService {
         : null;
     // A tool's context is bound when the tool is built, never read back out of
     // the invocation config, so `agentContext` on a request reaches nothing.
-    const { agentContext: _requestAgentContext, ...requestContext } =
-      request.context ?? {};
+    const { agentContext: _requestAgentContext, ...runtimeContext } =
+      request.runtime ?? {};
     const config = {
       context: {
-        ...requestContext,
+        ...runtimeContext,
         agentRequest: request,
         decisions: request.userDecisions,
       },
@@ -495,7 +495,7 @@ export class AgentService {
     let activeProvider: LLMProvider | undefined;
     await conversation.event.beforeExecution('invoking');
     try {
-      const llm = await this.resolveLLM(request).catch((error: unknown) => {
+      const llm = await this.resolveLLM().catch((error: unknown) => {
         throw toConfigurationError(error);
       });
       activeProvider = llm.provider;
@@ -555,7 +555,7 @@ export class AgentService {
       await conversation.streamCache.clear();
       await conversation.event.beforeExecution('streaming');
       executionStarted = true;
-      const llm = await this.resolveLLM(request).catch((error: unknown) => {
+      const llm = await this.resolveLLM().catch((error: unknown) => {
         throw toConfigurationError(error);
       });
       activeProvider = llm.provider;

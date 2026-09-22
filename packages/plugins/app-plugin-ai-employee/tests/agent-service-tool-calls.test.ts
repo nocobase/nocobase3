@@ -22,6 +22,7 @@ const createProviders = (
     resolveLLM: vi.fn(),
     getSystemPrompt: vi.fn(),
     toolRuntimeContext: vi.fn(() => ({})),
+    state: vi.fn(() => ({})),
     currentConversation: vi.fn(() => ({ sessionId: 'test-session' })),
     discoveredTools: vi.fn(),
   };

@@ -3,7 +3,7 @@ import { defineTools, type AgentContext } from '@nocobase/ai-employee';
 import {
   createTestActor,
   createTestAgentContext,
-  createTestConversationExecution,
+  createTestConversationTurn,
 } from './app/test-context.js';
 
 const contextTool = defineTools<AgentContext<{}, {}>>({
@@ -20,20 +20,15 @@ const contextFreeTool = defineTools<AgentContext<{}, {}>>({
 });
 
 describe('AgentContext adapter', () => {
-  it('maps actor and execution state without leaking transport fields', () => {
+  it('maps actor and turn into state, with the caller naming the session', () => {
     const agentContext = createTestAgentContext({
       actor: createTestActor({
         id: 7,
         roles: ['admin'],
         locale: 'en-US',
       }),
-      execution: createTestConversationExecution({
-        sessionId: 'main',
-        messageId: 'message-1',
-        streamTarget: { write() {}, end() {} },
-        abortSignal: new AbortController().signal,
-      }),
-      state: { sessionId: 'sub' },
+      turn: createTestConversationTurn({ messageId: 'message-1' }),
+      decided: { sessionId: 'sub' },
     });
 
     expect(agentContext.actor).toEqual({
@@ -44,6 +39,8 @@ describe('AgentContext adapter', () => {
     });
     expect(agentContext.state.sessionId).toBe('sub');
     expect(agentContext.state.messageId).toBe('message-1');
+    // A turn carries no transport, so the stream target and the abort signal
+    // stop at the conversation service and cannot reach a tool.
     expect(agentContext.state).not.toHaveProperty('streamTarget');
     expect(agentContext.state).not.toHaveProperty('abortSignal');
     // The context carries this execution and nothing ambient: a tool reaches a
@@ -58,8 +55,8 @@ describe('AgentContext adapter', () => {
 
 describe('AgentService AgentContext propagation', () => {
   it('passes request-scoped contexts independently and reports missing context clearly', async () => {
-    const contextA = createTestAgentContext({ state: { sessionId: 'A' } });
-    const contextB = createTestAgentContext({ state: { sessionId: 'B' } });
+    const contextA = createTestAgentContext({ decided: { sessionId: 'A' } });
+    const contextB = createTestAgentContext({ decided: { sessionId: 'B' } });
     const { buildTool } = await import('@nocobase/ai-employee');
     type Built = {
       invoke: (

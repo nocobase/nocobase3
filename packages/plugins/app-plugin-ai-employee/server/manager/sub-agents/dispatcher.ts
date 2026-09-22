@@ -13,7 +13,10 @@ import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { Actor, Translate } from '../../types.js';
-import type { ConversationExecution } from '../../agent/contracts.js';
+import type {
+  AgentUserDecisionResult,
+  ConversationTurn,
+} from '../../agent/contracts.js';
 import type { AIFileEntity } from '../../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../../repository/file-storage/ai-file-metadata-repository.js';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
@@ -48,7 +51,8 @@ export type SubAgentTask = {
 
 export interface SubAgentExecutionOptions {
   readonly actor: Actor;
-  readonly execution?: ConversationExecution;
+  /** The turn the dispatching agent is serving, inherited by the sub-agent. */
+  readonly turn?: ConversationTurn;
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
 }
@@ -124,6 +128,7 @@ export class SubAgentsDispatcher {
     this.workContextHandler = workContextHandler;
     this.documentLoaders = documentLoaders;
     void this.ai;
+    void this.aiEmployeesManager;
     void this.database;
     void this.databaseManager;
     void this.logger;
@@ -248,17 +253,15 @@ export class SubAgentsDispatcher {
       throw new Error('User not authenticated');
     }
 
-    const resolvedModel = await this.aiEmployeesManager.resolveModel(
-      employee,
-      model,
-    );
-    const execution = options.execution;
     if (!this.container) {
       throw new Error('SubAgentsDispatcher requires an App container');
     }
     const agentServiceFactory = this.container.resolve(
       agentServiceFactoryToken,
     );
+    // The sub-agent runs in its own session on the parent's turn: the session
+    // is its own, everything the parent gathered is inherited, and the target
+    // employee's own model policy still applies to the model asked for.
     const agent = await agentServiceFactory.createAIEmployee({
       username: employee.username,
       actor: options.actor,
@@ -267,18 +270,11 @@ export class SubAgentsDispatcher {
       getHeader: options.getHeader,
       sessionId,
       skillSettings,
-      webSearch,
-      tools: undefined,
-      execution,
-      state: {
-        sessionId,
-        messages: messages
-          ? [...messages]
-          : execution?.messages
-            ? [...execution.messages]
-            : undefined,
-        model: { ...resolvedModel },
-        webSearch: webSearch ?? execution?.webSearch,
+      turn: {
+        ...options.turn,
+        messages: messages ?? options.turn?.messages,
+        model,
+        webSearch: webSearch ?? options.turn?.webSearch,
       },
     });
     const lastMessage = await this.repositories.aiMessages.findOne({
@@ -292,7 +288,7 @@ export class SubAgentsDispatcher {
           lastMessage.messageId,
         )
       : null;
-    const context: Record<string, unknown> = {};
+    const runtime: Record<string, unknown> = {};
     if (
       messages &&
       decisions?.decisions?.some(
@@ -300,12 +296,11 @@ export class SubAgentsDispatcher {
           decision.type === 'reject',
       )
     ) {
-      context.appendMessages = messages;
+      runtime.appendMessages = messages;
     }
 
     const result = await agent.invoke({
       userDecisions: decisions ?? undefined,
-      model: resolvedModel,
       userMessages: decisions
         ? undefined
         : [
@@ -318,7 +313,7 @@ export class SubAgentsDispatcher {
             },
           ],
       writer,
-      context,
+      runtime,
     });
 
     writer?.({
@@ -351,7 +346,10 @@ export class SubAgentsDispatcher {
     return Boolean(aiToolMessage);
   }
 
-  async reject(sessionId: string, actorId: string | number): Promise<unknown> {
+  async reject(
+    sessionId: string,
+    actorId: string | number,
+  ): Promise<AgentUserDecisionResult | null | undefined> {
     const userId = actorId;
     if (!userId) {
       throw new Error('User not authenticated');

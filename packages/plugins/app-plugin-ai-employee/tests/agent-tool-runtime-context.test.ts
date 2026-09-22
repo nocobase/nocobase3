@@ -37,6 +37,7 @@ function createFixture() {
     logger: { warn: vi.fn(), error: vi.fn() },
     context: {
       toolRuntimeContext: vi.fn(() => runtimeContext),
+      state: vi.fn(() => runtimeContext.state ?? {}),
       currentConversation: vi.fn(() => ({ sessionId: 'runtime' })),
       resolveLLM: vi.fn(async () => ({
         providerName: 'test',
@@ -85,14 +86,14 @@ describe('AgentService tool runtime context', () => {
     expect(await runBuiltTool()).toEqual({ ...runtimeContext, deps: {} });
   });
 
-  it('ignores an agent context supplied by a request and keeps the other request values', async () => {
+  it('ignores an agent context supplied by a request and keeps the other runtime values', async () => {
     const { service, invoke, runBuiltTool } = createFixture();
 
     await service.invoke({
       userMessages,
-      context: {
+      runtime: {
         agentContext: { marker: 'from-request' },
-        timezone: 'Asia/Shanghai',
+        appendMessages: ['kept'],
       },
     });
 
@@ -100,6 +101,6 @@ describe('AgentService tool runtime context', () => {
     const config = invoke.mock.calls[0][1];
     // The key reaches nothing now, and is not forwarded either.
     expect(config.context).not.toHaveProperty('agentContext');
-    expect(config.context.timezone).toBe('Asia/Shanghai');
+    expect(config.context.appendMessages).toEqual(['kept']);
   });
 });

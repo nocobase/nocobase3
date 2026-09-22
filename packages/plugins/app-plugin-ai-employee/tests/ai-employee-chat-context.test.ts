@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import type { LLMProvider } from '@nocobase/ai-employee';
 import { AIEmployeeAgentContextProvider } from '../server/agent/context/ai-employee/context.js';
 
-const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
+const createFixture = (
+  promptMode: 'default' | 'raw' | 'none' = 'default',
+  state: Record<string, unknown> = {},
+) => {
   const provider = {
     parseResponseMetadata: vi.fn((output) => [output.id, output.metadata]),
   } as unknown as LLMProvider;
@@ -14,7 +17,7 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
       model: 'model-1',
     })),
   };
-  const toolRuntimeContext = { actor, ai: {} };
+  const toolRuntimeContext = { actor, ai: {}, state };
   const employeeModel = {
     llmService: 'employee-service',
     model: 'employee-model',
@@ -46,7 +49,6 @@ const createFixture = (promptMode: 'default' | 'raw' | 'none' = 'default') => {
       hasAccessibleKnowledgeBase: vi.fn(async () => false),
     },
     builtInManager: { setupBuiltInInfo: vi.fn() },
-    execution: {},
   } as any;
   const context = new AIEmployeeAgentContextProvider(options);
   const toolContext = {
@@ -81,29 +83,44 @@ describe('AIEmployeeAgentContextProvider', () => {
     expect(await none.context.getSystemPrompt([])).toBe('');
   });
 
-  it('resolves the model selected by each request through the employee policy', async () => {
-    const { context, llmProviderManager, resolveModel } = createFixture();
-    const first = { llmService: 'service-1', model: 'model-1' };
-    const second = { llmService: 'service-2', model: 'model-2' };
+  it('resolves the model the turn asked for through the employee policy', async () => {
+    const asked = { llmService: 'service-1', model: 'model-1' };
+    const { context, llmProviderManager, resolveModel } = createFixture(
+      'default',
+      { model: asked },
+    );
 
-    await context.resolveLLM({ model: first });
-    await context.resolveLLM({ model: second });
+    // The model is the agent's, not a request's: every call resolves the one
+    // the turn asked for, through the employee's policy.
+    await context.resolveLLM();
+    await context.resolveLLM();
 
-    expect(resolveModel).toHaveBeenNthCalledWith(1, first);
-    expect(resolveModel).toHaveBeenNthCalledWith(2, second);
-    expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(1, first);
-    expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(2, second);
+    expect(resolveModel).toHaveBeenNthCalledWith(1, asked);
+    expect(resolveModel).toHaveBeenNthCalledWith(2, asked);
+    expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(1, asked);
+    expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(2, asked);
   });
 
-  it('falls back to the employee model when a request selects none', async () => {
+  it('falls back to the employee model when the turn selected none', async () => {
     const { context, llmProviderManager, employeeModel } = createFixture();
 
-    await expect(context.resolveLLM({})).resolves.toMatchObject({
+    await expect(context.resolveLLM()).resolves.toMatchObject({
       llmService: 'test-service',
     });
     expect(llmProviderManager.getLLMService).toHaveBeenCalledWith(
       employeeModel,
     );
+  });
+
+  it('ignores a state model that is not a model reference', async () => {
+    const { context, resolveModel, employeeModel } = createFixture('default', {
+      model: { llmService: 'service-1' },
+    });
+
+    await context.resolveLLM();
+
+    expect(resolveModel).toHaveBeenCalledWith(undefined);
+    expect(await resolveModel.mock.results[0].value).toBe(employeeModel);
   });
 
   it('re-reads activated skill tools on every activeTools query', async () => {

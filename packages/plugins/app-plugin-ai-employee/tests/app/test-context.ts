@@ -7,9 +7,10 @@ import { ServiceContainer } from '@nocobase/service-provider';
 
 import {
   createAgentContext,
+  toAgentState,
   type AppAgentContext,
 } from '../../server/agent/context.js';
-import type { ConversationExecution } from '../../server/agent/contracts.js';
+import type { ConversationTurn } from '../../server/agent/contracts.js';
 import type { Actor } from '../../server/types.js';
 import {
   ManagerFactory,
@@ -41,9 +42,9 @@ export function createTestActor(overrides: Partial<Actor> = {}): Actor {
   };
 }
 
-export function createTestConversationExecution(
-  overrides: ConversationExecution = {},
-): ConversationExecution {
+export function createTestConversationTurn(
+  overrides: ConversationTurn = {},
+): ConversationTurn {
   return { ...overrides };
 }
 
@@ -97,32 +98,17 @@ export function createTestAIEmployeeFixture() {
 
 export function createTestAgentContext({
   actor = createTestActor(),
-  execution = createTestConversationExecution(),
-  state,
+  turn = createTestConversationTurn(),
+  decided,
 }: {
   actor?: Actor;
-  execution?: ConversationExecution;
-  state?: Parameters<typeof createAgentContext>[0]['state'];
+  turn?: ConversationTurn;
+  decided?: Parameters<typeof toAgentState>[1];
 } = {}): AppAgentContext {
   const fixture = createTestAIEmployeeFixture();
   return createAgentContext({
     actor,
-    state: {
-      sessionId: execution.sessionId,
-      messageId: execution.messageId,
-      messages: execution.messages ? [...execution.messages] : undefined,
-      model: execution.model ? { ...execution.model } : undefined,
-      webSearch: execution.webSearch,
-      important: execution.important,
-      frontendTools: execution.frontendTools
-        ? [...execution.frontendTools]
-        : undefined,
-      toolCallResults: execution.toolCallResults
-        ? [...execution.toolCallResults]
-        : undefined,
-      timezone: execution.timezone,
-      ...state,
-    },
+    state: toAgentState(turn, decided),
     logger: fixture.deps.logging.getLogger('ai-employee-test'),
   });
 }

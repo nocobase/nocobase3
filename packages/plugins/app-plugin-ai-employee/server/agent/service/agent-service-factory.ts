@@ -31,7 +31,7 @@ import {
   toAgentState,
   type AppAgentContext,
 } from '../context.js';
-import type { ConversationExecution } from '../contracts.js';
+import type { ConversationTurn } from '../contracts.js';
 import type { Actor, ModelRef, Translate } from '../../types.js';
 import {
   repositoryFactoryToken,
@@ -50,20 +50,22 @@ export const agentServiceFactoryToken: ServiceToken<AgentServiceFactory> =
 
 export interface CreateEmployeeOptions {
   readonly username: string;
+  /** The conversation this agent runs in. A new session is started when absent. */
   readonly sessionId?: string;
-  readonly systemPrompt?: string;
-  readonly actor?: Actor;
-  readonly frontendTools?: readonly unknown[];
   readonly from?: 'main-agent' | 'sub-agent';
+  readonly actor?: Actor;
+  /**
+   * Conversation-level configuration, held on the conversation record rather
+   * than sent with a turn. `AIConversationService` reads all three in one
+   * place, so a call site never unpacks the record itself.
+   */
+  readonly systemPrompt?: string;
+  readonly skillSettings?: AIEmployeeSkillSettings;
+  readonly tools?: { name: string }[];
+  /** This turn's runtime data. The only source of the agent's state. */
+  readonly turn?: ConversationTurn;
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
-  readonly skillSettings?: AIEmployeeSkillSettings;
-  readonly webSearch?: boolean;
-  readonly tools?: { name: string }[];
-  /** Runtime details of the request this agent runs for. */
-  readonly execution?: ConversationExecution;
-  /** Explicit agent state, applied over `execution`. */
-  readonly state?: Partial<AgentState>;
 }
 
 export interface CreateAgentOptions {
@@ -77,10 +79,8 @@ export interface CreateAgentOptions {
   readonly actor?: Actor;
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
-  /** Runtime details of the request this agent runs for. */
-  readonly execution?: ConversationExecution;
-  /** Explicit agent state, applied over `execution`. */
-  readonly state?: Partial<AgentState>;
+  /** This turn's runtime data. The only source of the agent's state. */
+  readonly turn?: ConversationTurn;
 }
 
 export class AgentServiceFactory {
@@ -117,17 +117,23 @@ export class AgentServiceFactory {
     const managers = this.managerFactory;
     const sessionId = options.sessionId ?? randomUUID();
     const actor = options.actor ?? { id: 0, roles: [], isRoot: true };
-    const agentContext = this.createContext(
-      actor,
-      options.translate,
-      options.getHeader,
-      this.resolveState(sessionId, options),
-    );
     const employee = await managers.aiEmployeesManager.getEmployee(
       options.username,
     );
     if (!employee)
       throw new Error(`AI employee "${options.username}" not found`);
+    // The model is resolved here and nowhere else. It reaches the state a tool
+    // reads and the LLM the agent runs on from this one call.
+    const resolvedModel = await managers.aiEmployeesManager.resolveModel(
+      employee,
+      options.turn?.model,
+    );
+    const agentContext = this.createContext(
+      actor,
+      options.translate,
+      options.getHeader,
+      toAgentState(options.turn, { sessionId, model: resolvedModel }),
+    );
     const contextOptions = {
       employee,
       sessionId,
@@ -151,11 +157,11 @@ export class AgentServiceFactory {
       employees: repositories.aiEmployees,
       toolMessages: repositories.aiToolMessages,
       usersAiEmployees: repositories.usersAiEmployees,
-      frontendTools: options.frontendTools,
+      frontendTools: options.turn?.frontendTools,
       getHeader: options.getHeader,
       systemMessage: options.systemPrompt,
       skillSettings: options.skillSettings,
-      webSearch: options.webSearch,
+      webSearch: options.turn?.webSearch,
       tools: options.tools,
     };
     const context = createAIEmployeeAgentContextProvider(contextOptions);
@@ -259,25 +265,12 @@ export class AgentServiceFactory {
         options.actor ?? { id: 0, roles: [], isRoot: true },
         options.translate,
         options.getHeader,
-        this.resolveState(sessionId, {
-          ...options,
-          state: { model: { ...model }, ...options.state },
-        }),
+        toAgentState(options.turn, { sessionId, model }),
       ),
       model,
       provider: resolved.provider,
       providerName: resolved.service.provider,
       llmService: resolved.service.name,
-      resolveLLM: async (requestModel) => {
-        const requestResolved =
-          await this.aiManager.llmProviderManager.getLLMService(requestModel);
-        return {
-          providerName: requestResolved.service.provider,
-          llmService: requestResolved.service.name,
-          model: requestResolved.model,
-          provider: requestResolved.provider,
-        };
-      },
       systemPrompt: options.systemPrompt,
       tools,
       activeTools: configuredToolNames,
@@ -298,31 +291,6 @@ export class AgentServiceFactory {
         converters: undefined,
       }),
     );
-  }
-
-  /**
-   * The agent state a tool sees. It is resolved once here and never again: the
-   * AgentService reads it back through `AgentContextProvider`, so no request
-   * can supply a different one.
-   */
-  private resolveState(
-    sessionId: string,
-    options: {
-      readonly execution?: ConversationExecution;
-      readonly state?: Partial<AgentState>;
-      readonly webSearch?: boolean;
-      readonly frontendTools?: readonly unknown[];
-    },
-  ): Partial<AgentState> {
-    const state = toAgentState(options.execution, options.state);
-    return {
-      ...state,
-      sessionId: options.state?.sessionId ?? sessionId,
-      webSearch: state.webSearch ?? options.webSearch,
-      frontendTools:
-        state.frontendTools ??
-        (options.frontendTools ? [...options.frontendTools] : undefined),
-    };
   }
 
   private createContext(

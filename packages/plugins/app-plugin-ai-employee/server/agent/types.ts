@@ -12,6 +12,7 @@ import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
+  AgentState,
   AgentThread,
   AIMessage,
   AIMessageInput,
@@ -21,7 +22,6 @@ import type {
 } from '@nocobase/ai-employee';
 export type { AgentThread } from '@nocobase/ai-employee';
 import type { LLMStreamCached } from '../manager/llm-stream-cached-manager.js';
-import type { ModelRef } from '../types.js';
 export type AgentExecutionSource = 'main-agent' | 'sub-agent' | (string & {});
 export type AgentExecutionMode = 'streaming' | 'invoking';
 export type AgentOperation = 'stream' | 'invoke' | 'resume' | 'fork';
@@ -33,15 +33,25 @@ export interface CurrentConversation {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * What one call to an already-created agent supplies. Everything that is fixed
+ * for the agent's lifetime — the actor, the session, the model, the turn a tool
+ * sees — belongs to `AgentState` and is resolved once by the
+ * `AgentServiceFactory`, so a request cannot swap it.
+ */
 export interface AgentRequest {
-  model?: ModelRef;
+  /** The message this operation forks from, where it forks from one. */
   messageId?: string;
   userMessages?: AIMessageInput[];
   userDecisions?: {
     interruptId?: string;
     decisions: UserDecision[];
   };
-  context?: Record<string, unknown>;
+  /**
+   * Per-call channel for the middleware pipeline, such as `appendMessages`.
+   * Turn data does not belong here; it is already in the agent's state.
+   */
+  runtime?: Record<string, unknown>;
   writer?: (chunk: unknown) => void;
   signal?: AbortSignal;
 }
@@ -367,7 +377,13 @@ export interface ConversationProvider {
 
 export interface AgentContextProvider {
   currentConversation(): CurrentConversation;
-  resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM>;
+  /** The turn this agent was created for, as every tool of it sees it. */
+  state(): AgentState;
+  /**
+   * The LLM this agent runs on. It follows from the agent's own state and the
+   * employee's model policy, never from the request being served.
+   */
+  resolveLLM(): Promise<ResolvedAgentLLM>;
   getSystemPrompt(
     messages: readonly AIMessageInput[],
   ): Promise<string | undefined>;

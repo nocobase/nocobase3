@@ -1,11 +1,11 @@
 import type {
+  AgentState,
   AIMessageInput,
   ToolsEntity,
   LLMProvider,
 } from '@nocobase/ai-employee';
 import type {
   AgentContextProvider,
-  AgentRequest,
   CurrentConversation,
   DiscoveredTools,
   ResolvedAgentLLM,
@@ -20,11 +20,10 @@ export interface FixedAgentContextOptions {
   readonly provider?: LLMProvider;
   readonly providerName?: string;
   readonly llmService?: string;
-  readonly resolveLLM?: (model: ModelRef) => Promise<ResolvedAgentLLM>;
   readonly systemPrompt?: string;
   readonly tools?: ReadonlyMap<string, ToolsEntity>;
   readonly activeTools?: ReadonlySet<string>;
-  readonly toolRuntimeContext?: unknown;
+  readonly toolRuntimeContext?: { state?: AgentState };
 }
 
 export class FixedAgentContextProvider implements AgentContextProvider {
@@ -33,13 +32,10 @@ export class FixedAgentContextProvider implements AgentContextProvider {
   private readonly provider?: LLMProvider;
   private readonly providerName?: string;
   private readonly llmService?: string;
-  private readonly resolveModel?: (
-    model: ModelRef,
-  ) => Promise<ResolvedAgentLLM>;
   private readonly prompt?: string;
   private readonly tools: ReadonlyMap<string, ToolsEntity>;
   private readonly activeToolNames: ReadonlySet<string>;
-  private readonly runtimeContext: unknown;
+  private readonly runtimeContext?: { state?: AgentState };
   public constructor(options: FixedAgentContextOptions) {
     this.conversation = {
       sessionId: options.sessionId,
@@ -50,7 +46,6 @@ export class FixedAgentContextProvider implements AgentContextProvider {
     this.provider = options.provider;
     this.providerName = options.providerName;
     this.llmService = options.llmService;
-    this.resolveModel = options.resolveLLM;
     this.prompt = options.systemPrompt;
     this.tools = options.tools ?? new Map();
     this.activeToolNames = options.activeTools ?? new Set(this.tools.keys());
@@ -65,11 +60,13 @@ export class FixedAgentContextProvider implements AgentContextProvider {
     return this.runtimeContext;
   }
 
-  public async resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM> {
-    const model = request.model ?? this.model;
+  public state(): AgentState {
+    return this.runtimeContext?.state ?? {};
+  }
+
+  public async resolveLLM(): Promise<ResolvedAgentLLM> {
+    const model = this.model;
     if (!model) throw new Error('Fixed agent model is required');
-    if (request.model && this.resolveModel)
-      return this.resolveModel(request.model);
     if (!this.provider)
       throw new Error('Fixed agent model provider is required');
     return {

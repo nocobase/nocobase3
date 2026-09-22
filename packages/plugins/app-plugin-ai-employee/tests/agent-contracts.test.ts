@@ -134,29 +134,67 @@ describe('fixed AgentService contracts', () => {
       'context.getSystemPrompt(allMessages)',
     );
     expect(read('agent/service/agent-service.ts')).toContain(
-      'request.context ?? {}',
+      'request.runtime ?? {}',
     );
   });
 
-  it('resolves the AI employee model from each AgentRequest', () => {
+  it('resolves the AI employee model once, when the agent is created', () => {
     const types = read('agent/types.ts');
     const options = read('agent/context/ai-employee/options.ts');
     const providers = read('agent/context/ai-employee/context.ts');
+    const factory = read('agent/service/agent-service-factory.ts');
     const conversationService = read('service/ai-conversation-service.ts');
     const subAgentDispatcher = read('manager/sub-agents/dispatcher.ts');
 
-    expect(types).toContain('model?: ModelRef');
+    // A request carries no model, so no caller resolves one of its own: the
+    // factory resolves it against the employee's policy and puts it in state.
+    expect(types).not.toContain('model?: ModelRef');
     expect(options).not.toContain('model?: ModelRef');
     expect(providers).not.toContain('private readonly model');
     expect(providers).not.toContain('model: options.model');
-    expect(providers).toContain('this.resolveModel(request.model)');
+    expect(providers).toContain('this.state().model');
     expect(providers).toContain('getLLMService(model)');
-    expect(conversationService).toContain('const agentRequest = {');
-    expect(conversationService).toContain('model: resolvedModel,');
-    expect(conversationService).toContain('userDecisions');
-    expect(subAgentDispatcher).toMatch(
-      /agent\.invoke\(\s*\{\s*userDecisions:[\s\S]*?model: resolvedModel,/,
+    expect(factory).toContain('managers.aiEmployeesManager.resolveModel(');
+    expect(factory).toContain('toAgentState(options.turn, { sessionId,');
+    expect(conversationService).not.toContain('resolveModel(');
+    expect(conversationService).not.toContain('const agentRequest = {');
+    expect(subAgentDispatcher).not.toContain('resolveModel(');
+  });
+
+  it('keeps the turn, the transport and the request apart', () => {
+    const contracts = read('agent/contracts.ts');
+    const factory = read('agent/service/agent-service-factory.ts');
+    const types = read('agent/types.ts');
+    const route = read('route/ai-conversations.ts');
+    const conversationService = read('service/ai-conversation-service.ts');
+
+    // One turn type, parsed in one place, and a transport that stops at the
+    // conversation service.
+    expect(contracts).toContain('export interface ConversationTurn');
+    expect(contracts).toContain('export interface ConversationTransport');
+    expect(contracts).not.toContain('ConversationExecution');
+    expect(route).toContain('function parseTurn(');
+    expect(route).not.toContain('function execution(');
+    expect(conversationService).not.toContain('streamTarget?');
+
+    // A turn names no session: the conversation an agent runs in is decided by
+    // whoever creates it, so there is one `sessionId` and no fallback chain.
+    expect(contracts).not.toMatch(
+      /interface ConversationTurn \{[\s\S]*?sessionId/,
     );
+    expect(factory).toContain('options.sessionId ?? randomUUID()');
+    expect(read('agent/context.ts')).toContain(
+      'sessionId: decided?.sessionId,',
+    );
+
+    // The agent takes the turn whole; nothing re-states its fields.
+    expect(factory).not.toContain('readonly state?:');
+    expect(factory).not.toContain('readonly execution?:');
+    expect(factory).not.toContain('readonly webSearch?:');
+    expect(factory).not.toContain('readonly frontendTools?:');
+    expect(factory).not.toContain('private resolveState(');
+    expect(types).not.toContain('context?: Record<string, unknown>;');
+    expect(types).toContain('runtime?: Record<string, unknown>;');
   });
 
   it('keeps AI chat conversation ownership in the conversation provider', () => {

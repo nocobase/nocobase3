@@ -33,6 +33,7 @@ const createProviders = (
     logger: { warn: vi.fn(), error: vi.fn() } as never,
     context: {
       toolRuntimeContext: vi.fn(() => ({})),
+      state: vi.fn(() => ({})),
       currentConversation: vi.fn(() => ({ sessionId: 'test-session' })),
       resolveLLM: vi.fn(async () => llm),
       getSystemPrompt: vi.fn(async () => {

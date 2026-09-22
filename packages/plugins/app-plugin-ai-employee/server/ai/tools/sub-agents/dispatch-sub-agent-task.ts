@@ -1,6 +1,6 @@
 import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import type { ModelRef } from '../../../types.js';
+import { isModelRef } from '../../../types.js';
 import { managerFactoryToken } from '../../../factory/manager-factory.js';
 import { repositoryFactoryToken } from '../../../factory/repository-factory.js';
 import {
@@ -8,12 +8,6 @@ import {
   getSkillSettingsFromMain,
   updateMessageMetadata,
 } from '../../sub-agents/shared.js';
-
-const isModelRef = (value: unknown): value is ModelRef =>
-  !!value &&
-  typeof value === 'object' &&
-  typeof (value as Record<string, unknown>).llmService === 'string' &&
-  typeof (value as Record<string, unknown>).model === 'string';
 
 export default defineTools({
   scope: 'SPECIFIED',
@@ -91,8 +85,9 @@ export default defineTools({
       },
       {
         actor: ctx.actor,
-        execution: {
-          sessionId: ctx.state.sessionId,
+        // The sub-agent inherits this agent's turn; its own session and model
+        // are decided when the sub-agent is created.
+        turn: {
           messages: ctx.state.messages,
           frontendTools: ctx.state.frontendTools,
           toolCallResults: ctx.state.toolCallResults,

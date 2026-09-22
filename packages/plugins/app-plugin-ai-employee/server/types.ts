@@ -83,6 +83,21 @@ export interface ModelRef {
   readonly model: string;
 }
 
+/**
+ * Narrows a model carried as loose agent state back to a `ModelRef`. The state
+ * a tool sees is plain data, so the reference has to be recognised rather than
+ * assumed.
+ */
+export function isModelRef(value: unknown): value is ModelRef {
+  const candidate = value as ModelRef | null;
+  return Boolean(
+    candidate &&
+    typeof candidate === 'object' &&
+    typeof candidate.llmService === 'string' &&
+    typeof candidate.model === 'string',
+  );
+}
+
 export type Translate = (
   key: string,
   options?: Record<string, unknown>,

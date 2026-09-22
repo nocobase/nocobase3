@@ -1,6 +1,9 @@
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Context as HonoContext, Hono } from 'hono';
-import type { ConversationExecution } from '../agent/contracts.js';
+import type {
+  ConversationTransport,
+  ConversationTurn,
+} from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
 import { identityTranslate, ResourceActionError } from '../types.js';
 import { requireConversationReadAccess } from '../service/utils.js';
@@ -123,10 +126,11 @@ export function createAIConversationsRouter(
       (input, target) =>
         services.conversationService.sendMessages({
           actor: context.var.currentUser,
-          input,
-          execution: execution(context, input, target),
-          translate: identityTranslate,
-          getHeader: (name) => context.req.header(name),
+          sessionId: requiredString(input.sessionId, 'sessionId'),
+          aiEmployee: input.aiEmployee,
+          stream: input.stream !== false,
+          turn: parseTurn(context, input),
+          transport: transport(context, target),
         }),
     ),
   );
@@ -138,10 +142,10 @@ export function createAIConversationsRouter(
       (input, target) =>
         services.conversationService.resendMessages({
           actor: context.var.currentUser,
-          input,
-          execution: execution(context, input, target),
-          translate: identityTranslate,
-          getHeader: (name) => context.req.header(name),
+          sessionId: requiredString(input.sessionId, 'sessionId'),
+          stream: input.stream !== false,
+          turn: parseTurn(context, input),
+          transport: transport(context, target),
         }),
     ),
   );
@@ -150,10 +154,12 @@ export function createAIConversationsRouter(
     const input = await jsonObject(context);
     const result = await services.conversationService.updateUserDecision({
       actor: context.var.currentUser,
-      input,
-      execution: execution(context, input),
-      translate: identityTranslate,
-      getHeader: (name) => context.req.header(name),
+      sessionId: requiredString(input.sessionId, 'sessionId'),
+      messageId: input.messageId,
+      toolCallId: input.toolCallId,
+      userDecision: input.userDecision,
+      turn: parseTurn(context, input),
+      transport: transport(context),
     });
     return context.json(result as never);
   });
@@ -165,10 +171,9 @@ export function createAIConversationsRouter(
       (input, target) =>
         services.conversationService.resumeToolCall({
           actor: context.var.currentUser,
-          input,
-          execution: execution(context, input, target),
-          translate: identityTranslate,
-          getHeader: (name) => context.req.header(name),
+          sessionId: requiredString(input.sessionId, 'sessionId'),
+          turn: parseTurn(context, input),
+          transport: transport(context, target),
         }),
     ),
   );
@@ -180,8 +185,8 @@ export function createAIConversationsRouter(
       (input, target) =>
         services.conversationService.resumeStream({
           actorId: context.var.currentUser.id,
-          input: { sessionId: requiredString(input.sessionId, 'sessionId') },
-          execution: execution(context, input, target),
+          sessionId: requiredString(input.sessionId, 'sessionId'),
+          transport: transport(context, target),
         }),
     ),
   );
@@ -250,16 +255,22 @@ function paginationQuery(
   return Number(value);
 }
 
-function execution(
+/**
+ * The one place a conversation request body becomes a turn. Everything
+ * downstream — the agent's state, the tools it runs — reads this result rather
+ * than the body, so no field is parsed twice.
+ */
+function parseTurn(
   context: HonoContext,
   input: Record<string, any>,
-  streamTarget?: ConversationStreamTarget,
-): ConversationExecution {
+): ConversationTurn {
   return {
-    sessionId:
-      typeof input.sessionId === 'string' ? input.sessionId : undefined,
     messageId:
-      typeof input.messageId === 'string' ? input.messageId : undefined,
+      typeof input.messageId === 'string'
+        ? input.messageId
+        : typeof input.editingMessageId === 'string'
+          ? input.editingMessageId
+          : undefined,
     messages: Array.isArray(input.messages) ? input.messages : undefined,
     model: input.model,
     webSearch: input.webSearch === true,
@@ -271,11 +282,21 @@ function execution(
     toolCallResults: Array.isArray(input.toolCallResults)
       ? input.toolCallResults
       : undefined,
-    streamTarget,
-    abortSignal: context.req.raw.signal,
     timezone:
       typeof input.timezone === 'string'
         ? input.timezone
         : context.req.header('x-timezone'),
+  };
+}
+
+function transport(
+  context: HonoContext,
+  streamTarget?: ConversationStreamTarget,
+): ConversationTransport {
+  return {
+    streamTarget,
+    abortSignal: context.req.raw.signal,
+    translate: identityTranslate,
+    getHeader: (name) => context.req.header(name),
   };
 }

@@ -9,8 +9,8 @@
 
 import type { AgentContext, AgentState } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
-import type { ConversationExecution } from './contracts.js';
-import type { Actor, Translate } from '../types.js';
+import type { ConversationTurn } from './contracts.js';
+import type { Actor, ModelRef, Translate } from '../types.js';
 
 /**
  * The context every backend tool of this application starts from. It carries
@@ -30,29 +30,29 @@ export interface CreateAgentContextOptions {
 }
 
 /**
- * Folds one request's execution details into the agent state. The result is
- * handed to `createAgentContext` once, when the AgentService is created; no
- * later call may replace it.
+ * Folds one turn into the agent state a tool sees. The session and the model
+ * are not the turn's to give: an agent runs in the session its caller named,
+ * and only the employee's policy may pick its model, so both arrive here
+ * already decided. The result is handed to `createAgentContext` once, when the
+ * AgentService is created; no later request may replace it.
  */
 export function toAgentState(
-  execution?: ConversationExecution,
-  overrides?: Partial<AgentState>,
+  turn?: ConversationTurn,
+  decided?: { sessionId?: string; model?: ModelRef },
 ): Partial<AgentState> {
+  const model = decided?.model ?? turn?.model;
   return {
-    sessionId: execution?.sessionId,
-    messageId: execution?.messageId,
-    messages: execution?.messages ? [...execution.messages] : undefined,
-    model: execution?.model ? { ...execution.model } : undefined,
-    webSearch: execution?.webSearch,
-    important: execution?.important,
-    frontendTools: execution?.frontendTools
-      ? [...execution.frontendTools]
+    sessionId: decided?.sessionId,
+    messageId: turn?.messageId,
+    messages: turn?.messages ? [...turn.messages] : undefined,
+    model: model ? { ...model } : undefined,
+    webSearch: turn?.webSearch,
+    important: turn?.important,
+    frontendTools: turn?.frontendTools ? [...turn.frontendTools] : undefined,
+    toolCallResults: turn?.toolCallResults
+      ? [...turn.toolCallResults]
       : undefined,
-    toolCallResults: execution?.toolCallResults
-      ? [...execution.toolCallResults]
-      : undefined,
-    timezone: execution?.timezone,
-    ...overrides,
+    timezone: turn?.timezone,
   };
 }
 

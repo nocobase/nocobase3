@@ -60,34 +60,36 @@ describe('AIConversationService tool context', () => {
 
     await service.sendMessages({
       actor: { id: 'user-1', roles: ['member'], isRoot: false },
-      input: {
-        sessionId: 'session-1',
-        aiEmployee: 'researcher',
+      sessionId: 'session-1',
+      aiEmployee: 'researcher',
+      stream: false,
+      turn: {
         messages,
         model: resolvedModel,
         webSearch: true,
-        stream: false,
+        timezone: 'Asia/Shanghai',
       },
-      execution: { timezone: 'Asia/Shanghai' },
-      translate: (key) => key,
+      transport: { translate: (key) => key },
     });
 
-    // The tool context is fixed when the AgentService is created, so the state
-    // reaches the factory rather than the request.
+    // The tool context is fixed when the AgentService is created, so the turn
+    // reaches the factory whole and the request carries none of it. The session
+    // is named once, beside the turn rather than inside it.
     expect(createAIEmployee).toHaveBeenCalledWith(
       expect.objectContaining({
-        webSearch: true,
-        execution: expect.objectContaining({ timezone: 'Asia/Shanghai' }),
-        state: {
-          sessionId: 'session-1',
+        sessionId: 'session-1',
+        from: 'main-agent',
+        turn: {
           messages,
           model: resolvedModel,
           webSearch: true,
+          timezone: 'Asia/Shanghai',
         },
       }),
     );
     const request = invoke.mock.calls[0][0];
-    expect(request.context).not.toHaveProperty('agentContext');
-    expect(request.context.timezone).toBe('Asia/Shanghai');
+    expect(request).not.toHaveProperty('model');
+    expect(request).not.toHaveProperty('context');
+    expect(request.userMessages).toEqual(messages);
   });
 });
