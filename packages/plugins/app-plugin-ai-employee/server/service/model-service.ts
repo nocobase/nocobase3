@@ -1,7 +1,4 @@
-import {
-  normalizeEnabledModelsConfig,
-  SupportedModel,
-} from '@nocobase/ai-employee';
+import { SupportedModel } from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
 import { randomUUID } from 'node:crypto';
 import type {
@@ -140,36 +137,6 @@ export class ModelService {
 
   async getSupportedProvider({ model }: { model: string }): Promise<string[]> {
     return this.ai.llmProviderManager.getSupportedProvider(model as any);
-  }
-
-  async requireModel({
-    model,
-  }: {
-    model: { llmService: string; model: string };
-  }): Promise<{ llmService: string; provider: string }> {
-    const service = await this.ai.llmServiceManager.getLLMService(
-      model.llmService,
-    );
-    if (!service || service.enabled === false) {
-      throw new Error(`LLM service not found or disabled: ${model.llmService}`);
-    }
-    const providerMeta = this.ai.llmProviderManager.llmProviders.get(
-      service.provider,
-    );
-    if (!providerMeta) {
-      throw new Error(`LLM provider is not configured: ${service.provider}`);
-    }
-    const models = normalizeEnabledModelsConfig(service.enabledModels).models;
-    if (
-      !models.some(
-        (candidate: { value?: string }) => candidate?.value === model.model,
-      )
-    ) {
-      throw new Error(
-        `Model is not enabled: ${model.llmService}/${model.model}`,
-      );
-    }
-    return { llmService: model.llmService, provider: service.provider };
   }
 
   randomUuid(_options: {}): string {
