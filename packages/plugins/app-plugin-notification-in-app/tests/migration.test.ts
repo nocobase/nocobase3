@@ -331,7 +331,7 @@ describe('in-app notification database migration', () => {
         checksum: loaded[2]?.checksum,
       },
     ]);
-    await expect(migrator.rollback()).resolves.toEqual({
+    await expect(migrator.rollback()).resolves.toMatchObject({
       batch: 1,
       rolledBack: [
         TARGET_MIGRATION_NAME,

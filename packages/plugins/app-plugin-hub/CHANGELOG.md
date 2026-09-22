@@ -1,5 +1,57 @@
 # @nocobase/app-plugin-hub
 
+## 0.1.0-beta.16
+
+### Patch Changes
+
+- 709f9ed: Update Better Auth and API keys to 1.7.5 and align fresh authentication databases with provider-based account identity. Existing authentication databases must be recreated; the original account migration has changed and no compatibility migration is provided.
+- d696700: Stop the `bubblegum` theme from turning settings pages into competing hues, and fix the token misuse it exposed.
+
+  The preset was carried over from tweakcn verbatim, and upstream spends the generic surface and outline roles on decoration: `--card` was a cream 101 degrees of hue away from the pink `--background`, `--border` was `--primary` itself at chroma 0.18 against a median of 0.02 across the other thirty presets, and `--muted` was a cyan. One demonstration card and a few dividers carry that; a settings page stacking several panels over dozens of hairlines does not, and pages showed pink, cream, cyan and teal at once. Six light values are retuned — `--card`, `--border`, `--muted`, `--input`, `--sidebar-border` and `--sidebar-primary` — keeping those roles in the background's hue family and leaving the preset's colour in `--primary`, `--secondary` and `--accent`. The dark values, the radius, and every other preset are unchanged, and `THIRD-PARTY-NOTICES.md` records the deviation.
+
+  The same pages also used tokens for something other than their role, which no neutral preset makes visible. Authorization's two page shells and four Hub pages painted the whole page with `bg-muted/20`, which is the page surface and belongs to `bg-background`; under a preset whose `--muted` is a real colour that was a film over the entire viewport. The AI employee page's read-only fields hand-rolled `bg-muted/40` instead of using the shared `Input` and `Textarea` with `disabled`, three information callouts were fixed `bg-blue-50`, and the MCP transport labels were fixed `bg-blue-100`/`bg-green-100`/`bg-amber-100`; the transports now take their three tones from the theme's chart series, which is what a preset defines to be told apart.
+
+  Three fixed colours on settings pages are corrected while they are in hand. The AI employee page's missing-knowledge-base warning and the schedule detail page's target-issue icon named a light-mode ink with no dark counterpart, so both were close to unreadable on a dark card; they now carry one. The routes example reported a load failure in a fixed red, which is what `--destructive` is for.
+
+  The theme authoring reference and the token reference now state the rule, so a preset converted tomorrow is checked against it.
+
+- e5601cb: Add `@nocobase/app-cli` as a development dependency so the plugin's tests can publish a Release through the real CLI against a real App Host. No runtime change.
+- d696700: Give every settings surface the token that matches what it is, so panels stop disagreeing with one another.
+
+  The permission set editor is where this shows: its two tabs sit in one panel, and the permission configuration tab painted itself `bg-background` while the assignment tab inherited the panel's `bg-card`, so switching tabs changed the page colour under the same heading. The same mistake is spread across the settings pages, and none of it is visible under a preset whose page and card are near-identical.
+
+  Each token names a layer rather than a shade, and every site now uses the one that describes it. A panel resting on the page is `bg-card`, which is what the AI tools and skills pages already used while the LLM service, MCP service, conversation, API key, user and notification log panels named the page surface instead — two lists in one plugin, one framed and one flat. A dialog or drawer is `bg-popover`, which is what the shared `Sheet`, `Dialog` and `Popover` primitives use and what six hand-rolled drawers and dialogs did not. An opaque sticky header, footer or table head names the surface it scrolls within rather than the page behind it. A form control names no surface at all and inherits the one it sits on, the way the shared `Input` and `Textarea` do with `bg-transparent`; twenty hand-rolled inputs, selects and text areas were pinned to the page colour and showed through as a differently coloured box inside every card.
+
+  The styling reference now states which token describes which layer, and why picking one because it happens to look right is what puts a page-coloured block inside a panel.
+
+- Updated dependencies [709f9ed]
+- Updated dependencies [d696700]
+- Updated dependencies [fa01814]
+- Updated dependencies [ca3188e]
+- Updated dependencies [38e5253]
+- Updated dependencies [fa01814]
+- Updated dependencies [7bde7bd]
+- Updated dependencies [5380642]
+- Updated dependencies [3187ace]
+- Updated dependencies [d4783c2]
+- Updated dependencies [d696700]
+- Updated dependencies [5380642]
+- Updated dependencies [c5f4438]
+- Updated dependencies [3187ace]
+- Updated dependencies [38e5253]
+- Updated dependencies [38e5253]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.20
+  - @nocobase/app-plugin-api-keys@0.1.0-beta.5
+  - @nocobase/app-plugin-authorization@0.2.0-beta.17
+  - @nocobase/db@1.0.0-beta.13
+  - @nocobase/app-server@1.0.0-beta.23
+  - @nocobase/app-plugin-users@0.1.0-beta.7
+  - @nocobase/app-host@0.1.0-beta.9
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/authorization@0.1.0-beta.8
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.15
 
 ### Patch Changes

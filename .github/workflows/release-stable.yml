@@ -11,6 +11,10 @@ name: Release Stable
 on:
   workflow_dispatch:
     inputs:
+      include_pro:
+        description: 'Also release Pro plugins after the NocoBase3 release succeeds'
+        type: boolean
+        default: true
       branch:
         description: 'Branch to release from'
         type: string
@@ -33,8 +37,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   prepare:
@@ -65,6 +68,7 @@ jobs:
           path: release-source
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -145,8 +149,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "nocobase[bot]"
+          git config user.email "179432756+nocobase[bot]@users.noreply.github.com"
 
       - name: Snapshot versions before versioning
         if: steps.mode.outputs.needs_version == 'true'
@@ -371,6 +375,7 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       merged: ${{ steps.merge.outputs.merged }}
       needs_version: ${{ needs.prepare.outputs.needs_version }}
+      published: ${{ steps.publish_result.outputs.published }}
     steps:
       - name: Check out workflow code
         uses: actions/checkout@v4
@@ -382,6 +387,7 @@ jobs:
           path: release-source
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Download prepared release source
         uses: actions/download-artifact@v4
@@ -420,8 +426,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "nocobase[bot]"
+          git config user.email "179432756+nocobase[bot]@users.noreply.github.com"
 
       - name: Download release packages
         uses: actions/download-artifact@v4
@@ -472,6 +478,26 @@ jobs:
         if: inputs.skip_smoke_test
         run: echo "::warning::The create-app smoke tests were skipped for this release."
 
+      # Mint the write token after validation so long builds do not consume its one-hour lifetime.
+      - name: Create a fresh NocoBase release token
+        if: '!inputs.dry_run'
+        id: release_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase3
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Authenticate git writes as nocobase bot
+        if: '!inputs.dry_run'
+        env:
+          RELEASE_TOKEN: ${{ steps.release_token.outputs.token }}
+        run: git remote set-url origin "https://x-access-token:${RELEASE_TOKEN}@github.com/nocobase/nocobase3.git"
+
       - name: Push release branch
         if: "!inputs.dry_run && needs.prepare.outputs.has_changes == 'true'"
         env:
@@ -500,9 +526,17 @@ jobs:
 
       - name: Publish to npm
         if: '!inputs.dry_run'
+        id: publish_result
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm changeset publish --from-pack-dir "$RUNNER_TEMP/release-publish"
+        run: |
+          set +e
+          node scripts/publish-plan-has-publications.mjs "$RUNNER_TEMP/release-publish/publish-plan.json"
+          PLAN_RC=$?
+          set -e
+          case "$PLAN_RC" in 0) PUBLISHED=true ;; 1) PUBLISHED=false ;; *) exit "$PLAN_RC" ;; esac
+          pnpm changeset publish --from-pack-dir "$RUNNER_TEMP/release-publish"
+          echo "published=$PUBLISHED" >> "$GITHUB_OUTPUT"
 
       - name: Push package tags
         if: '!inputs.dry_run'
@@ -512,21 +546,22 @@ jobs:
         if: "!inputs.dry_run && needs.prepare.outputs.has_changes == 'true'"
         id: merge
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.release_token.outputs.token }}
+          RELEASE_BASE: ${{ inputs.branch }}
           BATCH: ${{ needs.prepare.outputs.batch }}
           BATCH_TAG: ${{ needs.prepare.outputs.tag }}
           DIST_TAG: ${{ needs.prepare.outputs.dist_tag }}
         run: |
           PUBLISH_TAG="${DIST_TAG:-latest}"
           PR_URL=$(gh pr create \
-            --title "chore: release $BATCH" \
+            --title "chore: release $BATCH [skip ci]" \
             --body "Stable release \`$BATCH\` published to npm under the \`$PUBLISH_TAG\` dist-tag. Per-package versions are in the GitHub Release." \
-            --base "${{ inputs.branch }}" \
+            --base "$RELEASE_BASE" \
             --head "$BATCH_TAG")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
           set +e
-          gh pr merge "$PR_URL" --merge --delete-branch
+          gh pr merge "$PR_URL" --merge --delete-branch --subject "chore: merge release $BATCH into $RELEASE_BASE [skip ci]"
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
@@ -698,5 +733,24 @@ jobs:
     uses: ./.github/workflows/github-release.yml
     with:
       tag: ${{ needs.release.outputs.tag }}
+    secrets:
+      NOCOBASE_APP_PRIVATE_KEY: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
     permissions:
-      contents: write
+      contents: read
+
+  follow-pro-release:
+    name: Release matching Pro stable
+    needs: [prepare, release, github-release]
+    if: >-
+      !cancelled() && inputs.include_pro && !inputs.dry_run
+      && inputs.branch == 'main' && !inputs.keep_latest
+      && needs.release.result == 'success' && needs.github-release.result == 'success'
+      && needs.release.outputs.published == 'true'
+      && (needs.prepare.outputs.has_changes != 'true' || needs.release.outputs.merged == 'true')
+    uses: ./.github/workflows/pro-release-stable.yml
+    with:
+      branch: main
+      keep_latest: false
+      oss_sha: ${{ needs.prepare.outputs.source_sha }}
+      dry_run: false
+    secrets: inherit

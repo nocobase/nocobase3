@@ -34,11 +34,11 @@ Once officially published to the public npm registry, use `pnpm create @nocobase
 
 Wait for creation to finish and check project generation, dependency installation, and development guidance synchronization. Explain and resolve failed steps; an existing directory alone does not mean creation succeeded. Do not recreate the same project.
 
-## 3. Continue in the current session
+## 3. Complete creation and startup in the current session
 
-The subshell changes the directory only for the creation command; the session remains rooted in the application directory. After creation, explicitly read the generated `AGENTS.md` and relevant development guidance, then continue configuration. Do not require a new session or assume that new instructions loaded automatically.
+The subshell changes the directory only for the creation command; the session remains rooted in the application directory. After creation, explicitly read the generated `AGENTS.md` and relevant development guidance, then continue configuration. Do not assume that new instructions loaded automatically.
 
-Only when the user explicitly chooses a different application directory should you provide its path and ask them to end the current session, enter that directory, and start a new session. In a desktop client, open or create a project based on that directory and start a new session.
+After creation and startup, tell the user to start a new session in the application directory before continuing development. NocoBase synchronizes the development Skills into `.agents/skills/` in the project directory, and AI Agents load Skills when a session starts; staying in the current session leaves later development without that project guidance. If the user chose a different application directory, give its actual path as well and ask them to end the current session, enter that directory, and start a new session. In a desktop client, open or create the project for that directory and start a new session.
 
 ## 4. Confirm the database and configuration
 
@@ -69,4 +69,4 @@ Provide the user with:
 
 If the template uses its initial administrator, the account is `admin@nocobase.com` with password `admin123`; confirm this against the generated project's account guidance before presenting it. If the user configured an administrator or connected an existing database, use the actual account information instead of assuming the defaults. Do not repeat user-defined passwords in the conversation.
 
-Remind the user to change the template's initial password after first sign-in. Continue in the current application session with [your first feature](./first-feature).
+Remind the user to change the template's initial password after first sign-in. Start a new session in the application directory and continue with [your first feature](./first-feature).

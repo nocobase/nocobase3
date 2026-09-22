@@ -141,7 +141,7 @@ export default function ApiKeysPage(): ReactElement {
         </div>
       ) : null}
 
-      <div className='overflow-hidden rounded-xl border bg-background'>
+      <div className='overflow-hidden rounded-xl border bg-card'>
         <Table>
           <TableHeader>
             <TableRow>

@@ -4,8 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { Config } from '@oclif/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import AppDeploy from '../../cli/commands/deploy.js';
-import AppUpload from '../../cli/commands/upload.js';
+import commands from '../../cli/standard-commands.js';
+
+const AppDeploy = commands.deploy;
+const AppUpload = commands.upload;
 
 let root: string;
 beforeEach(async () => {

@@ -1,87 +1,12 @@
 # Migrations and seeds
 
-Migrations under `database/main/migrations/` are the application's schema history. Seeds under `database/main/seeds/` insert records the application requires to run.
+This page is the application side: where the directories live, how `pnpm db:apply` runs them, how additional connections configure their tasks, and what to do about checksum drift and compiled manifests.
 
-Migrations create structure. Seeds never do.
+How to write the files themselves — the migration and seed shape, the immutability and self-containment rules, the Collection Builder, and which of `builder`, `query` and `repository` a task context should reach for — belongs to the package that owns them. Read `.agents/skills/nocobase-db/SKILL.md` sections 2 and 3 before writing one, and run `pnpm skills:sync` if that file is missing.
+
+Migrations under `database/main/migrations/` are the application's schema history. Seeds under `database/main/seeds/` insert records the application requires to run. Migrations create structure. Seeds never do.
 
 `database/tsconfig.json` extends the server configuration so editor tooling and ESLint recognize migrations and seeds as Node source. Keep it in place when adding connection directories.
-
-## Writing a migration
-
-Name the file with a sortable timestamp prefix. The exported `name` must match the filename:
-
-```ts
-// database/main/migrations/202609020001_create_orders.ts
-import { defineMigration, type MigrationDefinition } from '@nocobase/db';
-
-const migration: MigrationDefinition = defineMigration({
-  name: '202609020001_create_orders',
-
-  async up({ builder }) {
-    await builder.createCollection('orders', (collection) => {
-      collection.increments('id');
-      collection.string('reference', { length: 64, nullable: false });
-      collection.string('status', { length: 32, nullable: false });
-      collection.datetime('createdAt', { nullable: false });
-      collection.unique('reference');
-      collection.index('status');
-    });
-  },
-
-  async down({ builder }) {
-    await builder.dropCollection('orders');
-  },
-});
-
-export default migration;
-```
-
-## A migration is immutable and self-contained
-
-**Spell out the exact structure.** Declare every field, index, and constraint in the migration itself.
-
-**Never import an evolving definition into a migration** — not a collection schema, not a model, not a registry, not a constant shared with runtime code. Those keep changing, and a migration that reads one silently means something different after it has already been applied. This is the rule that matters most on this page.
-
-**Once the branch that introduced a migration is merged, never edit it.** Check with `git log -- <file>` if you are unsure. Before the merge you may correct it in place; after, every change is a new migration. Never hard-code a previous checksum to make an edited migration look untouched.
-
-Write `down` as the explicit reverse in a safe dependency order. If an operation truly cannot be reversed, say so in the migration and in its test rather than writing a `down` that quietly does nothing.
-
-## Field builders
-
-`increments`, `integer`, `bigInt`, `string`, `text`, `boolean`, `decimal`, `datetime`, `json`, `blob`, `uuid`, and `native` for a dialect-specific type. Options include `nullable`, `length`, `defaultValue`, `precision`, and `scale`.
-
-Relations: `belongsTo`, `hasOne`, `hasMany`, `belongsToMany`. Constraints and indexes: `primary`, `unique`, `foreignKey`, `index`.
-
-## Changing an existing table
-
-Use explicit alter operations rather than dropping and recreating:
-
-```ts
-async up({ builder }) {
-  await builder.alterCollection('orders', (collection) => {
-    collection.string('customerReference', { length: 64, nullable: true });
-    collection.index('customerReference');
-  });
-},
-
-async down({ builder }) {
-  await builder.alterCollection('orders', (collection) => {
-    collection.dropField('customerReference');
-  });
-},
-```
-
-Dropping the field also drops the index on it, so `down` does not name that index. It could not anyway: index names are generated, not the string you passed to `index()`.
-
-Adding a non-nullable column to a populated table needs a default, or three migrations: add nullable, backfill, then tighten.
-
-## Logical names, physical names
-
-You write logical names and the naming strategy derives the physical ones: a `customerReference` field becomes a `customer_reference` column, and `index('status')` on `orders` becomes `idx_orders_status`. Field and collection names in migrations stay camelCase — the snake_case conversion is automatic.
-
-Runtime queries keep using the camelCase names, because the query builder converts them the same way — see [database and data access](database-and-data.md). The one place the physical name is required is a generated index or constraint name: `dropIndex` takes `idx_orders_status`, not `status`.
-
-Set `tableName` or `columnName` explicitly when you need to override the derivation.
 
 ## Running
 
@@ -90,6 +15,8 @@ pnpm db:apply
 ```
 
 This applies pending migrations and then pending seeds for `database.default`, including registered plugins, ordered by name across all sources. Both halves run only what is pending, so on an already-migrated database it applies seeds alone. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
+
+Seeds are the second half of that run, so the structure a seed writes into must already exist from an earlier migration. Keep seed data fixed and reproducible — no current timestamps or random values in identifying fields — and never let a repeat run silently overwrite data a user has edited.
 
 ## Multiple connections
 
@@ -107,6 +34,47 @@ pnpm db:apply --all --json
 Manual execution ignores `autoRun`. `--connection` and `--all` are mutually exclusive. `--all` uses the same connection order and stops at the first failure. JSON results include completed, skipped, failed and not-run entries, one per connection and kind; failures exit nonzero. Single-connection JSON from `migrate` and `seed` retains `status`, `batch` (migrations), `executed`, and `skipped`, with an added `connection` field.
 
 `pnpm db:reset` is a destructive reset for managed connections. It removes the managed schema objects — which clears migration and seed history along with every row in a managed table — then reruns all currently visible migrations and seeds from empty. It never calls migration `down()`. In an interactive terminal it asks for confirmation. CI and non-interactive terminals require `--force`, so use `pnpm db:reset --force` only when the target is intentionally disposable. It is rejected for an explicitly selected external connection; `--all` processes managed connections and reports external connections as skipped. It is limited to connections with a registered driver reset capability.
+
+`pnpm db:rollback` runs `down()` for every migration in the latest batch, newest first, and deletes its history records. The batch is the unit the history records, so a batch that mixed application and plugin migrations rolls back as one: the confirmation lists every migration and the package it belongs to before anything runs. It fails, having run nothing, when any migration in the batch is irreversible or has no `down()`. Data in anything those migrations drop is lost, and seeds are not re-run, so rows a seed inserted into a table the batch recreates are not restored. CI and non-interactive terminals require `--force`.
+
+`pnpm db:redo` is `db:rollback` followed by `db:apply`, which is what correcting an unmerged migration needs.
+
+## Re-running a migration you corrected
+
+Editing a migration that has already run changes nothing by itself. It is recorded as executed, so the next `pnpm db:apply` skips it, and the database keeps the schema the old source produced. What it does change is the recorded checksum, which is why the run then reports drift.
+
+While the branch is unmerged, re-run it:
+
+```bash
+pnpm db:redo
+```
+
+Once the branch is merged, do not edit it at all: write a new migration for the correction.
+
+Two things are never the answer here. `pnpm db:repair` only rewrites the recorded checksum, so it makes an un-applied change look applied — the schema stays wrong and nothing says so. Editing `__nocobase_migrations`, `__nocobase_collection_metadata` or a physical table by hand splits the two records of what exists: dropping a table without its metadata record leaves the Collection unresolvable, and the next run fails with `Metadata Collection "…" maps to missing physical table "…"` before it reaches your migration.
+
+`pnpm db:doctor` compares every metadata record with the table behind it and reports what disagrees; `--fix` deletes the records whose table is gone, which is the state a hand-rolled reset leaves behind. Anything else it finds is reported only — the table exists and something in it no longer matches what was recorded, which a migration has to reconcile.
+
+Each internal table has a command that maintains it, and none of them should be edited directly:
+
+| Table                                               | Holds                                     | Maintained by                                     |
+| --------------------------------------------------- | ----------------------------------------- | ------------------------------------------------- |
+| `__nocobase_migrations`                             | Which migrations ran, in which batch      | `db:apply`, `db:rollback`, `db:redo`, `db:repair` |
+| `__nocobase_seeds`                                  | Which seeds ran                           | `db:apply`, `db:repair`                           |
+| `__nocobase_collection_metadata`                    | The Collection metadata behind each table | Migrations, through `builder`; `db:doctor`        |
+| `__nocobase_migration_lock`, `__nocobase_seed_lock` | The run in progress                       | The run itself, and `db:unlock`                   |
+
+## When a run is killed while it holds the lock
+
+Migrations and seeds each run inside a lock, so two runs cannot apply the same history at once. A run holds its lock only while it keeps a heartbeat current: if it is killed — SIGKILL, a stopped container, a lost machine — the row stays behind but stops being refreshed, and the next run takes it over after 30 seconds and continues. Nothing has to be cleaned up by hand, and the takeover is logged, because it means a previous run did not shut down cleanly.
+
+Waiting is not always wanted, and a lock is sometimes worth looking at:
+
+```bash
+pnpm db:unlock
+```
+
+It reports who holds each lock and releases the ones that have stopped beating. A lock that is still beating is reported rather than released: a run is working behind it, and `--force` releases it anyway, which lets a second run start beside the first. Both the migration and the seed lock are covered, for the selected connections.
 
 `migrate --fresh` was the earlier form and is gone. It reset the schema without reseeding, so it left the seed history cleared but no seed executed; the default connection recovered on the next startup and a connection with `autoRun: false` did not.
 
@@ -132,47 +100,24 @@ A checksum recorded when a migration or seed ran no longer matching its current 
 
 `pnpm db:repair` (`nocobase app db repair`) rewrites the recorded checksums to match the current sources, which is how the warning is cleared once the change is confirmed intentional. One command covers both migrations and seeds. It executes nothing and changes no schema or data. Preview with `--dry-run` first; `--dry-run --json` is the form to run in CI when drift should gate a deploy. It never deletes a history record, so a repair cannot make an executed migration run again.
 
-Repair records a decision; it does not make one. It is the right tool for drift you can explain — a reformat, a comment, a rebuild that produced different output. It is not a way to edit a merged migration: the applied database still has the old schema, and rewriting the checksum only hides that. Correct a merged migration with a new migration.
+Repair records a decision; it does not make one. It is the right tool for drift where the schema is already what the new source would produce — a reformat, a comment, a rebuild that produced different output. When the edit changed what the migration does, repair is the wrong tool in both directions: while the branch is unmerged, `pnpm db:redo` applies the correction; once it is merged, a new migration does. Rewriting the checksum instead leaves the database with the old schema and nothing recording that it differs.
 
-## Seeds
+### Why the default is `warn`
 
-Seeds are for records the application cannot run without — a default configuration row, a fixed system record. Not demo data, and not test fixtures.
+Reporting drift rather than refusing to run is a deliberate default, not an oversight, and it follows from what the checksum covers: a migration's checksum is a hash of its file contents, so running the formatter over the migration directory or adding a comment changes it. Under `error` that harmless edit stops the application from starting until someone runs `db repair`.
 
-```ts
-// database/main/seeds/202609020002_seed_order_statuses.ts
-import { defineSeed, type SeedDefinition } from '@nocobase/db';
+The same default protects a deployment for a different reason. Startup runs migrations, and a failure there stops startup, so a policy of refusing to run turns drift into an outage. Drift is reachable on a legitimate upgrade path — the compiled representation of a migration is not guaranteed to hash the same as the source a database recorded, which is why verified legacy checksums are converted under the task lock rather than rejected.
 
-const seed: SeedDefinition = defineSeed({
-  name: '202609020002_seed_order_statuses',
+What `warn` costs is that an edit to an executed migration is easy to miss: the run says it skipped the migration, the database keeps the schema the old source produced, and only the warning says otherwise. That is what the warning's wording is for — it names `db redo` for an edit that changed what ran, and `db repair` only for one that did not.
 
-  async run({ query }) {
-    await query
-      .insertInto('orderStatuses')
-      .values([{ key: 'open', label: 'Open' }])
-      .execute();
-  },
-});
-
-export default seed;
-```
-
-Seeds run as the second half of `pnpm db:apply`. The structure a seed writes into must already exist from an earlier migration.
-
-Keep seed data fixed and reproducible — no current timestamps or random values in identifying fields. Decide explicitly what a repeat run does: skip on a unique key, or update deterministically. Never silently overwrite data a user has edited.
-
-## Testing
-
-Run migrations against a real test database and verify the resulting schema. A test that only imports the file proves nothing.
-
-Check that `up` produces the expected tables, columns, types, indexes, and constraints; that `down` cleans up when the migration is reversible; and that a seed behaves correctly on a first run, against existing data, and when run twice.
+Set `onChecksumMismatch: 'error'` per connection when both halves of that trade look different in your project: the migration directory is not formatted or commented after the fact, and a pipeline already gates on `db repair --dry-run --json`, so a refusal is informative rather than an obstacle. Set it for the connection rather than at the top level, so a connection carrying plugin migrations — whose sources you do not control — is not held to it.
 
 ## Verify
 
-- The filename and exported `name` match, and the prefix sorts correctly.
-- The migration imports no evolving definition.
-- `down` reverses `up` in a safe order.
 - `pnpm db:apply` applies cleanly on an empty database and on an already-migrated one.
-- The physical schema matches what the migration declared.
+- The physical schema matches what the migration declared, checked against a real test database rather than the builder's return value.
+- Running the same seed twice changes nothing.
+- For the per-file checks — filename against exported `name`, immutability, `down` ordering — follow the `nocobase-db` Skill's own verification list.
 
 ## Compiled migration and seed manifests
 

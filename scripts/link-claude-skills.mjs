@@ -11,7 +11,7 @@
 //
 // Links rather than copies, so editing a Skill through either path edits the one committed file. Relative links, so
 // the checkout stays movable.
-import { lstat, mkdir, readdir, symlink, unlink } from 'node:fs/promises';
+import { lstat, mkdir, readdir, stat, symlink, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -71,18 +71,24 @@ async function createLink(root, name, linkPath) {
   }
 }
 
-// `withFileTypes` reports a symbolic link as a link rather than as the directory it points at, so `.claude/skills/`
-// has to accept both: its entries are the links this script writes, and a link whose target is already gone still has
-// to be found in order to be pruned.
+// `withFileTypes` reports a symbolic link as a link rather than as the directory it points at, so both directories
+// need care. `.claude/skills/` accepts links outright: its entries are the links this script writes, and a link whose
+// target is already gone still has to be found in order to be pruned. `.agents/skills/` accepts a link only when it
+// resolves to a directory: a Skill that is published with a package lives in that package and is committed here as a
+// relative link, and a link is still one Skill to mirror.
 async function readDirectoryNames(directory, { links = false } = {}) {
   try {
     const entries = await readdir(directory, { withFileTypes: true });
-    return entries
-      .filter(
-        (entry) => entry.isDirectory() || (links && entry.isSymbolicLink()),
+    const names = [];
+    for (const entry of entries) {
+      if (
+        entry.isDirectory() ||
+        (entry.isSymbolicLink() &&
+          (links || (await isDirectory(path.join(directory, entry.name)))))
       )
-      .map((entry) => entry.name)
-      .sort();
+        names.push(entry.name);
+    }
+    return names.sort();
   } catch (error) {
     if (isNodeError(error, 'ENOENT') || isNodeError(error, 'ENOTDIR'))
       return [];
@@ -108,6 +114,16 @@ async function removeSymbolicLink(linkPath) {
   if (!entry.isSymbolicLink()) return false;
   await unlink(linkPath);
   return true;
+}
+
+async function isDirectory(target) {
+  try {
+    return (await stat(target)).isDirectory();
+  } catch (error) {
+    if (isNodeError(error, 'ENOENT') || isNodeError(error, 'ENOTDIR'))
+      return false;
+    throw error;
+  }
 }
 
 function isNodeError(error, code) {

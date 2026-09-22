@@ -59,7 +59,7 @@ async function createAppWithInstalledPlugin({
     await symlink(
       moduleDirectory(dependency),
       path.join(appRoot, 'node_modules', dependency),
-      'dir',
+      'junction',
     );
   }
 
@@ -813,7 +813,13 @@ describe('app plugin register command', () => {
     expect(await readFile(appSkill, 'utf8')).toBe('# App owned\n');
   });
 
-  it('synchronizes one full package name through the general command', async () => {
+  it.each([
+    { scope: 'all registered plugins', flags: [] },
+    {
+      scope: 'one full package name',
+      flags: ['--package', '@nocobase/app-plugin-audit-log'],
+    },
+  ])('synchronizes $scope through the general command', async ({ flags }) => {
     const appRoot = await createAppWithInstalledPlugin();
     await runCommand(config, 'plugin:register', [
       'audit-log',
@@ -825,8 +831,7 @@ describe('app plugin register command', () => {
     const synchronized = await runCommand(config, 'skills:sync', [
       '--dir',
       appRoot,
-      '--package',
-      '@nocobase/app-plugin-audit-log',
+      ...flags,
       '--dry-run',
       '--json',
     ]);

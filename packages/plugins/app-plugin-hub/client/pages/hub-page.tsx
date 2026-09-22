@@ -149,7 +149,7 @@ export function ApplicationsCatalog(): ReactElement {
     }
   };
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20 [&_button:not(:disabled)]:cursor-pointer'>
+    <main className='min-h-[calc(100svh-4rem)] bg-background [&_button:not(:disabled)]:cursor-pointer'>
       <PageContainer>
         {error ? (
           <ErrorNotification

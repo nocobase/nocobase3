@@ -16,7 +16,7 @@ export function PermissionsPage({
   children: ReactNode;
 }): ReactElement {
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20 p-5 sm:p-8'>
+    <main className='min-h-[calc(100svh-4rem)] bg-background p-5 sm:p-8'>
       <div className='min-w-0 space-y-5'>
         <header className='flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
           <div className='min-w-0'>

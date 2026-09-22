@@ -26,7 +26,7 @@ import process from 'node:process';
 import ts from 'typescript';
 
 /** Groups whose packages ship code to a consumer. Templates are applications; they are the end of the line. */
-const CHECKED_GROUPS = ['plugins', 'examples', 'libs', 'app'];
+const CHECKED_GROUPS = ['plugins', 'examples', 'libs', 'app', 'tools'];
 
 const SOURCE_EXTENSIONS = new Set([
   '.ts',
@@ -55,6 +55,10 @@ const SKIPPED_DIRECTORIES = new Set([
   // `registry` is shadcn-style source copied into an application and compiled there against that application's own
   // `react` and `@/` alias, which the plugin cannot resolve at all. `client` is checked — see below.
   'registry',
+  // `template` is the same shape one level up: `@nocobase/create-plugin` ships it as the source of a generated
+  // plugin, which compiles it against the manifest `src/lib/template.ts` writes for that plugin. The generator
+  // resolves none of those imports itself, so declaring them here would claim dependencies it does not have.
+  'template',
 ]);
 
 /**

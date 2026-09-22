@@ -48,6 +48,8 @@ Every published package lives under `packages/`, grouped into six directories by
 
 This repository's own Skills are committed under `.agents/skills/`, the agent-neutral location every agent can be pointed at. Claude Code does not read that path — it discovers Skills only under `~/.claude/skills/` and `<project>/.claude/skills/` — so `pnpm install` runs `scripts/link-claude-skills.mjs`, which mirrors each committed Skill into `.claude/skills/` as a relative symbolic link. `.claude/skills/` is therefore generated and ignored; `.agents/skills/` remains the single committed source, and editing a Skill through either path edits the same file.
 
+A Skill that also ships to applications is committed with its package and linked from here instead: `nocobase-deployment` lives in `packages/app/app-skills/skills/` so that `nocobase skills sync` delivers it to every generated application, and `.agents/skills/nocobase-deployment` is a relative symbolic link to it, which the mirror follows like any other Skill. Editing it is a change to `@nocobase/app-skills` and needs a changeset.
+
 This is the same arrangement `nocobase skills sync` sets up inside a generated application, with the ownership reversed: an application's `.agents/skills/` is generated from its installed packages and ignored, while this repository writes its Skills by hand and commits them.
 
 The mirror never replaces a path that is not a symbolic link, so a Skill you keep only in `.claude/skills/` is reported and left alone rather than deleted. It also never fails the install: a warning is enough, because the Skills are still readable where they are committed. Adding or removing a Skill takes effect on the next `pnpm install`, or immediately with `node ./scripts/link-claude-skills.mjs`.
@@ -164,6 +166,28 @@ Do not import or iterate over live collection schemas, field definitions, model 
 When a migration needs to create a collection, call `builder.createCollection` with its fixed name and declare every field, relation, index, and constraint in the migration itself. Write `down` with the corresponding explicit reverse operations in a safe dependency order. For an existing schema, use explicit `builder.alterCollection`, field, index, constraint, or metadata operations rather than synchronizing from the current collection definition.
 
 Add a migration-level test that executes `up` and, when reversible, `down` against a real test database and verifies the resulting physical schema and metadata.
+
+### Choosing a data-access tool in a migration or seed
+
+A migration's context carries three tools and they are not interchangeable. `builder` is the only one that changes structure. `query` is the default for data: it reads and writes rows through the Connection naming strategy and expresses exactly what it is given. `repository` is the narrow one — reach for it only where `query` would get the write wrong: cross-dialect field encoding and decoding, Collection-level naming overrides, and relation writes, including the junction rows behind a `belongsToMany`. Anything `query` expresses correctly stays on `query`.
+
+A seed's context carries only the last two, because a seed never changes structure. There the default is reversed: installation data is written in Collection terms, so `repository` is the normal tool and `query` is for what it cannot express, such as reading a physical table that backs no Collection.
+
+This does not loosen the rule above. `repository(name)` resolves the Collection from the database itself — the metadata a previous `builder` operation wrote — which is why it is available at all; importing or iterating an application's own collection definitions from a migration remains forbidden, and no amount of convenience justifies it. What it does mean is that a migration using `repository` is betting on a shape it did not declare in its own body, so three things follow:
+
+- Say in a comment why `query` was not enough. A reviewer cannot tell a considered use from a reflex, and the comment is what makes the difference visible.
+- Do not use it in `down`. By the time a rollback runs, the Collection has already moved past what `up` left behind, possibly several migrations past.
+- Do not use it to walk a table. Selecting every row and updating each one through a Repository is the shape to avoid; a set-based `query` statement is both correct and bounded.
+
+Both tasks get their Repository from the connection the task runs on, which inside a transaction is that transaction's connection. This is why the service container withholds the application's `DatabaseManager` from migrations and seeds: a Repository taken from it would write outside the task's transaction and survive a failure that should have discarded it.
+
+### A plugin's migrations are laid out differently from an application's
+
+An application keeps its tasks under `database/<connection>/migrations` and `seeds`, one directory per configured connection. A plugin declares a single `database/migrations` and `database/seeds` in its `defineServerPlugin` call, relative to the plugin's `baseDir`, and there is no connection segment because a plugin contributes only to the installing application's default connection. It cannot know which further connections an application defines, and cannot target one.
+
+The loader flattens the application's sources and every registered plugin's into one list per connection, rejects duplicate migration names across all of them, and orders what remains by name alone. So a plugin's migration name has to be derived from its package rather than being a bare timestamp — a collision fails the run for the whole application — and a plugin's migrations interleave with the application's by name rather than applying as a block. Execution history records the owning package name, so attribution survives the shared run.
+
+`packages/tools/create-plugin/template/AGENTS.md` carries this for generated plugins; change both together.
 
 Before editing an existing migration, check its Git history and the status of the branch that introduced it. An existing migration may be corrected directly only while its introducing feature branch has not yet been merged. Once that branch has been merged into its target branch, never modify the migration again; implement every correction or subsequent schema change in a new migration. Do not use hard-coded previous checksum hashes to make an edited migration appear compatible.
 
@@ -310,6 +334,8 @@ So the question is who resolves the import, and then what the import actually is
 `registry/` is excluded for a stronger reason than the rest: it is shadcn-style source copied into an application and compiled there against that application's own `react` and `@/` alias. The plugin cannot resolve those imports at all, so declaring them would claim dependencies it does not have.
 
 `peerDependencies` is the third answer, for a package the application must supply exactly one copy of. `react`, `react-dom`, `react-router`, and everything in `IDENTITY_SENSITIVE_PACKAGES` belong here rather than in `dependencies`: a second copy of a router or a React context does not merely waste space, it silently breaks. `@nocobase/i18n` is the shape to copy: it exports a server entry and a client entry from one package, so `i18next` is an ordinary dependency while `react`, `hono`, and `react-i18next` are optional peers. Mark such a peer `optional` in `peerDependenciesMeta` so the consumer that legitimately does not need it gets no warning.
+
+A tool a package **spawns** rather than imports is a dependency too, and it is the one neither check can find: both read import specifiers, so a `spawn('vite', …)` is invisible to them. Declare it as a peer, because the application owns the copy that runs, and record it where someone adding the next one will look — `@nocobase/app-tools` keeps a table of the executables it spawns in its README. Nothing else catches an omission here: the binary resolves from `node_modules/.bin` in this repository and in any generated application, so it is missing only in an application that never installed it.
 
 This rule changed once, and the reason is worth recording. Client imports used to belong in `devDependencies`, because `dist/package.json` was built by walking `dependencies` transitively and dragged every client package into the server deployment — `lucide-react` and `@xyflow/react` alone were 44 MB installed and never required. They are peers now, which keeps them out of a deployment without keeping them out of the application that has to resolve them.
 

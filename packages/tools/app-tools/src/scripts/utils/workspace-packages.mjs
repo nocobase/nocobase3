@@ -44,7 +44,3 @@ export const listWorkspacePackages = (rootDir) => {
       .filter(([name]) => typeof name === 'string'),
   );
 };
-
-/** Resolves one workspace package directory by package name, or `undefined` when it is not part of the workspace. */
-export const findWorkspacePackageDirectory = (rootDir, packageName) =>
-  listWorkspacePackages(rootDir).get(packageName);

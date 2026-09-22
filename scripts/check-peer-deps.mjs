@@ -98,7 +98,7 @@ export function findViolations(manifest) {
 //
 // A new group under `packages/` needs a deliberate decision about which side of that line it sits on before it is
 // added here.
-const CHECKED_GROUPS = ['plugins', 'examples'];
+const CHECKED_GROUPS = ['plugins', 'examples', 'tools'];
 
 export async function collectPackages(repositoryRoot) {
   const packages = [];

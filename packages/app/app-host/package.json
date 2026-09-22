@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-host",
-  "version": "0.1.0-beta.8",
+  "version": "0.1.0-beta.9",
   "description": "Standalone runtime host for NocoBase apps.",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
@@ -57,7 +57,7 @@
     "@nocobase/config": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
-    "tar": "^7.4.3"
+    "tar": "catalog:"
   },
   "scripts": {
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",

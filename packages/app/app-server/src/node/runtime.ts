@@ -15,9 +15,12 @@ import {
   type StandaloneAppScope,
 } from './scope.js';
 import {
+  resolveNodeShutdownTimeouts,
   type ClosableNodeAppServer,
+  type NodeShutdownOptions,
   disposeAfterStartupFailure,
   startNodeAppServer,
+  watchStartupShutdownSignals,
 } from './server.js';
 
 export type CreateStandaloneRuntimeScopeOptions = CreateStandaloneScopeOptions;
@@ -31,6 +34,8 @@ export interface StandaloneServerListenOptions {
 export interface StandaloneServer extends ClosableNodeAppServer {
   readonly application: Application;
   readonly listenOptions: StandaloneServerListenOptions;
+  /** Shutdown budget resolved from the environment; empty keeps the defaults. */
+  readonly shutdownOptions: NodeShutdownOptions;
   readonly signal: AbortSignal;
 }
 
@@ -97,6 +102,7 @@ export async function createStandaloneServer(
     };
     const server: StandaloneServer = {
       application,
+      shutdownOptions: resolveNodeShutdownTimeouts(scope.env),
       close: (): Promise<void> => scope.destroy(),
       fetch: (request, env, executionContext) =>
         proxy?.matches(new URL(request.url).pathname)
@@ -181,11 +187,33 @@ export async function resolveStandaloneAppRuntime(
 async function startStandaloneServer(
   options: CreateStandaloneServerOptions,
 ): Promise<void> {
-  const app = await createStandaloneServer(options);
+  // Startup runs migrations and seeds under a task lock before the HTTP server
+  // registers its own handlers, so the signals are watched from here until it
+  // does. A restart that arrives mid-startup then shuts down cleanly instead
+  // of leaving the lock held by a process that no longer exists.
+  const startupSignals = watchStartupShutdownSignals();
+  let app: StandaloneServer;
+  try {
+    app = await createStandaloneServer(options);
+  } catch (error) {
+    startupSignals.dispose();
+    throw error;
+  }
 
   const logger = app.application.container.has(loggingToken)
     ? app.application.container.resolve(loggingToken).getLogger('server')
     : undefined;
+
+  const startupSignal = startupSignals.received();
+  if (startupSignal) {
+    startupSignals.dispose();
+    const message = `Startup completed after ${startupSignal}; shutting down without listening.`;
+    if (logger) logger.info(message);
+    else console.log(message);
+    await app.close();
+    return;
+  }
+
   try {
     await startNodeAppServer(app, {
       ...(logger
@@ -196,6 +224,7 @@ async function startStandaloneServer(
             },
           }
         : {}),
+      ...app.shutdownOptions,
       hostname: app.listenOptions.hostname,
       port: app.listenOptions.port,
       onListen: (info): void => {
@@ -210,6 +239,8 @@ async function startStandaloneServer(
     });
   } catch (error) {
     await disposeAfterStartupFailure(() => app.close(), error);
+  } finally {
+    startupSignals.dispose();
   }
 }
 

@@ -1,6 +1,6 @@
 ---
 title: 'AI Agent 创建应用'
-description: '让 AI Agent 创建并启动 NocoBase 3 应用，在同一会话中继续开发。'
+description: '让 AI Agent 创建并启动 NocoBase 3 应用，然后在新会话中继续开发。'
 ---
 
 # AI Agent 创建应用
@@ -27,21 +27,20 @@ description: '让 AI Agent 创建并启动 NocoBase 3 应用，在同一会话�
    在刚开启的会话中，复制并发送下面这句话：
 
    ```text
-   请按照 https://v3.docs.nocobase.com/cn/get-started/create-app-with-agent 的指引，帮我创建一个 NocoBase 3 应用。
+   帮我创建一个 NocoBase 3 应用：https://v3.docs.nocobase.com/cn/get-started/create-app-with-agent.md （请直接访问链接内容）
    ```
 
-   AI Agent 会检查环境，在当前空目录中初始化应用，然后读取项目指引，确认数据库需求并启动服务。你可以在同一个会话里继续。
-
-   :::tip 如果应用创建在其他目录
-
-   如果你指定了另一个目录来存放应用，创建完成后，需要切换到那个项目并开启新会话：
-
-   - **CLI**：进入项目目录后，重新启动 AI Agent
-   - **桌面客户端**：添加或打开那个项目，再新建会话
-
-   :::
+   AI Agent 会检查环境，在当前空目录中初始化应用，然后读取项目指引，确认数据库需求并启动服务。
 
    启动成功后，按 AI Agent 提供的地址打开应用。
+
+   :::warning 注意
+
+   **应用创建并启动后，请重新开启一个会话来继续开发。**
+
+   创建应用时，NocoBase 会把开发用的 Skills 同步到项目目录的 `.agents/skills/`。AI Agent 只在会话开始时加载 Skills；在当前会话里继续，它读不到这些项目指引，后续开发容易偏离项目约定。
+
+   :::
 
 ## 登录应用
 
@@ -72,7 +71,7 @@ AI Agent 应在启动完成后直接告诉你访问地址和登录方式。使�
 
 ## 下一步
 
-在应用目录的会话中继续[让 AI Agent 做第一个功能](./first-feature)。AI Agent 本身的安装、账号登录和模型访问需要事先准备好。
+在应用目录开启新的会话，继续[让 AI Agent 做第一个功能](./first-feature)。AI Agent 本身的安装、账号登录和模型访问需要事先准备好。
 
 接着你就可以让你的 AI Agent 开始开发你的应用了。比如你想做一个 CRM 应用，就可以跟它说：
 

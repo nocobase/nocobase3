@@ -1,5 +1,49 @@
 # @nocobase/app-plugin-api-keys
 
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- 709f9ed: Update Better Auth and API keys to 1.7.5 and align fresh authentication databases with provider-based account identity. Existing authentication databases must be recreated; the original account migration has changed and no compatibility migration is provided.
+- fa01814: Add `db apply` and `db reset`, and retire `migrate --fresh`.
+
+  `nocobase app db apply` (`pnpm db:apply`) runs migrations and seeds as one plan, in the order startup runs them: each connection is migrated, then seeded. Only pending tasks run, so repeating it is safe. `nocobase app db reset` (`pnpm db:reset`) drops every managed schema object first and reruns both from empty; it asks for confirmation and requires `--force` in CI or a non-interactive terminal.
+
+  `migrate --fresh` is removed and now exits with a pointer to `db reset`. It rebuilt the schema without reseeding, so it left the seed history cleared and no seed executed — the default connection recovered on the next startup, and a connection with `autoRun: false` did not.
+
+  The `migrate` and `seed` commands are removed along with their template scripts; `db apply` replaces both. Running one half on its own is not a separate command, because both halves apply only what is pending: on an already-migrated database `db apply` applies seeds alone, and the one case it does not cover — migrating ahead of a deployment without seeding — can be served by a flag later without breaking anything.
+
+  `runAppDatabaseTasks` accepts several task kinds in one plan through its `kind` option, which is what makes a reset correct across both kinds: one plan means a connection's schema is rebuilt by its migrations task before its seeds run.
+
+- d696700: Give every settings surface the token that matches what it is, so panels stop disagreeing with one another.
+
+  The permission set editor is where this shows: its two tabs sit in one panel, and the permission configuration tab painted itself `bg-background` while the assignment tab inherited the panel's `bg-card`, so switching tabs changed the page colour under the same heading. The same mistake is spread across the settings pages, and none of it is visible under a preset whose page and card are near-identical.
+
+  Each token names a layer rather than a shade, and every site now uses the one that describes it. A panel resting on the page is `bg-card`, which is what the AI tools and skills pages already used while the LLM service, MCP service, conversation, API key, user and notification log panels named the page surface instead — two lists in one plugin, one framed and one flat. A dialog or drawer is `bg-popover`, which is what the shared `Sheet`, `Dialog` and `Popover` primitives use and what six hand-rolled drawers and dialogs did not. An opaque sticky header, footer or table head names the surface it scrolls within rather than the page behind it. A form control names no surface at all and inherits the one it sits on, the way the shared `Input` and `Textarea` do with `bg-transparent`; twenty hand-rolled inputs, selects and text areas were pinned to the page colour and showed through as a differently coloured box inside every card.
+
+  The styling reference now states which token describes which layer, and why picking one because it happens to look right is what puts a page-coloured block inside a panel.
+
+- Updated dependencies [709f9ed]
+- Updated dependencies [fa01814]
+- Updated dependencies [ca3188e]
+- Updated dependencies [38e5253]
+- Updated dependencies [fa01814]
+- Updated dependencies [7bde7bd]
+- Updated dependencies [5380642]
+- Updated dependencies [3187ace]
+- Updated dependencies [d4783c2]
+- Updated dependencies [5380642]
+- Updated dependencies [c5f4438]
+- Updated dependencies [3187ace]
+- Updated dependencies [38e5253]
+- Updated dependencies [38e5253]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.20
+  - @nocobase/db@1.0.0-beta.13
+  - @nocobase/app-server@1.0.0-beta.23
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.4
 
 ### Patch Changes

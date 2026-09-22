@@ -14,13 +14,17 @@ import {
   type SeedRepairResult,
   type SeedRunResult,
   type SeedSource,
+  type StaleTaskLockTakeover,
+  type TaskLockReleaseOptions,
 } from '@nocobase/db';
 
 import type { AppDatabaseSeedConfig } from './types.js';
+import type { AppTaskLockReleaseResult } from './migrator.js';
 
 export interface AppSeeder {
   run(): Promise<AppSeedRunResult>;
   repair(options?: SeedRepairOptions): Promise<AppSeedRepairResult>;
+  unlock(options?: TaskLockReleaseOptions): Promise<AppTaskLockReleaseResult>;
 }
 
 export type AppSeedSkippedReason = 'missing-directory';
@@ -47,6 +51,8 @@ export interface CreateAppSeederOptions {
   config: AppDatabaseSeedConfig;
   connection?: string;
   sources?: readonly SeedSource[];
+  /** Reported when a lock whose holder stopped beating is taken over. */
+  onStaleLock?: (takeover: StaleTaskLockTakeover) => void;
 }
 
 export function createAppSeeder(options: CreateAppSeederOptions): AppSeeder {
@@ -60,6 +66,17 @@ export function createAppSeeder(options: CreateAppSeederOptions): AppSeeder {
       }
 
       return completedRunResult(await createDatabaseSeeder(options).run());
+    },
+
+    // Unlocking needs no seed directory: the lock is taken by whichever run
+    // reached the connection, including one with only plugin seeds.
+    async unlock(
+      releaseOptions?: TaskLockReleaseOptions,
+    ): Promise<AppTaskLockReleaseResult> {
+      return {
+        status: 'completed',
+        ...(await createDatabaseSeeder(options).unlock(releaseOptions)),
+      };
     },
 
     async repair(
@@ -95,6 +112,7 @@ function createDatabaseSeederOptions(
     lockTableName: options.config.lockTableName,
     extensions: options.config.extensions,
     onChecksumMismatch: options.config.onChecksumMismatch,
+    onStaleLock: options.onStaleLock,
   };
 
   if (options.sources) {

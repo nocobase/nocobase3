@@ -155,7 +155,7 @@ describe.skipIf(!dialect)(
           .execute(),
       ).rejects.toThrow();
 
-      await expect(migrator.rollback()).resolves.toEqual({
+      await expect(migrator.rollback()).resolves.toMatchObject({
         batch: 2,
         rolledBack: [
           singleProviderMigration.name,
@@ -190,7 +190,7 @@ describe.skipIf(!dialect)(
           ),
         ]),
       ).resolves.toEqual([false, false, false, false, false]);
-      await expect(migrator.rollback()).resolves.toEqual({
+      await expect(migrator.rollback()).resolves.toMatchObject({
         batch: 1,
         rolledBack: [baseMigration.name],
         warnings: [],

@@ -143,7 +143,7 @@ export default function ConversationCenterPageComponent(): ReactElement {
       aria-label={t('Conversations')}
     >
       {/* The viewport constraint keeps history scrollable without expanding the settings page. */}
-      <div className='flex h-[clamp(24rem,68dvh,56rem)] min-w-0 overflow-hidden rounded-xl border bg-background shadow-sm'>
+      <div className='flex h-[clamp(24rem,68dvh,56rem)] min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm'>
         <aside
           aria-label={t('Conversations')}
           className={cn(
@@ -191,7 +191,7 @@ export default function ConversationCenterPageComponent(): ReactElement {
             error={listError}
             onRetry={() => setRevision((value) => value + 1)}
             renderLeading={() => (
-              <span className='flex size-9 shrink-0 items-center justify-center rounded-lg border bg-background text-muted-foreground'>
+              <span className='flex size-9 shrink-0 items-center justify-center rounded-lg border bg-transparent text-muted-foreground'>
                 <MessageSquare className='size-4' aria-hidden='true' />
               </span>
             )}

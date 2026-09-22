@@ -6,6 +6,10 @@ name: Release Beta
 on:
   workflow_dispatch:
     inputs:
+      include_pro:
+        description: 'Also release Pro plugins after the NocoBase3 release succeeds'
+        type: boolean
+        default: true
       dry_run:
         description: 'Dry run: compute versions and run checks without publishing or pushing'
         type: boolean
@@ -20,8 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   prepare:
@@ -49,6 +52,7 @@ jobs:
           path: release-source
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -91,8 +95,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "nocobase[bot]"
+          git config user.email "179432756+nocobase[bot]@users.noreply.github.com"
 
       - name: Record release base
         id: base
@@ -310,6 +314,7 @@ jobs:
     outputs:
       tag: ${{ needs.prepare.outputs.release_branch }}
       merged: ${{ steps.merge.outputs.merged }}
+      published: ${{ steps.publish_result.outputs.published }}
       create_app_version: ${{ steps.hub_versions.outputs.create_app_version }}
       hub_template_version: ${{ steps.hub_versions.outputs.hub_template_version }}
     steps:
@@ -323,6 +328,7 @@ jobs:
           path: release-source
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -358,8 +364,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "nocobase[bot]"
+          git config user.email "179432756+nocobase[bot]@users.noreply.github.com"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -400,6 +406,26 @@ jobs:
         if: inputs.skip_smoke_test
         run: echo "::warning::The create-app smoke test was skipped for this release."
 
+      # Mint the write token after validation so long builds do not consume its one-hour lifetime.
+      - name: Create a fresh NocoBase release token
+        if: '!inputs.dry_run'
+        id: release_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.NOCOBASE_APP_ID }}
+          private-key: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
+          owner: nocobase
+          repositories: nocobase3
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Authenticate git writes as nocobase bot
+        if: '!inputs.dry_run'
+        env:
+          RELEASE_TOKEN: ${{ steps.release_token.outputs.token }}
+        run: git remote set-url origin "https://x-access-token:${RELEASE_TOKEN}@github.com/nocobase/nocobase3.git"
+
       # Use full refspecs because the release branch and tag intentionally share a name for a short time.
       - name: Tag and push release branch
         if: '!inputs.dry_run'
@@ -423,7 +449,15 @@ jobs:
       # Publish the exact tarballs prepared and tested from the immutable release source state.
       - name: Publish to npm
         if: '!inputs.dry_run'
-        run: pnpm changeset publish --from-pack-dir "$RUNNER_TEMP/release-publish"
+        id: publish_result
+        run: |
+          set +e
+          node scripts/publish-plan-has-publications.mjs "$RUNNER_TEMP/release-publish/publish-plan.json"
+          PLAN_RC=$?
+          set -e
+          case "$PLAN_RC" in 0) PUBLISHED=true ;; 1) PUBLISHED=false ;; *) exit "$PLAN_RC" ;; esac
+          pnpm changeset publish --from-pack-dir "$RUNNER_TEMP/release-publish"
+          echo "published=$PUBLISHED" >> "$GITHUB_OUTPUT"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -474,19 +508,19 @@ jobs:
         if: '!inputs.dry_run'
         id: merge
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.release_token.outputs.token }}
           RELEASE_BRANCH: ${{ needs.prepare.outputs.release_branch }}
           RELEASE_BATCH: ${{ needs.prepare.outputs.batch }}
         run: |
           PR_URL=$(gh pr create \
-            --title "chore: release $RELEASE_BATCH" \
+            --title "chore: release $RELEASE_BATCH [skip ci]" \
             --body "Prerelease \`$RELEASE_BATCH\` published to npm under the \`beta\` dist-tag. Per-package versions are in the workflow summary." \
             --base develop \
             --head "$RELEASE_BRANCH")
           echo "url=$PR_URL" >> "$GITHUB_OUTPUT"
 
           set +e
-          gh pr merge "$PR_URL" --merge --delete-branch
+          gh pr merge "$PR_URL" --merge --delete-branch --subject "chore: merge release $RELEASE_BATCH into develop [skip ci]"
           RC=$?
           set -e
           if [ $RC -ne 0 ]; then
@@ -577,8 +611,10 @@ jobs:
     uses: ./.github/workflows/github-release.yml
     with:
       tag: ${{ needs.release.outputs.tag }}
+    secrets:
+      NOCOBASE_APP_PRIVATE_KEY: ${{ secrets.NOCOBASE_APP_PRIVATE_KEY }}
     permissions:
-      contents: write
+      contents: read
 
   hub-image:
     name: Publish Hub Docker image
@@ -600,3 +636,16 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+  follow-pro-release:
+    name: Release matching Pro beta
+    needs: [prepare, release, github-release]
+    if: >-
+      !cancelled() && inputs.include_pro && !inputs.dry_run
+      && needs.release.result == 'success' && needs.github-release.result == 'success'
+      && needs.release.outputs.merged == 'true' && needs.release.outputs.published == 'true'
+    uses: ./.github/workflows/pro-release-beta.yml
+    with:
+      oss_sha: ${{ needs.prepare.outputs.source_sha }}
+      dry_run: false
+    secrets: inherit

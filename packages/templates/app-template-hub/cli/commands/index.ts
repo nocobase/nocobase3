@@ -1,21 +1,15 @@
 import type { AppCliCommands } from '@nocobase/nb3-cli/plugins';
 
-import AppCollectionsGenerate from './collections-generate.js';
-import AppI18nCheck from './i18n-check.js';
-import AppInfo from './info.js';
-import AppDbApply from './db-apply.js';
-import AppDbRepair from './db-repair.js';
-import AppDbReset from './db-reset.js';
+import commands from '../standard-commands.js';
 
-// Commands this application owns. Each key is the name it answers to under the
-// `app` topic, so `info` becomes `pnpm nocobase app info`.
+// Commands this application answers to under the `app` topic, so `info` is
+// `pnpm nocobase app info`. The shared ones arrive as one map from the CLI
+// package and are passed straight through: re-exporting each of them from its
+// own file added a place to forget, and forgetting it makes a command answer to
+// nothing. Add a command this application owns as its own file here and give
+// it an entry below.
 const appCommands: AppCliCommands = {
-  'collections:generate': AppCollectionsGenerate,
-  'i18n:check': AppI18nCheck,
-  info: AppInfo,
-  'db:apply': AppDbApply,
-  'db:reset': AppDbReset,
-  'db:repair': AppDbRepair,
+  ...commands,
 };
 
 export default appCommands;

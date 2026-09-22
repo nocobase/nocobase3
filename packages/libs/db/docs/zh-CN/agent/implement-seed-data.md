@@ -17,28 +17,23 @@ import { defineSeed } from '@nocobase/db';
 export default defineSeed({
   name: '202609030002_create_default_order_statuses',
 
-  async run({ query }) {
-    const existing = await query
-      .selectFrom('orderStatuses')
-      .select('code')
-      .where('code', '=', 'draft')
-      .executeTakeFirst();
-
-    if (!existing) {
-      await query
-        .insertInto('orderStatuses')
-        .values({ code: 'draft', title: 'Draft' })
-        .execute();
-    }
+  async run({ repository }) {
+    await repository('orderStatuses').upsertOne({
+      filter: { code: 'draft' },
+      create: { code: 'draft', title: 'Draft' },
+      update: { title: 'Draft' },
+    });
   },
 });
 ```
 
-Seed Context 只提供 `query` 和 `connection`，不提供 `builder`。如果目标表或唯一约束尚不存在，应先添加 Migration。
+Seed Context 只提供 `repository`、`query` 和 `connection`，不提供 `builder`。如果目标表或唯一约束尚不存在，应先添加 Migration。
+
+安装数据默认用 `repository`：它按 Collection 逻辑字段名写入，关系和中间表行由关系写入生成，JSON、时间和 `createdAt`/`updatedAt` 等受管理字段的处理也不必每个 Seed 自己拼。`query` 留给 `repository` 表达不了的场景，例如读取一张不对应任何 Collection 的物理表。
 
 ## 幂等和历史
 
-- 使用稳定业务 key 查询现有记录。
+- 使用稳定业务 key 查询现有记录；`repository.upsertOne` 用一次调用表达这件事。
 - 使用数据库唯一约束防止并发或重试产生重复数据。
 - 默认每个 Seed 在独立事务中执行，数据写入和历史记录共享事务。
 - Seed 失败时不写历史；修复原因后再次执行。

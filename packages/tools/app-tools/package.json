@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-tools",
-  "version": "0.0.2-beta.0",
+  "version": "0.0.2-beta.1",
   "description": "Shared application development and build tools.",
   "type": "module",
   "license": "Apache-2.0",
@@ -55,24 +55,22 @@
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
-    "@nocobase/dev-config": "workspace:*",
     "@types/node": "catalog:",
-    "typescript": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
-    "vitest": "catalog:",
-    "tsx": "catalog:"
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "@nocobase/app-server": "workspace:^",
     "@nocobase/nb3-cli": "workspace:^",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
     "vite": "catalog:"
   },
   "dependencies": {
-    "cross-spawn": "^7.0.6",
+    "@nocobase/dev-config": "workspace:*",
+    "cross-spawn": "catalog:",
     "execa": "^10.0.1",
-    "typescript": "catalog:",
-    "tar": "^7.5.22",
-    "@nocobase/dev-config": "workspace:*"
+    "tar": "catalog:"
   }
 }

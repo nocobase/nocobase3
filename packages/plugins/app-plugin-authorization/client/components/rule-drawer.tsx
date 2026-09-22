@@ -37,7 +37,7 @@ export function RuleDrawer({
       >
         <Dialog.Portal>
           <Dialog.Backdrop className='fixed inset-0 z-50 bg-black/30' />
-          <Dialog.Popup className='fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl flex-col border-l bg-background shadow-xl outline-none'>
+          <Dialog.Popup className='fixed inset-y-0 right-0 z-50 flex w-full max-w-3xl flex-col border-l bg-popover shadow-xl outline-none'>
             <header className='flex shrink-0 items-start justify-between gap-4 border-b p-6'>
               <div className='space-y-1'>
                 <Dialog.Title className='text-lg font-semibold'>
@@ -93,7 +93,7 @@ export function RuleForm({
       <div className='min-h-0 flex-1 space-y-8 overflow-y-auto p-6 [&>section+section]:border-t [&>section+section]:pt-6'>
         {children}
       </div>
-      <footer className='flex shrink-0 items-center justify-end gap-2 border-t bg-background px-6 py-4'>
+      <footer className='flex shrink-0 items-center justify-end gap-2 border-t bg-popover px-6 py-4'>
         {footer}
       </footer>
     </div>

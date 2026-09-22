@@ -304,7 +304,7 @@ export function NotificationInAppInbox(): ReactElement {
         {(!loading && !error && items.length > 0) || nextCursor ? (
           <div
             ref={sentinelRef}
-            className='border-t bg-background px-4 py-3 text-center'
+            className='border-t bg-card px-4 py-3 text-center'
           >
             {nextCursor && typeof IntersectionObserver !== 'undefined' ? (
               <p role='status' className='text-sm text-muted-foreground'>
@@ -372,7 +372,7 @@ function InboxRow({ item, onMutate }: InboxRowProps): ReactElement {
   }, [item.body]);
   return (
     <article
-      className={`flex gap-3 p-4 sm:p-5 ${item.readAt ? 'bg-background' : 'bg-primary/[0.035]'}`}
+      className={`flex gap-3 p-4 sm:p-5 ${item.readAt ? 'bg-card' : 'bg-primary/[0.035]'}`}
     >
       <div className='mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground'>
         <Bell className='size-4' />

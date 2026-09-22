@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
@@ -37,7 +38,8 @@ function moduleDirectory(packageName: string): string {
  */
 async function createApp({
   prettier = false,
-}: { prettier?: boolean } = {}): Promise<string> {
+  typescript = true,
+}: { prettier?: boolean; typescript?: boolean } = {}): Promise<string> {
   const appRoot = await mkdtemp(path.join(os.tmpdir(), 'nb3-client-'));
   created.push(appRoot);
   await writeFile(
@@ -45,16 +47,18 @@ async function createApp({
     JSON.stringify({ name: 'demo-app' }),
   );
   await mkdir(path.join(appRoot, 'node_modules'), { recursive: true });
-  await symlink(
-    moduleDirectory('typescript'),
-    path.join(appRoot, 'node_modules', 'typescript'),
-    'dir',
-  );
+  if (typescript) {
+    await symlink(
+      moduleDirectory('typescript'),
+      path.join(appRoot, 'node_modules', 'typescript'),
+      'junction',
+    );
+  }
   if (prettier) {
     await symlink(
       moduleDirectory('prettier'),
       path.join(appRoot, 'node_modules', 'prettier'),
-      'dir',
+      'junction',
     );
   }
   return appRoot;
@@ -84,6 +88,84 @@ function sourceWith(...shortNames: string[]): string {
       : `[\n${shortNames.map((name) => `  ${name}(),\n`).join('')}]`;
   return `${HEADER}\n${imports}\nconst clientPlugins: AppClientPlugins = defineClientPlugins(${array});\n\nexport default clientPlugins;\n`;
 }
+
+// Exercise Node's native ESM loader without Vitest's URL transforms or fallback module lookup paths.
+function checkCompilerInNode(appRoot: string, assertion: string): void {
+  const editorUrl = new URL('../src/lib/client-plugins.ts', import.meta.url);
+  execFileSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      `import assert from 'node:assert/strict';
+import { createClientPluginsEditor } from ${JSON.stringify(editorUrl.href)};
+const appRoot = process.argv[1];
+${assertion}`,
+      appRoot,
+    ],
+    { env: { ...process.env, NODE_PATH: '' }, timeout: 30_000 },
+  );
+}
+
+describe('loading the application TypeScript compiler', () => {
+  it('loads a compiler entry whose path contains URL characters', async () => {
+    const appRoot = await createApp({ typescript: false });
+    const compilerRoot = path.join(appRoot, 'node_modules', 'typescript');
+    const entry = 'compiler #entry.cjs';
+    await mkdir(compilerRoot);
+    await writeFile(
+      path.join(compilerRoot, 'package.json'),
+      JSON.stringify({ name: 'typescript', main: entry }),
+    );
+    await writeFile(
+      path.join(compilerRoot, entry),
+      `module.exports = require(${JSON.stringify(require.resolve('typescript'))});\n`,
+    );
+
+    checkCompilerInNode(
+      appRoot,
+      `const editor = await createClientPluginsEditor(appRoot);
+assert.deepEqual(editor.list(${JSON.stringify(sourceWith('alpha'))}), [
+  { localName: 'alpha', packageName: '@nocobase/app-plugin-alpha' },
+]);`,
+    );
+  });
+
+  it('reports a missing compiler', async () => {
+    const appRoot = await createApp({ typescript: false });
+
+    checkCompilerInNode(
+      appRoot,
+      `await assert.rejects(createClientPluginsEditor(appRoot), {
+  name: 'MissingTypeScriptError',
+  message: /TypeScript is not installed/,
+});`,
+    );
+  });
+
+  it('preserves errors thrown by an installed compiler', async () => {
+    const appRoot = await createApp({ typescript: false });
+    const compilerRoot = path.join(appRoot, 'node_modules', 'typescript');
+    await mkdir(compilerRoot);
+    await writeFile(
+      path.join(compilerRoot, 'package.json'),
+      JSON.stringify({ name: 'typescript', main: 'index.cjs' }),
+    );
+    await writeFile(
+      path.join(compilerRoot, 'index.cjs'),
+      "throw Object.assign(new Error('Compiler dependency is missing'), { code: 'MODULE_NOT_FOUND' });\n",
+    );
+
+    checkCompilerInNode(
+      appRoot,
+      `await assert.rejects(createClientPluginsEditor(appRoot), {
+  name: 'Error',
+  code: 'MODULE_NOT_FOUND',
+  message: 'Compiler dependency is missing',
+});`,
+    );
+  });
+});
 
 describe('localNameFor', () => {
   it('converts a kebab-case package into a camelCase binding', () => {

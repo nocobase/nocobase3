@@ -1,5 +1,37 @@
 # @nocobase/app-plugin-authorization-example
 
+## 0.1.0-beta.3
+
+### Patch Changes
+
+- 709f9ed: Update Better Auth and API keys to 1.7.5 and align fresh authentication databases with provider-based account identity. Existing authentication databases must be recreated; the original account migration has changed and no compatibility migration is provided.
+- Updated dependencies [709f9ed]
+- Updated dependencies [d696700]
+- Updated dependencies [fa01814]
+- Updated dependencies [ca3188e]
+- Updated dependencies [38e5253]
+- Updated dependencies [fa01814]
+- Updated dependencies [7bde7bd]
+- Updated dependencies [5380642]
+- Updated dependencies [3187ace]
+- Updated dependencies [d4783c2]
+- Updated dependencies [d696700]
+- Updated dependencies [5380642]
+- Updated dependencies [c5f4438]
+- Updated dependencies [3187ace]
+- Updated dependencies [38e5253]
+- Updated dependencies [38e5253]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.20
+  - @nocobase/app-plugin-authorization@0.2.0-beta.17
+  - @nocobase/db@1.0.0-beta.13
+  - @nocobase/app-server@1.0.0-beta.23
+  - @nocobase/app-plugin-authz-default-access@0.1.0-beta.1
+  - @nocobase/app-plugin-authz-sharing-rules@0.1.0-beta.1
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/app-plugin-authz-restriction-rules@0.1.0-beta.0
+
 ## 0.1.0-beta.2
 
 ### Patch Changes

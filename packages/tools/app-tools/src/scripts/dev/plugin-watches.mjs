@@ -1,19 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import ts from 'typescript';
 
-import { findWorkspacePackageDirectory } from '../utils/workspace-packages.mjs';
+import { listWorkspacePackages } from '../utils/workspace-packages.mjs';
 
 // Read declarations without importing server code or starting providers.
-export const resolvePluginWatchIncludes = (rootDir) => {
+export const resolvePluginWatchIncludes = async (rootDir) => {
   const file = path.join(rootDir, 'server/plugins.ts');
   if (!fs.existsSync(file)) return [];
-  const source = ts.createSourceFile(
-    file,
-    fs.readFileSync(file, 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const text = fs.readFileSync(file, 'utf8');
+  const workspacePackages = listWorkspacePackages(rootDir);
+  // Only a workspace neighbour has sources to watch, and watching one requires importing it by name here, so a file
+  // naming none of them cannot produce a single entry. Deciding that by substring keeps TypeScript — 24 MB of
+  // compiler — out of every `pnpm dev` that would only have been told `[]`. That is every generated application:
+  // its plugins are installed under `node_modules`, and whatever sits beside it belongs to unrelated projects.
+  if (![...workspacePackages.keys()].some((name) => text.includes(name)))
+    return [];
+  const { default: ts } = await import('typescript');
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const imports = new Map();
   for (const statement of source.statements) {
     if (
@@ -48,7 +51,7 @@ export const resolvePluginWatchIncludes = (rootDir) => {
   };
   visit(source);
   return [...packages].flatMap((packageName) => {
-    const pluginDir = findWorkspacePackageDirectory(rootDir, packageName);
+    const pluginDir = workspacePackages.get(packageName);
     if (!pluginDir) return [];
     const relative = path
       .relative(rootDir, pluginDir)

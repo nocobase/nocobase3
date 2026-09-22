@@ -1,0 +1,130 @@
+/*
+ * bubblegum: colours and radius converted from the tweakcn preset of the same id.
+ * https://github.com/jnsahaj/tweakcn (Apache-2.0); see THIRD-PARTY-NOTICES.md in this directory.
+ * Typography, spacing and elevation are the values this application defines, unchanged.
+ *
+ * Six light colours are retuned rather than carried over, because upstream spends
+ * the generic surface and outline roles on decoration: `card` was a cream 101 deg
+ * of hue away from the pink `background`, `border` was `primary` itself at chroma
+ * 0.18, and `muted` was a cyan. One demonstration card and a few dividers carry
+ * that; a settings page stacking several panels over dozens of hairlines turns it
+ * into four competing hues. The retuned values keep those roles in the background
+ * hue family and leave the theme's colour in `primary`, `secondary` and `accent`,
+ * which is where it reads as deliberate. The dark rule needs none of this: its
+ * surfaces and outlines are already neutral.
+ */
+:root[data-theme='bubblegum'],
+.theme-preview[data-theme='bubblegum'] {
+  --font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  --font-serif:
+    ui-serif, Georgia, Cambria, 'Times New Roman', 'Songti SC', SimSun, serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  --font-heading: var(--font-sans);
+  --spacing: 0.2rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: calc(1 / 0.75);
+  --text-sm: 0.875rem;
+  --text-sm--line-height: calc(1.2 / 0.875);
+  --text-base: 1rem;
+  --text-base--line-height: calc(1.4 / 1);
+  --text-lg: 1.125rem;
+  --text-lg--line-height: calc(1.6 / 1.125);
+  --text-xl: 1.25rem;
+  --text-xl--line-height: calc(1.6 / 1.25);
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: calc(1.8 / 1.5);
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: calc(2.1 / 1.875);
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: calc(2.3 / 2.25);
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 1;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 1;
+  --text-7xl: 4.5rem;
+  --text-7xl--line-height: 1;
+  --text-8xl: 6rem;
+  --text-8xl--line-height: 1;
+  --text-9xl: 8rem;
+  --text-9xl--line-height: 1;
+  --shadow-2xs: 0 1px rgb(0 0 0 / 0.05);
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  --radius: 0.4rem;
+  --background: #f6e6ee;
+  --foreground: #5b5b5b;
+  --card: #fffafd;
+  --card-foreground: #5b5b5b;
+  --popover: #ffffff;
+  --popover-foreground: #5b5b5b;
+  --primary: #d04f99;
+  --primary-foreground: #ffffff;
+  --secondary: #8acfd1;
+  --secondary-foreground: #333333;
+  --muted: #f3e4ed;
+  --muted-foreground: #7a7a7a;
+  --accent: #fbe2a7;
+  --accent-foreground: #333333;
+  --destructive: #f96f70;
+  --border: #eec5dd;
+  --input: #e9cfdf;
+  --ring: #e670ab;
+  --chart-1: #e670ab;
+  --chart-2: #84d2e2;
+  --chart-3: #fbe2a7;
+  --chart-4: #f3a0ca;
+  --chart-5: #d7488e;
+  --sidebar: #f8d8ea;
+  --sidebar-foreground: #333333;
+  --sidebar-primary: #d04f99;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f9a8d4;
+  --sidebar-accent-foreground: #333333;
+  --sidebar-border: #f0d2e6;
+  --sidebar-ring: #ec4899;
+}
+
+:root.dark[data-theme='bubblegum'],
+:root.dark .theme-preview[data-theme='bubblegum'] {
+  --background: #12242e;
+  --foreground: #f3e3ea;
+  --card: #1c2e38;
+  --card-foreground: #f3e3ea;
+  --popover: #1c2e38;
+  --popover-foreground: #f3e3ea;
+  --primary: #fbe2a7;
+  --primary-foreground: #12242e;
+  --secondary: #e4a2b1;
+  --secondary-foreground: #12242e;
+  --muted: #24272b;
+  --muted-foreground: #e4a2b1;
+  --accent: #c67b96;
+  --accent-foreground: #f3e3ea;
+  --destructive: #e35ea4;
+  --border: #324859;
+  --input: #20333d;
+  --ring: #50afb6;
+  --chart-1: #50afb6;
+  --chart-2: #e4a2b1;
+  --chart-3: #c67b96;
+  --chart-4: #175c6c;
+  --chart-5: #24272b;
+  --sidebar: #101f28;
+  --sidebar-foreground: #f3f4f6;
+  --sidebar-primary: #ec4899;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f9a8d4;
+  --sidebar-accent-foreground: #1f2937;
+  --sidebar-border: #374151;
+  --sidebar-ring: #ec4899;
+}

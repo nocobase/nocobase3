@@ -64,7 +64,7 @@ pnpm start
 pnpm build --target linux-x64 --tar
 ```
 
-产物为 `storage/dist.tar.gz`，包含 `dist/` 和 `config.example.yml`。ARM 或 musl 环境需要匹配自己的目标；原生数据库依赖也必须与目标平台和 Node.js 版本一致。
+产物为 `storage/exports/dist.tar.gz`，包含 `dist/` 和 `config.example.yml`，其中 `dist/` 已带有生产依赖。ARM 或 musl 环境需要匹配自己的目标；原生数据库依赖也必须与目标平台和 Node.js 版本一致。
 
 不要把本地数据库、测试账号密码或真实 `config.yml` 打入公共仓库。把构建包上传到目标机器的新发布目录并解压：
 
@@ -87,10 +87,10 @@ export APP_BASE_PATH=/main
 export APP_SERVER_HOST=127.0.0.1
 export APP_SERVER_PORT=13000
 export NODE_ENV=production
-node --input-type=module -e "const { startServer } = await import('./dist/server/standalone.js'); startServer();"
+node ./dist/server/standalone.js
 ```
 
-部署包不包含源码目录的 `scripts/start.mjs`，因此解压部署包后使用编译产物入口；源码目录中则使用 `pnpm start`。检查实际产物的入口导出，不要复制不存在的路径。
+部署包不包含源码目录的 `scripts/start.mjs`，因此解压部署包后直接用 `node` 运行编译产物入口 `dist/server/standalone.js`；源码目录中则使用 `pnpm start`。
 
 把域名的 HTTPS 流量通过反向代理转发到应用，保留 API、静态资源和 WebSocket 路径；使用服务管理器管理进程、重启和日志。正式迁移前备份已有数据库，并按照目标配置决定启动时迁移还是发布时单独迁移。
 

@@ -82,7 +82,7 @@ export default function LLMServicePage(): ReactElement {
           {error}
         </div>
       )}
-      <div className='overflow-hidden rounded-xl border bg-background'>
+      <div className='overflow-hidden rounded-xl border bg-card'>
         <Table>
           <TableHeader>
             <TableRow>
@@ -285,7 +285,7 @@ function ModelMultiSelect({
           .includes(search);
       }}
     >
-      <Combobox.InputGroup className='flex min-h-10 w-full items-center gap-1 rounded-md border border-input bg-background px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring'>
+      <Combobox.InputGroup className='flex min-h-10 w-full items-center gap-1 rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring'>
         <Combobox.Value>
           {(selected: EnabledModel[]) => (
             <Combobox.Chips className='flex min-w-0 flex-1 flex-wrap items-center gap-1'>
@@ -436,7 +436,7 @@ function ModelEditor({
         <DialogHeader>
           <DialogTitle>{t('Edit models')}</DialogTitle>
         </DialogHeader>
-        <div className='flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800'>
+        <div className='flex items-start gap-2 rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground'>
           <CircleAlert className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
           <span>
             {t(

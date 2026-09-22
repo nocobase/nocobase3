@@ -165,7 +165,7 @@ Plugins add features to your application. Let these commands edit `package.json`
 | `pnpm package:remove <name>`    | Remove a direct NocoBase package and its synchronized Skill |
 | `pnpm skills:sync`              | Sync direct NocoBase package Skills into `.agents/skills/`  |
 
-Use `pnpm skills:sync` to synchronize Skills. The CLI retains `nocobase plugin skills sync` for older applications, but new templates do not provide a separate script alias.
+`pnpm install` automatically runs `pnpm skills:sync` through the application's `postinstall` hook. Run `pnpm skills:sync` manually when install scripts were disabled or Skills need refreshing. The CLI retains `nocobase plugin skills sync` for older applications, but new templates do not provide a separate script alias.
 
 Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
 
@@ -203,7 +203,7 @@ An older application with the new CLI but without the script can run `pnpm nocob
 
 #### Deploying to a different machine
 
-`pnpm build` produces `dist/`, which is the whole deployment: copy it to a server and run it. It carries its own `package.json`, and `pnpm install --prod` there installs exactly what the server needs.
+`pnpm build` produces `dist/`, which is the whole deployment: copy it to a server and run it. The build already ran `pnpm install --prod` inside `dist/`, so the tree ships with its `node_modules` and needs no install step on the server. It also keeps its own `package.json`, so `pnpm install --prod` run inside `dist/` on the server reinstalls exactly the same set: useful when `node_modules` was left out of a copy, never required after a normal build.
 
 Client packages are not among them. Plugins declare what their browser code needs as peer dependencies, so your application installs one shared copy for its Vite build, while `dist/` opts out of peer installation entirely — `lucide-react`, `@base-ui/react`, `sonner` and the rest never reach a server that has no browser in it.
 

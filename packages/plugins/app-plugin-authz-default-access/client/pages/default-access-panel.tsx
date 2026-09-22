@@ -301,7 +301,7 @@ export function DefaultAccessPanel({
               {resourceType?.groups?.length ? (
                 <SelectField
                   aria-label={t('defaultAccess.groupFilter')}
-                  className='h-9 max-w-64 rounded-md border bg-background px-3 text-sm'
+                  className='h-9 max-w-64 rounded-md border bg-transparent px-3 text-sm'
                   value={groupFilter}
                   onValueChange={(selectedValue) =>
                     filter('group', selectedValue)
@@ -331,7 +331,7 @@ export function DefaultAccessPanel({
             <ManagementTable>
               <div className='max-h-[65vh] overflow-auto'>
                 <Table className='min-w-[36rem] table-fixed'>
-                  <TableHeader className='sticky top-0 z-10 bg-background'>
+                  <TableHeader className='sticky top-0 z-10 bg-card'>
                     <TableRow>
                       <TableHead className='w-[32%] px-5 py-3'>
                         {t('common.resource')}
@@ -682,7 +682,7 @@ export function DefaultAccessPanel({
                           {action.label}
                           <SelectField
                             aria-label={action.label}
-                            className='h-9 min-w-48 rounded-md border bg-background px-3 text-sm font-normal'
+                            className='h-9 min-w-48 rounded-md border bg-transparent px-3 text-sm font-normal'
                             value={
                               !current
                                 ? 'unset'
