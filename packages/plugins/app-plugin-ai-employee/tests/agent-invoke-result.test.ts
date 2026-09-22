@@ -58,7 +58,6 @@ const agentFor = (sessionId: string) => {
   const context: AgentContextProvider = {
     currentConversation: () => ({ sessionId }),
     agentContext: { state: { sessionId } } as never,
-    state: () => ({ sessionId }),
     resolveLLM: async () => ({
       providerName: 'test',
       llmService: 'test-service',

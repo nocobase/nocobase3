@@ -18,7 +18,10 @@ import { AgentService } from '../server/agent/service/agent-service.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
 import { DEFAULT_AGENT_FEATURES } from '../server/agent/types.js';
 
-const agentContext = { marker: 'from-provider' } as never;
+const agentContext = {
+  marker: 'from-provider',
+  state: { sessionId: 'runtime' },
+} as never;
 
 function createFixture() {
   const invoke = vi.fn(async () => ({ messages: [] }));
@@ -37,7 +40,6 @@ function createFixture() {
     logger: { warn: vi.fn(), error: vi.fn() },
     context: {
       agentContext,
-      state: vi.fn(() => agentContext.state ?? {}),
       currentConversation: vi.fn(() => ({ sessionId: 'runtime' })),
       resolveLLM: vi.fn(async () => ({
         providerName: 'test',
@@ -75,7 +77,7 @@ const userMessages = [
   { role: 'user' as const, content: { type: 'text' as const, content: 'hi' } },
 ];
 
-describe('AgentService tool runtime context', () => {
+describe('AgentService tool context', () => {
   it('builds each tool with the context fixed when the service was created', async () => {
     const { service, runBuiltTool } = createFixture();
 

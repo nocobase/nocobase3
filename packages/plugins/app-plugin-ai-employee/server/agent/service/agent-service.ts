@@ -307,7 +307,7 @@ export class AgentService {
       (message: any) => message?.role !== 'system',
     );
     const importantPrompt =
-      context.state().important === 'GraphRecursionError'
+      context.agentContext.state.important === 'GraphRecursionError'
         ? `<Important>You have already called tools multiple times and gathered sufficient information.\nFirst, provide a summary based on the existing information. Do not call additional tools.\nIf information is missing, clearly state it in the summary.</Important>`
         : undefined;
     const systemPrompt = features.contextEnrichment

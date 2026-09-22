@@ -1,6 +1,5 @@
 import type {
   AgentContext,
-  AgentState,
   AIMessageInput,
   ToolsEntity,
   LLMProvider,
@@ -55,10 +54,6 @@ export class FixedAgentContextProvider implements AgentContextProvider {
 
   public currentConversation(): CurrentConversation {
     return this.conversation;
-  }
-
-  public state(): AgentState {
-    return this.agentContext.state;
   }
 
   public async resolveLLM(): Promise<ResolvedAgentLLM> {

@@ -6,7 +6,6 @@ import type {
 } from '../../types.js';
 import type {
   AgentContext,
-  AgentState,
   AIEmployee as AIEmployeeType,
   AIMessageInput,
   LLMProviderManager,
@@ -129,15 +128,11 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     return this.conversation;
   }
 
-  public state(): AgentState {
-    return this.agentContext.state;
-  }
-
   public async resolveLLM(): Promise<ResolvedAgentLLM> {
     // The employee's own configuration decides the model. The turn may ask for
     // one, but only a model the employee allows is honoured, and a turn that
     // asks for none is resolved rather than rejected.
-    const model = await this.resolveModel(this.state().model);
+    const model = await this.resolveModel(this.agentContext.state.model);
     const resolved = await this.llmProviderManager.getLLMService(model);
     return {
       providerName: resolved.service.provider,

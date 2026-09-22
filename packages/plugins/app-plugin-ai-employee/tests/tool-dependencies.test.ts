@@ -31,7 +31,6 @@ function createService(tools: unknown[], withContainer = true) {
     ...(withContainer ? { container } : {}),
     context: {
       agentContext: baseContext,
-      state: () => baseContext.state ?? {},
       currentConversation: () => ({ sessionId: 'deps' }),
       resolveLLM: async () => ({
         providerName: 'test',

@@ -13,7 +13,6 @@ import type { Logger } from '@nocobase/logging';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
   AgentContext,
-  AgentState,
   AgentThread,
   AIMessage,
   AIMessageInput,
@@ -378,8 +377,6 @@ export interface ConversationProvider {
 
 export interface AgentContextProvider {
   currentConversation(): CurrentConversation;
-  /** The turn this agent was created for, as every tool of it sees it. */
-  state(): AgentState;
   /**
    * The LLM this agent runs on. It follows from the agent's own state and the
    * employee's model policy, never from the request being served.

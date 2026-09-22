@@ -152,7 +152,7 @@ describe('fixed AgentService contracts', () => {
     expect(options).not.toContain('model?: ModelRef');
     expect(providers).not.toContain('private readonly model');
     expect(providers).not.toContain('model: options.model');
-    expect(providers).toContain('this.state().model');
+    expect(providers).toContain('this.agentContext.state.model');
     expect(providers).toContain('getLLMService(model)');
     expect(factory).toContain('managers.aiEmployeesManager.resolveModel(');
     expect(conversationService).not.toContain('resolveModel(');
