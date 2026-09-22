@@ -14,7 +14,6 @@ import type { ModelRef } from '../../../types.js';
 
 export interface FixedAgentContextOptions {
   readonly sessionId: string;
-  readonly username?: string;
   readonly from?: string;
   readonly model?: ModelRef;
   readonly provider?: LLMProvider;
@@ -39,7 +38,6 @@ export class FixedAgentContextProvider implements AgentContextProvider {
   public constructor(options: FixedAgentContextOptions) {
     this.conversation = {
       sessionId: options.sessionId,
-      username: options.username,
       from: options.from,
     };
     this.model = options.model;

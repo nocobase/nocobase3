@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import {
   createServiceToken,
   type ServiceResolver,
@@ -70,8 +69,8 @@ export interface CreateEmployeeOptions {
 }
 
 export interface CreateAgentOptions {
-  readonly sessionId?: string;
-  readonly username?: string;
+  /** The conversation this agent runs in. A fixed agent is always given one. */
+  readonly sessionId: string;
   readonly model?: ModelRef;
   readonly systemPrompt?: string;
   readonly tools?: readonly string[];
@@ -200,12 +199,10 @@ export class AgentServiceFactory {
     );
   }
 
-  public async createAgent(
-    options: CreateAgentOptions = {},
-  ): Promise<AgentService> {
+  public async createAgent(options: CreateAgentOptions): Promise<AgentService> {
     const repositories = this.repositoryFactory;
     const managers = this.managerFactory;
-    const sessionId = options.sessionId ?? randomUUID();
+    const { sessionId } = options;
     const persistence =
       options.persistence ??
       new DatabaseConversationPersistence({
@@ -249,7 +246,6 @@ export class AgentServiceFactory {
     }
     const context = new FixedAgentContextProvider({
       sessionId,
-      username: options.username,
       agentContext: this.createContext(
         options.actor ?? { id: 0, roles: [], isRoot: true },
         options.runtime ?? { logger: this.loggerService },
