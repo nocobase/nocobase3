@@ -22,6 +22,10 @@ name: Merge Beta to Stable
 on:
   workflow_dispatch:
     inputs:
+      include_pro:
+        description: 'Also promote Pro plugins after the OSS promotion succeeds (does not publish packages)'
+        type: boolean
+        default: true
       dry_run:
         description: 'Dry run: compute versions and run checks without pushing any branch'
         type: boolean
@@ -333,7 +337,7 @@ jobs:
     name: Promote matching Pro beta
     needs: merge
     if: >-
-      !cancelled() && vars.PRO_RELEASE_FOLLOW_OSS == 'true' && !inputs.dry_run
+      !cancelled() && inputs.include_pro && !inputs.dry_run
       && needs.merge.result == 'success' && needs.merge.outputs.main_sha != ''
     uses: ./.github/workflows/pro-promote-to-stable.yml
     with:
