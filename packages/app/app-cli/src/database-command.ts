@@ -84,10 +84,18 @@ export async function runDatabaseApplyCommand(
         command.log(
           `WARNING: checksum changed since it was executed: ${describe(warning)}`,
         );
-      if (entry.warnings?.length)
+      if (entry.warnings?.length) {
+        // Which command depends on what the edit did, and repair is only ever
+        // right for the first case: it records that the source and the schema
+        // agree. Used on a change the database never received, it makes an
+        // un-applied migration look applied.
         command.log(
-          'Run "nocobase app db repair" to realign the history once the change is confirmed intentional.',
+          'If the edit left the schema identical — a reformat, a comment, a rebuild — run "nocobase app db repair" to realign the history.',
         );
+        command.log(
+          'If it changed what the migration does, run "nocobase app db redo" while its branch is unmerged, or add a new migration once it is merged.',
+        );
+      }
     }
   }
   if (!result.ok) command.exit(1);

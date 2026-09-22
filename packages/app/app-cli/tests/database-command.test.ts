@@ -435,9 +435,14 @@ it('warns about checksum drift and repairs it across both task kinds', async () 
   // The default policy reports the drift without stopping the run.
   command.log.mockClear();
   await runDatabaseApplyCommand(command, { json: false, all: false }, runtime);
-  expect(command.log.mock.calls.flat().join('\n')).toContain(
+  const drift = command.log.mock.calls.flat().join('\n');
+  expect(drift).toContain(
     'WARNING: checksum changed since it was executed: 001_create',
   );
+  // Both routes, because repair is only right when the schema already agrees
+  // with the edited source.
+  expect(drift).toContain('"nocobase app db repair"');
+  expect(drift).toContain('"nocobase app db redo"');
   expect(command.exit).not.toHaveBeenCalled();
 
   // A dry run reports both kinds and writes nothing.

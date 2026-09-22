@@ -5,6 +5,12 @@ import { loadStandaloneAppEnv } from '@nocobase/app-server/node';
 import { readCliHooks, runHookStage } from '../utils/cli-hooks.mjs';
 import { resolvePluginWatchIncludes } from './plugin-watches.mjs';
 import { resolveConfigWatch, watchConfigFiles } from './config-watch.mjs';
+import {
+  DEPENDENCY_SETTLE_MS,
+  resolveDependencyWatch,
+} from './dependency-watch.mjs';
+import { acquireDevInstanceLock } from './instance-lock.mjs';
+import { resolveDevShutdownEnv } from './shutdown-budget.mjs';
 import { resolveWatchEnvironment } from './watch-environment.mjs';
 import { findAvailablePort } from './ports.mjs';
 import { waitForHttpReady } from './readiness.mjs';
@@ -102,6 +108,9 @@ const spawnDevProcess = (label, command, args, env, options = {}) => {
 let shuttingDown = false;
 let envRestartTimer;
 let envWatcher;
+let dependencyWatchers = [];
+let dependencyRestartTimer;
+let instanceLock;
 
 const shutdown = (exitCode = 0) => {
   if (shuttingDown) return;
@@ -113,6 +122,12 @@ const shutdown = (exitCode = 0) => {
     envRestartTimer = undefined;
   }
   envWatcher?.close();
+  if (dependencyRestartTimer) {
+    clearTimeout(dependencyRestartTimer);
+    dependencyRestartTimer = undefined;
+  }
+  for (const watcher of dependencyWatchers.splice(0)) watcher.close();
+  instanceLock?.release();
 
   // The supervisor owns the complete process group. Exiting the worker starts
   // Execa's graceful termination and bounded escalation for all descendants.
@@ -213,6 +228,27 @@ const pluginWatchIncludes = proxyTarget
   ? []
   : resolvePluginWatchIncludes(rootDir);
 
+// Only a run that owns a local server contends for the application's database;
+// a proxy run talks to someone else's and may share the root. Claimed before
+// anything starts, so a duplicate costs nothing.
+if (!proxyTarget && nextEnv.NOCOBASE_DEV_ALLOW_MULTIPLE !== 'true') {
+  const lock = acquireDevInstanceLock({ rootDir });
+  if (!lock.acquired) {
+    const startedAt = Number(lock.startedAt);
+    const since = Number.isFinite(startedAt)
+      ? ` started ${new Date(startedAt).toLocaleTimeString()}`
+      : '';
+    console.error(
+      `[dev] A development server for this application is already running (pid ${lock.pid}${since}).`,
+    );
+    console.error(
+      '[dev] Stop it first. A second one takes the next free port and then fails on the migration lock the first one holds. Set NOCOBASE_DEV_ALLOW_MULTIPLE=true to start one anyway.',
+    );
+    shutdown(1);
+  }
+  instanceLock = lock;
+}
+
 console.log(
   `\n  Starting ${proxyTarget ? 'Vite with remote backend' : 'app dev server'}...`,
 );
@@ -230,6 +266,7 @@ spawnDevProcess(
 if (!proxyTarget) {
   const serverEnv = {
     ...nextEnv,
+    ...resolveDevShutdownEnv(nextEnv),
     APP_VITE_DEV_HOST: viteDevHost,
     APP_VITE_DEV_PORT: String(vitePort),
     APP_VITE_DEV_URL: `http://${toUrlHost(viteDevHost)}:${vitePort}`,
@@ -259,8 +296,6 @@ if (!proxyTarget) {
             // tsx's cwd-relative default misses pnpm dependencies above the app.
             '--exclude',
             `${path.parse(rootDir).root.replaceAll('\\', '/')}**/node_modules/**`,
-            '--include',
-            'package.json',
             ...pluginWatchIncludes.flatMap((include) => ['--include', include]),
           ]),
       'server/standalone.ts',
@@ -272,6 +307,19 @@ if (!proxyTarget) {
   if (!strictStartup && serverChild.stdin) {
     process.stdin.pipe(serverChild.stdin);
   }
+
+  if (!strictStartup)
+    dependencyWatchers = resolveDependencyWatch(rootDir).map((watch) =>
+      watchConfigFiles(watch, (_eventType, filename) => {
+        clearTimeout(dependencyRestartTimer);
+        dependencyRestartTimer = setTimeout(() => {
+          dependencyRestartTimer = undefined;
+          if (shuttingDown) return;
+          console.log(`[dev] ${filename} changed; restarting server`);
+          serverChild.stdin?.write('\n');
+        }, DEPENDENCY_SETTLE_MS);
+      }),
+    );
 
   const configuredConfigPath = serverEnv.APP_CONFIG_FILE;
   const configWatch = resolveConfigWatch(rootDir, configuredConfigPath);
