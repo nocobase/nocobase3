@@ -63,6 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s dist/index.html
+          test -s dist/favicon.svg
           test -d dist/assets
           # The registry entry files are not enumerated here: `shadcn build` decides what it writes, and a check
           # naming them would go stale as items are added.
