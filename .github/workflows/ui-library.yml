@@ -66,13 +66,24 @@ jobs:
           test -s dist/favicon.svg
           test -d dist/assets
           test -s dist/r/registry.json
-          test -s dist/r/auth-ui.json
           node --input-type=module <<'NODE'
           import { readFile } from 'node:fs/promises';
 
-          for (const file of ['dist/r/registry.json', 'dist/r/auth-ui.json']) {
-            JSON.parse(await readFile(file, 'utf8'));
+          const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
+
+          // `shadcn build` writes one JSON per item next to the index, so the index is what says which files must
+          // exist. Reading the names from it keeps this check correct as items are added or renamed.
+          const registry = await readJson('dist/r/registry.json');
+          const names = registry.items.map((item) => item.name);
+          if (names.length === 0) {
+            throw new Error('dist/r/registry.json lists no items');
           }
+
+          for (const name of names) {
+            await readJson(`dist/r/${name}.json`);
+          }
+
+          console.log(`Verified ${names.length} registry item(s): ${names.join(', ')}`);
           NODE
 
       - name: Upload build artifact

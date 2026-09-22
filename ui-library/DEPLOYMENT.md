@@ -10,4 +10,4 @@ Pull Request 会安装依赖、构建并检查产物，但不会上传 OSS。合
 
 发布使用固定版本的 `ossutil`，Bucket 和地域来自上面的 secret，上传目标是 `oss://<bucket>/` 根目录。资源、Registry 条目、Registry 索引和 `index.html` 按顺序上传；入口 HTML 和 Registry 索引使用 `Cache-Control: no-cache`，Vite 生成的内容哈希文件使用一年期不可变缓存，`favicon.svg` 和 `assets/` 下从 `public/` 复制来的固定名称图片使用一天缓存。Workflow 不会删除 OSS 中已有的对象，因此上传中断时旧文件仍会保留。
 
-如果发布失败，先查看 Actions 日志中第一个失败的步骤：构建失败通常是依赖或 TypeScript/Vite 问题，验证失败表示预期的 `dist` 文件缺失，OSS 步骤失败通常是 Secret 无效、RAM 用户没有目标 Bucket 的 `oss:PutObject` 权限或 Bucket 地域不匹配。发布成功后可检查首页、`http://ui.nocobase.com/r/registry.json` 和 `http://ui.nocobase.com/r/auth-ui.json` 是否返回 JSON；若看到 HTML，说明静态网站回退规则拦截了该路径，需要检查 OSS 对象是否位于 Bucket 根目录。
+如果发布失败，先查看 Actions 日志中第一个失败的步骤：构建失败通常是依赖或 TypeScript/Vite 问题，验证失败表示预期的 `dist` 文件缺失或 Registry JSON 无法解析，OSS 步骤失败通常是 Secret 无效、RAM 用户没有目标 Bucket 的 `oss:PutObject` 权限或 Bucket 地域不匹配。发布成功后可检查首页、`http://ui.nocobase.com/r/registry.json` 以及它 `items` 里列出的每个条目文件（例如 `http://ui.nocobase.com/r/auth-ui.json`）是否返回 JSON；若看到 HTML，说明静态网站回退规则拦截了该路径，需要检查 OSS 对象是否位于 Bucket 根目录。
