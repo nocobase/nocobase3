@@ -10,7 +10,7 @@ Install this package as a direct development dependency of the target App using 
 
 Ask the App Agent, for example: “Implement invoice template printing from a DOCX file, including line items and PDF download.” The [Template Print Skill](skills/nocobase-app-plugin-template-print/SKILL.md) guides scope, dependencies, data permissions, rendering, and verification. Edit the canonical files here; the App's `.agents/skills/` copy is generated local output.
 
-The references distill the legacy `@nocobase/plugin-action-template-print` implementation. They separate historical behavior from v3 adaptation and include a source map, core code examples, Office image handling, and regression scenarios. They do not require a checkout of the legacy plugin.
+The references define v3 ownership, public renderer integration, Office image handling, PDF conversion boundaries, and regression scenarios. They are implementation guidance only; the target App or business plugin owns the runtime code.
 
 ## Validation
 

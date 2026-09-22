@@ -4,7 +4,7 @@ description: Use when implementing or debugging NocoBase 3 template printing wit
 argument-hint: '[action: implement|debug] [format: docx|xlsx|pptx] [output: document|pdf|printable-pdf]'
 allowed-tools: Bash, Read, Write, Grep, Glob
 owner: platform-tools
-version: 1.0.0
+version: 1.1.0
 last-reviewed: 2026-09-22
 risk-level: medium
 ---
@@ -21,7 +21,8 @@ This package provides implementation guidance only. It exports no rendering serv
 
 - Do not implement ordinary browser page printing or silent physical-printer access.
 - Do not assume this package installs a renderer, creates a route or collection, or supplies Client/Server runtime registration.
-- Do not copy legacy v2 APIs, private Carbone internals, or unverified format support into a v3 App.
+- Use only the installed App's v3 contracts and the selected renderer's documented public APIs.
+- Do not add an undocumented renderer adapter or claim format support that has not been verified.
 
 # Input Contract
 
@@ -34,7 +35,7 @@ This package provides implementation guidance only. It exports no rendering serv
 | `template-ownership` | no                                 | fixed App-owned asset unless managed uploads are requested                      | enum: `fixed-asset`, `managed-upload`; separate manage/use permissions       | "Is the template fixed by the App or managed by users?"                       |
 | `locale-timezone`    | no                                 | the App's current locale and timezone                                           | validate against the App contract before querying or formatting              | "Which locale and timezone should labels and dates use?"                      |
 
-The supplied template, App instructions, installed package versions, and existing business code are authoritative for details not listed here. If the user says "you decide", use the defaults above, state them in the implementation notes, and keep the first slice to one format, one representative template, and one authorized download.
+The supplied template, App instructions, installed package versions, and existing business code are authoritative for details not listed here. If the user says "you decide", use a fixed DOCX asset, one representative record with its required child data, same-format document output, and one authorized download. Do not add XLSX, PPTX, PDF conversion, or managed template uploads in the same first slice unless requested.
 
 # Mandatory Clarification Gate
 
@@ -53,29 +54,26 @@ Read [implementation.md](references/implementation.md) before adding an endpoint
 
 # Workflow
 
-1. Read [rendering.md](references/rendering.md) for dependency choices, the minimal Carbone adapter, the data contract, and the legacy extension pipeline. Choose public APIs first; isolate and pin any required private-engine adapter.
-2. When the template includes images, attachments, QR codes, XLSX cell images, or a PDF spacing defect, read [office-processing.md](references/office-processing.md). Plain text rendering does not provide the legacy image extensions automatically.
+1. Read [rendering.md](references/rendering.md) for dependency choices, the Renderer interface, the minimal public-API adapter, the data contract, and the format-specific processing pipeline. Choose documented public APIs first; stop and record unsupported branches when the selected renderer cannot provide a required capability.
+2. When the template includes images, attachments, QR codes, XLSX cell images, or a PDF spacing defect, read [office-processing.md](references/office-processing.md). Plain text rendering does not provide custom image handling automatically.
 3. Implement in the target App or owning business plugin using explicit v3 composition. Keep authentication and authorization at the server boundary, data loading separate from rendering, and heavy render/conversion work on the server. Register only actual runtime contributions you add.
 4. Follow [verification.md](references/verification.md) for the implemented branches. Verify document contents and layout with a real template, permissions with different principals, and deployed dependencies for the selected output.
 5. Deliver the requested action, a working template example with its data shape, and a generated document that opens correctly in the intended viewer. Report the checks run, supported format/feature combinations, converter prerequisites, and any unverified branch.
-
-Use [legacy-source-map.md](references/legacy-source-map.md) only when tracing a historical implementation detail or comparing a defect. Its relative source paths describe the old plugin, not imports that should appear in a v3 App. All essential guidance is included here; a legacy checkout is optional.
 
 # Reference Loading Map
 
 | Reference                                               | Load when                                                                    | Purpose                                                                               |
 | ------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | [implementation.md](references/implementation.md)       | adding an endpoint, query, template store, or download flow                  | v3 ownership, authorization, data contract, uploads, and deployment boundaries        |
-| [rendering.md](references/rendering.md)                 | selecting dependencies, Carbone APIs, tags, or private adapters              | renderer contract, data examples, and legacy pipeline boundaries                      |
+| [rendering.md](references/rendering.md)                 | selecting dependencies, Carbone APIs, tags, or renderer adapters             | renderer contract, data examples, and format-specific processing boundaries           |
 | [office-processing.md](references/office-processing.md) | implementing images, attachments, QR codes, XLSX cell images, or PDF spacing | authorized image resolution, Office package processing, and conversion cleanup        |
 | [verification.md](references/verification.md)           | verifying an implemented branch                                              | fixture matrix, permission cases, deployment checks, and structural/visual inspection |
-| [legacy-source-map.md](references/legacy-source-map.md) | tracing a historical defect or behavior                                      | source locations and adaptation warnings; never use it as a v3 API contract           |
 
 # Safety Gate
 
-High-impact actions include accepting or replacing managed templates, writing rendered files, invoking a converter, adding a route or query that accesses private data, and using private renderer internals.
+High-impact actions include accepting or replacing managed templates, writing rendered files, invoking a converter, and adding a route or query that accesses private data.
 
-Before any high-impact action, validate the template identity, actual file structure, authorized data scope, output limits, storage boundary, and converter configuration. Do not accept caller-provided filesystem paths or arbitrary renderer options. Keep private engine calls inside one pinned adapter and reject unsupported formats explicitly.
+Before any high-impact action, validate the template identity, actual file structure, authorized data scope, output limits, storage boundary, and converter configuration. Do not accept caller-provided filesystem paths or arbitrary renderer options. Use only documented renderer APIs and reject unsupported formats or processing branches explicitly.
 
 For managed uploads, retain the previous revision until the replacement is validated; remove failed temporary files and read back the stored metadata and content identity after each write. For rendering and conversion, use per-job temporary paths and clean them up on success, failure, cancellation, and timeout without masking the primary error. If implementation scope changes materially, stop and ask for confirmation before proceeding.
 
@@ -110,4 +108,3 @@ Rollback guidance: restore the previous template revision, remove only the faile
 - [Rendering engine and core examples](references/rendering.md)
 - [Office images and PDF layout](references/office-processing.md)
 - [Verification guide](references/verification.md)
-- [Legacy implementation source map](references/legacy-source-map.md)
