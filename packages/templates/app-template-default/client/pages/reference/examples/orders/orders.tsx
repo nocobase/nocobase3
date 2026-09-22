@@ -57,6 +57,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -365,39 +366,42 @@ export default function OrdersExamplePage(): ReactElement {
                   <MoreHorizontalIcon />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align='end'>
-                  <DropdownMenuLabel>
-                    {t('reference.actions')}
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => setDetail(order)}>
-                    <EyeIcon />
-                    {t('examples.orders.viewDetails')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      void navigator.clipboard.writeText(order.number);
-                      toast.add({
-                        type: 'success',
-                        title: t('reference.copied'),
-                        description: order.number,
-                      });
-                    }}
-                  >
-                    <CopyIcon />
-                    {t('examples.orders.copyNumber')}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant='destructive'
-                    disabled={
-                      order.status === 'cancelled' ||
-                      order.status === 'refunded' ||
-                      order.status === 'completed'
-                    }
-                    onClick={() => setCancelling(order)}
-                  >
-                    <XCircleIcon />
-                    {t('examples.orders.cancelOrder')}
-                  </DropdownMenuItem>
+                  {/* Base UI reads the label's group from context, so it cannot sit loose in the content. */}
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>
+                      {t('reference.actions')}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => setDetail(order)}>
+                      <EyeIcon />
+                      {t('examples.orders.viewDetails')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        void navigator.clipboard.writeText(order.number);
+                        toast.add({
+                          type: 'success',
+                          title: t('reference.copied'),
+                          description: order.number,
+                        });
+                      }}
+                    >
+                      <CopyIcon />
+                      {t('examples.orders.copyNumber')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant='destructive'
+                      disabled={
+                        order.status === 'cancelled' ||
+                        order.status === 'refunded' ||
+                        order.status === 'completed'
+                      }
+                      onClick={() => setCancelling(order)}
+                    >
+                      <XCircleIcon />
+                      {t('examples.orders.cancelOrder')}
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

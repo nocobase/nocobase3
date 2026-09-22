@@ -19,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -348,56 +349,59 @@ export default function DataTableExamplePage(): ReactElement {
                   <MoreHorizontalIcon />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align='end'>
-                  <DropdownMenuLabel>{order.number}</DropdownMenuLabel>
-                  <DropdownMenuItem
-                    onClick={() =>
-                      setLastAction(
-                        `${t('components.dataTable.viewDetails')} · ${order.number}`,
-                      )
-                    }
-                  >
-                    <EyeIcon />
-                    {t('components.dataTable.viewDetails')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      void navigator.clipboard.writeText(order.number);
-                      setLastAction(
-                        `${t('reference.copied')} · ${order.number}`,
-                      );
-                    }}
-                  >
-                    <CopyIcon />
-                    {t('components.dataTable.copyNumber')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={order.status !== 'processing'}
-                    onClick={() =>
-                      setLastAction(
-                        `${t('components.dataTable.markShipped')} · ${order.number}`,
-                      )
-                    }
-                  >
-                    <TruckIcon />
-                    {t('components.dataTable.markShipped')}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    variant='destructive'
-                    disabled={
-                      order.status === 'cancelled' ||
-                      order.status === 'refunded' ||
-                      order.status === 'shipped'
-                    }
-                    onClick={() =>
-                      setLastAction(
-                        `${t('components.dataTable.cancelOrder')} · ${order.number}`,
-                      )
-                    }
-                  >
-                    <XCircleIcon />
-                    {t('components.dataTable.cancelOrder')}
-                  </DropdownMenuItem>
+                  {/* Base UI reads the label's group from context, so it cannot sit loose in the content. */}
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>{order.number}</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        setLastAction(
+                          `${t('components.dataTable.viewDetails')} · ${order.number}`,
+                        )
+                      }
+                    >
+                      <EyeIcon />
+                      {t('components.dataTable.viewDetails')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        void navigator.clipboard.writeText(order.number);
+                        setLastAction(
+                          `${t('reference.copied')} · ${order.number}`,
+                        );
+                      }}
+                    >
+                      <CopyIcon />
+                      {t('components.dataTable.copyNumber')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={order.status !== 'processing'}
+                      onClick={() =>
+                        setLastAction(
+                          `${t('components.dataTable.markShipped')} · ${order.number}`,
+                        )
+                      }
+                    >
+                      <TruckIcon />
+                      {t('components.dataTable.markShipped')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant='destructive'
+                      disabled={
+                        order.status === 'cancelled' ||
+                        order.status === 'refunded' ||
+                        order.status === 'shipped'
+                      }
+                      onClick={() =>
+                        setLastAction(
+                          `${t('components.dataTable.cancelOrder')} · ${order.number}`,
+                        )
+                      }
+                    >
+                      <XCircleIcon />
+                      {t('components.dataTable.cancelOrder')}
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

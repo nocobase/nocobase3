@@ -57,6 +57,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -939,20 +940,23 @@ function CustomerMenu({
         <MoreHorizontalIcon />
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end'>
-        <DropdownMenuLabel>{t('reference.actions')}</DropdownMenuLabel>
-        <DropdownMenuItem onClick={() => onOpenProfile(customer)}>
-          <UserRoundIcon />
-          {t('examples.customers.openProfile')}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onCopyEmail(customer)}>
-          <CopyIcon />
-          {t('examples.customers.copyEmail')}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem render={<a href={`mailto:${customer.email}`} />}>
-          <MessageSquareIcon />
-          {t('examples.customers.sendEmail')}
-        </DropdownMenuItem>
+        {/* Base UI reads the label's group from context, so it cannot sit loose in the content. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{t('reference.actions')}</DropdownMenuLabel>
+          <DropdownMenuItem onClick={() => onOpenProfile(customer)}>
+            <UserRoundIcon />
+            {t('examples.customers.openProfile')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onCopyEmail(customer)}>
+            <CopyIcon />
+            {t('examples.customers.copyEmail')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem render={<a href={`mailto:${customer.email}`} />}>
+            <MessageSquareIcon />
+            {t('examples.customers.sendEmail')}
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -41,6 +41,7 @@ import { ButtonGroup } from '@/components/ui/button-group';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -572,42 +573,47 @@ export default function InboxExamplePage(): ReactElement {
                         <MoreHorizontalIcon />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align='end' className='w-56'>
-                        <DropdownMenuLabel>
-                          {t('examples.inbox.assign')}
-                        </DropdownMenuLabel>
-                        {AGENTS.map((agent) => (
-                          <DropdownMenuItem
-                            key={agent.id}
-                            onClick={() =>
-                              updateSelected({ assigneeId: agent.id })
-                            }
-                          >
-                            <UserPlusIcon />
-                            {agent.name}
-                          </DropdownMenuItem>
-                        ))}
+                        {/* Base UI reads a label's group from context, so each label opens its own group. */}
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel>
+                            {t('examples.inbox.assign')}
+                          </DropdownMenuLabel>
+                          {AGENTS.map((agent) => (
+                            <DropdownMenuItem
+                              key={agent.id}
+                              onClick={() =>
+                                updateSelected({ assigneeId: agent.id })
+                              }
+                            >
+                              <UserPlusIcon />
+                              {agent.name}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuGroup>
                         <DropdownMenuSeparator />
-                        <DropdownMenuLabel>
-                          {t('examples.inbox.snooze')}
-                        </DropdownMenuLabel>
-                        {SNOOZE_OPTIONS.map((option) => (
-                          <DropdownMenuItem
-                            key={option.id}
-                            onClick={() => {
-                              updateSelected({ status: 'pending' });
-                              toast.add({
-                                type: 'success',
-                                title: t('examples.inbox.snoozed'),
-                                description: t(
-                                  `examples.inbox.snoozeOption.${option.id}`,
-                                ),
-                              });
-                            }}
-                          >
-                            <ClockIcon />
-                            {t(`examples.inbox.snoozeOption.${option.id}`)}
-                          </DropdownMenuItem>
-                        ))}
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel>
+                            {t('examples.inbox.snooze')}
+                          </DropdownMenuLabel>
+                          {SNOOZE_OPTIONS.map((option) => (
+                            <DropdownMenuItem
+                              key={option.id}
+                              onClick={() => {
+                                updateSelected({ status: 'pending' });
+                                toast.add({
+                                  type: 'success',
+                                  title: t('examples.inbox.snoozed'),
+                                  description: t(
+                                    `examples.inbox.snoozeOption.${option.id}`,
+                                  ),
+                                });
+                              }}
+                            >
+                              <ClockIcon />
+                              {t(`examples.inbox.snoozeOption.${option.id}`)}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuGroup>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           disabled={selected.status === 'closed'}
@@ -713,17 +719,19 @@ export default function InboxExamplePage(): ReactElement {
                           <FileTextIcon />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align='start' className='w-64'>
-                          <DropdownMenuLabel>
-                            {t('examples.inbox.useTemplate')}
-                          </DropdownMenuLabel>
-                          {REPLY_TEMPLATES.map((template) => (
-                            <DropdownMenuItem
-                              key={template.id}
-                              onClick={() => setDraft(template.body)}
-                            >
-                              {template.title}
-                            </DropdownMenuItem>
-                          ))}
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel>
+                              {t('examples.inbox.useTemplate')}
+                            </DropdownMenuLabel>
+                            {REPLY_TEMPLATES.map((template) => (
+                              <DropdownMenuItem
+                                key={template.id}
+                                onClick={() => setDraft(template.body)}
+                              >
+                                {template.title}
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuGroup>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </ButtonGroup>

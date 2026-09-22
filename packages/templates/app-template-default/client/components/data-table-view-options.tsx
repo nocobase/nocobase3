@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -53,20 +54,23 @@ export function DataTableViewOptions<TData>({
         {t('dataTable.view', { defaultValue: 'View' })}
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-[150px]'>
-        <DropdownMenuLabel>
-          {t('dataTable.toggleColumns', { defaultValue: 'Toggle columns' })}
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {columns.map((column) => (
-          <DropdownMenuCheckboxItem
-            key={column.id}
-            className='capitalize'
-            checked={column.getIsVisible()}
-            onCheckedChange={(checked) => column.toggleVisibility(checked)}
-          >
-            {getColumnLabel ? getColumnLabel(column) : column.id}
-          </DropdownMenuCheckboxItem>
-        ))}
+        {/* The label names this group, and Base UI throws if it sits outside one. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            {t('dataTable.toggleColumns', { defaultValue: 'Toggle columns' })}
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {columns.map((column) => (
+            <DropdownMenuCheckboxItem
+              key={column.id}
+              className='capitalize'
+              checked={column.getIsVisible()}
+              onCheckedChange={(checked) => column.toggleVisibility(checked)}
+            >
+              {getColumnLabel ? getColumnLabel(column) : column.id}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
