@@ -64,7 +64,7 @@ Builds target the current machine by default. For a Node.js 24, Linux x64, glibc
 pnpm build --target linux-x64 --tar
 ```
 
-The output is `storage/dist.tar.gz`, containing `dist/` and `config.example.yml`. Use a matching target for ARM or musl. Native database dependencies must also match the target platform and Node.js version.
+The output is `storage/exports/dist.tar.gz`, containing `dist/` and `config.example.yml`; `dist/` already carries its production dependencies. Use a matching target for ARM or musl. Native database dependencies must also match the target platform and Node.js version.
 
 Do not publish the local database, test passwords, or real `config.yml`. Upload the build archive to a new release directory and extract it:
 
@@ -87,10 +87,10 @@ export APP_BASE_PATH=/main
 export APP_SERVER_HOST=127.0.0.1
 export APP_SERVER_PORT=13000
 export NODE_ENV=production
-node --input-type=module -e "const { startServer } = await import('./dist/server/standalone.js'); startServer();"
+node ./dist/server/standalone.js
 ```
 
-The archive does not contain the source workspace's `scripts/start.mjs`. Use the compiled entry after extracting an archive, and `pnpm start` in the source workspace. Check the actual artifact exports and paths.
+The archive does not contain the source workspace's `scripts/start.mjs`. After extracting an archive, run the compiled entry `dist/server/standalone.js` with `node`; in the source workspace use `pnpm start`.
 
 Configure an HTTPS reverse proxy for the domain, retaining API, static asset, and WebSocket paths. Use a service manager for process startup, restarts, and logs. Back up an existing database before migrations and decide whether the target runs them at startup or as a separate release step.
 

@@ -190,7 +190,10 @@ export class WorkflowService {
     const hash = workflow.hash;
     if (!hash || !(await this.store.has(workflow.key, hash)))
       throw new Error(
-        `Workflow Artifact ${workflow.key}/${String(hash)} is missing`,
+        `Workflow Artifact ${workflow.key}/${String(hash)} is missing from this build. ` +
+          'The database still points at the hash of an earlier build, so enable the version this build deployed: ' +
+          'choose "Enable new version" on the workflow in workflow management, or call POST /api/workflows/<hash>/enable with the new hash. ' +
+          'Enabling by workflow id keeps the missing hash.',
       );
   }
 

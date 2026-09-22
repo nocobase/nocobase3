@@ -123,6 +123,30 @@ function createService(
   });
 }
 describe('application workflow Artifact lazy synchronization', () => {
+  it('names the way out when the enabled hash is absent from the build', async () => {
+    const f = await fixture();
+    const v1 = await emit(f.distRoot, 'v1');
+    const service = createService(f);
+    const repository = new WorkflowRepository(f.database, service);
+    await repository.enable(v1);
+    // A database carried over from an earlier build points at a hash this
+    // build never produced, so neither dist nor the Artifact store has it.
+    const stale = 'f'.repeat(64);
+    await workflowStore(f.database).workflows.updateMany({
+      filter: { key: 'sample' },
+      values: { hash: stale },
+    });
+    try {
+      await expect(service.trigger('sample', {})).rejects.toThrow(
+        new RegExp(
+          `Workflow Artifact sample/${stale} is missing from this build.*Enable new version.*POST /api/workflows/<hash>/enable`,
+        ),
+      );
+    } finally {
+      await service.dispose();
+    }
+  });
+
   it('loads TypeScript resources directly from the workflow package in development', async () => {
     const f = await fixture();
     const digest = await emit(f.distRoot, 'artifact');

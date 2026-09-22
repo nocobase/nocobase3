@@ -48,6 +48,8 @@ Every published package lives under `packages/`, grouped into six directories by
 
 This repository's own Skills are committed under `.agents/skills/`, the agent-neutral location every agent can be pointed at. Claude Code does not read that path — it discovers Skills only under `~/.claude/skills/` and `<project>/.claude/skills/` — so `pnpm install` runs `scripts/link-claude-skills.mjs`, which mirrors each committed Skill into `.claude/skills/` as a relative symbolic link. `.claude/skills/` is therefore generated and ignored; `.agents/skills/` remains the single committed source, and editing a Skill through either path edits the same file.
 
+A Skill that also ships to applications is committed with its package and linked from here instead: `nocobase-deployment` lives in `packages/app/app-skills/skills/` so that `nocobase skills sync` delivers it to every generated application, and `.agents/skills/nocobase-deployment` is a relative symbolic link to it, which the mirror follows like any other Skill. Editing it is a change to `@nocobase/app-skills` and needs a changeset.
+
 This is the same arrangement `nocobase skills sync` sets up inside a generated application, with the ownership reversed: an application's `.agents/skills/` is generated from its installed packages and ignored, while this repository writes its Skills by hand and commits them.
 
 The mirror never replaces a path that is not a symbolic link, so a Skill you keep only in `.claude/skills/` is reported and left alone rather than deleted. It also never fails the install: a warning is enough, because the Skills are still readable where they are committed. Adding or removing a Skill takes effect on the next `pnpm install`, or immediately with `node ./scripts/link-claude-skills.mjs`.
