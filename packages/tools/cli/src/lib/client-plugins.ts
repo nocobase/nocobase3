@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 import { existsSync, statSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import type ts from 'typescript';
 
@@ -118,15 +119,23 @@ async function loadTypeScript(
   fileLabel: string,
 ): Promise<typeof ts> {
   const require = createRequire(path.join(appRoot, 'package.json'));
-  let loaded: unknown;
+  let typescriptPath: string;
   try {
-    loaded = await import(require.resolve('typescript'));
+    typescriptPath = require.resolve('typescript');
   } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      !('code' in error) ||
+      error.code !== 'MODULE_NOT_FOUND'
+    ) {
+      throw error;
+    }
     throw new MissingTypeScriptError(
       `TypeScript is not installed in ${appRoot}, so ${fileLabel} cannot be edited automatically.`,
       { cause: error },
     );
   }
+  const loaded: unknown = await import(pathToFileURL(typescriptPath).href);
   return interopDefault<typeof ts>(loaded, 'createSourceFile');
 }
 
