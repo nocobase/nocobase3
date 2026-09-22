@@ -13,7 +13,9 @@ The ESLint export uses ESLint 10 flat config, `@eslint/js`,
 - `createClientLibraryConfig` applies browser and React rules, with Node globals
   for scripts and configuration files.
 - `createPortalConfig` scopes browser and React rules to `client`, `registry`,
-  and tests, and scopes Node globals to `server`, scripts, and config files.
+  and tests, and scopes Node globals to `server`, scripts, and config files. It
+  also relaxes the rules shadcn/ui registry output trips over, for the registry
+  paths alone; see below.
 
 All factories accept:
 
@@ -52,3 +54,23 @@ intentionally unavailable.
 
 The shared global ignores cover build output, coverage, generated content, and
 test artifacts. React and Vitest rules are scoped to their relevant files.
+
+## shadcn/ui registry output
+
+`createPortalConfig` relaxes a short list of rules for
+`client/components/ui/**/*.tsx` and `client/hooks/use-mobile.ts`, and a few more
+for `client/components/ui/chart.tsx`.
+
+Those files are not written by hand. `shadcn add` copies them from the upstream
+registry verbatim, and `shadcn add <name> --diff` only stays meaningful while
+the local copy matches. The primitives export their `cva` variants, contexts and
+hooks beside the component by design, and a few compose state the way the
+upstream source does, so rules such as `react-refresh/only-export-components`
+report on a shape nobody here chose and whose only available fix is the edit
+that destroys the diff.
+
+The relaxation is the factory's rather than each portal's because every portal
+adds registry components eventually, including the applications generated from
+the templates — each would otherwise discover the same failure and write the
+same exception. Everything outside those paths, `client/components/` included,
+is held to the full rule set.

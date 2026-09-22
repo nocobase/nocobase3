@@ -69,7 +69,7 @@ If an older application has the command but not the script, use `pnpm nocobase p
 
 ## Start from a worked page
 
-Check for `client/pages/reference/` before writing UI of your own. An application generated from the default template carries it; one generated from another template may not, and its absence is not a defect.
+Check for `client/pages/reference/` before writing UI of your own. Every current template ships it, so an application generated from any of them carries it; one generated before it existed does not, and its absence is not a defect.
 
 It is source kept to be read. Nothing routes it, so a build never reaches it and no user sees it:
 

@@ -15,6 +15,13 @@ describe('app client routes', () => {
     expect(routeComponentOverrides).toEqual([]);
   });
 
+  it('routes nothing under client/pages/reference', () => {
+    // A reference page reaching the router would put a shadcn gallery inside somebody's product, so this pins the
+    // boundary rather than trusting a reviewer to notice the import path.
+    const loaders = JSON.stringify(applicationRoutes);
+    expect(loaders).not.toContain('pages/reference');
+  });
+
   it('declares application and settings route contributions', async () => {
     expect(applicationRoutes).toHaveLength(2);
     expect(applicationRoutes[0]).toMatchObject({

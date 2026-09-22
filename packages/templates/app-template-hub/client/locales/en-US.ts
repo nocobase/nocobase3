@@ -101,6 +101,7 @@ const enUS = {
     title: 'NocoBase',
   },
   actions: {
+    close: 'Close',
     save: 'Save',
     cancel: 'Cancel',
     confirm: 'Confirm',
@@ -127,6 +128,25 @@ const enUS = {
     label: 'Application navigation',
     breadcrumb: 'Breadcrumb',
     console: 'Hub console',
+  },
+  dataTable: {
+    noResults: 'No results.',
+    sortAscending: 'Asc',
+    sortDescending: 'Desc',
+    hideColumn: 'Hide',
+    view: 'View',
+    toggleColumns: 'Toggle columns',
+    selectedCount: '{{selected}} of {{total}} row(s) selected.',
+    rowsPerPage: 'Rows per page',
+    pageOf: 'Page {{page}} of {{pageCount}}',
+    firstPage: 'Go to first page',
+    previousPage: 'Go to previous page',
+    nextPage: 'Go to next page',
+    lastPage: 'Go to last page',
+  },
+  datePicker: {
+    placeholder: 'Pick a date',
+    rangePlaceholder: 'Pick a date range',
   },
 };
 
