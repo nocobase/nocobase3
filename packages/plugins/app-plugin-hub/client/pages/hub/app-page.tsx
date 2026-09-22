@@ -648,7 +648,7 @@ function AppPageContent({ appId }: { readonly appId: string }): ReactElement {
 
   return (
     <>
-      <main className='min-h-[calc(100svh-4rem)] bg-muted/20 [&_button:not(:disabled)]:cursor-pointer'>
+      <main className='min-h-[calc(100svh-4rem)] bg-background [&_button:not(:disabled)]:cursor-pointer'>
         <div className='mx-auto max-w-[1600px] px-5 py-6 sm:px-8 sm:py-8'>
           {pollNotice?.appId === appId && (
             <p role='status' className='mb-3 text-sm text-muted-foreground'>

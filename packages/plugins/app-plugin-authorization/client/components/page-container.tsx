@@ -13,7 +13,7 @@ export function PageContainer({
 }: PageContainerProps): ReactElement {
   return (
     <section
-      className={`min-h-[calc(100svh-4rem)] w-full bg-muted/20 ${className}`}
+      className={`min-h-[calc(100svh-4rem)] w-full bg-background ${className}`}
       {...props}
     >
       {header}

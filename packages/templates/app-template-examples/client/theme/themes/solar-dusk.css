@@ -1,0 +1,120 @@
+/*
+ * solar-dusk: colours and radius converted from the tweakcn preset of the same id.
+ * https://github.com/jnsahaj/tweakcn (Apache-2.0); see THIRD-PARTY-NOTICES.md in this directory.
+ * Typography, spacing and elevation are the values this application defines, unchanged.
+ */
+:root[data-theme='solar-dusk'],
+.theme-preview[data-theme='solar-dusk'] {
+  --font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  --font-serif:
+    ui-serif, Georgia, Cambria, 'Times New Roman', 'Songti SC', SimSun, serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  --font-heading: var(--font-sans);
+  --spacing: 0.2rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: calc(1 / 0.75);
+  --text-sm: 0.875rem;
+  --text-sm--line-height: calc(1.2 / 0.875);
+  --text-base: 1rem;
+  --text-base--line-height: calc(1.4 / 1);
+  --text-lg: 1.125rem;
+  --text-lg--line-height: calc(1.6 / 1.125);
+  --text-xl: 1.25rem;
+  --text-xl--line-height: calc(1.6 / 1.25);
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: calc(1.8 / 1.5);
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: calc(2.1 / 1.875);
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: calc(2.3 / 2.25);
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 1;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 1;
+  --text-7xl: 4.5rem;
+  --text-7xl--line-height: 1;
+  --text-8xl: 6rem;
+  --text-8xl--line-height: 1;
+  --text-9xl: 8rem;
+  --text-9xl--line-height: 1;
+  --shadow-2xs: 0 1px rgb(0 0 0 / 0.05);
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  --radius: 0.3rem;
+  --background: #fdfbf7;
+  --foreground: #4a3b33;
+  --card: #f8f4ee;
+  --card-foreground: #4a3b33;
+  --popover: #f8f4ee;
+  --popover-foreground: #4a3b33;
+  --primary: #b45309;
+  --primary-foreground: #ffffff;
+  --secondary: #e4c090;
+  --secondary-foreground: #57534e;
+  --muted: #f1e9da;
+  --muted-foreground: #78716c;
+  --accent: #f2daba;
+  --accent-foreground: #57534e;
+  --destructive: #991b1b;
+  --border: #e4d9bc;
+  --input: #e4d9bc;
+  --ring: #b45309;
+  --chart-1: #b45309;
+  --chart-2: #78716c;
+  --chart-3: #a16207;
+  --chart-4: #78716c;
+  --chart-5: #ca8a04;
+  --sidebar: #f1e9da;
+  --sidebar-foreground: #4a3b33;
+  --sidebar-primary: #b45309;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #a16207;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #e4d9bc;
+  --sidebar-ring: #b45309;
+}
+
+:root.dark[data-theme='solar-dusk'],
+:root.dark .theme-preview[data-theme='solar-dusk'] {
+  --background: #1c1917;
+  --foreground: #f5f5f4;
+  --card: #292524;
+  --card-foreground: #f5f5f4;
+  --popover: #292524;
+  --popover-foreground: #f5f5f4;
+  --primary: #f97316;
+  --primary-foreground: #ffffff;
+  --secondary: #57534e;
+  --secondary-foreground: #e7e5e4;
+  --muted: #201d1a;
+  --muted-foreground: #a8a29e;
+  --accent: #1e4252;
+  --accent-foreground: #e7e5e4;
+  --destructive: #dc2626;
+  --border: #44403c;
+  --input: #44403c;
+  --ring: #f97316;
+  --chart-1: #f97316;
+  --chart-2: #0ea5e9;
+  --chart-3: #eab308;
+  --chart-4: #a8a29e;
+  --chart-5: #78716c;
+  --sidebar: #292524;
+  --sidebar-foreground: #f5f5f4;
+  --sidebar-primary: #f97316;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #0ea5e9;
+  --sidebar-accent-foreground: #0c2a4d;
+  --sidebar-border: #44403c;
+  --sidebar-ring: #f97316;
+}

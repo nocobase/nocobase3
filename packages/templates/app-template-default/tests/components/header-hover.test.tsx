@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { ThemeModeToggle } from '../../client/theme/theme-mode-toggle';
 import { AppThemeProvider } from '../../client/theme/theme-provider';
-import { ThemeSettings } from '../../client/theme/theme-settings';
 import { UserMenu } from '../../client/layouts/components/user-menu';
 
 // Session requests belong to the authentication tests.
@@ -18,6 +18,7 @@ vi.mock('../../client/layouts/components/language-switcher.js', () => ({
 }));
 
 beforeEach(() => {
+  vi.stubGlobal('APP_BASE_PATH', '/crm/');
   // jsdom does not implement the media queries used by the real theme provider.
   vi.stubGlobal('matchMedia', () => ({
     matches: false,
@@ -34,10 +35,7 @@ afterEach(() => {
   document.documentElement.removeAttribute('data-theme');
 });
 
-const panels = [
-  ['Appearance', ThemeSettings, 'dialog'],
-  ['Open account menu', UserMenu, 'menu'],
-] as const;
+const panels = [['Open account menu', UserMenu, 'menu']] as const;
 
 it.each(panels)(
   'opens and closes %s on hover',
@@ -85,3 +83,23 @@ it.each(panels)(
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
   },
 );
+
+// The color mode is a one-click action, not a panel: it switches the mode in place and never opens a surface.
+it('switches the color mode from the header toggle', async () => {
+  const user = userEvent.setup();
+  render(
+    <AppThemeProvider>
+      <ThemeModeToggle />
+    </AppThemeProvider>,
+  );
+  const toggle = screen.getByRole('button', {
+    name: 'Switch between light and dark',
+  });
+  expect(toggle).not.toHaveAttribute('title');
+
+  await user.click(toggle);
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(document.documentElement).toHaveClass('dark');
+  expect(localStorage.getItem('nocobase:crm:theme:color-scheme')).toBe('dark');
+});

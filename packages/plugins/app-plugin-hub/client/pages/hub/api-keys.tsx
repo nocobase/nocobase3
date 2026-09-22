@@ -195,7 +195,7 @@ export function ApiKeys({
           </p>
         </div>
       ) : (
-        <div className='overflow-x-auto rounded-lg border bg-background'>
+        <div className='overflow-x-auto rounded-lg border bg-card'>
           <table className='w-full min-w-[960px] table-fixed text-left text-sm'>
             <colgroup>
               <col className='w-[23%]' />

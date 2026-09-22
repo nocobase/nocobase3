@@ -7,6 +7,6 @@ export const PresetContext = createContext<{
 } | null>(null);
 export function useThemePreset() {
   const value = useContext(PresetContext);
-  if (!value) throw new Error('ThemeSettings requires AppThemeProvider');
+  if (!value) throw new Error('Theme selection requires AppThemeProvider');
   return value;
 }
