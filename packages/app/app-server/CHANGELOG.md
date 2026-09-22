@@ -1,5 +1,81 @@
 # @nocobase/app-server
 
+## 1.0.0-beta.23
+
+### Minor Changes
+
+- fa01814: Report migration and seed checksum drift as a warning instead of failing, and add `nocobase app db repair` to realign the recorded history.
+
+  An executed migration or seed whose source has since changed no longer stops the run. `latest()`, `rollback()` and `run()` return the drift in a new `warnings` field, the CLI prints it, `--json` carries it, and startup logs it through the application logger. Set `onChecksumMismatch: 'error'` on a connection's `migrations` or `seeds` configuration, or at the top level, to keep refusing to run. A history record whose migration is missing from the sources entirely still fails regardless of the policy.
+
+  `pnpm db:repair` rewrites recorded checksums to match the current sources, covering both migrations and seeds in one command. It previews before writing, prompts for confirmation unless `--force` is passed, supports `--dry-run` for inspection in CI, and conditions every write on the checksum it read, so a history changed in between fails rather than being overwritten. It never deletes a history record, so a repair cannot make an executed task run again.
+
+- fa01814: Add `db apply` and `db reset`, and retire `migrate --fresh`.
+
+  `nocobase app db apply` (`pnpm db:apply`) runs migrations and seeds as one plan, in the order startup runs them: each connection is migrated, then seeded. Only pending tasks run, so repeating it is safe. `nocobase app db reset` (`pnpm db:reset`) drops every managed schema object first and reruns both from empty; it asks for confirmation and requires `--force` in CI or a non-interactive terminal.
+
+  `migrate --fresh` is removed and now exits with a pointer to `db reset`. It rebuilt the schema without reseeding, so it left the seed history cleared and no seed executed — the default connection recovered on the next startup, and a connection with `autoRun: false` did not.
+
+  The `migrate` and `seed` commands are removed along with their template scripts; `db apply` replaces both. Running one half on its own is not a separate command, because both halves apply only what is pending: on an already-migrated database `db apply` applies seeds alone, and the one case it does not cover — migrating ahead of a deployment without seeding — can be served by a flag later without breaking anything.
+
+  `runAppDatabaseTasks` accepts several task kinds in one plan through its `kind` option, which is what makes a reset correct across both kinds: one plan means a connection's schema is rebuilt by its migrations task before its seeds run.
+
+- 7bde7bd: Add `nocobase app db rollback` and `nocobase app db redo`, so a migration corrected before its branch is merged can be re-run without resetting the database.
+
+  Editing an executed migration changes nothing on its own: it is recorded as executed, so `db apply` skips it and the database keeps the schema the old source produced. Until now the only way forward was `db reset`, which drops every managed table and every row with it, or editing the history table by hand — which the documentation forbids, and which splits the two records of what exists: dropping a table without its metadata record leaves the Collection unresolvable.
+
+  `db rollback` runs `down()` for the latest migration batch, newest first, and deletes its history records. The batch is the unit the history records, so a batch that mixed application and plugin migrations rolls back as one, and the confirmation lists every migration with the package it belongs to before anything runs. It fails having run nothing when a migration in the batch is irreversible or has no `down()`. `db redo` is that followed by `db apply`. Both are destructive in the same way and confirm the same way: CI and non-interactive terminals require `--force`, `--connection` and `--all` select connections as they do elsewhere, and `--json` carries the result. Seeds are not re-run, so rows a seed inserted into a table the batch recreates are not restored.
+
+  `Migrator.rollback()` accepts `{ dryRun: true }`, which is what the confirmation is built from: it takes the lock, resolves the batch, rejects an irreversible one, and reports what a run would undo without running any `down`. `MigrationRollbackResult` gains `records` — the batch's history records in rollback order, carrying each migration's package — and `dryRun`. `AppDatabaseTaskOperation` gains `'rollback'`, which applies to migrations alone: a plan including seeds is refused, because seeds have no inverse.
+
+  The three templates gain `db:rollback` and `db:redo` scripts. The migrations reference now documents re-running a corrected migration, states what `db:repair` is and is not for — it records that the schema already matches, so using it on a change the database never received leaves the schema wrong and nothing recording that — and lists each internal table with the command that maintains it.
+
+- 3187ace: Wait for a contended migration or seed lock instead of failing on the first conflict, report who holds it, and stop abandoning it held when a restart interrupts startup.
+
+  Acquiring the lock now retries with backoff until `lockAcquireTimeoutMs` — a new Migrator and Seeder option defaulting to 30 seconds — so the brief overlap between two starts resolves itself rather than surfacing as an error. A conflicting insert is treated as contention on its own: the previous implementation re-read the lock row to decide what to report, and a holder that released in between left the driver's `UNIQUE constraint failed` text as the whole explanation. When the wait does expire, the message names the holder recorded in `locked_by`, the time in `locked_at`, how long it waited, and that the row has to be deleted if the process holding it was killed. An insert that keeps failing while the lock table holds no row is still reported as the driver error it is, rather than being retried until the timeout.
+
+  Startup watches `SIGINT` and `SIGTERM` from before the application boots until the HTTP server registers its own handlers. Migrations and seeds run in that window, and Node's default disposition terminated the process outright, so a `tsx watch` restart triggered by a dependency install left the lock held by a process that no longer existed and the next start had to wait it out. The signal is now recorded, startup finishes and releases the lock the ordinary way, and the application shuts down instead of listening. A second signal still forces the exit. `watchStartupShutdownSignals` is exported for hosts that run their own startup sequence, and the app-host CLI uses it: its handlers were registered before the host existed, so a signal during startup exited the process immediately and abandoned the same locks.
+
+  Migrations and seeds share one lock implementation, so contention behaves and reports identically for both.
+
+### Patch Changes
+
+- ca3188e: Report a connection whose Collection artifacts have never been generated as one line instead of one per expected file.
+
+  `collections generate --check` compares the database with `database/<connection>/collections/` and reports every expected file it cannot read as `missing`. When the directory does not exist at all — the state of any application that has not run the command yet — that is three lines per Collection plus the manifest, none of which says anything the first one did not: an application with 41 Collections printed 124 of them. The result now carries `directoryExists` in check mode so the two cases can be told apart, and the command prints the count and what to run instead of the list. `--json` still carries every difference.
+
+- 5380642: Give migrations and seeds a `repository` on their context, bound to the connection the task runs on.
+
+  `query` reaches rows through the Connection naming strategy and expresses exactly what it is given, which leaves three things for each task to assemble by hand: cross-dialect field encoding, Collection-level naming overrides, and relation writes including the junction rows behind a `belongsToMany`. `context.repository(name)` covers them, taking the Collection as the database itself records it — the metadata a previous `builder` operation wrote — rather than importing any application definition.
+
+  The two contexts default differently. A migration changes structure, so `builder` and `query` remain its tools and `repository` is for the writes `query` would get wrong; a migration that uses it should say in a comment why `query` was not enough, keep it out of `down`, and not walk a table with it. A seed changes no structure and writes installation data in Collection terms, so `repository` is its normal tool and `query` covers what that cannot express.
+
+  Inside a transaction the Repository comes from the transaction's own connection, so a failed task discards its writes. This is what the database task service container has been protecting: resolving the application's `DatabaseManager` there would have produced a Repository writing outside the task's transaction, and its refusal now names the supported path instead of only refusing.
+
+- Updated dependencies [fa01814]
+- Updated dependencies [38e5253]
+- Updated dependencies [7bde7bd]
+- Updated dependencies [5380642]
+- Updated dependencies [3187ace]
+- Updated dependencies [5380642]
+- Updated dependencies [c5f4438]
+- Updated dependencies [3187ace]
+- Updated dependencies [38e5253]
+- Updated dependencies [38e5253]
+  - @nocobase/db@1.0.0-beta.13
+  - @nocobase/db-dameng@0.1.0-beta.2
+  - @nocobase/db-kingbase@0.1.0-beta.2
+  - @nocobase/db-mssql@0.1.0-beta.1
+  - @nocobase/db-mysql@0.1.0-beta.2
+  - @nocobase/db-oceanbase@0.1.0-beta.1
+  - @nocobase/db-oracle@0.1.0-beta.2
+  - @nocobase/db-postgres@0.1.0-beta.2
+  - @nocobase/db-sqlite@0.1.0-beta.2
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/queue@0.1.0-beta.7
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 1.0.0-beta.22
 
 ### Minor Changes

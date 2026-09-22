@@ -1,5 +1,11 @@
 # @nocobase/app-plugin-template-print
 
+## 0.0.2-beta.0
+
+### Patch Changes
+
+- b569461: Add a Skill-only template printing plugin that guides NocoBase 3 application implementations, including dependency selection, authorized data loading, Office image processing, and PDF verification.
+
 ## 0.0.1
 
 ### Patch Changes

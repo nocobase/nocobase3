@@ -1,5 +1,83 @@
 # @nocobase/db
 
+## 1.0.0-beta.13
+
+### Minor Changes
+
+- fa01814: Report migration and seed checksum drift as a warning instead of failing, and add `nocobase app db repair` to realign the recorded history.
+
+  An executed migration or seed whose source has since changed no longer stops the run. `latest()`, `rollback()` and `run()` return the drift in a new `warnings` field, the CLI prints it, `--json` carries it, and startup logs it through the application logger. Set `onChecksumMismatch: 'error'` on a connection's `migrations` or `seeds` configuration, or at the top level, to keep refusing to run. A history record whose migration is missing from the sources entirely still fails regardless of the policy.
+
+  `pnpm db:repair` rewrites recorded checksums to match the current sources, covering both migrations and seeds in one command. It previews before writing, prompts for confirmation unless `--force` is passed, supports `--dry-run` for inspection in CI, and conditions every write on the checksum it read, so a history changed in between fails rather than being overwritten. It never deletes a history record, so a repair cannot make an executed task run again.
+
+- 38e5253: Store an offset-bearing ISO string in a `datetime` Field as the local wall clock it names, and validate temporal strings written through `database.query()`.
+
+  `datetime` is a wall-clock type, so a value carrying `Z` or `±HH:MM` is not something it can hold as written. Repository refused such a value outright, while `database.query()` passed every string to the driver untouched: `2026-09-06T09:30:00Z` was accepted by the write and then stored verbatim on SQLite, where the first read of the row failed with `FIELD_CAPABILITY_NOT_SUPPORTED` because no valid local value carries an offset. Every other dialect took the write too and silently dropped the offset, giving one value on PostgreSQL and a different one on MySQL.
+
+  Both writers now converge on one answer: the offset is applied and the instant is stored as the host's local reading of it, which is exactly where the equivalent `Date` value has always landed. `2026-09-06T09:30:00Z`, `2026-09-06T17:30:00+08:00` and `new Date('2026-09-06T09:30:00Z')` are one value for a host at `+08:00`, through `createOne`, `createMany`, `updateOne`, `updateMany`, `upsertOne`, and Query `insertInto` and `updateTable`. `datetimeTz` is unchanged and still keeps the instant. Rows already holding an offset, which only SQLite could store, are read back through the same conversion rather than failing.
+
+  Temporal strings written through `database.query()` are now validated the way Repository has always validated them, so a value that cannot be stored is reported at the write instead of at a later read. This rejects shapes the query builder used to accept silently, including the space-separated `2026-08-14 10:00:00`: write `2026-08-14T10:00:00`, or pass a `Date`.
+
+- 7bde7bd: Add `nocobase app db rollback` and `nocobase app db redo`, so a migration corrected before its branch is merged can be re-run without resetting the database.
+
+  Editing an executed migration changes nothing on its own: it is recorded as executed, so `db apply` skips it and the database keeps the schema the old source produced. Until now the only way forward was `db reset`, which drops every managed table and every row with it, or editing the history table by hand — which the documentation forbids, and which splits the two records of what exists: dropping a table without its metadata record leaves the Collection unresolvable.
+
+  `db rollback` runs `down()` for the latest migration batch, newest first, and deletes its history records. The batch is the unit the history records, so a batch that mixed application and plugin migrations rolls back as one, and the confirmation lists every migration with the package it belongs to before anything runs. It fails having run nothing when a migration in the batch is irreversible or has no `down()`. `db redo` is that followed by `db apply`. Both are destructive in the same way and confirm the same way: CI and non-interactive terminals require `--force`, `--connection` and `--all` select connections as they do elsewhere, and `--json` carries the result. Seeds are not re-run, so rows a seed inserted into a table the batch recreates are not restored.
+
+  `Migrator.rollback()` accepts `{ dryRun: true }`, which is what the confirmation is built from: it takes the lock, resolves the batch, rejects an irreversible one, and reports what a run would undo without running any `down`. `MigrationRollbackResult` gains `records` — the batch's history records in rollback order, carrying each migration's package — and `dryRun`. `AppDatabaseTaskOperation` gains `'rollback'`, which applies to migrations alone: a plan including seeds is refused, because seeds have no inverse.
+
+  The three templates gain `db:rollback` and `db:redo` scripts. The migrations reference now documents re-running a corrected migration, states what `db:repair` is and is not for — it records that the schema already matches, so using it on a change the database never received leaves the schema wrong and nothing recording that — and lists each internal table with the command that maintains it.
+
+- 5380642: Publish a `nocobase-db` Skill so an application's agents get the database rules with the package.
+
+  The package's documentation is not published — `files` carried `dist` alone — so an application that installed `@nocobase/db` had no guidance from it, and what existed lived in the application template as a second-hand copy that covered `QueryAdapter` and not Repository. The Skill ships under `skills/` and `nocobase skills sync` copies it into `.agents/skills/` of every application that depends on the package, alongside the plugin Skills already synchronized there.
+
+  It is organized as the six areas an application meets: connection and dialect configuration, migrations and seeds, the Collection Builder, Repository and Query, transactions, and Collections. It records what the type declarations cannot — which layer a task belongs to, the reverse criterion for reaching past `query` in a migration or seed, that `database/<connection>/collections/` is derived output for a managed connection but committed metadata for an external one, and the API shapes that do not exist and are otherwise guessed.
+
+- 3187ace: Let a Collection be created again when its metadata outlived its physical table.
+
+  `createCollection` resolved the Collection it was about to create, which fails with `COLLECTION_SCHEMA_DRIFT` when a metadata record survived without its table — the state a corrected migration re-runs into, and the state a hand-rolled reset leaves behind. The resolved definition was then discarded and replaced by the operation's own, so the lookup could only fail, never inform the operation. Collections that these operations define themselves are no longer resolved; referenced Collections still are, and every other operation on a Collection whose table is missing still reports the drift.
+
+- 5380642: Give migrations and seeds a `repository` on their context, bound to the connection the task runs on.
+
+  `query` reaches rows through the Connection naming strategy and expresses exactly what it is given, which leaves three things for each task to assemble by hand: cross-dialect field encoding, Collection-level naming overrides, and relation writes including the junction rows behind a `belongsToMany`. `context.repository(name)` covers them, taking the Collection as the database itself records it — the metadata a previous `builder` operation wrote — rather than importing any application definition.
+
+  The two contexts default differently. A migration changes structure, so `builder` and `query` remain its tools and `repository` is for the writes `query` would get wrong; a migration that uses it should say in a comment why `query` was not enough, keep it out of `down`, and not walk a table with it. A seed changes no structure and writes installation data in Collection terms, so `repository` is its normal tool and `query` covers what that cannot express.
+
+  Inside a transaction the Repository comes from the transaction's own connection, so a failed task discards its writes. This is what the database task service container has been protecting: resolving the application's `DatabaseManager` there would have produced a Repository writing outside the task's transaction, and its refusal now names the supported path instead of only refusing.
+
+- 3187ace: Wait for a contended migration or seed lock instead of failing on the first conflict, report who holds it, and stop abandoning it held when a restart interrupts startup.
+
+  Acquiring the lock now retries with backoff until `lockAcquireTimeoutMs` — a new Migrator and Seeder option defaulting to 30 seconds — so the brief overlap between two starts resolves itself rather than surfacing as an error. A conflicting insert is treated as contention on its own: the previous implementation re-read the lock row to decide what to report, and a holder that released in between left the driver's `UNIQUE constraint failed` text as the whole explanation. When the wait does expire, the message names the holder recorded in `locked_by`, the time in `locked_at`, how long it waited, and that the row has to be deleted if the process holding it was killed. An insert that keeps failing while the lock table holds no row is still reported as the driver error it is, rather than being retried until the timeout.
+
+  Startup watches `SIGINT` and `SIGTERM` from before the application boots until the HTTP server registers its own handlers. Migrations and seeds run in that window, and Node's default disposition terminated the process outright, so a `tsx watch` restart triggered by a dependency install left the lock held by a process that no longer existed and the next start had to wait it out. The signal is now recorded, startup finishes and releases the lock the ordinary way, and the application shuts down instead of listening. A second signal still forces the exit. `watchStartupShutdownSignals` is exported for hosts that run their own startup sequence, and the app-host CLI uses it: its handlers were registered before the host existed, so a signal during startup exited the process immediately and abandoned the same locks.
+
+  Migrations and seeds share one lock implementation, so contention behaves and reports identically for both.
+
+### Patch Changes
+
+- c5f4438: Keep one implementation of the task ledger and the source loader behind the two kinds, and apply the history table's column upgrade to the seed ledger as well.
+
+  Migrations and seeds keep separate ledgers because only one of them is reversible, but the table, its reads and writes, and most of loading a source directory were the same work written twice: the two `internal/history.ts` modules differed by one column and their names, and the two loaders by which fields a definition must define. The shared halves now live in `migration/internal/history.ts` and `migration/internal/task-loader.ts`, with each kind naming its own table and messages — the arrangement the task locks already use. Every exported function keeps its name and signature, and no message changes.
+
+  The duplication had a cost beyond size: a change to one side could be forgotten on the other, which is how the seed ledger never got the `package_name` column upgrade the migration ledger has. It has it now, so a ledger created before that column existed is upgraded in place on the next run rather than failing its first read.
+
+- 38e5253: Accept `YYYY-MM-DD HH:mm:ss` when writing a `datetime` or `datetimeTz` value
+
+  Reading has always accepted the space separator, because it is the shape catalogs and drivers hand back, while writing required the `T` and reported a value that "is not a valid V1 temporal value" without naming the separator. The two halves of one contract disagreed, and the literal they disagreed about is the one every SQL dialect spells.
+
+  Both writers now normalize it, so `'2026-09-02 09:00:00'` and `'2026-09-02T09:00:00'` store the same canonical value. The space is unambiguous — no valid V1 value carries one — and this only widens what is accepted, so nothing that worked before changes.
+
+- 38e5253: Read temporal values through the result normalizer in Repository, and resolve a stored timestamp on the UTC pivot
+
+  Repository decoded stored timestamps with the mutation validator rather than the result normalizer Query has always used, so the same row read through the two APIs could differ or fail on one of them. It now decodes through the result normalizer, which is what recognizes the shapes storage produces rather than the shapes a caller writes.
+
+  That matters most after a Field is converted between `datetime` and `datetimeTz`. The two types disagree about what a stored value is, and the physical column is not rewritten: a widened SQLite column holds text carrying no offset, which Repository rejected outright with `FIELD_CAPABILITY_NOT_SUPPORTED`, and a narrowed one holds text that carries one.
+
+  Both are now resolved on UTC, in both directions, for the same reason MySQL's `datetime(3)` already pivots there: it is the only reading that does not depend on the host the row is read on, so one database reports the same value everywhere and a Field converted one way and back returns what it started with. A previously stored offset in a `datetime` value therefore reads as the instant's UTC wall clock rather than the host's — writing keeps resolving a caller's offset against the host, where a caller is present and `Date` semantics apply.
+
+  PostgreSQL still converts these columns by reading each value in the session time zone, so a migration that widens or narrows one has to pin that session to UTC itself.
+
 ## 1.0.0-beta.12
 
 ### Minor Changes
