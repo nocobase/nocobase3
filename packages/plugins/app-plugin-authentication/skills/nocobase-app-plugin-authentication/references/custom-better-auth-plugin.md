@@ -125,10 +125,7 @@ the browser. The session must be a Better Auth session so `auth.required()`,
 
 ## Storing the binding
 
-When the platform only yields standard provider data, reuse `account`:
-`providerId` = plugin id, `issuer`, `accountId` = subject, `userId`. When the
-protocol needs queryable extras such as a tenant or device id, declare a model
-in the plugin's `schema` and create it with an application migration:
+When the platform only yields standard provider data, reuse `account`: `providerId` identifies a stable configured provider, `accountId` is its subject, and `userId` identifies the application user. Better Auth 1.7.5 uses the unique pair `providerId + accountId`; the account table has no `issuer` column. Give distinct identity issuers distinct provider IDs, including separate tenants of the same platform, and continue verifying the protocol issuer and audience. Do not reuse a provider ID for a different issuer or merge identities by email. When the protocol needs queryable extras such as a tenant or device id, declare a model in the plugin's `schema` and create it with an application migration:
 
 ```ts
 import { defineMigration, type MigrationDefinition } from '@nocobase/db';

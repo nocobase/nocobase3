@@ -176,7 +176,6 @@ class DefaultUserAdministrationService implements UserAdministrationService {
       )
       .catch(throwIdentityConflict);
     await context.internalAdapter.createAccount({
-      issuer: 'local:credential',
       accountId: user.id,
       providerId: 'credential',
       userId: user.id,
@@ -245,7 +244,6 @@ class DefaultUserAdministrationService implements UserAdministrationService {
       await context.internalAdapter.updatePassword(userId, hash);
     } else {
       await context.internalAdapter.linkAccount({
-        issuer: 'local:credential',
         accountId: userId,
         providerId: 'credential',
         userId,

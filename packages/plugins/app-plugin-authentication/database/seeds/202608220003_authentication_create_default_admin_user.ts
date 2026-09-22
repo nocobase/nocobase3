@@ -58,7 +58,6 @@ const seed: SeedDefinition = defineSeed({
       .insertInto('account')
       .values({
         id: crypto.randomUUID(),
-        issuer: 'local:credential',
         accountId: userId,
         providerId: 'credential',
         userId,
