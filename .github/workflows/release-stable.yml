@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       include_pro:
-        description: 'Also release Pro plugins after the OSS release succeeds'
+        description: 'Also release Pro plugins after the NocoBase3 release succeeds'
         type: boolean
         default: true
       branch:
