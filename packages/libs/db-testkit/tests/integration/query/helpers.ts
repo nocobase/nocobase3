@@ -28,14 +28,14 @@ export async function seedQueryOrders(
         status: 'paid',
         amount: 120,
         sort: 2,
-        paidAt: '2026-08-14 10:00:00',
+        paidAt: '2026-08-14T10:00:00',
       },
       {
         orderNo: 'SO-003',
         status: 'paid',
         amount: 240,
         sort: 3,
-        paidAt: '2026-08-14 11:00:00',
+        paidAt: '2026-08-14T11:00:00',
       },
     ])
     .execute();
@@ -71,7 +71,7 @@ export async function seedWhereOrders(
         status: 'paid',
         type: 'normal',
         amount: 120,
-        paidAt: '2026-08-14 10:00:00',
+        paidAt: '2026-08-14T10:00:00',
         archivedAt: null,
       },
       {
@@ -80,7 +80,7 @@ export async function seedWhereOrders(
         status: 'completed',
         type: 'vip',
         amount: 240,
-        paidAt: '2026-08-14 11:00:00',
+        paidAt: '2026-08-14T11:00:00',
         archivedAt: null,
       },
       {
@@ -99,7 +99,7 @@ export async function seedWhereOrders(
         type: 'internal',
         amount: 480,
         paidAt: null,
-        archivedAt: '2026-08-14 12:00:00',
+        archivedAt: '2026-08-14T12:00:00',
       },
       {
         tenantId: 'tenant-a',
@@ -107,7 +107,7 @@ export async function seedWhereOrders(
         status: 'paid',
         type: 'vip',
         amount: 600,
-        paidAt: '2026-08-14 13:00:00',
+        paidAt: '2026-08-14T13:00:00',
         archivedAt: null,
       },
       {
@@ -116,7 +116,7 @@ export async function seedWhereOrders(
         status: 'paid',
         type: 'normal',
         amount: 180,
-        paidAt: '2026-08-14 14:00:00',
+        paidAt: '2026-08-14T14:00:00',
         archivedAt: null,
       },
     ])

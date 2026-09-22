@@ -27,7 +27,7 @@ const enUS = {
     workflowFields: 'Workflow settings',
     details: 'Change details',
   },
-  authorization: { title: 'Workflow', read: 'Read' },
+  authorization: { title: 'Workflow', manage: 'Manage' },
   nav: {
     automation: 'Automation',
     workflows: 'Workflows',

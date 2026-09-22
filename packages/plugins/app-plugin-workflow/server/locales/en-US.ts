@@ -2,8 +2,9 @@ import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
   nav: { automation: 'Automation' },
-  authorization: { title: 'Workflow', read: 'Read' },
+  authorization: { title: 'Workflow', manage: 'Manage' },
   errors: {
+    forbidden: 'Workflow management permission is required.',
     badRequest: 'The workflow request is invalid.',
     conflict: 'The workflow request conflicts with the current state.',
     serviceUnavailable: 'The workflow service is unavailable.',

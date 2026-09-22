@@ -129,11 +129,12 @@ The three files named `runtime.ts`, `plugins.ts`, and `routes.ts` are compositio
 
 | Script                      | What it does                                                                                                                                                                                        |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm migrate`              | Apply pending migrations from your `database/main/migrations/` and from every registered plugin; `pnpm migrate --fresh --force` clears managed schema objects and rebuilds them from migrations     |
-| `pnpm seed`                 | Run seeds from `database/main/seeds/` and from registered plugins                                                                                                                                   |
+| `pnpm db:apply`             | Apply pending migrations from your `database/main/migrations/` and from every registered plugin, then pending seeds from `database/main/seeds/` and from those plugins                              |
+| `pnpm db:reset`             | Destructive: drop every managed schema object, then rerun all migrations and seeds from empty; asks first, and needs `--force` in CI                                                                |
+| `pnpm db:repair`            | Realign recorded migration and seed checksums with the current sources; `--dry-run` reports without writing                                                                                         |
 | `pnpm collections:generate` | Write `collection.json`, `metadata.json` and `schema.json` for every Collection under `database/<connection>/collections/`, plus a `_manifest.json`; `--check` fails when the files are out of date |
 
-Migrations also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm migrate` explicitly when you want to apply a schema change without restarting.
+Migrations and seeds also run automatically on startup while `database.connections.main.migrations.autoRun` is `true` in `config.yml`. Run `pnpm db:apply` explicitly when you want to apply a change without restarting. Both halves run only what is pending, so running it on an already-migrated database applies seeds alone.
 
 Database tasks support `--connection <name>` and `--all`; no argument targets `database.default`. Per-connection source and upgrade rules are documented in [migrations and seeds](.agents/skills/nocobase-app-development/references/migrations.md).
 
@@ -164,7 +165,7 @@ Plugins add features to your application. Let these commands edit `package.json`
 | `pnpm package:remove <name>`    | Remove a direct NocoBase package and its synchronized Skill |
 | `pnpm skills:sync`              | Sync direct NocoBase package Skills into `.agents/skills/`  |
 
-`pnpm plugin:skills:sync` remains an alias for older automation; use `pnpm skills:sync` in new scripts and documentation.
+Use `pnpm skills:sync` to synchronize Skills. The CLI retains `nocobase plugin skills sync` for older applications, but new templates do not provide a separate script alias.
 
 Use a full package name, as with `plugin:register` and `plugin:unregister`; short names such as `authentication` also work. The optional name is a positional argument, not `--plugin`.
 
@@ -197,12 +198,8 @@ An older application with the new CLI but without the script can run `pnpm nocob
 
 | Script                      | What it does                                                                                |
 | --------------------------- | ------------------------------------------------------------------------------------------- |
-| `pnpm client:inspect`       | Print the resolved client composition: routes, providers, and which file owns each          |
-| `pnpm server:inspect`       | Print the resolved server composition                                                       |
 | `pnpm server:deps:retarget` | Replace native binaries with the target platform's; part of `pnpm build`                    |
 | `pnpm server:deps:verify`   | Check that everything your server and CLI import reaches a deployment; part of `pnpm build` |
-
-These read static declarations. They report what is wired, not whether it works — a passing inspection is not a substitute for tests.
 
 #### Deploying to a different machine
 
@@ -349,7 +346,7 @@ MIT
 
 ## Publish to an application Hub
 
-The Default template includes `upload` and `deploy` scripts. Run `pnpm run upload` or `pnpm run deploy` from the App root; these forward all arguments to `pnpm nocobase app upload` and `pnpm nocobase app deploy`, respectively. Use `pnpm run deploy` explicitly because `pnpm deploy` is also a pnpm built-in command. Existing applications need to add these scripts if they already have the publishing CLI but predate the shortcuts.
+The Default template includes `upload` and `deploy` scripts. Run `pnpm run upload` or `pnpm run deploy` from the App root; these forward all arguments to the `app upload` and `app deploy` commands of the application's own CLI, respectively. Use `pnpm run deploy` explicitly because `pnpm deploy` is also a pnpm built-in command. Existing applications need to add these scripts if they already have the publishing CLI but predate the shortcuts.
 
 ```bash
 pnpm run upload

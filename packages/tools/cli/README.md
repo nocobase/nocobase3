@@ -28,6 +28,8 @@ NocoBase 3 的命令行工具，bin 名为 `nocobase`。
 
 普通 NocoBase 包的 `skills/` 一级子目录使用 `nocobase-` 开头的 kebab-case 名称；`nocobase-app-plugin-*` 名称保留给对应插件，而插件自身的 Skill 必须使用完整包名对应的前缀。完整同步会把 Skill 与来源包的关系写入 `.agents/.skills-sync.json`，以便依赖移除后清理旧副本；不以 `nocobase-` 开头的 App 自有 Skill 不受影响。
 
+同步还会把每个 Skill 目录以相对符号链接镜像到 `.claude/skills/`：Claude Code 只从 `~/.claude/skills/` 和 `<项目>/.claude/skills/` 发现 Skill，不读 `.agents/skills/`，没有这层镜像时 App 同步下来的 Skill 在 Claude Code 里一个都不会出现。用链接而不是拷贝，是因为 `.agents/skills/` 每次同步整体替换，拷贝会静默变成同一份指引的旧版本。镜像目录同样是生成物，模板的 `.gitignore` 和 `create-app` 的兜底 `.gitignore` 都会忽略它。移除依赖或 Skill 不再提供时，对应链接一并删除；App 自己在 `.claude/skills/` 下放的目录不受影响，而当某个 `nocobase-` 名称已经被真实目录占用时同步会报错而不是覆盖。
+
 实现在 `src/lib/` 下的 `client-plugins.ts`、`server-plugins.ts`、`cli-plugins.ts`、`plugin-registration.ts` 和 `skills-sync.ts`。仓库根目录不再维护第二套 register、unregister 或 skills sync 实现。
 
 ## 对外导出

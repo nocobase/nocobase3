@@ -142,6 +142,21 @@ function sharedFrameworkSource(template, file) {
     }, source);
   }
 
+  // The pm2 configuration names the process after the template; everything else about how it starts is shared.
+  if (file === 'ecosystem.config.js') {
+    const processName = (manifest) =>
+      `nocobase-${manifest.name.replace(/^@nocobase\//u, '')}`;
+    const name = processName(template.manifest);
+    assert.ok(
+      source.includes(`name: '${name}',`),
+      `${template.kind}: ecosystem.config.js must name the process ${name}`,
+    );
+    return source.replace(
+      `name: '${name}',`,
+      `name: '${processName(baseline.manifest)}',`,
+    );
+  }
+
   // Keep product identity and Hub's deliberate menu order local while comparing the shared layout.
   if (file === 'client/layouts/components/sidebar-footer.tsx') {
     source = source
@@ -227,7 +242,6 @@ for (const template of templates) {
   test(`${template.kind} keeps the shared build and CLI framework aligned with Default`, () => {
     for (const directory of [
       'scripts',
-      'cli/dev-commands',
       'client/routing',
       'client/layouts',
       'client/theme',
@@ -252,6 +266,7 @@ for (const template of templates) {
       'eslint.config.js',
       'vitest.config.ts',
       'vite.config.ts',
+      'ecosystem.config.js',
       'server/app.ts',
       'server/embedded.ts',
       'server/standalone.ts',
@@ -264,7 +279,6 @@ for (const template of templates) {
     }
     // Product-specific scripts need a documented exception; compare the shared contract in both directions.
     const exceptions = [
-      'pack:check', // Tarball names identify each template.
       'upload', // Hub publishing commands are implemented only by Default.
       'deploy',
       ...(template.kind === 'hub' ? ['test:e2e'] : []), // Hub has no AI plugin.
@@ -283,13 +297,35 @@ for (const template of templates) {
   test(`${template.kind} exposes publishing scripts only when supported`, () => {
     for (const command of ['upload', 'deploy']) {
       if (template.kind === 'default') {
+        // Straight at the CLI entry, not through `pnpm nocobase`: a script
+        // calling another script is a second `pnpm run`, and each layer
+        // prints its own ELIFECYCLE line for one non-zero exit.
         assert.equal(
           template.manifest.scripts[command],
-          `pnpm nocobase app ${command}`,
+          `tsx ./cli/index.ts app ${command}`,
         );
       } else {
         assert.equal(Object.hasOwn(template.manifest.scripts, command), false);
       }
+    }
+  });
+
+  test(`${template.kind} publishes the database directory by part, not whole`, () => {
+    // `files` is a whitelist npm applies ahead of every ignore file, so a bare `database` entry publishes
+    // whatever `collections:generate` happens to have written locally: a snapshot of one developer's database,
+    // in whatever dialect they run it against, shipped to every application scaffolded from the template.
+    // Neither .gitignore nor .npmignore can take it back out. Name the parts that are source instead.
+    const { files } = template.manifest;
+    assert.equal(files.includes('database'), false);
+    for (const entry of [
+      'database/tsconfig.json',
+      'database/*/migrations/**',
+      'database/*/seeds/**',
+    ]) {
+      assert.ok(
+        files.includes(entry),
+        `${template.kind}: files must list ${entry}`,
+      );
     }
   });
 

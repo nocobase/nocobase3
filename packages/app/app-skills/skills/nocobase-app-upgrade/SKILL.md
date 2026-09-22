@@ -115,7 +115,7 @@ For each file read three versions — `$WORK/$BASE/<file>`, `$WORK/$TARGET/<file
 - **Template added a file** — copy it in; if something already exists at that path, reconcile rather than overwrite.
 - **Template removed a file** — only after step 5.
 
-The generator rewrites template identity into some files, so those files legitimately differ from both releases. Current candidates include `client/runtime.ts`, `client/service-provider.ts`, and the Examples template's `server/providers/app-example.ts`; inspect the project and generator behavior instead of treating this as an exhaustive list for future templates. Keep the application's name when taking a template change there — copying verbatim splits the i18n namespace and fails `pnpm client:inspect`. When a target removes one of these files, preserve any application-owned customization until step 5 establishes that it is unused or migrated.
+The generator rewrites template identity into some files, so those files legitimately differ from both releases. Current candidates include `client/runtime.ts`, `client/service-provider.ts`, and the Examples template's `server/providers/app-example.ts`; inspect the project and generator behavior instead of treating this as an exhaustive list for future templates. Keep the application's name when taking a template change there — copying verbatim splits the i18n namespace. When a target removes one of these files, preserve any application-owned customization until step 5 establishes that it is unused or migrated.
 
 When the right answer is unclear, stop and ask. The user is the only one who knows why their code is the way it is.
 

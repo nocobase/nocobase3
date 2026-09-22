@@ -1,8 +1,20 @@
+import { EmptyState } from '../components/empty-state.js';
+import { PageSection } from '../components/page-section.js';
+import { StatusBadge } from '../components/status-badge.js';
+import { Button } from '../components/ui/button.js';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table.js';
 import { PageContainer } from '../components/page-container.js';
 import { PageHeader } from '../components/page-header.js';
 import { apiClientToken, useService } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
-import { ArrowLeft, CalendarClock, CircleAlert } from 'lucide-react';
+import { ArrowLeft, CircleAlert } from 'lucide-react';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 
@@ -55,65 +67,6 @@ function viewStatus(item: ScheduleItem): ViewStatus {
   if (item.lifecycleState === 'inactive') return 'inactive';
   if (item.targetState !== 'ready') return 'targetIssue';
   return 'active';
-}
-
-function Card({
-  children,
-  className = '',
-}: {
-  readonly children: ReactNode;
-  readonly className?: string;
-}): ReactElement {
-  return (
-    <section
-      className={`rounded-xl border border-border bg-card text-card-foreground shadow-sm ${className}`}
-    >
-      {children}
-    </section>
-  );
-}
-
-function EmptyState({
-  children,
-}: {
-  readonly children: ReactNode;
-}): ReactElement {
-  return (
-    <div className='flex flex-col items-center gap-3 px-6 py-14 text-center text-sm text-muted-foreground'>
-      <span className='grid size-11 place-items-center rounded-full bg-muted'>
-        <CalendarClock className='size-5' />
-      </span>
-      {children}
-    </div>
-  );
-}
-
-function StatusBadge({
-  label,
-  status,
-}: {
-  readonly label: string;
-  readonly status: string;
-}): ReactElement {
-  const tone =
-    status === 'active' || status === 'succeeded'
-      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-      : status === 'failed' || status === 'targetIssue'
-        ? 'bg-destructive/10 text-destructive'
-        : status === 'running' || status === 'waiting'
-          ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300'
-          : status === 'inactive' ||
-              status === 'triggered' ||
-              status === 'timed_out'
-            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-            : 'bg-muted text-muted-foreground';
-  return (
-    <span
-      className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}
-    >
-      {label}
-    </span>
-  );
 }
 
 function DefinitionRow({
@@ -215,62 +168,56 @@ export default function ScheduleDetailPage(): ReactElement {
     loadedOccurrencesId === scheduleId ? occurrencesError : undefined;
 
   return (
-    <PageContainer
-      header={
-        <PageHeader
-          eyebrow={t('nav.automation')}
-          title={item?.title ?? t('page.title')}
-          description={item?.description}
-          back={
-            <Link
-              className='inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground'
-              to='/settings/schedules'
-            >
-              <ArrowLeft className='size-4' />
-              {t('page.details.back')}
-            </Link>
-          }
-          actions={
-            item && !scheduleLoading ? (
-              <ScheduleSwitch
-                checked={item.enabled}
-                disabled={updating || item.lifecycleState === 'inactive'}
-                label={
-                  item.enabled
-                    ? t('page.actions.disable')
-                    : t('page.actions.enable')
-                }
-                onChange={(enabled) => {
-                  setItem({ ...item, enabled });
-                  setUpdating(true);
-                  void api
-                    .request<{ data: ScheduleItem }>({
-                      method: 'POST',
-                      path: `schedules/${encodeURIComponent(item.id)}/${enabled ? 'enable' : 'disable'}`,
-                    })
-                    .then((response) => setItem(response.data))
-                    .catch(() => setItem(item))
-                    .finally(() => setUpdating(false));
-                }}
-              />
-            ) : null
-          }
-        />
-      }
-    >
+    <PageContainer>
+      <Link
+        className='inline-flex items-center gap-1 rounded-sm text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
+        to='/settings/schedules'
+      >
+        <ArrowLeft aria-hidden='true' className='size-4' />
+        {t('page.details.back')}
+      </Link>
+      <PageHeader
+        title={item?.title ?? t('page.title')}
+        description={item?.description}
+        actions={
+          item && !scheduleLoading ? (
+            <ScheduleSwitch
+              checked={item.enabled}
+              disabled={updating || item.lifecycleState === 'inactive'}
+              label={
+                item.enabled
+                  ? t('page.actions.disable')
+                  : t('page.actions.enable')
+              }
+              onChange={(enabled) => {
+                setItem({ ...item, enabled });
+                setUpdating(true);
+                void api
+                  .request<{ data: ScheduleItem }>({
+                    method: 'POST',
+                    path: `schedules/${encodeURIComponent(item.id)}/${enabled ? 'enable' : 'disable'}`,
+                  })
+                  .then((response) => setItem(response.data))
+                  .catch(() => setItem(item))
+                  .finally(() => setUpdating(false));
+              }}
+            />
+          ) : null
+        }
+      />
       {currentError ? (
         <div className='flex gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive'>
           <CircleAlert className='size-5 shrink-0' />
           {currentError}
         </div>
       ) : scheduleLoading ? (
-        <Card>
+        <PageSection>
           <EmptyState>{t('page.details.loading')}</EmptyState>
-        </Card>
+        </PageSection>
       ) : !item ? (
-        <Card>
+        <PageSection>
           <EmptyState>{t('page.details.notFound')}</EmptyState>
-        </Card>
+        </PageSection>
       ) : (
         <Details
           item={item}
@@ -336,7 +283,7 @@ function Overview({
 }): ReactElement {
   return (
     <div className='grid gap-5 lg:grid-cols-2'>
-      <Card className='p-5'>
+      <PageSection className='p-5'>
         <h2 className='mb-2 font-semibold'>{t('page.details.schedule')}</h2>
         <dl>
           <DefinitionRow
@@ -383,8 +330,8 @@ function Overview({
             />
           ) : null}
         </dl>
-      </Card>
-      <Card className='p-5'>
+      </PageSection>
+      <PageSection className='p-5'>
         <h2 className='mb-2 font-semibold'>{t('page.details.target')}</h2>
         <dl>
           <DefinitionRow
@@ -404,7 +351,7 @@ function Overview({
             />
           ) : null}
         </dl>
-      </Card>
+      </PageSection>
     </div>
   );
 }
@@ -429,7 +376,7 @@ function Triggers({
     currentPage * pageSize,
   );
   return (
-    <Card>
+    <PageSection>
       <h2 className='border-b border-border p-4 font-semibold'>
         {t('page.details.triggers')}
       </h2>
@@ -440,30 +387,28 @@ function Triggers({
       ) : items.length === 0 ? (
         <EmptyState>{t('page.triggersEmpty')}</EmptyState>
       ) : (
-        <div className='overflow-x-auto'>
-          <table className='w-full min-w-4xl text-left text-sm'>
-            <thead className='bg-muted/40 text-xs text-muted-foreground'>
-              <tr>
+        <>
+          <Table className='min-w-4xl text-left'>
+            <TableHeader className='bg-muted/30 tracking-wide uppercase'>
+              <TableRow>
                 {(['startedAt', 'duration', 'status', 'target'] as const).map(
                   (column) => (
-                    <th className='px-4 py-3 font-medium' key={column}>
+                    <TableHead key={column}>
                       {t(`page.triggerColumns.${column}`)}
-                    </th>
+                    </TableHead>
                   ),
                 )}
-              </tr>
-            </thead>
-            <tbody className='divide-y divide-border'>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {pageItems.map((item) => (
-                <tr key={item.id}>
-                  <td className='px-4 py-4'>
-                    {formatClientDateTime(item.startedAt)}
-                  </td>
-                  <td className='px-4 py-4'>
+                <TableRow key={item.id}>
+                  <TableCell>{formatClientDateTime(item.startedAt)}</TableCell>
+                  <TableCell>
                     {formatClientDuration(item.startedAt, item.finishedAt) ??
                       t('page.inProgress')}
-                  </td>
-                  <td className='px-4 py-4'>
+                  </TableCell>
+                  <TableCell>
                     <StatusBadge
                       label={t(`page.triggerStatuses.${item.status}`, {
                         defaultValue: item.status,
@@ -477,8 +422,8 @@ function Triggers({
                         })}
                       </p>
                     ) : null}
-                  </td>
-                  <td className='px-4 py-4'>
+                  </TableCell>
+                  <TableCell>
                     {item.target?.href ? (
                       <Link
                         className='mt-1 block text-xs text-primary hover:underline'
@@ -489,11 +434,11 @@ function Triggers({
                     ) : (
                       t('page.unavailable')
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
           {pageCount > 1 ? (
             <div className='flex items-center justify-between border-t border-border px-4 py-3 text-sm'>
               <span className='text-muted-foreground'>
@@ -503,29 +448,27 @@ function Triggers({
                 })}
               </span>
               <div className='flex gap-2'>
-                <button
-                  className='rounded-md border border-border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50'
+                <Button
                   disabled={currentPage === 1}
                   onClick={() => setPage((value) => Math.max(1, value - 1))}
-                  type='button'
+                  size='sm'
                 >
                   {t('page.pagination.previous')}
-                </button>
-                <button
-                  className='rounded-md border border-border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50'
+                </Button>
+                <Button
                   disabled={currentPage === pageCount}
                   onClick={() =>
                     setPage((value) => Math.min(pageCount, value + 1))
                   }
-                  type='button'
+                  size='sm'
                 >
                   {t('page.pagination.next')}
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}
-        </div>
+        </>
       )}
-    </Card>
+    </PageSection>
   );
 }

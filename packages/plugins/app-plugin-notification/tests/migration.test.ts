@@ -409,11 +409,13 @@ describe('notification database migration', () => {
       batch: 1,
       executed: MIGRATION_NAMES,
       skipped: [],
+      warnings: [],
     });
     await expect(migrator.latest()).resolves.toEqual({
       batch: 1,
       executed: [],
       skipped: MIGRATION_NAMES,
+      warnings: [],
     });
 
     const client = await database.connection().client<SqliteClient>();
@@ -432,6 +434,7 @@ describe('notification database migration', () => {
     await expect(migrator.rollback()).resolves.toEqual({
       batch: 1,
       rolledBack: [...MIGRATION_NAMES].reverse(),
+      warnings: [],
     });
     await expect(
       Promise.all(

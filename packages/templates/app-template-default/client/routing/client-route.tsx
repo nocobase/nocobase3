@@ -33,6 +33,7 @@ export function ClientRoute({ route }: ClientRouteProps): ReactElement {
       (module) => {
         if (active) {
           setComponentModule(module);
+          setLoadError(undefined);
         }
       },
       (error: unknown) => {

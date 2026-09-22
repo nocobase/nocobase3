@@ -1,5 +1,16 @@
 # @nocobase/app-plugin-authorization
 
+## 0.2.0-beta.16
+
+### Patch Changes
+
+- 43592e9: Support users.initialAdmin credentials for fresh installations, preserving legacy defaults when omitted and assigning root permission to the configured administrator without resetting existing accounts.
+- Updated dependencies [43592e9]
+- Updated dependencies [43592e9]
+  - @nocobase/app-plugin-authentication@0.1.0-beta.19
+  - @nocobase/db@1.0.0-beta.12
+  - @nocobase/app-server@1.0.0-beta.22
+
 ## 0.2.0-beta.15
 
 ### Minor Changes

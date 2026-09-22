@@ -7,14 +7,16 @@ description: Declare date, time, datetime, and datetimeTz fields and use canonic
 
 Use `datetime` for local calendar components and `datetimeTz` for an instant. The latter normalizes to UTC and does not preserve an original offset or named time zone.
 
-| Logical type | Accepted input                                                                           | Returned value                     |
-| ------------ | ---------------------------------------------------------------------------------------- | ---------------------------------- |
-| `date`       | `YYYY-MM-DD`                                                                             | `YYYY-MM-DD`                       |
-| `time`       | `HH:mm:ss`, optionally with one to three fractional digits                               | `HH:mm:ss.SSS`                     |
-| `datetime`   | `YYYY-MM-DDTHH:mm:ss`, optionally with one to three fractional digits, without an offset | `YYYY-MM-DDTHH:mm:ss.SSS`          |
-| `datetimeTz` | Date-time with `Z` or `±HH:mm`, or a valid JavaScript `Date`                             | `YYYY-MM-DDTHH:mm:ss.SSSZ`, in UTC |
+| Logical type | Accepted input                                                                                                    | Returned value                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `date`       | `YYYY-MM-DD`, or a valid JavaScript `Date`                                                                        | `YYYY-MM-DD`                       |
+| `time`       | `HH:mm:ss`, optionally with one to three fractional digits, or a valid JavaScript `Date`                          | `HH:mm:ss.SSS`                     |
+| `datetime`   | `YYYY-MM-DDTHH:mm:ss`, optionally with one to three fractional digits and an offset, or a valid JavaScript `Date` | `YYYY-MM-DDTHH:mm:ss.SSS`          |
+| `datetimeTz` | Date-time with `Z` or `±HH:mm`, or a valid JavaScript `Date`                                                      | `YYYY-MM-DDTHH:mm:ss.SSSZ`, in UTC |
 
-V1 accepts years 1000–9999, valid calendar dates, and times from `00:00:00.000` through `23:59:59.999`. Reject invalid dates, leap seconds, `24:00:00`, negative durations, more than three fractional digits, and implicit-zone instants. Offset magnitudes may not exceed `14:00`; `-00:00` (unknown offset) is rejected. UTC conversion must also stay within the year range. The three zone-free types do not accept JavaScript `Date`.
+V1 accepts years 1000–9999, valid calendar dates, and times from `00:00:00.000` through `23:59:59.999`. Reject invalid dates, leap seconds, `24:00:00`, negative durations, more than three fractional digits, and implicit-zone instants. Offset magnitudes may not exceed `14:00`; `-00:00` (unknown offset) is rejected. The converted value must also stay within the year range.
+
+All four types accept a JavaScript `Date`. `datetimeTz` keeps the instant; `date`, `time`, and `datetime` take the host's local reading of it, since they store wall-clock components rather than an instant. A `datetime` value that carries an offset is converted the same way and lands on exactly what the equivalent `Date` would: for a host at `+08:00`, `2026-09-06T09:30:00Z`, `2026-09-06T17:30:00+08:00` and `new Date('2026-09-06T09:30:00Z')` all store `2026-09-06T17:30:00.000`. Convert in the application instead when a different zone is meant. `date` and `time` accept no offset; use a `Date` or the component form.
 
 ```ts
 await builder.createCollection('events', (c) => {
@@ -62,7 +64,7 @@ Builder saves every explicitly declared scalar logical type in metadata. Inspect
 - Native column limits still apply. MySQL `TIMESTAMP` uses its narrower 1970–2038 range; the default `DATETIME` mapping supports later instants. Oracle `TIMESTAMP WITH TIME ZONE` cannot be a primary or unique constraint column; Builder rejects these constraints on new tables before DDL.
 - Legacy SQL Server `DATETIME` accepts its native year range and millisecond spellings ending in `0`, `3`, or `7`; other values are rejected to avoid native rounding. `SMALLDATETIME` requires whole minutes within its native range. New declarations use `DATETIME2(3)` instead.
 - SQL formatting and binding preserve local components or UTC meaning without changing global driver parsers. Canonical output is used by ordinary and nested projections, mutation returning, streaming, and temporal min/max results.
-- Raw Query/SQL, imports, and schema defaults are physical interfaces: they must follow the same storage convention. Metadata does not transform existing rows or add physical check constraints. Do not write unnormalized text into SQLite temporal columns.
+- Query validates and converts temporal values exactly as Repository does, so both writers store the same thing for the same input. Raw SQL, imports, and schema defaults remain physical interfaces that bypass this and must follow the storage convention themselves. Metadata does not transform existing rows or add physical check constraints. Do not write unnormalized text into SQLite temporal columns.
 - These changes do not migrate existing databases. Inspect and explicitly migrate any existing zone-bearing column previously declared as `datetime` before adopting the new zone-free declaration.
 
 The [design record](../proposals/date-time-field-types.md) contains rationale and staged validation history, not additional public capabilities.

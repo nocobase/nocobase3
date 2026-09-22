@@ -30,14 +30,14 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'plugin:inspect': 'nocobase plugin inspect',
   'plugin:unregister': 'nocobase plugin unregister',
   'plugin:update': 'nocobase plugin update',
-  'plugin:skills:sync': 'nocobase plugin skills sync',
   'skills:sync': 'nocobase skills sync',
   'package:remove': 'nocobase package remove',
   nocobase: 'tsx ./cli/index.ts',
-  'client:inspect': 'pnpm nocobase app inspect client',
-  'server:inspect': 'pnpm nocobase app inspect server',
-  migrate: 'pnpm nocobase app migrate',
-  seed: 'pnpm nocobase app seed',
+  // Straight at the CLI entry, not through `pnpm nocobase`: a script calling another script is a
+  // second `pnpm run`, and each layer prints its own ELIFECYCLE line for one non-zero exit.
+  'db:apply': 'tsx ./cli/index.ts app db apply',
+  'db:reset': 'tsx ./cli/index.ts app db reset',
+  'db:repair': 'tsx ./cli/index.ts app db repair',
 };
 
 describe('documented plugin commands', () => {
@@ -54,17 +54,6 @@ describe('documented plugin commands', () => {
     // A runtime dependency, not tooling: `cli/index.ts` imports it and `dist/cli` ships to a deployment,
     // which installs from `dependencies` alone.
     expect(appPackage.dependencies?.['@nocobase/nb3-cli']).toBeTruthy();
-  });
-
-  it('ships the inspector that client:inspect runs', () => {
-    const entry = path.join(
-      appRoot,
-      'cli/dev-commands/inspect-client-impl.mjs',
-    );
-
-    expect(existsSync(entry)).toBe(true);
-    // A generated app only receives what `files` lists, so an unlisted directory is present here and missing there.
-    expect(appPackage.files).toContain('cli');
   });
 
   it('keeps synchronized Agent state out of source control and publication', () => {
