@@ -27,7 +27,7 @@ Ask your AI Agent to check the environment, create a project, and start it local
    Copy and send this prompt in the session you just started:
 
    ```text
-   Follow https://v3.docs.nocobase.com/get-started/create-app-with-agent to create a NocoBase 3 application for me.
+   Create a NocoBase 3 application for me: https://v3.docs.nocobase.com/get-started/create-app-with-agent.md (read the linked file directly)
    ```
 
    Your AI Agent will check the environment, initialize the application in the current empty directory, read its project guidance, confirm your database requirements, and start the service.

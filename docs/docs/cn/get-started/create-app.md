@@ -27,7 +27,7 @@ description: '让 AI Agent 创建并启动 NocoBase 3 应用，然后在新会�
    在刚开启的会话中，复制并发送下面这句话：
 
    ```text
-   请按照 https://v3.docs.nocobase.com/cn/get-started/create-app-with-agent 的指引，帮我创建一个 NocoBase 3 应用。
+   帮我创建一个 NocoBase 3 应用：https://v3.docs.nocobase.com/cn/get-started/create-app-with-agent.md （请直接访问链接内容）
    ```
 
    AI Agent 会检查环境，在当前空目录中初始化应用，然后读取项目指引，确认数据库需求并启动服务。
