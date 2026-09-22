@@ -253,6 +253,8 @@ type AIChatWindowProps = {
 
 What the assistant then sees is decided server-side, not by the page: images and PDFs are sent to the model as multimodal content blocks, other recognized document types are extracted to text, and anything else produces a message telling the user the type is unsupported. So "drop a screenshot and have the assistant read it" needs no tool and no OCR step — it needs `enableAttachments`, a configured disk, and a model that accepts images.
 
+That last one is on you to get right. `AIModel` carries `supportWebSearch` but nothing for image input, so neither the selector nor the composer can warn that the selected model will not read the picture; the failure arrives from the provider, mid-turn, in whatever words it chooses. When a flow starts from an image, say so in the employee's description and make the employee's default model one that accepts images.
+
 ## Tasks and shortcuts
 
 ```ts
