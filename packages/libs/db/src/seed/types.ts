@@ -5,7 +5,10 @@ import type {
   ChecksumMismatch,
   ChecksumMismatchPolicy,
 } from '../migration/checksum-history.js';
-import type { MigrationConnection } from '../migration/types.js';
+import type {
+  MigrationConnection,
+  StaleTaskLockTakeover,
+} from '../migration/types.js';
 import type { QueryAdapter } from '../query/types.js';
 import type { Repository, RepositoryRecord } from '../repository/types.js';
 
@@ -90,6 +93,8 @@ export interface CreateSeederOptions extends LoadSeedsOptions {
    * Defaults to 30 seconds.
    */
   readonly lockAcquireTimeoutMs?: number;
+  /** Called when a lock whose holder stopped sending heartbeats is taken over. */
+  readonly onStaleLock?: (takeover: StaleTaskLockTakeover) => void;
   /**
    * How to react when an executed seed's source no longer hashes to the
    * checksum recorded for it. Defaults to `warn`.

@@ -122,6 +122,11 @@ export interface CreateMigratorOptions extends LoadMigrationsOptions {
    */
   readonly lockAcquireTimeoutMs?: number;
   /**
+   * Called when a lock whose holder stopped sending heartbeats is taken over,
+   * which is how a run recovers from a previous one being killed.
+   */
+  readonly onStaleLock?: (takeover: StaleTaskLockTakeover) => void;
+  /**
    * How to react when an executed migration's source no longer hashes to the
    * checksum recorded for it. Defaults to `warn`.
    */
@@ -138,6 +143,19 @@ export interface MigrationRunResult {
   readonly skipped: string[];
   /** Checksum drift the `warn` policy allowed the run to continue past. */
   readonly warnings: ChecksumMismatch[];
+}
+
+export type {
+  StaleTaskLockTakeover,
+  TaskLockReleaseResult,
+  TaskLockState,
+} from './internal/lock.js';
+import type { StaleTaskLockTakeover } from './internal/lock.js';
+
+/** Options accepted by Migrator.unlock(). */
+export interface TaskLockReleaseOptions {
+  /** Release a lock that is still sending heartbeats. */
+  readonly force?: boolean;
 }
 
 /** Options accepted by Migrator.rollback(). */

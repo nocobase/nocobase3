@@ -1,4 +1,8 @@
-import { databaseManagerToken } from '@nocobase/db';
+import {
+  createDatabaseManager,
+  databaseManagerToken,
+  TASK_LOCK_EXPIRY_MS,
+} from '@nocobase/db';
 import { resolveStandaloneAppRuntime } from '@nocobase/app-server/node';
 import { createAppFromRuntime } from '@nocobase/app-server/runtime';
 import { DatabaseProvider } from '@nocobase/app-server/database';
@@ -22,6 +26,7 @@ import {
   runDatabaseRedoCommand,
   runDatabaseRepairCommand,
   runDatabaseRollbackCommand,
+  runDatabaseUnlockCommand,
 } from '../src/database-command.js';
 import { createAppPaths, AppConfig } from '@nocobase/app-server/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
@@ -140,7 +145,34 @@ export default defineSeed({ name: '001_defaults', async run() {} });`,
       if (existsSync(file))
         appendFileSync(file, '\n// changed after execution\n');
   }
-  return { runtime, command, migration, seed, rewrite };
+  /** Writes a lock row the way a run holding one would. */
+  async function lockRow(
+    connection: string,
+    { lockedBy, beating }: { lockedBy: string; beating: boolean },
+  ): Promise<void> {
+    const manager = createDatabaseManager({
+      drivers: { sqlite },
+      connections: {
+        [connection]: {
+          dialect: 'sqlite',
+          filename: paths.storage(`${connection}.sqlite`),
+        },
+      },
+    });
+    try {
+      const at = beating
+        ? new Date()
+        : new Date(Date.now() - TASK_LOCK_EXPIRY_MS * 4);
+      await manager
+        .query(connection)
+        .insertInto('__nocobase_migration_lock')
+        .values({ id: 1, locked_by: lockedBy, locked_at: at, heartbeat_at: at })
+        .execute();
+    } finally {
+      await manager.destroy();
+    }
+  }
+  return { runtime, command, migration, seed, rewrite, lockRow };
 }
 
 it('reports both kinds per connection and honors manual selection', async () => {
@@ -603,6 +635,76 @@ it('requires --force where it cannot prompt', async () => {
     expect.objectContaining({
       ok: false,
       error: 'A rollback requires --force in CI or a non-interactive terminal.',
+    }),
+  );
+});
+
+it('reports an unheld lock, refuses a live one and releases it with --force', async () => {
+  const { runtime, command, migration, lockRow } = fixture();
+  migration('main');
+  await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
+
+  await runDatabaseUnlockCommand(command, { json: true, all: false }, runtime);
+  expect(command.logJson).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      ok: true,
+      results: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'migrations',
+          released: false,
+          lockReason: 'not-held',
+        }),
+      ]),
+    }),
+  );
+
+  // A run that is still beating holds its lock; releasing it would let a
+  // second run start beside the first.
+  await lockRow('main', { lockedBy: 'live-run', beating: true });
+  await runDatabaseUnlockCommand(command, { json: true, all: false }, runtime);
+  expect(command.logJson).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      results: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'migrations',
+          released: false,
+          lockReason: 'active',
+        }),
+      ]),
+    }),
+  );
+
+  await runDatabaseUnlockCommand(
+    command,
+    { json: true, all: false, force: true },
+    runtime,
+  );
+  expect(command.logJson).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      results: expect.arrayContaining([
+        expect.objectContaining({ kind: 'migrations', released: true }),
+      ]),
+    }),
+  );
+  expect(command.exit).not.toHaveBeenCalled();
+});
+
+it('releases a lock whose holder stopped beating without --force', async () => {
+  const { runtime, command, migration, lockRow } = fixture();
+  migration('main');
+  await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
+  await lockRow('main', { lockedBy: 'killed-run', beating: false });
+
+  await runDatabaseUnlockCommand(command, { json: true, all: false }, runtime);
+  expect(command.logJson).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      results: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'migrations',
+          released: true,
+          lock: expect.objectContaining({ lockedBy: 'killed-run' }),
+        }),
+      ]),
     }),
   );
 });

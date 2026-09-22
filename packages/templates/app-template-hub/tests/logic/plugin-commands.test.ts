@@ -40,6 +40,7 @@ const DOCUMENTED_SCRIPTS: Readonly<Record<string, string>> = {
   'db:repair': 'tsx ./cli/index.ts app db repair',
   'db:rollback': 'tsx ./cli/index.ts app db rollback',
   'db:redo': 'tsx ./cli/index.ts app db redo',
+  'db:unlock': 'tsx ./cli/index.ts app db unlock',
 };
 
 describe('documented plugin commands', () => {

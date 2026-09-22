@@ -8,6 +8,7 @@ it('exposes the template-specific publishing command surface', () => {
   expect(commands).toHaveProperty('db:repair');
   expect(commands).toHaveProperty('db:rollback');
   expect(commands).toHaveProperty('db:redo');
+  expect(commands).toHaveProperty('db:unlock');
   expect(commands).toHaveProperty('upload');
   expect(commands).toHaveProperty('deploy');
 });

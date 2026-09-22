@@ -12,6 +12,18 @@ export const DEFAULT_MIGRATION_LOCK_TABLE = '__nocobase_migration_lock';
  */
 export const DEFAULT_TASK_LOCK_ACQUIRE_TIMEOUT_MS = 30_000;
 
+/** How often a holder proves it is still alive. */
+export const TASK_LOCK_HEARTBEAT_INTERVAL_MS = 5_000;
+
+/**
+ * How long a lock survives without a heartbeat before another run may take it
+ * over. A hard kill — SIGKILL, a container stopped, a machine lost — runs no
+ * cleanup, so the row would otherwise block every later run until someone
+ * deleted it by hand. Several missed beats are tolerated so a slow database
+ * does not hand the lock to a second run while the first is still working.
+ */
+export const TASK_LOCK_EXPIRY_MS = 30_000;
+
 const LOCK_ROW_ID = 1;
 const INITIAL_RETRY_DELAY_MS = 50;
 const MAX_RETRY_DELAY_MS = 500;
@@ -23,12 +35,42 @@ const MAX_RETRY_DELAY_MS = 500;
  */
 const MAX_ATTEMPTS_WITHOUT_HOLDER = 3;
 
+/** Expired rows taken over before the contention is reported instead. */
+const MAX_TAKEOVERS = 3;
+
 const inProcessLocks = new Set<string>();
+
+/** A lock as it stands in the database, as reported to an operator. */
+export interface TaskLockState {
+  readonly tableName: string;
+  readonly lockedBy: string;
+  readonly lockedAt: Date | undefined;
+  readonly heartbeatAt: Date | undefined;
+  /** No heartbeat within {@link TASK_LOCK_EXPIRY_MS}: the holder is gone. */
+  readonly expired: boolean;
+}
+
+/** Why a lock was taken over, for a caller that reports it. */
+export interface StaleTaskLockTakeover {
+  readonly tableName: string;
+  readonly lockedBy: string;
+  readonly heartbeatAt: Date | undefined;
+  readonly staleForMs: number;
+}
+
+export interface TaskLockReleaseResult {
+  readonly released: boolean;
+  readonly lock: TaskLockState | undefined;
+  /** `not-held` when there was nothing to release, `active` when it is alive. */
+  readonly reason: 'not-held' | 'active' | undefined;
+}
 
 export interface TaskLockOptions {
   readonly tableName?: string;
   /** Defaults to {@link DEFAULT_TASK_LOCK_ACQUIRE_TIMEOUT_MS}. */
   readonly acquireTimeoutMs?: number;
+  /** Called when an expired lock is taken over, before the task runs. */
+  readonly onStaleLock?: (takeover: StaleTaskLockTakeover) => void;
 }
 
 /** A task lock with its messages resolved: `Migration`, `Seed`, and so on. */
@@ -40,6 +82,7 @@ export interface TaskLockDescriptor extends TaskLockOptions {
 interface TaskLockRow {
   readonly locked_by?: unknown;
   readonly locked_at?: unknown;
+  readonly heartbeat_at?: unknown;
 }
 
 export function withMigrationLock<T>(
@@ -53,6 +96,7 @@ export function withMigrationLock<T>(
       label: 'Migration',
       tableName: options.tableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
       acquireTimeoutMs: options.acquireTimeoutMs,
+      onStaleLock: options.onStaleLock,
     },
     fn,
   );
@@ -74,13 +118,16 @@ export async function withTaskLock<T>(
   inProcessLocks.add(lockKey);
   const owner = createLockOwner();
   let acquired = false;
+  let heartbeat: NodeJS.Timeout | undefined;
 
   try {
     await ensureTaskLockTable(connection, tableName);
     await acquireDatabaseLock(connection, options, owner);
     acquired = true;
+    heartbeat = startHeartbeat(connection, tableName, owner);
     return await fn();
   } finally {
+    if (heartbeat) clearInterval(heartbeat);
     try {
       if (acquired) {
         await releaseDatabaseLock(connection, tableName, owner);
@@ -97,25 +144,65 @@ export async function ensureTaskLockTable(
 ): Promise<void> {
   const knex = await connection.client<Knex>();
   const exists = await knex.schema.hasTable(tableName);
-  if (exists) {
-    return;
+  if (!exists) {
+    try {
+      await knex.schema.createTable(
+        tableName,
+        (table: Knex.CreateTableBuilder) => {
+          table.integer('id').primary();
+          table.string('locked_by', 191).notNullable();
+          table.dateTime('locked_at').notNullable();
+          table.dateTime('heartbeat_at').nullable();
+        },
+      );
+    } catch (error) {
+      if (!(await knex.schema.hasTable(tableName))) {
+        throw error;
+      }
+    }
   }
 
-  try {
-    await knex.schema.createTable(
-      tableName,
-      (table: Knex.CreateTableBuilder) => {
-        table.integer('id').primary();
-        table.string('locked_by', 191).notNullable();
-        table.dateTime('locked_at').notNullable();
-      },
-    );
-  } catch (error) {
-    if (await knex.schema.hasTable(tableName)) {
-      return;
-    }
-    throw error;
+  // A table created before heartbeats existed is upgraded in place. The lock is
+  // what every migration runs inside, so it cannot be a migration itself.
+  if (!(await knex.schema.hasColumn(tableName, 'heartbeat_at'))) {
+    await knex.schema.alterTable(tableName, (table: Knex.AlterTableBuilder) => {
+      table.dateTime('heartbeat_at').nullable();
+    });
   }
+}
+
+/** Reads the lock without creating its table, for inspection and release. */
+export async function readTaskLockState(
+  connection: MigrationConnection,
+  tableName: string,
+  now: number = Date.now(),
+): Promise<TaskLockState | undefined> {
+  const knex = await connection.client<Knex>();
+  if (!(await knex.schema.hasTable(tableName))) return undefined;
+  const row = await readLockRow(knex, tableName);
+  return row ? describeLock(tableName, row, now) : undefined;
+}
+
+/**
+ * Deletes the lock row. An active lock is left alone unless `force` is set:
+ * releasing one a live run is holding lets a second run start beside it.
+ */
+export async function releaseTaskLock(
+  connection: MigrationConnection,
+  tableName: string,
+  options: { readonly force?: boolean } = {},
+): Promise<TaskLockReleaseResult> {
+  const lock = await readTaskLockState(connection, tableName);
+  if (!lock) return { released: false, lock: undefined, reason: 'not-held' };
+  if (!lock.expired && !options.force) {
+    return { released: false, lock, reason: 'active' };
+  }
+
+  const knex = await connection.client<Knex>();
+  await knex(tableName)
+    .where({ id: LOCK_ROW_ID, locked_by: lock.lockedBy })
+    .delete();
+  return { released: true, lock, reason: undefined };
 }
 
 async function acquireDatabaseLock(
@@ -130,15 +217,17 @@ async function acquireDatabaseLock(
   const startedAt = Date.now();
   let delayMs = INITIAL_RETRY_DELAY_MS;
   let attemptsWithoutHolder = 0;
-  let holder: TaskLockRow | undefined;
+  let takeovers = 0;
   let lastError: unknown;
 
   for (;;) {
     try {
+      const at = new Date();
       await knex(tableName).insert({
         id: LOCK_ROW_ID,
         locked_by: owner,
-        locked_at: new Date(),
+        locked_at: at,
+        heartbeat_at: at,
       });
       return;
     } catch (error) {
@@ -152,10 +241,20 @@ async function acquireDatabaseLock(
     const current = await readLockRow(knex, tableName);
     const elapsedMs = Date.now() - startedAt;
     if (current) {
-      holder = current;
+      const state = describeLock(tableName, current, Date.now());
       attemptsWithoutHolder = 0;
-      if (elapsedMs >= timeoutMs) {
-        throw new Error(lockHeldMessage(label, tableName, holder, elapsedMs), {
+      if (state.expired && takeovers < MAX_TAKEOVERS && elapsedMs < timeoutMs) {
+        // The holder stopped proving it was alive, which a hard kill is the
+        // usual reason for. Taking the row over is the only way forward that
+        // does not need a person to delete it. Retried immediately, and only
+        // so many times: a row that keeps coming back has a live writer.
+        takeovers += 1;
+        await takeOverExpiredLock(knex, tableName, state, options);
+        continue;
+      }
+
+      if (elapsedMs >= timeoutMs || takeovers >= MAX_TAKEOVERS) {
+        throw new Error(lockHeldMessage(label, tableName, state, elapsedMs), {
           cause: lastError,
         });
       }
@@ -175,6 +274,51 @@ async function acquireDatabaseLock(
     await sleep(Math.min(delayMs, MAX_RETRY_DELAY_MS, timeoutMs - elapsedMs));
     delayMs *= 2;
   }
+}
+
+async function takeOverExpiredLock(
+  knex: Knex,
+  tableName: string,
+  state: TaskLockState,
+  options: TaskLockDescriptor,
+): Promise<void> {
+  const staleSince = state.heartbeatAt ?? state.lockedAt;
+  // Scoped to the owner that was read, so a run that acquires it in between is
+  // not deleted by this one.
+  const deleted = await knex(tableName)
+    .where({ id: LOCK_ROW_ID, locked_by: state.lockedBy })
+    .delete();
+  if (!deleted) return;
+
+  options.onStaleLock?.({
+    tableName,
+    lockedBy: state.lockedBy,
+    heartbeatAt: state.heartbeatAt,
+    staleForMs: staleSince ? Date.now() - staleSince.getTime() : 0,
+  });
+}
+
+function startHeartbeat(
+  connection: MigrationConnection,
+  tableName: string,
+  owner: string,
+): NodeJS.Timeout {
+  const timer = setInterval(() => {
+    void (async () => {
+      try {
+        const knex = await connection.client<Knex>();
+        await knex(tableName)
+          .where({ id: LOCK_ROW_ID, locked_by: owner })
+          .update({ heartbeat_at: new Date() });
+      } catch {
+        // A failed beat is not a reason to abort the task: the next one may
+        // succeed, and a task that loses its lock fails on its own writes.
+      }
+    })();
+  }, TASK_LOCK_HEARTBEAT_INTERVAL_MS);
+  // The task itself keeps the process alive; the timer must not.
+  timer.unref();
+  return timer;
 }
 
 async function releaseDatabaseLock(
@@ -209,31 +353,50 @@ async function readLockRow(
   }
 }
 
+function describeLock(
+  tableName: string,
+  row: TaskLockRow,
+  now: number,
+): TaskLockState {
+  const heartbeatAt = toDate(row.heartbeat_at);
+  const lockedAt = toDate(row.locked_at);
+  const provenAt = heartbeatAt ?? lockedAt;
+  return {
+    tableName,
+    lockedBy: typeof row.locked_by === 'string' ? row.locked_by : 'unknown',
+    lockedAt,
+    heartbeatAt,
+    // An unreadable timestamp is treated as expired: a row nothing can date is
+    // one nothing can wait for either.
+    expired: provenAt ? now - provenAt.getTime() > TASK_LOCK_EXPIRY_MS : true,
+  };
+}
+
 function lockHeldMessage(
   label: string,
   tableName: string,
-  holder: TaskLockRow | undefined,
+  lock: TaskLockState,
   elapsedMs: number,
 ): string {
-  const by =
-    typeof holder?.locked_by === 'string' ? ` by "${holder.locked_by}"` : '';
-  const since = formatLockTimestamp(holder?.locked_at);
-  const waited = `Waited ${(elapsedMs / 1000).toFixed(1)}s for it to be released.`;
-  return `${label} lock "${tableName}" is already held${by}${since ? ` since ${since}` : ''}. ${waited} Another ${label.toLowerCase()} run holds it; if the process that held it was killed, delete the row with id ${LOCK_ROW_ID} from "${tableName}" before running it again.`;
+  const since = lock.lockedAt ? ` since ${lock.lockedAt.toISOString()}` : '';
+  const beat = lock.heartbeatAt
+    ? ` Last heartbeat ${lock.heartbeatAt.toISOString()}.`
+    : '';
+  return `${label} lock "${tableName}" is already held by "${lock.lockedBy}"${since}. Waited ${(elapsedMs / 1000).toFixed(1)}s for it to be released.${beat} Another ${label.toLowerCase()} run holds it; a run that stops beating is taken over automatically after ${TASK_LOCK_EXPIRY_MS / 1000}s, or release it now with "nocobase app db unlock".`;
 }
 
 /** Dialects return the timestamp as a Date, an epoch number, or a string. */
-function formatLockTimestamp(value: unknown): string | undefined {
+function toDate(value: unknown): Date | undefined {
   if (value instanceof Date) {
-    return Number.isFinite(value.getTime()) ? value.toISOString() : undefined;
+    return Number.isFinite(value.getTime()) ? value : undefined;
   }
   if (typeof value === 'number') {
     const date = new Date(value);
-    return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+    return Number.isFinite(date.getTime()) ? date : undefined;
   }
   if (typeof value === 'string') {
     const parsed = Date.parse(value);
-    return Number.isNaN(parsed) ? value : new Date(parsed).toISOString();
+    return Number.isNaN(parsed) ? undefined : new Date(parsed);
   }
   return undefined;
 }

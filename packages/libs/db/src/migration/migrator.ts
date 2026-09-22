@@ -20,6 +20,8 @@ import {
 } from './internal/history.js';
 import {
   DEFAULT_MIGRATION_LOCK_TABLE,
+  readTaskLockState,
+  releaseTaskLock,
   withMigrationLock,
 } from './internal/lock.js';
 import { loadMigrations } from './loader.js';
@@ -33,6 +35,10 @@ import type {
   MigrationRollbackOptions,
   MigrationRollbackResult,
   MigrationRunResult,
+  MigrationConnection,
+  TaskLockReleaseOptions,
+  TaskLockReleaseResult,
+  TaskLockState,
 } from './types.js';
 
 /** Executes and rolls back ordered migrations for one database connection. */
@@ -56,6 +62,17 @@ export interface Migrator {
    * getting one created.
    */
   history(): Promise<MigrationHistoryRecord[]>;
+  /**
+   * The lock as it stands, or undefined when no run holds it. Reads only, and
+   * creates no table.
+   */
+  lock(): Promise<TaskLockState | undefined>;
+  /**
+   * Deletes the lock row so a later run can proceed. An expired lock — one
+   * whose holder stopped sending heartbeats — is released; an active one needs
+   * `force`, because releasing it lets a second run start beside the first.
+   */
+  unlock(options?: TaskLockReleaseOptions): Promise<TaskLockReleaseResult>;
 }
 
 /** Creates a migration runner backed by the supplied database manager. */
@@ -103,6 +120,7 @@ class DefaultMigrator implements Migrator {
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
         acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureMigrationTable(
@@ -176,6 +194,30 @@ class DefaultMigrator implements Migrator {
     return readMigrationHistory(migrationConnection, tableName);
   }
 
+  async lock(): Promise<TaskLockState | undefined> {
+    return readTaskLockState(this.lockConnection(), this.lockTableName());
+  }
+
+  async unlock(
+    options: TaskLockReleaseOptions = {},
+  ): Promise<TaskLockReleaseResult> {
+    return releaseTaskLock(
+      this.lockConnection(),
+      this.lockTableName(),
+      options,
+    );
+  }
+
+  private lockConnection(): MigrationConnection {
+    return createMigrationConnection(
+      this.options.database.connection(this.options.connection),
+    );
+  }
+
+  private lockTableName(): string {
+    return this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE;
+  }
+
   async rollback(
     options: MigrationRollbackOptions = {},
   ): Promise<MigrationRollbackResult> {
@@ -202,6 +244,7 @@ class DefaultMigrator implements Migrator {
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
         acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureMigrationTable(
@@ -285,6 +328,7 @@ class DefaultMigrator implements Migrator {
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
         acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureMigrationTable(migrationConnection, tableName);

@@ -15,6 +15,9 @@ import {
   type MigrationSource,
   type MigrationRollbackOptions,
   type MigrationRollbackResult,
+  type StaleTaskLockTakeover,
+  type TaskLockReleaseOptions,
+  type TaskLockReleaseResult,
   type MigrationRunResult,
 } from '@nocobase/db';
 
@@ -27,6 +30,12 @@ export interface AppMigrator {
     options?: MigrationRollbackOptions,
   ): Promise<AppMigrationRollbackResult>;
   repair(options?: MigrationRepairOptions): Promise<AppMigrationRepairResult>;
+  unlock(options?: TaskLockReleaseOptions): Promise<AppTaskLockReleaseResult>;
+}
+
+/** A lock release, or the reason it was left alone. */
+export interface AppTaskLockReleaseResult extends TaskLockReleaseResult {
+  status: 'completed';
 }
 
 export type AppMigrationSkippedReason = 'missing-directory';
@@ -65,6 +74,8 @@ export interface CreateAppMigratorOptions {
   config: AppDatabaseMigrationConfig;
   connection?: string;
   sources?: readonly MigrationSource[];
+  /** Reported when a lock whose holder stopped beating is taken over. */
+  onStaleLock?: (takeover: StaleTaskLockTakeover) => void;
 }
 
 export function createAppMigrator(
@@ -105,6 +116,17 @@ export function createAppMigrator(
       );
     },
 
+    // Unlocking needs no migration directory: the lock exists whether or not
+    // this application owns migrations, because plugins and startup share it.
+    async unlock(
+      releaseOptions?: TaskLockReleaseOptions,
+    ): Promise<AppTaskLockReleaseResult> {
+      return {
+        status: 'completed',
+        ...(await createDatabaseMigrator(options).unlock(releaseOptions)),
+      };
+    },
+
     async repair(
       repairOptions?: MigrationRepairOptions,
     ): Promise<AppMigrationRepairResult> {
@@ -135,6 +157,7 @@ function createDatabaseMigratorOptions(
     lockTableName: options.config.lockTableName,
     extensions: options.config.extensions,
     onChecksumMismatch: options.config.onChecksumMismatch,
+    onStaleLock: options.onStaleLock,
   };
 
   if (options.sources) {
