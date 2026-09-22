@@ -7,6 +7,7 @@ import type {
 } from '../migration/checksum-history.js';
 import type { MigrationConnection } from '../migration/types.js';
 import type { QueryAdapter } from '../query/types.js';
+import type { Repository, RepositoryRecord } from '../repository/types.js';
 
 /** Controls whether an individual seed runs in a database transaction. */
 export type SeedTransactionMode = true | false | 'auto';
@@ -18,6 +19,25 @@ export type SeedConnection = MigrationConnection;
 export interface SeedContext {
   readonly config: DatabaseTaskConfig;
   readonly container: ServiceResolver;
+  /**
+   * The default tool for installation data, bound to the connection this seed
+   * runs on — the transaction's connection when it runs in one.
+   *
+   * Installation data is written in Collection terms: logical field names,
+   * relations and nested writes, with field encoding and timestamps handled
+   * for the dialect rather than by each seed.
+   */
+  repository<
+    TRecord extends object = RepositoryRecord,
+    TCreate extends object = Partial<TRecord>,
+    TUpdate extends object = Partial<TRecord>,
+  >(
+    collection: string,
+  ): Repository<TRecord, TCreate, TUpdate>;
+  /**
+   * Row-level access for what `repository` cannot express, such as a read
+   * against a physical table that backs no Collection.
+   */
   readonly query: QueryAdapter;
   readonly connection: SeedConnection;
 }

@@ -1,87 +1,12 @@
 # Migrations and seeds
 
-Migrations under `database/main/migrations/` are the application's schema history. Seeds under `database/main/seeds/` insert records the application requires to run.
+This page is the application side: where the directories live, how `pnpm db:apply` runs them, how additional connections configure their tasks, and what to do about checksum drift and compiled manifests.
 
-Migrations create structure. Seeds never do.
+How to write the files themselves — the migration and seed shape, the immutability and self-containment rules, the Collection Builder, and which of `builder`, `query` and `repository` a task context should reach for — belongs to the package that owns them. Read `.agents/skills/nocobase-db/SKILL.md` sections 2 and 3 before writing one, and run `pnpm skills:sync` if that file is missing.
+
+Migrations under `database/main/migrations/` are the application's schema history. Seeds under `database/main/seeds/` insert records the application requires to run. Migrations create structure. Seeds never do.
 
 `database/tsconfig.json` extends the server configuration so editor tooling and ESLint recognize migrations and seeds as Node source. Keep it in place when adding connection directories.
-
-## Writing a migration
-
-Name the file with a sortable timestamp prefix. The exported `name` must match the filename:
-
-```ts
-// database/main/migrations/202609020001_create_orders.ts
-import { defineMigration, type MigrationDefinition } from '@nocobase/db';
-
-const migration: MigrationDefinition = defineMigration({
-  name: '202609020001_create_orders',
-
-  async up({ builder }) {
-    await builder.createCollection('orders', (collection) => {
-      collection.increments('id');
-      collection.string('reference', { length: 64, nullable: false });
-      collection.string('status', { length: 32, nullable: false });
-      collection.datetime('createdAt', { nullable: false });
-      collection.unique('reference');
-      collection.index('status');
-    });
-  },
-
-  async down({ builder }) {
-    await builder.dropCollection('orders');
-  },
-});
-
-export default migration;
-```
-
-## A migration is immutable and self-contained
-
-**Spell out the exact structure.** Declare every field, index, and constraint in the migration itself.
-
-**Never import an evolving definition into a migration** — not a collection schema, not a model, not a registry, not a constant shared with runtime code. Those keep changing, and a migration that reads one silently means something different after it has already been applied. This is the rule that matters most on this page.
-
-**Once the branch that introduced a migration is merged, never edit it.** Check with `git log -- <file>` if you are unsure. Before the merge you may correct it in place; after, every change is a new migration. Never hard-code a previous checksum to make an edited migration look untouched.
-
-Write `down` as the explicit reverse in a safe dependency order. If an operation truly cannot be reversed, say so in the migration and in its test rather than writing a `down` that quietly does nothing.
-
-## Field builders
-
-`increments`, `integer`, `bigInt`, `string`, `text`, `boolean`, `decimal`, `datetime`, `json`, `blob`, `uuid`, and `native` for a dialect-specific type. Options include `nullable`, `length`, `defaultValue`, `precision`, and `scale`.
-
-Relations: `belongsTo`, `hasOne`, `hasMany`, `belongsToMany`. Constraints and indexes: `primary`, `unique`, `foreignKey`, `index`.
-
-## Changing an existing table
-
-Use explicit alter operations rather than dropping and recreating:
-
-```ts
-async up({ builder }) {
-  await builder.alterCollection('orders', (collection) => {
-    collection.string('customerReference', { length: 64, nullable: true });
-    collection.index('customerReference');
-  });
-},
-
-async down({ builder }) {
-  await builder.alterCollection('orders', (collection) => {
-    collection.dropField('customerReference');
-  });
-},
-```
-
-Dropping the field also drops the index on it, so `down` does not name that index. It could not anyway: index names are generated, not the string you passed to `index()`.
-
-Adding a non-nullable column to a populated table needs a default, or three migrations: add nullable, backfill, then tighten.
-
-## Logical names, physical names
-
-You write logical names and the naming strategy derives the physical ones: a `customerReference` field becomes a `customer_reference` column, and `index('status')` on `orders` becomes `idx_orders_status`. Field and collection names in migrations stay camelCase — the snake_case conversion is automatic.
-
-Runtime queries keep using the camelCase names, because the query builder converts them the same way — see [database and data access](database-and-data.md). The one place the physical name is required is a generated index or constraint name: `dropIndex` takes `idx_orders_status`, not `status`.
-
-Set `tableName` or `columnName` explicitly when you need to override the derivation.
 
 ## Running
 
@@ -90,6 +15,8 @@ pnpm db:apply
 ```
 
 This applies pending migrations and then pending seeds for `database.default`, including registered plugins, ordered by name across all sources. Both halves run only what is pending, so on an already-migrated database it applies seeds alone. The template defaults to `main`. Plugin migrations, seeds and runtime default reads/writes always use this same connection; changing `database.default` changes the application system database.
+
+Seeds are the second half of that run, so the structure a seed writes into must already exist from an earlier migration. Keep seed data fixed and reproducible — no current timestamps or random values in identifying fields — and never let a repeat run silently overwrite data a user has edited.
 
 ## Multiple connections
 
@@ -134,45 +61,12 @@ A checksum recorded when a migration or seed ran no longer matching its current 
 
 Repair records a decision; it does not make one. It is the right tool for drift you can explain — a reformat, a comment, a rebuild that produced different output. It is not a way to edit a merged migration: the applied database still has the old schema, and rewriting the checksum only hides that. Correct a merged migration with a new migration.
 
-## Seeds
-
-Seeds are for records the application cannot run without — a default configuration row, a fixed system record. Not demo data, and not test fixtures.
-
-```ts
-// database/main/seeds/202609020002_seed_order_statuses.ts
-import { defineSeed, type SeedDefinition } from '@nocobase/db';
-
-const seed: SeedDefinition = defineSeed({
-  name: '202609020002_seed_order_statuses',
-
-  async run({ query }) {
-    await query
-      .insertInto('orderStatuses')
-      .values([{ key: 'open', label: 'Open' }])
-      .execute();
-  },
-});
-
-export default seed;
-```
-
-Seeds run as the second half of `pnpm db:apply`. The structure a seed writes into must already exist from an earlier migration.
-
-Keep seed data fixed and reproducible — no current timestamps or random values in identifying fields. Decide explicitly what a repeat run does: skip on a unique key, or update deterministically. Never silently overwrite data a user has edited.
-
-## Testing
-
-Run migrations against a real test database and verify the resulting schema. A test that only imports the file proves nothing.
-
-Check that `up` produces the expected tables, columns, types, indexes, and constraints; that `down` cleans up when the migration is reversible; and that a seed behaves correctly on a first run, against existing data, and when run twice.
-
 ## Verify
 
-- The filename and exported `name` match, and the prefix sorts correctly.
-- The migration imports no evolving definition.
-- `down` reverses `up` in a safe order.
 - `pnpm db:apply` applies cleanly on an empty database and on an already-migrated one.
-- The physical schema matches what the migration declared.
+- The physical schema matches what the migration declared, checked against a real test database rather than the builder's return value.
+- Running the same seed twice changes nothing.
+- For the per-file checks — filename against exported `name`, immutability, `down` ordering — follow the `nocobase-db` Skill's own verification list.
 
 ## Compiled migration and seed manifests
 

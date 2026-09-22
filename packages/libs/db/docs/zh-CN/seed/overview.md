@@ -23,16 +23,17 @@ import { defineSeed } from '@nocobase/db';
 
 export default defineSeed({
   name: '202609030002_create_default_status',
-  async run({ query }) {
-    await query
-      .insertInto('orderStatuses')
-      .values({ code: 'draft', title: 'Draft' })
-      .execute();
+  async run({ repository }) {
+    await repository('orderStatuses').upsertOne({
+      filter: { code: 'draft' },
+      create: { code: 'draft', title: 'Draft' },
+      update: { title: 'Draft' },
+    });
   },
 });
 ```
 
-Seed Context 只包含 `query` 和 `connection`，没有 `builder`。
+Seed Context 只包含 `repository`、`query` 和 `connection`，没有 `builder`。安装数据默认走 `repository`，`query` 留给它表达不了的场景。
 
 ### 创建 Runner
 

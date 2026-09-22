@@ -50,6 +50,7 @@ NocoBase packages may publish Skills under `.agents/skills/`. Run `pnpm skills:s
 | File upload and metadata through Repository               | `@nocobase/app-plugin-file`           |
 | Translated text and language switching                    | `@nocobase/app-plugin-i18n`           |
 | User administration and application-owned role assignment | `@nocobase/app-plugin-users`          |
+| Reading or writing data, schema changes, migrations       | `@nocobase/db`                        |
 
 Read the relevant Skill before writing the feature, but treat this table as a map rather than an installed-package list. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 
@@ -88,6 +89,8 @@ Read the page for the task in front of you. Do not read all of them.
 | Understand behavior inherited from an official application template                 | [template variants](references/template-variants.md)             |
 
 A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.
+
+The three database pages above are the application side — where the files live, which commands run them, how connections are configured. The database API they are written against belongs to `@nocobase/db` and is documented by the `nocobase-db` Skill synchronized alongside this one. Read that Skill before writing a migration, a seed, or a query.
 
 For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
 
