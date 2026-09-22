@@ -134,6 +134,7 @@
     "directory": "packages/templates/app-template-hub"
   },
   "scripts": {
+    "postinstall": "pnpm skills:sync",
     "dev": "node --import tsx ./scripts/dev.mjs",
     "build": "node ./scripts/build.mjs",
     "start": "node ./scripts/start.mjs",
