@@ -6,9 +6,12 @@ import { existsSync } from 'node:fs';
 
 import {
   createSeeder,
+  type ChecksumMismatch,
   type CreateSeederOptions,
   type DatabaseManager,
   type Seeder,
+  type SeedRepairOptions,
+  type SeedRepairResult,
   type SeedRunResult,
   type SeedSource,
 } from '@nocobase/db';
@@ -17,6 +20,7 @@ import type { AppDatabaseSeedConfig } from './types.js';
 
 export interface AppSeeder {
   run(): Promise<AppSeedRunResult>;
+  repair(options?: SeedRepairOptions): Promise<AppSeedRepairResult>;
 }
 
 export type AppSeedSkippedReason = 'missing-directory';
@@ -26,6 +30,14 @@ export interface AppSeedRunResult {
   reason?: AppSeedSkippedReason;
   executed?: string[];
   skipped?: string[];
+  warnings?: ChecksumMismatch[];
+}
+
+export interface AppSeedRepairResult {
+  status: 'completed' | 'skipped';
+  reason?: AppSeedSkippedReason;
+  repaired?: ChecksumMismatch[];
+  dryRun?: boolean;
 }
 
 export interface CreateAppSeederOptions {
@@ -49,6 +61,21 @@ export function createAppSeeder(options: CreateAppSeederOptions): AppSeeder {
 
       return completedRunResult(await createDatabaseSeeder(options).run());
     },
+
+    async repair(
+      repairOptions?: SeedRepairOptions,
+    ): Promise<AppSeedRepairResult> {
+      if (!hasSeedDirectory(options)) {
+        return {
+          status: 'skipped',
+          reason: 'missing-directory',
+        };
+      }
+
+      return completedRepairResult(
+        await createDatabaseSeeder(options).repair(repairOptions),
+      );
+    },
   };
 }
 
@@ -67,6 +94,7 @@ function createDatabaseSeederOptions(
     tableName: options.config.tableName,
     lockTableName: options.config.lockTableName,
     extensions: options.config.extensions,
+    onChecksumMismatch: options.config.onChecksumMismatch,
   };
 
   if (options.sources) {
@@ -96,5 +124,14 @@ function completedRunResult(result: SeedRunResult): AppSeedRunResult {
     status: 'completed',
     executed: result.executed,
     skipped: result.skipped,
+    warnings: result.warnings,
+  };
+}
+
+function completedRepairResult(result: SeedRepairResult): AppSeedRepairResult {
+  return {
+    status: 'completed',
+    repaired: result.repaired,
+    dryRun: result.dryRun,
   };
 }

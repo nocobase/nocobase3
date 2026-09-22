@@ -9,7 +9,7 @@ description: 'Sign-in, permissions, approvals, notifications — what is ready-m
 This page is being written.
 :::
 
-These common requirements are already solved — install and they work. Every page follows the same shape: the problem it solves, how to install it, the most common usages, and what you may change.
+This section covers reusable application capabilities and supporting Skills that help an Agent implement business features. Each page explains the problem, installation, common usage, and customization. Refer to the individual page for the features it provides out of the box.
 
 ## In this section
 
@@ -20,6 +20,7 @@ These common requirements are already solved — install and they work. Every pa
 - [Scheduled tasks](./scheduler) — Define schedules in code and monitor, enable, or disable them in the UI.
 - [Notifications](./notification) — Email, in-app messages, and IM channels.
 - [Files](./file) — Uploads and attachments.
+- [Template printing](./template-print) — Use a Skill to guide the Agent in implementing contracts, orders, and reports.
 - [Language switching](./i18n) — Switching the interface language.
 - [Themes](./theme) — Change colors and fonts, and switch between light and dark.
 - [AI employees and knowledge base](./ai-employee) — AI features your finished application offers its own users.

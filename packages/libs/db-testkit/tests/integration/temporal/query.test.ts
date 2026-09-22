@@ -161,6 +161,32 @@ describeIntegrationDatabases('Temporal query values', (context) => {
     });
   });
 
+  it('writes a SQL expression to a temporal column instead of binding it as text', async () => {
+    await createCollection('temporalQueryExpression');
+
+    // An expression is SQL the builder composes, not a value. Reaching a dialect's `temporalBinding` would
+    // render it with `String(value)` and bind that text as a parameter; MySQL and OceanBase also apply
+    // `.replace('T', ' ')` to it, turning `CURRENT_TIMESTAMP` into the unparseable `CURREN _TIMESTAMP`.
+    await expect(
+      context.database
+        .query()
+        .insertInto('temporalQueryExpression')
+        .values({
+          id: 'expression',
+          local: context.db.raw('CURRENT_TIMESTAMP'),
+        })
+        .execute(),
+    ).resolves.toMatchObject({ insertedCount: 1 });
+
+    const row = await context.database
+      .query()
+      .selectFrom('temporalQueryExpression')
+      .select(['local'])
+      .where('id', '=', 'expression')
+      .executeTakeFirst();
+    expect(row?.local).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/);
+  });
+
   it('selects temporal fields through aliases and scalar subqueries', async () => {
     await context.builder.createCollection(
       'temporalQueryParents',

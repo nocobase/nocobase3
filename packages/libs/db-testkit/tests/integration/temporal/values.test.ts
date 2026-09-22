@@ -19,6 +19,39 @@ describeIntegrationDatabases('Temporal field values', (context) => {
     });
   }
 
+  it('accepts the SQL space separator through Repository and Query', async () => {
+    // `YYYY-MM-DD HH:mm:ss` is the literal every dialect spells, and reading has always returned it as the
+    // canonical `T` form. Writing it now normalizes the same way, so both writers store one shape.
+    await createCollection('temporalSpaceSeparator');
+    const repository = context.database.repository('temporalSpaceSeparator');
+    await repository.createOne({
+      values: {
+        id: 'repository',
+        local: '2026-09-06 09:30:00.120',
+        instant: '2026-09-06 01:30:00.120Z',
+      },
+    });
+    await context.database
+      .connection(context.spec.name)
+      .query.insertInto('temporalSpaceSeparator')
+      .values({
+        id: 'query',
+        local: '2026-09-06 09:30:00.120',
+        instant: '2026-09-06 01:30:00.120Z',
+      })
+      .execute();
+
+    await expect(
+      repository.findMany({
+        select: (select) => select.fields('id', 'local', 'instant'),
+        sort: (sort) => sort.field('id').asc(),
+      }),
+    ).resolves.toEqual([
+      { id: 'query', local: values.local, instant: values.instant },
+      { id: 'repository', local: values.local, instant: values.instant },
+    ]);
+  });
+
   it('creates and reads temporal values through Repository.createOne and findOne', async () => {
     await createCollection('temporalRepositoryCreate');
     const repository = context.database.repository('temporalRepositoryCreate');

@@ -1351,7 +1351,7 @@ function createEmbeddedPluginFixture(rootDir: string): void {
       ...packageName.split('/'),
     );
     mkdirSync(path.dirname(target), { recursive: true });
-    symlinkSync(packageRoot, target, 'dir');
+    symlinkSync(packageRoot, target, 'junction');
   }
 }
 

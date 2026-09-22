@@ -66,17 +66,21 @@ describeIntegrationDatabases('compiled database tasks', (context) => {
       );
     }
     await generateDatabaseManifests({ sourceDir, outputDir });
+    // These cases are about artifact and source identity rather than the
+    // mismatch policy, so they opt into failing on drift.
     const migrationOptions = {
       connection: context.spec.name,
       packageName: '@example/artifacts',
       tableName: context.table('artifactHistory'),
       lockTableName: context.table('artifactLock'),
+      onChecksumMismatch: 'error' as const,
     };
     const seedOptions = {
       connection: context.spec.name,
       packageName: '@example/artifacts',
       tableName: context.table('artifactSeedHistory'),
       lockTableName: context.table('artifactSeedLock'),
+      onChecksumMismatch: 'error' as const,
     };
     return {
       sourceDir,

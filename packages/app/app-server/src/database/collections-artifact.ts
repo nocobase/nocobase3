@@ -83,6 +83,13 @@ export interface AppCollectionsArtifactConnectionResult {
   /** Check mode only. */
   differences?: AppCollectionsArtifactDifference[];
   /**
+   * Check mode only. False when `directory` does not exist: nothing has been
+   * generated for this connection yet, which a reader has to tell apart from
+   * artifacts that have drifted, because every expected file is then reported
+   * `missing` and the two look alike.
+   */
+  directoryExists?: boolean;
+  /**
    * Collections whose `metadata.json` is this connection's metadata source
    * but which the database no longer has. The file is kept — it is the only
    * copy — and reported here for a person to decide about.
@@ -346,6 +353,7 @@ async function generateForConnection(
     return {
       ...base,
       status: differences.length === 0 ? 'completed' : 'stale',
+      directoryExists: disk.exists,
       differences,
       unchanged: countUnchanged(perCollection, differences),
     };
@@ -423,6 +431,8 @@ async function generateForConnection(
 }
 
 interface DirectoryState {
+  /** False when the directory itself is absent, as opposed to empty. */
+  readonly exists: boolean;
   /** Known-shaped files, relative path → content. */
   readonly files: Map<string, string>;
   /** Collection directories present on disk. */
@@ -445,7 +455,7 @@ function readDirectory(directory: string): DirectoryState {
     entries = readdirSync(directory, { withFileTypes: true });
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { files, collections, unexpected };
+      return { exists: false, files, collections, unexpected };
     }
     throw error;
   }
@@ -483,6 +493,7 @@ function readDirectory(directory: string): DirectoryState {
     }
   }
   return {
+    exists: true,
     files,
     collections: collections.sort(),
     unexpected: unexpected.sort(),

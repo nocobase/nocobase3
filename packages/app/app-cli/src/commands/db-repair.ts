@@ -2,24 +2,25 @@ import { AppCommand } from '../context.js';
 import { type Command, Flags } from '@oclif/core';
 import type { Interfaces } from '@oclif/core';
 
-import { runDatabaseCommand } from '../database-command.js';
+import { runDatabaseRepairCommand } from '../database-command.js';
 
-export default class AppMigrate extends AppCommand {
-  static override summary = 'Run pending database migrations.';
+export default class AppDbRepair extends AppCommand {
+  static override summary =
+    'Realign recorded migration and seed checksums with the current sources.';
   static override description =
-    'Runs the default connection unless --connection or --all is specified. Plugins belong to the default connection. Stops on the first failure.';
+    'Rewrites the checksum stored for each executed migration and seed whose source has since changed, clearing the drift that a run reports. It executes nothing and changes no schema or data. History records with no matching source are left untouched, because removing one would let the task run again. Preview with --dry-run before writing.';
 
   static override examples: Command.Example[] = [
+    '<%= config.bin %> <%= command.id %> --dry-run',
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --connection analytics --json',
-    '<%= config.bin %> <%= command.id %> --all',
+    '<%= config.bin %> <%= command.id %> --all --force --json',
   ];
 
   static override flags: {
     json: Interfaces.BooleanFlag<boolean>;
     all: Interfaces.BooleanFlag<boolean>;
     connection: Interfaces.OptionFlag<string | undefined>;
-    fresh: Interfaces.BooleanFlag<boolean>;
+    'dry-run': Interfaces.BooleanFlag<boolean>;
     force: Interfaces.BooleanFlag<boolean>;
   } = {
     json: Flags.boolean({
@@ -36,26 +37,25 @@ export default class AppMigrate extends AppCommand {
       exclusive: ['all'],
       description: 'Target a named managed connection, regardless of autoRun.',
     }),
-    fresh: Flags.boolean({
+    'dry-run': Flags.boolean({
       default: false,
-      description: 'Clear managed schema objects and rerun all migrations.',
+      description: 'Report what would be rewritten without writing anything.',
     }),
     force: Flags.boolean({
       default: false,
-      description: 'Skip the confirmation required by --fresh.',
+      description: 'Skip the confirmation prompt.',
     }),
   };
 
   public async run(): Promise<void> {
-    const { flags } = await this.parse(AppMigrate);
-    await runDatabaseCommand(
+    const { flags } = await this.parse(AppDbRepair);
+    await runDatabaseRepairCommand(
       {
         log: (message) => this.log(message),
         logJson: (value) => this.logJson(value),
         exit: (code) => this.exit(code),
       },
-      'migrations',
-      flags,
+      { ...flags, dryRun: flags['dry-run'] },
       this.appContext,
     );
   }

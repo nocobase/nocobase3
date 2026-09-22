@@ -2,7 +2,13 @@
 
 Pages are React components in `client/pages/`. Routes and menu entries are declared in `client/routes.ts`. For nested pages, Tabs and groups, also read [child routes](client-child-routes.md).
 
-When `client/pages/reference/examples/` exists, read the screen closest to the one you are about to build before writing it — a list starts from `orders`, a record editor from `product-form`, a settings screen from `team-settings`. Those pages are deliberately unrouted, so copy their structure into a page of your own rather than importing or routing them.
+When `client/pages/reference/` exists, open its `README.md` and read the screen closest to the one you are about to build before writing it — a list starts from `examples/orders`, a record editor from `examples/product-form`, a settings screen from `examples/team-settings`. Those pages are deliberately unrouted, so copy their structure into a page of your own rather than importing or routing them.
+
+## Disable a feature without deleting its pages
+
+Preserve the page modules, reusable components, and recoverable route definition when a user asks to disable or hide a feature. Prefer an application-owned availability setting that conditionally includes the route or gates it with an unavailable/redirect result, and use the same policy to hide links, buttons, and navigation. Use route APIs that actually exist; do not invent a `hidden` or `enabled` route option. Removing navigation alone leaves the URL reachable. Keep the definition in source so restoring availability does not require recreating the page.
+
+A browser setting is presentation, not enforcement. The server must independently reject the disabled operation, including direct API calls. Verify the hidden UI, direct URL behavior, and rejected API operation, and describe how to re-enable both sides. Do not remove page files, dependencies, or feature data unless the user requests permanent removal.
 
 ## Add a page
 

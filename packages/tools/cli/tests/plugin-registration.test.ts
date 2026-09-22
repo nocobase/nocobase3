@@ -60,7 +60,7 @@ async function createApp(
     await symlink(
       moduleDirectory(dependency),
       path.join(appRoot, 'node_modules', dependency),
-      'dir',
+      'junction',
     );
   }
   return appRoot;

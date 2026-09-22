@@ -8,7 +8,7 @@ import { decodeIntegerValue } from '../integer.js';
 import { decodeBooleanValue } from '../boolean.js';
 import { normalizeCharValue } from '../char.js';
 import { normalizeEnumValue } from '../enum.js';
-import { normalizeTemporalValue } from '../temporal.js';
+import { normalizeTemporalResultValue } from '../temporal.js';
 import type { RepositoryRecord } from '../types.js';
 
 type ScalarDecoder = (
@@ -18,11 +18,17 @@ type ScalarDecoder = (
 
 export type RowDecoder = (row: RepositoryRecord) => RepositoryRecord;
 
+/**
+ * Decode with the result normalizer, not the mutation validator.
+ *
+ * These are stored values, and the shapes storage produces are not the shapes a caller writes: a timestamp whose
+ * offset does not match the Field's logical type after a type change, more fractional digits than V1 keeps, a
+ * space instead of the `T`, or the epoch milliseconds knex left in SQLite columns before temporal Fields were
+ * normalized. Query has always decoded through `normalizeTemporalResultValue` for exactly that reason; Repository
+ * validated instead, so the same row read through the two APIs could differ or fail on one of them.
+ */
 const decodeTemporal: ScalarDecoder = (field, value) =>
-  normalizeTemporalValue(field, value, 'FIELD_CAPABILITY_NOT_SUPPORTED', [
-    'select',
-    field.name,
-  ]);
+  normalizeTemporalResultValue(field, value);
 
 /** Normalize logical scalar values, including driver-specific JSON payloads. */
 const scalarDecoders: ReadonlyMap<string, ScalarDecoder> = new Map([

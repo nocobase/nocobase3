@@ -4,8 +4,22 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const script = new URL('../../scripts/smoke-create-app.sh', import.meta.url);
+
+const fullRun = [
+  'skills:sync',
+  'test',
+  'dev',
+  'build',
+  'start',
+  'server:deps:retarget',
+];
+const otherTarget =
+  process.platform === 'linux' && process.arch === 'x64'
+    ? 'linux-arm64'
+    : 'linux-x64';
 
 // Exercise the real shell lifecycle with HTTP servers and controlled pnpm outcomes, without downloading an app for
 // every failure case. The CI action separately runs the same script with published packages and the real pnpm.
@@ -13,6 +27,7 @@ const fakePnpm = `#!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
+const { execFileSync } = require('node:child_process');
 const command = process.argv[2];
 const scenario = process.env.SMOKE_SCENARIO;
 const state = process.env.SMOKE_STATE;
@@ -21,6 +36,9 @@ if (command === 'config') {
   console.log(process.env.PNPM_CONFIG_REGISTRY);
 } else if (command === 'create') {
   fs.mkdirSync(path.join(process.argv[4], 'node_modules'), { recursive: true });
+  // create-app writes the runtime configuration and keeps the template's example beside it.
+  fs.writeFileSync(path.join(process.argv[4], 'config.example.yml'), 'auth:\\n  secret: replace-me\\n');
+  fs.writeFileSync(path.join(process.argv[4], 'config.yml'), 'auth:\\n  secret: generated\\n');
   if (process.argv.includes('--json')) console.log(JSON.stringify({ status: 'success', dependenciesInstalled: true }));
 } else {
   if (process.cwd() !== path.join(state, 'crm')) throw new Error('Not in generated application');
@@ -35,7 +53,44 @@ if (command === 'config') {
     try { process.kill(devPid, 0); alive = true; } catch {}
     if (alive) throw new Error('Dev is still running during build');
     if (scenario === 'build-fails') process.exit(9);
+    if (!process.argv.includes('--tar')) throw new Error('Build must pack the deployment archive');
+    // A deployment tree: the entry the archive is started from, the manifest the retarget records into, and a
+    // bundled native module carrying binaries for several platforms.
+    const prebuilds = 'dist/node_modules/bundled-driver/prebuilds';
+    fs.mkdirSync('dist/server', { recursive: true });
+    fs.mkdirSync(prebuilds, { recursive: true });
+    for (const platform of ['darwin-arm64', 'linux-x64', 'linux-arm64', 'linuxmusl-arm64']) {
+      fs.writeFileSync(path.join(prebuilds, platform + '.node'), platform);
+    }
+    fs.writeFileSync('dist/package.json', JSON.stringify({
+      name: 'crm-dist',
+      nocobase: { buildTarget: { platform: process.platform, arch: process.arch, nodeMajor: 24, nodeAbi: 137 } },
+    }));
+    fs.copyFileSync(process.env.SMOKE_STANDALONE_SOURCE, 'dist/server/standalone.js');
     fs.writeFileSync('built', 'yes');
+    if (scenario !== 'archive-missing') {
+      fs.mkdirSync('storage/exports', { recursive: true });
+      const entries = ['config.example.yml', 'dist'];
+      if (scenario === 'archive-contains-config') entries.push('config.yml');
+      execFileSync('tar', ['-czf', 'storage/exports/dist.tar.gz', ...entries]);
+    }
+  } else if (command === 'server:deps:retarget') {
+    const target = process.argv[process.argv.indexOf('--target') + 1];
+    const nodeVersion = process.argv[process.argv.indexOf('--node-version') + 1];
+    if (!target || nodeVersion !== '24') throw new Error('Retarget must name a target and Node 24');
+    if (target === process.platform + '-' + process.arch) throw new Error('Retarget must name another platform');
+    fs.writeFileSync(path.join(state, 'retarget-target'), target);
+    if (scenario === 'retarget-fails') process.exit(11);
+    const [platform, arch] = target.split('-');
+    const manifest = JSON.parse(fs.readFileSync('dist/package.json', 'utf8'));
+    manifest.nocobase.buildTarget = { platform, arch, libc: 'glibc', nodeMajor: 24, nodeAbi: 137 };
+    fs.writeFileSync('dist/package.json', JSON.stringify(manifest));
+    const prebuilds = 'dist/node_modules/bundled-driver/prebuilds';
+    if (scenario !== 'retarget-leaves-binaries') {
+      for (const file of fs.readdirSync(prebuilds)) {
+        if (!file.includes(target)) fs.rmSync(path.join(prebuilds, file));
+      }
+    }
   } else {
     if (process.env.NOCOBASE_STRICT_STARTUP !== 'true') throw new Error('Strict startup must be enabled');
     if (command === 'start' && !fs.existsSync('built')) throw new Error('Start ran before build');
@@ -72,6 +127,37 @@ if (command === 'config') {
 }
 `;
 
+// What the archive's dist/server/standalone.js does when a server starts it with node: refuses to run anywhere but
+// the extracted deployment directory, with production settings and the configuration the guide places beside dist.
+const fakeStandalone = `const fs = require('node:fs');
+const http = require('node:http');
+const path = require('node:path');
+const scenario = process.env.SMOKE_SCENARIO;
+const state = process.env.SMOKE_STATE;
+const basePath = process.env.SMOKE_BASE_PATH;
+const deployRoot = path.resolve(__dirname, '..', '..');
+if (deployRoot !== path.join(state, 'deploy')) throw new Error('Standalone entry ran outside the deployment directory: ' + deployRoot);
+if (process.env.NODE_ENV !== 'production') throw new Error('NODE_ENV must be production');
+if (process.env.NOCOBASE_STRICT_STARTUP !== 'true') throw new Error('Strict startup must be enabled');
+if (process.env.APP_CONFIG_FILE !== path.join(deployRoot, 'config.yml')) throw new Error('APP_CONFIG_FILE must name the deployed config.yml');
+if (!fs.existsSync(process.env.APP_CONFIG_FILE)) throw new Error('The deployed config.yml is missing');
+if (!fs.existsSync(path.join(deployRoot, 'storage'))) throw new Error('The deployment has no storage directory');
+if (scenario === 'standalone-exits') process.exit(7);
+const server = http.createServer((req, res) => {
+  if (req.url === basePath + '/api/healthz') {
+    res.end(JSON.stringify({ ok: true }));
+  } else if (req.url === basePath + '/') {
+    res.end('<html>Deployed app</html>');
+  } else {
+    res.statusCode = 404;
+    res.end('Not found');
+  }
+});
+server.listen(Number(process.env.APP_SERVER_PORT), '127.0.0.1', () => {
+  fs.writeFileSync(path.join(state, 'standalone.pid'), String(process.pid));
+});
+`;
+
 // Hold production readiness until the progress loop has encountered the same log-read failure as CI. Other tail
 // calls still use the real command, including the registry configuration checks before the application starts.
 const unavailableStartLogTail = `#!/usr/bin/env bash
@@ -93,6 +179,8 @@ async function runSmoke(t, scenario, basePath = '/main', extraArgs = []) {
   for (const tool of ['pnpm', 'npm']) {
     fs.writeFileSync(path.join(bin, tool), fakePnpm, { mode: 0o755 });
   }
+  const standaloneSource = path.join(bin, 'standalone.js');
+  fs.writeFileSync(standaloneSource, fakeStandalone);
   if (scenario === 'start-log-unavailable') {
     fs.writeFileSync(path.join(bin, 'tail'), unavailableStartLogTail, {
       mode: 0o755,
@@ -101,7 +189,7 @@ async function runSmoke(t, scenario, basePath = '/main', extraArgs = []) {
   const child = spawn(
     'bash',
     [
-      script.pathname,
+      fileURLToPath(script),
       '--registry',
       'http://localhost:4873',
       '--create-app-version',
@@ -121,6 +209,7 @@ async function runSmoke(t, scenario, basePath = '/main', extraArgs = []) {
         SMOKE_SCENARIO: scenario,
         SMOKE_STATE: workdir,
         SMOKE_BASE_PATH: basePath,
+        SMOKE_STANDALONE_SOURCE: standaloneSource,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 30_000,
@@ -133,7 +222,7 @@ async function runSmoke(t, scenario, basePath = '/main', extraArgs = []) {
     child.on('error', reject);
     child.on('close', resolve);
   });
-  for (const phase of ['dev', 'start']) {
+  for (const phase of ['dev', 'start', 'standalone']) {
     const pidFile = path.join(workdir, `${phase}.pid`);
     if (fs.existsSync(pidFile)) {
       const pid = Number(fs.readFileSync(pidFile, 'utf8'));
@@ -152,6 +241,10 @@ async function runSmoke(t, scenario, basePath = '/main', extraArgs = []) {
           .trim()
           .split('\n')
       : [],
+    retargetTarget: fs.existsSync(path.join(workdir, 'retarget-target'))
+      ? fs.readFileSync(path.join(workdir, 'retarget-target'), 'utf8')
+      : undefined,
+    deployed: fs.existsSync(path.join(workdir, 'deploy', 'config.yml')),
   };
 }
 
@@ -159,30 +252,32 @@ for (const basePath of ['', '/main', '/nested/app']) {
   test(`builds and starts the generated application at ${basePath || '/'}`, async (t) => {
     const result = await runSmoke(t, 'success', basePath);
     assert.equal(result.code, 0, result.output);
-    assert.deepEqual(result.commands, [
-      'skills:sync',
-      'test',
-      'dev',
-      'build',
-      'start',
-    ]);
-    assert.match(result.output, /passed test, dev, build, and start/u);
+    assert.deepEqual(result.commands, fullRun);
+    assert.match(
+      result.output,
+      /passed test, dev, build, start, archive deployment, and retarget/u,
+    );
     assert.ok(result.output.includes(`${basePath}/api/healthz`));
+    // The archive was extracted and started as a deployment, and the tree was retargeted for a platform this is not.
+    assert.equal(result.deployed, true, result.output);
+    assert.match(result.output, /started by the deployed archive is serving/u);
+    assert.equal(result.retargetTarget, otherTarget);
+    assert.ok(
+      result.output.includes(`dist/package.json records ${otherTarget}`),
+      result.output,
+    );
   });
 }
 
 test('keeps waiting for production readiness when the progress log is unavailable', async (t) => {
   const result = await runSmoke(t, 'start-log-unavailable');
   assert.equal(result.code, 0, result.output);
-  assert.deepEqual(result.commands, [
-    'skills:sync',
-    'test',
-    'dev',
-    'build',
-    'start',
-  ]);
+  assert.deepEqual(result.commands, fullRun);
   assert.match(result.output, /tail: cannot open .*start\.log/u);
-  assert.match(result.output, /passed test, dev, build, and start/u);
+  assert.match(
+    result.output,
+    /passed test, dev, build, start, archive deployment, and retarget/u,
+  );
 });
 
 for (const [scenario, commands, error] of [
@@ -192,6 +287,31 @@ for (const [scenario, commands, error] of [
   ['start-exits', ['dev', 'build', 'start'], 'pnpm start exited'],
   ['unhealthy', ['dev', 'build', 'start'], 'pnpm start did not become ready'],
   ['homepage-fails', ['dev', 'build', 'start'], 'did not serve its homepage'],
+  [
+    'archive-missing',
+    ['dev', 'build', 'start'],
+    'did not produce storage/exports/dist.tar.gz',
+  ],
+  [
+    'archive-contains-config',
+    ['dev', 'build', 'start'],
+    'contains runtime configuration or data',
+  ],
+  [
+    'standalone-exits',
+    ['dev', 'build', 'start'],
+    'the deployed archive exited before the application became ready',
+  ],
+  [
+    'retarget-fails',
+    ['dev', 'build', 'start', 'server:deps:retarget'],
+    'Retargeting native modules for',
+  ],
+  [
+    'retarget-leaves-binaries',
+    ['dev', 'build', 'start', 'server:deps:retarget'],
+    'Binaries for other platforms remain',
+  ],
 ]) {
   test(`fails and cleans up when ${scenario}`, async (t) => {
     const result = await runSmoke(t, scenario);
@@ -221,11 +341,5 @@ test('verifies JSON creation with a selected dialect', async (t) => {
     '--json',
   ]);
   assert.equal(result.code, 0, result.output);
-  assert.deepEqual(result.commands, [
-    'skills:sync',
-    'test',
-    'dev',
-    'build',
-    'start',
-  ]);
+  assert.deepEqual(result.commands, fullRun);
 });

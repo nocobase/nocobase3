@@ -137,6 +137,7 @@ await connection.transaction(async (trxConnection) => {
 
 - `builder` 来自 `trxConnection.builder`。
 - `query` 来自 `trxConnection.query`。
+- `repository()` 来自 `trxConnection.repository()`，Migration 失败时它写入的数据随事务回滚。
 - `connection.client()` 绑定到 `trxConnection.client()`。
 - 执行记录写入和 `migration.up()` 在同一个事务里。
 

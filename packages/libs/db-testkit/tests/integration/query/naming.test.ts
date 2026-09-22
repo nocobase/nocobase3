@@ -14,7 +14,7 @@ describeIntegrationDatabases('query naming', (context) => {
       .insertInto('orderItems')
       .values({
         orderNo: 'SO-001',
-        createdAt: '2026-08-13 00:00:00',
+        createdAt: '2026-08-13T00:00:00',
       })
       .execute();
 
@@ -55,7 +55,7 @@ describeIntegrationDatabases('query naming', (context) => {
       .insertInto('orderItems')
       .values({
         orderNo: 'SO-001',
-        createdAt: '2026-08-13 00:00:00',
+        createdAt: '2026-08-13T00:00:00',
       })
       .execute();
 
@@ -106,7 +106,7 @@ describeIntegrationDatabases('query naming', (context) => {
       .insertInto('orderItems')
       .values({
         orderNo: 'SO-001',
-        createdAt: '2026-08-13 00:00:00',
+        createdAt: '2026-08-13T00:00:00',
       })
       .execute();
 
@@ -150,7 +150,7 @@ describeIntegrationDatabases('query naming', (context) => {
       .insertInto('orderItems')
       .values({
         orderNo: 'SO-001',
-        createdAt: '2026-08-13 00:00:00',
+        createdAt: '2026-08-13T00:00:00',
       })
       .execute();
 

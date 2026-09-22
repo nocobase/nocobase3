@@ -11,8 +11,14 @@ export function createTaskServiceResolver(
 ): ServiceResolver {
   function assertAllowed<T>(token: ServiceToken<T>): void {
     if (!allowedTokens.has(token)) {
+      // Name the supported path: a migration or seed that resolved the
+      // DatabaseManager here would get the application's connection rather
+      // than its own, and in a transaction would write outside it.
       throw new Error(
-        `Service "${token.name}" is not allowed in migrations or seeds.`,
+        `Service "${token.name}" is not allowed in migrations or seeds. ` +
+          'Read and write data through the context\'s "repository" and ' +
+          '"query", which are bound to the connection the task runs on, ' +
+          'and change structure through a migration\'s "builder".',
       );
     }
   }

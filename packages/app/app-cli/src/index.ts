@@ -3,8 +3,9 @@ import type { AppCommandContext } from './context.js';
 import { AppCommand } from './context.js';
 import { createDefaultCommandContext } from './default-context.js';
 import Info from './commands/info.js';
-import Migrate from './commands/migrate.js';
-import Seed from './commands/seed.js';
+import DbApply from './commands/db-apply.js';
+import DbReset from './commands/db-reset.js';
+import DbRepair from './commands/db-repair.js';
 import Collections from './commands/collections-generate.js';
 import I18n from './commands/i18n-check.js';
 import Upload from './commands/upload.js';
@@ -20,8 +21,9 @@ export function createAppCommands(options: AppCommandsOptions): AppCliCommands {
   const context = createDefaultCommandContext(options);
   const commands: Record<string, typeof AppCommand> = {
     info: Info,
-    migrate: Migrate,
-    seed: Seed,
+    'db:apply': DbApply,
+    'db:reset': DbReset,
+    'db:repair': DbRepair,
     'collections:generate': Collections,
     'i18n:check': I18n,
     ...(options.publishing ? { upload: Upload, deploy: Deploy } : {}),

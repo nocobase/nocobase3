@@ -12,7 +12,7 @@ e2e/                Tests needing a real server, real auth, or a real database
 
 `vitest.config.ts` discovers `tests/**/*.test.{ts,tsx}` automatically. Theme token tests compile the real CSS; browser checks still need to verify computed styles, typography, spacing and focus.
 
-Templates ship their tests into generated applications. Keep them runnable from the application root after scaffolding: read application identity from `package.json`, resolve application paths relative to the test file, and import dependencies through their published package exports. Do not depend on a monorepo checkout, a fixed template directory name, or a particular pnpm store layout. Run `pnpm test` in the generated application as well as in the template when changing these contracts.
+Templates ship their tests into generated applications. Keep them runnable from the application root after scaffolding: read application identity from `package.json`, resolve application paths relative to the test file, and import dependencies through their published package exports. Do not depend on a monorepo checkout, a fixed template directory name, or a particular pnpm store layout. Run the affected test files in the generated application as well as in the template when changing these contracts.
 
 ## What to test, by change
 
@@ -61,20 +61,27 @@ Run against a real test database. A test that only imports the migration file pr
 
 ## Before finishing
 
-```bash
-pnpm typecheck
-pnpm test
-pnpm lint
-pnpm build
-```
+Scope every check to the changed behavior and its affected consumers. Select relevant checks rather than running a fixed full-application checklist after each edit:
 
-`pnpm check` runs all of these plus formatting.
+| Check               | Scope                                                                                                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Formatting and lint | Pass the changed files to Prettier or ESLint using the project's configuration; include other files only when shared formatting or lint configuration affects them                      |
+| Type checking       | Use the smallest owning TypeScript project configuration that covers the change; preserve project references and compiler settings rather than passing individual source files to `tsc` |
+| Tests               | Use `pnpm exec vitest run <affected-test-files>` with actual relevant paths; include integration or end-to-end tests for affected behavior across boundaries                            |
+| Build               | Build affected packages or supported application targets when emitted output, bundling, or deployment behavior needs verification                                                       |
+| Runtime             | Exercise only the affected workflows, including their authentication and permission boundaries when relevant                                                                            |
 
-Then verify the actual behavior. Green commands mean the code compiles and the assertions you wrote hold — not that the feature works:
+In a workspace, use `pnpm --filter <affected-package> <script>` for each affected package and affected consumer. For standalone applications, inspect available scripts and project configurations before selecting commands. Do not invent selectors that a command does not support. If a necessary check only supports a whole project or package, use that smallest supported scope and explain the limitation.
+
+Expand scope only when shared code, dependencies, configuration, or a failure gives a concrete reason, or when the user explicitly requests it. Full-application verification is appropriate when the impact actually spans the application. Once checks pass, repeat them only after further relevant changes or to resolve failures. `pnpm check` combines full checks, so use it only when all of its work is warranted by the affected scope.
+
+Add focused regression coverage when behavior changes. Documentation-only changes need formatting and link checks for the changed documents, not type checking, runtime tests, or builds.
+
+Then verify the affected behavior, selecting only the applicable steps below. Green commands mean the code compiles and the assertions you wrote hold — not that the feature works:
 
 - Open the page and use it, in both light and dark themes.
 - Confirm the endpoint's responses for signed-out, unpermitted, and permitted callers.
-- Confirm `pnpm migrate` applies cleanly.
+- Confirm `pnpm db:apply` applies cleanly.
 - Switch language and confirm the text changes.
 
 ## Reporting
