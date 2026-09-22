@@ -12,6 +12,7 @@ What an App can add to the AI Employee runtime, what is already there, and the `
 - [Skills](#skills)
 - [Tool and Skill display i18n](#tool-and-skill-display-i18n)
 - [Built-in employee, tools, and skills](#built-in-employee-tools-and-skills)
+- [Making a collection visible to the data tools](#making-a-collection-visible-to-the-data-tools)
 - [Three ways to reach outside the App](#three-ways-to-reach-outside-the-app)
 - [LLM services (`config.yml`)](#llm-services-configyml)
 - [MCP servers (`config.yml`)](#mcp-servers-configyml)
@@ -274,6 +275,20 @@ Nineteen built-in tools:
 Three built-in Skills, all `GENERAL`, so every employee can load them: `data-metadata` (discover connections, collections, fields, relations), `data-query` (query records, counts, aggregates), `business-analysis-report` (build a report from freshly queried data).
 
 Activate a `SPECIFIED` built-in by naming it in an employee's `tools` or a Skill's `tools`. Never import a built-in's implementation module.
+
+## Making a collection visible to the data tools
+
+The seven data tools and the two data Skills read nothing the App has not opted into, and the opt-in is not the collection itself. Three things must all hold for one collection, and all three are the App's to arrange:
+
+1. It is registered for authorization under the **two-part** name `<connection>.<collection>` — `authz.db.collections.add({ name: 'main.leads', title: 'Leads' })`. A registration under a bare `leads` works for the rest of the application and is skipped here: the catalog keeps only names that split into exactly two dot-separated parts, and the first part must match a configured connection name exactly. There is no default-connection alias.
+2. Its registration keeps the `read` action. The default action set includes it; a narrowed `actions` list can drop it.
+3. The current user's permission set actually grants read on it, producing a conditional decision with fields and a scope.
+
+Miss any of them and nothing raises. Discovery simply omits that collection, so the assistant answers "I could not find that table" while the table plainly exists and the application's own pages read it fine. A direct query against it is rejected instead of hidden, which is the faster way to tell the two apart.
+
+Field visibility follows the same rule one level down: a query may touch only the intersection of registered fields, the authorization decision's output fields, and supported scalar metadata — so a field absent from the grant is missing rather than forbidden. Relations are one-hop and same-connection, and both sides are authorized independently.
+
+So when a new business collection is meant to be queryable by an assistant, registering it for authorization is part of building it, not a later permissions chore. Verify it by asking the assistant to list collections before writing anything that depends on the answer.
 
 ## Three ways to reach outside the App
 

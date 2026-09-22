@@ -32,6 +32,7 @@ Import a token from the package that created it. `createServiceToken` is keyed b
 2. `config.yml` declares at least one usable `ai.llmServices` entry. Nothing works without it, and its models must be real — see [capabilities.md § LLM services](references/capabilities.md#llm-services-configyml).
 3. Frontend work needs `client/extensions/nocobase-ai/index.ts` to exist. If it does not, install the Registry item first — see [chat-surfaces.md § Install the extension](references/chat-surfaces.md#install-the-extension).
 4. Chat attachments need a storage disk decided deliberately — see [capabilities.md § Attachment storage](references/capabilities.md#attachment-storage-configyml).
+5. The built-in data tools see only collections registered for authorization as `<connection>.<collection>`, and they hide what they cannot see instead of failing. A collection registered under its bare name is invisible to them — see [capabilities.md § Making a collection visible to the data tools](references/capabilities.md#making-a-collection-visible-to-the-data-tools).
 
 ## What to build for what the user asked
 
@@ -50,6 +51,8 @@ Import a token from the package that created it. `createServiceToken` is keyed b
 | The assistant to read an image or PDF the user dropped in | nothing — enable attachments and configure a disk | chat surface props, `config.yml`      |
 
 Reach for an App-defined tool before concluding a capability is missing: a backend tool may declare any container token as a dependency, so anything an App service can do, a tool can do. Do not copy a built-in employee, tool, or skill into the App to modify it.
+
+The last two rows of that table are alternatives more often than they look. When the values come from something the model interpreted — a screenshot, a pasted note, a scraped page — prefer filling a visible form the user submits over writing the record directly. Extraction is where a model is least reliable and the fields are exactly what a person can check at a glance, and the built-in form filler never submits, so review is structural rather than a habit. Write directly when the values are already structured, when no one is watching, or when the user asked for it.
 
 ## Shortest end-to-end path
 
