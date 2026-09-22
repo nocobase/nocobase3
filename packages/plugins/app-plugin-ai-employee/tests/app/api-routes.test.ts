@@ -181,7 +181,7 @@ describe('AI action routers', () => {
       error: 'key is required',
     });
   });
-  it('keeps a model the client did not send as a resolved reference out of the turn', async () => {
+  it('keeps a model the client did not send as a resolved reference out of the state', async () => {
     const app = new Hono();
     const { deps, services } = createTestAIEmployeeFixture();
     services.ready = async () => undefined;
@@ -220,9 +220,9 @@ describe('AI action routers', () => {
 
     // `AgentState.model` promises every tool a resolved reference, so a partial
     // one is dropped rather than carried, and extras do not ride along.
-    expect(sendMessages.mock.calls[0][0].turn.model).toBeUndefined();
-    expect(sendMessages.mock.calls[1][0].turn.model).toBeUndefined();
-    expect(sendMessages.mock.calls[2][0].turn.model).toEqual({
+    expect(sendMessages.mock.calls[0][0].state.model).toBeUndefined();
+    expect(sendMessages.mock.calls[1][0].state.model).toBeUndefined();
+    expect(sendMessages.mock.calls[2][0].state.model).toEqual({
       llmService: 'openai',
       model: 'gpt-5',
     });

@@ -7,8 +7,15 @@ export interface AgentToolCallResult {
   result: unknown;
 }
 
+/**
+ * What one execution is, as every backend tool of it sees it. It is built where
+ * the request is parsed and travels unchanged, except that the agent's factory
+ * resolves `model` against the employee's policy and a dispatcher replaces
+ * `sessionId` for a sub-agent it starts.
+ */
 export interface AgentState {
-  sessionId?: string;
+  /** The conversation this execution belongs to. Always known. */
+  sessionId: string;
   messageId?: string;
   /**
    * Messages an agent may hand to a sub-agent it dispatches. They are neither

@@ -31,8 +31,7 @@ import { NativeCollectionSaver } from '../checkpoint/index.js';
 import type { ConversationPersistence } from '../contracts/persistence.js';
 import { DatabaseConversationPersistence } from '../conversation/persistence/database.js';
 import { ConversationProvider } from '../conversation/conversation-provider.js';
-import { createAgentContext, toAgentState } from '../context.js';
-import type { ConversationTurn } from '../contracts.js';
+import { createAgentContext } from '../context.js';
 import type { Actor, ModelRef, Translate } from '../../types.js';
 import {
   repositoryFactoryToken,
@@ -51,8 +50,11 @@ export const agentServiceFactoryToken: ServiceToken<AgentServiceFactory> =
 
 export interface CreateEmployeeOptions {
   readonly username: string;
-  /** The conversation this agent runs in. A new session is started when absent. */
-  readonly sessionId?: string;
+  /**
+   * What this execution is, as every tool of the agent will see it. The
+   * session it names is the conversation the agent runs in.
+   */
+  readonly state: AgentState;
   readonly from?: 'main-agent' | 'sub-agent';
   readonly actor?: Actor;
   /**
@@ -62,8 +64,6 @@ export interface CreateEmployeeOptions {
    */
   readonly systemPrompt?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
-  /** This turn's runtime data. The only source of the agent's state. */
-  readonly turn?: ConversationTurn;
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
 }
@@ -79,8 +79,6 @@ export interface CreateAgentOptions {
   readonly actor?: Actor;
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
-  /** This turn's runtime data. The only source of the agent's state. */
-  readonly turn?: ConversationTurn;
 }
 
 export class AgentServiceFactory {
@@ -115,24 +113,27 @@ export class AgentServiceFactory {
   ): Promise<AgentService> {
     const repositories = this.repositoryFactory;
     const managers = this.managerFactory;
-    const sessionId = options.sessionId ?? randomUUID();
+    const sessionId = options.state.sessionId;
     const actor = options.actor ?? { id: 0, roles: [], isRoot: true };
     const employee = await managers.aiEmployeesManager.getEmployee(
       options.username,
     );
     if (!employee)
       throw new Error(`AI employee "${options.username}" not found`);
-    // The model is resolved here and nowhere else. It reaches the state a tool
-    // reads and the LLM the agent runs on from this one call.
-    const resolvedModel = await managers.aiEmployeesManager.resolveModel(
-      employee,
-      options.turn?.model,
-    );
+    // The model is resolved here and nowhere else, so the state a tool reads
+    // and the LLM the agent runs on come from this one call. It is the only
+    // field of the state this factory replaces.
     const agentContext = this.createContext(
       actor,
       options.translate,
       options.getHeader,
-      toAgentState(options.turn, { sessionId, model: resolvedModel }),
+      {
+        ...options.state,
+        model: await managers.aiEmployeesManager.resolveModel(
+          employee,
+          options.state.model,
+        ),
+      },
     );
     const contextOptions = {
       employee,
@@ -157,11 +158,11 @@ export class AgentServiceFactory {
       employees: repositories.aiEmployees,
       toolMessages: repositories.aiToolMessages,
       usersAiEmployees: repositories.usersAiEmployees,
-      frontendTools: options.turn?.frontendTools,
+      frontendTools: options.state.frontendTools,
       getHeader: options.getHeader,
       systemMessage: options.systemPrompt,
       skillSettings: options.skillSettings,
-      webSearch: options.turn?.webSearch,
+      webSearch: options.state.webSearch,
     };
     const context = createAIEmployeeAgentContextProvider(contextOptions);
     const persistence = new DatabaseConversationPersistence({
@@ -264,7 +265,7 @@ export class AgentServiceFactory {
         options.actor ?? { id: 0, roles: [], isRoot: true },
         options.translate,
         options.getHeader,
-        toAgentState(options.turn, { sessionId, model }),
+        { sessionId, model },
       ),
       model,
       provider: resolved.provider,
@@ -294,9 +295,9 @@ export class AgentServiceFactory {
 
   private createContext(
     actor: Actor,
-    translate?: Translate,
-    getHeader?: (name: string) => string | undefined,
-    state?: Partial<AgentState>,
+    translate: Translate | undefined,
+    getHeader: ((name: string) => string | undefined) | undefined,
+    state: AgentState,
   ): AgentContext {
     return createAgentContext({
       actor,

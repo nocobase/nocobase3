@@ -84,16 +84,10 @@ export default defineTools({
       },
       {
         actor: ctx.actor,
-        // The sub-agent inherits this agent's turn; its own session and model
-        // are decided when the sub-agent is created. The handoff messages ride
-        // on the task, which is what reaches the sub-agent's conversation, so
-        // they are not repeated here.
-        turn: {
-          frontendTools: ctx.state.frontendTools,
-          toolCallResults: ctx.state.toolCallResults,
-          timezone: ctx.state.timezone,
-          important: ctx.state.important,
-        },
+        // The sub-agent inherits this execution whole. What the dispatch
+        // decided for it — its session, and the model and handover this task
+        // names — replaces the inherited values in the dispatcher.
+        state: ctx.state,
         translate: ctx.translate,
         getHeader: ctx.getHeader,
       },

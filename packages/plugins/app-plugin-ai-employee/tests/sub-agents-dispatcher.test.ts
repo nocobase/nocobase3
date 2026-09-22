@@ -51,7 +51,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
     expect(getUserDecisions).toHaveBeenCalledWith('sub-message');
   });
 
-  it('passes the inherited turn to sub-agent tools', async () => {
+  it('passes the inherited state to sub-agent tools', async () => {
     const invoke = vi.fn().mockResolvedValue({
       message: {
         role: 'assistant',
@@ -105,32 +105,28 @@ describe('SubAgentsDispatcher direct dependencies', () => {
         },
         {
           actor: { id: 'user-1', roles: ['member'], isRoot: false },
-          turn: { timezone: 'Asia/Shanghai' },
+          state: { sessionId: 'main-session', timezone: 'Asia/Shanghai' },
         },
       ),
     ).resolves.toBe('Search result');
 
-    // The sub-agent inherits the parent's turn but runs in its own session,
-    // and the factory resolves its model. Nothing of this rides the request,
-    // and the turn never carries a session for the agent's own to contradict.
+    // The sub-agent inherits the dispatching agent's state and runs it in its
+    // own session: the session is the one change this dispatcher makes.
     expect(createAIEmployee).toHaveBeenCalledWith(
       expect.objectContaining({
         actor: { id: 'user-1', roles: ['member'], isRoot: false },
-        sessionId: 'sub-session',
         from: 'sub-agent',
-        turn: expect.objectContaining({
+        state: expect.objectContaining({
+          sessionId: 'sub-session',
           timezone: 'Asia/Shanghai',
           model: resolvedModel,
           webSearch: true,
         }),
       }),
     );
-    expect(createAIEmployee.mock.calls[0][0].turn).not.toHaveProperty(
-      'sessionId',
-    );
-    expect(createAIEmployee.mock.calls[0][0].turn.handoffMessages).toHaveLength(
-      1,
-    );
+    expect(
+      createAIEmployee.mock.calls[0][0].state.handoffMessages,
+    ).toHaveLength(1);
     const request = invoke.mock.calls[0][0];
     expect(request).not.toHaveProperty('model');
     expect(request).not.toHaveProperty('context');

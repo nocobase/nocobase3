@@ -5,12 +5,8 @@ import { loggingToken } from '@nocobase/app-server/logging';
 import { databaseManagerToken } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 
-import type { AgentContext } from '@nocobase/ai-employee';
-import {
-  createAgentContext,
-  toAgentState,
-} from '../../server/agent/context.js';
-import type { ConversationTurn } from '../../server/agent/contracts.js';
+import type { AgentContext, AgentState } from '@nocobase/ai-employee';
+import { createAgentContext } from '../../server/agent/context.js';
 import type { Actor } from '../../server/types.js';
 import {
   ManagerFactory,
@@ -42,10 +38,10 @@ export function createTestActor(overrides: Partial<Actor> = {}): Actor {
   };
 }
 
-export function createTestConversationTurn(
-  overrides: ConversationTurn = {},
-): ConversationTurn {
-  return { ...overrides };
+export function createTestAgentState(
+  overrides: Partial<AgentState> = {},
+): AgentState {
+  return { sessionId: 'test-session', ...overrides };
 }
 
 export class TestAIResourceRegistrar extends AIResourceRegistrar {
@@ -98,17 +94,15 @@ export function createTestAIEmployeeFixture() {
 
 export function createTestAgentContext({
   actor = createTestActor(),
-  turn = createTestConversationTurn(),
-  decided,
+  state = createTestAgentState(),
 }: {
   actor?: Actor;
-  turn?: ConversationTurn;
-  decided?: Parameters<typeof toAgentState>[1];
+  state?: AgentState;
 } = {}): AgentContext {
   const fixture = createTestAIEmployeeFixture();
   return createAgentContext({
     actor,
-    state: toAgentState(turn, decided),
+    state,
     logger: fixture.deps.logging.getLogger('ai-employee-test'),
   });
 }

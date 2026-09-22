@@ -9,44 +9,14 @@
 
 import type { AgentContext, AgentState } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
-import type { ConversationTurn } from './contracts.js';
-import type { Actor, ModelRef, Translate } from '../types.js';
+import type { Actor, Translate } from '../types.js';
 
 export interface CreateAgentContextOptions {
   readonly actor: Actor;
-  readonly state?: Partial<AgentState>;
+  readonly state: AgentState;
   readonly logger: Logger;
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
-}
-
-/**
- * Folds one turn into the agent state a tool sees. The session and the model
- * are not the turn's to give: an agent runs in the session its caller named,
- * and only the employee's policy may pick its model, so both arrive here
- * already decided. The result is handed to `createAgentContext` once, when the
- * AgentService is created; no later request may replace it.
- */
-export function toAgentState(
-  turn?: ConversationTurn,
-  decided?: { sessionId?: string; model?: ModelRef },
-): Partial<AgentState> {
-  const model = decided?.model ?? turn?.model;
-  return {
-    sessionId: decided?.sessionId,
-    messageId: turn?.messageId,
-    handoffMessages: turn?.handoffMessages
-      ? [...turn.handoffMessages]
-      : undefined,
-    model: model ? { ...model } : undefined,
-    webSearch: turn?.webSearch,
-    important: turn?.important,
-    frontendTools: turn?.frontendTools ? [...turn.frontendTools] : undefined,
-    toolCallResults: turn?.toolCallResults
-      ? [...turn.toolCallResults]
-      : undefined,
-    timezone: turn?.timezone,
-  };
 }
 
 /**
@@ -58,7 +28,7 @@ export function toAgentState(
  */
 export function createAgentContext({
   actor,
-  state: stateOverrides,
+  state,
   logger,
   translate,
   getHeader,
@@ -71,7 +41,7 @@ export function createAgentContext({
       isRoot: actor.isRoot,
       locale: actor.locale,
     },
-    state: { ...stateOverrides },
+    state: { ...state },
     logger,
     translate,
     getHeader,

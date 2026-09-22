@@ -7,13 +7,11 @@
  */
 
 import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization/server';
-import type {
-  ConversationTransport,
-  ConversationTurn,
-} from '../agent/contracts.js';
+import type { ConversationTransport } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
 import type {
   AgentContext,
+  AgentState,
   AIEmployeeEntity,
   AIMessageInput,
   UserDecision,
@@ -48,7 +46,7 @@ import type {
   AIToolMessageEntity,
 } from '../repository/index.js';
 import { AgentSSEAdapter } from '../agent/transport/sse.js';
-import { createAgentContext, toAgentState } from '../agent/context.js';
+import { createAgentContext } from '../agent/context.js';
 import { EXECUTE_FRONTEND_TOOL_NAME } from '../agent/context/ai-employee/common/frontend-tool-contracts.js';
 import { findCurrentFrontendTool } from '../agent/context/ai-employee/frontend-tools.js';
 import type { CreateEmployeeOptions } from '../agent/service/agent-service-factory.js';
@@ -328,20 +326,18 @@ export class AIConversationService {
   }
   private createAgentContext({
     actor,
-    sessionId,
-    turn,
+    state,
     translate,
     getHeader,
   }: {
     actor: Actor;
-    sessionId: string;
-    turn?: ConversationTurn;
+    state: AgentState;
     translate?: Translate;
     getHeader?: (name: string) => string | undefined;
   }): AgentContext {
     return createAgentContext({
       actor,
-      state: toAgentState(turn, { sessionId }),
+      state,
       logger: this.logger,
       translate,
       getHeader,
@@ -798,22 +794,21 @@ export class AIConversationService {
 
   async sendMessages({
     actor,
-    sessionId,
     aiEmployee,
     messages: incomingMessages,
     stream = true,
-    turn,
+    state,
     transport,
   }: {
     actor: Actor;
-    sessionId: string;
     aiEmployee: string;
     messages?: readonly AIMessageInput[];
     stream?: boolean;
-    turn: ConversationTurn;
+    state: AgentState;
     transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
+    const { sessionId } = state;
     const { translate, getHeader } = transport;
 
     try {
@@ -878,7 +873,7 @@ export class AIConversationService {
           this.snowflake,
           sessionId,
           messages,
-          turn.messageId,
+          state.messageId,
         );
         throw new ResourceActionError(
           400,
@@ -894,14 +889,13 @@ export class AIConversationService {
       // because whether it was interrupted decides what the agent's state
       // carries. Both calls are repository work and need no agent.
       const interrupted =
-        !turn.messageId &&
+        !state.messageId &&
         (await this.subAgentsDispatcher.isInterrupted(sessionId));
       const userDecisions = interrupted
         ? await this.subAgentsDispatcher.reject(sessionId, actor.id)
         : undefined;
       const agent = await this.agentServiceFactory.createAIEmployee({
         username: employee.username,
-        sessionId,
         from: 'main-agent',
         actor,
         systemPrompt,
@@ -909,8 +903,8 @@ export class AIConversationService {
         // These messages answer the sub-agent's pending question, so they are
         // handed to it rather than sent to this model. Every other turn leaves
         // the field empty.
-        turn: {
-          ...turn,
+        state: {
+          ...state,
           handoffMessages: userDecisions ? messages : undefined,
         },
         translate,
@@ -931,7 +925,7 @@ export class AIConversationService {
         }
         return await runInvoke({ userDecisions });
       }
-      if (!turn.messageId && !interrupted) {
+      if (!state.messageId && !interrupted) {
         const toolMessages = await agent.cancelToolCall();
         if (toolMessages?.length) {
           await prependCancelledToolContinuation(
@@ -945,7 +939,7 @@ export class AIConversationService {
 
       const request: AgentRequest = {
         userMessages: messages,
-        messageId: turn.messageId,
+        messageId: state.messageId,
       };
       if (stream) {
         await runStream(request);
@@ -1069,18 +1063,17 @@ export class AIConversationService {
 
   async resendMessages({
     actor,
-    sessionId,
     stream = true,
-    turn,
+    state,
     transport,
   }: {
     actor: Actor;
-    sessionId: string;
     stream?: boolean;
-    turn: ConversationTurn;
+    state: AgentState;
     transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
+    const { sessionId } = state;
     const { translate, getHeader } = transport;
 
     try {
@@ -1102,7 +1095,7 @@ export class AIConversationService {
       }
 
       const resendMessages: AIMessageInput[] = [];
-      let { messageId } = turn;
+      let { messageId } = state;
       if (messageId) {
         const message = await this.repositories.aiMessages.findOne({
           filter: { sessionId, messageId },
@@ -1144,12 +1137,11 @@ export class AIConversationService {
       }
       const agent = await this.agentServiceFactory.createAIEmployee({
         username: employee.username,
-        sessionId,
         from: 'main-agent',
         actor,
         systemPrompt,
         skillSettings,
-        turn: { ...turn, messageId },
+        state: { ...state, messageId },
         translate,
         getHeader,
       });
@@ -1180,27 +1172,25 @@ export class AIConversationService {
 
   async updateUserDecision({
     actor,
-    sessionId,
     messageId,
     toolCallId,
     userDecision,
-    turn,
+    state,
     transport,
   }: {
     actor: Actor;
-    sessionId: string;
     messageId: string;
     toolCallId: string;
     userDecision: UserDecision;
-    turn: ConversationTurn;
+    state: AgentState;
     transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
+    const { sessionId } = state;
     const { translate, getHeader } = transport;
     const agentContext = this.createAgentContext({
       actor,
-      sessionId,
-      turn,
+      state,
       translate,
       getHeader,
     });
@@ -1315,16 +1305,15 @@ export class AIConversationService {
 
   async resumeToolCall({
     actor,
-    sessionId,
-    turn,
+    state,
     transport,
   }: {
     actor: Actor;
-    sessionId: string;
-    turn: ConversationTurn;
+    state: AgentState;
     transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
+    const { sessionId } = state;
     const { translate, getHeader } = transport;
     const target = streamTarget(transport);
     try {
@@ -1347,9 +1336,9 @@ export class AIConversationService {
         return;
       }
 
-      const message: AIMessageEntity | null = turn.messageId
+      const message: AIMessageEntity | null = state.messageId
         ? await this.repositories.aiMessages.findOne({
-            filter: { sessionId, messageId: turn.messageId },
+            filter: { sessionId, messageId: state.messageId },
           })
         : await this.repositories.aiMessages.findOne({
             filter: { sessionId },
@@ -1380,12 +1369,11 @@ export class AIConversationService {
       }
       const agent = await this.agentServiceFactory.createAIEmployee({
         username: employee.username,
-        sessionId,
         from: 'main-agent',
         actor,
         systemPrompt,
         skillSettings,
-        turn: { ...turn, messageId: message.messageId },
+        state: { ...state, messageId: message.messageId },
         translate,
         getHeader,
       });

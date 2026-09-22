@@ -60,11 +60,11 @@ describe('AIConversationService tool context', () => {
 
     await service.sendMessages({
       actor: { id: 'user-1', roles: ['member'], isRoot: false },
-      sessionId: 'session-1',
       aiEmployee: 'researcher',
       messages,
       stream: false,
-      turn: {
+      state: {
+        sessionId: 'session-1',
         model: resolvedModel,
         webSearch: true,
         timezone: 'Asia/Shanghai',
@@ -72,14 +72,14 @@ describe('AIConversationService tool context', () => {
       transport: { translate: (key) => key },
     });
 
-    // The tool context is fixed when the AgentService is created, so the turn
+    // The tool context is fixed when the AgentService is created, so the state
     // reaches the factory whole and the request carries none of it. No
     // sub-agent was interrupted, so nothing is handed over.
     expect(createAIEmployee).toHaveBeenCalledWith(
       expect.objectContaining({
-        sessionId: 'session-1',
         from: 'main-agent',
-        turn: {
+        state: {
+          sessionId: 'session-1',
           model: resolvedModel,
           webSearch: true,
           timezone: 'Asia/Shanghai',
@@ -153,11 +153,10 @@ describe('AIConversationService tool context', () => {
 
     await service.sendMessages({
       actor: { id: 'user-1', roles: ['member'], isRoot: false },
-      sessionId: 'session-1',
       aiEmployee: 'researcher',
       messages,
       stream: false,
-      turn: {},
+      state: { sessionId: 'session-1' },
       transport: { translate: (key) => key },
     });
 
@@ -166,7 +165,9 @@ describe('AIConversationService tool context', () => {
     // agent is resumed with the decisions alone.
     expect(reject).toHaveBeenCalledWith('session-1', 'user-1');
     expect(createAIEmployee).toHaveBeenCalledWith(
-      expect.objectContaining({ turn: { handoffMessages: messages } }),
+      expect.objectContaining({
+        state: { sessionId: 'session-1', handoffMessages: messages },
+      }),
     );
     expect(invoke).toHaveBeenCalledWith({ userDecisions: decisions });
     // The interrupted turn resolves the pending call through the decisions, so

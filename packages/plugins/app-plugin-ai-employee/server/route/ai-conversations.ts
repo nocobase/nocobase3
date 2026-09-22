@@ -1,9 +1,7 @@
 import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Context as HonoContext, Hono } from 'hono';
-import type {
-  ConversationTransport,
-  ConversationTurn,
-} from '../agent/contracts.js';
+import type { AgentState } from '@nocobase/ai-employee';
+import type { ConversationTransport } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
 import { identityTranslate, ResourceActionError } from '../types.js';
 import { requireConversationReadAccess } from '../service/utils.js';
@@ -126,11 +124,10 @@ export function createAIConversationsRouter(
       (input, target) =>
         services.conversationService.sendMessages({
           actor: context.var.currentUser,
-          sessionId: requiredString(input.sessionId, 'sessionId'),
           aiEmployee: input.aiEmployee,
           messages: Array.isArray(input.messages) ? input.messages : undefined,
           stream: input.stream !== false,
-          turn: parseTurn(context, input),
+          state: parseAgentState(context, input),
           transport: transport(context, target),
         }),
     ),
@@ -143,9 +140,8 @@ export function createAIConversationsRouter(
       (input, target) =>
         services.conversationService.resendMessages({
           actor: context.var.currentUser,
-          sessionId: requiredString(input.sessionId, 'sessionId'),
           stream: input.stream !== false,
-          turn: parseTurn(context, input),
+          state: parseAgentState(context, input),
           transport: transport(context, target),
         }),
     ),
@@ -155,11 +151,10 @@ export function createAIConversationsRouter(
     const input = await jsonObject(context);
     const result = await services.conversationService.updateUserDecision({
       actor: context.var.currentUser,
-      sessionId: requiredString(input.sessionId, 'sessionId'),
       messageId: input.messageId,
       toolCallId: input.toolCallId,
       userDecision: input.userDecision,
-      turn: parseTurn(context, input),
+      state: parseAgentState(context, input),
       transport: transport(context),
     });
     return context.json(result as never);
@@ -172,8 +167,7 @@ export function createAIConversationsRouter(
       (input, target) =>
         services.conversationService.resumeToolCall({
           actor: context.var.currentUser,
-          sessionId: requiredString(input.sessionId, 'sessionId'),
-          turn: parseTurn(context, input),
+          state: parseAgentState(context, input),
           transport: transport(context, target),
         }),
     ),
@@ -257,15 +251,17 @@ function paginationQuery(
 }
 
 /**
- * The one place a conversation request body becomes a turn. Everything
- * downstream — the agent's state, the tools it runs — reads this result rather
- * than the body, so no field is parsed twice.
+ * The one place a conversation request body becomes agent state. What this
+ * returns is what every tool of the execution will see, so nothing downstream
+ * reads the body again: the factory replaces the model it resolved, a
+ * dispatcher replaces the session of a sub-agent it starts, and that is all.
  */
-function parseTurn(
+function parseAgentState(
   context: HonoContext,
   input: Record<string, any>,
-): ConversationTurn {
+): AgentState {
   return {
+    sessionId: requiredString(input.sessionId, 'sessionId'),
     messageId:
       typeof input.messageId === 'string'
         ? input.messageId

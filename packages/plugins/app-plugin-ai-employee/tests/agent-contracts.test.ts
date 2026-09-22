@@ -155,40 +155,48 @@ describe('fixed AgentService contracts', () => {
     expect(providers).toContain('this.state().model');
     expect(providers).toContain('getLLMService(model)');
     expect(factory).toContain('managers.aiEmployeesManager.resolveModel(');
-    expect(factory).toContain('toAgentState(options.turn, { sessionId,');
     expect(conversationService).not.toContain('resolveModel(');
     expect(conversationService).not.toContain('const agentRequest = {');
     expect(subAgentDispatcher).not.toContain('resolveModel(');
   });
 
-  it('keeps the turn, the transport and the request apart', () => {
+  it('carries one AgentState from the route, replaced only where decided', () => {
     const contracts = read('agent/contracts.ts');
+    const context = read('agent/context.ts');
     const factory = read('agent/service/agent-service-factory.ts');
     const types = read('agent/types.ts');
     const route = read('route/ai-conversations.ts');
-    const conversationService = read('service/ai-conversation-service.ts');
+    const dispatcher = read('manager/sub-agents/dispatcher.ts');
 
-    // One turn type, parsed in one place, and a transport that stops at the
-    // conversation service.
-    expect(contracts).toContain('export interface ConversationTurn');
-    expect(contracts).toContain('export interface ConversationTransport');
-    expect(contracts).not.toContain('ConversationExecution');
-    expect(route).toContain('function parseTurn(');
+    // One state type travels end to end. There is no second request-shaped
+    // type beside it and nothing folds one into the other.
+    expect(contracts).not.toContain('ConversationTurn');
+    expect(context).not.toContain('toAgentState');
+    expect(route).toContain('function parseAgentState(');
+    expect(route).not.toContain('function parseTurn(');
     expect(route).not.toContain('function execution(');
-    expect(conversationService).not.toContain('streamTarget?');
 
-    // A turn names no session: the conversation an agent runs in is decided by
-    // whoever creates it, so there is one `sessionId` and no fallback chain.
-    expect(contracts).not.toMatch(
-      /interface ConversationTurn \{[\s\S]*?sessionId/,
+    // Each field it replaces is replaced in exactly one place: the model where
+    // the employee's policy is, the session where a sub-agent is started.
+    expect(factory).toContain('options.state.sessionId');
+    // A fixed agent still names its own session; an employee agent takes the
+    // one its state already carries.
+    const employeeOptions = factory.slice(
+      factory.indexOf('export interface CreateEmployeeOptions'),
+      factory.indexOf('export interface CreateAgentOptions'),
     );
-    expect(factory).toContain('options.sessionId ?? randomUUID()');
-    expect(read('agent/context.ts')).toContain(
-      'sessionId: decided?.sessionId,',
+    expect(employeeOptions).toContain('readonly state: AgentState;');
+    expect(employeeOptions).not.toContain('sessionId');
+    expect(dispatcher).toMatch(
+      /state: \{\s*\.\.\.options\.state,\s*sessionId,/,
     );
 
-    // The agent takes the turn whole; nothing re-states its fields.
-    expect(factory).not.toContain('readonly state?:');
+    // The transport stops at the conversation service, and a request carries
+    // no turn data of its own.
+    expect(contracts).toContain('export interface ConversationTransport');
+    expect(read('service/ai-conversation-service.ts')).not.toContain(
+      'streamTarget?',
+    );
     expect(factory).not.toContain('readonly execution?:');
     expect(factory).not.toContain('readonly webSearch?:');
     expect(factory).not.toContain('readonly frontendTools?:');
@@ -203,7 +211,9 @@ describe('fixed AgentService contracts', () => {
     expect(read('agent/context/ai-employee/context.ts')).not.toContain(
       'private readonly tools:',
     );
-    expect(conversationService).not.toMatch(/options\?\.tools/);
+    expect(read('service/ai-conversation-service.ts')).not.toMatch(
+      /options\?\.tools/,
+    );
   });
 
   it('keeps AI chat conversation ownership in the conversation provider', () => {

@@ -13,10 +13,7 @@ import type { DatabaseConnection, DatabaseManager } from '@nocobase/db';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 import type { Actor, Translate } from '../../types.js';
-import type {
-  AgentUserDecisionResult,
-  ConversationTurn,
-} from '../../agent/contracts.js';
+import type { AgentUserDecisionResult } from '../../agent/contracts.js';
 import type { AIFileEntity } from '../../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../../repository/file-storage/ai-file-metadata-repository.js';
 import type { RepositoryFactory } from '../../factory/repository-factory.js';
@@ -34,6 +31,7 @@ import type { AgentInvokeResult } from '../../agent/types.js';
 import { agentServiceFactoryToken } from '../../agent/service/agent-service-factory.js';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
+  AgentState,
   SubAgentConversationMetadata,
   AIMessageInput,
 } from '@nocobase/ai-employee';
@@ -52,8 +50,8 @@ export type SubAgentTask = {
 
 export interface SubAgentExecutionOptions {
   readonly actor: Actor;
-  /** The turn the dispatching agent is serving, inherited by the sub-agent. */
-  readonly turn?: ConversationTurn;
+  /** The dispatching agent's own state, inherited by the sub-agent. */
+  readonly state: AgentState;
   readonly translate?: Translate;
   readonly getHeader?: (name: string) => string | undefined;
 }
@@ -260,22 +258,23 @@ export class SubAgentsDispatcher {
     const agentServiceFactory = this.container.resolve(
       agentServiceFactoryToken,
     );
-    // The sub-agent runs in its own session on the parent's turn: the session
-    // is its own, everything the parent gathered is inherited, and the target
-    // employee's own model policy still applies to the model asked for.
+    // The sub-agent inherits the dispatching agent's state and runs it in its
+    // own session. Replacing that session is the only change this dispatcher
+    // makes to the state; the target employee's own policy still decides the
+    // model, in the factory.
     const agent = await agentServiceFactory.createAIEmployee({
       username: employee.username,
       actor: options.actor,
       from: 'sub-agent',
       translate: options.translate,
       getHeader: options.getHeader,
-      sessionId,
       skillSettings,
-      turn: {
-        ...options.turn,
+      state: {
+        ...options.state,
+        sessionId,
         handoffMessages,
         model,
-        webSearch: webSearch ?? options.turn?.webSearch,
+        webSearch: webSearch ?? options.state.webSearch,
       },
     });
     const lastMessage = await this.repositories.aiMessages.findOne({
