@@ -2943,15 +2943,34 @@ function encodeQueryBoolean(
     : normalizeBooleanValue(field, value);
 }
 
+/**
+ * Bind a temporal value the way Repository does, so both writers store the same thing.
+ *
+ * Strings used to reach the driver untouched, which let `2026-09-06T09:30:00Z` land in a `datetime` column
+ * verbatim on SQLite — accepted by the write and then unreadable, since no valid local value carries an offset.
+ * Every other dialect took it too and silently dropped the offset. Normalizing here converts it instead, and
+ * `temporalBinding` keeps receiving the canonical string each dialect's formatting is written against.
+ *
+ * A `Knex.Raw`, a column reference or a subquery is SQL the builder composes rather than a value, and returning
+ * it untouched is the only correct thing to do with it. Passing one to `temporalBinding` is not: every dialect's
+ * strategy starts with `String(value)`, which renders the object as SQL text and then binds that text as a
+ * parameter, so `now()` arrives as the literal `'now()'`. MySQL and OceanBase go further and apply
+ * `.replace('T', ' ')` to it, which rewrites the first `T` in the SQL itself — `CURRENT_TIMESTAMP(3)` becomes
+ * `CURREN _TIMESTAMP(3)`.
+ *
+ * Primitives other than a string keep reaching `temporalBinding` unvalidated, which is what they did before.
+ * A number is the shape legacy rows hold, and rejecting it here is a separate decision from this one.
+ */
 function encodeQueryTemporal(
   client: Knex,
   field: FieldDefinition,
   value: unknown,
 ): unknown {
   if (value === null) return null;
+  if (typeof value === 'object' && !(value instanceof Date)) return value;
   const temporalBinding =
     getDatabaseDriverRuntime(client)?.repository?.temporalBinding;
-  if (!(value instanceof Date)) {
+  if (!(value instanceof Date) && typeof value !== 'string') {
     return temporalBinding ? temporalBinding({ client, field, value }) : value;
   }
   const normalized = normalizeTemporalValue(field, value);

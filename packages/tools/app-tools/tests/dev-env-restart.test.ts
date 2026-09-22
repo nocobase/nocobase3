@@ -24,7 +24,7 @@ async function waitFor(check: () => Promise<boolean>) {
   throw new Error('Timed out waiting for development supervisor');
 }
 
-async function fixture(strict = false) {
+async function fixture(strict = false, wrapper = false) {
   const root = await mkdtemp(path.join(tmpdir(), 'dev-env-restart-'));
   directories.push(root);
   const log = path.join(root, 'events.jsonl');
@@ -54,7 +54,12 @@ async function fixture(strict = false) {
   );
   const child = spawn(
     process.execPath,
-    ['--import', createRequire(import.meta.url).resolve('tsx'), launcher],
+    wrapper
+      ? [
+          '-e',
+          `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(`require('node:child_process').spawn(process.execPath, ${JSON.stringify(['--import', createRequire(import.meta.url).resolve('tsx'), launcher])}, { stdio: 'inherit' });`)}], { stdio: 'inherit' }); setInterval(() => {}, 1000);`,
+        ]
+      : ['--import', createRequire(import.meta.url).resolve('tsx'), launcher],
     {
       cwd: path.resolve(import.meta.dirname, '..'),
       env: {
@@ -65,6 +70,8 @@ async function fixture(strict = false) {
       stdio: ['ignore', 'pipe', 'pipe'],
     },
   );
+  child.stdout?.on('data', (chunk) => process.stdout.write(chunk));
+  child.stderr?.on('data', (chunk) => process.stderr.write(chunk));
   processes.push(child);
   const events = async (): Promise<
     Array<{
@@ -86,7 +93,7 @@ async function fixture(strict = false) {
 
 afterEach(async () => {
   for (const child of processes.splice(0)) {
-    if (child.exitCode === null) {
+    if (child.exitCode === null && child.signalCode === null) {
       const closed = new Promise<void>((resolve) =>
         child.once('close', () => resolve()),
       );
@@ -140,3 +147,74 @@ it('preserves an unexpected development process failure instead of restarting it
   expect(await closed).toBe(7);
   expect(await events()).toHaveLength(1);
 });
+
+// These tests use real descendants: killing only the direct child would leave
+// their listening sockets open even after the supervisor reports completion.
+it.skipIf(process.platform === 'win32')(
+  'reaps an uncooperative descendant even when SIGINT is forwarded twice',
+  async () => {
+    const { root, child, events } = await fixture();
+    const worker = (await events())[0].pid;
+    const descendantFile = path.join(root, 'descendant.json');
+    // Replace the worker for the next environment-triggered run.
+    await writeFile(
+      path.join(root, 'child.mjs'),
+      `
+    import { spawn } from 'node:child_process';
+    spawn(process.execPath, ['-e', ${JSON.stringify(`
+      const net = require('node:net');
+      const fs = require('node:fs');
+      process.on('SIGTERM', () => {});
+      const server = net.createServer();
+      server.listen(0, '127.0.0.1', () => fs.writeFileSync(process.argv[1], JSON.stringify({ pid: process.pid, port: server.address().port })));
+    `)}, ${JSON.stringify(descendantFile)}], { stdio: 'inherit' });
+    setInterval(() => {}, 1000);
+  `,
+    );
+    await writeFile(path.join(root, '.env.local'), 'VALUE=restart\n');
+    await waitFor(async () => {
+      try {
+        await readFile(descendantFile);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    const { port } = JSON.parse(await readFile(descendantFile, 'utf8')) as {
+      port: number;
+    };
+    const closed = new Promise<void>((resolve) =>
+      child.once('close', () => resolve()),
+    );
+    child.kill('SIGINT');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    child.kill('SIGINT');
+    await closed;
+    const { createServer } = await import('node:net');
+    const socket = createServer();
+    await new Promise<void>((resolve, reject) => {
+      socket.once('error', reject);
+      socket.listen(port, '127.0.0.1', resolve);
+    });
+    await new Promise<void>((resolve) => socket.close(() => resolve()));
+    expect(() => process.kill(worker, 0)).toThrow();
+  },
+);
+
+it.skipIf(process.platform === 'win32')(
+  'stops the development worker when its launching parent is hard-killed',
+  async () => {
+    const { child, events } = await fixture(false, true);
+    const pid = (await events())[0].pid;
+    const closed = new Promise<void>((resolve) =>
+      child.once('close', () => resolve()),
+    );
+    child.kill('SIGKILL');
+    await closed;
+    expect((await events()).map((event) => event.event)).toEqual([
+      'start',
+      'stop',
+    ]);
+    expect(() => process.kill(pid, 0)).toThrow();
+  },
+);

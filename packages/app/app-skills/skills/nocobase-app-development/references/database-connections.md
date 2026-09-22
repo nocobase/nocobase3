@@ -1,6 +1,8 @@
 # Database connections and dialects
 
-Use this page to switch the application's database or add a connection. For schema changes read [migrations and seeds](migrations.md); for runtime queries read [database and data access](database-and-data.md).
+Use this page to switch the application's database or add a connection: the dialect packages and their fields, what `server/config/database.ts` and `config.yml` each own, and the installation and typing problems that follow. For schema changes read [migrations and seeds](migrations.md); for runtime queries read [database and data access](database-and-data.md).
+
+What a connection means once code touches it — `schemaManagement` as a schema-ownership boundary rather than read-only credentials, and what `database/<connectionName>/collections/` holds for a managed connection versus an external one — is in `.agents/skills/nocobase-db/SKILL.md` sections 1 and 6.
 
 ## Creating an application
 
@@ -146,11 +148,11 @@ Run `pnpm typecheck` for the typed defaults, then verify the specific connection
 
 | Change                        | Runtime verification                                                                                                                                                                                                    |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default managed connection    | Run `pnpm migrate` when applying pending migrations is intended. It targets `database.default`.                                                                                                                         |
-| Additional managed connection | Run `pnpm migrate --connection analytics` when applying that connection's pending migrations is intended. A successful default-connection migration does not verify it.                                                 |
+| Default managed connection    | Run `pnpm db:apply` when applying pending migrations and seeds is intended. It targets `database.default`.                                                                                                              |
+| Additional managed connection | Run `pnpm db:apply --connection analytics` when applying that connection's pending tasks is intended. A successful default-connection run does not verify it.                                                           |
 | External connection           | Perform a bounded read from an existing collection using `database.query('externalCrm')` in an application service or test. Verify the expected target, naming and metadata. Do not run migrations or seeds against it. |
 
-Migration commands execute schema changes and write migration history; they are not read-only connection probes. Manual execution ignores `autoRun`. For connectivity-only verification of a managed connection, use a bounded read of an existing collection instead. Follow [database and data access](database-and-data.md) for the query API.
+Migration commands execute schema changes and write migration history; they are not read-only connection probes. Manual execution ignores `autoRun`. For connectivity-only verification of a managed connection, use a bounded read of an existing collection instead. See [database and data access](database-and-data.md) for resolving the manager, and the `nocobase-db` Skill for the query API itself.
 
 Start the application with `pnpm dev` and exercise the feature that uses the changed connection. Startup alone does not prove an external or unused connection works, and may apply migrations and seeds to managed connections with `autoRun` enabled. Check that the expected target was used and that other connections still work.
 

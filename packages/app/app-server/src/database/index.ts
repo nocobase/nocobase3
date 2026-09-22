@@ -14,6 +14,7 @@ export {
 } from './provider.js';
 export {
   createAppMigrator,
+  type AppMigrationRepairResult,
   type AppMigrationRollbackResult,
   type AppMigrationRunResult,
   type AppMigrationSkippedReason,
@@ -22,6 +23,7 @@ export {
 export {
   createAppSeeder,
   type AppSeeder,
+  type AppSeedRepairResult,
   type AppSeedRunResult,
   type AppSeedSkippedReason,
   type CreateAppSeederOptions,
@@ -47,6 +49,7 @@ export {
   runAppSeeds,
   runAppDatabaseTasks,
   AppDatabaseTaskError,
+  type AppDatabaseTaskOperation,
   type AppDatabaseTaskResult,
   type AppDatabaseTaskRunOptions,
   type AppDatabaseTasksResult,

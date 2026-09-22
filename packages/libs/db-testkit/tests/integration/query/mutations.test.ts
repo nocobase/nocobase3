@@ -24,14 +24,14 @@ describeIntegrationDatabases('query mutations', (context) => {
           status: 'paid',
           amount: 120,
           sort: 2,
-          paidAt: '2026-08-14 10:00:00',
+          paidAt: '2026-08-14T10:00:00',
         },
         {
           orderNo: 'SO-003',
           status: 'paid',
           amount: 240,
           sort: 3,
-          paidAt: '2026-08-14 11:00:00',
+          paidAt: '2026-08-14T11:00:00',
         },
       ])
       .execute();

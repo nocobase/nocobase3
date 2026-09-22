@@ -1,6 +1,6 @@
 ---
 title: 'Create with an AI Agent'
-description: 'Create and start a NocoBase 3 application with an AI Agent, continue development in the same session.'
+description: 'Create and start a NocoBase 3 application with an AI Agent, then continue development in a new session.'
 ---
 
 # Create with an AI Agent
@@ -30,18 +30,17 @@ Ask your AI Agent to check the environment, create a project, and start it local
    Follow https://v3.docs.nocobase.com/get-started/create-app-with-agent to create a NocoBase 3 application for me.
    ```
 
-   Your AI Agent will check the environment, initialize the application in the current empty directory, read its project guidance, confirm your database requirements, and start the service. You can continue in the same session.
-
-   :::tip If you create the application in another directory
-
-   After creation, switch to that project and start a new session:
-
-   - **CLI:** enter the project directory and restart your AI Agent
-   - **Desktop client:** add or open that project and create a new session
-
-   :::
+   Your AI Agent will check the environment, initialize the application in the current empty directory, read its project guidance, confirm your database requirements, and start the service.
 
    After startup, open the URL provided by your AI Agent.
+
+   :::warning Note
+
+   **After the application starts, start a new session before you continue development.**
+
+   Creating the application synchronizes the development Skills into `.agents/skills/` in the project directory. AI Agents load Skills when a session starts; a session that began before this directory existed does not have them, so later development works without this project guidance.
+
+   :::
 
 ## Sign in
 
@@ -72,7 +71,7 @@ Use `pnpm dev` during development. `pnpm build` followed by `pnpm start` runs a 
 
 ## Next step
 
-Continue in the session rooted in your application directory and [build your first feature](./first-feature). The AI Agent's installation, account, and model access must be prepared separately.
+Start a new session rooted in your application directory and [build your first feature](./first-feature). The AI Agent's installation, account, and model access must be prepared separately.
 
 Next, hand the project to your AI Agent and let it start building. To build a CRM application, for example, tell it:
 

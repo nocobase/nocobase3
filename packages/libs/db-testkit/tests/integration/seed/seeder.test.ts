@@ -92,10 +92,12 @@ describeIntegrationDatabases('seed runner', (context) => {
     await expect(seeder.run()).resolves.toEqual({
       executed: ['202608210001_beta_defaults', '202608210002_alpha_defaults'],
       skipped: [],
+      warnings: [],
     });
     await expect(seeder.run()).resolves.toEqual({
       executed: [],
       skipped: ['202608210001_beta_defaults', '202608210002_alpha_defaults'],
+      warnings: [],
     });
     await expect(
       context.db(dataTableName).select('event').orderBy('id'),
@@ -174,20 +176,22 @@ describeIntegrationDatabases('seed runner', (context) => {
     ]);
   });
 
-  it('rejects checksum changes for executed seeds', async () => {
+  it('reports, rejects, and repairs checksum changes for executed seeds', async () => {
     const directory = await createTempDirectory();
     const tableName = context.table('checksumSeedHistory');
     const lockTableName = context.table('checksumSeedLock');
     const name = '202608210001_checksum_seed';
     await writeSeed(directory, name, seedSource(name));
-    const seeder = createSeeder({
+    const options = {
       database: context.database,
       connection: context.spec.name,
       directory,
       tableName,
       lockTableName,
-    });
-    await seeder.run();
+    };
+    const seeder = createSeeder(options);
+    await expect(seeder.run()).resolves.toMatchObject({ warnings: [] });
+    const [recorded] = await context.db(tableName).select();
 
     await writeSeed(
       directory,
@@ -203,9 +207,34 @@ describeIntegrationDatabases('seed runner', (context) => {
     `,
     );
 
-    await expect(seeder.run()).rejects.toThrow(
-      `Executed seed "${name}" checksum changed.`,
-    );
+    // An executed seed never runs again, so the default policy reports it and
+    // lets the run continue.
+    const warned = await seeder.run();
+    expect(warned.executed).toEqual([]);
+    expect(warned.warnings).toEqual([
+      {
+        packageName: 'app',
+        name,
+        recordedChecksum: recorded.checksum,
+        sourceChecksum: expect.not.stringMatching(recorded.checksum),
+      },
+    ]);
+
+    await expect(
+      createSeeder({ ...options, onChecksumMismatch: 'error' }).run(),
+    ).rejects.toThrow(`Executed seed "${name}" checksum changed.`);
+
+    const preview = await seeder.repair({ dryRun: true });
+    expect(preview).toEqual({ repaired: warned.warnings, dryRun: true });
+    await expect(context.db(tableName).select()).resolves.toEqual([recorded]);
+
+    expect(await seeder.repair()).toEqual({
+      repaired: warned.warnings,
+      dryRun: false,
+    });
+    await expect(
+      createSeeder({ ...options, onChecksumMismatch: 'error' }).run(),
+    ).resolves.toMatchObject({ executed: [], skipped: [name], warnings: [] });
   });
 
   it('supports seeds that explicitly run without a transaction', async () => {
