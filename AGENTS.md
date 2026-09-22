@@ -179,6 +179,14 @@ This does not loosen the rule above. `repository(name)` resolves the Collection 
 
 Both tasks get their Repository from the connection the task runs on, which inside a transaction is that transaction's connection. This is why the service container withholds the application's `DatabaseManager` from migrations and seeds: a Repository taken from it would write outside the task's transaction and survive a failure that should have discarded it.
 
+### A plugin's migrations are laid out differently from an application's
+
+An application keeps its tasks under `database/<connection>/migrations` and `seeds`, one directory per configured connection. A plugin declares a single `database/migrations` and `database/seeds` in its `defineServerPlugin` call, relative to the plugin's `baseDir`, and there is no connection segment because a plugin contributes only to the installing application's default connection. It cannot know which further connections an application defines, and cannot target one.
+
+The loader flattens the application's sources and every registered plugin's into one list per connection, rejects duplicate migration names across all of them, and orders what remains by name alone. So a plugin's migration name has to be derived from its package rather than being a bare timestamp — a collision fails the run for the whole application — and a plugin's migrations interleave with the application's by name rather than applying as a block. Execution history records the owning package name, so attribution survives the shared run.
+
+`packages/tools/create-plugin/template/AGENTS.md` carries this for generated plugins; change both together.
+
 Before editing an existing migration, check its Git history and the status of the branch that introduced it. An existing migration may be corrected directly only while its introducing feature branch has not yet been merged. Once that branch has been merged into its target branch, never modify the migration again; implement every correction or subsequent schema change in a new migration. Do not use hard-coded previous checksum hashes to make an edited migration appear compatible.
 
 ## Database Integration Test Scheduling
