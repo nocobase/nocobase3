@@ -88,15 +88,19 @@ jobs:
           (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
           (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/develop')
         env:
-          UI_LIBRARY_ALI_OSS_ACCESS_KEY_ID: ${{ secrets.UI_LIBRARY_ALI_OSS_ACCESS_KEY_ID }}
-          UI_LIBRARY_ALI_OSS_ACCESS_KEY_SECRET: ${{ secrets.UI_LIBRARY_ALI_OSS_ACCESS_KEY_SECRET }}
-          OSS_ACCESS_KEY_ID: ${{ secrets.UI_LIBRARY_ALI_OSS_ACCESS_KEY_ID }}
-          OSS_ACCESS_KEY_SECRET: ${{ secrets.UI_LIBRARY_ALI_OSS_ACCESS_KEY_SECRET }}
+          UI_LIBRARY_ALI_OSS_ACCESS_KEY_ID: ${{ secrets.DOCS_ALI_OSS_ACCESS_KEY_ID }}
+          UI_LIBRARY_ALI_OSS_ACCESS_KEY_SECRET: ${{ secrets.DOCS_ALI_OSS_ACCESS_KEY_SECRET }}
+          UI_LIBRARY_ALI_OSS_BUCKET: ${{ secrets.UI_LIBRARY_BUCKET }}
+          UI_LIBRARY_ALI_OSS_REGION: ${{ secrets.UI_LIBRARY_REGION }}
+          # ossutil reads the credentials from these names rather than the UI_LIBRARY_-prefixed ones.
+          OSS_ACCESS_KEY_ID: ${{ secrets.DOCS_ALI_OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.DOCS_ALI_OSS_ACCESS_KEY_SECRET }}
         working-directory: ui-library
         run: |
           set -euo pipefail
 
-          for name in UI_LIBRARY_ALI_OSS_ACCESS_KEY_ID UI_LIBRARY_ALI_OSS_ACCESS_KEY_SECRET; do
+          for name in UI_LIBRARY_ALI_OSS_ACCESS_KEY_ID UI_LIBRARY_ALI_OSS_ACCESS_KEY_SECRET \
+                      UI_LIBRARY_ALI_OSS_BUCKET UI_LIBRARY_ALI_OSS_REGION; do
             if [ -z "${!name}" ]; then
               echo "::error::$name is not set. Configure the repository secret before publishing."
               exit 1
@@ -109,17 +113,22 @@ jobs:
           sudo mv /tmp/ossutil/ossutil-2.2.2-linux-amd64/ossutil /usr/local/bin/ossutil
           sudo chmod 755 /usr/local/bin/ossutil
 
-          BUCKET='nocobase-ui-library'
-          REGION='cn-beijing'
+          BUCKET="$UI_LIBRARY_ALI_OSS_BUCKET"
+          # ossutil takes the bare region id, `cn-beijing`, and derives the endpoint from it; the secret holds whichever
+          # form was pasted from the console, and `--region oss-cn-beijing` is rejected outright.
+          REGION="${UI_LIBRARY_ALI_OSS_REGION#oss-}"
           ENDPOINT="oss://$BUCKET"
 
           # Upload every generated file except the two indexes. Existing objects are kept when a later step fails.
+          # Only Vite's content-hashed bundles can be cached forever; the files copied from `public/` keep their names
+          # across releases, so a long cache on those would keep serving a replaced logo or favicon.
           while IFS= read -r -d '' file; do
             relative="${file#./dist/}"
             case "$relative" in
               index.html|r/registry.json) continue ;;
               r/*) CACHE_CONTROL='no-cache' ;;
-              *) CACHE_CONTROL='public,max-age=31536000,immutable' ;;
+              assets/*-*.js|assets/*-*.css) CACHE_CONTROL='public,max-age=31536000,immutable' ;;
+              *) CACHE_CONTROL='public,max-age=86400' ;;
             esac
             ossutil cp "$file" "$ENDPOINT/$relative" \
               -f --region "$REGION" --cache-control "$CACHE_CONTROL"
