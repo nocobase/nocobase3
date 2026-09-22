@@ -23,6 +23,7 @@ import type { WorkflowNodeRunRecord } from '../../client/workflow-management/typ
 import type { WorkflowNestedDefinition } from '../../client/types.js';
 import clientLocales from '../../client/locales/index.js';
 import { createWorkflowI18nRuntime } from '../i18n.js';
+import { openMenu } from './menu.js';
 
 const i18n = await createWorkflowI18nRuntime(clientLocales);
 
@@ -374,10 +375,7 @@ describe('workflow node descriptions', () => {
     );
   });
 
-  // TODO: Re-enable after fixing the missing "Run manually" entry in CI.
-  // https://github.com/nocobase/nocobase3/actions/runs/35550512525/job/106184315436
-  // eslint-disable-next-line vitest/no-disabled-tests -- Temporarily skip the confirmed CI failure.
-  it.skip('opens the execution canvas after a manual run', async () => {
+  it('opens the execution canvas after a manual run', async () => {
     vi.spyOn(workflowApi, 'workflow').mockResolvedValue(
       workflow({ enabled: true, current: true }),
     );
@@ -402,9 +400,7 @@ describe('workflow node descriptions', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'More actions' }),
-    );
+    await openMenu('More actions');
     fireEvent.click(await screen.findByText('Run manually'));
 
     await waitFor(() =>
@@ -494,18 +490,16 @@ describe('workflow node descriptions', () => {
       </MemoryRouter>,
     );
 
-    const picker = await screen.findByRole('button', { name: 'Version' });
-    fireEvent.click(picker);
+    await openMenu('Version');
     await waitFor(() =>
       expect(
-        [
-          ...screen
-            .getAllByRole('menuitem')
-            .filter(
-              (item) =>
-                !item.getAttribute('aria-label')?.startsWith('Compare with'),
-            ),
-        ].map((option) => option.textContent),
+        screen
+          .getAllByRole('menuitem')
+          .filter(
+            (item) =>
+              !item.classList.contains('workflow-version-compare-action'),
+          )
+          .map((option) => option.textContent),
       ).toEqual(['Unpublished', '>version-1']),
     );
 
