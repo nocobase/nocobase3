@@ -5,7 +5,7 @@ description: Plan, build, deploy, verify, upgrade, and troubleshoot NocoBase 3 a
 
 # NocoBase production deployment
 
-Use this Skill to execute a complete deployment workflow. Read the repository `AGENTS.md` and the relevant deployment pages before changing files or running stateful commands. The user-facing deployment guide is under [`docs/docs/cn/deployment/`](../../../docs/docs/cn/deployment/) and is the reference for command details and platform-specific examples.
+Use this Skill to execute a complete deployment workflow. Read the application's `AGENTS.md` and `README.MD` before changing files or running stateful commands: the README documents this application's build targets, archive layout, configuration variables and Hub publishing commands. The Deployment section of the NocoBase 3 documentation is the reference for command details and platform-specific examples; in the nocobase3 source repository it is `docs/docs/<lang>/deployment/`.
 
 Do not treat a process being healthy as proof that the application is usable. A deployment is complete only after the database, configuration, application behavior, workflow artifacts, and persistence checks below have evidence.
 
@@ -44,7 +44,7 @@ APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
 tar -tzf storage/exports/dist.tar.gz | head -30
 ```
 
-For a direct server deployment, transfer the archive and extract it into the deployment root. Do not run `pnpm install --prod` as a substitute for the packaged production dependencies unless the project-specific build instructions explicitly require it. For Docker, build the image from the production `dist` tree and keep configuration and storage outside the image. Ensure the build target matches the server or image architecture, libc, and Node ABI.
+For a direct server deployment, transfer the archive and extract it into the deployment root. Nothing needs installing there: `pnpm build` already ran `pnpm install --prod` inside `dist/`, and the archive carries the resulting `dist/node_modules`. `dist/package.json` stays in the tree so that the same command can be rerun inside `dist/` on the server if `node_modules` was left out of a copy; that is a repair, not a step of a normal deployment, and it is never run in the application source tree. For Docker, build the image from the production `dist` tree and keep configuration and storage outside the image. Ensure the build target matches the server or image architecture, libc, and Node ABI.
 
 ## Decide the data operation
 
@@ -91,7 +91,7 @@ For network uncertainty, inspect the Hub record before retrying. Reuse the same 
 
 If the application contains DSL workflows or other compiled workflow artifacts, treat the production build as a new artifact set. The workflow definition is compiled into production JavaScript and receives a deployment hash; the development artifact or previous hash may not exist in the production package.
 
-After deployment, check that each workflow's active version points to an artifact present in the production build. If the runtime reports `Workflow Artifact <key>/<hash> is missing`, do not enable the workflow by its database flow ID alone. Enable the pending version using its deployed artifact hash (`enable(hash)` or the corresponding management API route), then trigger a real business event and inspect the run result. Keep source checking, artifact building, synchronization, enablement, and invocation as separate checks.
+After deployment, check that each workflow's active version points to an artifact present in the production build. If the runtime reports `Workflow Artifact <key>/<hash> is missing`, do not enable the workflow by its database flow ID alone: that keeps the old hash. Enable the pending version by its deployed artifact hash, either with **Enable new version** on the workflow in the management UI or with `POST <APP_BASE_PATH>/api/workflows/<hash>/enable`, then trigger a real business event and inspect the run result. Keep source checking, artifact building, synchronization, enablement, and invocation as separate checks.
 
 ## Verify the deployed application
 

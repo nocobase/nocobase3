@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-skills",
   "version": "0.1.0-beta.11",
-  "description": "Agent Skills for developing and upgrading NocoBase applications.",
+  "description": "Agent Skills for developing, upgrading and deploying NocoBase applications.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

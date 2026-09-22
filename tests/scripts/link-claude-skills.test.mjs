@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readlink,
   rm,
+  stat,
   symlink,
   writeFile,
 } from 'node:fs/promises';
@@ -34,6 +35,58 @@ test('links every committed skill with a relative target', async (t) => {
     (
       await lstat(path.join(root, CLAUDE_SKILLS_DIRECTORY, 'nocobase-beta'))
     ).isSymbolicLink(),
+  );
+});
+
+test('mirrors a skill committed as a link to its package', async (t) => {
+  const root = await createRepository(t, ['nocobase-alpha']);
+  const packaged = path.join(root, 'packages', 'app', 'app-skills', 'skills');
+  await mkdir(path.join(packaged, 'nocobase-deployment'), { recursive: true });
+  await writeFile(
+    path.join(packaged, 'nocobase-deployment', 'SKILL.md'),
+    '# deployment\n',
+  );
+  await symlink(
+    path.join(
+      '..',
+      '..',
+      'packages',
+      'app',
+      'app-skills',
+      'skills',
+      'nocobase-deployment',
+    ),
+    path.join(root, AGENT_SKILLS_DIRECTORY, 'nocobase-deployment'),
+    'dir',
+  );
+  await symlink(
+    path.join('..', '..', 'packages', 'nowhere'),
+    path.join(root, AGENT_SKILLS_DIRECTORY, 'nocobase-dangling'),
+    'dir',
+  );
+
+  assert.deepEqual(await linkClaudeSkills(root), {
+    linked: ['nocobase-alpha', 'nocobase-deployment'],
+    removed: [],
+    skipped: [],
+  });
+  assert.equal(
+    await readlink(
+      path.join(root, CLAUDE_SKILLS_DIRECTORY, 'nocobase-deployment'),
+    ),
+    path.join('..', '..', AGENT_SKILLS_DIRECTORY, 'nocobase-deployment'),
+  );
+  assert.ok(
+    (
+      await stat(
+        path.join(
+          root,
+          CLAUDE_SKILLS_DIRECTORY,
+          'nocobase-deployment',
+          'SKILL.md',
+        ),
+      )
+    ).isFile(),
   );
 });
 
