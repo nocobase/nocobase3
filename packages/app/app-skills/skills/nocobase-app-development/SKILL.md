@@ -112,7 +112,7 @@ The three database pages above are the application side — where the files live
 
 For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
 
-When a task involves frontend form validation, read the relevant sections of [React Hook Form and Zod](references/react-hook-form.md) before implementing it. This is a locally formatted copy of the [shadcn/ui guide](https://ui.shadcn.com/docs/forms/react-hook-form.md), downloaded on 2026-09-22. Use it for schema validation, field error rendering, and accessibility; adapt examples to the application's installed dependencies, component APIs, and translation keys. Frontend validation complements server-side validation and does not replace it.
+When a task involves frontend form validation, read the relevant sections of [React Hook Form and Zod](references/react-hook-form.md) before implementing it. Use it for schema validation, field error rendering, and accessibility; adapt examples to the application's installed dependencies, component APIs, and translation keys. Frontend validation complements server-side validation and does not replace it.
 
 ## Business permissions
 
