@@ -6,6 +6,10 @@ name: Release Beta
 on:
   workflow_dispatch:
     inputs:
+      include_pro:
+        description: 'Also release Pro plugins after the NocoBase3 release succeeds'
+        type: boolean
+        default: true
       dry_run:
         description: 'Dry run: compute versions and run checks without publishing or pushing'
         type: boolean
@@ -614,7 +618,7 @@ jobs:
     name: Release matching Pro beta
     needs: [prepare, release, github-release]
     if: >-
-      !cancelled() && vars.PRO_RELEASE_FOLLOW_OSS == 'true' && !inputs.dry_run
+      !cancelled() && inputs.include_pro && !inputs.dry_run
       && needs.release.result == 'success' && needs.github-release.result == 'success'
       && needs.release.outputs.merged == 'true' && needs.release.outputs.published == 'true'
     uses: ./.github/workflows/pro-release-beta.yml

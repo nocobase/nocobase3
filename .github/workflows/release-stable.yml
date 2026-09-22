@@ -11,6 +11,10 @@ name: Release Stable
 on:
   workflow_dispatch:
     inputs:
+      include_pro:
+        description: 'Also release Pro plugins after the NocoBase3 release succeeds'
+        type: boolean
+        default: true
       branch:
         description: 'Branch to release from'
         type: string
@@ -714,7 +718,7 @@ jobs:
     name: Release matching Pro stable
     needs: [prepare, release, github-release]
     if: >-
-      !cancelled() && vars.PRO_RELEASE_FOLLOW_OSS == 'true' && !inputs.dry_run
+      !cancelled() && inputs.include_pro && !inputs.dry_run
       && inputs.branch == 'main' && !inputs.keep_latest
       && needs.release.result == 'success' && needs.github-release.result == 'success'
       && needs.release.outputs.published == 'true'
