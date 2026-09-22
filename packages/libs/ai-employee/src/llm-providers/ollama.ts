@@ -98,10 +98,6 @@ export class OllamaEmbeddingProvider extends EmbeddingProvider {
 export const ollamaProviderOptions: LLMProviderMeta = {
   title: 'Ollama',
   supportedModel: [SupportedModel.LLM, SupportedModel.EMBEDDING],
-  models: {
-    [SupportedModel.LLM]: [],
-    [SupportedModel.EMBEDDING]: [],
-  },
   provider: OllamaProvider,
   embedding: OllamaEmbeddingProvider,
 };

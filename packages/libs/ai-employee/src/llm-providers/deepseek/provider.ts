@@ -463,15 +463,6 @@ export class DeepSeekProvider extends LLMProvider {
 export const deepseekProviderOptions: LLMProviderMeta = {
   title: 'DeepSeek',
   supportedModel: [SupportedModel.LLM],
-  models: {
-    [SupportedModel.LLM]: [
-      'deepseek-flash',
-      'deepseek-v4-pro',
-      'deepseek-v4-flash',
-      'deepseek-chat',
-      'deepseek-reasoner',
-    ],
-  },
   supportWebSearch: true,
   webSearchModels: ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro'],
   provider: DeepSeekProvider,

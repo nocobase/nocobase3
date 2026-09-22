@@ -81,12 +81,13 @@ export class ModelService {
       service.provider,
     );
     if (!provider) return [];
-    if (model) {
-      const type = model as SupportedModel;
-      if (!provider.supportedModel?.includes(type)) return [];
-      return (provider.models?.[type] ?? []).map((id) => ({ id }));
-    }
-    return [];
+    // Only embedding models are suggested from the provider metadata. Chat models
+    // come from the provider's own API through `listProviderModels`.
+    if (model !== SupportedModel.EMBEDDING) return [];
+    if (!provider.supportedModel?.includes(SupportedModel.EMBEDDING)) return [];
+    return (provider.models?.[SupportedModel.EMBEDDING] ?? []).map((id) => ({
+      id,
+    }));
   }
   async listProviderModels({
     input,
