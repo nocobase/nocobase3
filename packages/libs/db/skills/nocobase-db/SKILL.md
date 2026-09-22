@@ -134,6 +134,10 @@ The rules are absolute, because these files are history that has already run on 
 
 A backfill belongs in the migration that makes it necessary, using `query` from the same context — not in a seed.
 
+Both run inside a transaction by default. `transaction: false` opts out, and a failure then leaves partial work behind with no history record, so take it only when the operation genuinely cannot run in one.
+
+A task's `connection` is not the runtime connection either. It carries `dialect`, `capabilities` and `client()` — enough to branch on the database, and deliberately not a way back to the manager. Anything conditional on the dialect reads it from there.
+
 ## 3. Builder
 
 `builder` is the schema API, and a migration is where it belongs. Runtime code has `db.builder()` available and should not use it: schema that changes outside the migration history is schema nothing can reproduce.
@@ -182,7 +186,7 @@ This does not loosen the self-contained rule. `repository(name)` resolves the Co
 - Do not use it in `down`. By the time a rollback runs, the Collection has moved past what `up` left behind, possibly several migrations past.
 - Do not use it to walk a table. Selecting every row and updating each one through a Repository is the shape to avoid; a set-based `query` statement is both correct and bounded.
 
-Both tasks take their Repository from the connection the task runs on, which inside a transaction is that transaction's connection, so a failed task discards its writes. That is also why the task service container withholds the application's `DatabaseManager`: a Repository taken from there would write outside the task's transaction and survive a failure that should have discarded it.
+Both tasks take their Repository from the connection the task runs on, which inside a transaction is that transaction's connection, so a failed task discards its writes. That is also why `context.container` is not the application container. Its type is `ServiceResolver`, but at runtime it is a frozen allow list holding one token — `idGeneratorToken` from `@nocobase/app-server/id-generator`, for a task that has to generate an identifier. Every other `resolve` throws, `databaseManagerToken` included: a service taken from there would hold the application's connection rather than the task's, and inside a transaction would write outside it and survive a failure that should have discarded it.
 
 **Is the unit of work a Collection's records, or a result set?** Records of one Collection and the things related to them are Repository's job. A shape that is not any Collection's records — a report joining unrelated tables, a set aggregated then paginated — is Query's.
 
