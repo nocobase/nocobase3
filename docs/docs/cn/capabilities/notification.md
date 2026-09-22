@@ -38,7 +38,7 @@ notification:
       provider: in-app
 ```
 
-`channels` 是名称映射，`inbox` 是业务代码发送消息时使用的 Channel 名称。每个命名 Channel 对应一个 Provider，Provider 的配置直接写在该 Channel 下。
+`channels` 是一个以 Channel 名称为键的配置对象。示例中的 `inbox` 是 Channel 名称，业务代码通过这个名称选择发送通道。每个 Channel 只配置一个 Provider，Provider 类型和相关参数直接写在该 Channel 下。
 
 首次启用通知插件或新增通知相关插件后，请执行应用迁移：
 
@@ -231,6 +231,22 @@ Webhook 地址、签名密钥、SMTP 密码和 Resend API 密钥都是凭据。�
 ## 从业务代码发送通知
 
 在服务端代码中，从应用容器获取共享的 `notificationServiceToken`，再调用 `send()`。不要在业务模块中创建第二个 Notification Manager，也不要直接调用 SMTP、Resend 或 Webhook。
+
+`send()` 接收一个参数对象，其中：
+
+| 参数             | 是否必填 | 说明                                                                                                            |
+| ---------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `idempotencyKey` | 是       | 用于标识同一次业务发送。相同请求重复使用这个值时会返回原来的 Notification，避免重复创建。                       |
+| `source`         | 否       | 业务来源信息。`type` 必填，`referenceId` 可选，用于在通知记录中关联业务对象。                                   |
+| `messages`       | 是       | 以 Channel 名称为键的消息映射，至少包含一项。每个键必须对应已启用的 Channel；同一次调用可以发送到多个 Channel。 |
+
+每个 `messages.<channel>` 的字段取决于 Channel 类型。内置 Channel 的消息字段如下：
+
+| Channel 类型 | 必填字段                          | 可选字段                                | 说明                                                                         |
+| ------------ | --------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
+| 站内信       | `to`、`title`、`body`             | `target`                                | `to` 是应用用户 ID 或 ID 数组；`target` 可以是内部路由或完整的 HTTP(S) URL。 |
+| 邮件         | `to`、`subject`、`text` 或 `html` | `from`、`replyTo`                       | `to` 可以是一个邮箱地址或地址数组；数组中的每个地址都会创建独立的 Delivery。 |
+| Webhook      | `text`                            | `title`、`target`、`format`、`payloads` | Webhook 消息不填写 `to`；`target` 必须是完整的 HTTP(S) URL。                 |
 
 下面的示例通过 `inbox` Channel 给申请人发送一条站内信：
 

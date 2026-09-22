@@ -38,7 +38,7 @@ notification:
       provider: in-app
 ```
 
-`channels` is a name-to-configuration map. `inbox` is the Channel name used by application code, and each named Channel selects one Provider whose configuration is written directly under that Channel.
+`channels` is a configuration object keyed by Channel names. In this example, `inbox` is the Channel name that application code uses to select the sending route. Each Channel configures one Provider, with the Provider type and settings written directly under that Channel.
 
 Run application migrations after enabling notification plugins or adding a notification plugin:
 
@@ -231,6 +231,22 @@ Webhook URLs, signing secrets, SMTP passwords, and Resend API keys are credentia
 ## Send notifications from application code
 
 Server code should resolve the shared `notificationServiceToken` from the application container and call `send()`. Do not create a second Notification Manager or call SMTP, Resend, or a Webhook directly from business code.
+
+`send()` accepts one parameter object:
+
+| Parameter        | Required | Description                                                                                                                                   |
+| ---------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `idempotencyKey` | Yes      | Identifies one business send. Reusing it for the same request returns the original Notification and prevents duplicates.                      |
+| `source`         | No       | Business source information. `type` is required and `referenceId` is optional; use them to correlate the notification with a business object. |
+| `messages`       | Yes      | A map keyed by Channel name with at least one entry. Each key must match an enabled Channel; one call can send to multiple Channels.          |
+
+The fields under each `messages.<channel>` depend on the Channel type. Built-in Channel message fields are:
+
+| Channel type | Required fields                   | Optional fields                         | Description                                                                                                     |
+| ------------ | --------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| In-app       | `to`, `title`, `body`             | `target`                                | `to` is an application user ID or an array of IDs; `target` can be an internal route or a complete HTTP(S) URL. |
+| Email        | `to`, `subject`, `text` or `html` | `from`, `replyTo`                       | `to` can be one email address or an array; each address creates an independent Delivery.                        |
+| Webhook      | `text`                            | `title`, `target`, `format`, `payloads` | Do not set `to` for Webhook messages; `target` must be a complete HTTP(S) URL.                                  |
 
 This example sends an in-app message through the `inbox` Channel:
 
