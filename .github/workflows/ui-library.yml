@@ -93,8 +93,11 @@ jobs:
         env:
           UI_LIBRARY_ALI_OSS_ACCESS_KEY_ID: ${{ secrets.DOCS_ALI_OSS_ACCESS_KEY_ID }}
           UI_LIBRARY_ALI_OSS_ACCESS_KEY_SECRET: ${{ secrets.DOCS_ALI_OSS_ACCESS_KEY_SECRET }}
-          UI_LIBRARY_ALI_OSS_BUCKET: ${{ secrets.UI_LIBRARY_BUCKET }}
-          UI_LIBRARY_ALI_OSS_REGION: ${{ secrets.UI_LIBRARY_REGION }}
+          # The bucket and the region name the destination rather than authenticating to it, so they are written here
+          # where a reviewer can read them. In a repository secret a value nobody can inspect is one mistyped
+          # character away from a failure that reports an endpoint that appears nowhere in the repository.
+          UI_LIBRARY_ALI_OSS_BUCKET: nocobase-ui-library
+          UI_LIBRARY_ALI_OSS_REGION: cn-beijing
           # ossutil reads the credentials from these names rather than the UI_LIBRARY_-prefixed ones.
           OSS_ACCESS_KEY_ID: ${{ secrets.DOCS_ALI_OSS_ACCESS_KEY_ID }}
           OSS_ACCESS_KEY_SECRET: ${{ secrets.DOCS_ALI_OSS_ACCESS_KEY_SECRET }}
@@ -102,8 +105,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for name in UI_LIBRARY_ALI_OSS_ACCESS_KEY_ID UI_LIBRARY_ALI_OSS_ACCESS_KEY_SECRET \
-                      UI_LIBRARY_ALI_OSS_BUCKET UI_LIBRARY_ALI_OSS_REGION; do
+          for name in UI_LIBRARY_ALI_OSS_ACCESS_KEY_ID UI_LIBRARY_ALI_OSS_ACCESS_KEY_SECRET; do
             if [ -z "${!name}" ]; then
               echo "::error::$name is not set. Configure the repository secret before publishing."
               exit 1
@@ -117,9 +119,9 @@ jobs:
           sudo chmod 755 /usr/local/bin/ossutil
 
           BUCKET="$UI_LIBRARY_ALI_OSS_BUCKET"
-          # ossutil takes the bare region id, `cn-beijing`, and derives the endpoint from it; the secret holds whichever
-          # form was pasted from the console, and `--region oss-cn-beijing` is rejected outright.
-          REGION="${UI_LIBRARY_ALI_OSS_REGION#oss-}"
+          # ossutil takes the bare region id and derives `<bucket>.oss-<region>.aliyuncs.com` from it;
+          # `--region oss-cn-beijing` is rejected outright, which is why the value above carries no `oss-` prefix.
+          REGION="$UI_LIBRARY_ALI_OSS_REGION"
           ENDPOINT="oss://$BUCKET"
 
           # Upload every generated file except the two indexes. Existing objects are kept when a later step fails.
