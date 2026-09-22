@@ -176,3 +176,77 @@ describe('expandEnvironmentReferences', () => {
     });
   });
 });
+
+describe('overrideEnabledModels', () => {
+  it('leaves a curated model list alone by default', async () => {
+    const ai = createManager();
+    await ai.llmServiceManager.registerLLMService({
+      name: 'openai',
+      provider: 'openai',
+      enabledModels: ['curated-in-the-ui'],
+      enabled: false,
+    });
+
+    await new LLMServiceConfigSynchronizer(ai.llmServiceManager).synchronize([
+      {
+        name: 'openai',
+        provider: 'openai',
+        enabledModels: [{ label: 'From config', value: 'from-config' }],
+      },
+    ]);
+
+    await expect(
+      ai.llmServiceManager.getLLMService('openai'),
+    ).resolves.toMatchObject({
+      enabledModels: {
+        mode: 'custom',
+        models: [{ label: 'curated-in-the-ui', value: 'curated-in-the-ui' }],
+      },
+      enabled: false,
+    });
+  });
+
+  it('reapplies the configured list when the service opts in, without re-enabling it', async () => {
+    const ai = createManager();
+    await ai.llmServiceManager.registerLLMService({
+      name: 'openai',
+      provider: 'openai',
+      enabledModels: ['curated-in-the-ui'],
+      enabled: false,
+    });
+
+    await new LLMServiceConfigSynchronizer(ai.llmServiceManager).synchronize([
+      {
+        name: 'openai',
+        provider: 'openai',
+        overrideEnabledModels: true,
+        enabledModels: [{ label: 'From config', value: 'from-config' }],
+      },
+    ]);
+
+    await expect(
+      ai.llmServiceManager.getLLMService('openai'),
+    ).resolves.toMatchObject({
+      enabledModels: {
+        mode: 'custom',
+        models: [{ label: 'From config', value: 'from-config' }],
+      },
+      // The administrator turned this service off; reapplying models is not a
+      // reason to turn it back on.
+      enabled: false,
+    });
+  });
+
+  it('rejects a non-boolean overrideEnabledModels', async () => {
+    const ai = createManager();
+    await expect(
+      new LLMServiceConfigSynchronizer(ai.llmServiceManager).synchronize([
+        {
+          name: 'openai',
+          provider: 'openai',
+          overrideEnabledModels: 'yes',
+        } as never,
+      ]),
+    ).rejects.toThrow('overrideEnabledModels');
+  });
+});

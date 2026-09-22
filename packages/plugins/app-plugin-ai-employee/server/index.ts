@@ -15,7 +15,10 @@ export {
   LLMServiceConfigSynchronizer,
   normalizeLLMServiceConfig,
 } from './manager/llm-service-config.js';
-export type { LLMServiceSyncSummary } from './manager/llm-service-config.js';
+export type {
+  LLMServiceSyncSummary,
+  NormalizedLLMServiceConfig,
+} from './manager/llm-service-config.js';
 export { AIEmployeeProvider } from './provider/index.js';
 export {
   normalizeDisks,
