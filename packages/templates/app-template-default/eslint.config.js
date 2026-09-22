@@ -17,7 +17,7 @@ export default createPortalConfig({
       // Keep them as the registry emits them so `shadcn add <name> --diff`
       // stays meaningful; hand-written components in `client/components/`
       // are still held to the full rule set.
-      name: 'shadcn-ui',
+      name: 'app-template-default/shadcn-ui',
       files: ['client/components/ui/**/*.tsx', 'client/hooks/use-mobile.ts'],
       rules: {
         'react-refresh/only-export-components': 'off',
@@ -32,7 +32,7 @@ export default createPortalConfig({
     {
       // Recharts exposes loosely typed tooltip and legend payloads; the
       // upstream chart wrapper reads them as-is.
-      name: 'shadcn-ui-chart',
+      name: 'app-template-default/shadcn-ui-chart',
       files: ['client/components/ui/chart.tsx'],
       rules: {
         '@typescript-eslint/no-unsafe-assignment': 'off',
