@@ -812,7 +812,7 @@ export class AIConversationService {
     transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
-    const { translate } = transport;
+    const { translate, getHeader } = transport;
 
     try {
       if (!turn.messages) {
@@ -842,6 +842,8 @@ export class AIConversationService {
       if (!conversation) {
         throw new ResourceActionError(400, translate('conversation not found'));
       }
+      const { systemPrompt, skillSettings } =
+        conversationAgentOptions(conversation);
 
       const employee = await getAIEmployee(this.repositories, aiEmployee);
       if (!employee) {
@@ -891,10 +893,11 @@ export class AIConversationService {
         sessionId,
         from: 'main-agent',
         actor,
-        ...conversationAgentOptions(conversation),
+        systemPrompt,
+        skillSettings,
         turn: { ...turn, messages },
         translate,
-        getHeader: transport.getHeader,
+        getHeader,
       });
       const runStream = (request: AgentRequest) =>
         this.consumeAgentStream(
@@ -1069,7 +1072,7 @@ export class AIConversationService {
     transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
-    const { translate } = transport;
+    const { translate, getHeader } = transport;
 
     try {
       const conversation = await this.aiConversationsManager.getConversation({
@@ -1079,6 +1082,8 @@ export class AIConversationService {
       if (!conversation) {
         throw new ResourceActionError(400, translate('conversation not found'));
       }
+      const { systemPrompt, skillSettings } =
+        conversationAgentOptions(conversation);
       const employee = await getAIEmployee(
         this.repositories,
         conversation.aiEmployeeUsername ?? '',
@@ -1133,14 +1138,15 @@ export class AIConversationService {
         sessionId,
         from: 'main-agent',
         actor,
-        ...conversationAgentOptions(conversation),
+        systemPrompt,
+        skillSettings,
         turn: {
           ...turn,
           messageId,
           messages: resendMessages.length ? resendMessages : turn.messages,
         },
         translate,
-        getHeader: transport.getHeader,
+        getHeader,
       });
       const request: AgentRequest = {
         messageId,
@@ -1314,7 +1320,7 @@ export class AIConversationService {
     transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
-    const { translate } = transport;
+    const { translate, getHeader } = transport;
     const target = streamTarget(transport);
     try {
       const conversation = await this.aiConversationsManager.getConversation({
@@ -1325,6 +1331,8 @@ export class AIConversationService {
         sendErrorResponse(target, 'conversation not found');
         return;
       }
+      const { systemPrompt, skillSettings } =
+        conversationAgentOptions(conversation);
       const employee = await getAIEmployee(
         this.repositories,
         conversation.aiEmployeeUsername ?? '',
@@ -1370,10 +1378,11 @@ export class AIConversationService {
         sessionId,
         from: 'main-agent',
         actor,
-        ...conversationAgentOptions(conversation),
+        systemPrompt,
+        skillSettings,
         turn: { ...turn, messageId: message.messageId },
         translate,
-        getHeader: transport.getHeader,
+        getHeader,
       });
       await this.consumeAgentStream(
         sessionId,
