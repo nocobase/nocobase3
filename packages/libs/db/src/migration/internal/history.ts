@@ -3,68 +3,100 @@ import type { MigrationConnection, MigrationHistoryRecord } from '../types.js';
 
 export const DEFAULT_MIGRATION_TABLE = '__nocobase_migrations';
 
-interface MigrationHistoryRow {
+/**
+ * A task ledger: one table recording what has run. Migrations and seeds keep
+ * separate ledgers because only one of them is reversible, but the table, its
+ * columns and every read and write against it are the same bookkeeping, so the
+ * implementation lives here and the seed side names its own table.
+ */
+export interface TaskLedger {
+  readonly tableName: string;
+  /** Migrations record which batch a run belongs to; seeds have no batch. */
+  readonly batched: boolean;
+}
+
+/** One recorded run, with `batch` present exactly for a batched ledger. */
+export interface TaskHistoryEntry {
+  readonly id: number;
+  readonly packageName: string;
+  readonly name: string;
+  readonly batch?: number;
+  readonly checksum: string;
+  readonly executedAt: Date | string;
+  readonly durationMs: number | null;
+}
+
+export interface TaskHistoryWrite {
+  readonly packageName: string;
+  readonly name: string;
+  readonly batch?: number;
+  readonly checksum: string;
+  readonly durationMs: number;
+}
+
+interface TaskHistoryRow {
   id: number;
   package_name: string;
   name: string;
-  batch: number;
+  batch?: number;
   checksum: string;
   executed_at: Date | string;
   duration_ms: number | null;
 }
 
-export async function ensureMigrationTable(
+export async function ensureTaskHistoryTable(
   connection: MigrationConnection,
-  tableName: string = DEFAULT_MIGRATION_TABLE,
+  ledger: TaskLedger,
 ): Promise<void> {
   const knex = await connection.client<Knex>();
-  const exists = await knex.schema.hasTable(tableName);
+  const exists = await knex.schema.hasTable(ledger.tableName);
   if (!exists) {
     try {
       await knex.schema.createTable(
-        tableName,
+        ledger.tableName,
         (table: Knex.CreateTableBuilder) => {
           table.increments('id').primary();
           table.string('package_name', 191).notNullable();
           table.string('name', 191).notNullable().unique();
-          table.integer('batch').notNullable();
+          if (ledger.batched) table.integer('batch').notNullable();
           table.string('checksum', 128).notNullable();
           table.dateTime('executed_at').notNullable();
           table.integer('duration_ms').nullable();
         },
       );
     } catch (error) {
-      if (!(await knex.schema.hasTable(tableName))) {
+      // Another run created it between the check and the create.
+      if (!(await knex.schema.hasTable(ledger.tableName))) {
         throw error;
       }
     }
   }
 
-  await ensurePackageNameColumn(knex, tableName);
+  await ensurePackageNameColumn(knex, ledger.tableName);
 }
 
-export async function readMigrationHistory(
+export async function readTaskHistoryEntries(
   connection: MigrationConnection,
-  tableName: string = DEFAULT_MIGRATION_TABLE,
-): Promise<MigrationHistoryRecord[]> {
+  ledger: TaskLedger,
+): Promise<TaskHistoryEntry[]> {
   const knex = await connection.client<Knex>();
-  const rows = await knex<MigrationHistoryRow>(tableName)
+  const rows = await knex<TaskHistoryRow>(ledger.tableName)
     .select([
       'id',
       'package_name',
       'name',
-      'batch',
+      ...(ledger.batched ? ['batch' as const] : []),
       'checksum',
       'executed_at',
       'duration_ms',
     ])
     .orderBy('id', 'asc');
 
-  return rows.map((row: MigrationHistoryRow) => ({
+  return rows.map((row: TaskHistoryRow) => ({
     id: Number(row.id),
     packageName: String(row.package_name),
     name: String(row.name),
-    batch: Number(row.batch),
+    ...(ledger.batched ? { batch: Number(row.batch) } : {}),
     checksum: String(row.checksum),
     executedAt: row.executed_at,
     durationMs:
@@ -72,6 +104,54 @@ export async function readMigrationHistory(
         ? null
         : Number(row.duration_ms),
   }));
+}
+
+export async function recordTaskHistoryEntry(
+  connection: MigrationConnection,
+  ledger: TaskLedger,
+  entry: TaskHistoryWrite,
+): Promise<void> {
+  const knex = await connection.client<Knex>();
+  await knex(ledger.tableName).insert({
+    package_name: entry.packageName,
+    name: entry.name,
+    ...(ledger.batched ? { batch: entry.batch } : {}),
+    checksum: entry.checksum,
+    executed_at: new Date(),
+    duration_ms: entry.durationMs,
+  });
+}
+
+export async function deleteTaskHistoryEntry(
+  connection: MigrationConnection,
+  ledger: TaskLedger,
+  name: string,
+): Promise<void> {
+  const knex = await connection.client<Knex>();
+  await knex(ledger.tableName).where({ name }).delete();
+}
+
+function migrationLedger(tableName: string): TaskLedger {
+  return { tableName, batched: true };
+}
+
+export async function ensureMigrationTable(
+  connection: MigrationConnection,
+  tableName: string = DEFAULT_MIGRATION_TABLE,
+): Promise<void> {
+  await ensureTaskHistoryTable(connection, migrationLedger(tableName));
+}
+
+export async function readMigrationHistory(
+  connection: MigrationConnection,
+  tableName: string = DEFAULT_MIGRATION_TABLE,
+): Promise<MigrationHistoryRecord[]> {
+  const entries = await readTaskHistoryEntries(
+    connection,
+    migrationLedger(tableName),
+  );
+  // A batched ledger selects and maps `batch`, so it is present on every entry.
+  return entries.map((entry) => ({ ...entry, batch: Number(entry.batch) }));
 }
 
 export async function recordMigrationCompleted(
@@ -85,15 +165,17 @@ export async function recordMigrationCompleted(
     durationMs: number;
   },
 ): Promise<void> {
-  const knex = await connection.client<Knex>();
-  await knex(options.tableName ?? DEFAULT_MIGRATION_TABLE).insert({
-    package_name: options.packageName ?? 'app',
-    name: options.name,
-    batch: options.batch,
-    checksum: options.checksum,
-    executed_at: new Date(),
-    duration_ms: options.durationMs,
-  });
+  await recordTaskHistoryEntry(
+    connection,
+    migrationLedger(options.tableName ?? DEFAULT_MIGRATION_TABLE),
+    {
+      packageName: options.packageName ?? 'app',
+      name: options.name,
+      batch: options.batch,
+      checksum: options.checksum,
+      durationMs: options.durationMs,
+    },
+  );
 }
 
 export async function deleteMigrationHistoryRecord(
@@ -103,12 +185,17 @@ export async function deleteMigrationHistoryRecord(
     name: string;
   },
 ): Promise<void> {
-  const knex = await connection.client<Knex>();
-  await knex(options.tableName ?? DEFAULT_MIGRATION_TABLE)
-    .where({ name: options.name })
-    .delete();
+  await deleteTaskHistoryEntry(
+    connection,
+    migrationLedger(options.tableName ?? DEFAULT_MIGRATION_TABLE),
+    options.name,
+  );
 }
 
+/**
+ * A ledger created before `package_name` existed is upgraded in place. A task
+ * ledger cannot be maintained by a migration: migrations are what it records.
+ */
 async function ensurePackageNameColumn(
   knex: Knex,
   tableName: string,
