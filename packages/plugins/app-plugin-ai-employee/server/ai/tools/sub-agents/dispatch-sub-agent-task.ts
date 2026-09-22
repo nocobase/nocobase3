@@ -1,6 +1,5 @@
 import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import { isModelRef } from '../../../types.js';
 import { managerFactoryToken } from '../../../factory/manager-factory.js';
 import { repositoryFactoryToken } from '../../../factory/repository-factory.js';
 import {
@@ -69,7 +68,7 @@ export default defineTools({
     );
     const model = await managers.aiEmployeesManager.resolveModel(
       employee,
-      isModelRef(ctx.state.model) ? ctx.state.model : undefined,
+      ctx.state.model,
     );
     const answer = await managers.subAgentsDispatcher.run(
       {

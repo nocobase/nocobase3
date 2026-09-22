@@ -19,7 +19,6 @@ import type {
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import type { AIEmployeeSkillSettings } from './options.js';
-import { isModelRef } from '../../../types.js';
 import type { Actor, ModelRef, Translate } from '../../../types.js';
 import type { BuiltInManager } from '../../../manager/built-in-manager.js';
 import type { KnowledgeBaseManager } from '../../../manager/knowledge-base-manager.js';
@@ -142,10 +141,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     // The employee's own configuration decides the model. The turn may ask for
     // one, but only a model the employee allows is honoured, and a turn that
     // asks for none is resolved rather than rejected.
-    const requested = this.state().model;
-    const model = await this.resolveModel(
-      isModelRef(requested) ? requested : undefined,
-    );
+    const model = await this.resolveModel(this.state().model);
     const resolved = await this.llmProviderManager.getLLMService(model);
     return {
       providerName: resolved.service.provider,

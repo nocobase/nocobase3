@@ -112,17 +112,6 @@ describe('AIEmployeeAgentContextProvider', () => {
     );
   });
 
-  it('ignores a state model that is not a model reference', async () => {
-    const { context, resolveModel, employeeModel } = createFixture('default', {
-      model: { llmService: 'service-1' },
-    });
-
-    await context.resolveLLM();
-
-    expect(resolveModel).toHaveBeenCalledWith(undefined);
-    expect(await resolveModel.mock.results[0].value).toBe(employeeModel);
-  });
-
   it('re-reads activated skill tools on every activeTools query', async () => {
     const { context, toolContext } = createFixture();
     toolContext.getAgentTools.mockResolvedValue({

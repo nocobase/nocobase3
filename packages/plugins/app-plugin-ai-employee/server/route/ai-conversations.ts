@@ -272,7 +272,14 @@ function parseTurn(
         : typeof input.editingMessageId === 'string'
           ? input.editingMessageId
           : undefined,
-    model: input.model,
+    // Every other field is checked here, and the model is no exception: what
+    // arrives is whatever the client sent, and `AgentState.model` promises a
+    // resolved reference to every tool that reads it.
+    model:
+      typeof input.model?.llmService === 'string' &&
+      typeof input.model?.model === 'string'
+        ? { llmService: input.model.llmService, model: input.model.model }
+        : undefined,
     webSearch: input.webSearch === true,
     important:
       typeof input.important === 'string' ? input.important : undefined,

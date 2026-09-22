@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createAIEmployeeRoutes } from '../../server/route/index.js';
 import { createTestAIEmployeeFixture } from './test-context.js';
@@ -181,6 +181,53 @@ describe('AI action routers', () => {
       error: 'key is required',
     });
   });
+  it('keeps a model the client did not send as a resolved reference out of the turn', async () => {
+    const app = new Hono();
+    const { deps, services } = createTestAIEmployeeFixture();
+    services.ready = async () => undefined;
+    const sendMessages = vi.fn(async () => undefined);
+    services.conversationService.sendMessages = sendMessages as never;
+    const routes = createAIEmployeeRoutes({
+      authentication: deps.auth,
+      authorization: deps.authorization,
+      services,
+      logger: deps.logging.getLogger('ai-employee-test'),
+    });
+    app.route('/api/ai', routes);
+
+    const send = async (model: unknown) => {
+      const response = await app.request(
+        'http://localhost/api/ai/aiConversations:sendMessages',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: 'session-1',
+            aiEmployee: 'dara',
+            messages: [],
+            model,
+          }),
+        },
+      );
+      // The action answers over SSE, so the handler is only done once the
+      // stream is.
+      await response.text();
+    };
+
+    await send({ llmService: 'openai' });
+    await send('gpt-5');
+    await send({ llmService: 'openai', model: 'gpt-5', reasoning: 'ignored' });
+
+    // `AgentState.model` promises every tool a resolved reference, so a partial
+    // one is dropped rather than carried, and extras do not ride along.
+    expect(sendMessages.mock.calls[0][0].turn.model).toBeUndefined();
+    expect(sendMessages.mock.calls[1][0].turn.model).toBeUndefined();
+    expect(sendMessages.mock.calls[2][0].turn.model).toEqual({
+      llmService: 'openai',
+      model: 'gpt-5',
+    });
+  });
+
   it('wires each managed resource to a dedicated service instance', () => {
     const { deps, services } = createTestAIEmployeeFixture();
     expect(services.employeeService.constructor.name).toBe('AIEmployeeService');

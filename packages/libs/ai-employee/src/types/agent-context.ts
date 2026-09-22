@@ -16,7 +16,12 @@ export interface AgentState {
    * which the caller supplies per execution.
    */
   handoffMessages?: AIMessageInput[];
-  model?: Record<string, unknown>;
+  /**
+   * The model this execution resolved to. It is written by whoever creates the
+   * agent, after the employee's own policy has decided, so a reader takes it as
+   * given rather than narrowing it back out of loose data.
+   */
+  model?: { llmService: string; model: string };
   webSearch?: boolean;
   important?: string;
   frontendTools?: unknown[];
