@@ -338,9 +338,7 @@ export class AIConversationService {
     return createAgentContext({
       actor,
       state,
-      logger: this.logger,
-      translate,
-      getHeader,
+      runtime: { logger: this.logger, translate, getHeader },
     });
   }
 

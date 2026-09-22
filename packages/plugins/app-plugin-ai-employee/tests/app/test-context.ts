@@ -103,7 +103,7 @@ export function createTestAgentContext({
   return createAgentContext({
     actor,
     state,
-    logger: fixture.deps.logging.getLogger('ai-employee-test'),
+    runtime: { logger: fixture.deps.logging.getLogger('ai-employee-test') },
   });
 }
 

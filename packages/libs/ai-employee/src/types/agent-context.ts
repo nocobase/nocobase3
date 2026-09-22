@@ -44,6 +44,18 @@ export interface AgentActor {
 }
 
 /**
+ * What the host lends an execution for as long as it runs: somewhere to log,
+ * the caller's language, and the request's headers where there is a request.
+ * None of it describes the execution, which is why it is not part of the state.
+ */
+export interface AgentRuntime {
+  logger: Logger;
+  translate?: (key: string, options?: Record<string, unknown>) => string;
+  /** Headers of the request this execution runs for, where one exists. */
+  getHeader?: (name: string) => string | undefined;
+}
+
+/**
  * What a backend tool receives. It carries this execution's data plus the
  * dependencies the tool itself declared — nothing else. A tool that needs a
  * manager, repository or service declares its container token and reads it
@@ -53,10 +65,7 @@ export interface AgentContext<TDeps = Record<string, never>> {
   deps: TDeps;
   actor: AgentActor;
   state: AgentState;
-  logger: Logger;
+  runtime: AgentRuntime;
   /** Host-owned authorization boundary for loading skill content. */
   availableSkills?: () => Promise<readonly SkillsEntity[]>;
-  translate?: (key: string, options?: Record<string, unknown>) => string;
-  /** Headers of the request this execution runs for, where one exists. */
-  getHeader?: (name: string) => string | undefined;
 }

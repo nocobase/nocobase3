@@ -182,7 +182,7 @@ async function createFixture(services?: DataServices) {
       toolCallStatusMiddleware(
         { messages },
         currentConversation,
-        context.logger,
+        context.runtime.logger,
       ),
       'wrapToolCall',
     );

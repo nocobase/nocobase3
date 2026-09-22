@@ -302,9 +302,7 @@ export class AgentServiceFactory {
     return createAgentContext({
       actor,
       state,
-      logger: this.loggerService,
-      translate,
-      getHeader,
+      runtime: { logger: this.loggerService, translate, getHeader },
     });
   }
 }

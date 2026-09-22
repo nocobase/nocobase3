@@ -88,8 +88,8 @@ export default defineTools({
         // decided for it — its session, and the model and handover this task
         // names — replaces the inherited values in the dispatcher.
         state: ctx.state,
-        translate: ctx.translate,
-        getHeader: ctx.getHeader,
+        translate: ctx.runtime.translate,
+        getHeader: ctx.runtime.getHeader,
       },
     );
     await updateMessageMetadata(

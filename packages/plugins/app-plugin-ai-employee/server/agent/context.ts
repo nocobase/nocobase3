@@ -7,16 +7,17 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
-import type { AgentContext, AgentState } from '@nocobase/ai-employee';
-import type { Logger } from '@nocobase/logging';
-import type { Actor, Translate } from '../types.js';
+import type {
+  AgentContext,
+  AgentRuntime,
+  AgentState,
+} from '@nocobase/ai-employee';
+import type { Actor } from '../types.js';
 
 export interface CreateAgentContextOptions {
   readonly actor: Actor;
   readonly state: AgentState;
-  readonly logger: Logger;
-  readonly translate?: Translate;
-  readonly getHeader?: (name: string) => string | undefined;
+  readonly runtime: AgentRuntime;
 }
 
 /**
@@ -29,9 +30,7 @@ export interface CreateAgentContextOptions {
 export function createAgentContext({
   actor,
   state,
-  logger,
-  translate,
-  getHeader,
+  runtime,
 }: CreateAgentContextOptions): AgentContext {
   return {
     deps: {},
@@ -42,8 +41,6 @@ export function createAgentContext({
       locale: actor.locale,
     },
     state: { ...state },
-    logger,
-    translate,
-    getHeader,
+    runtime,
   };
 }

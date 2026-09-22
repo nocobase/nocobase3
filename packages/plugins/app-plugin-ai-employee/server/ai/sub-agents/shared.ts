@@ -43,7 +43,7 @@ function localizeBuiltInInfo(
 ): void {
   ctx.deps.managers.builtInManager.setupBuiltInInfo({
     employee: employee as unknown as AIEmployeeType,
-    translate: ctx.translate,
+    translate: ctx.runtime.translate,
   });
 }
 
