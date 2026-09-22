@@ -1,6 +1,5 @@
 import { SupportedModel } from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
-import { randomUUID } from 'node:crypto';
 import type {
   EnabledLLMServiceDto,
   ProviderModelDto,
@@ -133,13 +132,5 @@ export class ModelService {
       seen.add(id);
       return [{ id }];
     });
-  }
-
-  async getSupportedProvider({ model }: { model: string }): Promise<string[]> {
-    return this.ai.llmProviderManager.getSupportedProvider(model as any);
-  }
-
-  randomUuid(_options: {}): string {
-    return randomUUID();
   }
 }
