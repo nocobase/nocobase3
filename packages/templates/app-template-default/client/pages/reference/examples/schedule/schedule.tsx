@@ -632,42 +632,53 @@ export default function ScheduleExamplePage(): ReactElement {
             {t('examples.schedule.milestonesDescription')}
           </p>
         </div>
-        <Carousel opts={{ align: 'start' }} className='w-full px-12'>
-          <CarouselContent className='-ml-3'>
-            {SCHEDULE_MILESTONES.map((milestone) => (
-              <CarouselItem
-                key={milestone.id}
-                className='basis-full pl-3 sm:basis-1/2 lg:basis-1/3'
-              >
-                <Card size='sm' className='m-px h-full'>
-                  <CardHeader>
-                    <CardDescription className='tabular-nums'>
-                      {format(addDays(WEEK_ORIGIN, milestone.dayOffset), 'PP', {
-                        locale: dateLocale,
-                      })}
-                    </CardDescription>
-                    <CardTitle className='text-sm'>{milestone.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className='flex items-center justify-between gap-2'>
-                    <span className='text-xs text-muted-foreground'>
-                      {t('examples.schedule.milestoneOwner', {
-                        name: milestone.owner,
-                      })}
-                    </span>
-                    <Badge
-                      variant='outline'
-                      className={CATEGORY_CLASS[milestone.category]}
-                    >
-                      {t(`examples.schedule.category.${milestone.category}`)}
-                    </Badge>
-                  </CardContent>
-                </Card>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <CarouselPrevious aria-label={t('reference.previous')} />
-          <CarouselNext aria-label={t('reference.next')} />
-        </Carousel>
+        {/* The arrows sit at -left-12 and -right-12, outside the carousel root,
+            so the room for them belongs to this wrapper; padding on the root
+            itself indents the cards and leaves the arrows clipped. */}
+        <div className='px-12'>
+          <Carousel opts={{ align: 'start' }} className='w-full'>
+            <CarouselContent className='-ml-3'>
+              {SCHEDULE_MILESTONES.map((milestone) => (
+                <CarouselItem
+                  key={milestone.id}
+                  className='basis-full pl-3 sm:basis-1/2 lg:basis-1/3'
+                >
+                  <Card size='sm' className='m-px h-full'>
+                    <CardHeader>
+                      <CardDescription className='tabular-nums'>
+                        {format(
+                          addDays(WEEK_ORIGIN, milestone.dayOffset),
+                          'PP',
+                          {
+                            locale: dateLocale,
+                          },
+                        )}
+                      </CardDescription>
+                      <CardTitle className='text-sm'>
+                        {milestone.title}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className='flex items-center justify-between gap-2'>
+                      <span className='text-xs text-muted-foreground'>
+                        {t('examples.schedule.milestoneOwner', {
+                          name: milestone.owner,
+                        })}
+                      </span>
+                      <Badge
+                        variant='outline'
+                        className={CATEGORY_CLASS[milestone.category]}
+                      >
+                        {t(`examples.schedule.category.${milestone.category}`)}
+                      </Badge>
+                    </CardContent>
+                  </Card>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <CarouselPrevious aria-label={t('reference.previous')} />
+            <CarouselNext aria-label={t('reference.next')} />
+          </Carousel>
+        </div>
       </section>
 
       <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
