@@ -1,3 +1,29 @@
+/**
+ * Customers — a directory that switches between a card grid and a data table,
+ * with a profile panel and an add dialog.
+ *
+ * Skeleton: `PageHeader` → toolbar of search `Input`, tier `Select`, match
+ * count and a grid/table `ToggleGroup` → `Empty` state, card grid or
+ * `DataTable` → `Sheet` profile with details/activity/notes `Tabs` → `Dialog`
+ * add form. Helpers follow the page: `ProfileRow`, `ContactHoverCard`,
+ * `CustomerMenu`.
+ *
+ * Patterns, by the component or block that holds them:
+ * - View-mode switch: the `ToggleGroup` in the toolbar and `view`.
+ * - Client-side search plus facet filter: `visible` and the toolbar controls.
+ * - No-results state with a reset action: the `Empty` block.
+ * - Entity card grid: the `Card` grid block.
+ * - Hover contact card: `ContactHoverCard`.
+ * - One actions menu reused by card and row: `CustomerMenu`.
+ * - Table columns reusing the card widgets: `columns`.
+ * - Tabbed detail panel with definition-list rows: the `Sheet` block and
+ *   `ProfileRow`.
+ * - Create form with a disabled submit while saving: `submitCustomer`.
+ *
+ * Demonstration filler to leave behind: the inert Import button, the
+ * `setTimeout` fake save, the seeded activity and notes behind the profile
+ * tabs and the `mailto:` menu item.
+ */
 import { useTranslation } from '@nocobase/i18n/client';
 import type { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';

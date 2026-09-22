@@ -1,3 +1,27 @@
+/**
+ * Orders — a list screen: KPI strip, status tabs, a filterable table, a detail
+ * panel, a destructive confirmation and a create dialog.
+ *
+ * Skeleton: `PageHeader` → four `StatCard`s → status `Tabs` with counts →
+ * `DataTable` with search, `DateRangePicker` and `DataTableViewOptions` →
+ * `Sheet` detail with a line-item `Table` → `AlertDialog` cancel → `Dialog`
+ * create form.
+ *
+ * Patterns, by the component or block that holds them:
+ * - KPI card with a delta badge: `StatCard`.
+ * - Selection, sortable headers, identity cell, status badge map: `columns`,
+ *   `STATUS_BADGE`.
+ * - Row actions menu with copy-to-clipboard and a destructive item: the
+ *   `actions` column cell.
+ * - Status tabs with per-status counts: the `Tabs` block and `counts`.
+ * - Detail side panel keyed off a nullable row: the `Sheet` block and `detail`.
+ * - Destructive confirmation: `confirmCancel` and the `AlertDialog` block.
+ * - Uncontrolled create form read through `FormData`: `submitNewOrder`.
+ *
+ * Demonstration filler to leave behind: the inert Export button, the
+ * hard-coded KPI deltas, the `SO-2026-<n>` id sequencing and the single-line
+ * order `submitNewOrder` synthesises in place of a server call.
+ */
 import { useTranslation } from '@nocobase/i18n/client';
 import type { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';

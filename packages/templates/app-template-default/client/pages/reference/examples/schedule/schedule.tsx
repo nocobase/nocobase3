@@ -1,3 +1,32 @@
+/**
+ * Team schedule — a calendar: a mini-month picker beside a day/week agenda
+ * grid or a month list, a milestone carousel and a drawer that creates or
+ * edits an event.
+ *
+ * Skeleton: `PageHeader` with a view `ToggleGroup`, prev/today/next
+ * `ButtonGroup` and New event → two-column grid. Left: `Calendar` card with
+ * the day's events, category legend card. Right: agenda card switching between
+ * `AgendaSkeleton`, a month `Table` and an hour-by-day grid → milestone
+ * `Carousel` → `Drawer` event form.
+ *
+ * Patterns, by the component or block that holds them:
+ * - Mini calendar marking days with events: the `Calendar` and `eventDays`.
+ * - Prev/today/next navigation: `shift` and the `ButtonGroup`.
+ * - Event chip opening a `Popover`: `EventCard`.
+ * - Category colors from chart tokens: `CATEGORY_CLASS`, `CATEGORY_DOT`.
+ * - Hand-built time grid: the `AGENDA_HOURS` block.
+ * - Loading skeleton: `AgendaSkeleton`.
+ * - Multi-select chips combobox: the attendees `Combobox multiple` and
+ *   `useComboboxAnchor`.
+ * - One drawer form for create and edit: `openCreate`, `openEdit`,
+ *   `saveEvent`.
+ * - Locale-aware dates: `useLocale()` mapped to a `date-fns` locale and
+ *   passed to every `format` call, `Calendar` and `DatePicker`.
+ *
+ * Demonstration filler to leave behind: the simulate-loading `Toggle`, the
+ * `setTimeout` fake save, the milestone carousel and the `dayOffset` mock
+ * dates that keep the data on "this week".
+ */
 import { useLocale, useTranslation } from '@nocobase/i18n/client';
 import {
   addDays,

@@ -1,3 +1,30 @@
+/**
+ * Onboarding survey — a one-question-at-a-time questionnaire with a completion
+ * summary, a prose side panel and an FAQ accordion.
+ *
+ * Skeleton: `PageHeader` → three-column grid. Left, two columns: one `Card`
+ * that swaps between the summary `Table` and the `Questionnaire`. Right: an
+ * about `Card` in `Typography*` prose and an FAQ `Card` with `Accordion`.
+ *
+ * Patterns, by the component or block that holds them:
+ * - Stepped questionnaire shell with progress and actions: the
+ *   `Questionnaire` block, `ITEM_DEFINITIONS`, `activeItem`.
+ * - Single and multiple choice: `ChoiceQuestion`.
+ * - Rating scale: `RatingQuestion`.
+ * - Slider with a live badge: `SliderQuestion`.
+ * - Free text: the `QuestionnaireInput` case.
+ * - Dispatch on question kind from the data file: the `switch` on
+ *   `question.kind`.
+ * - Answer summary and reset: `summary`, `startOver`.
+ * - Prose block and FAQ: the `Typography*` and `Accordion` cards.
+ *
+ * Wording is stored as translation keys on the data objects (`titleKey`,
+ * `labelKey`) and resolved with `t()`, unlike the other pages, which build
+ * keys by template.
+ *
+ * Demonstration filler to leave behind: the about card and FAQ exist to show
+ * Typography and Accordion; `handleSubmit` only flips `completed` and toasts.
+ */
 import { useTranslation } from '@nocobase/i18n/client';
 import {
   CheckCircle2Icon,

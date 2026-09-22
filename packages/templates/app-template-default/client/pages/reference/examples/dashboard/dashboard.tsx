@@ -1,3 +1,29 @@
+/**
+ * Dashboard — an analytics overview: KPIs with charts, a recent-orders table,
+ * an activity feed and goal progress, split across two tabs.
+ *
+ * Skeleton: `PageHeader` with a range `ToggleGroup` → four `StatCard`s →
+ * `Tabs` overview/analytics. Overview: area-plus-target-line revenue chart
+ * beside a donut → recent orders `Table` in a card beside an `ItemGroup`
+ * activity feed → `Progress` targets card. Analytics: two-series `LineChart`
+ * beside a `BarChart` → device donut.
+ *
+ * Patterns, by the block that holds them:
+ * - KPI card with an icon slot: `StatCard`.
+ * - Segmented range control: the `ToggleGroup` in `actions`.
+ * - Chart colors through tokens: `revenueConfig` and the other `ChartConfig`
+ *   objects, every color `var(--chart-N)`.
+ * - Combo chart with a gradient fill: the `AreaChart` block.
+ * - Donut with a centered total: the `PieChart` block and its `Label` content.
+ * - Compact table inside a card: the recent-orders `Card`.
+ * - Activity feed: the `ItemGroup` block and `ACTIVITY_ICON`; `relativeLabel`
+ *   for coarse relative time.
+ * - Goal meters: the `Progress` block.
+ *
+ * Demonstration filler to leave behind: the inert Export and View-all buttons,
+ * the seeded activity feed, the quarterly targets and the second donut, which
+ * repeats the first. This is the one example page without a `Toaster`.
+ */
 import { useTranslation } from '@nocobase/i18n/client';
 import { format } from 'date-fns';
 import {

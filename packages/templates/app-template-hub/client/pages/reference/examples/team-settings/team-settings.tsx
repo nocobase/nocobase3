@@ -1,3 +1,33 @@
+/**
+ * Team settings — a settings area with four tabs: workspace profile, member
+ * management, notification preferences and billing.
+ *
+ * Skeleton: `PageHeader` → `Breadcrumb` → banner `Alert` whose action jumps to
+ * the billing tab → controlled `Tabs`. General: profile `Card` with avatar
+ * row, slug `InputGroup`, `Textarea`, `NativeSelect`. Members: `AvatarGroup`
+ * header and a `Table` with an inline role `Select` and remove. Notifications:
+ * grouped `Switch` rows and a `Collapsible` advanced section. Billing: trial
+ * `Alert`, plan `RadioGroup` cards, usage `Progress`, invoices `Table` →
+ * invite `Dialog` → remove-member `AlertDialog`.
+ *
+ * Patterns, by the component or block that holds them:
+ * - Banner with an action that changes tab: the `Alert` block and `setTab`.
+ * - Controlled tabs: `TABS`, `tab`.
+ * - Horizontal fields: `Field orientation='horizontal'` throughout General.
+ * - Inline editing in a table row, owner exempt: the members `Table` and
+ *   `changeRole`.
+ * - Grouped preference switches from a map: `toEnabledMap` and the
+ *   Notifications `FieldGroup`.
+ * - Collapsible advanced section with a rotating chevron: the `Collapsible`.
+ * - Plan picker as radio cards: the billing `RadioGroup`.
+ * - Usage meters and an invoice table: the `Progress` and `Table` blocks.
+ * - Invite dialog reading `FormData`; destructive confirm: `submitInvite`,
+ *   `confirmRemove`.
+ *
+ * Demonstration filler to leave behind: `saveGeneral`, logo upload and invoice
+ * download only toast; the trial and balance alerts are static copy; the
+ * advanced `Collapsible` exists to show the primitive.
+ */
 import { useTranslation } from '@nocobase/i18n/client';
 import { format } from 'date-fns';
 import {

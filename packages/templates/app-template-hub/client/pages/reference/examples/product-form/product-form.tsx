@@ -1,3 +1,34 @@
+/**
+ * Product form — a record editor showing most of what a form field can be:
+ * text, combobox, grouped input, tags, slider, switch, radio cards, native
+ * select, date, attachments and checkboxes, with a sidebar and a sticky save
+ * bar.
+ *
+ * Skeleton: `PageHeader` → one `<form noValidate>` in a two-column grid. Main
+ * column: Details, Pricing, Inventory and Media `Card`s. Sidebar: Status,
+ * Organization and Danger zone `Card`s. A sticky action bar closes the form.
+ *
+ * Patterns, by the component or block that holds them:
+ * - Central draft state and a typed updater: `draft`, `update`.
+ * - Field-level validation with `FieldError` and `aria-invalid`: `errors`,
+ *   `errorMessage`, `handleSubmit`.
+ * - Searchable brand picker: the `Combobox` in Details.
+ * - Prefix and suffix-action input: the SKU `InputGroup` and `suggestSku`.
+ * - Tag editor with chips, Enter and suggestions: `addTag`, `removeTag`,
+ *   `handleTagKeyDown`.
+ * - Slider with a live derived value: the discount `Slider`.
+ * - Horizontal switch and radio-card fields: `Field orientation='horizontal'`
+ *   in Pricing.
+ * - Field shown only when a switch is on: the low-stock threshold.
+ * - Attachment list with remove: the `AttachmentGroup` in Media.
+ * - Date field in a form: `DatePicker` in Status.
+ * - Danger zone behind an `AlertDialog`; save bar with `Kbd` hint and
+ *   `Spinner`.
+ *
+ * Demonstration filler to leave behind: the Fill-sample button and
+ * `SAMPLE_PRODUCT`, the `UPLOAD_QUEUE` drip-feed in `uploadNext`, the
+ * `setTimeout` fake save, the unbound ⌘S hint and `TAG_SUGGESTIONS`.
+ */
 import { useTranslation } from '@nocobase/i18n/client';
 import { format } from 'date-fns';
 import {

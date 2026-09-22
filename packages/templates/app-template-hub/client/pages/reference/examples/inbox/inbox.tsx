@@ -1,3 +1,31 @@
+/**
+ * Inbox — a shared support inbox: a filterable conversation list beside a
+ * message thread with assignment, snooze and a reply composer.
+ *
+ * Skeleton: `PageHeader` → `ResizablePanelGroup` at a fixed height. Left
+ * panel: search `Input`, status `ToggleGroup`, `ScrollArea` of
+ * `ConversationRow`s. Right panel: thread header with avatar, badges, tooltip
+ * actions and an overflow menu → subject bar → `MessageScroller` thread →
+ * composer with `Textarea`, a `ButtonGroup` and Send. An empty panel shows
+ * when nothing is selected.
+ *
+ * Patterns, by the component or block that holds them:
+ * - Selectable list row as a button: `ConversationRow`, with `aria-current`.
+ * - Resizable master/detail: the `ResizablePanelGroup` block.
+ * - Chat message with day separators and attachments: `ThreadMessage`,
+ *   `ThreadAttachment`.
+ * - Scrolling thread that resets per conversation and offers a jump button:
+ *   the `MessageScrollerProvider` keyed by `selected.id`.
+ * - Tooltip icon button: `ThreadAction`.
+ * - Grouped overflow menu with a disabled item: the assign/snooze/close
+ *   `DropdownMenu` and `SNOOZE_OPTIONS`.
+ * - Optimistic local reply and mark-read on open: `sendReply`,
+ *   `openConversation`, `updateSelected`.
+ *
+ * Demonstration filler to leave behind: Refresh only toasts, the attach and
+ * emoji buttons are stubs, suggest-reply pastes a template, snooze changes
+ * status without scheduling and the ⌘↵ hint is not bound.
+ */
 import { useTranslation } from '@nocobase/i18n/client';
 import { format, isSameDay, isToday, isYesterday } from 'date-fns';
 import {
