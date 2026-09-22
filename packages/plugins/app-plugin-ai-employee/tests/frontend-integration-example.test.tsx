@@ -28,9 +28,10 @@ import type {
 import type { AIService } from '../registry/nocobase-ai/services/types.js';
 
 const skillDirectory = '../skills/nocobase-app-plugin-ai-employee/';
+// The Skill publishes this example once. It is executed here rather than read,
+// because a readiness gate that only looks right is the defect it exists for.
 const documents = [
-  { path: 'SKILL.md', heading: '# Frontend App Integration' },
-  { path: 'references/frontend-registry.md', heading: '## Chat surfaces' },
+  { path: 'references/chat-surfaces.md', heading: '## The readiness gate' },
 ];
 
 function readExample(document: (typeof documents)[number]) {
@@ -185,10 +186,6 @@ function expectNoChat(service: ReturnType<typeof createService>) {
   expect(service.createConversation).not.toHaveBeenCalled();
   expect(service.sendMessagesStream).not.toHaveBeenCalled();
 }
-
-it('publishes the same complete integration example in both documents', () => {
-  expect(readExample(documents[0]!)).toBe(readExample(documents[1]!));
-});
 
 describe.each(documents)('issue 6561: $path', (document) => {
   const source = readExample(document);
