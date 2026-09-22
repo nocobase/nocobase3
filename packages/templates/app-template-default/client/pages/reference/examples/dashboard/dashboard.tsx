@@ -411,7 +411,7 @@ export default function DashboardExamplePage(): ReactElement {
       </div>
 
       <Tabs defaultValue='overview'>
-        <TabsList variant='line' className='w-full justify-start'>
+        <TabsList variant='line'>
           <TabsTrigger value='overview'>
             {t('examples.dashboard.tabs.overview')}
           </TabsTrigger>

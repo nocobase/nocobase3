@@ -513,7 +513,7 @@ export default function OrdersExamplePage(): ReactElement {
           value={statusTab}
           onValueChange={(value) => setStatusTab(value as StatusTab)}
         >
-          <TabsList variant='line' className='w-full justify-start'>
+          <TabsList variant='line'>
             {(['all', ...ORDER_STATUSES] as const).map((status) => (
               <TabsTrigger key={status} value={status}>
                 {status === 'all' ? t('reference.all') : statusLabel(status)}

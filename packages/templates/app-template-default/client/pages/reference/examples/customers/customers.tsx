@@ -619,7 +619,7 @@ export default function CustomersExamplePage(): ReactElement {
                 </div>
                 <Separator />
                 <Tabs defaultValue='details'>
-                  <TabsList variant='line' className='w-full justify-start'>
+                  <TabsList variant='line'>
                     <TabsTrigger value='details'>
                       {t('examples.customers.tabs.details')}
                     </TabsTrigger>

@@ -331,7 +331,7 @@ export default function TeamSettingsExamplePage(): ReactElement {
       </Alert>
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as SettingsTab)}>
-        <TabsList variant='line' className='w-full justify-start'>
+        <TabsList variant='line'>
           {TABS.map((item) => (
             <TabsTrigger key={item} value={item}>
               {t(`examples.teamSettings.tabs.${item}`)}
