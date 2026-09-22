@@ -55,6 +55,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # `build` is `shadcn build && vite build`, and Vite does not type-check, so this is the only step that would
+      # catch a TypeScript error before it is published.
+      - name: Typecheck UI Library
+        run: pnpm --filter @nocobase/ui-library typecheck
+
       - name: Build UI Library
         run: pnpm --filter @nocobase/ui-library build
 
@@ -65,9 +70,13 @@ jobs:
           test -s dist/index.html
           test -s dist/favicon.svg
           test -d dist/assets
-          # The registry entry files are not enumerated here: `shadcn build` decides what it writes, and a check
-          # naming them would go stale as items are added.
-          test -d dist/r
+          # The publish step uploads the registry index by name, so its absence has to fail here rather than after
+          # every other object has already been uploaded. The entry files are derived from the index instead of being
+          # listed: `shadcn build` decides what it writes, and a check naming them would go stale as items are added.
+          test -s dist/r/registry.json
+          jq -r '.items[].name' dist/r/registry.json | while IFS= read -r name; do
+            test -s "dist/r/$name.json" || { echo "::error::Registry index lists '$name' but dist/r/$name.json is missing."; exit 1; }
+          done
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
