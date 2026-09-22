@@ -73,7 +73,6 @@ export interface AIEmployeeAgentContextProviderOptions {
   readonly systemMessage?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
   readonly webSearch?: boolean;
-  readonly tools?: { name: string }[];
 }
 
 export class AIEmployeeAgentContextProvider implements AgentContextProvider {
@@ -98,7 +97,6 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly systemMessage: string;
   private readonly skillSettings?: AIEmployeeSkillSettings;
   private readonly webSearch: boolean;
-  private readonly tools: { name: string }[];
 
   public constructor(options: AIEmployeeAgentContextProviderOptions) {
     this.employee = options.employee;
@@ -122,7 +120,6 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     this.systemMessage = options.systemMessage ?? '';
     this.skillSettings = options.skillSettings;
     this.webSearch = options.webSearch ?? false;
-    this.tools = options.tools ?? [];
     this.builtInManager.setupBuiltInInfo({
       employee: this.employee,
       translate: this.translate,
@@ -384,7 +381,6 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
       ...(this.employee.skillSettings?.enabledTools ?? []).map((name) => ({
         name,
       })),
-      ...(this.tools ?? []),
     ];
     if (await this.getKnowledgeBaseRetrieveTool())
       configured.push({ name: SYSTEM_TOOLS.KNOWLEDGE_BASE });
@@ -409,10 +405,9 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     const eligible = new Set(names.filter((name) => this.isToolSelected(name)));
     // A selection is not a capability grant. Preserve deliberately configured
     // legacy web search, but not web search inherited into enabledTools.
-    const configuredWebSearch = [
-      ...(this.employee.skillSettings?.tools ?? []),
-      ...this.tools,
-    ].some(({ name }) => name === SYSTEM_TOOLS.WEB_SEARCH);
+    const configuredWebSearch = (this.employee.skillSettings?.tools ?? []).some(
+      ({ name }: { name: string }) => name === SYSTEM_TOOLS.WEB_SEARCH,
+    );
     if (!this.webSearch && !configuredWebSearch) {
       eligible.delete(SYSTEM_TOOLS.WEB_SEARCH);
     }

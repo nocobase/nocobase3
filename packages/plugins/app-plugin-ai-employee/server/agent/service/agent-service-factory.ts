@@ -56,12 +56,11 @@ export interface CreateEmployeeOptions {
   readonly actor?: Actor;
   /**
    * Conversation-level configuration, held on the conversation record rather
-   * than sent with a turn. `AIConversationService` reads all three in one
-   * place, so a call site never unpacks the record itself.
+   * than sent with a turn. `AIConversationService` reads both in one place, so
+   * a call site never unpacks the record itself.
    */
   readonly systemPrompt?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
-  readonly tools?: { name: string }[];
   /** This turn's runtime data. The only source of the agent's state. */
   readonly turn?: ConversationTurn;
   readonly translate?: Translate;
@@ -162,7 +161,6 @@ export class AgentServiceFactory {
       systemMessage: options.systemPrompt,
       skillSettings: options.skillSettings,
       webSearch: options.turn?.webSearch,
-      tools: options.tools,
     };
     const context = createAIEmployeeAgentContextProvider(contextOptions);
     const persistence = new DatabaseConversationPersistence({

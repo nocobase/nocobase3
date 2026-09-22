@@ -264,10 +264,14 @@ function normalizeIncomingMessageAttachments(
  * The configuration a conversation record holds for its agent, in the shape
  * `createAIEmployee` takes. Every action that starts an agent spreads this
  * rather than unpacking the record itself.
+ *
+ * `options.tools` is deliberately absent: nothing in this package ever writes
+ * one. A tool a conversation may use is decided by the employee's
+ * `skillSettings` and by the per-conversation `skillSettings` filter.
  */
 function conversationAgentOptions(
   conversation: AIConversationEntity,
-): Pick<CreateEmployeeOptions, 'systemPrompt' | 'skillSettings' | 'tools'> {
+): Pick<CreateEmployeeOptions, 'systemPrompt' | 'skillSettings'> {
   const options = conversation.options;
   return {
     systemPrompt:
@@ -276,9 +280,6 @@ function conversationAgentOptions(
         : undefined,
     skillSettings: isRecord(options?.skillSettings)
       ? (options.skillSettings as AIEmployeeSkillSettings)
-      : undefined,
-    tools: Array.isArray(options?.tools)
-      ? (options.tools as { name: string }[])
       : undefined,
   };
 }

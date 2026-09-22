@@ -195,6 +195,15 @@ describe('fixed AgentService contracts', () => {
     expect(factory).not.toContain('private resolveState(');
     expect(types).not.toContain('context?: Record<string, unknown>;');
     expect(types).toContain('runtime?: Record<string, unknown>;');
+
+    // A conversation cannot inject a tool list of its own. Nothing ever wrote
+    // `options.tools`, so what an employee may use is decided by its own
+    // `skillSettings` and narrowed by the per-conversation filter.
+    expect(factory).not.toContain('readonly tools?: { name: string }[]');
+    expect(read('agent/context/ai-employee/context.ts')).not.toContain(
+      'private readonly tools:',
+    );
+    expect(conversationService).not.toMatch(/options\?\.tools/);
   });
 
   it('keeps AI chat conversation ownership in the conversation provider', () => {
