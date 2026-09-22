@@ -1,14 +1,14 @@
 ---
 title: 'Template printing'
-description: 'Use the template printing Skill to help an App Agent implement contracts, orders, and reports from Office templates and business data.'
-keywords: 'NocoBase,template printing,Skill,Agent,DOCX,XLSX,PDF,contracts'
+description: 'Use the template printing Skill in NocoBase 3 to help an App Agent implement contracts, orders, and reports from Office templates and business data.'
+keywords: 'NocoBase 3,template printing,Skill,Agent,DOCX,XLSX,PDF,contracts'
 ---
 
 # Template printing
 
 Template printing generates contracts, orders, invoices, and reports with a defined layout. Provide a template, the records to include, and your output requirements. The App Agent uses the template printing Skill to implement data filling, downloads, and the printing entry point in your application.
 
-`@nocobase/app-plugin-template-print` provides a Skill and supporting references only. Installing it makes implementation guidance available to the Agent. Printing buttons, template management pages, and rendering services are developed for your business requirements. The package creates none of these features and requires no Client or Server registration.
+`@nocobase/app-plugin-template-print` provides a Skill and supporting references only. Installing it makes implementation guidance available to the Agent. Printing buttons, template management pages, and rendering services are implemented in the target App or business plugin according to NocoBase 3 conventions. The package provides no Client or Server runtime entry and creates none of these features automatically.
 
 ## Install and synchronize the Skill
 
@@ -43,6 +43,8 @@ For the first implementation, prepare an actual template and a representative bu
 | Output              | Download DOCX, download PDF, or open a PDF for printing                           |
 | Permissions         | Only print orders and attachments the current user may read                       |
 
+If the requirement leaves the scope open, use the smallest complete slice first: one fixed DOCX asset shipped with the application, one current record with its required child data, and a same-format DOCX download. Add XLSX, PPTX, PDF conversion, batch printing, or template management only when the requirement calls for them.
+
 Give the Agent your existing template. If field tags have not been defined, ask it to add them based on the actual data structure. If you have no template, describe the desired layout and review the template sample the Agent creates first.
 
 Here, Agent means the development Agent working in your application's source directory. Once development is complete, business users use the page's buttons without learning Skills or writing prompts.
@@ -55,7 +57,7 @@ Use a development tool that reads project Skills from the target application's d
 
 > Use the nocobase-app-plugin-template-print Skill to add a “Print contract” button to the order details page. Fill the DOCX template I provided with the current order's customer name, order number, line items, and amounts. Preserve the layout and support DOCX download. Only use data the current user may read. Inspect the existing order fields and page first, then implement and verify with the actual template.
 
-The Agent should reuse the application's data access, permissions, and page structure, adding rendering dependencies as needed. After implementation, open an order, download the contract, and check its fields, line count, amounts, and pagination against the template requirements.
+The Agent should reuse the application's data access, permissions, and page structure. In the target App or business plugin, declare and pin the selected server Renderer directly, add the v3 Route and authorization checks required by the feature, and authenticate and authorize before loading data or rendering. Serve private templates, attachments, and generated files through a protected download Route; a public `contentUrl` or `accessPath` is not an authorization check. After implementation, open an order, download the contract, and check its fields, line count, amounts, and pagination against the template requirements.
 
 ### Print multiple records
 
@@ -73,7 +75,7 @@ Extend an existing feature with concrete requirements:
 
 DOCX, XLSX, and PPTX are template formats to consider during implementation. Actual support depends on what the Agent implements and verifies. Specify where images appear, such as the body, header, footer, or Excel cells. QR codes and linear barcodes are different requirements; specify the encoding type if you need a linear barcode.
 
-PDF conversion usually needs an additional server-side conversion environment. For example, the embedded Carbone conversion path requires compatible LibreOffice and fonts. Ask the Agent to identify deployment requirements for the chosen approach and verify the final PDF. After downloading or opening a PDF, users can choose a printer through their viewer. Silent access to a local printer needs a separate implementation.
+PDF conversion usually needs an additional server-side conversion environment. For example, choosing Carbone with LibreOffice through documented public APIs requires compatible LibreOffice and fonts. Ask the Agent to identify deployment requirements for the chosen approach and verify the final PDF. After downloading or opening a PDF, users can choose a printer through their viewer. Silent access to a local printer needs a separate implementation.
 
 ### Manage multiple templates
 
@@ -81,7 +83,7 @@ Ask for template management only when business users need to maintain templates.
 
 > Sales contracts have domestic and international versions. Allow administrators to upload and replace templates, and let sales staff choose a version when printing. Bind the templates to order data and handle in-flight document generation correctly when a template is replaced. Sales staff must not be able to modify templates.
 
-Fixed templates can be maintained with the application. Uploads, version management, template selection, and management permissions are additional business features to specify in your request.
+Fixed templates can be maintained with the application's code. Uploads, version management, template selection, and management permissions are additional business features to specify in your request.
 
 ## Review the result
 
@@ -92,6 +94,7 @@ Ask the Agent to provide a sample template, generated files, the checks it ran, 
 - Empty line items, long text, multi-page tables, Chinese fonts, and images display correctly in the actual layout.
 - Download filenames and formats are correct, with clear errors for missing templates, empty results, and conversion failures.
 - If PDF is required, conversion, fonts, and pagination are verified in the deployment environment, beyond a successful development-machine download.
+- Private templates, attachments, and generated files are served through protected endpoints; public URLs, hidden buttons, and private storage alone are not access control.
 
 Skill synchronization only establishes that the Agent can read the guidance. A completed feature also needs its business page, server implementation, and generated-file verification.
 
