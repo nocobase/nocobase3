@@ -16,14 +16,14 @@ describe('app client routes', () => {
 
   it('declares application and settings route contributions', async () => {
     expect(applicationRoutes).toHaveLength(2);
-    expect(applicationRoutes[0]).toMatchObject({
+    const [app, settings] = applicationRoutes;
+    // The landing page and the four authentication pages are the whole of this template's routing. The reference
+    // pages under `client/pages/reference/` are deliberately absent: they are source to read while building a page,
+    // not screens this application serves, so nothing routes them and a build never reaches them.
+    expect(app).toMatchObject({
       parent: 'app',
       routes: [
-        {
-          auth: 'required',
-          name: 'home',
-          path: '/',
-        },
+        { auth: 'required', authz: 'skip', name: 'home', path: '/' },
         { auth: 'guest', name: 'login', path: '/login' },
         { auth: 'guest', name: 'register', path: '/register' },
         {
@@ -34,17 +34,21 @@ describe('app client routes', () => {
         { auth: 'guest', name: 'reset-password', path: '/reset-password' },
       ],
     });
-    expect(applicationRoutes[1]).toEqual({
-      parent: 'settings',
-      routes: [],
-    });
-    expect(Object.isFrozen(applicationRoutes[0])).toBe(true);
-    expect(Object.isFrozen(applicationRoutes[1])).toBe(true);
-    for (const route of applicationRoutes[0].routes) {
+    expect(settings).toEqual({ parent: 'settings', routes: [] });
+    expect(Object.isFrozen(app)).toBe(true);
+    expect(Object.isFrozen(settings)).toBe(true);
+    for (const route of app.routes) {
       await expect(route.componentLoader()).resolves.toMatchObject({
         default: expect.any(Function),
       });
     }
+  });
+
+  it('routes nothing under client/pages/reference', () => {
+    // A reference page reaching the router would put a shadcn gallery inside somebody's product, so this pins the
+    // boundary rather than trusting a reviewer to notice the import path.
+    const loaders = JSON.stringify(applicationRoutes);
+    expect(loaders).not.toContain('pages/reference');
   });
 
   it('pins the route names page grants are stored against', () => {
@@ -58,8 +62,8 @@ describe('app client routes', () => {
       },
     ]);
 
+    // The landing page opted out of page authorization, so it is reachable by every signed-in user.
     expect(pageAuthorizations(resolved.routes)).toEqual([
-      // The landing page opted out of page authorization, so it is reachable by every signed-in user.
       { name: 'home', authorizedAs: null },
     ]);
   });

@@ -68,12 +68,29 @@ Run `pnpm package:remove @nocobase/example`. The command uses the application's 
 
 If an older application has the command but not the script, use `pnpm nocobase package remove @nocobase/example`. If its CLI predates the command, update `@nocobase/nb3-cli` first; on a version that already has `skills:sync`, a compatibility fallback is to remove the package with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, verify that the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing an already-absent package to `package:remove` cleans recorded historical Skill ownership without uninstalling or cleaning another package.
 
+## Start from a worked page
+
+Check for `client/pages/reference/` before writing UI of your own. Every current template ships it, so an application generated from any of them carries it; one generated before it existed does not, and its absence is not a defect.
+
+It is source kept to be read. Nothing routes it, so a build never reaches it and no user sees it. Its `README.md` is the index: one table maps the screen you are asked for to the example page and the block inside it that shows the pattern, and a second maps the interaction you need to the component page that demonstrates the primitive. Read that file first rather than listing the directory.
+
+Then work through it in this order:
+
+1. Pick the closest example page from the README table — a list screen starts from `examples/orders`, a record editor from `examples/product-form`, a settings screen from `examples/team-settings` — and read the module comment at the top of its `.tsx`. It names the patterns the page demonstrates, the component that holds each one, and the parts that are demonstration filler.
+2. Open only the blocks the task needs. The example pages are 600 to 1000 lines each because they show several patterns at once; a real screen usually needs two or three of them, and copying the whole page produces an overbuilt one.
+3. Confirm each primitive the block uses is in `client/components/ui/`, and each composition in `client/components/`. If one is missing, add it with `pnpm exec shadcn add` rather than inlining a copy.
+4. Copy the skeleton — `PageContainer` and `PageHeader`, the token classes, the state shape, the `render` prop and `data-icon` conventions — and leave behind the mock data module, the `ExamplePage` frame from `shared.tsx`, and the filler the header comment names.
+5. Move the strings into `client/locales/` under the application's own keys. The reference wording lives in `client/pages/reference/locales/` and never reaches a build.
+
+Do not import from `client/pages/reference/` in a page you ship, and do not give one a route — it is reference material, not a feature.
+
 ## Choose your reference
 
 Read the page for the task in front of you. Do not read all of them.
 
 | Task                                                                                | Read                                                             |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Copy a worked screen instead of designing one from nothing                          | `client/pages/reference/README.md` in the application            |
 | Create a page, write a page component, configure routes or navigation               | [client pages and routes](references/client-pages-and-routes.md) |
 | Add child pages, page Tabs, Dialogs, or Drawers using child routes; add menu groups | [child routes and overlays](references/client-child-routes.md)   |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode    | [components and styling](references/components-and-styling.md)   |

@@ -2,7 +2,31 @@
 
 The UI is shadcn/ui primitives, composed into application components, styled with Tailwind semantic tokens.
 
+## Read a worked page first
+
+If the application has `client/pages/reference/`, open its `README.md` before composing anything. It indexes two groups: `examples/` holds complete business screens on mock data, and `components/` holds one page per shadcn/ui primitive with its variants and a realistic use. Nothing routes either group, so they exist only to be read.
+
+Use `components/<primitive>.tsx` to see how a primitive is actually composed here — which parts it needs, what its controlled form looks like, how its states are styled — instead of inferring an API from its source or from memory. Use `examples/` for the shape of a whole screen; each page's module comment names the patterns it holds so you can read one block rather than a thousand lines. Copy the structure, not the mock data, and never import from either group in a page you ship.
+
 For icon buttons in the page's top-right header, read [header action interactions](header-actions.md) before adding or changing an entry. It defines when to use a tooltip versus a hover panel and how to preserve the components' default dismissal behavior.
+
+## These are Base UI components, not Radix
+
+`components.json` sets the `base-nova` style, so every primitive in `client/components/ui/` is built on Base UI. The API differs from the Radix-based shadcn most examples on the web show, and the difference an implementer hits first is composition:
+
+| Base UI shadcn (this application)                       | Radix shadcn (elsewhere)             |
+| ------------------------------------------------------- | ------------------------------------ |
+| `<Button render={<Link to='/orders' />}>`               | `<Button asChild><Link …/></Button>` |
+| `<DialogTrigger render={<Button variant='outline' />}>` | `<DialogTrigger asChild>`            |
+| `<DropdownMenuTrigger render={<Button size='icon' />}>` | `<DropdownMenuTrigger asChild>`      |
+
+`asChild` does not exist here; passing it is a type error. Hand the element to render through `render`, as an element without children, and the primitive supplies its own children and merges props.
+
+Two more Base UI shapes the reference pages comment on: a `DropdownMenuLabel` must sit inside a `DropdownMenuGroup`, and `Select`'s `onValueChange` hands back `T | null`, so coalesce it before storing.
+
+Icons inside a button carry a `data-icon` attribute so the button can space them: `data-icon='inline-start'` before the label, `data-icon='inline-end'` after it. An icon-only button uses `size='icon'` and an accessible name.
+
+Menus and popovers open on hover by setting `openOnHover` and `delay={0}` on the trigger; a radio or checkbox item closes its menu on selection with `closeOnClick`. These are component options, not hand-written mouse handlers; the header and account menu in `client/layouts/components/` use them, and [header action interactions](header-actions.md) says when to.
 
 ## Page container
 
@@ -50,6 +74,20 @@ Application ownership permits edits but does not make editing `client/extensions
 ## Compose upward
 
 `client/components/ui/` holds primitives. Build your own components on top of them and put those in `client/components/`.
+
+A few compositions already live there because shadcn documents them as patterns rather than publishing them as registry items. Reach for these before writing the same thing from scratch:
+
+| Component                                                                           | For                                                     |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `PageContainer`, `PageHeader`                                                       | Page frame: padding, title, description, actions        |
+| `DataTable`, `DataTableColumnHeader`, `DataTablePagination`, `DataTableViewOptions` | Sortable, filterable, paginated lists on TanStack Table |
+| `DatePicker`, `DateRangePicker`                                                     | A date or range in a `Popover` over `Calendar`          |
+| `Typography*`                                                                       | Prose headings, paragraphs, lists, blockquotes          |
+| `Breadcrumbs`                                                                       | The trail from route `breadcrumb` declarations          |
+| `RouteDialog`, `RouteDrawer`, `RouteChildPage`                                      | URL-addressed overlays and covering child pages         |
+| `Loading`                                                                           | The shared spinner                                      |
+
+Toasts are raised with `toast.add({ type, title, description })` from `@/components/ui/toast`, which needs a `<Toaster />` mounted somewhere above the caller. The application shell does not mount one, so a page that toasts mounts it once at its root as the reference pages do, or the application adds it to a layout for every page to share. Charts wrap `recharts` in `ChartContainer` with a `ChartConfig` whose colors are `var(--chart-1)` through `var(--chart-5)`. The `chart` and `toast` reference pages show both.
 
 ```tsx
 // client/components/order-summary.tsx
