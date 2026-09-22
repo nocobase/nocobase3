@@ -1,5 +1,6 @@
 import type { CollectionDefinition, CollectionKind } from '../types.js';
 import type { CollectionResolutionResult } from '../resolver/types.js';
+import type { CollectionResolutionIssueCode } from '../resolver/errors.js';
 import type {
   ListPhysicalCollectionsOptions,
   PhysicalCollectionSchema,
@@ -38,4 +39,36 @@ export interface ConnectionCollections {
   refresh(name: string): Promise<CollectionDefinition | undefined>;
   invalidate(name?: string): void;
   validateRelations(name?: string): Promise<void>;
+  /**
+   * Compares every stored metadata record with the physical schema behind it.
+   *
+   * The two are separate records of what exists, and a hand-rolled reset or a
+   * table dropped outside a migration leaves them disagreeing — after which
+   * resolving that Collection fails, and so does anything that resolves it.
+   * Reads only.
+   */
+  diagnose(): Promise<CollectionDiagnosis>;
+}
+
+/** What a metadata record and its physical table disagree about. */
+export interface CollectionDiagnosisIssue {
+  readonly name: string;
+  /** The physical table the record maps to. */
+  readonly tableName: string;
+  readonly code: CollectionDiagnosisIssueCode | CollectionResolutionIssueCode;
+  readonly message: string;
+  /**
+   * The record describes a table that does not exist, so deleting the record
+   * is a complete fix. Every other issue needs a migration: the table is
+   * there and something about it no longer matches what was recorded.
+   */
+  readonly orphaned: boolean;
+}
+
+export type CollectionDiagnosisIssueCode = 'COLLECTION_TABLE_MISSING';
+
+export interface CollectionDiagnosis {
+  /** Metadata records examined. */
+  readonly checked: number;
+  readonly issues: readonly CollectionDiagnosisIssue[];
 }

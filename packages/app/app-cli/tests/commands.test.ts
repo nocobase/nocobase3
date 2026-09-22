@@ -22,6 +22,7 @@ describe('application command factories', () => {
       'db:rollback',
       'db:redo',
       'db:unlock',
+      'db:doctor',
       'collections:generate',
       'i18n:check',
     ]);

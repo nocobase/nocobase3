@@ -72,3 +72,44 @@ describe('recreating a Collection whose metadata outlived its table', () => {
     ).rejects.toThrow(/maps to missing physical table "leads"/);
   });
 });
+
+describe('diagnosing metadata against the schema', () => {
+  it('reports the records whose tables are gone and nothing else', async () => {
+    const db = database();
+    const connection = db.connection();
+    await connection.builder.createCollection('leads', (collection) => {
+      collection.increments('id');
+    });
+    await connection.builder.createCollection('leadNotes', (collection) => {
+      collection.increments('id');
+    });
+
+    await expect(connection.collections.diagnose()).resolves.toMatchObject({
+      checked: 2,
+      issues: [],
+    });
+
+    const knex = await connection.client<Knex>();
+    await knex.raw('drop table leads');
+    connection.collections.invalidate();
+
+    const diagnosis = await connection.collections.diagnose();
+    expect(diagnosis.checked).toBe(2);
+    expect(diagnosis.issues).toEqual([
+      expect.objectContaining({
+        name: 'leads',
+        tableName: 'leads',
+        code: 'COLLECTION_TABLE_MISSING',
+        orphaned: true,
+      }),
+    ]);
+
+    // Removing the record is the whole fix: what it described is gone.
+    await connection.collectionMetadata.removeDocument('leads');
+    connection.collections.invalidate();
+    await expect(connection.collections.diagnose()).resolves.toMatchObject({
+      checked: 1,
+      issues: [],
+    });
+  });
+});
