@@ -618,7 +618,7 @@ export default function CustomersExamplePage(): ReactElement {
                   </div>
                 </div>
                 <Separator />
-                <Tabs defaultValue='details'>
+                <Tabs defaultValue='details' className='gap-5'>
                   <TabsList variant='line'>
                     <TabsTrigger value='details'>
                       {t('examples.customers.tabs.details')}
@@ -631,7 +631,7 @@ export default function CustomersExamplePage(): ReactElement {
                     </TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value='details' className='pt-4'>
+                  <TabsContent value='details'>
                     <dl className='grid gap-3 text-sm'>
                       <ProfileRow
                         label={t('reference.email')}
@@ -664,7 +664,7 @@ export default function CustomersExamplePage(): ReactElement {
                     </dl>
                   </TabsContent>
 
-                  <TabsContent value='activity' className='pt-4'>
+                  <TabsContent value='activity'>
                     {profile.activity.length === 0 ? (
                       <p className='text-sm text-muted-foreground'>
                         {t('examples.customers.noActivity')}
@@ -697,7 +697,7 @@ export default function CustomersExamplePage(): ReactElement {
                     )}
                   </TabsContent>
 
-                  <TabsContent value='notes' className='pt-4'>
+                  <TabsContent value='notes'>
                     {profile.notes.length === 0 ? (
                       <p className='text-sm text-muted-foreground'>
                         {t('examples.customers.noNotes')}

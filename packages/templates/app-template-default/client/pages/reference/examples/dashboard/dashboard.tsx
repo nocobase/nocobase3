@@ -410,7 +410,7 @@ export default function DashboardExamplePage(): ReactElement {
         />
       </div>
 
-      <Tabs defaultValue='overview'>
+      <Tabs defaultValue='overview' className='gap-5'>
         <TabsList variant='line'>
           <TabsTrigger value='overview'>
             {t('examples.dashboard.tabs.overview')}
@@ -420,7 +420,7 @@ export default function DashboardExamplePage(): ReactElement {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value='overview' className='space-y-6 pt-6'>
+        <TabsContent value='overview' className='space-y-6'>
           <div className='grid gap-4 lg:grid-cols-3'>
             <Card className='lg:col-span-2'>
               <CardHeader>
@@ -727,7 +727,7 @@ export default function DashboardExamplePage(): ReactElement {
           </Card>
         </TabsContent>
 
-        <TabsContent value='analytics' className='space-y-6 pt-6'>
+        <TabsContent value='analytics' className='space-y-6'>
           <div className='grid gap-4 lg:grid-cols-2'>
             <Card>
               <CardHeader>

@@ -330,7 +330,11 @@ export default function TeamSettingsExamplePage(): ReactElement {
         </AlertAction>
       </Alert>
 
-      <Tabs value={tab} onValueChange={(value) => setTab(value as SettingsTab)}>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as SettingsTab)}
+        className='gap-5'
+      >
         <TabsList variant='line'>
           {TABS.map((item) => (
             <TabsTrigger key={item} value={item}>
@@ -339,7 +343,7 @@ export default function TeamSettingsExamplePage(): ReactElement {
           ))}
         </TabsList>
 
-        <TabsContent value='general' className='space-y-6 pt-6'>
+        <TabsContent value='general' className='space-y-6'>
           <Card>
             <CardHeader>
               <CardTitle>{t('examples.teamSettings.general.title')}</CardTitle>
@@ -450,7 +454,7 @@ export default function TeamSettingsExamplePage(): ReactElement {
           </div>
         </TabsContent>
 
-        <TabsContent value='members' className='space-y-6 pt-6'>
+        <TabsContent value='members' className='space-y-6'>
           <Card>
             <CardHeader>
               <CardTitle>{t('examples.teamSettings.members.title')}</CardTitle>
@@ -582,7 +586,7 @@ export default function TeamSettingsExamplePage(): ReactElement {
           </Card>
         </TabsContent>
 
-        <TabsContent value='notifications' className='space-y-6 pt-6'>
+        <TabsContent value='notifications' className='space-y-6'>
           <Card>
             <CardHeader>
               <CardTitle>
@@ -680,7 +684,7 @@ export default function TeamSettingsExamplePage(): ReactElement {
           </Card>
         </TabsContent>
 
-        <TabsContent value='billing' className='space-y-6 pt-6'>
+        <TabsContent value='billing' className='space-y-6'>
           <Alert>
             <MailIcon />
             <AlertTitle>
