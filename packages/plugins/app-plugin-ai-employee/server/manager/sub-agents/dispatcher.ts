@@ -45,7 +45,8 @@ export type SubAgentTask = {
   question: string;
   skillSettings?: Record<string, any>;
   webSearch?: boolean;
-  messages?: AIMessageInput[];
+  /** Messages the dispatching agent hands over; see `ConversationTurn`. */
+  handoffMessages?: AIMessageInput[];
   writer?: (chunk: any) => void;
 };
 
@@ -245,7 +246,7 @@ export class SubAgentsDispatcher {
       question,
       skillSettings,
       webSearch,
-      messages,
+      handoffMessages,
       writer,
     } = task;
     const userId = options.actor.id;
@@ -272,7 +273,7 @@ export class SubAgentsDispatcher {
       skillSettings,
       turn: {
         ...options.turn,
-        messages: messages ?? options.turn?.messages,
+        handoffMessages,
         model,
         webSearch: webSearch ?? options.turn?.webSearch,
       },
@@ -289,14 +290,16 @@ export class SubAgentsDispatcher {
         )
       : null;
     const runtime: Record<string, unknown> = {};
+    // The handover only happens where it means something: the user interrupted
+    // this sub-agent's tool call, so their message is answering it.
     if (
-      messages &&
+      handoffMessages?.length &&
       decisions?.decisions?.some(
         (decision: { type: 'approve' | 'edit' | 'reject' }) =>
           decision.type === 'reject',
       )
     ) {
-      runtime.appendMessages = messages;
+      runtime.appendMessages = handoffMessages;
     }
 
     const result = await agent.invoke({

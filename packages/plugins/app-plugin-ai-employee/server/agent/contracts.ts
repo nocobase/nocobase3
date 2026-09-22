@@ -17,7 +17,22 @@ import type { ConversationStreamTarget } from '../types.js';
  */
 export interface ConversationTurn {
   readonly messageId?: string;
-  readonly messages?: readonly AIMessageInput[];
+  /**
+   * Messages to hand to a sub-agent whose pending tool call this turn
+   * interrupted, and nothing else. They are neither the model's history, which
+   * the checkpointer holds, nor this call's input, which is
+   * `AgentRequest.userMessages`.
+   *
+   * One flow sets them. When a user ignores a sub-agent's pending tool call and
+   * sends a new message, the main agent is resumed with the tool decisions
+   * alone, so that message never enters the main graph at all. It reaches
+   * `dispatch-sub-agent-task` through the agent state instead, which hands it
+   * to the sub-agent as `appendMessages`. The message is answering the
+   * sub-agent's pending question, so it belongs to that conversation and is
+   * persisted there rather than in the main one. Every other turn leaves this
+   * empty.
+   */
+  readonly handoffMessages?: readonly AIMessageInput[];
   /** The model this turn asks for. The employee's policy still decides. */
   readonly model?: ModelRef;
   readonly webSearch?: boolean;

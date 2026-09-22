@@ -800,6 +800,7 @@ export class AIConversationService {
     actor,
     sessionId,
     aiEmployee,
+    messages: incomingMessages,
     stream = true,
     turn,
     transport,
@@ -807,6 +808,7 @@ export class AIConversationService {
     actor: Actor;
     sessionId: string;
     aiEmployee: string;
+    messages?: readonly AIMessageInput[];
     stream?: boolean;
     turn: ConversationTurn;
     transport: ConversationTransport;
@@ -815,15 +817,15 @@ export class AIConversationService {
     const { translate, getHeader } = transport;
 
     try {
-      if (!turn.messages) {
+      if (!incomingMessages) {
         throw new ResourceActionError(
           400,
           translate('messages must be an array'),
         );
       }
-      // The turn is immutable, so the mutations this action makes — attachment
-      // normalization and the cancelled-tool continuation — happen on a copy.
-      const messages = [...turn.messages];
+      // The caller's array is not this action's to mutate, and it mutates twice:
+      // attachment normalization and the cancelled-tool continuation.
+      const messages = [...incomingMessages];
       normalizeIncomingMessageAttachments(translate, messages);
       const userMessage = messages.find(
         (message: AIMessageInput) => message.role === 'user',
@@ -888,6 +890,15 @@ export class AIConversationService {
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
+      // A sub-agent waiting on a tool call is resolved before the agent exists,
+      // because whether it was interrupted decides what the agent's state
+      // carries. Both calls are repository work and need no agent.
+      const interrupted =
+        !turn.messageId &&
+        (await this.subAgentsDispatcher.isInterrupted(sessionId));
+      const userDecisions = interrupted
+        ? await this.subAgentsDispatcher.reject(sessionId, actor.id)
+        : undefined;
       const agent = await this.agentServiceFactory.createAIEmployee({
         username: employee.username,
         sessionId,
@@ -895,7 +906,13 @@ export class AIConversationService {
         actor,
         systemPrompt,
         skillSettings,
-        turn: { ...turn, messages },
+        // These messages answer the sub-agent's pending question, so they are
+        // handed to it rather than sent to this model. Every other turn leaves
+        // the field empty.
+        turn: {
+          ...turn,
+          handoffMessages: userDecisions ? messages : undefined,
+        },
         translate,
         getHeader,
       });
@@ -907,30 +924,22 @@ export class AIConversationService {
         );
       const runInvoke = (request: AgentRequest) =>
         request.messageId ? agent.forkInvoke(request) : agent.invoke(request);
-      if (!turn.messageId) {
-        if (await this.subAgentsDispatcher.isInterrupted(sessionId)) {
-          const userDecisions = await this.subAgentsDispatcher.reject(
+      if (userDecisions) {
+        if (stream) {
+          await runStream({ userDecisions });
+          return undefined;
+        }
+        return await runInvoke({ userDecisions });
+      }
+      if (!turn.messageId && !interrupted) {
+        const toolMessages = await agent.cancelToolCall();
+        if (toolMessages?.length) {
+          await prependCancelledToolContinuation(
+            this.repositories,
             sessionId,
-            actor.id,
+            messages,
+            toolMessages,
           );
-          if (userDecisions) {
-            if (stream) {
-              await runStream({ userDecisions });
-            } else {
-              return await runInvoke({ userDecisions });
-            }
-            return undefined;
-          }
-        } else {
-          const toolMessages = await agent.cancelToolCall();
-          if (toolMessages?.length) {
-            await prependCancelledToolContinuation(
-              this.repositories,
-              sessionId,
-              messages,
-              toolMessages,
-            );
-          }
         }
       }
 
@@ -1140,11 +1149,7 @@ export class AIConversationService {
         actor,
         systemPrompt,
         skillSettings,
-        turn: {
-          ...turn,
-          messageId,
-          messages: resendMessages.length ? resendMessages : turn.messages,
-        },
+        turn: { ...turn, messageId },
         translate,
         getHeader,
       });

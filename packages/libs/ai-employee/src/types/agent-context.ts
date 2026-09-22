@@ -10,7 +10,12 @@ export interface AgentToolCallResult {
 export interface AgentState {
   sessionId?: string;
   messageId?: string;
-  messages?: AIMessageInput[];
+  /**
+   * Messages an agent may hand to a sub-agent it dispatches. They are neither
+   * the model's history, which the checkpointer holds, nor this call's input,
+   * which the caller supplies per execution.
+   */
+  handoffMessages?: AIMessageInput[];
   model?: Record<string, unknown>;
   webSearch?: boolean;
   important?: string;

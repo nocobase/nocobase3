@@ -128,6 +128,7 @@ export function createAIConversationsRouter(
           actor: context.var.currentUser,
           sessionId: requiredString(input.sessionId, 'sessionId'),
           aiEmployee: input.aiEmployee,
+          messages: Array.isArray(input.messages) ? input.messages : undefined,
           stream: input.stream !== false,
           turn: parseTurn(context, input),
           transport: transport(context, target),
@@ -271,7 +272,6 @@ function parseTurn(
         : typeof input.editingMessageId === 'string'
           ? input.editingMessageId
           : undefined,
-    messages: Array.isArray(input.messages) ? input.messages : undefined,
     model: input.model,
     webSearch: input.webSearch === true,
     important:

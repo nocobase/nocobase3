@@ -96,7 +96,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
           model: resolvedModel,
           question: 'Find current information',
           webSearch: true,
-          messages: [
+          handoffMessages: [
             {
               role: 'user',
               content: { type: 'text', content: 'Parent context' },
@@ -128,7 +128,9 @@ describe('SubAgentsDispatcher direct dependencies', () => {
     expect(createAIEmployee.mock.calls[0][0].turn).not.toHaveProperty(
       'sessionId',
     );
-    expect(createAIEmployee.mock.calls[0][0].turn.messages).toHaveLength(1);
+    expect(createAIEmployee.mock.calls[0][0].turn.handoffMessages).toHaveLength(
+      1,
+    );
     const request = invoke.mock.calls[0][0];
     expect(request).not.toHaveProperty('model');
     expect(request).not.toHaveProperty('context');

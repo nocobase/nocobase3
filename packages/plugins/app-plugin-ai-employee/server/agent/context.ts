@@ -35,7 +35,9 @@ export function toAgentState(
   return {
     sessionId: decided?.sessionId,
     messageId: turn?.messageId,
-    messages: turn?.messages ? [...turn.messages] : undefined,
+    handoffMessages: turn?.handoffMessages
+      ? [...turn.handoffMessages]
+      : undefined,
     model: model ? { ...model } : undefined,
     webSearch: turn?.webSearch,
     important: turn?.important,

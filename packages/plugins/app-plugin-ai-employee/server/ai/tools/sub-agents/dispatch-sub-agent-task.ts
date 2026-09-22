@@ -77,7 +77,7 @@ export default defineTools({
         employee,
         model,
         webSearch: ctx.state.webSearch,
-        messages: ctx.state.messages,
+        handoffMessages: ctx.state.handoffMessages,
         question,
         skillSettings: (skillSettings ?? undefined) as
           Record<string, unknown> | undefined,
@@ -86,9 +86,10 @@ export default defineTools({
       {
         actor: ctx.actor,
         // The sub-agent inherits this agent's turn; its own session and model
-        // are decided when the sub-agent is created.
+        // are decided when the sub-agent is created. The handoff messages ride
+        // on the task, which is what reaches the sub-agent's conversation, so
+        // they are not repeated here.
         turn: {
-          messages: ctx.state.messages,
           frontendTools: ctx.state.frontendTools,
           toolCallResults: ctx.state.toolCallResults,
           timezone: ctx.state.timezone,
