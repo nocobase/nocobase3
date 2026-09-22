@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       include_pro:
-        description: 'Also promote Pro plugins after the OSS promotion succeeds (does not publish packages)'
+        description: 'Also merge Pro plugins after the nocobase3 merge succeeds (does not publish packages)'
         type: boolean
         default: true
       dry_run:
