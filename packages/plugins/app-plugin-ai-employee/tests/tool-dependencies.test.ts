@@ -30,7 +30,7 @@ function createService(tools: unknown[], withContainer = true) {
     logger: { warn: vi.fn(), error: vi.fn() },
     ...(withContainer ? { container } : {}),
     context: {
-      toolRuntimeContext: () => baseContext,
+      agentContext: baseContext,
       state: () => baseContext.state ?? {},
       currentConversation: () => ({ sessionId: 'deps' }),
       resolveLLM: async () => ({

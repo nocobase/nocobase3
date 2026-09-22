@@ -52,7 +52,7 @@ export interface AIEmployeeAgentContextProviderOptions {
   readonly currentConversation: CurrentConversation;
   readonly actor: Actor;
   readonly translate?: Translate;
-  readonly toolRuntimeContext: AgentContext;
+  readonly agentContext: AgentContext;
   /**
    * Applies the employee's model policy to an optionally requested model. A
    * caller may ask for a model but never widen what the employee allows.
@@ -80,7 +80,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly conversation: CurrentConversation;
   private readonly actor: Actor;
   private readonly translate?: Translate;
-  private readonly runtimeContext: AgentContext;
+  public readonly agentContext: AgentContext;
   private readonly resolveModel: (model?: ModelRef | null) => Promise<ModelRef>;
   private readonly llmProviderManager: LLMProviderManager;
   private readonly toolsManager: ToolsManager;
@@ -103,7 +103,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     this.conversation = options.currentConversation;
     this.actor = options.actor;
     this.translate = options.translate;
-    this.runtimeContext = options.toolRuntimeContext;
+    this.agentContext = options.agentContext;
     this.resolveModel = options.resolveModel;
     this.llmProviderManager = options.llmProviderManager;
     this.toolsManager = options.toolsManager;
@@ -129,12 +129,8 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     return this.conversation;
   }
 
-  public toolRuntimeContext(): AgentContext {
-    return this.runtimeContext;
-  }
-
   public state(): AgentState {
-    return this.runtimeContext.state;
+    return this.agentContext.state;
   }
 
   public async resolveLLM(): Promise<ResolvedAgentLLM> {
@@ -296,14 +292,14 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     )
       return undefined;
     return this.toolsManager.getTools(SYSTEM_TOOLS.KNOWLEDGE_BASE, {
-      ctx: this.runtimeContext,
+      ctx: this.agentContext,
     });
   }
 
   private listTools(filter?: ToolsFilter): Promise<ToolsEntity[]> {
     return this.toolsManager.listTools({
       ...filter,
-      ctx: this.runtimeContext,
+      ctx: this.agentContext,
     });
   }
 
@@ -358,14 +354,14 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     );
     const tools = await this.listTools({ scope: 'GENERAL' });
     const getSkill = await this.toolsManager.getTools(SYSTEM_TOOLS.GET_SKILL, {
-      ctx: this.runtimeContext,
+      ctx: this.agentContext,
     });
     if (getSkill) tools.push(getSkill);
     if (this.webSearch === true) {
       const webSearch = await this.toolsManager.getTools(
         SYSTEM_TOOLS.WEB_SEARCH,
         {
-          ctx: this.runtimeContext,
+          ctx: this.agentContext,
         },
       );
       if (webSearch) tools.push(webSearch);

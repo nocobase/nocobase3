@@ -71,6 +71,7 @@ function createProvider(
   };
   const context = new FixedAgentContextProvider({
     sessionId: 'fixed-session',
+    agentContext: { state: { sessionId: 'fixed-session' } } as never,
     model: { llmService: 'memory-test-service', model: 'memory-test-model' },
     provider,
     providerName: llm.providerName,
@@ -144,6 +145,7 @@ it('runs on the model it was created with and exposes its tools', async () => {
   const defaultProvider = {} as LLMProvider;
   const context = new FixedAgentContextProvider({
     sessionId: 'context-session',
+    agentContext: { state: { sessionId: 'context-session' } } as never,
     model: { llmService: 'default-service', model: 'default-model' },
     provider: defaultProvider,
     providerName: 'default-provider',

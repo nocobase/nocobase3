@@ -326,10 +326,9 @@ export class AgentService {
           tools: new Map<string, ToolsEntity>(),
           activeTools: () => Promise.resolve(new Set<string>()),
         };
-    const baseToolContext = context.toolRuntimeContext();
     const resolvedTools = llm.provider.resolveTools(
       [...discoveredTools.tools.values()].map((entity) =>
-        buildTool(entity, this.toolContext(entity, baseToolContext)),
+        buildTool(entity, this.toolContext(entity, context.agentContext)),
       ),
     );
     let thread = await conversation.messages.currentThread();
@@ -354,11 +353,11 @@ export class AgentService {
         : null;
     // A tool's context is bound when the tool is built, never read back out of
     // the invocation config, so `agentContext` on a request reaches nothing.
-    const { agentContext: _requestAgentContext, ...runtimeContext } =
+    const { agentContext: _requestAgentContext, ...requestRuntime } =
       request.runtime ?? {};
     const config = {
       context: {
-        ...runtimeContext,
+        ...requestRuntime,
         agentRequest: request,
         decisions: request.userDecisions,
       },

@@ -48,7 +48,7 @@ function createFixture(
     sessionId: 'test',
     actor: { id: 1, roles: [], isRoot: false },
     currentConversation: { sessionId: 'test' },
-    toolRuntimeContext: {},
+    agentContext: { state: { sessionId: 'test' } },
     toolsManager: {
       listTools: vi.fn(async (filter: { scope?: string }) =>
         tools.filter((entry) => !filter.scope || entry.scope === filter.scope),

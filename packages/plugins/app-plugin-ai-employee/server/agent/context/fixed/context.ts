@@ -1,4 +1,5 @@
 import type {
+  AgentContext,
   AgentState,
   AIMessageInput,
   ToolsEntity,
@@ -23,7 +24,7 @@ export interface FixedAgentContextOptions {
   readonly systemPrompt?: string;
   readonly tools?: ReadonlyMap<string, ToolsEntity>;
   readonly activeTools?: ReadonlySet<string>;
-  readonly toolRuntimeContext?: { state: AgentState };
+  readonly agentContext: AgentContext;
 }
 
 export class FixedAgentContextProvider implements AgentContextProvider {
@@ -35,7 +36,7 @@ export class FixedAgentContextProvider implements AgentContextProvider {
   private readonly prompt?: string;
   private readonly tools: ReadonlyMap<string, ToolsEntity>;
   private readonly activeToolNames: ReadonlySet<string>;
-  private readonly runtimeContext?: { state: AgentState };
+  public readonly agentContext: AgentContext;
   public constructor(options: FixedAgentContextOptions) {
     this.conversation = {
       sessionId: options.sessionId,
@@ -49,21 +50,15 @@ export class FixedAgentContextProvider implements AgentContextProvider {
     this.prompt = options.systemPrompt;
     this.tools = options.tools ?? new Map();
     this.activeToolNames = options.activeTools ?? new Set(this.tools.keys());
-    this.runtimeContext = options.toolRuntimeContext;
+    this.agentContext = options.agentContext;
   }
 
   public currentConversation(): CurrentConversation {
     return this.conversation;
   }
 
-  public toolRuntimeContext(): unknown {
-    return this.runtimeContext;
-  }
-
   public state(): AgentState {
-    return (
-      this.runtimeContext?.state ?? { sessionId: this.conversation.sessionId }
-    );
+    return this.agentContext.state;
   }
 
   public async resolveLLM(): Promise<ResolvedAgentLLM> {

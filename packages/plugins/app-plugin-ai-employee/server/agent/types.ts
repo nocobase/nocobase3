@@ -12,6 +12,7 @@ import type { ToolsEntity } from '@nocobase/ai-employee';
 import type { Logger } from '@nocobase/logging';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import type {
+  AgentContext,
   AgentState,
   AgentThread,
   AIMessage,
@@ -393,7 +394,7 @@ export interface AgentContextProvider {
    * when the AgentService is created and is never taken from a request, so a
    * caller cannot swap the actor, session, or services a tool runs with.
    */
-  toolRuntimeContext(): unknown;
+  readonly agentContext: AgentContext;
 }
 
 export interface ChatMessageConverter<TSource, TResult> {

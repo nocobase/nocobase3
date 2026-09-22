@@ -18,7 +18,7 @@ import { AgentService } from '../server/agent/service/agent-service.js';
 import { createTestConversationProvider } from './test-conversation-provider.js';
 import { DEFAULT_AGENT_FEATURES } from '../server/agent/types.js';
 
-const runtimeContext = { marker: 'from-provider' };
+const agentContext = { marker: 'from-provider' } as never;
 
 function createFixture() {
   const invoke = vi.fn(async () => ({ messages: [] }));
@@ -36,8 +36,8 @@ function createFixture() {
     conversation: createTestConversationProvider({ sessionId: 'runtime' }),
     logger: { warn: vi.fn(), error: vi.fn() },
     context: {
-      toolRuntimeContext: vi.fn(() => runtimeContext),
-      state: vi.fn(() => runtimeContext.state ?? {}),
+      agentContext,
+      state: vi.fn(() => agentContext.state ?? {}),
       currentConversation: vi.fn(() => ({ sessionId: 'runtime' })),
       resolveLLM: vi.fn(async () => ({
         providerName: 'test',
@@ -83,7 +83,7 @@ describe('AgentService tool runtime context', () => {
 
     // The tool declared nothing, so it receives the execution context and an
     // empty `deps` — not the provider object itself, and nothing ambient.
-    expect(await runBuiltTool()).toEqual({ ...runtimeContext, deps: {} });
+    expect(await runBuiltTool()).toEqual({ ...agentContext, deps: {} });
   });
 
   it('ignores an agent context supplied by a request and keeps the other runtime values', async () => {
@@ -97,7 +97,7 @@ describe('AgentService tool runtime context', () => {
       },
     });
 
-    expect(await runBuiltTool()).toEqual({ ...runtimeContext, deps: {} });
+    expect(await runBuiltTool()).toEqual({ ...agentContext, deps: {} });
     const config = invoke.mock.calls[0][1];
     // The key reaches nothing now, and is not forwarded either.
     expect(config.context).not.toHaveProperty('agentContext');

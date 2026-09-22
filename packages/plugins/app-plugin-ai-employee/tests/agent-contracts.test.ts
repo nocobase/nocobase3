@@ -499,7 +499,7 @@ describe('fixed AgentService contracts', () => {
     const providers = read('agent/context/ai-employee/context.ts');
     // Each tool is built with its own context; a request-supplied one is
     // dropped rather than forwarded.
-    expect(service).toContain('this.toolContext(entity, baseToolContext)');
+    expect(service).toContain('this.toolContext(entity, context.agentContext)');
     expect(service).toContain('agentContext: _requestAgentContext');
     expect(service).not.toContain('context.ctx');
     expect(providers).not.toContain('ctx: options.ctx');
@@ -534,9 +534,7 @@ describe('fixed AgentService contracts', () => {
       currentConversation(): CurrentConversation {
         return { sessionId: 'contract' };
       }
-      toolRuntimeContext(): unknown {
-        return {};
-      }
+      readonly agentContext = { state: { sessionId: 'contract' } } as never;
       resolveLLM(): Promise<ResolvedAgentLLM> {
         return Promise.resolve({
           providerName: 'test',
@@ -694,9 +692,7 @@ describe('Agent execution failure classification', () => {
     currentConversation(): CurrentConversation {
       return { sessionId: 'configuration' };
     },
-    toolRuntimeContext(): unknown {
-      return {};
-    },
+    agentContext: { state: { sessionId: 'configuration' } } as never,
     resolveLLM(): Promise<ResolvedAgentLLM> {
       return Promise.reject(failure);
     },

@@ -57,8 +57,8 @@ const provider = {
 const agentFor = (sessionId: string) => {
   const context: AgentContextProvider = {
     currentConversation: () => ({ sessionId }),
-    toolRuntimeContext: () => ({}),
-    state: () => ({}),
+    agentContext: { state: { sessionId } } as never,
+    state: () => ({ sessionId }),
     resolveLLM: async () => ({
       providerName: 'test',
       llmService: 'test-service',

@@ -146,7 +146,7 @@ export class AgentServiceFactory {
       },
       actor,
       translate: options.translate,
-      toolRuntimeContext: agentContext,
+      agentContext,
       resolveModel: (model?: ModelRef | null) =>
         managers.aiEmployeesManager.resolveModel(employee, model),
       llmProviderManager: this.aiManager.llmProviderManager,
@@ -261,7 +261,7 @@ export class AgentServiceFactory {
     const context = new FixedAgentContextProvider({
       sessionId,
       username: options.username,
-      toolRuntimeContext: this.createContext(
+      agentContext: this.createContext(
         options.actor ?? { id: 0, roles: [], isRoot: true },
         options.translate,
         options.getHeader,

@@ -17,7 +17,7 @@ const createFixture = (
       model: 'model-1',
     })),
   };
-  const toolRuntimeContext = { actor, ai: {}, state };
+  const agentContext = { actor, ai: {}, state };
   const employeeModel = {
     llmService: 'employee-service',
     model: 'employee-model',
@@ -32,7 +32,7 @@ const createFixture = (
     },
     sessionId: 'session-1',
     actor,
-    toolRuntimeContext,
+    agentContext,
     resolveModel,
     llmProviderManager,
     toolsManager: {},

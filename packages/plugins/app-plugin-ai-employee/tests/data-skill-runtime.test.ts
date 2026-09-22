@@ -120,7 +120,7 @@ async function createFixture(services?: DataServices) {
       timezone: 'UTC',
     })),
   };
-  const runtimeContext: AgentContext = createTestAgentContext();
+  const agentContext: AgentContext = createTestAgentContext();
   // Stands in for the container: what each declared token resolves to here.
   const resolved = new Map<unknown, unknown>([
     [dataServicesFactoryToken, () => services ?? data],
@@ -143,7 +143,7 @@ async function createFixture(services?: DataServices) {
     employeeSettings: Partial<EmployeeSkillSettings> = {},
   ) {
     const context: AgentContext = {
-      ...runtimeContext,
+      ...agentContext,
       state: { sessionId },
     };
     const currentConversation = { sessionId, username: 'atlas' };
@@ -156,7 +156,7 @@ async function createFixture(services?: DataServices) {
       sessionId,
       currentConversation,
       actor: context.actor,
-      toolRuntimeContext: context,
+      agentContext: context,
       llmProviderManager: aiManager.llmProviderManager,
       toolsManager: aiManager.toolsManager,
       skillsManager: aiManager.skillsManager,
