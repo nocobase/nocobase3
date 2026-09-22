@@ -102,6 +102,16 @@ A checksum recorded when a migration or seed ran no longer matching its current 
 
 Repair records a decision; it does not make one. It is the right tool for drift where the schema is already what the new source would produce — a reformat, a comment, a rebuild that produced different output. When the edit changed what the migration does, repair is the wrong tool in both directions: while the branch is unmerged, `pnpm db:redo` applies the correction; once it is merged, a new migration does. Rewriting the checksum instead leaves the database with the old schema and nothing recording that it differs.
 
+### Why the default is `warn`
+
+Reporting drift rather than refusing to run is a deliberate default, not an oversight, and it follows from what the checksum covers: a migration's checksum is a hash of its file contents, so running the formatter over the migration directory or adding a comment changes it. Under `error` that harmless edit stops the application from starting until someone runs `db repair`.
+
+The same default protects a deployment for a different reason. Startup runs migrations, and a failure there stops startup, so a policy of refusing to run turns drift into an outage. Drift is reachable on a legitimate upgrade path — the compiled representation of a migration is not guaranteed to hash the same as the source a database recorded, which is why verified legacy checksums are converted under the task lock rather than rejected.
+
+What `warn` costs is that an edit to an executed migration is easy to miss: the run says it skipped the migration, the database keeps the schema the old source produced, and only the warning says otherwise. That is what the warning's wording is for — it names `db redo` for an edit that changed what ran, and `db repair` only for one that did not.
+
+Set `onChecksumMismatch: 'error'` per connection when both halves of that trade look different in your project: the migration directory is not formatted or commented after the fact, and a pipeline already gates on `db repair --dry-run --json`, so a refusal is informative rather than an obstacle. Set it for the connection rather than at the top level, so a connection carrying plugin migrations — whose sources you do not control — is not held to it.
+
 ## Verify
 
 - `pnpm db:apply` applies cleanly on an empty database and on an already-migrated one.
