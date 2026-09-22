@@ -36,6 +36,7 @@ it.each(['en-US', 'zh-CN'])(
       screen.getAllByRole('link').map((link) => link.getAttribute('href')),
     ).toEqual([
       '/demo/notifications',
+      '/demo/notification-example',
       '/demo/route-overlays',
       '/demo/articles',
       '/demo/numeric-examples',

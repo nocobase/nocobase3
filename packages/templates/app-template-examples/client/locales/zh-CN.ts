@@ -205,6 +205,10 @@ const zhCN: AppResource = {
       title: '通知中心',
       description: '查看发给你的站内通知，筛选未读消息并管理已读状态。',
     },
+    notificationTasks: {
+      title: '任务通知',
+      description: '将任务分配给不同用户，收件人可以从通知进入详情并调整任务。',
+    },
     routeOverlays: {
       title: '路由弹窗与抽屉',
       description:

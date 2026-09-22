@@ -79,6 +79,7 @@ const enUS = {
   },
   errors: {
     requestFailed: 'Notification request failed.',
+    inAppRecipientNotFound: 'In-app notification recipient does not exist.',
   },
 };
 

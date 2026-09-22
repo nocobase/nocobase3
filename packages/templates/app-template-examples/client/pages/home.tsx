@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   BookOpen,
   Bell,
+  ClipboardList,
   Database,
   Hash,
   FileText,
@@ -21,6 +22,11 @@ import { Button } from '@/components/ui/button';
 
 const examples = [
   { key: 'notifications', path: '/notifications', icon: Bell },
+  {
+    key: 'notificationTasks',
+    path: '/notification-example',
+    icon: ClipboardList,
+  },
   { key: 'routeOverlays', path: '/route-overlays', icon: PanelsTopLeft },
   { key: 'articles', path: '/articles', icon: FileText },
   { key: 'numbers', path: '/numeric-examples', icon: Hash },

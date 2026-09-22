@@ -194,6 +194,7 @@ export function createDatabaseProviderDefinition(options: {
                 status: 'failed',
                 disposition: 'never',
                 error: {
+                  code: 'IN_APP_NOTIFICATION_RECIPIENT_NOT_FOUND',
                   category: 'recipient',
                   message: 'In-app notification recipient does not exist.',
                 },

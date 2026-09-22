@@ -1,5 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { I18nRuntime } from '@nocobase/i18n';
+import { I18nProvider } from '@nocobase/i18n/client';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import locales from '../client/locales/index.js';
 
 const notification = vi.hoisted(() => ({
   listLogs: vi.fn(),
@@ -136,6 +146,72 @@ describe('NotificationLogsPage', () => {
     expect(
       screen.getByText('Need attention').previousSibling,
     ).toHaveTextContent('1');
+  });
+
+  it('translates known Provider errors and keeps legacy messages translatable', async () => {
+    notification.listLogs.mockResolvedValue([
+      {
+        log: {
+          id: 'notification-1',
+          sourceType: 'workflow',
+          status: 'failed',
+          createdAt: '2026-08-28T07:00:00.000Z',
+          updatedAt: '2026-08-28T07:00:01.000Z',
+        },
+        deliveries: [
+          {
+            delivery: {
+              id: 'delivery-1',
+              channelName: 'inbox',
+              providerType: 'in-app',
+              attemptCount: 1,
+              status: 'failed',
+              createdAt: '2026-08-28T07:00:00.000Z',
+              updatedAt: '2026-08-28T07:00:01.000Z',
+            },
+            attempts: [
+              {
+                id: 'attempt-1',
+                sequence: 1,
+                providerType: 'in-app',
+                status: 'failed',
+                startedAt: '2026-08-28T07:00:00.000Z',
+                error: {
+                  code: 'IN_APP_NOTIFICATION_RECIPIENT_NOT_FOUND',
+                  message: 'In-app notification recipient does not exist.',
+                },
+              },
+            ],
+            retryAudits: [],
+          },
+        ],
+      },
+    ]);
+    const runtime = new I18nRuntime({
+      applicationNamespace: 'app',
+      defaultLocale: 'en-US',
+      locales: ['en-US', 'zh-CN'],
+    });
+    runtime.registerApplicationNamespace('app', {
+      'en-US': async () => ({ default: {} }),
+    });
+    runtime.registerNamespace('@nocobase/app-plugin-notification', locales);
+    await runtime.init('en-US');
+
+    render(
+      <I18nProvider runtime={runtime}>
+        <NotificationLogsPage />
+      </I18nProvider>,
+    );
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Expand notification' }),
+    );
+    await act(() => runtime.changeLanguage('zh-CN'));
+
+    expect(screen.getByText('站内信接收用户不存在。')).toBeInTheDocument();
+    expect(
+      screen.queryByText('In-app notification recipient does not exist.'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows user-facing labels for a single Provider in recent notifications', async () => {

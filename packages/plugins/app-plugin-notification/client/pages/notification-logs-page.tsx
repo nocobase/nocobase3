@@ -14,8 +14,13 @@ import { getNotificationClient } from '../runtime.js';
 
 const notification = getNotificationClient();
 
+type Translate = (
+  key: string,
+  options?: Readonly<Record<string, unknown>>,
+) => string;
+
 export default function NotificationLogsPage(): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   const [logs, setLogs] = useState<readonly NotificationLogDetails[]>([]);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -206,7 +211,7 @@ function TestNotificationDialog({
   readonly onClose: () => void;
   readonly onSent: () => void;
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   const [selected, setSelected] = useState<NotificationTestTarget>();
   const [values, setValues] = useState<Readonly<Record<string, string>>>({});
   const [sending, setSending] = useState(false);
@@ -464,7 +469,7 @@ function NotificationLogsTable({
   readonly logs: readonly NotificationLogDetails[];
   readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   return (
     <div className='overflow-x-auto'>
       <table className='w-full min-w-[860px] text-sm'>
@@ -516,7 +521,7 @@ function NotificationTableRow({
   readonly details: NotificationLogDetails;
   readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   const [open, setOpen] = useState(false);
   return (
     <Fragment>
@@ -586,7 +591,7 @@ function DeliveryTable({
   readonly deliveries: readonly NotificationDeliveryDetails[];
   readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   if (deliveries.length === 0) {
     return (
       <p className='py-4 text-center text-sm text-muted-foreground'>
@@ -669,7 +674,7 @@ function AttemptList({
   readonly details: NotificationDeliveryDetails;
   readonly targets?: readonly NotificationTestTarget[];
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   if (details.attempts.length === 0) {
     return (
       <p className='text-xs text-muted-foreground'>
@@ -702,7 +707,7 @@ function AttemptList({
               ) : null}
               {attempt.error ? (
                 <span className='mt-1 block truncate text-destructive'>
-                  {attempt.error.message}
+                  {providerErrorMessage(t, attempt.error)}
                 </span>
               ) : null}
             </span>
@@ -736,7 +741,7 @@ function StatusBadge({
 }: {
   readonly status: NotificationStatus;
 }): ReactElement {
-  const { t } = useTranslation();
+  const { t } = useTranslation('@nocobase/app-plugin-notification');
   return (
     <span
       className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusTone(status)}`}
@@ -765,4 +770,18 @@ function formatTime(value: string): string {
 
 function errorMessage(value: unknown, fallback: string): string {
   return value instanceof Error ? value.message : fallback;
+}
+
+function providerErrorMessage(
+  t: Translate,
+  error: { readonly message: string; readonly code?: string },
+): string {
+  if (
+    error.code === 'IN_APP_NOTIFICATION_RECIPIENT_NOT_FOUND' ||
+    error.message === 'In-app notification recipient does not exist.'
+  )
+    return t('errors.inAppRecipientNotFound', {
+      defaultValue: 'In-app notification recipient does not exist.',
+    });
+  return error.message;
 }

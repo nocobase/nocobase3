@@ -17,6 +17,7 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     path: '/',
   },
   {
+    authz: 'skip',
     auth: 'required',
     componentLoader: () => import('./pages/notifications.js'),
     name: 'notifications',

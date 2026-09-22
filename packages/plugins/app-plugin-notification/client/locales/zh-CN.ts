@@ -78,6 +78,7 @@ const zhCN: NotificationResource = {
   },
   errors: {
     requestFailed: '通知请求失败。',
+    inAppRecipientNotFound: '站内信接收用户不存在。',
   },
 };
 
