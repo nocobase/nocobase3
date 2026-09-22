@@ -312,9 +312,12 @@ export default function ChartExamplePage(): ReactElement {
         description={t('components.chart.pieDescription')}
         contentClassName='block'
       >
+        {/* innerRadius is pixels, so the box holds a pixel height rather than
+            a spacing-scaled one, and the hole is wide enough for the caption
+            centred inside it. */}
         <ChartContainer
           config={categoryConfig}
-          className='mx-auto aspect-square h-72'
+          className='mx-auto aspect-square h-[18rem]'
         >
           <PieChart>
             <ChartTooltip
@@ -325,7 +328,7 @@ export default function ChartExamplePage(): ReactElement {
               data={revenueByCategory}
               dataKey='revenue'
               nameKey='category'
-              innerRadius={60}
+              innerRadius={70}
               strokeWidth={5}
             >
               <Label
@@ -347,8 +350,8 @@ export default function ChartExamplePage(): ReactElement {
                         </tspan>
                         <tspan
                           x={viewBox.cx}
-                          y={(viewBox.cy ?? 0) + 24}
-                          className='fill-muted-foreground'
+                          y={(viewBox.cy ?? 0) + 22}
+                          className='fill-muted-foreground text-xs'
                         >
                           {t('components.chart.revenueTotal')}
                         </tspan>
@@ -369,9 +372,12 @@ export default function ChartExamplePage(): ReactElement {
         description={t('components.chart.radialDescription')}
         contentClassName='block'
       >
+        {/* innerRadius, outerRadius and polarRadius below are pixels, so the
+            box holds a pixel height rather than a spacing-scaled one: at
+            compact h-64 is 205px and the 110px outer radius was clipped. */}
         <ChartContainer
           config={quotaConfig}
-          className='mx-auto aspect-square h-64'
+          className='mx-auto aspect-square h-[16rem]'
         >
           <RadialBarChart
             data={quota}
