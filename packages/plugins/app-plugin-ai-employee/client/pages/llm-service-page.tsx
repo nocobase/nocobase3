@@ -436,7 +436,7 @@ function ModelEditor({
         <DialogHeader>
           <DialogTitle>{t('Edit models')}</DialogTitle>
         </DialogHeader>
-        <div className='flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800'>
+        <div className='flex items-start gap-2 rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground'>
           <CircleAlert className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
           <span>
             {t(

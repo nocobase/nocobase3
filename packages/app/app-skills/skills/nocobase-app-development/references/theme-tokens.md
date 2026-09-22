@@ -25,6 +25,8 @@ Values are complete CSS colors (normally OKLCH), not HSL channels. Define all 31
 
 Use semantic classes such as `bg-card text-card-foreground`, `border-input`, `ring-ring`, and `bg-sidebar text-sidebar-foreground`. Charts must explicitly reference `fill-chart-1`, `stroke-chart-2`, or `var(--chart-1)`; a chart library does not choose these variables automatically. Do not wrap a complete color in `hsl()`.
 
+The surface and outline roles carry structure, not decoration, and a preset that forgets this reads as a clash rather than as a style. Keep `--card` and `--popover` in `--background`'s hue family so a panel lifts off the page instead of changing its subject; keep `--muted` a near-background tint; keep `--border` and `--input` low-chroma hairlines rather than a second statement of `--primary`. A preset's actual colour belongs in `--primary`, `--secondary`, `--accent` and the chart series, which appear on small deliberate areas. Check a preset on a page that stacks several panels and dozens of dividers, not on one that shows a single card.
+
 Sidebar values may reference general colors within the same preset, but remain independently configurable. Do not redefine the general palette inside a sidebar to change its appearance.
 
 ## Fonts

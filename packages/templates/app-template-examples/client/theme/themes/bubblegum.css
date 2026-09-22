@@ -2,6 +2,16 @@
  * bubblegum: colours and radius converted from the tweakcn preset of the same id.
  * https://github.com/jnsahaj/tweakcn (Apache-2.0); see THIRD-PARTY-NOTICES.md in this directory.
  * Typography, spacing and elevation are the values this application defines, unchanged.
+ *
+ * Six light colours are retuned rather than carried over, because upstream spends
+ * the generic surface and outline roles on decoration: `card` was a cream 101 deg
+ * of hue away from the pink `background`, `border` was `primary` itself at chroma
+ * 0.18, and `muted` was a cyan. One demonstration card and a few dividers carry
+ * that; a settings page stacking several panels over dozens of hairlines turns it
+ * into four competing hues. The retuned values keep those roles in the background
+ * hue family and leave the theme's colour in `primary`, `secondary` and `accent`,
+ * which is where it reads as deliberate. The dark rule needs none of this: its
+ * surfaces and outlines are already neutral.
  */
 :root[data-theme='bubblegum'],
 .theme-preview[data-theme='bubblegum'] {
@@ -53,7 +63,7 @@
   --radius: 0.4rem;
   --background: #f6e6ee;
   --foreground: #5b5b5b;
-  --card: #fdedc9;
+  --card: #fffafd;
   --card-foreground: #5b5b5b;
   --popover: #ffffff;
   --popover-foreground: #5b5b5b;
@@ -61,13 +71,13 @@
   --primary-foreground: #ffffff;
   --secondary: #8acfd1;
   --secondary-foreground: #333333;
-  --muted: #b2e1eb;
+  --muted: #f3e4ed;
   --muted-foreground: #7a7a7a;
   --accent: #fbe2a7;
   --accent-foreground: #333333;
   --destructive: #f96f70;
-  --border: #d04f99;
-  --input: #e4e4e4;
+  --border: #eec5dd;
+  --input: #e9cfdf;
   --ring: #e670ab;
   --chart-1: #e670ab;
   --chart-2: #84d2e2;
@@ -76,11 +86,11 @@
   --chart-5: #d7488e;
   --sidebar: #f8d8ea;
   --sidebar-foreground: #333333;
-  --sidebar-primary: #ec4899;
+  --sidebar-primary: #d04f99;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f9a8d4;
   --sidebar-accent-foreground: #333333;
-  --sidebar-border: #f3e8ff;
+  --sidebar-border: #f0d2e6;
   --sidebar-ring: #ec4899;
 }
 
