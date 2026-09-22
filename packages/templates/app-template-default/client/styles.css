@@ -3,7 +3,6 @@
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
 @import './theme/themes/default.css';
-@import './theme/themes/compact.css';
 @import './theme/themes/modern-minimal.css';
 @import './theme/themes/violet-bloom.css';
 @import './theme/themes/mocha-mousse.css';

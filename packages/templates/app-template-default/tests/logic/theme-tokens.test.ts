@@ -115,36 +115,6 @@ function declarations(root: Root, selector: string): Record<string, string> {
 }
 
 describe('theme token contract', () => {
-  it('keeps compact identical to default except for dimensions', () => {
-    const defaultCss = readPreset('default');
-    const compactCss = readPreset('compact');
-    const withoutDimensions = (values: Record<string, string>) =>
-      Object.fromEntries(
-        Object.entries(values).filter(
-          ([key]) =>
-            key !== '--spacing' &&
-            key !== '--radius' &&
-            !key.startsWith('--text-'),
-        ),
-      );
-    for (const mode of ['', '.dark']) {
-      expect(
-        withoutDimensions(
-          declarations(compactCss, `:root${mode}[data-theme='compact']`),
-        ),
-      ).toEqual(
-        withoutDimensions(
-          declarations(defaultCss, `:root${mode}[data-theme='default']`),
-        ),
-      );
-    }
-    const compact = declarations(compactCss, ":root[data-theme='compact']");
-    const standard = declarations(defaultCss, ":root[data-theme='default']");
-    expect(parseFloat(compact['--spacing'])).toBeLessThan(
-      parseFloat(standard['--spacing']),
-    );
-  });
-
   for (const { id } of themePresets) {
     it(`${id} defines complete tokens for the page and isolated previews`, () => {
       const root = readPreset(id);
@@ -173,8 +143,6 @@ describe('theme token contract', () => {
     const standard = declarations(base, ":root[data-theme='default']");
     const standardDark = declarations(base, ":root.dark[data-theme='default']");
     for (const { id } of themePresets) {
-      // Compact exists to change the dimensions, so it is the one deliberate exception.
-      if (id === 'compact') continue;
       const root = readPreset(id);
       expect(
         withoutPalette(declarations(root, `:root[data-theme='${id}']`)),
@@ -188,11 +156,9 @@ describe('theme token contract', () => {
   });
 
   it('gives every preset its own palette', () => {
-    // Compact is Default's palette at a tighter density, so it is the one pair that repeats on purpose. A second
-    // repeat would be two cards offering the reader the same choice.
+    // Two cards with one palette would offer the reader the same choice twice.
     const seen = new Map<string, string>();
     for (const { id } of themePresets) {
-      if (id === 'compact') continue;
       const root = readPreset(id);
       const light = palette(declarations(root, `:root[data-theme='${id}']`));
       const dark = palette(

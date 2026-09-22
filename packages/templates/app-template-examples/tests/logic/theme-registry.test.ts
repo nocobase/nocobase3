@@ -19,9 +19,9 @@ function label(resource: unknown, key: string): unknown {
 }
 
 describe('theme registry', () => {
-  it('lists Compact first, as the preset a fresh browser starts on', () => {
-    expect(themePresets[0].id).toBe('compact');
-    expect(defaultThemePreset).toBe('compact');
+  it('lists Default first, as the preset a fresh browser starts on', () => {
+    expect(themePresets[0].id).toBe('default');
+    expect(defaultThemePreset).toBe('default');
   });
 
   it('names every preset in every locale', () => {

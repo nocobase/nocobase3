@@ -8,18 +8,13 @@ keywords: 'NocoBase 3,主题变量,颜色,字体,字号,间距,圆角,阴影,Tai
 
 NocoBase 应用的主题由 CSS 变量组成。在 `client/theme/themes/` 中定义主题预设，在 `client/styles.css` 中把这些变量映射到 Tailwind。组件优先使用这些语义化变量，这样切换主题或颜色模式时可以保持一致。
 
-当前实现以 `client/theme/themes/default.css` 为准。`compact.css` 与它配色相同，只在间距、圆角以及部分字号行高上更紧凑；其余内置主题只改颜色和圆角，字体、字号、间距和阴影都沿用默认主题。
+当前实现以 `client/theme/themes/default.css` 为准。其余内置主题只改颜色和圆角，字体、字号、行高、间距和阴影都沿用默认主题。
 
 ## 主题预设和颜色模式
 
-预设 ID 注册在 `client/theme/theme-presets.ts` 中，当前有两项：
+预设 ID 注册在 `client/theme/theme-presets.ts` 中。第一项 `default` 是回退预设，其余预设在它的基础上只改颜色和圆角。
 
-| ID        | 说明                                        |
-| --------- | ------------------------------------------- |
-| `default` | 常规间距和圆角，`--spacing` 为 `0.25rem`    |
-| `compact` | 更紧凑的间距和圆角，`--spacing` 为 `0.2rem` |
-
-预设和颜色模式是两个独立的选择。`next-themes` 负责 `light`、`dark` 和 `system`，预设只通过根元素上的 `data-theme` 选择 CSS 变量。比如，当前页面可能同时具有 `class="dark" data-theme="compact"`。
+预设和颜色模式是两个独立的选择。`next-themes` 负责 `light`、`dark` 和 `system`，预设只通过根元素上的 `data-theme` 选择 CSS 变量。比如，当前页面可能同时具有 `class="dark" data-theme="modern-minimal"`。
 
 应用可以在 `config.yml` 中设置 `client.app.defaultColorScheme` 和 `client.app.defaultTheme` 作为首次启动的默认值。当前浏览器保存的有效选择会分别覆盖这两个默认值；缺少或无效的配置会回退到 `system` 和注册列表中的第一项预设。选择保存在浏览器本地。
 
@@ -95,34 +90,29 @@ NocoBase 应用的主题由 CSS 变量组成。在 `client/theme/themes/` 中定
 
 ## 字号和行高
 
-每档字号由两个变量组成：`--text-<size>` 和 `--text-<size>--line-height`。字号使用 `rem`，行高是无单位的计算值。下面是 `default` 预设的值；`compact` 使用相同字号，但把 `sm` 到 `4xl` 的行高调得更紧凑。
+每档字号由两个变量组成：`--text-<size>` 和 `--text-<size>--line-height`。字号使用 `rem`，行高是无单位的计算值。下面是 `default` 预设的值，其余内置预设沿用相同的字号和行高。
 
-| 字号   | `--text-*` | `default` 行高       | `compact` 行高      |
-| ------ | ---------- | -------------------- | ------------------- |
-| `xs`   | `0.75rem`  | `calc(1 / 0.75)`     | `calc(1 / 0.75)`    |
-| `sm`   | `0.875rem` | `calc(1.25 / 0.875)` | `calc(1.2 / 0.875)` |
-| `base` | `1rem`     | `calc(1.5 / 1)`      | `calc(1.4 / 1)`     |
-| `lg`   | `1.125rem` | `calc(1.75 / 1.125)` | `calc(1.6 / 1.125)` |
-| `xl`   | `1.25rem`  | `calc(1.75 / 1.25)`  | `calc(1.6 / 1.25)`  |
-| `2xl`  | `1.5rem`   | `calc(2 / 1.5)`      | `calc(1.8 / 1.5)`   |
-| `3xl`  | `1.875rem` | `calc(2.25 / 1.875)` | `calc(2.1 / 1.875)` |
-| `4xl`  | `2.25rem`  | `calc(2.5 / 2.25)`   | `calc(2.3 / 2.25)`  |
-| `5xl`  | `3rem`     | `1`                  | `1`                 |
-| `6xl`  | `3.75rem`  | `1`                  | `1`                 |
-| `7xl`  | `4.5rem`   | `1`                  | `1`                 |
-| `8xl`  | `6rem`     | `1`                  | `1`                 |
-| `9xl`  | `8rem`     | `1`                  | `1`                 |
+| 字号   | `--text-*` | 行高                |
+| ------ | ---------- | ------------------- |
+| `xs`   | `0.75rem`  | `calc(1 / 0.75)`    |
+| `sm`   | `0.875rem` | `calc(1.2 / 0.875)` |
+| `base` | `1rem`     | `calc(1.4 / 1)`     |
+| `lg`   | `1.125rem` | `calc(1.6 / 1.125)` |
+| `xl`   | `1.25rem`  | `calc(1.6 / 1.25)`  |
+| `2xl`  | `1.5rem`   | `calc(1.8 / 1.5)`   |
+| `3xl`  | `1.875rem` | `calc(2.1 / 1.875)` |
+| `4xl`  | `2.25rem`  | `calc(2.3 / 2.25)`  |
+| `5xl`  | `3rem`     | `1`                 |
+| `6xl`  | `3.75rem`  | `1`                 |
+| `7xl`  | `4.5rem`   | `1`                 |
+| `8xl`  | `6rem`     | `1`                 |
+| `9xl`  | `8rem`     | `1`                 |
 
 使用 `text-xs` 到 `text-9xl`。页面默认使用 `text-base`。单独的 `leading-*` 或 `text-sm/6` 会覆盖字号变量提供的行高；`text-[14px]` 这类任意值也不会使用这套刻度，只有在确实需要固定尺寸时才使用。
 
 ## 间距
 
-`--spacing` 是数字工具类使用的基础长度：
-
-| 预设      | `--spacing` |
-| --------- | ----------- |
-| `default` | `0.25rem`   |
-| `compact` | `0.2rem`    |
+`--spacing` 是数字工具类使用的基础长度，`default` 预设为 `0.2rem`，其余内置预设沿用该值。
 
 `p-4`、`gap-2`、`h-8`、`size-4` 和 `w-64` 等工具类会把后缀数字乘以 `--spacing`，编译结果类似 `calc(var(--spacing) * 4)`。修改它会同时影响内边距、元素间距、控件和图标尺寸，以及部分导航尺寸。
 
@@ -130,12 +120,7 @@ NocoBase 应用的主题由 CSS 变量组成。在 `client/theme/themes/` 中定
 
 ## 圆角
 
-`--radius` 是圆角工具类的基础长度：
-
-| 预设      | `--radius` |
-| --------- | ---------- |
-| `default` | `0.5rem`   |
-| `compact` | `0.25rem`  |
+`--radius` 是圆角工具类的基础长度，`default` 预设为 `0.375rem`，其余内置预设各自定义圆角。
 
 `client/styles.css` 根据它生成以下七档圆角：
 
@@ -157,7 +142,7 @@ NocoBase 应用的主题由 CSS 变量组成。在 `client/theme/themes/` 中定
 
 `--shadow-2xs`、`--shadow-xs`、`--shadow-sm`、`--shadow-md`、`--shadow-lg`、`--shadow-xl` 和 `--shadow-2xl`。
 
-默认值记录在 `default.css` 中；除紧凑主题之外，其余预设沿用这组值。组件使用 `shadow-2xs` 到 `shadow-2xl`，需要取消层级时使用 `shadow-none`。
+默认值记录在 `default.css` 中，其余预设沿用这组值。组件使用 `shadow-2xs` 到 `shadow-2xl`，需要取消层级时使用 `shadow-none`。
 
 Tailwind 通常会把具名阴影编译成固定值。`client/styles.css` 先声明这些名称，再为每一档提供 `@utility`，把它们连接到 `var(--shadow-*)`，所以运行时切换预设仍然有效。修改主题时保留这些适配工具，不要用固定阴影覆盖变量；阴影值本身已经包含颜色。
 

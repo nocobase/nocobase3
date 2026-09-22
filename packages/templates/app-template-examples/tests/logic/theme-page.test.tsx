@@ -8,20 +8,20 @@ import locales from '../../client/locales/index.js';
 import ThemePage from '../../client/pages/settings/theme/index.tsx';
 import { AppThemeProvider } from '../../client/theme/index.ts';
 
-// The shipped registry holds two presets. The page exists for a registry an application grows to dozens, so the test
+// The test pins a registry of its own. The page exists for a registry an application grows to dozens, so the test
 // drives a long one and swaps the list per case instead of reaching into the page for a knob it does not have.
 const registry = vi.hoisted(() => ({
   presets: [] as { id: string; labelKey: string }[],
 }));
 
 vi.mock('../../client/theme/theme-presets', () => ({
-  defaultThemePreset: 'compact',
+  defaultThemePreset: 'default',
   themePresets: registry.presets,
 }));
 
 const BUILT_IN = [
-  { id: 'compact', labelKey: 'appearance.themes.compact' },
   { id: 'default', labelKey: 'appearance.themes.default' },
+  { id: 'modern-minimal', labelKey: 'appearance.themes.modern-minimal' },
 ];
 
 const CROWDED = Array.from({ length: 38 }, (_, index) => {
@@ -80,8 +80,8 @@ afterEach(() => {
 
 describe('settings theme page', () => {
   it.each([
-    ['en-US', 'Theme', 'Compact', 'Spacious'],
-    ['zh-CN', '主题', '紧凑', '宽松'],
+    ['en-US', 'Theme', 'Default', 'Modern Minimal'],
+    ['zh-CN', '主题', '默认', '现代极简'],
   ])(
     'lists every registered theme in the language it is read in (%s)',
     async (locale, title, active, other) => {
@@ -103,11 +103,18 @@ describe('settings theme page', () => {
   it('persists a newly selected theme and applies it to the document', async () => {
     await renderPage();
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Spacious' }));
+    await userEvent.click(
+      screen.getByRole('radio', { name: 'Modern Minimal' }),
+    );
 
-    expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe('default');
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
-    expect(screen.getByRole('radio', { name: 'Spacious' })).toBeChecked();
+    expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe(
+      'modern-minimal',
+    );
+    expect(document.documentElement).toHaveAttribute(
+      'data-theme',
+      'modern-minimal',
+    );
+    expect(screen.getByRole('radio', { name: 'Modern Minimal' })).toBeChecked();
     expect(screen.getAllByTestId('theme-selected-indicator')).toHaveLength(1);
   });
 
@@ -119,9 +126,9 @@ describe('settings theme page', () => {
 
     expect(screen.getAllByRole('radio')).toHaveLength(2);
 
-    await userEvent.type(search, 'spacious');
+    await userEvent.type(search, 'minimal');
     expect(screen.getAllByRole('radio')).toHaveLength(1);
-    expect(screen.getByRole('radio', { name: 'Spacious' })).toBeVisible();
+    expect(screen.getByRole('radio', { name: 'Modern Minimal' })).toBeVisible();
 
     await userEvent.clear(search);
     await userEvent.type(search, 'zzz');
@@ -133,9 +140,9 @@ describe('settings theme page', () => {
     await renderPage();
     const search = screen.getByRole('searchbox', { name: 'Search themes' });
 
-    await userEvent.type(search, 'spacious');
+    await userEvent.type(search, 'minimal');
     expect(screen.getAllByRole('radio')).toHaveLength(1);
-    expect(screen.getByRole('radio', { name: 'Spacious' })).toBeVisible();
+    expect(screen.getByRole('radio', { name: 'Modern Minimal' })).toBeVisible();
 
     await userEvent.clear(search);
     await userEvent.type(search, 'THEME-0');

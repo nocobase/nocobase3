@@ -63,12 +63,12 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     expect(themePresets.map(({ id }) => id)).not.toContain('ant-design');
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
-    expect(screen.getByTestId('preset')).toHaveTextContent('compact');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(screen.getByTestId('preset')).toHaveTextContent('default');
     expect(document.documentElement).toHaveClass('light');
   });
 
-  it('omits Ocean and falls back from its saved ID to Compact', async () => {
+  it('omits Ocean and falls back from its saved ID to Default', async () => {
     localStorage.setItem('nocobase:crm:theme:preset', 'ocean');
     render(
       <AppThemeProvider>
@@ -76,9 +76,9 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     expect(themePresets.map(({ id }) => id)).not.toContain('ocean');
-    expect(screen.getByTestId('preset')).toHaveTextContent('compact');
-    expect(themePresets.map(({ id }) => id)).toContain('default');
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    expect(screen.getByTestId('preset')).toHaveTextContent('default');
+    expect(themePresets.map(({ id }) => id)).toContain('modern-minimal');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
   });
 
   beforeEach(() => {
@@ -109,10 +109,10 @@ describe('app client theme', () => {
   });
 
   it.each([
-    [undefined, undefined, 'light', 'compact'],
-    ['dark', 'default', 'dark', 'default'],
-    ['system', 'removed', 'dark', 'compact'],
-    ['invalid', 'default', 'light', 'default'],
+    [undefined, undefined, 'light', 'default'],
+    ['dark', 'modern-minimal', 'dark', 'modern-minimal'],
+    ['system', 'removed', 'dark', 'default'],
+    ['invalid', 'modern-minimal', 'light', 'modern-minimal'],
   ])(
     'uses configured defaults with saved mode %s and preset %s',
     async (savedMode, savedPreset, mode, preset) => {
@@ -122,7 +122,7 @@ describe('app client theme', () => {
       config.textContent = JSON.stringify({
         version: 1,
         config: {
-          app: { defaultColorScheme: 'light', defaultTheme: 'compact' },
+          app: { defaultColorScheme: 'light', defaultTheme: 'default' },
         },
       });
       document.body.append(config);
@@ -156,7 +156,7 @@ describe('app client theme', () => {
       await waitFor(() =>
         expect(document.documentElement).toHaveClass('light'),
       );
-      expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+      expect(document.documentElement).toHaveAttribute('data-theme', 'default');
       expect(
         localStorage.getItem('nocobase:crm:theme:color-scheme'),
       ).toBeNull();
@@ -164,10 +164,10 @@ describe('app client theme', () => {
   );
 
   it.each([
-    [undefined, undefined, 'compact'],
-    ['default', undefined, 'default'],
-    [undefined, 'default', 'default'],
-    ['default', 'compact', 'compact'],
+    [undefined, undefined, 'default'],
+    ['modern-minimal', undefined, 'modern-minimal'],
+    [undefined, 'modern-minimal', 'modern-minimal'],
+    ['modern-minimal', 'default', 'default'],
   ])(
     'keeps startup and Provider consistent (%s, %s)',
     async (configured, saved, expected) => {
@@ -235,7 +235,7 @@ describe('app client theme', () => {
     config.type = 'application/json';
     config.textContent = JSON.stringify({
       version: 1,
-      config: { app: { defaultColorScheme: 'light', defaultTheme: 'compact' } },
+      config: { app: { defaultColorScheme: 'light', defaultTheme: 'default' } },
     });
     document.body.append(config);
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
@@ -252,7 +252,7 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     await waitFor(() => expect(document.documentElement).toHaveClass('light'));
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
     unmount();
     render(
       <AppThemeProvider defaultTheme='dark'>
@@ -282,7 +282,7 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     await waitFor(() => expect(document.documentElement).toHaveClass('dark'));
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
   });
 
   it('follows the system theme and persists explicit changes', async () => {
@@ -311,7 +311,7 @@ describe('app client theme', () => {
   });
 
   it('selects presets independently, restores them and ignores another app', async () => {
-    localStorage.setItem('nocobase:crm:theme:preset', 'default');
+    localStorage.setItem('nocobase:crm:theme:preset', 'modern-minimal');
     render(
       <AppThemeProvider>
         <PresetProbe />
@@ -319,34 +319,37 @@ describe('app client theme', () => {
     );
 
     await userEvent.click(
-      screen.getByRole('button', { name: 'Use the compact preset' }),
+      screen.getByRole('button', { name: 'Use the default preset' }),
     );
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
     expect(document.documentElement).toHaveClass('dark');
-    expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe('compact');
+    expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe('default');
     fireEvent(
       window,
       new StorageEvent('storage', {
         key: 'nocobase:erp:theme:preset',
-        newValue: 'default',
+        newValue: 'modern-minimal',
       }),
     );
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
     fireEvent(
       window,
       new StorageEvent('storage', {
         key: 'nocobase:crm:theme:preset',
-        newValue: 'default',
+        newValue: 'modern-minimal',
       }),
     );
     await waitFor(() =>
-      expect(screen.getByTestId('preset')).toHaveTextContent('default'),
+      expect(screen.getByTestId('preset')).toHaveTextContent('modern-minimal'),
     );
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(document.documentElement).toHaveAttribute(
+      'data-theme',
+      'modern-minimal',
+    );
   });
 
   it('restores a saved preset and resets both selections when storage is cleared', async () => {
-    localStorage.setItem('nocobase:crm:theme:preset', 'default');
+    localStorage.setItem('nocobase:crm:theme:preset', 'modern-minimal');
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'light');
     render(
       <AppThemeProvider>
@@ -354,13 +357,16 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     await waitFor(() =>
-      expect(document.documentElement).toHaveAttribute('data-theme', 'default'),
+      expect(document.documentElement).toHaveAttribute(
+        'data-theme',
+        'modern-minimal',
+      ),
     );
     expect(document.documentElement).toHaveClass('light');
     localStorage.clear();
     fireEvent(window, new StorageEvent('storage', { key: null }));
     await waitFor(() => expect(document.documentElement).toHaveClass('dark'));
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
   });
 
   it('keeps selections usable when browser storage is unavailable', async () => {
@@ -376,9 +382,12 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     await userEvent.click(
-      screen.getByRole('button', { name: 'Use the default preset' }),
+      screen.getByRole('button', { name: 'Use the modern-minimal preset' }),
     );
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(document.documentElement).toHaveAttribute(
+      'data-theme',
+      'modern-minimal',
+    );
   });
 
   it('syncs valid modes, normalizes invalid modes and removed presets', async () => {
@@ -389,7 +398,7 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     await userEvent.click(
-      screen.getByRole('button', { name: 'Use the default preset' }),
+      screen.getByRole('button', { name: 'Use the modern-minimal preset' }),
     );
     fireEvent(
       window,
@@ -407,9 +416,9 @@ describe('app client theme', () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.getByTestId('preset')).toHaveTextContent('compact'),
+      expect(screen.getByTestId('preset')).toHaveTextContent('default'),
     );
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
     fireEvent(
       window,
       new StorageEvent('storage', {
@@ -442,11 +451,11 @@ function PresetProbe(): ReactElement {
   return (
     <>
       <span data-testid='preset'>{preset}</span>
-      <button type='button' onClick={() => setPreset('compact')}>
-        Use the compact preset
-      </button>
       <button type='button' onClick={() => setPreset('default')}>
         Use the default preset
+      </button>
+      <button type='button' onClick={() => setPreset('modern-minimal')}>
+        Use the modern-minimal preset
       </button>
     </>
   );

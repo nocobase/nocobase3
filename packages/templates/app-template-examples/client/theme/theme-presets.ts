@@ -1,5 +1,4 @@
 export const themePresets = [
-  { id: 'compact', labelKey: 'appearance.themes.compact' },
   { id: 'default', labelKey: 'appearance.themes.default' },
   { id: 'modern-minimal', labelKey: 'appearance.themes.modern-minimal' },
   { id: 'violet-bloom', labelKey: 'appearance.themes.violet-bloom' },
@@ -34,4 +33,4 @@ export const themePresets = [
 ] as const;
 
 export type ThemePresetId = (typeof themePresets)[number]['id'];
-export const defaultThemePreset: ThemePresetId = 'compact';
+export const defaultThemePreset: ThemePresetId = 'default';

@@ -326,8 +326,7 @@ const enUS = {
       empty: 'No theme matches “{{query}}”.',
     },
     themes: {
-      compact: 'Compact',
-      default: 'Spacious',
+      default: 'Default',
       'modern-minimal': 'Modern Minimal',
       'violet-bloom': 'Violet Bloom',
       'mocha-mousse': 'Mocha',

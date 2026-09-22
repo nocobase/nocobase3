@@ -304,8 +304,7 @@ const zhCN: AppResource = {
       empty: '没有匹配“{{query}}”的主题。',
     },
     themes: {
-      compact: '紧凑',
-      default: '宽松',
+      default: '默认',
       'modern-minimal': '现代极简',
       'violet-bloom': '紫罗兰',
       'mocha-mousse': '摩卡',
