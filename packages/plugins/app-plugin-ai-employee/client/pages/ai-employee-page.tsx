@@ -21,6 +21,8 @@ import {
 } from 'react';
 
 import { Button } from '../../registry/nocobase-ai/shared/ui/button.js';
+import { Input } from '../../registry/nocobase-ai/shared/ui/input.js';
+import { Textarea } from '../../registry/nocobase-ai/shared/ui/textarea.js';
 import { Switch as SkillSwitch } from '../../registry/nocobase-ai/shared/ui/switch.js';
 import {
   Collapsible,
@@ -85,15 +87,15 @@ function ReadonlyField({
     <label className='grid gap-1.5 text-sm'>
       <span className='font-medium'>{label}</span>
       {multiline ? (
-        <textarea
-          className='min-h-24 rounded-md border bg-muted/40 px-3 py-2 text-muted-foreground'
+        <Textarea
+          className='min-h-24 text-muted-foreground'
           value={text}
           disabled
           readOnly
         />
       ) : (
-        <input
-          className='h-10 rounded-md border bg-muted/40 px-3 text-muted-foreground'
+        <Input
+          className='h-10 text-muted-foreground'
           value={text}
           disabled
           readOnly
@@ -174,7 +176,7 @@ function KnowledgeBaseMultiSelect({
     >
       <summary
         aria-label={label}
-        className={`flex min-h-10 list-none items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm marker:content-none ${disabled ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
+        className={`flex min-h-10 list-none items-center gap-2 rounded-md border bg-transparent px-3 py-2 text-sm marker:content-none ${disabled ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
       >
         <span className='flex min-w-0 flex-1 flex-wrap gap-1'>
           {selectedOptions.length ? (
@@ -281,7 +283,7 @@ function ModelMultiSelect({
       }}
     >
       <summary
-        className={`flex min-h-10 list-none items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm marker:content-none ${disabled ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
+        className={`flex min-h-10 list-none items-center gap-2 rounded-md border bg-transparent px-3 py-2 text-sm marker:content-none ${disabled ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
       >
         <span className='flex min-w-0 flex-1 flex-wrap gap-1'>
           {value.length ? (
@@ -894,7 +896,7 @@ export default function AIEmployeePage(): ReactElement {
 
               {tab === 'role' ? (
                 <div className='flex h-full min-h-80 flex-col gap-4'>
-                  <div className='flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800'>
+                  <div className='flex items-start gap-2 rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground'>
                     <CircleAlert
                       className='mt-0.5 h-4 w-4 shrink-0'
                       aria-hidden='true'
@@ -954,7 +956,7 @@ export default function AIEmployeePage(): ReactElement {
                                   : event.target.value,
                             })
                           }
-                          className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-background p-3'
+                          className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-transparent p-3'
                         />
                       )}
                     </fieldset>
@@ -966,7 +968,7 @@ export default function AIEmployeePage(): ReactElement {
                         onChange={(event) =>
                           patchDraft({ about: event.target.value })
                         }
-                        className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-background p-3'
+                        className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-transparent p-3'
                         placeholder={t('employees.rolePlaceholder')}
                       />
                     </label>
@@ -976,7 +978,7 @@ export default function AIEmployeePage(): ReactElement {
 
               {tab === 'models' ? (
                 <div className='space-y-5'>
-                  <div className='flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800'>
+                  <div className='flex items-start gap-2 rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground'>
                     <CircleAlert
                       className='mt-0.5 h-4 w-4 shrink-0'
                       aria-hidden='true'
@@ -1197,7 +1199,7 @@ export default function AIEmployeePage(): ReactElement {
                     />
                   </div>
                   {selected.missingKnowledgeBaseKeys?.length ? (
-                    <div className='rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800'>
+                    <div className='rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300'>
                       {t('Missing Knowledge Bases')}:{' '}
                       {selected.missingKnowledgeBaseKeys.join(', ')}
                     </div>
@@ -1303,7 +1305,7 @@ export default function AIEmployeePage(): ReactElement {
                         patchDraft({ knowledgeBasePrompt: event.target.value })
                       }
                       aria-invalid={!knowledgeBasePromptValid}
-                      className={`min-h-28 rounded-lg border bg-background p-3 disabled:opacity-50 ${knowledgeBasePromptValid ? '' : 'border-destructive'}`}
+                      className={`min-h-28 rounded-lg border bg-transparent p-3 disabled:opacity-50 ${knowledgeBasePromptValid ? '' : 'border-destructive'}`}
                     />
                     {!knowledgeBasePromptValid ? (
                       <span className='text-sm text-destructive'>
@@ -1329,7 +1331,7 @@ export default function AIEmployeePage(): ReactElement {
                             },
                           })
                         }
-                        className='h-10 rounded-md border bg-background px-3 disabled:opacity-50'
+                        className='h-10 rounded-md border bg-transparent px-3 disabled:opacity-50'
                       />
                       <span className='text-muted-foreground'>
                         {t(
@@ -1354,7 +1356,7 @@ export default function AIEmployeePage(): ReactElement {
                             },
                           })
                         }
-                        className='h-10 rounded-md border bg-background px-3 disabled:opacity-50'
+                        className='h-10 rounded-md border bg-transparent px-3 disabled:opacity-50'
                       />
                       <span className='text-muted-foreground'>
                         {t(

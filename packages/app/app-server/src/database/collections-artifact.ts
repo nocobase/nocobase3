@@ -29,7 +29,8 @@ import {
   resolveAppMetadataStore,
 } from './collections-directory.js';
 import { createAppDatabaseManager } from './manager.js';
-import { defaultConnectionName, planAppDatabaseTasks } from './plan.js';
+import { selectAppDatabaseConnections } from './connection-selection.js';
+import { planAppDatabaseTasks } from './plan.js';
 import type { AppDatabaseConfig } from './types.js';
 
 /**
@@ -121,7 +122,7 @@ export async function generateAppCollectionsArtifact(
   options: AppCollectionsArtifactOptions = {},
 ): Promise<AppCollectionsArtifactResult> {
   const check = options.check ?? false;
-  const names = selectConnections(config, options);
+  const names = selectAppDatabaseConnections(config, options);
   if (names === undefined) {
     return { ok: true, status: 'not-configured', check, results: [] };
   }
@@ -181,33 +182,6 @@ export async function generateAppCollectionsArtifact(
  * part: their schema is owned elsewhere, but a snapshot of what it resolves to
  * is exactly what a reader without database access needs from them.
  */
-function selectConnections(
-  config: AppDatabaseConfig,
-  options: AppCollectionsArtifactOptions,
-): string[] | undefined {
-  if (options.connection !== undefined && options.all) {
-    throw new Error('--connection and --all are mutually exclusive.');
-  }
-  const primary = defaultConnectionName(config);
-  if (primary === 'none' || !primary) {
-    if (options.connection !== undefined) {
-      throw new Error('Database is not configured.');
-    }
-    return undefined;
-  }
-  const names = options.all
-    ? Object.keys(config.connections).sort((a, b) =>
-        a === primary ? -1 : b === primary ? 1 : a < b ? -1 : a > b ? 1 : 0,
-      )
-    : [options.connection ?? primary];
-  for (const name of names) {
-    if (!Object.hasOwn(config.connections, name)) {
-      throw new Error(`Unknown database connection "${name}".`);
-    }
-  }
-  return names;
-}
-
 /**
  * The history table name is part of a connection's migration configuration,
  * which planning already resolves — including the legacy top-level form. Ask

@@ -15,6 +15,13 @@ describe('app client routes', () => {
     expect(routeComponentOverrides).toEqual([]);
   });
 
+  it('routes nothing under client/pages/reference', () => {
+    // A reference page reaching the router would put a shadcn gallery inside somebody's product, so this pins the
+    // boundary rather than trusting a reviewer to notice the import path.
+    const loaders = JSON.stringify(applicationRoutes);
+    expect(loaders).not.toContain('pages/reference');
+  });
+
   it('declares application and settings route contributions', async () => {
     expect(applicationRoutes).toHaveLength(2);
     expect(applicationRoutes[0]).toMatchObject({
@@ -41,9 +48,13 @@ describe('app client routes', () => {
         { auth: 'guest', name: 'reset-password', path: '/reset-password' },
       ],
     });
-    expect(applicationRoutes[1]).toEqual({
-      parent: 'settings',
-      routes: [],
+    expect(applicationRoutes[1]).toMatchObject({ parent: 'settings' });
+    expect(applicationRoutes[1].routes).toHaveLength(1);
+    expect(applicationRoutes[1].routes[0]).toMatchObject({
+      authz: { action: 'access', resource: { id: 'theme', type: 'page' } },
+      name: 'theme',
+      navigation: { order: 100, title: 'appearance.theme.title' },
+      path: '/theme',
     });
     expect(Object.isFrozen(applicationRoutes[0])).toBe(true);
     expect(Object.isFrozen(applicationRoutes[1])).toBe(true);
@@ -69,6 +80,11 @@ describe('app client routes', () => {
       // The Hub entry is deliberately gated: reaching it is the `hub` access grant, not merely being signed in.
       { name: 'applications-root', authorizedAs: 'hub' },
       { name: 'applications-legacy', authorizedAs: 'hub' },
+    ]);
+    // A settings page carries no rule by default. This one asks for a page grant, so it stays invisible until an
+    // administrator is granted it — which is the whole reason its name is pinned here.
+    expect(pageAuthorizations(resolved.settingsRouteTree)).toEqual([
+      { name: 'theme', authorizedAs: 'theme' },
     ]);
   });
 

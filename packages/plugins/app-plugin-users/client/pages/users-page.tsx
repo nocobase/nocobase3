@@ -250,7 +250,7 @@ export default function UsersPage(): ReactElement {
       />
 
       <div className='flex flex-wrap gap-3'>
-        <label className='flex h-9 min-w-64 flex-1 items-center gap-2 rounded-lg border bg-background px-3'>
+        <label className='flex h-9 min-w-64 flex-1 items-center gap-2 rounded-lg border bg-transparent px-3'>
           <Search className='size-4 text-muted-foreground' />
           <Input
             className='h-auto border-0 p-0 focus-visible:ring-0'
@@ -314,7 +314,7 @@ export default function UsersPage(): ReactElement {
         </p>
       ) : null}
 
-      <div className='overflow-hidden rounded-xl border bg-background'>
+      <div className='overflow-hidden rounded-xl border bg-card'>
         <Table>
           <TableHeader>
             <TableRow>

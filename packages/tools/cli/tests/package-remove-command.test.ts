@@ -161,7 +161,7 @@ describe('package remove command', () => {
     await symlink(
       vendorRoot,
       path.join(appRoot, 'node_modules', '@nocobase', 'app-skills'),
-      'dir',
+      'junction',
     );
     await writeFile(
       path.join(appRoot, 'package-lock.json'),
@@ -325,7 +325,7 @@ describe('package remove command', () => {
       await symlink(
         path.dirname(require.resolve(`${dependency}/package.json`)),
         path.join(appRoot, 'node_modules', dependency),
-        'dir',
+        'junction',
       );
     }
     const pluginRoot = path.join(appRoot, 'node_modules', packageName);

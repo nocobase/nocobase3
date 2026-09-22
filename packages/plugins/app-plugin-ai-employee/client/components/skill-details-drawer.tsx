@@ -95,7 +95,7 @@ function SkillDetails({
             {skillDescription(skill) || t('skills.detailsDescription')}
           </DialogDescription>
         </div>
-        <div className='sticky top-0 z-10 flex border-b bg-background px-6 sm:px-8'>
+        <div className='sticky top-0 z-10 flex border-b bg-popover px-6 sm:px-8'>
           <TabsList
             activateOnFocus
             variant='line'

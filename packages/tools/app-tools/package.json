@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-tools",
-  "version": "0.0.2-beta.0",
+  "version": "0.0.2-beta.1",
   "description": "Shared application development and build tools.",
   "type": "module",
   "license": "Apache-2.0",

@@ -291,7 +291,7 @@ describe('app migrator', () => {
       connection: 'tenant',
     });
 
-    await expect(migrator.rollback()).resolves.toEqual({
+    await expect(migrator.rollback()).resolves.toMatchObject({
       status: 'completed',
       batch: 2,
       rolledBack: ['001_create_users'],

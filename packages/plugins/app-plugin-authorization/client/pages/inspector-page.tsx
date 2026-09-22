@@ -368,7 +368,7 @@ function Inspector({
               className='max-h-[60vh] overflow-auto rounded-lg border bg-card'
             >
               <table className='w-full table-fixed text-sm'>
-                <thead className='sticky top-0 z-10 bg-background'>
+                <thead className='sticky top-0 z-10 bg-card'>
                   <tr>
                     <th className='w-[32%] p-3 text-left'>
                       {t('common.resource')}

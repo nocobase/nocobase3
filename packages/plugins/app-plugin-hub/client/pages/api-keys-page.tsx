@@ -37,7 +37,7 @@ export default function ApiKeysPage(): ReactElement {
     };
   }, [client, authorization]);
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
+    <main className='min-h-[calc(100svh-4rem)] bg-background'>
       <PageContainer>
         {failed ? (
           <ErrorNotification message={t('apiKeys.loadFailed')} />

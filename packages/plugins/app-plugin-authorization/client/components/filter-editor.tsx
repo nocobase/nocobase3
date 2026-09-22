@@ -33,7 +33,7 @@ const unary = new Set<FilterOperator>([
   '$isTruly',
   '$isFalsy',
 ]);
-const selectClass = 'h-8 min-w-0 rounded-md border bg-background px-2 text-sm';
+const selectClass = 'h-8 min-w-0 rounded-md border bg-transparent px-2 text-sm';
 
 export function FilterEditor({
   fields,

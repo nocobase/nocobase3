@@ -6,8 +6,10 @@ import {
   closeNodeServer,
   closeNodeServerWithGracePeriod,
   disposeAfterStartupFailure,
+  resolveNodeShutdownTimeouts,
   shutdownNodeAppServer,
   startNodeAppServer,
+  SHUTDOWN_TIMEOUT_ENV,
   type ClosableNodeAppServer,
   type NodeAppHttpServer,
 } from '../src/node/index.js';
@@ -249,3 +251,34 @@ function waitForWebSocketClose(websocket: WebSocket): Promise<void> {
     websocket.addEventListener('close', () => resolve(), { once: true });
   });
 }
+
+describe('shutdown budget', () => {
+  it('derives both timeouts from the environment', () => {
+    // A supervisor that kills the process after a fixed wait makes the
+    // deployment defaults unreachable; the drain has to end before the force
+    // exit, and both before the supervisor's own deadline.
+    expect(
+      resolveNodeShutdownTimeouts({ [SHUTDOWN_TIMEOUT_ENV]: '4000' }),
+    ).toEqual({
+      forceExitTimeoutMs: 4000,
+      httpDrainTimeoutMs: 3000,
+    });
+  });
+
+  it('keeps the drain positive for a budget smaller than the margin', () => {
+    const resolved = resolveNodeShutdownTimeouts({
+      [SHUTDOWN_TIMEOUT_ENV]: '300',
+    });
+    expect(resolved.forceExitTimeoutMs).toBe(300);
+    expect(resolved.httpDrainTimeoutMs).toBeGreaterThan(0);
+  });
+
+  it('keeps the defaults when nothing usable is set', () => {
+    for (const value of [undefined, '', 'soon', '0', '-1'])
+      expect(
+        resolveNodeShutdownTimeouts(
+          value === undefined ? {} : { [SHUTDOWN_TIMEOUT_ENV]: value },
+        ),
+      ).toEqual({});
+  });
+});

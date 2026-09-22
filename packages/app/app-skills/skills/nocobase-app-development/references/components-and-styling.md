@@ -2,7 +2,31 @@
 
 The UI is shadcn/ui primitives, composed into application components, styled with Tailwind semantic tokens.
 
+## Read a worked page first
+
+If the application has `client/pages/reference/`, open its `README.md` before composing anything. It indexes two groups: `examples/` holds complete business screens on mock data, and `components/` holds one page per shadcn/ui primitive with its variants and a realistic use. Nothing routes either group, so they exist only to be read.
+
+Use `components/<primitive>.tsx` to see how a primitive is actually composed here — which parts it needs, what its controlled form looks like, how its states are styled — instead of inferring an API from its source or from memory. Use `examples/` for the shape of a whole screen; each page's module comment names the patterns it holds so you can read one block rather than a thousand lines. Copy the structure, not the mock data, and never import from either group in a page you ship.
+
 For icon buttons in the page's top-right header, read [header action interactions](header-actions.md) before adding or changing an entry. It defines when to use a tooltip versus a hover panel and how to preserve the components' default dismissal behavior.
+
+## These are Base UI components, not Radix
+
+`components.json` sets the `base-nova` style, so every primitive in `client/components/ui/` is built on Base UI. The API differs from the Radix-based shadcn most examples on the web show, and the difference an implementer hits first is composition:
+
+| Base UI shadcn (this application)                       | Radix shadcn (elsewhere)             |
+| ------------------------------------------------------- | ------------------------------------ |
+| `<Button render={<Link to='/orders' />}>`               | `<Button asChild><Link …/></Button>` |
+| `<DialogTrigger render={<Button variant='outline' />}>` | `<DialogTrigger asChild>`            |
+| `<DropdownMenuTrigger render={<Button size='icon' />}>` | `<DropdownMenuTrigger asChild>`      |
+
+`asChild` does not exist here; passing it is a type error. Hand the element to render through `render`, as an element without children, and the primitive supplies its own children and merges props.
+
+Two more Base UI shapes the reference pages comment on: a `DropdownMenuLabel` must sit inside a `DropdownMenuGroup`, and `Select`'s `onValueChange` hands back `T | null`, so coalesce it before storing.
+
+Icons inside a button carry a `data-icon` attribute so the button can space them: `data-icon='inline-start'` before the label, `data-icon='inline-end'` after it. An icon-only button uses `size='icon'` and an accessible name.
+
+Menus and popovers open on hover by setting `openOnHover` and `delay={0}` on the trigger; a radio or checkbox item closes its menu on selection with `closeOnClick`. These are component options, not hand-written mouse handlers; the header and account menu in `client/layouts/components/` use them, and [header action interactions](header-actions.md) says when to.
 
 ## Page container
 
@@ -41,9 +65,29 @@ pnpm exec shadcn search @shadcn -q dialog   # find one by keyword
 
 `search` takes a registry namespace and a `-q` query, not a bare component name.
 
+## Customize template and registry components
+
+Prefer configuring existing props, slots, and page composition before changing a template or registry component. If the extension lacks the required option, create an application-specific wrapper or replacement in `client/components/` (or a feature-owned directory outside `client/extensions/`) and compose it from the existing primitives and public hooks. A wrapper must genuinely control the requested behavior; hiding a hard-coded link through CSS or DOM manipulation is not a substitute for a custom form. Switch the consuming page to the new component while preserving the original extension files for reuse and upgrades.
+
+Application ownership permits edits but does not make editing `client/extensions/` the default customization path. Change the baseline only when the user explicitly requests it or composition is impractical; keep any such change narrow and explain why. New components should preserve shared theme tokens, accessibility, validation, and loading/error behavior rather than introduce a second implementation of the underlying service.
+
 ## Compose upward
 
 `client/components/ui/` holds primitives. Build your own components on top of them and put those in `client/components/`.
+
+A few compositions already live there because shadcn documents them as patterns rather than publishing them as registry items. Reach for these before writing the same thing from scratch:
+
+| Component                                                                           | For                                                     |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `PageContainer`, `PageHeader`                                                       | Page frame: padding, title, description, actions        |
+| `DataTable`, `DataTableColumnHeader`, `DataTablePagination`, `DataTableViewOptions` | Sortable, filterable, paginated lists on TanStack Table |
+| `DatePicker`, `DateRangePicker`                                                     | A date or range in a `Popover` over `Calendar`          |
+| `Typography*`                                                                       | Prose headings, paragraphs, lists, blockquotes          |
+| `Breadcrumbs`                                                                       | The trail from route `breadcrumb` declarations          |
+| `RouteDialog`, `RouteDrawer`, `RouteChildPage`                                      | URL-addressed overlays and covering child pages         |
+| `Loading`                                                                           | The shared spinner                                      |
+
+Toasts are raised with `toast.add({ type, title, description })` from `@/components/ui/toast`, which needs a `<Toaster />` mounted somewhere above the caller. The application shell does not mount one, so a page that toasts mounts it once at its root as the reference pages do, or the application adds it to a layout for every page to share. Charts wrap `recharts` in `ChartContainer` with a `ChartConfig` whose colors are `var(--chart-1)` through `var(--chart-5)`. The `chart` and `toast` reference pages show both.
 
 ```tsx
 // client/components/order-summary.tsx
@@ -79,6 +123,10 @@ Read [the token reference](theme-tokens.md) when styling UI. It is the shared co
 
 Tokens are defined in `client/theme/themes/*.css` for both themes. A literal color looks fine in whichever theme you happened to be viewing and breaks in the other — this is the most common styling defect in this codebase.
 
+Picking the right surface token matters as much as avoiding a literal. Each one names a layer rather than a shade: `bg-background` is the page, `bg-card` is a panel resting on it, `bg-popover` is a floating surface such as a dialog or drawer, and a form control names no surface at all so it inherits whatever it sits on, the way the shared `Input` and `Textarea` do with `bg-transparent`. An opaque sticky header or footer has to name one, and it names the surface it scrolls within rather than the page behind it.
+
+Reaching for `bg-background` because it happens to look right is what puts a page-coloured block inside a panel. Under a preset whose page and card are near-identical the mistake is invisible, and under one where they differ it is the first thing anyone notices — two tabs of the same panel disagreeing, or one page's list framed as a card while its sibling's is flat.
+
 Body uses `font-sans text-base`; semantic h1–h6 use `font-heading`, and code/pre/kbd/samp use `font-mono`. A title rendered as another element needs `font-heading`. Use `text-sm`, `p-4`, `gap-2`, `h-8`, `rounded-lg`, and `shadow-md` instead of equivalent arbitrary values. Sidebar and chart colors have their own semantic classes.
 
 Retain deliberate constraints (image sizes, viewport limits, circular icons), but check whether fixed sizes, explicit line heights, or shadow color classes override the intended theme. Do not globally restyle isolated third-party content. Font resources must be loaded before a font variable can select them.
@@ -93,7 +141,7 @@ Retain deliberate constraints (image sizes, viewport limits, circular icons), bu
 
 ## Dark mode
 
-Both themes come from the same tokens, so using them correctly means dark mode already works. `client/theme/` owns the theme provider and the System/Light/Dark selector.
+Both themes come from the same tokens, so using them correctly means dark mode already works. `client/theme/` owns the theme provider and the light/dark header button; choosing a preset is a Settings page, `client/pages/settings/theme/`.
 
 Check both themes before finishing. `dark:` variants are for the rare case a token cannot express; reaching for them often means a literal color slipped in.
 

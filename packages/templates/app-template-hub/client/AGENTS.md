@@ -5,7 +5,8 @@ This directory is the application's browser client. Read the application's root 
 ## What lives where
 
 - `routes.ts` declares your page routes. `pages/` holds the components they load.
-- `components/` holds your components; `components/ui/` holds shadcn/ui primitives added with `pnpm exec shadcn add`.
+- `components/` holds your components; `components/ui/` holds shadcn/ui primitives added with `pnpm exec shadcn add`. The compositions shadcn documents without publishing — `DataTable` and its column header, pagination and view options, `DatePicker` and `DateRangePicker`, and the `Typography*` prose primitives — live in `components/` as ordinary components you may edit.
+- `pages/reference/` holds worked examples to read, not pages this application serves: `examples/` are complete business screens on mock data, `components/` shows one shadcn/ui primitive per page, and `shared.tsx` is the frame both use. An example is a folder holding its page beside the data that page reads, as `examples/orders/orders.tsx` and `orders.data.ts`. Its `README.md` indexes both groups by the screen or interaction you need, and each example page opens with a module comment naming its patterns and filler; read those before the source. Nothing routes them, so a build never reaches them; copy their structure when building a page, and neither import from them nor route them. A page added here needs its wording in both files under `pages/reference/locales/`, which is where it belongs rather than in `locales/`: `tests/logic/locale-coverage.test.ts` reads every key the reference pages name, including the ones they complete at run time, and fails on a key only one language has.
 - `locales/` holds every user-visible string.
 - `runtime.ts` is the composition root. `service-provider.ts` holds startup logic and Refine resources for CRUD integration. `react-providers.ts` holds your React context providers, and `plugins.ts` lists the plugins the browser loads. Sidebar entries come from route `navigation` declarations.
 - `routing/`, `layouts/`, and `theme/` are the framework structure: route rendering and access checks, the App, Settings and Dev layouts, their shared components in `layouts/components/`, and the theme provider. The template evolves these, so an edit here is what a future upgrade has to reconcile — prefer the built-in mechanism, and when you do change them, comment why. Do not declare product routes in any of them.
@@ -28,7 +29,7 @@ This directory is the application's browser client. Read the application's root 
 - Every user-visible string goes through a translation key.
 - React provider layers are outer-to-inner: `root`, `application`, `extension`. Applications use the first two; plugins own the extension layer. `before` and `after` order only within one layer.
 
-Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`.
+Before finishing, run only the formatting, lint, type checking, tests, builds, and runtime checks relevant to the change, scoped to affected files, projects, or packages and their affected consumers. Follow the verification scope rules in the application root `AGENTS.md`; do not default to full-application or workspace-wide checks after each edit.
 
 For UI styling, use the shared color, font, size, spacing, radius and shadow contract in `.agents/skills/nocobase-app-development/references/theme-tokens.md` (from the application root). Prefer its Tailwind utilities so components respond to theme changes; keep deliberate fixed-size exceptions explicit.
 

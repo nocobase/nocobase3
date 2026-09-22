@@ -20,6 +20,8 @@ import {
 } from './internal/history.js';
 import {
   DEFAULT_MIGRATION_LOCK_TABLE,
+  readTaskLockState,
+  releaseTaskLock,
   withMigrationLock,
 } from './internal/lock.js';
 import { loadMigrations } from './loader.js';
@@ -30,8 +32,13 @@ import type {
   MigrationHistoryRecord,
   MigrationRepairOptions,
   MigrationRepairResult,
+  MigrationRollbackOptions,
   MigrationRollbackResult,
   MigrationRunResult,
+  MigrationConnection,
+  TaskLockReleaseOptions,
+  TaskLockReleaseResult,
+  TaskLockState,
 } from './types.js';
 
 /** Executes and rolls back ordered migrations for one database connection. */
@@ -41,7 +48,9 @@ export interface Migrator {
   /** Applies pending migrations through the named migration, inclusive. */
   upTo(name: string): Promise<MigrationRunResult>;
   /** Rolls back the most recently applied migration batch. */
-  rollback(): Promise<MigrationRollbackResult>;
+  rollback(
+    options?: MigrationRollbackOptions,
+  ): Promise<MigrationRollbackResult>;
   /**
    * Rewrites recorded checksums to match the current sources, clearing drift
    * reported by a run. Executes no migration and changes no schema.
@@ -53,6 +62,17 @@ export interface Migrator {
    * getting one created.
    */
   history(): Promise<MigrationHistoryRecord[]>;
+  /**
+   * The lock as it stands, or undefined when no run holds it. Reads only, and
+   * creates no table.
+   */
+  lock(): Promise<TaskLockState | undefined>;
+  /**
+   * Deletes the lock row so a later run can proceed. An expired lock — one
+   * whose holder stopped sending heartbeats — is released; an active one needs
+   * `force`, because releasing it lets a second run start beside the first.
+   */
+  unlock(options?: TaskLockReleaseOptions): Promise<TaskLockReleaseResult>;
 }
 
 /** Creates a migration runner backed by the supplied database manager. */
@@ -99,6 +119,8 @@ class DefaultMigrator implements Migrator {
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureMigrationTable(
@@ -172,7 +194,34 @@ class DefaultMigrator implements Migrator {
     return readMigrationHistory(migrationConnection, tableName);
   }
 
-  async rollback(): Promise<MigrationRollbackResult> {
+  async lock(): Promise<TaskLockState | undefined> {
+    return readTaskLockState(this.lockConnection(), this.lockTableName());
+  }
+
+  async unlock(
+    options: TaskLockReleaseOptions = {},
+  ): Promise<TaskLockReleaseResult> {
+    return releaseTaskLock(
+      this.lockConnection(),
+      this.lockTableName(),
+      options,
+    );
+  }
+
+  private lockConnection(): MigrationConnection {
+    return createMigrationConnection(
+      this.options.database.connection(this.options.connection),
+    );
+  }
+
+  private lockTableName(): string {
+    return this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE;
+  }
+
+  async rollback(
+    options: MigrationRollbackOptions = {},
+  ): Promise<MigrationRollbackResult> {
+    const dryRun = options.dryRun ?? false;
     const connection = this.options.database.connection(
       this.options.connection,
     );
@@ -194,6 +243,8 @@ class DefaultMigrator implements Migrator {
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureMigrationTable(
@@ -215,7 +266,7 @@ class DefaultMigrator implements Migrator {
 
         const batch = currentBatch(history);
         if (batch === 0) {
-          return { batch: 0, rolledBack: [], warnings };
+          return { batch: 0, rolledBack: [], records: [], warnings, dryRun };
         }
 
         const migrationsByName = new Map(
@@ -234,6 +285,19 @@ class DefaultMigrator implements Migrator {
           validateRollbackMigration(migration.migration);
           return migration;
         });
+        // Validation above already rejected an irreversible batch, so a dry run
+        // reports what a run would undo and why it could not, without running
+        // any `down`.
+        if (dryRun) {
+          return {
+            batch,
+            rolledBack: rollbackItems.map((migration) => migration.name),
+            records,
+            warnings,
+            dryRun,
+          };
+        }
+
         const rolledBack: string[] = [];
 
         for (const migration of rollbackItems) {
@@ -241,10 +305,11 @@ class DefaultMigrator implements Migrator {
           rolledBack.push(migration.name);
         }
 
-        return { batch, rolledBack, warnings };
+        return { batch, rolledBack, records, warnings, dryRun };
       },
     );
-    if (result.rolledBack.length > 0) connection.collections.invalidate();
+    if (!dryRun && result.rolledBack.length > 0)
+      connection.collections.invalidate();
     return result;
   }
 
@@ -262,6 +327,8 @@ class DefaultMigrator implements Migrator {
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureMigrationTable(migrationConnection, tableName);

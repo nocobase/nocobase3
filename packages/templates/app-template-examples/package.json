@@ -1,7 +1,7 @@
 {
   "name": "@nocobase/app-template-examples",
   "displayName": "NocoBase Examples",
-  "version": "0.1.0-beta.23",
+  "version": "0.1.0-beta.24",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -10,7 +10,7 @@
   "packageManager": "pnpm@11.7.0",
   "nocobase": {
     "templateKind": "app",
-    "defaultTemplateVersion": "0.1.0-beta.23"
+    "defaultTemplateVersion": "0.1.0-beta.24"
   },
   "devDependencies": {
     "@ai-sdk/react": "2.0.0",
@@ -97,7 +97,8 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:",
-    "@nocobase/app-tools": "workspace:^"
+    "@nocobase/app-tools": "workspace:^",
+    "@shadcn/react": "^0.3.1"
   },
   "files": [
     ".prettierignore",
@@ -156,6 +157,10 @@
     "db:apply": "tsx ./cli/index.ts app db apply",
     "db:reset": "tsx ./cli/index.ts app db reset",
     "db:repair": "tsx ./cli/index.ts app db repair",
+    "db:rollback": "tsx ./cli/index.ts app db rollback",
+    "db:redo": "tsx ./cli/index.ts app db redo",
+    "db:unlock": "tsx ./cli/index.ts app db unlock",
+    "db:doctor": "tsx ./cli/index.ts app db doctor",
     "plugin:register": "nocobase plugin register",
     "plugin:inspect": "nocobase plugin inspect",
     "plugin:unregister": "nocobase plugin unregister",

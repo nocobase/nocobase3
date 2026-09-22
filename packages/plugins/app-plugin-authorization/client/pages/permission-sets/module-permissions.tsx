@@ -83,10 +83,7 @@ export function ModulePermissions({
   );
   return (
     <div ref={containerRef} className='relative text-sm'>
-      <div
-        className='sticky top-0 z-10 border-b bg-background py-2'
-        style={rowStyle}
-      >
+      <div className='sticky top-0 z-10 border-b bg-card py-2' style={rowStyle}>
         <span className='pl-4 font-medium'>{label}</span>
         <span className='text-right text-xs text-muted-foreground'>
           {t(

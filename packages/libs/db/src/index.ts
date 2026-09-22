@@ -56,6 +56,12 @@ export type {
 } from './collection/types.js';
 export type { CollectionBuilder } from './collection/builder/builder.js';
 export type {
+  CollectionDiagnosis,
+  CollectionDiagnosisIssue,
+  CollectionDiagnosisIssueCode,
+  ConnectionCollections,
+} from './collection/registry/types.js';
+export type {
   CollectionResolutionResult,
   CollectionResolutionWarning,
 } from './collection/resolver/types.js';
@@ -99,6 +105,10 @@ export type {
 export { defineMigration } from './migration/define.js';
 export { loadMigrations, validateMigrations } from './migration/loader.js';
 export { createMigrator } from './migration/migrator.js';
+export {
+  TASK_LOCK_EXPIRY_MS,
+  TASK_LOCK_HEARTBEAT_INTERVAL_MS,
+} from './migration/internal/lock.js';
 export type { Migrator } from './migration/migrator.js';
 export type {
   ChecksumMismatch,
@@ -112,7 +122,12 @@ export type {
   MigrationDefinition,
   MigrationRepairOptions,
   MigrationRepairResult,
+  MigrationRollbackOptions,
   MigrationRollbackResult,
+  StaleTaskLockTakeover,
+  TaskLockReleaseOptions,
+  TaskLockReleaseResult,
+  TaskLockState,
   MigrationRunResult,
   MigrationSource,
   MigrationTransactionMode,

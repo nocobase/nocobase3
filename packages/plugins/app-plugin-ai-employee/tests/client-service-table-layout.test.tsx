@@ -73,7 +73,7 @@ describe('service settings table layout', () => {
       expect(table).toHaveAttribute('data-slot', 'table');
       expect(table.parentElement).toHaveClass('overflow-x-auto');
       const frame = table.parentElement?.parentElement;
-      expect(frame).toHaveClass('rounded-xl', 'border', 'bg-background');
+      expect(frame).toHaveClass('rounded-xl', 'border', 'bg-card');
       expect(frame?.parentElement).toHaveClass(
         'flex',
         'min-w-0',

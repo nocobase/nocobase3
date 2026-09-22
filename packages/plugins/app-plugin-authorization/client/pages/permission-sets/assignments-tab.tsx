@@ -111,7 +111,7 @@ export function Assignments({
         />
         <SelectField
           aria-label={t('permissionSets.assignments.kindLabel')}
-          className='h-9 min-w-44 rounded-lg border bg-background px-3 text-sm'
+          className='h-9 min-w-44 rounded-lg border bg-transparent px-3 text-sm'
           value={kind}
           onValueChange={(selectedValue) => changeKind(selectedValue)}
           options={[
@@ -308,7 +308,7 @@ function AssignmentPicker({
           value={subjects}
           onChange={setSubjects}
         />
-        <div className='sticky bottom-0 flex justify-end gap-2 border-t bg-background py-4'>
+        <div className='sticky bottom-0 flex justify-end gap-2 border-t bg-popover py-4'>
           <Button variant='outline' onClick={onClose}>
             {t('common.cancel')}
           </Button>
