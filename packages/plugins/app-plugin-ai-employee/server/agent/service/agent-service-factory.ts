@@ -56,7 +56,8 @@ export interface CreateEmployeeOptions {
    */
   readonly state: AgentState;
   readonly from?: 'main-agent' | 'sub-agent';
-  readonly actor?: Actor;
+  /** Who this agent runs as. There is no implicit root. */
+  readonly actor: Actor;
   /**
    * Conversation-level configuration, held on the conversation record rather
    * than sent with a turn. `AIConversationService` reads both in one place, so
@@ -115,7 +116,7 @@ export class AgentServiceFactory {
     const repositories = this.repositoryFactory;
     const managers = this.managerFactory;
     const sessionId = options.state.sessionId;
-    const actor = options.actor ?? { id: 0, roles: [], isRoot: true };
+    const { actor } = options;
     const employee = await managers.aiEmployeesManager.getEmployee(
       options.username,
     );
