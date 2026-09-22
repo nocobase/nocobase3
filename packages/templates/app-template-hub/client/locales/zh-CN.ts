@@ -129,6 +129,7 @@ const zhCN: AppResource = {
     title: 'NocoBase',
   },
   actions: {
+    close: '关闭',
     save: '保存',
     cancel: '取消',
     confirm: '确认',
@@ -153,6 +154,25 @@ const zhCN: AppResource = {
     label: '应用导航',
     breadcrumb: '面包屑',
     console: 'Hub 控制台',
+  },
+  dataTable: {
+    noResults: '暂无数据。',
+    sortAscending: '升序',
+    sortDescending: '降序',
+    hideColumn: '隐藏',
+    view: '视图',
+    toggleColumns: '显示列',
+    selectedCount: '已选择 {{selected}} / {{total}} 行。',
+    rowsPerPage: '每页行数',
+    pageOf: '第 {{page}} 页，共 {{pageCount}} 页',
+    firstPage: '第一页',
+    previousPage: '上一页',
+    nextPage: '下一页',
+    lastPage: '最后一页',
+  },
+  datePicker: {
+    placeholder: '选择日期',
+    rangePlaceholder: '选择日期范围',
   },
 };
 

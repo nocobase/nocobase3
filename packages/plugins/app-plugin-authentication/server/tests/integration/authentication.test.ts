@@ -123,6 +123,21 @@ describe('Authentication', () => {
         username: 'alice.admin',
       },
     });
+    const user = await database
+      .connection()
+      .query.selectFrom('user')
+      .select('id')
+      .where('email', '=', 'alice@example.com')
+      .executeTakeFirstOrThrow();
+    const accounts = await database
+      .connection()
+      .query.selectFrom('account')
+      .select(['accountId', 'providerId', 'userId'])
+      .where('userId', '=', user.id)
+      .execute();
+    expect(accounts).toEqual([
+      { accountId: user.id, providerId: 'credential', userId: user.id },
+    ]);
     cookie = signedUp.headers.get('set-cookie') ?? '';
     expect(cookie).toContain('nocobase3.session_token');
     expect(cookie).toContain('Path=/test-app');
@@ -465,11 +480,10 @@ describe('Authentication seed', () => {
 
       const account = await connection.query
         .selectFrom('account')
-        .select(['issuer', 'accountId', 'providerId', 'userId', 'password'])
+        .select(['accountId', 'providerId', 'userId', 'password'])
         .where('userId', '=', user?.id)
         .executeTakeFirst();
       expect(account).toMatchObject({
-        issuer: 'local:credential',
         accountId: user?.id,
         providerId: 'credential',
         userId: user?.id,

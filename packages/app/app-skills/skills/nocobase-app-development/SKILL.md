@@ -50,6 +50,7 @@ NocoBase packages may publish Skills under `.agents/skills/`. Run `pnpm skills:s
 | File upload and metadata through Repository               | `@nocobase/app-plugin-file`           |
 | Translated text and language switching                    | `@nocobase/app-plugin-i18n`           |
 | User administration and application-owned role assignment | `@nocobase/app-plugin-users`          |
+| Reading or writing data, schema changes, migrations       | `@nocobase/db`                        |
 
 Read the relevant Skill before writing the feature, but treat this table as a map rather than an installed-package list. Implementing a permission system, a notification sender, or a scheduler by hand when a registered plugin provides one is the most expensive mistake available here.
 
@@ -67,12 +68,29 @@ Run `pnpm package:remove @nocobase/example`. The command uses the application's 
 
 If an older application has the command but not the script, use `pnpm nocobase package remove @nocobase/example`. If its CLI predates the command, update `@nocobase/nb3-cli` first; on a version that already has `skills:sync`, a compatibility fallback is to remove the package with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, verify that the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing an already-absent package to `package:remove` cleans recorded historical Skill ownership without uninstalling or cleaning another package.
 
+## Start from a worked page
+
+Check for `client/pages/reference/` before writing UI of your own. Every current template ships it, so an application generated from any of them carries it; one generated before it existed does not, and its absence is not a defect.
+
+It is source kept to be read. Nothing routes it, so a build never reaches it and no user sees it. Its `README.md` is the index: one table maps the screen you are asked for to the example page and the block inside it that shows the pattern, and a second maps the interaction you need to the component page that demonstrates the primitive. Read that file first rather than listing the directory.
+
+Then work through it in this order:
+
+1. Pick the closest example page from the README table — a list screen starts from `examples/orders`, a record editor from `examples/product-form`, a settings screen from `examples/team-settings` — and read the module comment at the top of its `.tsx`. It names the patterns the page demonstrates, the component that holds each one, and the parts that are demonstration filler.
+2. Open only the blocks the task needs. The example pages are 600 to 1000 lines each because they show several patterns at once; a real screen usually needs two or three of them, and copying the whole page produces an overbuilt one.
+3. Confirm each primitive the block uses is in `client/components/ui/`, and each composition in `client/components/`. If one is missing, add it with `pnpm exec shadcn add` rather than inlining a copy.
+4. Copy the skeleton — `PageContainer` and `PageHeader`, the token classes, the state shape, the `render` prop and `data-icon` conventions — and leave behind the mock data module, the `ExamplePage` frame from `shared.tsx`, and the filler the header comment names.
+5. Move the strings into `client/locales/` under the application's own keys. The reference wording lives in `client/pages/reference/locales/` and never reaches a build.
+
+Do not import from `client/pages/reference/` in a page you ship, and do not give one a route — it is reference material, not a feature.
+
 ## Choose your reference
 
 Read the page for the task in front of you. Do not read all of them.
 
 | Task                                                                                | Read                                                             |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Copy a worked screen instead of designing one from nothing                          | `client/pages/reference/README.md` in the application            |
 | Create a page, write a page component, configure routes or navigation               | [client pages and routes](references/client-pages-and-routes.md) |
 | Add child pages, page Tabs, Dialogs, or Drawers using child routes; add menu groups | [child routes and overlays](references/client-child-routes.md)   |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode    | [components and styling](references/components-and-styling.md)   |
@@ -88,6 +106,8 @@ Read the page for the task in front of you. Do not read all of them.
 | Understand behavior inherited from an official application template                 | [template variants](references/template-variants.md)             |
 
 A feature with a page and an API usually needs four: migrations, server routes, client pages and routes, and i18n.
+
+The three database pages above are the application side — where the files live, which commands run them, how connections are configured. The database API they are written against belongs to `@nocobase/db` and is documented by the `nocobase-db` Skill synchronized alongside this one. Read that Skill before writing a migration, a seed, or a query.
 
 For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
 
@@ -139,6 +159,12 @@ Config        config.yml — gitignored, holds secrets; document options in
 
 Reach a plugin's capability only through its documented package exports. Never import a plugin's internal source path or write to its tables directly.
 
+## Reversible customization
+
+When customizing template or registry UI, prefer existing props and composition, then new application components outside `client/extensions/`. Keep the original extension implementation as the reusable baseline; edit it only when explicitly requested or when composition cannot reasonably meet the requirement, and explain that choice. See [components and styling](references/components-and-styling.md#customize-template-and-registry-components).
+
+Treat disabling a feature as a reversible availability change by default: preserve its page and component source, conditionally exclude or guard its route, and hide its links and actions. A hidden navigation item alone does not disable direct URL access. Enforce the same feature policy on the server so direct API calls cannot execute the disabled operation. Do not delete feature code merely to remove it from the current UI; explicit permanent removal can justify deletion. See [client pages and routes](references/client-pages-and-routes.md#disable-a-feature-without-deleting-its-pages).
+
 ## Non-negotiables
 
 These cause real damage and appear in every reference:
@@ -176,12 +202,7 @@ Use `APP_SERVER_PORT` for the local entry port in both development modes. With `
 
 When building for another platform, pass `--target` and verify the native binaries retained in `dist/node_modules`. `better-sqlite3` 13 bundles N-API binaries for multiple platforms; Alpine targets need the `linuxmusl` binary, while other Linux targets use the `linux` binary.
 
-```bash
-pnpm typecheck
-pnpm test
-pnpm lint
-pnpm build
-```
+For each change, scope all verification to affected files, projects, or packages and their affected consumers, including formatting, lint, type checking, tests, builds, and runtime checks. Use supported file selectors, project configurations, and workspace package filters. Do not default to full-application or workspace-wide commands or `pnpm check`. Run the smallest supported scope when a required check cannot be narrowed further, and explain why. Expand or repeat checks only when further changes, dependency impact, configuration changes, or failures justify it, or the user requests it. Documentation-only changes need formatting and link checks for changed documents, not type checking, runtime tests, or builds. Follow [Testing and verification](references/testing.md) for selection examples.
 
 Verify observable behavior, not just that the commands passed. [Testing and verification](references/testing.md) lists what to check for each kind of change.
 

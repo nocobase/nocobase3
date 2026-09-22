@@ -1,6 +1,6 @@
 # Database and data access
 
-Schema changes are migrations — see [migrations and seeds](migrations.md). This page is about reading and writing data at runtime.
+This page is how an application reaches the database and where that code belongs. The API itself — Repository, QueryAdapter, transactions, naming, and the criterion for choosing between the two layers — belongs to the package that owns it: read `.agents/skills/nocobase-db/SKILL.md` sections 4 and 5, and run `pnpm skills:sync` if that file is missing. Schema changes are migrations; see [migrations and seeds](migrations.md).
 
 ## Resolving the database
 
@@ -14,91 +14,17 @@ const database = app.container.resolve(databaseManagerToken);
 
 In a route factory, resolve it once in the factory rather than inside each handler. In a service, take it as a constructor dependency — see [services and jobs](services-and-jobs.md).
 
-The manager exposes three things:
+From there, `database.repository(collection)` is the default for a collection's records and their relations, `database.query()` is for a result set that is not any collection's records, and `database.transaction(fn)` groups writes that must succeed or fail together. Each takes an optional connection name and uses the default connection when omitted.
 
-| Call                       | Returns                                          |
-| -------------------------- | ------------------------------------------------ |
-| `database.query()`         | Query builder for reading and writing rows       |
-| `database.builder()`       | Schema builder; for migrations, not runtime code |
-| `database.transaction(fn)` | Runs `fn` with a connection inside a transaction |
-
-Each takes an optional connection name and uses the default connection when omitted.
-
-## Reading
-
-```ts
-const query = database.query();
-
-const orders = await query
-  .selectFrom('orders')
-  .selectAll()
-  .where('status', '=', 'open')
-  .orderBy('createdAt', 'desc')
-  .limit(50)
-  .execute();
-
-const order = await query
-  .selectFrom('orders')
-  .selectAll()
-  .where('id', '=', id)
-  .executeTakeFirst();
-```
-
-`execute()` returns an array, `executeTakeFirst()` a row or `undefined`, and `executeTakeFirstOrThrow()` a row or throws. Also available: `value(column)` for a single value, `pluck(column)` for one column across rows, and `exists()`.
-
-Values passed to `where` are parameterized. Never build SQL by interpolating a string.
-
-Joins, `groupBy`, `having`, and aggregate functions through the expression builder are all available; read the `QueryAdapter` types in `@nocobase/db` for the full surface.
-
-## Writing
-
-```ts
-await query
-  .insertInto('orders')
-  .values({ reference: 'ORD-1', createdAt: new Date() })
-  .execute();
-
-await query
-  .updateTable('orders')
-  .set({ status: 'closed' })
-  .where('id', '=', id)
-  .execute();
-
-await query.deleteFrom('orders').where('id', '=', id).execute();
-```
-
-`update` and `delete` require a `where`. Affecting every row needs an explicit `allowAllRows()` — the guard exists because an accidentally omitted `where` is unrecoverable in production.
-
-## Transactions
-
-Group writes that must succeed or fail together:
-
-```ts
-await database.transaction(async (connection) => {
-  await connection.query.insertInto('orders').values(order).execute();
-  await connection.query
-    .updateTable('inventory')
-    .set({ reserved: true })
-    .where('sku', '=', order.sku)
-    .execute();
-});
-```
-
-Use the `connection` the callback provides. A query issued through the outer `database.query()` inside the callback runs outside the transaction and will not roll back with it. Returning from the callback commits; throwing rolls back.
-
-## Identifiers
-
-Write the same camelCase names you used in the migration. A `createdAt` field is stored in a `created_at` column, and the adapter converts in both directions: `where('createdAt', ...)` targets the right column, and returned rows come back with `createdAt` keys.
-
-Physical names work too, so `where('created_at', ...)` is equally valid — but stay consistent with the migration's camelCase so the code reads the same throughout.
-
-The exception is anywhere a raw index or constraint name is needed, such as `dropIndex` in a migration. Those are generated names like `idx_orders_status` and are not converted.
+Keep `@nocobase/db` in `dependencies`, not `devDependencies`. The deployed server resolves it at runtime, and TypeScript also reads that declaration to infer the database configuration through the public package name; declaring it only as a development dependency can cause TS2883 in an installed application even while a source workspace builds successfully.
 
 ## Where data access belongs
 
 Put queries in a service and call the service from the route, once more than one handler needs the same data or the logic is worth testing on its own. A route that only reads and returns a list may query directly.
 
-Never expose a raw row shape as an API response without deciding what belongs in it. Internal columns leak through `selectAll()`.
+Never expose a raw row shape as an API response without deciding what belongs in it. Internal columns leak through a select-everything query.
+
+Neither Repository nor Query applies the application's permissions. The route decides what the caller may see and change before any of it reaches a filter, a values object, or a field selection — see [application permission development](authorization.md).
 
 ## Generated IDs
 
@@ -107,6 +33,6 @@ Never expose a raw row shape as an API response without deciding what belongs in
 ## Verify
 
 - Queries return what you expect against a real database, not only in a mocked test.
-- Updates and deletes are scoped by `where`.
+- Updates and deletes are scoped, and an unscoped one is deliberate rather than accidental.
 - Multi-write operations roll back as a unit on failure.
 - Responses expose intended fields only.

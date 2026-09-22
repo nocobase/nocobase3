@@ -5,7 +5,10 @@ import {
   type DatabaseTaskConfig,
 } from '../../task-config.js';
 import type { DatabaseConnection } from '../../database/connection.js';
-import { createMigrationConnection } from '../../migration/internal/context.js';
+import {
+  createMigrationConnection,
+  createTaskRepositoryAccessor,
+} from '../../migration/internal/context.js';
 import type { SeedContext, SeedConnection } from '../types.js';
 
 export function createSeedContext(
@@ -16,6 +19,7 @@ export function createSeedContext(
   return {
     config,
     container,
+    repository: createTaskRepositoryAccessor(connection),
     query: connection.query,
     connection: createSeedConnection(connection),
   };

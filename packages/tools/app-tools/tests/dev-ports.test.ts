@@ -87,15 +87,35 @@ describe('development ports', () => {
 
     expect(await canListen('0.0.0.0', preferredPort)).toBe(true);
   });
+
+  it('rejects a specific address another process already answers on', async () => {
+    // The same port-sharing quirk runs the other way too: a wildcard listener and a specific one coexist, so
+    // binding loopback succeeds while the other process still receives loopback connections.
+    const preferredPort = await listenOnAvailablePort('0.0.0.0');
+
+    expect(await canListen(host, preferredPort)).toBe(false);
+  });
+
+  it('skips a specific address another process already answers on', async () => {
+    const preferredPort = await listenOnAvailablePort('0.0.0.0');
+
+    expect(
+      await findAvailablePort({
+        host,
+        label: 'test',
+        preferredPort,
+      }),
+    ).toBeGreaterThan(preferredPort);
+  });
 });
 
-async function listenOnAvailablePort(): Promise<number> {
+async function listenOnAvailablePort(listenHost = host): Promise<number> {
   const server = net.createServer();
   servers.push(server);
 
   return new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, host, () => {
+    server.listen(0, listenHost, () => {
       const address = server.address();
       if (!address || typeof address === 'string') {
         reject(new Error('Unable to resolve the temporary test port.'));

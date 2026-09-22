@@ -89,6 +89,7 @@ describe('tailwind content sources', () => {
       symlinkSync(
         path.join(store, 'store/app-plugin-fixture'),
         path.join(scope, 'app-plugin-fixture'),
+        'junction',
       );
 
       const files = contentFilesIn(store);
@@ -119,6 +120,7 @@ describe('tailwind content sources', () => {
       symlinkSync(
         path.join(store, 'store/app-plugin-fixture'),
         path.join(scope, 'app-plugin-fixture'),
+        'junction',
       );
 
       const files = contentFilesIn(store);

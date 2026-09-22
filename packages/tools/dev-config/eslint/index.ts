@@ -282,6 +282,41 @@ export const createClientLibraryConfig: (
     ],
   });
 
+// shadcn/ui registry output is copied into an application verbatim by
+// `shadcn add` so that `shadcn add <name> --diff` stays meaningful against
+// upstream. The primitives export their `cva` variants, contexts and hooks
+// alongside the component by design, and a few compose state the way the
+// upstream source does, so the rules that object to those shapes are relaxed
+// for the registry paths alone. Hand-written components in
+// `client/components/` are still held to the full rule set.
+const shadcnRegistry: Linter.Config[] = [
+  {
+    name: '@nocobase/dev-config/shadcn-registry',
+    files: ['client/components/ui/**/*.tsx', 'client/hooks/use-mobile.ts'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      '@eslint-react/set-state-in-effect': 'off',
+      '@eslint-react/no-nested-component-definitions': 'off',
+      '@eslint-react/no-array-index-key': 'off',
+      '@eslint-react/dom-no-dangerously-set-innerhtml': 'off',
+      '@eslint-react/use-state': 'off',
+    },
+  },
+  {
+    // Recharts exposes loosely typed tooltip and legend payloads; the upstream
+    // chart wrapper reads them as-is.
+    name: '@nocobase/dev-config/shadcn-registry-chart',
+    files: ['client/components/ui/chart.tsx'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off',
+    },
+  },
+];
+
 export const createPortalConfig: (
   options?: SharedConfigOptions,
 ) => Linter.Config[] = (options = {}) =>
@@ -290,6 +325,7 @@ export const createPortalConfig: (
     environment: [
       ...scopeConfigs(react, portalClientFiles),
       ...scopeConfigs(node, portalNodeFiles),
+      ...shadcnRegistry,
       ...(options.environment ?? []),
     ],
   });

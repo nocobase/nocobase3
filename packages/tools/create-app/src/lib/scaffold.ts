@@ -60,6 +60,10 @@ const FALLBACK_GITIGNORE = [
   '/database.sqlite-journal',
   '/database.sqlite-wal',
   '/database.sqlite-shm',
+  // Written by `pnpm collections:generate`: a snapshot of what this machine's database resolves every Collection
+  // to, regenerated after migrating rather than committed. Only the managed connection the template ships is named,
+  // because an `external` connection keeps its metadata.json in the repository as the metadata source.
+  '/database/main/collections/',
   '/.agents/',
   '/.claude/skills/',
   '/.agent-annotations/',

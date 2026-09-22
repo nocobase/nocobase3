@@ -2,7 +2,7 @@
   {
     "type": "file",
     "name": "index",
-    "label": "Deployment"
+    "label": "Deployment options"
   },
   {
     "type": "file",
@@ -12,16 +12,26 @@
   {
     "type": "file",
     "name": "standalone",
-    "label": "Build and run"
+    "label": "Standalone: build and run"
   },
   {
     "type": "file",
     "name": "docker",
-    "label": "Deploy with Docker"
+    "label": "Standalone: Docker"
   },
   {
     "type": "file",
     "name": "hub",
-    "label": "Hub"
+    "label": "Deploy Hub"
+  },
+  {
+    "type": "file",
+    "name": "hub-publishing",
+    "label": "Publish applications with Hub"
+  },
+  {
+    "type": "file",
+    "name": "operations",
+    "label": "Backup, recovery and troubleshooting"
   }
 ]

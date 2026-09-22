@@ -83,9 +83,7 @@ client/pages/auth/shared.tsx            logo and marketing panel used by every p
 client/extensions/nocobase-auth-ui/     layout, tabs, SSO buttons, four password forms
 ```
 
-Edit these files directly. The extension directory was materialized from the
-plugin's UI registry item and belongs to the application; upgrades arrive as
-a three-way merge, so keep local changes minimal and cohesive.
+Customize page composition and shared branding first. The extension directory belongs to the application, but keep its original components as the reusable baseline. Prefer existing props and slots; when they cannot express the change, create a wrapper or replacement under `client/components/auth/` and import it from the page. Reuse extension primitives and headless actions instead of forking authentication behavior. Edit the original extension only if explicitly requested or composition is impractical, and explain the reason. Preserve original pages and components when disabling a feature so it can be re-enabled without reconstruction.
 
 ### Changing text, branding, or layout
 
@@ -121,6 +119,8 @@ have the button call it; see [adding sign-in methods](adding-sign-in-methods.md)
 
 ### Writing a custom form
 
+Place custom forms outside `client/extensions/`, for example in `client/components/auth/`, and update the consuming page import. Preserve the original form and its extension files.
+
 Compose the headless action instead of calling the client by hand:
 
 ```tsx
@@ -143,9 +143,11 @@ relative links and the router.
 
 ### Turning registration off
 
-Set `emailAndPassword.disableSignUp: true` in `server/config/auth.ts` so the
-endpoint refuses, then remove the `/register` route and the links to it from
-the login page. Hiding the page alone leaves the endpoint open.
+Set `emailAndPassword.disableSignUp: true` in server authentication configuration so direct password-registration requests are refused. Treat “remove registration” as disabling availability unless permanent source deletion was explicitly requested: retain `client/pages/auth/register.tsx`, the original form, and a recoverable route definition. Conditionally exclude `/register` from active routes or gate it to an unavailable/redirect result, and hide registration links and actions. Hiding navigation alone does not block the URL.
+
+If the original `PasswordLoginForm` has no prop for hiding registration, use a new application form under `client/components/auth/` that reuses `usePasswordLogin` and the existing primitives, then select it in the login page. Do not edit the extension form, delete the registration page, or hide a hard-coded link with CSS merely to disable registration. Keep unrelated sign-in and configured password-recovery behavior intact.
+
+Document the application-owned UI availability setting or composition change and the server configuration needed to restore registration; do not imply an existing shared switch if the application has none. Verify that registration links are absent, direct navigation cannot display an active registration form, and a direct registration request fails without creating an account. Confirm restoration can reuse the retained page and form. Other self-provisioning methods, such as social sign-in, need their own policy if the user intends to disable all account creation rather than password self-registration alone.
 
 ### Password reset
 

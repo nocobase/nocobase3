@@ -165,6 +165,28 @@ When a migration needs to create a collection, call `builder.createCollection` w
 
 Add a migration-level test that executes `up` and, when reversible, `down` against a real test database and verifies the resulting physical schema and metadata.
 
+### Choosing a data-access tool in a migration or seed
+
+A migration's context carries three tools and they are not interchangeable. `builder` is the only one that changes structure. `query` is the default for data: it reads and writes rows through the Connection naming strategy and expresses exactly what it is given. `repository` is the narrow one — reach for it only where `query` would get the write wrong: cross-dialect field encoding and decoding, Collection-level naming overrides, and relation writes, including the junction rows behind a `belongsToMany`. Anything `query` expresses correctly stays on `query`.
+
+A seed's context carries only the last two, because a seed never changes structure. There the default is reversed: installation data is written in Collection terms, so `repository` is the normal tool and `query` is for what it cannot express, such as reading a physical table that backs no Collection.
+
+This does not loosen the rule above. `repository(name)` resolves the Collection from the database itself — the metadata a previous `builder` operation wrote — which is why it is available at all; importing or iterating an application's own collection definitions from a migration remains forbidden, and no amount of convenience justifies it. What it does mean is that a migration using `repository` is betting on a shape it did not declare in its own body, so three things follow:
+
+- Say in a comment why `query` was not enough. A reviewer cannot tell a considered use from a reflex, and the comment is what makes the difference visible.
+- Do not use it in `down`. By the time a rollback runs, the Collection has already moved past what `up` left behind, possibly several migrations past.
+- Do not use it to walk a table. Selecting every row and updating each one through a Repository is the shape to avoid; a set-based `query` statement is both correct and bounded.
+
+Both tasks get their Repository from the connection the task runs on, which inside a transaction is that transaction's connection. This is why the service container withholds the application's `DatabaseManager` from migrations and seeds: a Repository taken from it would write outside the task's transaction and survive a failure that should have discarded it.
+
+### A plugin's migrations are laid out differently from an application's
+
+An application keeps its tasks under `database/<connection>/migrations` and `seeds`, one directory per configured connection. A plugin declares a single `database/migrations` and `database/seeds` in its `defineServerPlugin` call, relative to the plugin's `baseDir`, and there is no connection segment because a plugin contributes only to the installing application's default connection. It cannot know which further connections an application defines, and cannot target one.
+
+The loader flattens the application's sources and every registered plugin's into one list per connection, rejects duplicate migration names across all of them, and orders what remains by name alone. So a plugin's migration name has to be derived from its package rather than being a bare timestamp — a collision fails the run for the whole application — and a plugin's migrations interleave with the application's by name rather than applying as a block. Execution history records the owning package name, so attribution survives the shared run.
+
+`packages/tools/create-plugin/template/AGENTS.md` carries this for generated plugins; change both together.
+
 Before editing an existing migration, check its Git history and the status of the branch that introduced it. An existing migration may be corrected directly only while its introducing feature branch has not yet been merged. Once that branch has been merged into its target branch, never modify the migration again; implement every correction or subsequent schema change in a new migration. Do not use hard-coded previous checksum hashes to make an edited migration appear compatible.
 
 ## Database Integration Test Scheduling

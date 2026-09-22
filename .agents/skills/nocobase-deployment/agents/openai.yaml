@@ -1,0 +1,6 @@
+interface:
+  display_name: 'NocoBase Production Deployment'
+  short_description: 'Deploy and verify NocoBase 3 applications'
+  default_prompt: 'Use $nocobase-deployment to plan, execute, verify, or troubleshoot a NocoBase 3 production deployment.'
+policy:
+  allow_implicit_invocation: true

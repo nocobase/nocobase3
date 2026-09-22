@@ -102,7 +102,13 @@ Use shadcn/ui for UI. Check `client/components/ui/` first; if the primitive is n
 pnpm exec shadcn add card
 ```
 
-Build your own components by composing these primitives, and put them in `client/components/`.
+Build your own components by composing these primitives, and put them in `client/components/`. A few such compositions ship with the template for the shadcn documentation pages that describe a pattern rather than a registry item: `DataTable` with `DataTableColumnHeader`, `DataTablePagination` and `DataTableViewOptions` in `client/components/data-table*.tsx`, `DatePicker` and `DateRangePicker` in `client/components/date-picker.tsx`, and the `Typography*` prose primitives in `client/components/typography.tsx`. Reach for these before writing a table, a date field or long-form text from scratch.
+
+**Read the reference pages before building a page.** `client/pages/reference/` is worked source, not part of the running application: nothing routes it, so a build never reaches it and no user ever sees it. `examples/` holds eight complete business screens on mock data — a dashboard, orders, customers, a product form, an inbox, a survey, team settings and a schedule — and `components/` holds one page per shadcn/ui primitive showing its variants and a realistic use. Both share the frame in `shared.tsx`. An example is a folder holding its page beside the mock data that page reads — `examples/orders/orders.tsx` and `orders.data.ts` — so the screen and its records move together.
+
+Their wording lives beside them in `client/pages/reference/locales/`, not in `client/locales/`, because these pages are not part of the application and their strings have no reason to reach a browser; kept in the application locale they were 96% of it. A page given a route temporarily therefore shows its key paths until you merge that module into `client/locales/index.ts` by hand.
+
+Start from its `README.md`: one table maps the screen you are asked for to the example page and the blocks inside it, a second maps the interaction you need to the component page, and each example page opens with a module comment naming its patterns and its demonstration filler. Open the closest one and copy its structure rather than inventing your own: `PageContainer` and `PageHeader`, `Card` grids for summaries, `DataTable` for lists, `Sheet` or `Dialog` for detail and create flows, `AlertDialog` before a destructive action, `toast` for confirmation. Copy the shape and the token usage; leave the mock data behind. Do not import from `client/pages/reference/` in a page you ship, and do not route one — a shadcn gallery inside somebody's product is a defect, and `tests/logic/client-routes.test.ts` fails if a reference page reaches the router.
 
 Style with the semantic Tailwind tokens — `bg-background`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary` — so pages follow the light and dark themes. Do not hard-code colors like `bg-white` or `text-gray-900`; they break the moment someone switches theme.
 
@@ -215,7 +221,7 @@ pnpm nocobase app i18n:check  # languages declared on only one side
 
 Add a command of your own as an oclif `Command` subclass in `cli/commands/`, then list it in `cli/commands/index.ts`; the key becomes its name under `app`. These commands are static tooling — they read and write files and packages. They do not start the application, so nothing in them may resolve a service or query the database. Anything needing the running application is a server route or a job, not a command.
 
-`cli/` is compiled into `dist` alongside the server, so a deployed application runs the same commands with `node ./cli/index.js`. `pnpm db:apply`, `pnpm db:reset` and `pnpm db:repair` are these commands rather than separate scripts. `db apply` runs migrations and seeds as one plan, each half applying only what is pending.
+`cli/` is compiled into `dist` alongside the server, so a deployed application runs the same commands with `node ./cli/index.js`. `pnpm db:apply`, `pnpm db:reset` and `pnpm db:repair` are these commands rather than separate scripts. `db apply` runs migrations and seeds as one plan, each half applying only what is pending. Those scripts run `tsx ./cli/index.ts` directly rather than going through `pnpm nocobase`: a script that calls another script is a second `pnpm run`, and when the command exits non-zero — which `collections:generate --check` does by design — each layer prints its own `ELIFECYCLE` line for the one failure. `pnpm nocobase <topic>` stays the way to reach a command that has no script of its own.
 
 ## Plugins
 
@@ -319,12 +325,11 @@ Node ABI to major version: 115 is Node 20, 127 is 22, 137 is 24, 147 is 26.
 
 ## Before you finish
 
-```bash
-pnpm typecheck
-pnpm test
-pnpm lint
-pnpm build
-```
+For each change, scope all verification to the affected files, projects, or packages and their affected consumers. This applies to formatting, lint, type checking, tests, builds, and runtime verification. Run only the checks relevant to the change: use explicit file paths for formatting, lint, and tests; use the owning project's TypeScript configuration for type checking; build only affected packages or supported build targets. In a workspace, use `pnpm --filter <affected-package> <script>`. In a standalone application, use its supported file or project selectors; do not invent flags or bypass project configuration to force a narrower check.
+
+Do not run full-application or workspace-wide checks, or an aggregate `pnpm check`, as a routine step after each edit. If a necessary check cannot be narrowed further, run the smallest supported project or package scope and explain why. Expand scope only when shared code, dependencies, configuration, or a failure gives a concrete reason, or when the user explicitly requests it. After checks pass, repeat them only for further relevant changes or unresolved failures. Documentation-only changes need formatting and link checks for the changed documents, not type checking, runtime tests, or builds.
+
+Report which checks ran, their scope, and any unverified behavior. See the application development Skill's `references/testing.md` for selection examples.
 
 Add tests for what you changed: a route's authenticated, unauthenticated, and unauthorized responses; a migration's `up` and `down` against a real database; a page's actual behavior. Tests belong in `tests/`, or in `e2e/` when they need a real server. Never place a test beside the source it covers.
 
