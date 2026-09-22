@@ -44,7 +44,7 @@ async function createApp(): Promise<string> {
   await symlink(
     moduleDirectory('typescript'),
     path.join(appRoot, 'node_modules', 'typescript'),
-    'dir',
+    'junction',
   );
   return appRoot;
 }

@@ -97,7 +97,7 @@ async function createLoopFixture(
     await symlink(
       moduleDirectory(dependency),
       path.join(appRoot, 'node_modules', dependency),
-      'dir',
+      'junction',
     );
   }
   for (const dependency of Object.keys(FIXTURE_DEPENDENCY_DIRECTORIES)) {
@@ -113,14 +113,14 @@ async function createLoopFixture(
       await symlink(
         packageDirectory,
         path.join(modulesRoot, ...dependency.split('/')),
-        'dir',
+        'junction',
       );
     }
   }
   await symlink(
     generated.targetDirectory,
     path.join(appRoot, 'node_modules', '@nocobase', 'app-plugin-agent-loop'),
-    'dir',
+    'junction',
   );
   return { appRoot, pluginRoot: generated.targetDirectory };
 }
