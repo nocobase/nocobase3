@@ -251,10 +251,8 @@ function paginationQuery(
 }
 
 /**
- * The one place a conversation request body becomes agent state. What this
- * returns is what every tool of the execution will see, so nothing downstream
- * reads the body again: the factory replaces the model it resolved, a
- * dispatcher replaces the session of a sub-agent it starts, and that is all.
+ * The one place a conversation request body becomes agent state. Nothing
+ * downstream reads the body again.
  */
 function parseAgentState(
   context: HonoContext,
@@ -268,9 +266,6 @@ function parseAgentState(
         : typeof input.editingMessageId === 'string'
           ? input.editingMessageId
           : undefined,
-    // Every other field is checked here, and the model is no exception: what
-    // arrives is whatever the client sent, and `AgentState.model` promises a
-    // resolved reference to every tool that reads it.
     model:
       typeof input.model?.llmService === 'string' &&
       typeof input.model?.model === 'string'

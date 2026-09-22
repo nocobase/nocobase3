@@ -20,13 +20,7 @@ export interface CreateAgentContextOptions {
   readonly runtime: AgentRuntime;
 }
 
-/**
- * Builds the context every backend tool of this application starts from. It
- * carries what this execution is — who is asking, what the turn holds — and
- * nothing else: `deps` starts empty, and a tool that needs a manager,
- * repository or service declares its container token for `AgentService` to
- * resolve into `deps` for that tool alone.
- */
+/** `deps` starts empty; `AgentService` fills each tool's own when it builds it. */
 export function createAgentContext({
   actor,
   state,

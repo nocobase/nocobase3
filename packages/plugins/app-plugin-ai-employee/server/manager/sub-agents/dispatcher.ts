@@ -44,16 +44,15 @@ export type SubAgentTask = {
   question: string;
   skillSettings?: Record<string, any>;
   webSearch?: boolean;
-  /** Messages the dispatching agent hands over; see `ConversationTurn`. */
+  /** See `AgentState.handoffMessages`. */
   handoffMessages?: AIMessageInput[];
   writer?: (chunk: any) => void;
 };
 
 export interface SubAgentExecutionOptions {
   readonly actor: Actor;
-  /** The dispatching agent's own state, inherited by the sub-agent. */
+  /** The dispatching agent's own, inherited by the sub-agent. */
   readonly state: AgentState;
-  /** What the host lent the dispatching agent, lent on to the sub-agent. */
   readonly runtime: AgentRuntime;
 }
 
@@ -259,10 +258,7 @@ export class SubAgentsDispatcher {
     const agentServiceFactory = this.container.resolve(
       agentServiceFactoryToken,
     );
-    // The sub-agent inherits the dispatching agent's state and runs it in its
-    // own session. Replacing that session is the only change this dispatcher
-    // makes to the state; the target employee's own policy still decides the
-    // model, in the factory.
+    // Its own session is the only change this dispatcher makes to the state.
     const agent = await agentServiceFactory.createAIEmployee({
       username: employee.username,
       actor: options.actor,
@@ -289,8 +285,8 @@ export class SubAgentsDispatcher {
         )
       : null;
     const runtime: Record<string, unknown> = {};
-    // The handover only happens where it means something: the user interrupted
-    // this sub-agent's tool call, so their message is answering it.
+    // Only where it means something: the user interrupted this sub-agent's
+    // tool call, so their message is answering it.
     if (
       handoffMessages?.length &&
       decisions?.decisions?.some(

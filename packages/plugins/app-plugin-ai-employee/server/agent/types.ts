@@ -34,10 +34,8 @@ export interface CurrentConversation {
 }
 
 /**
- * What one call to an already-created agent supplies. Everything that is fixed
- * for the agent's lifetime — the actor, the session, the model, the turn a tool
- * sees — belongs to `AgentState` and is resolved once by the
- * `AgentServiceFactory`, so a request cannot swap it.
+ * What one call to an already-created agent supplies. Whatever is fixed for the
+ * agent's lifetime is in `AgentState`, so a request cannot swap it.
  */
 export interface AgentRequest {
   /** The message this operation forks from, where it forks from one. */
@@ -47,10 +45,7 @@ export interface AgentRequest {
     interruptId?: string;
     decisions: UserDecision[];
   };
-  /**
-   * Per-call channel for the middleware pipeline, such as `appendMessages`.
-   * Turn data does not belong here; it is already in the agent's state.
-   */
+  /** Per-call channel for the middleware pipeline, such as `appendMessages`. */
   runtime?: Record<string, unknown>;
   writer?: (chunk: unknown) => void;
   signal?: AbortSignal;

@@ -8,26 +8,18 @@ export interface AgentToolCallResult {
 }
 
 /**
- * What one execution is, as every backend tool of it sees it. It is built where
- * the request is parsed and travels unchanged, except that the agent's factory
- * resolves `model` against the employee's policy and a dispatcher replaces
- * `sessionId` for a sub-agent it starts.
+ * What one execution is, as every backend tool of it sees it. Built where the
+ * request is parsed; only `model` and `sessionId` are replaced afterwards.
  */
 export interface AgentState {
-  /** The conversation this execution belongs to. Always known. */
   sessionId: string;
   messageId?: string;
   /**
-   * Messages an agent may hand to a sub-agent it dispatches. They are neither
-   * the model's history, which the checkpointer holds, nor this call's input,
-   * which the caller supplies per execution.
+   * Messages an agent may hand to a sub-agent it dispatches. Not history — the
+   * checkpointer holds that — and not this call's input.
    */
   handoffMessages?: AIMessageInput[];
-  /**
-   * The model this execution resolved to. It is written by whoever creates the
-   * agent, after the employee's own policy has decided, so a reader takes it as
-   * given rather than narrowing it back out of loose data.
-   */
+  /** Already resolved against the employee's policy; read it as given. */
   model?: { llmService: string; model: string };
   webSearch?: boolean;
   important?: string;
@@ -44,14 +36,13 @@ export interface AgentActor {
 }
 
 /**
- * What the host lends an execution for as long as it runs: somewhere to log,
- * the caller's language, and the request's headers where there is a request.
- * None of it describes the execution, which is why it is not part of the state.
+ * What the host lends an execution while it runs. None of it describes the
+ * execution, which is why it is not part of the state.
  */
 export interface AgentRuntime {
   logger: Logger;
   translate?: (key: string, options?: Record<string, unknown>) => string;
-  /** Headers of the request this execution runs for, where one exists. */
+  /** Absent where the execution serves no request. */
   getHeader?: (name: string) => string | undefined;
 }
 

@@ -50,36 +50,25 @@ export const agentServiceFactoryToken: ServiceToken<AgentServiceFactory> =
 
 export interface CreateEmployeeOptions {
   readonly username: string;
-  /**
-   * What this execution is, as every tool of the agent will see it. The
-   * session it names is the conversation the agent runs in.
-   */
+  /** Its session is the conversation the agent runs in. */
   readonly state: AgentState;
   readonly from?: 'main-agent' | 'sub-agent';
   /** Who this agent runs as. There is no implicit root. */
   readonly actor: Actor;
-  /**
-   * Conversation-level configuration, held on the conversation record rather
-   * than sent with a turn. `AIConversationService` reads both in one place, so
-   * a call site never unpacks the record itself.
-   */
+  /** Held on the conversation record; see `conversationAgentOptions()`. */
   readonly systemPrompt?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
-  /** What the host lends this execution, handed on to every tool of it. */
   readonly runtime: AgentRuntime;
 }
 
 export interface CreateAgentOptions {
-  /** The conversation this agent runs in. A fixed agent is always given one. */
   readonly sessionId: string;
   readonly model?: ModelRef;
   readonly systemPrompt?: string;
   readonly tools?: readonly string[];
   readonly skills?: readonly string[];
   readonly persistence?: ConversationPersistence;
-  /** Who this agent runs as. There is no implicit root. */
   readonly actor: Actor;
-  /** What the host lends it, handed on to every tool of it. */
   readonly runtime: AgentRuntime;
 }
 
@@ -122,9 +111,7 @@ export class AgentServiceFactory {
     );
     if (!employee)
       throw new Error(`AI employee "${options.username}" not found`);
-    // The model is resolved here and nowhere else, so the state a tool reads
-    // and the LLM the agent runs on come from this one call. It is the only
-    // field of the state this factory replaces.
+    // The one field of the state this factory replaces.
     const agentContext = this.createContext(actor, options.runtime, {
       ...options.state,
       model: await managers.aiEmployeesManager.resolveModel(

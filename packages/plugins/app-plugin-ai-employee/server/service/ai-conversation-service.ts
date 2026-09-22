@@ -1,10 +1,4 @@
-/**
- * Conversation actions for the flattened App Context.
- *
- * Each exported function mirrors the original action behaviour including
- * middleware semantics, SSE error envelopes, parallel-limit checks and the
- * `AIEmployee` streaming / invocation flows.
- */
+/** Conversation actions: the resource layer over agents and their history. */
 
 import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization/server';
 import type { ConversationTransport } from '../agent/contracts.js';
@@ -257,13 +251,9 @@ function normalizeIncomingMessageAttachments(
 }
 
 /**
- * The configuration a conversation record holds for its agent, in the shape
- * `createAIEmployee` takes. Every action that starts an agent spreads this
- * rather than unpacking the record itself.
- *
- * `options.tools` is deliberately absent: nothing in this package ever writes
- * one. A tool a conversation may use is decided by the employee's
- * `skillSettings` and by the per-conversation `skillSettings` filter.
+ * The configuration a conversation record holds for its agent. `options.tools`
+ * is deliberately absent: nothing writes one, and what an employee may use is
+ * decided by its own `skillSettings` and the per-conversation filter.
  */
 function conversationAgentOptions(
   conversation: AIConversationEntity,
@@ -325,8 +315,6 @@ export class AIConversationService {
     this.subAgentsDispatcher = options.subAgentsDispatcher;
     this.agentServiceFactory = options.agentServiceFactory;
   }
-  /** What the host lends one execution: this application's logger, plus the
-   * caller's language and headers. */
   private agentRuntime(transport: ConversationTransport): AgentRuntime {
     return {
       logger: this.logger,
@@ -347,11 +335,7 @@ export class AIConversationService {
     return createAgentContext({ actor, state, runtime });
   }
 
-  /**
-   * Writes one agent run to the caller's SSE target and to the resume cache.
-   * Every streaming action ends the target the same way, including the ones
-   * that fail partway.
-   */
+  /** Writes one agent run to the caller's SSE target and the resume cache. */
   private async consumeAgentStream(
     sessionId: string,
     transport: ConversationTransport,
@@ -888,9 +872,8 @@ export class AIConversationService {
       if (conversation.category !== 'chat') {
         throw new ResourceActionError(404, 'conversation not found');
       }
-      // A sub-agent waiting on a tool call is resolved before the agent exists,
-      // because whether it was interrupted decides what the agent's state
-      // carries. Both calls are repository work and need no agent.
+      // Resolved before the agent exists, because the answer decides what its
+      // state carries. Both calls are repository work and need no agent.
       const interrupted =
         !state.messageId &&
         (await this.subAgentsDispatcher.isInterrupted(sessionId));
@@ -903,9 +886,8 @@ export class AIConversationService {
         actor,
         systemPrompt,
         skillSettings,
-        // These messages answer the sub-agent's pending question, so they are
-        // handed to it rather than sent to this model. Every other turn leaves
-        // the field empty.
+        // They answer the sub-agent's pending question, so they are handed
+        // over rather than sent to this model.
         state: {
           ...state,
           handoffMessages: userDecisions ? messages : undefined,

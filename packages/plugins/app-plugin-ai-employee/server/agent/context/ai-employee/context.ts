@@ -50,11 +50,7 @@ import {
 export interface AIEmployeeAgentContextProviderOptions {
   readonly employee: AIEmployeeType;
   readonly currentConversation: CurrentConversation;
-  /**
-   * What this execution is and what the host lent it. The session, the actor,
-   * the requested web search, the frontend tools, the caller's language and
-   * headers all live here; nothing restates them beside it.
-   */
+  /** Nothing below restates what this already carries. */
   readonly agentContext: AgentContext;
   readonly aiEmployeesManager: AIEmployeesManager;
   readonly llmProviderManager: LLMProviderManager;
@@ -87,8 +83,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly systemMessage: string;
   private readonly skillSettings?: AIEmployeeSkillSettings;
 
-  // Read from the context rather than copied beside it, so the two can never
-  // come apart.
+  // Derived, never copied, so the two cannot come apart.
   private get sessionId(): string {
     return this.agentContext.state.sessionId;
   }
@@ -135,8 +130,6 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     // The employee's own configuration decides the model. The turn may ask for
     // one, but only a model the employee allows is honoured, and a turn that
     // asks for none is resolved rather than rejected.
-    // The employee's own configuration decides the model, so the manager that
-    // owns that policy is asked directly.
     const model = await this.aiEmployeesManager.resolveModel(
       this.employee,
       this.agentContext.state.model,

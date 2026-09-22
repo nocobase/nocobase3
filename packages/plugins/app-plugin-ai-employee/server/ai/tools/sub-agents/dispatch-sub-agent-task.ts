@@ -84,9 +84,6 @@ export default defineTools({
       },
       {
         actor: ctx.actor,
-        // The sub-agent inherits this execution whole. What the dispatch
-        // decided for it — its session, and the model and handover this task
-        // names — replaces the inherited values in the dispatcher.
         state: ctx.state,
         runtime: ctx.runtime,
       },
