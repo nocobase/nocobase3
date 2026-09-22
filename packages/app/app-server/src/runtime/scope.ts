@@ -1,10 +1,6 @@
 import path from 'node:path';
 
-import {
-  createConfigPaths,
-  type ConfigPaths,
-  type EnvMap,
-} from '../config/index.js';
+import { type EnvMap } from '../config/index.js';
 import { normalizeBasePath, resolveAppName } from '../support/index.js';
 import type { AppPathOptions, AppScope } from './types.js';
 
@@ -82,15 +78,6 @@ export function resolveAppScopeEnv(
     ...(scope.env ?? (scope.mode === 'standalone' ? process.env : {})),
     ...overrides,
   };
-}
-
-export function createAppConfigPaths(paths: AppPathOptions): ConfigPaths {
-  return createConfigPaths({
-    rootDir: paths.rootDir,
-    serverDir: paths.serverDir,
-    databaseDir: paths.databaseDir,
-    storageDir: paths.storageDir,
-  });
 }
 
 export function resolveAppRouting(

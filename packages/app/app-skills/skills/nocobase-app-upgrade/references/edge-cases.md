@@ -90,7 +90,7 @@ Apply the agreed outcome to the manifest and composition roots together, then ve
 
 ## Migrations
 
-A release can ship a migration under `database/`. Copy it in like any added file, then `pnpm migrate`.
+A release can ship a migration under `database/`. Copy it in like any added file, then `pnpm db:apply`.
 
 Never edit a migration that arrives this way, and never edit one already run — a correction goes in a new migration. The user's own migrations and seeds stay byte for byte where they are; an upgrade never rewrites them.
 
@@ -118,7 +118,7 @@ Rarely touched by the template — a change landing here deserves a careful read
   server/routes/  server/providers/  database/  cli/commands/  tests/  e2e/
 
 Template structure — where most of the delta lands
-  client/routing/  client/shell/  client/layouts/  client/theme/
+  client/routing/  client/layouts/  client/theme/
   client/app.ts  client/runtime.ts  client/startup.tsx  server/*.ts
   scripts/  vite.config.ts  vitest.config.ts  eslint.config.js
   tsconfig*.json  index.html  components.json
@@ -130,3 +130,7 @@ Both sides edit these — the hardest decisions
 Legacy application-owned guidance, when present
   skills/
 ```
+
+## Shared application scripts and commands
+
+When a target template delegates scripts to `@nocobase/app-tools` and commands to `@nocobase/app-cli`, add the former to `devDependencies` and the latter to `dependencies`. Merge the thin script entries and `cli/standard-commands.ts` while retaining application command registrations, plugin composition, and custom commands. Compare any locally modified script implementation before replacing it; move application-specific behavior to supported CLI hooks or retain a deliberate local override.

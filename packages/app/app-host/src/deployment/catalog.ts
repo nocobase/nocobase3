@@ -9,7 +9,7 @@
 
 import { createHash } from 'node:crypto';
 import type { Dirent } from 'node:fs';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import type {
   AppBackendKind,
@@ -70,9 +70,21 @@ export class DeploymentCatalog {
         continue;
       }
 
+      const appDirectory = path.join(this.deploymentsDir, entry.name);
+      const revision = await readFile(
+        path.join(appDirectory, '.active-revision'),
+        'utf8',
+      ).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return undefined;
+        throw error;
+      });
+      if (revision !== undefined && !/^[a-f0-9]{64}$/.test(revision))
+        throw new Error(`Invalid active revision for app "${entry.name}"`);
       const definition = await this.readDefinition(
         entry.name,
-        path.join(this.deploymentsDir, entry.name),
+        revision === undefined
+          ? appDirectory
+          : path.join(appDirectory, revision),
       );
       if (definition) {
         definitions.push(definition);
@@ -80,6 +92,15 @@ export class DeploymentCatalog {
     }
 
     return definitions.sort((a, b) => a.id.localeCompare(b.id));
+  }
+
+  async selectRevision(appId: string, checksum: string): Promise<void> {
+    if (!this.isValidAppId(appId) || !/^[a-f0-9]{64}$/.test(checksum))
+      throw new Error('Invalid application revision identity');
+    const marker = path.join(this.deploymentsDir, appId, '.active-revision');
+    const temporary = `${marker}.tmp`;
+    await writeFile(temporary, checksum, { mode: 0o600 });
+    await rename(temporary, marker);
   }
 
   async discoverAt(
@@ -354,9 +375,9 @@ export class DeploymentCatalog {
 }
 
 export function defaultDeploymentsDir(): string {
-  return path.resolve(process.cwd(), 'storage', 'app-deployments');
+  return path.resolve(process.cwd(), 'storage', 'apps', 'revisions');
 }
 
 export function defaultVolumesDir(): string {
-  return path.resolve(process.cwd(), 'storage', 'app-volumes');
+  return path.resolve(process.cwd(), 'storage', 'apps', 'volumes');
 }

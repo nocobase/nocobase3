@@ -1,3 +1,8 @@
+export {
+  resolveDatabaseConfig,
+  type DatabaseConfigInput,
+  type ResolvedDatabaseConfig,
+} from './resolve-config.js';
 export { defineAppDatabaseConfig } from './define-app-database-config.js';
 export {
   createAppDatabaseManager,
@@ -9,6 +14,7 @@ export {
 } from './provider.js';
 export {
   createAppMigrator,
+  type AppMigrationRepairResult,
   type AppMigrationRollbackResult,
   type AppMigrationRunResult,
   type AppMigrationSkippedReason,
@@ -17,6 +23,7 @@ export {
 export {
   createAppSeeder,
   type AppSeeder,
+  type AppSeedRepairResult,
   type AppSeedRunResult,
   type AppSeedSkippedReason,
   type CreateAppSeederOptions,
@@ -42,6 +49,7 @@ export {
   runAppSeeds,
   runAppDatabaseTasks,
   AppDatabaseTaskError,
+  type AppDatabaseTaskOperation,
   type AppDatabaseTaskResult,
   type AppDatabaseTaskRunOptions,
   type AppDatabaseTasksResult,

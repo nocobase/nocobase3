@@ -1,8 +1,10 @@
+import users from './users.js';
 import {
   defaultAppConfigs,
   type AppConfigFactory,
 } from '@nocobase/app-server/config';
 import auth from './auth.js';
+import authorization from './authorization.js';
 import session from './session.js';
 import server from './server.js';
 import spa from './spa.js';
@@ -17,7 +19,9 @@ import snowflake from './snowflake.js';
 import hub from './hub.js';
 
 const defaultConfigs: AppConfigFactory<{
+  users: ReturnType<typeof users>;
   auth: ReturnType<typeof auth>;
+  authorization: ReturnType<typeof authorization>;
   session: ReturnType<typeof session>;
   server: ReturnType<typeof server>;
   spa: ReturnType<typeof spa>;
@@ -31,7 +35,9 @@ const defaultConfigs: AppConfigFactory<{
   snowflake: ReturnType<typeof snowflake>;
   hub: ReturnType<typeof hub>;
 }> = defaultAppConfigs({
+  users,
   auth,
+  authorization,
   session,
   server,
   spa,

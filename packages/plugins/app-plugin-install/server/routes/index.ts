@@ -1,5 +1,5 @@
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
-import type { ConfigPaths } from '@nocobase/app-server/config';
+import type { AppPaths } from '@nocobase/app-server/config';
 import {
   defineRootRoutes,
   type AppRootRouteContribution,
@@ -30,7 +30,7 @@ export type InstallPluginRoutesApplication =
   AppPluginApplication<InstallPluginConfig>;
 
 export interface CreateInstallRoutesOptions {
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly generateSecret?: () => string;
 }
 

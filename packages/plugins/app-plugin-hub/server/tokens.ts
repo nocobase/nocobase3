@@ -1,3 +1,4 @@
+import type { JournalPage, JournalQuery } from '@nocobase/logging';
 import type {
   HostDeploymentSet,
   HostStatus,
@@ -73,6 +74,12 @@ export interface HubDeploymentRecord {
   readonly createdAt: Date;
   readonly startedAt: Date | null;
   readonly finishedAt: Date | null;
+  /**
+   * Set when a deployment request was answered from an earlier idempotent request instead of
+   * creating a deployment now, so callers can tell "accepted" from "already done". Records read
+   * back from storage never carry it.
+   */
+  readonly reused?: boolean;
 }
 
 export interface HubRuntimeStatus {
@@ -215,6 +222,13 @@ export interface HubService {
     appId: string,
     input: UpdateHubSettingsInput,
   ): Promise<HubAppDetail>;
+  readLogs(
+    appId: string,
+    query?: JournalQuery,
+    deploymentId?: string,
+  ): Promise<
+    JournalPage & { enabled: boolean; status?: string; phase?: string }
+  >;
   listDeployments(
     appId: string,
     options?: { page?: number; pageSize?: number },

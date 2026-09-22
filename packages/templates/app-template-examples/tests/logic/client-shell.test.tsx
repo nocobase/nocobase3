@@ -1,5 +1,7 @@
 import {
+  apiClientToken,
   ClientApplicationContext,
+  realtimeClientToken,
   type ClientApplication,
 } from '@nocobase/app-client';
 import type { AppClientRegisteredRoute } from '@nocobase/app-client/plugins';
@@ -9,13 +11,9 @@ import {
 } from '@nocobase/app-plugin-authentication/client';
 import {
   AuthorizationClient,
+  type AuthorizationCheck,
   authorizationClientToken,
 } from '@nocobase/app-plugin-authorization/client';
-import {
-  Refine,
-  type AuthProvider,
-  type AccessControlProvider,
-} from '@refinedev/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ComponentType, ReactElement } from 'react';
 import { Outlet, MemoryRouter } from 'react-router';
@@ -30,7 +28,9 @@ describe('application shell', () => {
       addEventListener: vi.fn(),
       addListener: vi.fn(),
       dispatchEvent: vi.fn(),
-      matches: query === '(prefers-color-scheme: dark)',
+      matches:
+        query === '(prefers-color-scheme: dark)' ||
+        query === '(min-width: 768px)',
       media: query,
       onchange: null,
       removeEventListener: vi.fn(),
@@ -39,12 +39,12 @@ describe('application shell', () => {
   });
 
   it('wraps authenticated application pages with navigation and user controls', async () => {
-    renderApplication('/', createAuthProvider(true));
+    renderApplication('/', true);
 
     expect(
       await screen.findByRole('navigation', { name: 'Application navigation' }),
     ).toBeVisible();
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Home' })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -60,10 +60,10 @@ describe('application shell', () => {
       'text-sidebar-primary-foreground',
       'focus-visible:ring-sidebar-ring',
     );
-    // The account menu is a real dropdown, so its contents exist only once opened; the trigger carries the name.
+    // The account menu exposes user details in its panel without a native tooltip.
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
-    ).toHaveAttribute('title', 'Alice');
+    ).not.toHaveAttribute('title');
     expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
     expect(
       screen.queryByRole('link', { name: 'Settings' }),
@@ -82,11 +82,12 @@ describe('application shell', () => {
   it.each([true, false])(
     'shows the Settings entry only when a page is accessible (%s)',
     async (allowed) => {
-      const can = vi.fn(async ({ resource }: { resource?: string }) => ({
-        can: resource !== 'preferences' || allowed,
-      }));
-      renderApplication('/', createAuthProvider(true), [], {
-        accessControlProvider: { can },
+      const can = vi.fn(
+        async ({ resource }: AuthorizationCheck) =>
+          resource.id !== 'preferences' || allowed,
+      );
+      renderApplication('/', true, [], {
+        authorization: { can },
         settingsRouteTree: [
           createRoute(
             'preferences',
@@ -103,7 +104,7 @@ describe('application shell', () => {
       await waitFor(() =>
         expect(can).toHaveBeenCalledWith(
           expect.objectContaining({
-            resource: 'preferences',
+            resource: { type: 'page', id: 'preferences' },
             action: 'access',
           }),
         ),
@@ -134,7 +135,7 @@ describe('application shell', () => {
       navigation: { title: 'Orders' },
       children: [child],
     };
-    renderApplication('/orders/42', createAuthProvider(true), [parent]);
+    renderApplication('/orders/42', true, [parent]);
     expect(await screen.findByText('Order detail')).toBeVisible();
     expect(screen.getByText('Orders layout')).toBeVisible();
     expect(
@@ -163,7 +164,7 @@ describe('application shell', () => {
       navigation: { title: 'Orders' },
       children: [child],
     };
-    renderApplication('/orders', createAuthProvider(true), [parent]);
+    renderApplication('/orders', true, [parent]);
     expect(await screen.findByRole('link', { name: 'Orders' })).toHaveAttribute(
       'href',
       '/orders',
@@ -181,7 +182,7 @@ describe('application shell', () => {
   });
 
   it('collapses and expands the desktop navigation', async () => {
-    renderApplication('/', createAuthProvider(true));
+    renderApplication('/', true);
 
     const sidebar = await screen.findByRole('complementary', {
       name: 'Application navigation',
@@ -190,34 +191,41 @@ describe('application shell', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Collapse navigation' }),
     );
-    expect(sidebar).toHaveClass('md:w-16');
+    expect(sidebar).toHaveClass('w-16');
     expect(
       screen.getByRole('button', { name: 'Expand navigation' }),
     ).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Expand navigation' }));
-    expect(sidebar).toHaveClass('md:w-64');
+    expect(sidebar).toHaveClass('w-64');
   });
 
   it('opens and closes the mobile navigation without changing the route', async () => {
-    renderApplication('/', createAuthProvider(true));
-    await screen.findByRole('navigation', { name: 'Application navigation' });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
-    expect(
-      screen.getByRole('complementary', { name: 'Application navigation' }),
-    ).toHaveClass('translate-x-0');
-
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    renderApplication('/', true);
     fireEvent.click(
-      screen.getAllByRole('button', { name: 'Close navigation' })[1],
+      await screen.findByRole('button', { name: 'Open navigation' }),
     );
     expect(
-      screen.getByRole('complementary', { name: 'Application navigation' }),
-    ).toHaveClass('-translate-x-full');
+      await screen.findByRole('dialog', { name: 'Application navigation' }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Close navigation' }));
+    expect(
+      screen.queryByRole('dialog', { name: 'Application navigation' }),
+    ).toBeNull();
   });
 
   it('keeps guest pages outside the application shell', async () => {
-    renderApplication('/login', createAuthProvider(false), [
+    renderApplication('/login', false, [
       createRoute('login', '/login', 'guest', GuestPage),
     ]);
 
@@ -231,10 +239,10 @@ describe('application shell', () => {
 
 function renderApplication(
   initialEntry: string,
-  authProvider: AuthProvider,
+  authenticated: boolean,
   routes: readonly AppClientRegisteredRoute[] = [],
   options: {
-    readonly accessControlProvider?: AccessControlProvider;
+    readonly authorization?: Pick<AuthorizationClient, 'can'>;
     readonly settingsRouteTree?: readonly AppClientRegisteredRoute[];
   } = {},
 ): void {
@@ -242,16 +250,27 @@ function renderApplication(
     createRoute('home', '/', 'required', HomePage, 'application'),
     ...routes,
   ];
-  const authenticated =
-    (authProvider as TestAuthProvider).authenticated ?? true;
   const authClient = createTestAuthClient(authenticated);
   const authorizationClient = new AuthorizationClient({
     request: vi.fn(),
   } as never);
+  vi.spyOn(authorizationClient, 'can').mockImplementation(
+    (request) => options.authorization?.can(request) ?? Promise.resolve(true),
+  );
+  const apiClient = {
+    request: vi.fn(async ({ path }: { path: string }) =>
+      path === 'notifications/in-app/unread-count'
+        ? { count: 0 }
+        : { fallback: false, locale: 'en-US', requestedLocale: 'en-US' },
+    ),
+  };
   const app = {
     runtime: { settingsRouteTree: options.settingsRouteTree ?? [] },
     services: {
       resolve: (token: unknown) => {
+        if (token === apiClientToken) return apiClient;
+        if (token === realtimeClientToken)
+          return { subscribe: () => () => {}, onOpen: () => () => {} };
         if (token === authenticationClientToken) return authClient;
         if (token === authorizationClientToken) return authorizationClient;
         throw new Error(`Unexpected service token: ${String(token)}`);
@@ -263,57 +282,16 @@ function renderApplication(
       <AuthenticationProvider>
         <MemoryRouter initialEntries={[initialEntry]}>
           <AppThemeProvider>
-            <Refine
-              accessControlProvider={options.accessControlProvider}
-              authProvider={authProvider}
-              dataProvider={{
-                getList: vi.fn(),
-                getMany: vi.fn(),
-                getOne: vi.fn(),
-                create: vi.fn(),
-                createMany: vi.fn(),
-                update: vi.fn(),
-                updateMany: vi.fn(),
-                deleteOne: vi.fn(),
-                deleteMany: vi.fn(),
-                getApiUrl: vi.fn(),
-                custom: vi.fn(),
-              }}
-              options={{ disableTelemetry: true }}
-            >
-              <AppRouter
-                devRouteTree={[]}
-                clientRoutes={clientRoutes}
-                settingsRouteTree={options.settingsRouteTree ?? []}
-              />
-            </Refine>
+            <AppRouter
+              devRouteTree={[]}
+              clientRoutes={clientRoutes}
+              settingsRouteTree={options.settingsRouteTree ?? []}
+            />
           </AppThemeProvider>
         </MemoryRouter>
       </AuthenticationProvider>
     </ClientApplicationContext.Provider>,
   );
-}
-
-interface TestAuthProvider extends AuthProvider {
-  readonly authenticated: boolean;
-}
-
-function createAuthProvider(authenticated: boolean): TestAuthProvider {
-  return {
-    authenticated,
-    check: async () => ({ authenticated }),
-    getIdentity: async () =>
-      authenticated
-        ? {
-            email: 'alice@example.com',
-            fullName: 'Alice',
-            id: 1,
-          }
-        : null,
-    login: vi.fn(),
-    logout: vi.fn().mockResolvedValue({ success: true }),
-    onError: async (error) => ({ error }),
-  };
 }
 
 function createTestAuthClient(authenticated: boolean) {
@@ -358,7 +336,9 @@ function createRoute(
     path,
     source,
     ...(navigationTitle ? { navigation: { title: navigationTitle } } : {}),
-    ...(protectedRoute ? { access: { resource: name, action: 'access' } } : {}),
+    ...(protectedRoute
+      ? { authz: { resource: { type: 'page', id: name }, action: 'access' } }
+      : { authz: 'skip' as const }),
   };
 }
 

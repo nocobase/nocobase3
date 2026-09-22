@@ -12,7 +12,12 @@
   {
     "type": "file",
     "name": "create-app",
-    "label": "创建应用"
+    "label": "AI Agent 创建应用"
+  },
+  {
+    "type": "file",
+    "name": "create-app-manually",
+    "label": "手动创建应用"
   },
   {
     "type": "file",

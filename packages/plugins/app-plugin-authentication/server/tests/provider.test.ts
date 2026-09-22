@@ -4,7 +4,8 @@ import { databaseManagerToken, type DatabaseManager } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { type Caching } from '@nocobase/caching';
 import { cachingToken } from '@nocobase/app-server/caching';
-import { AppConfig, createConfigPaths } from '@nocobase/app-server/config';
+import { LoggingProvider, loggingToken } from '@nocobase/app-server/logging';
+import { AppConfig, createAppPaths } from '@nocobase/app-server/config';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { realtimePrincipalResolverToken } from '@nocobase/app-server/realtime';
 import { Hono } from 'hono';
@@ -31,6 +32,38 @@ import {
 import { authenticationToken } from '../tokens.js';
 
 describe('authentication provider', () => {
+  it('routes authentication warnings through the application logger without suppressing missing-origin warnings', async () => {
+    const config = await createConfig({});
+    config.mergeDefaults({
+      logging: {
+        level: 'debug',
+        file: { enabled: false },
+        console: { enabled: false },
+      },
+    });
+    const container = createDependencies();
+    const app = {
+      appName: 'main app',
+      publicBasePath: '/main',
+      config,
+      container,
+      paths: createAppPaths({ rootDir: '/test/app' }),
+      router: new Hono(),
+    };
+    const loggingProvider = new LoggingProvider(app);
+    loggingProvider.register();
+    const logger = container.resolve(loggingToken).getLogger('auth');
+    const warn = vi.spyOn(logger, 'warn');
+    createAuthentication.mockClear();
+    new AuthenticationProvider(app).register();
+    container.resolve(authenticationToken);
+    const options = createAuthentication.mock.calls[0]?.[0];
+    expect(options?.baseURL).toBeUndefined();
+    options?.logger?.log?.('warn', 'Base URL is not set');
+    expect(warn).toHaveBeenCalledWith({}, 'Base URL is not set');
+    await loggingProvider.shutdown();
+    createAuthentication.mockClear();
+  });
   it('registers authentication with the application runtime and dependencies', async () => {
     const connection = { kind: 'connection' };
     const database = {
@@ -59,7 +92,7 @@ describe('authentication provider', () => {
       publicBasePath: '/main',
       config,
       container,
-      paths: createConfigPaths({ rootDir: '/test/app' }),
+      paths: createAppPaths({ rootDir: '/test/app' }),
       router: new Hono(),
     });
 
@@ -172,7 +205,7 @@ describe('authentication provider', () => {
         server: { host: '127.0.0.1', port: 13001, startLog: true },
       }),
       container,
-      paths: createConfigPaths({ rootDir: '/test/app' }),
+      paths: createAppPaths({ rootDir: '/test/app' }),
       router: new Hono(),
     }).register();
     container.resolve(authenticationToken);
@@ -201,7 +234,7 @@ describe('authentication provider', () => {
         server: { host: '127.0.0.1', port: 13000, startLog: true },
       }),
       container,
-      paths: createConfigPaths({ rootDir: '/test/app' }),
+      paths: createAppPaths({ rootDir: '/test/app' }),
       router: new Hono(),
     }).register();
     container.resolve(authenticationToken);

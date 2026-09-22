@@ -1,5 +1,14 @@
 # @nocobase/db-testkit
 
+## 0.0.2-beta.1
+
+### Patch Changes
+
+- 24e771f: Remove circular development dependencies between the database core, shared testkit, and dialect packages. Move runnable database examples, the playground, and benchmarks to repository development tools.
+- Updated dependencies [24e771f]
+- Updated dependencies [26ac480]
+  - @nocobase/db@1.0.0-beta.9
+
 ## 0.0.2-beta.0
 
 ### Patch Changes

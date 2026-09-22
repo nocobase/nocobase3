@@ -94,17 +94,20 @@ export function Catalog({
         })}
       />
       <div className='flex flex-wrap items-center gap-3'>
-        <label className='flex h-10 min-w-0 max-w-md flex-1 items-center gap-2 rounded-lg border bg-background px-3'>
-          <Search className='size-4 text-muted-foreground' />
+        <div className='relative w-full min-w-0 sm:max-w-md sm:flex-1'>
+          <Search className='pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground' />
           <Input
-            className='h-auto border-0 p-0 focus-visible:ring-0'
+            aria-label={t('page.search', {
+              defaultValue: 'Search applications…',
+            })}
+            className='h-10 pl-9'
             onChange={(event) => onQuery(event.target.value)}
             placeholder={t('page.search', {
               defaultValue: 'Search applications…',
             })}
             value={query}
           />
-        </label>
+        </div>
         <div className='ml-auto flex items-center gap-3'>
           <div className='flex h-10 items-center rounded-lg border bg-background p-1'>
             <ViewButton
@@ -423,7 +426,13 @@ export function CreateDialog({
             {t('detail.cancel', { defaultValue: 'Cancel' })}
           </Button>
           {/* The button sits outside the form now that it is pinned, so `form` reassociates it. */}
-          <Button disabled={busy} form={createAppFormId} type='submit'>
+          <Button
+            disabled={
+              busy || !name.trim() || !/^(?!__)[A-Za-z0-9_-]+$/.test(appId)
+            }
+            form={createAppFormId}
+            type='submit'
+          >
             {t('page.create', { defaultValue: 'Create application' })}
           </Button>
         </>
@@ -440,13 +449,14 @@ export function CreateDialog({
           label={t('page.applicationName', {
             defaultValue: 'Application name',
           })}
+          required
         >
           <Input
             autoFocus
             className='h-10'
             onChange={(event) => onName(event.target.value)}
             placeholder={t('page.applicationNamePlaceholder', {
-              defaultValue: 'Customer portal',
+              defaultValue: 'Enter application name',
             })}
             required
             value={name}
@@ -454,17 +464,18 @@ export function CreateDialog({
         </Field>
         <Field
           label={t('page.applicationId', { defaultValue: 'Application ID' })}
+          required
           hint={t('page.applicationIdHint', {
             defaultValue:
-              'Auto-generated and editable; globally unique and fixed after creation.',
+              'Required. Use letters, numbers, hyphens, or underscores; cannot start with __. Must be globally unique and cannot be changed after creation.',
           })}
         >
           <Input
             className='h-10 font-mono'
             onChange={(event) => onAppId(event.target.value)}
-            pattern='[A-Za-z0-9_-]+'
+            pattern='(?!__)[A-Za-z0-9_-]+'
             placeholder={t('page.applicationIdPlaceholder', {
-              defaultValue: 'customer-portal',
+              defaultValue: 'Enter application ID',
             })}
             required
             value={appId}

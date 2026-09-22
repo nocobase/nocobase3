@@ -9,7 +9,6 @@ export interface WorkflowNodeRunSummary {
   readonly startedAt: string;
   readonly finishedAt: string | null;
   readonly result?: unknown;
-  readonly nextKey?: string | null;
   readonly branchKey?: string | null;
 }
 export interface WorkflowNodeTrace {

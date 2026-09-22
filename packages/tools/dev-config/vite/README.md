@@ -34,3 +34,5 @@ config when Vite runs from another directory.
 
 Keep `base`, API and proxy addresses, environment prefixes, aliases, package
 metadata defines, and package-specific plugins local.
+
+Portal development excludes `@silurus/ooxml` from dependency prebundling to preserve its parser WASM asset URLs.

@@ -106,6 +106,8 @@ export interface WorkflowLogger {
 export interface WorkflowEventOptions {
   eventKey?: string;
   deferred?: boolean;
+  /** Return after persisting a manual run while the runtime tracks its execution. */
+  waitForCompletion?: boolean;
   /** Execute any workflow manually, bypassing its enabled state and trigger-specific event validation. */
   manually?: boolean;
   force?: boolean;

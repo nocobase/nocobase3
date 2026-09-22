@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-i18n",
   "displayName": "Internationalization",
   "description": "Adds language switching to a NocoBase app, on top of @nocobase/i18n.",
-  "version": "0.1.0-beta.7",
+  "version": "0.1.0-beta.8",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "sideEffects": false,
@@ -71,15 +71,18 @@
     "@nocobase/app-client": "workspace:^",
     "@nocobase/app-server": "workspace:^",
     "@nocobase/i18n": "workspace:^",
-    "@nocobase/service-provider": "workspace:^",
     "hono": "catalog:",
     "react": "^19.0.0"
   },
   "devDependencies": {
     "@nocobase/dev-config": "workspace:*",
+    "@nocobase/service-provider": "workspace:^",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "eslint": "catalog:",
+    "jsdom": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

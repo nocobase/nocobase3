@@ -1,7 +1,6 @@
 import { createApp } from '../../server/app.js';
 import authConfig from '../../server/config/auth.js';
 // @vitest-environment node
-import ArticlesProvider from '../../server/providers/articles.ts';
 import { articlesRoutes } from '../../server/routes/articles.ts';
 import { analyticsRoutes } from '../../server/routes/analytics.ts';
 import { externalCrmRoutes } from '../../server/routes/external-crm.ts';
@@ -34,7 +33,7 @@ import {
   SessionProvider,
   sessionHttpMiddleware,
 } from '@nocobase/app-server/session';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   type AppIdentityConfig,
   type AppConfigAccessor,
@@ -342,9 +341,7 @@ describe('app server', () => {
             route !== numericExamplesRoutes,
         ),
         serviceProviders: [
-          ...appRuntime.serviceProviders.filter(
-            (provider) => provider !== ArticlesProvider,
-          ),
+          ...appRuntime.serviceProviders,
           TestRuntimeApplicationProvider,
         ],
       },
@@ -1385,7 +1382,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
   };
   const config = createTestConfig(configValues);
-  const paths = createConfigPaths({ rootDir: '/test/app-template-examples' });
+  const paths = createAppPaths({ rootDir: '/test/app-template-examples' });
   const database =
     options.database === false
       ? undefined

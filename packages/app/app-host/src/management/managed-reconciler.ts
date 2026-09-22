@@ -1,3 +1,10 @@
+import { createDiagnosticLogger, type Logger } from '@nocobase/logging';
+import {
+  deploymentLog,
+  deploymentFailure,
+  withDeploymentLog,
+  type DeploymentLogListener,
+} from '../deployment-log.js';
 /**
  * This file is part of the NocoBase (R) project.
  * Copyright (c) 2020-2024 NocoBase Co., Ltd.
@@ -22,6 +29,7 @@ import type {
 } from './types.ts';
 
 export interface ManagedReconcilerOptions {
+  logger?: Logger;
   registry: AppRuntimeRegistry;
   artifactResolver: ArtifactResolver;
   volumes: AppVolumeManager;
@@ -29,6 +37,7 @@ export interface ManagedReconcilerOptions {
 }
 
 export class ManagedReconciler {
+  private readonly diagnostic: ReturnType<typeof createDiagnosticLogger>;
   private readonly registry: AppRuntimeRegistry;
   private readonly artifactResolver: ArtifactResolver;
   private readonly volumes: AppVolumeManager;
@@ -49,6 +58,7 @@ export class ManagedReconciler {
   });
 
   constructor(options: ManagedReconcilerOptions) {
+    this.diagnostic = createDiagnosticLogger(options.logger);
     this.registry = options.registry;
     this.artifactResolver = options.artifactResolver;
     this.volumes = options.volumes;
@@ -75,12 +85,20 @@ export class ManagedReconciler {
     return current;
   }
 
-  applyDeployment(deployment: HostDeploymentSpec): Promise<HostStatus> {
+  applyDeployment(
+    deployment: HostDeploymentSpec,
+    listener?: DeploymentLogListener,
+  ): Promise<HostStatus> {
     return this.enqueue(async () => {
       validateDeploymentSet({ revision: 1, deployments: [deployment] });
       this.assertDeploymentIdentity(deployment);
       const revision = this.nextRevision();
-      await this.reconcileDeployment(revision, deployment);
+      await withDeploymentLog(
+        listener,
+        deployment.appId,
+        deployment.operationId ?? deployment.id,
+        () => this.reconcileDeployment(revision, deployment),
+      );
       this.reconciledRevision = revision;
       return this.getStatus();
     });
@@ -122,7 +140,7 @@ export class ManagedReconciler {
             await this.volumes
               .removeConfig(deployment.appId, previousConfigPath)
               .catch((error: unknown) => {
-                console.warn(
+                this.diagnostic.warn(
                   'Failed to clean up previous app configuration after start',
                   {
                     appId: deployment.appId,
@@ -136,7 +154,7 @@ export class ManagedReconciler {
             await this.registry
               .updateDefinition(deployment.appId, previousDefinition)
               .catch((restoreError: unknown) => {
-                console.warn(
+                this.diagnostic.warn(
                   'Failed to restore previous app definition after start failure',
                   {
                     appId: deployment.appId,
@@ -152,7 +170,7 @@ export class ManagedReconciler {
             await this.volumes
               .removeConfig(deployment.appId, candidateConfigPath)
               .catch((cleanupError: unknown) => {
-                console.warn(
+                this.diagnostic.warn(
                   'Failed to clean up candidate app configuration after start failure',
                   {
                     appId: deployment.appId,
@@ -399,6 +417,7 @@ export class ManagedReconciler {
           `App backend "${spec.backend}" is not available on this host`,
         );
       }
+      deploymentLog('resolving', 'Resolving release artifact');
       const artifact = restoring
         ? await this.artifactResolver.restore(spec.artifact)
         : await this.artifactResolver.resolve(spec.artifact);
@@ -408,6 +427,11 @@ export class ManagedReconciler {
       )?.configPath;
       let candidateConfigPath: string | undefined;
       try {
+        deploymentLog(
+          'preparing',
+          'Preparing application configuration and persistent storage',
+          { cacheHit: artifact.cacheHit },
+        );
         const configPath =
           spec.config?.content !== undefined
             ? await this.volumes.writeConfig(
@@ -420,9 +444,12 @@ export class ManagedReconciler {
               : undefined;
         const dataDir = await this.volumes.prepareStorageDir(spec.appId);
         candidateConfigPath = configPath;
+        deploymentLog('starting', 'Activating application');
         result = await this.registry.replaceDefinition(
           {
             ...artifact.definition,
+            deploymentId: spec.operationId,
+            logging: spec.logging,
             id: spec.appId,
             appName: spec.appId,
             basePath: spec.basePath ?? artifact.definition.basePath,
@@ -436,18 +463,30 @@ export class ManagedReconciler {
             reason: `deployment ${spec.id} revision ${revision}`,
           },
         );
+        deploymentLog('switching', 'Application definition accepted', {
+          activated: Boolean(result.app),
+        });
         await artifact.commit();
         if (previousConfigPath && previousConfigPath !== configPath) {
           await this.volumes
             .removeConfig(spec.appId, previousConfigPath)
             .catch((error: unknown) => {
-              console.warn('Failed to clean up previous app configuration', {
-                appId: spec.appId,
-                error,
-              });
+              this.diagnostic.warn(
+                'Failed to clean up previous app configuration',
+                {
+                  appId: spec.appId,
+                  error,
+                },
+              );
             });
         }
       } catch (error) {
+        deploymentFailure(error);
+        deploymentLog(
+          'cleaning',
+          'Removing rejected artifact and configuration',
+          { err: error },
+        );
         await artifact.rollback();
         if (
           spec.config?.content !== undefined &&
@@ -457,10 +496,13 @@ export class ManagedReconciler {
           await this.volumes
             .removeConfig(spec.appId, candidateConfigPath)
             .catch((cleanupError: unknown) => {
-              console.warn('Failed to clean up candidate app configuration', {
-                appId: spec.appId,
-                error: cleanupError,
-              });
+              this.diagnostic.warn(
+                'Failed to clean up candidate app configuration',
+                {
+                  appId: spec.appId,
+                  error: cleanupError,
+                },
+              );
             });
         }
         throw error;
@@ -476,6 +518,7 @@ export class ManagedReconciler {
         error: null,
       });
     } catch (error) {
+      deploymentFailure(error);
       this.statuses.set(spec.id, {
         id: spec.id,
         appId: spec.appId,

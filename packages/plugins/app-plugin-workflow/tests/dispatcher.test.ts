@@ -8,6 +8,8 @@ import {
   NODE_RUN_STATUS,
 } from '../server/engine/constants.js';
 import Dispatcher from '../server/engine/dispatcher.js';
+import { WorkflowRunRepository } from '../server/repositories/workflow-run-repository.js';
+import { createWorkflowRunRoutes } from '../server/routes/workflow-runs.js';
 import Processor from '../server/engine/processor.js';
 import type {
   WorkflowDefinition,
@@ -55,6 +57,80 @@ describe('workflow dispatcher and processor', () => {
 
   afterEach(async () => {
     await database.destroy();
+  });
+
+  it('returns a persisted manual run before a waiting node finishes and drains it', async () => {
+    const gate = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const workflow = await createTestWorkflow(database, {
+      key: 'manual-background',
+      enabled: false,
+      nodes: [{ key: 'wait', type: 'wait' }],
+    });
+    const dispatcher = new Dispatcher({
+      database,
+      instructions: new Map([
+        [
+          'wait',
+          defineTestInstruction('wait', async () => {
+            started.resolve();
+            await gate.promise;
+            return { status: NODE_RUN_STATUS.RESOLVED, result: 'done' };
+          }),
+        ],
+      ]),
+    });
+    try {
+      const repository = new WorkflowRunRepository(database, {
+        trigger: async () => ({ status: 'skipped', reason: 'not-found' }),
+        triggerRevision: async (_id, input, options) => {
+          await dispatcher.trigger(workflow, input, options);
+          return { status: 'accepted', eventKey: options?.eventKey ?? '' };
+        },
+        discoverArtifacts: async () => [],
+        ensureArtifactMaterialized: async () => undefined,
+      });
+      const routes = createWorkflowRunRoutes(repository);
+      const response = await routes.request(`/workflows/${workflow.id}/run`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'event-key': 'manual-background',
+        },
+        body: '{}',
+      });
+      expect(response.status).toBe(200);
+      const receipt = (await response.json()) as {
+        data: { id: string; finishedAt: string | null };
+      };
+      expect(receipt.data.finishedAt).toBeNull();
+      const duplicate = await repository.run(
+        workflow.id,
+        {},
+        { eventKey: 'manual-background' },
+      );
+      expect(duplicate.id).toBe(receipt.data.id);
+      const run = await findRun(database, 'manual-background');
+      expect(run.id).toBeDefined();
+      expect(run.finishedAt).toBeNull();
+      await started.promise;
+      expect(dispatcher.idle).toBe(false);
+      let drained = false;
+      const drain = dispatcher.drain().then(() => {
+        drained = true;
+      });
+      await Promise.resolve();
+      expect(drained).toBe(false);
+      gate.resolve();
+      await drain;
+      expect((await findRun(database, 'manual-background')).status).toBe(
+        EXECUTION_STATUS.RESOLVED,
+      );
+      expect(dispatcher.idle).toBe(true);
+    } finally {
+      gate.resolve();
+      await dispatcher.drain();
+    }
   });
 
   it('dispatches and processes nodes connected only by upstreamKey and downstreamKey', async () => {
@@ -129,36 +205,46 @@ describe('workflow dispatcher and processor', () => {
     ]);
   });
 
-  it('recovers an undispatched execution through the same key-based processor path', async () => {
-    const workflow = await createTestWorkflow(database, {
-      key: 'recoverable',
-      nodes: [{ key: 'only', type: 'echo' }],
-    });
-    await insertTestRun(database, {
-      workflowId: workflow.id,
-      workflowKey: 'recoverable',
-      eventKey: 'recover-event',
-      createdAt: new Date(0).toISOString(),
-    });
+  it.each([false, true])(
+    'recovers an undispatched execution (disabled manual revision=%s)',
+    async (manual) => {
+      const workflow = await createTestWorkflow(database, {
+        key: 'recoverable',
+        enabled: !manual,
+        nodes: [{ key: 'only', type: 'echo' }],
+      });
+      await insertTestRun(database, {
+        workflowId: workflow.id,
+        workflowKey: 'recoverable',
+        eventKey: 'recover-event',
+        createdAt: new Date(0).toISOString(),
+      });
 
-    const dispatcher = new Dispatcher({
-      database,
-      instructions: new Map([
-        [
-          'echo',
-          defineTestInstruction('echo', async () => ({
-            status: NODE_RUN_STATUS.RESOLVED,
-            result: 'recovered',
-          })),
-        ],
-      ]),
-    });
-    await expect(dispatcher.recover()).resolves.toBe(1);
+      if (manual) {
+        await testStore(database).runs.updateMany({
+          filter: { eventKey: 'recover-event' },
+          values: { manually: true },
+        });
+      }
+      const dispatcher = new Dispatcher({
+        database,
+        instructions: new Map([
+          [
+            'echo',
+            defineTestInstruction('echo', async () => ({
+              status: NODE_RUN_STATUS.RESOLVED,
+              result: 'recovered',
+            })),
+          ],
+        ]),
+      });
+      await expect(dispatcher.recover()).resolves.toBe(1);
 
-    expect((await findRun(database, 'recover-event')).status).toBe(
-      EXECUTION_STATUS.RESOLVED,
-    );
-  });
+      expect((await findRun(database, 'recover-event')).status).toBe(
+        EXECUTION_STATUS.RESOLVED,
+      );
+    },
+  );
 });
 
 /**

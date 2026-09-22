@@ -4,10 +4,15 @@ import {
 } from '@nocobase/service-provider';
 import { databaseManagerToken } from '@nocobase/db';
 import { createAppDatabaseManager } from './manager.js';
-import { executeAppDatabasePlan } from './tasks.js';
+import {
+  executeAppDatabasePlan,
+  type AppDatabaseTasksResult,
+} from './tasks.js';
 import { planAppRuntimeDatabaseTasks } from './plan.js';
 import { prepareAppDatabaseStorage } from './storage.js';
-import type { AppConfigAccessor, ConfigPaths } from '../config/index.js';
+import { loggingToken } from '../logging/token.js';
+import type { Logger } from '@nocobase/logging';
+import type { AppConfigAccessor, AppPaths } from '../config/index.js';
 import type {
   AppDatabaseConfig,
   AppDatabaseTaskContributions,
@@ -16,7 +21,7 @@ import type {
 export interface DatabaseProviderApplication {
   readonly config: AppConfigAccessor;
   readonly container: ServiceContainer;
-  readonly paths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly databaseTaskContributions: AppDatabaseTaskContributions;
 }
 
@@ -59,9 +64,38 @@ export class DatabaseProvider extends ServiceProvider<DatabaseProviderApplicatio
       Object.keys(config.connections),
     );
     const database = container.resolve(databaseManagerToken);
-    await executeAppDatabasePlan(database, config, plan, {
+    const result = await executeAppDatabasePlan(database, config, plan, {
+      runtimeConfig: this.app.config,
+      container: this.app.container,
       paths: this.app.paths,
     });
+    this.reportChecksumWarnings(result);
+  }
+
+  /**
+   * Automatic startup tasks have no console to report to, so drift tolerated by
+   * the `warn` policy is only visible if it reaches the application log.
+   */
+  private reportChecksumWarnings(result: AppDatabaseTasksResult): void {
+    const { container } = this.app;
+    if (!container.has(loggingToken)) return;
+    let logger: Logger | undefined;
+    for (const entry of result.results) {
+      for (const warning of entry.warnings ?? []) {
+        logger ??= container.resolve(loggingToken).getLogger('database');
+        logger.warn(
+          {
+            connection: entry.connection,
+            kind: entry.kind,
+            package: warning.packageName,
+            name: warning.name,
+            recordedChecksum: warning.recordedChecksum,
+            sourceChecksum: warning.sourceChecksum,
+          },
+          `Executed ${entry.kind === 'migrations' ? 'migration' : 'seed'} "${warning.name}" no longer matches its source. Run "nocobase app db repair" to realign the history.`,
+        );
+      }
+    }
   }
 
   public override async shutdown(): Promise<void> {

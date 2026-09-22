@@ -11,6 +11,9 @@ const reactSetupFile: string = fileURLToPath(
 const reactConfig: ViteUserConfig = {
   plugins: [react()],
   test: {
+    // Queue discovery dynamically imports application TypeScript. Keep its
+    // loader inside Vitest so those imports use the same transform and registry.
+    server: { deps: { inline: ['@boringnode/queue'] } },
     environment: 'jsdom',
     exclude: ['**/node_modules/**', '**/dist/**', '**/build/**'],
     setupFiles: [reactSetupFile],

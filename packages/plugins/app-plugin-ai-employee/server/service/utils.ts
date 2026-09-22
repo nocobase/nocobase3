@@ -1,4 +1,17 @@
-import { notFoundError, validationError } from '../types.js';
+import { forbiddenError, notFoundError, validationError } from '../types.js';
+import type { ConversationManagementActor } from '../types.js';
+
+export function requireConversationReadAccess(
+  actor: ConversationManagementActor,
+): void {
+  if (
+    actor.id === 'anonymous' ||
+    !String(actor.id) ||
+    actor.canReadAllConversations !== true
+  ) {
+    throw forbiddenError('AI settings access is required');
+  }
+}
 
 export type ResourceInput = Record<string, any>;
 
@@ -16,6 +29,15 @@ export function requiredString(value: unknown, name: string): string {
   const normalized = optionalString(value);
   if (normalized) return normalized;
   throw badRequest(`${name} is required`);
+}
+
+export function resourceI18n(
+  value: unknown,
+): { namespace: string } | undefined {
+  if (value === undefined) return undefined;
+  const record = asRecord(value);
+  if (!record) throw badRequest('i18n must be an object');
+  return { namespace: requiredString(record.namespace, 'i18n.namespace') };
 }
 
 export function stringArray(value: unknown): string[] | undefined {

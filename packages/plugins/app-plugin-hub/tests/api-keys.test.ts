@@ -1,3 +1,4 @@
+import { permissionSetsToken } from '@nocobase/app-plugin-authorization';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -918,6 +919,7 @@ describe('Hub API Key HTTP boundary', () => {
       });
     }
     container.instance(authorizationToken, authz);
+    container.instance(permissionSetsToken, authz.permissionSets);
     container.instance(hubApiKeyServiceToken, service);
     const listReleases = vi
       .fn<HubService['listReleases']>()
@@ -1099,7 +1101,7 @@ describe('Hub API Key HTTP boundary', () => {
         host: {
           enabled: true,
           driver: 'tsx',
-          appDeploymentsDir: path.join(root, 'deployments'),
+          appRevisionsDir: path.join(root, 'deployments'),
           appVolumesDir: path.join(root, 'volumes'),
           configPath: path.join(root, 'host.yml'),
         },
@@ -1107,14 +1109,18 @@ describe('Hub API Key HTTP boundary', () => {
     });
     try {
       await mkdir(path.join(root, 'dist/server'), { recursive: true });
-      await mkdir(path.join(root, 'storage'));
+      await mkdir(path.join(root, 'storage/exports'), { recursive: true });
       await writeFile(
         path.join(root, 'dist/package.json'),
         JSON.stringify({ version: '1.0.0' }),
       );
       await writeFile(path.join(root, 'dist/server/embedded.js'), '');
       await createTar(
-        { cwd: root, file: path.join(root, 'storage/dist.tar.gz'), gzip: true },
+        {
+          cwd: root,
+          file: path.join(root, 'storage/exports/dist.tar.gz'),
+          gzip: true,
+        },
         ['dist'],
       );
       const publishing = await service.create('admin', {
@@ -1434,6 +1440,8 @@ describe('Hub API Key HTTP boundary', () => {
       '/hub/api-keys',
       '/hub/apps/crm/releases',
       '/hub/apps/crm/deployments',
+      '/hub/apps/crm/logs',
+      '/hub/apps/crm/deployments/op-1/logs',
     ])
       expect((await api.request(path, { headers })).status).toBe(403);
     expect(listReleases).not.toHaveBeenCalled();

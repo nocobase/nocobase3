@@ -1,3 +1,4 @@
+import { loggingToken } from '@nocobase/app-server/logging';
 import {
   ServiceProvider,
   type ServiceContainer,
@@ -45,10 +46,17 @@ export class HubProvider extends ServiceProvider<HubProviderApplication> {
       const config = this.app.config.get<HubPluginConfig>('hub')!;
       this.hostController = AppHostSupervisor.initialize({
         ...config.host,
+        logger: resolver.has(loggingToken)
+          ? resolver.resolve(loggingToken).getLogger('host-supervisor')
+          : undefined,
         mode: 'managed',
       });
       return new DefaultHubService({
         apiKeys: resolver.resolve(hubApiKeyServiceToken),
+
+        logger: resolver.has(loggingToken)
+          ? resolver.resolve(loggingToken).getLogger('hub')
+          : undefined,
         database: resolver.resolve(databaseManagerToken),
         config,
         hostController: this.hostController,

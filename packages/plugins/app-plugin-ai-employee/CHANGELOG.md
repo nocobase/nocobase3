@@ -1,5 +1,181 @@
 # @nocobase/app-plugin-ai-employee
 
+## 0.1.0-beta.19
+
+### Minor Changes
+
+- ff158aa: Group Settings navigation under AI with separate AI Employees, Conversations, LLM services, and MCP services pages while preserving legacy links. Add a read-only conversation center for searching and inspecting application-wide conversation history, protected by the application's AI settings Permission Set access. Reuse Registry conversation lists, message rendering, and history conversion, with safe read-only tool and sub-agent presentation.
+
+  Make the AI Employees list collapsible and hidden by default, with a localized, accessible icon-only toggle centered on the left divider and no employee count or extra detail toolbar. Preserve the original bordered employee cards, 19rem expanded list, detail header, selection, and unsaved edits, with a reserved control gutter and touch-friendly sizing.
+
+  Keep conversation search, pagination, and selection in the URL; improve responsive metadata, accessible search controls, localized timestamps, independent retries, and scroll anchoring when loading earlier messages. Align the Conversations page with the shared AI settings header, background, spacing, and content container while preserving its read-only controls and independently scrollable list and transcript.
+
+- ff158aa: Add a standalone, read-only Skills catalog immediately after AI Employees with permission-protected management list and detail endpoints. Display associated tool names in a searchable table and show skill titles, descriptions, safe Markdown, and tool metadata in a detail dialog. Include English and Chinese translations, cancellation-safe loading, and retryable errors without executing tools or changing runtime skills endpoints.
+- ff158aa: Add a read-only Tools catalog immediately after Skills in AI settings, with searchable cards and an accessible right-side details drawer. Show tool documentation safely and input schemas as inert JSON without execution controls. Add independently authorized management endpoints while preserving the existing runtime tools response contract.
+
+### Patch Changes
+
+- ff158aa: Add human-readable display titles to the built-in data metadata, data query, and business analysis report skills and their data tools. Replace legacy translation markers in all built-in tool titles and about text with plain English metadata so management views display readable text instead of internal resource names or unresolved templates.
+- ff158aa: Constrain the AI employee editor to a viewport-responsive height and scroll overflowing tab content, including skills and tools, independently of the employee header, tabs, and save controls.
+- ff158aa: Keep system and custom role editors at the same height, avoid marking an unchanged empty custom editor as modified, and align employee save actions with the editor's right edge.
+- ff158aa: Expand the employee list by default when multiple AI employees are available, while preserving manual toggling. Let system and custom role editors fill the available detail area above the action bar.
+- ff158aa: Sort the Skills and Tools management pages and AI employee skill and tool lists alphabetically by display title, falling back to the name when the title is empty, using a consistent case-insensitive order.
+- ff158aa: Add matching icons to AI employee, skill, tool, LLM service, and MCP service settings navigation entries.
+- ff158aa: Align AI settings route authorization contracts with the current application runtime and remove a duplicate conversation type import after integrating develop.
+- ff158aa: Align LLM and MCP service settings tables with the standard administration table layout and page gutters, removing redundant card headings and nested padding. Clarify English and Chinese AI administration page descriptions and consolidate service configuration guidance into the LLM and MCP page introductions.
+- ff158aa: Keep the employee list toggle visible and usable when only one AI employee is available, while leaving the list collapsed by default.
+- ff158aa: Remove cross-feature tabs from AI Employee settings and its exported shell wrappers while preserving internal employee detail/editor tabs. Redirect legacy knowledge-base and vector-database tab URLs to their independent settings paths, preserving unrelated query parameters and hashes. Keep the tab registry and shell props as deprecated compatibility APIs without rendering contributed tabs; migrate custom tab contributions to Settings routes with parent `aiGroup`. Knowledge-base list/vector path helpers now target the standalone pages and require the owning Knowledge Base plugin's corresponding route update.
+- ff158aa: Add employee skill enable switches backed by an optional `skillSettings.enabledSkills` allowlist. Omitted or null selections retain inherited GENERAL and registered skills, while an empty list disables every skill. Preserve explicit selections across built-in registration and repository reloads, intersect session restrictions, and reject unavailable skill content and persisted tool activations. Existing skill and tool settings remain compatible without a database migration.
+- ff158aa: Add persistent employee tool selection with legacy inheritance for omitted or null selections and explicit disabling with an empty selection. Apply selections to discovered, injected, and skill-activated tools without allowing session settings to broaden access, preserve saved custom tool approval settings across registration and restart independently of explicit tool selections, and retain unknown saved names for future registrations. Selected optional tools still require their runtime capabilities, including current-user knowledge-base access.
+- ff158aa: Hide Conversations from the AI settings sidebar while preserving its guarded route and legacy direct links.
+- ff158aa: Remove the built-in data-modeling skill, which references unavailable tools. Keep the data-metadata, data-query, and business-analysis-report skills available.
+- ff158aa: Keep Atlas as the only registered built-in AI employee, removing the Dex, Ellis, Lexi, Vera, and Viz definitions while retaining reusable skills and tools.
+
+  Existing employee records and conversation history are unchanged; this release does not migrate or delete previously registered employees.
+
+- ff158aa: Unify tool rows across employee configuration, skill details, and the tool catalog with fixed heights, truncated titles and identifiers, and two-line plain-text introductions with full hover text. Read employee tool introductions from introduction.about rather than model-facing descriptions, while preserving permission controls and tool-detail navigation.
+- ff158aa: Keep skill cards at a fixed height, truncate long metadata, and collapse overflowing tool badges into a responsive +N indicator.
+- ff158aa: Replace the Skills settings table with responsive cards showing skill metadata above a tools footer with a Wrench icon and wrapping badges. Preserve metadata and tool search, accessible drawer opening and focus return, safe detail rendering, and loading, empty, and retry states.
+- ff158aa: Show localized skill counts alongside search and display tool introductions instead of model-facing descriptions in skill details. Include tool about fields in skill management responses.
+- ff158aa: Align tool cards with skill cards using fixed heights, truncated text, and title links without hover underlines. Remove scope and source from tool cards and details.
+- ff158aa: Organize tool details into labeled About, Description, and Input schema sections, and remove the redundant read-only schema hint.
+- ff158aa: Present tools as a compact single-column directory with whole-row detail triggers, responsive identifiers, localized result counts, and two-line plain-text introductions. Preserve keyboard focus and existing detail drawers.
+- ff158aa: Include tool introductions in management summaries and display and search the about field instead of the model-facing description in tool cards.
+- ff158aa: Support package-owned i18n metadata for Tools and Skills, preserving English source text for model execution while translating display titles, Tool introductions, and Skill descriptions. Localize built-in resources in English and Chinese, sort catalogs by localized titles in the current locale with stable name tie-breakers, and document Client locale ownership and exact source-text keys.
+- Updated dependencies [ff158aa]
+- Updated dependencies [ff158aa]
+- Updated dependencies [ff158aa]
+- Updated dependencies [ff158aa]
+  - @nocobase/ai-employee@0.2.0-beta.7
+
+## 0.1.0-beta.18
+
+### Patch Changes
+
+- 8f5eacf: Document a configuration readiness gate for embedded AI chat so the first message can be sent after initial navigation or refresh without switching employees or models. Include complete integration examples, actionable loading and unavailable states, and first-send verification steps.
+- 8f5eacf: Document conversation history response fields, stable message identifiers, pagination, nullability, and authenticated HTTP examples. Clarify the current SSE response limitation for non-streaming execution and distinguish history rows from message inputs and server agent results.
+- 8f5eacf: Fix AI conversation keyword searches failing with a SQL binding error. Use native repository substring filters with literal wildcard escaping while preserving user and scope isolation and conversation ordering.
+- 8f5eacf: Fix missing knowledge base options in the AI employee editor by using the knowledge base plugin's AI API route. Exclude disabled knowledge bases from the available options.
+- 8f5eacf: Use the shared Dialog and Button components for the LLM model editor so backdrop clicks and Escape dismiss it, focus is managed and restored, and modal styling matches the application's component library.
+
+  Use a searchable multi-select Combobox for provider models, with selected chips and the search input inside the same field. Filter by model label or ID, preserve selections while searching, and portal the options outside the editor's scroll container with viewport-aware list scrolling. Escape closes the picker before the editor.
+
+  Show localized loading and empty states while discovering LLM services instead of leaving the settings table blank.
+
+## 0.1.0-beta.17
+
+### Patch Changes
+
+- 64b3fdb: Integrate source-qualified database authorization and native relation policies with AI data services. Preserve explicit route group extensions, translated resource search, Hub ownership checks, API key cleanup, and protected permission-set assignments across user deletion. Update shared application guidance for the split authorization plugins.
+- 64b3fdb: Remove Refine from client authorization checks. Use `AuthorizationClient.can({ resource, action })` instead of the removed two-argument signature, and import `useCan` from `@nocobase/app-plugin-authorization/client`. Migrate page guards, navigation, and notification visibility while preserving session isolation and realtime permission invalidation.
+
+  Remove the Refine access-control configuration and legacy global authorization client accessors. Resolve the application-owned client through `useAuthorizationClient()` or `authorizationClientToken`. Settings actions now revoke stale access immediately; route checks no longer bypass the authorization page or translate Refine CRUD action names.
+
+  Unify route authorization under `authz: 'skip' | { resource: { type, id }, action }`. Normalize default rules during registration and share them across page guards, navigation, permission discovery, and inspection. Remove the legacy `access` field and string resource adapter.
+
+  Limit settings action checks to the actions each page uses, keep the permission-set action helper internal, and avoid rebuilding navigation twice when selecting a route.
+
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [fe564d9]
+- Updated dependencies [fe564d9]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+- Updated dependencies [64b3fdb]
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/app-plugin-authorization@0.2.0-beta.15
+  - @nocobase/app-server@1.0.0-beta.21
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/db@1.0.0-beta.11
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
+## 0.1.0-beta.16
+
+### Patch Changes
+
+- e13ed84: Make development logs concise and application-scoped while retaining structured file diagnostics. Route configuration and authentication diagnostics through application logging, reduce routine startup and request noise, distinguish optional AI Skill directories from missing configured paths, and align development console settings across templates. Document that deployed applications need rebuilding to adopt the current logging protocol.
+- Updated dependencies [e0c4b3d]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+- Updated dependencies [00362cf]
+- Updated dependencies [e13ed84]
+- Updated dependencies [e13ed84]
+  - @nocobase/db@1.0.0-beta.10
+  - @nocobase/app-server@1.0.0-beta.19
+  - @nocobase/logging@0.1.0-beta.5
+  - @nocobase/app-plugin-authentication@0.1.0-beta.18
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+
+## 0.1.0-beta.15
+
+### Minor Changes
+
+- ec93611: Add discoverable data metadata, permission-scoped queries, and business analysis report skills for AI employees. Validate report charts on the server and render only confirmed report results. Reapply session restrictions to activated tools and include runtime skill assets in compiled deployment output.
+
+### Patch Changes
+
+- 365a9fe: Complete English and Chinese translations for authentication, route feedback, authorization, shared controls, File and Notification Registry components, and development examples. Use concise semantic keys consistently for the new translations. Resolve AI Registry copy from the active language and localize development navigation and section headings. Translate MCP configuration guidance, tool drawer labels, and transport descriptions.
+- d4ca00e: Use useApiClient() for React API client access across application pages, plugins and shared examples, preserving application-scoped client resolution.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [365a9fe]
+- Updated dependencies [365a9fe]
+- Updated dependencies [60fa139]
+- Updated dependencies [24e771f]
+- Updated dependencies [60fa139]
+- Updated dependencies [26ac480]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-plugin-authorization@0.2.0-beta.13
+  - @nocobase/app-plugin-authentication@0.1.0-beta.17
+  - @nocobase/db@1.0.0-beta.9
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/ai-employee@0.2.0-beta.6
+  - @nocobase/caching@0.1.0-beta.2
+  - @nocobase/i18n@1.0.0-beta.4
+  - @nocobase/service-provider@0.0.2-beta.1
+
 ## 0.1.0-beta.14
 
 ### Patch Changes

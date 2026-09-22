@@ -1,6 +1,33 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  comparison: {
+    connectionsChanged: 'Connections changed',
+    untitledNode: 'Untitled node',
+    compare: 'Compare',
+    compareWith: 'Compare with {{version}}',
+    title: 'Compare versions',
+    description:
+      'Select two versions, then select a node to inspect its definition and connection changes. Nodes are matched by key; a renamed key appears as removal and addition. Runtime parameter values, execution data, and external script/resource contents are excluded.',
+    needVersions: 'At least two versions are needed',
+    direction: 'Changes from baseline to target',
+    before: 'Baseline version',
+    after: 'Target version',
+    added: 'Added',
+    removed: 'Removed',
+    changed: 'Changed',
+    unchanged: 'Unchanged',
+    swap: 'Swap versions',
+    current: 'Current',
+    field: 'Field path',
+    absent: 'Not present',
+    noChanges: 'No definition changes',
+    missingNode: 'This node does not exist in this version',
+    changedNodes: 'Changed nodes',
+    workflowFields: 'Workflow settings',
+    details: 'Change details',
+  },
+  authorization: { title: 'Workflow', manage: 'Manage' },
   nav: {
     automation: 'Automation',
     workflows: 'Workflows',
@@ -8,6 +35,7 @@ const enUS = {
     runs: 'Execution records',
   },
   common: {
+    back: 'Back',
     cancel: 'Cancel',
     save: 'Save',
     refresh: 'Refresh',
@@ -23,6 +51,7 @@ const enUS = {
     runCount_other: '{{count}} runs',
   },
   status: {
+    notExecuted: 'Not executed',
     queued: 'Queued',
     running: 'Running',
     resolved: 'Resolved',
@@ -94,6 +123,8 @@ const enUS = {
     triggeredAt: 'Triggered at {{time}}',
   },
   inspector: {
+    notExecuted:
+      'This node was not executed in this run, so no result is available.',
     label: 'Workflow inspector',
     overview: 'Workflow overview',
     selectNode: 'Select a node to inspect it.',
@@ -111,10 +142,16 @@ const enUS = {
     unserializable: '[Unserializable value]',
   },
   canvas: {
+    controls: 'Canvas controls',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    fitView: 'Fit view',
+
     start: 'Start',
     end: 'End',
     condition: 'Condition',
     terminate: 'Terminate',
+    terminates: 'Workflow terminates here',
     run: 'Run',
     emptyBranch: 'Empty branch',
     yes: 'Yes',
@@ -126,6 +163,8 @@ const enUS = {
     verticalLayout: 'Vertical layout',
     fitting: 'Fitting workflow to the viewport…',
     layingOut: 'Laying out workflow…',
+    fullscreen: 'Enter fullscreen',
+    exitFullscreen: 'Exit fullscreen',
   },
   pages: {
     list: {

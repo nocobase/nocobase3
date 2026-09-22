@@ -6,6 +6,7 @@ export type ViewMode = 'grid' | 'list';
 
 export type DetailTab =
   | 'deployments'
+  | 'logs'
   | 'releases'
   | 'development'
   | 'resources'
@@ -15,6 +16,7 @@ export type DetailTab =
 export const DETAIL_TABS: readonly DetailTab[] = [
   'deployments',
   'releases',
+  'logs',
   'development',
   'resources',
   'configuration',

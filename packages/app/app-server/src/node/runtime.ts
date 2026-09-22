@@ -1,3 +1,4 @@
+import { loggingToken } from '../logging/token.js';
 import type { Application } from '../application/index.js';
 import { NodeServerProxy, type NodeServerProxyOptions } from './proxy.js';
 import {
@@ -63,13 +64,17 @@ export async function createStandaloneServer(
   options: CreateStandaloneServerOptions,
 ): Promise<StandaloneServer> {
   const {
-    appRuntime: _appRuntime,
+    appRuntime,
     createServer,
     proxy: configureProxy,
     ...serverOptions
   } = options;
   const scope = createStandaloneRuntimeScope(
-    resolveStandaloneServerScopeOptions(serverOptions),
+    resolveStandaloneServerScopeOptions({
+      ...serverOptions,
+      deploymentRootDir:
+        serverOptions.deploymentRootDir ?? appRuntime.deploymentRootDir,
+    }),
   );
 
   try {
@@ -113,10 +118,18 @@ export async function createStandaloneServer(
 }
 
 export function startServer(options: CreateStandaloneServerOptions): void {
+  const strictStartup =
+    createStandaloneRuntimeScope({
+      ...options,
+      deploymentRootDir:
+        options.deploymentRootDir ?? options.appRuntime.deploymentRootDir,
+    }).env.NOCOBASE_STRICT_STARTUP === 'true';
   const startPromise = startStandaloneServer(options);
   startPromise.catch((error) => {
     console.error(error);
     process.exitCode = 1;
+    // Startup has already disposed the scope. Do not retain leaked handles.
+    if (strictStartup) process.exit(1);
   });
 }
 
@@ -148,11 +161,21 @@ export function createStandaloneRuntimeScope(
   return createStandaloneScope(options);
 }
 
-export function resolveStandaloneAppRuntime(
+export async function resolveStandaloneAppRuntime(
   definition: AppRuntimeDefinition,
   options: CreateStandaloneRuntimeScopeOptions,
-): Promise<ResolvedAppRuntime> {
-  return resolveAppRuntime(definition, createStandaloneRuntimeScope(options));
+): Promise<ResolvedAppRuntime & { readonly scope: StandaloneAppScope }> {
+  const scope = createStandaloneRuntimeScope({
+    ...options,
+    deploymentRootDir:
+      options.deploymentRootDir ?? definition.deploymentRootDir,
+  });
+  try {
+    const runtime = await resolveAppRuntime(definition, scope);
+    return Object.assign(runtime, { scope });
+  } catch (error) {
+    return disposeAfterStartupFailure(() => scope.destroy(), error);
+  }
 }
 
 async function startStandaloneServer(
@@ -160,8 +183,19 @@ async function startStandaloneServer(
 ): Promise<void> {
   const app = await createStandaloneServer(options);
 
+  const logger = app.application.container.has(loggingToken)
+    ? app.application.container.resolve(loggingToken).getLogger('server')
+    : undefined;
   try {
     await startNodeAppServer(app, {
+      ...(logger
+        ? {
+            logger: {
+              error: (message: string, err?: unknown) =>
+                logger.error({ err }, message),
+            },
+          }
+        : {}),
       hostname: app.listenOptions.hostname,
       port: app.listenOptions.port,
       onListen: (info): void => {
@@ -169,9 +203,9 @@ async function startStandaloneServer(
           return;
         }
 
-        console.log(
-          `App server listening on http://${info.address}:${info.port}`,
-        );
+        const message = `App server listening on http://${info.address}:${info.port}`;
+        if (logger) logger.info(message);
+        else console.log(message);
       },
     });
   } catch (error) {

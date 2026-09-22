@@ -7,6 +7,7 @@ import { HUB_RELEASE_ACTIONS } from '../../shared/permissions.js';
 import { authenticationToken } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
+  permissionSetsToken,
   type AuthorizationEnv,
 } from '@nocobase/app-plugin-authorization';
 import { loggingToken } from '@nocobase/app-server/logging';
@@ -50,6 +51,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
     const routes = new Hono<AuthorizationEnv>();
     const authentication = container.resolve(authenticationToken);
     const authorization = container.resolve(authorizationToken);
+    const permissionSets = container.resolve(permissionSetsToken);
     const hub = container.resolve(hubServiceToken);
     const securityLogger = container.has(loggingToken)
       ? container.resolve(loggingToken).getLogger('security')
@@ -276,12 +278,9 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         resource: { type: 'user', id: '*' },
         action: 'read',
       });
-      const permissionSets = await authorization.permissionSets.list();
+      const sets = await permissionSets.list();
       const byKey = new Map(
-        permissionSets.map((permissionSet) => [
-          permissionSet.key,
-          permissionSet,
-        ]),
+        sets.map((permissionSet) => [permissionSet.key, permissionSet]),
       );
       return context.json({
         data: HUB_ACTIVE_ROLE_KEYS.flatMap((key) => {
@@ -536,6 +535,10 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
             id: deployment.id,
             operationId: deployment.id,
             status: deployment.status,
+            // A reused operation was created by an earlier request, so the App may be running
+            // another Release by now. Clients must not read it as "this Release is live".
+            reused: deployment.reused === true,
+            createdAt: deployment.createdAt,
           };
         },
         202,
@@ -562,6 +565,37 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         });
       },
     );
+
+    for (const route of [
+      '/apps/:appId/logs',
+      '/apps/:appId/deployments/:deploymentId/logs',
+    ]) {
+      routes.get(route, async (context) => {
+        const appId = context.req.param('appId')!;
+        const deploymentId = context.req.param('deploymentId');
+        await requireHubAction(
+          context,
+          appId,
+          deploymentId ? 'read-deployment' : 'read-log',
+        );
+        preventSensitiveResponseCaching(context);
+        return respond(context, () =>
+          hub.readLogs(
+            appId,
+            {
+              cursor: context.req.query('cursor'),
+              level: context.req.query('level'),
+              source: context.req.query('source'),
+              search: context.req.query('search'),
+              since: context.req.query('since'),
+              until: context.req.query('until'),
+              fromStart: context.req.query('fromStart') === 'true',
+            },
+            deploymentId,
+          ),
+        );
+      });
+    }
     routes.get('/apps/:appId/deployments', async (context) => {
       await requireHubAction(
         context,

@@ -93,6 +93,26 @@ describe('ScheduleStore reconciliation', () => {
     ]);
   });
 
+  it('reuses the app lock and keeps different apps isolated', async () => {
+    await store.reconcile([]);
+    await store.reconcile([], true);
+    const otherStore = new ScheduleStore(
+      database,
+      'other',
+      queue.schedules('schedule'),
+      () => new Date(NOW),
+    );
+    await otherStore.reconcile([]);
+
+    expect(await rows('schedule_sync_locks')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ appName: 'main' }),
+        expect.objectContaining({ appName: 'other' }),
+      ]),
+    );
+    await expect(rows('schedule_sync_locks')).resolves.toHaveLength(2);
+  });
+
   it('preserves Queue counters, next time, and the enabled state for unchanged and content-only updates', async () => {
     await store.reconcile([entry(baseDefinition())]);
     const id = scheduleId('main', 'daily');

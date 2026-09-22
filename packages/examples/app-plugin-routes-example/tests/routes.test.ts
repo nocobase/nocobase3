@@ -2,7 +2,7 @@ import {
   authenticationToken,
   type Auth,
 } from '@nocobase/app-plugin-authentication';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
@@ -109,7 +109,7 @@ function createApplication(authentication: Auth): AppPluginApplication {
     appName: 'main',
     publicBasePath: '',
     config: { app: { name: 'main', publicBasePath: '' } },
-    paths: createConfigPaths({ rootDir: '/missing' }),
+    paths: createAppPaths({ rootDir: '/missing' }),
     router: new Hono(),
     container,
   };

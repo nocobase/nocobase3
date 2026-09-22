@@ -1,0 +1,121 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  collectRuntimeSpecifiers,
+  findViolations,
+} from '../../scripts/check-runtime-deps.mjs';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+test('ignores import-like UI prose, comments, regexes and JSX text', () => {
+  const source = `
+    const labels = { undoImport: 'Undo import', importError: 'Invalid file' };
+    const description = "import 'not-a-package'";
+    // import 'comment-only';
+    /* export { value } from 'comment-export'; */
+    const pattern = /import 'regex-only'/;
+    const view = <div>import 'jsx-only'<span title="require('attribute-only')" />{labels.undoImport}</div>;
+    import { value } from 'real-package';
+  `;
+  assert.deepEqual([...collectRuntimeSpecifiers(source)], ['real-package']);
+});
+
+test('collects runtime imports and exports, skipping type-only references', () => {
+  const source = `
+    import main, { type Type, value } from 'mixed';
+    import * as namespace from 'namespace';
+    import 'side-effect';
+    import type DefaultType from 'type-default';
+    import { type A, type B } from 'type-named';
+    import keep, { type C } from 'default-and-types';
+    export { value, type D } from 're-export';
+    export * from 'export-all';
+    export * as named from 'export-namespace';
+    export type { E } from 'type-export';
+    export { type F } from 'type-export-named';
+    import legacy = require('legacy');
+    import type LegacyType = require('legacy-type');
+    const load = () => import('dynamic', { with: { type: 'json' } });
+    const dependency = require('required');
+    type Query = import('type-query').T;
+    const dynamicName = import(variable);
+    object.import('method-only');
+    object.require('method-only');
+  `;
+  assert.deepEqual(
+    [...collectRuntimeSpecifiers(source)].sort(),
+    [
+      'mixed',
+      'namespace',
+      'side-effect',
+      'default-and-types',
+      're-export',
+      'export-all',
+      'export-namespace',
+      'legacy',
+      'dynamic',
+      'required',
+    ].sort(),
+  );
+});
+
+test('visits expressions inside templates and supports literal dynamic imports', () => {
+  const source =
+    'const text = `import "prose" ${import("nested")}`; import(`literal`); import(`prefix-${name}`);';
+  assert.deepEqual(
+    [...collectRuntimeSpecifiers(source)],
+    ['nested', 'literal'],
+  );
+});
+
+test('uses the filename for TypeScript assertions and fails closed on invalid syntax', () => {
+  assert.deepEqual(
+    [
+      ...collectRuntimeSpecifiers(
+        "const a = <number>value; import 'real';",
+        'file.ts',
+      ),
+    ],
+    ['real'],
+  );
+  assert.throws(
+    () => collectRuntimeSpecifiers('import {', 'broken.ts'),
+    /Cannot scan broken.ts/,
+  );
+});
+
+test('still reports undeclared and dev-only dependencies, without reporting prose', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'runtime-deps-test-'));
+  try {
+    await mkdir(path.join(root, 'client'));
+    await writeFile(
+      path.join(root, 'client', 'index.tsx'),
+      `
+      const labels = { undoImport: 'Undo import', importError: 'Invalid file' };
+      import 'missing'; import 'dev-only'; import 'peer'; import 'runtime'; import 'optional';
+    `,
+    );
+    const violations = await findViolations(
+      root,
+      {
+        name: 'fixture',
+        files: ['client'],
+        dependencies: { runtime: '*' },
+        peerDependencies: { peer: '*' },
+        optionalDependencies: { optional: '*' },
+        devDependencies: { 'dev-only': '*' },
+      },
+      new Set(),
+    );
+    assert.deepEqual(
+      violations.map(({ dependency, kind }) => ({ dependency, kind })),
+      [
+        { dependency: 'dev-only', kind: 'dev-only' },
+        { dependency: 'missing', kind: 'undeclared' },
+      ],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

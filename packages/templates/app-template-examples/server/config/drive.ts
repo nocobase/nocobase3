@@ -4,11 +4,11 @@ import {
 } from '@nocobase/app-server/config';
 import type { AppDriveConfig } from '@nocobase/drive';
 
-const drive: AppConfigFactory<AppDriveConfig> = defineAppConfig((runtime) => {
+const drive: AppConfigFactory<AppDriveConfig> = defineAppConfig(({ paths }) => {
   const disks: AppDriveConfig['disks'] = {
     local: {
       driver: 'fs',
-      location: runtime.configPaths.storage(),
+      location: paths.storage(),
       visibility: 'private',
     },
     s3: {

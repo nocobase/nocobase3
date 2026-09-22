@@ -5,6 +5,7 @@ import type {
 } from '@nocobase/db';
 import { rawRows } from '@nocobase/db';
 import type { Knex } from 'knex';
+import { preserveNestedTransaction } from './transactions.js';
 import { preciseIntegerClient } from './precise-integers.js';
 import { OracleSchemaInspector } from './inspectors/oracle.js';
 
@@ -331,6 +332,15 @@ export const oracleDriver: DatabaseDriverDefinition<
     const BaseClient = preciseIntegerClient(Oracledb);
     if (typeof BaseClient === 'string') return BaseClient;
     class NocobaseOracleClient extends BaseClient {
+      transaction(
+        container: (transaction: Knex.Transaction) => Promise<unknown>,
+        config: Knex.TransactionConfig,
+        outerTx?: Knex.Transaction,
+      ): Knex.Transaction {
+        const transaction = super.transaction(container, config, outerTx);
+        return outerTx ? preserveNestedTransaction(transaction) : transaction;
+      }
+
       prepBindings(bindings: readonly unknown[]): unknown[] {
         const prepared = super.prepBindings(
           bindings as Parameters<Knex.Client['prepBindings']>[0],

@@ -1,3 +1,6 @@
+import defaultAccess from '@nocobase/app-plugin-authz-default-access/client';
+import sharingRules from '@nocobase/app-plugin-authz-sharing-rules/client';
+import restrictionRules from '@nocobase/app-plugin-authz-restriction-rules/client';
 import {
   defineClientPlugins,
   type AppClientPlugins,
@@ -5,6 +8,8 @@ import {
 import aiEmployee from '@nocobase/app-plugin-ai-employee/client';
 import authentication from '@nocobase/app-plugin-authentication/client';
 import authorization from '@nocobase/app-plugin-authorization/client';
+import authorizationExample from '@nocobase/app-plugin-authorization-example/client';
+import users from '@nocobase/app-plugin-users/client';
 import databaseExplorer from '@nocobase/app-plugin-database-explorer/client';
 import install from '@nocobase/app-plugin-install/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
@@ -17,7 +22,6 @@ import repositoryExample from '@nocobase/app-plugin-repository-example/client';
 import scheduler from '@nocobase/app-plugin-scheduler/client';
 import file from '@nocobase/app-plugin-file/client';
 import fileExample from '@nocobase/app-plugin-file-example/client';
-import users from '@nocobase/app-plugin-users/client';
 import apiKeys from '@nocobase/app-plugin-api-keys/client';
 
 // Array order is contribution order. A plugin is enabled by appearing in this
@@ -26,8 +30,12 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   authentication(),
   aiEmployee(),
   authorization(),
-  databaseExplorer(),
+  defaultAccess(),
+  sharingRules(),
+  restrictionRules(),
+  authorizationExample(),
   users({ mount: 'settings', path: '/users' }),
+  databaseExplorer(),
   apiKeys({ path: '/api-keys' }),
   i18n(),
   install(),

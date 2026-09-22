@@ -77,3 +77,7 @@ pnpm --filter @nocobase/app-plugin-notification-in-app typecheck
 pnpm --filter @nocobase/app-plugin-notification-in-app test
 pnpm --filter @nocobase/app-plugin-notification-in-app build
 ```
+
+### Recipient validation
+
+Final delivery checks that the recipient exists through Authentication’s user administration service. Missing recipients fail with category `recipient` and disposition `never`, without an inbox write or realtime event. User lookup errors remain retryable storage failures. Custom hosts using `createDatabaseProviderDefinition` must provide `recipientExists(userId): Promise<boolean>` backed by their user directory.

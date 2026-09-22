@@ -26,6 +26,20 @@ afterEach(async () => {
 });
 
 describe('loadAppHostConfig', () => {
+  it('keeps managed revision roots distinct from legacy deployments', async () => {
+    const rootDir = await createTempDirectory();
+    const config = await loadAppHostConfig({
+      rootDir,
+      environment: {
+        APP_HOST_MODE: 'managed',
+        APP_REVISIONS_DIR: './storage/apps/revisions',
+      },
+    });
+    expect(config.appRevisionsDir).toBe(
+      path.join(rootDir, 'storage/apps/revisions'),
+    );
+  });
+
   it('uses pretty logging outside production', async () => {
     const rootDir = await createTempDirectory();
     const config = await loadAppHostConfig({
@@ -33,10 +47,8 @@ describe('loadAppHostConfig', () => {
       environment: { NODE_ENV: 'development' },
     });
     expect(config.logging).toMatchObject({
-      transport: {
-        target: 'pino-pretty',
-        options: { colorize: true, singleLine: true },
-      },
+      file: { enabled: true },
+      console: { enabled: true, pretty: true },
     });
   });
 
@@ -53,7 +65,7 @@ describe('loadAppHostConfig', () => {
             location: './storage/releases',
             visibility: 'private',
           },
-          appDeploymentsDir: './storage/apps',
+          appRevisionsDir: './storage/apps',
           appVolumesDir: './storage/volumes',
         },
       }),
@@ -72,7 +84,7 @@ describe('loadAppHostConfig', () => {
         driver: 'fs',
         location: path.join(rootDir, 'storage/releases'),
       },
-      appDeploymentsDir: path.join(rootDir, 'storage/apps'),
+      appRevisionsDir: path.join(rootDir, 'storage/apps'),
       appVolumesDir: path.join(rootDir, 'storage/volumes'),
     });
   });
@@ -102,13 +114,13 @@ describe('loadAppHostConfig', () => {
 
     expect(config.artifact).toMatchObject({
       driver: 'fs',
-      location: path.join(rootDir, 'storage/app-artifacts'),
+      location: path.join(rootDir, 'storage/apps/artifacts'),
     });
-    expect(config.appDeploymentsDir).toBe(
-      path.join(rootDir, 'storage/app-deployments'),
+    expect(config.appRevisionsDir).toBe(
+      path.join(rootDir, 'storage/apps/revisions'),
     );
     expect(config.appVolumesDir).toBe(
-      path.join(rootDir, 'storage/app-volumes'),
+      path.join(rootDir, 'storage/apps/volumes'),
     );
   });
 
@@ -120,17 +132,13 @@ describe('loadAppHostConfig', () => {
     });
 
     expect(config.logging).toMatchObject({
-      default: 'host',
       level: 'info',
       base: { service: 'app-host' },
-      transport: {
-        target: 'pino-roll',
-        options: {
-          file: path.join(rootDir, 'storage/host/logs/{logger}.log'),
-          frequency: 'daily',
-          mkdir: true,
-        },
+      file: {
+        enabled: true,
+        directory: path.join(rootDir, 'storage/host/logs'),
       },
+      console: { enabled: true, pretty: false },
     });
   });
 });

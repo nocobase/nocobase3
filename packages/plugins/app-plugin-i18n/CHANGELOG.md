@@ -1,5 +1,17 @@
 # @nocobase/app-plugin-i18n
 
+## 0.1.0-beta.8
+
+### Patch Changes
+
+- 21d3ed4: Use the current application's API client for locale switching and startup synchronization so requests respect its configuration and remain isolated between applications.
+- 365a9fe: Document semantic translation key naming, grouping, interpolation, and rename guidance with examples for application and plugin development.
+- Updated dependencies [d4ca00e]
+- Updated dependencies [26ac480]
+  - @nocobase/app-client@1.0.0-beta.18
+  - @nocobase/app-server@1.0.0-beta.18
+  - @nocobase/i18n@1.0.0-beta.4
+
 ## 0.1.0-beta.7
 
 ### Patch Changes

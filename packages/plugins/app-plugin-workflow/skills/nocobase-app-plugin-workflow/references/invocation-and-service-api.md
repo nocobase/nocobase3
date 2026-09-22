@@ -107,7 +107,7 @@ const { eventKey, runId } = receipt;
 
 For a workflow that exists and is enabled, `trigger()` can still throw `INVALID_INPUT`, `INPUT_TOO_LARGE`, `PARENT_RUN_NOT_FOUND`, or `STACK_LIMIT_EXCEEDED` before it returns an accepted receipt.
 
-The management run endpoint resolves the exact materialized database definition/version identified by `definitionId`. It does not require that revision to be `current` or `enabled`, so an authenticated operator can run a historical revision. The Run is marked manual and preserves that definition's version, hash, Input Schema, and input snapshot. The optional event key uses the same idempotency mechanism as `trigger()`; the server generates one when it is omitted. The current DSL has no top-level trigger-source field.
+The management run endpoint resolves the exact materialized database definition/version identified by `definitionId`. It does not require that revision to be `current` or `enabled`, so an operator with workflow management permission can run a historical revision. The Run is marked manual and preserves that definition's version, hash, Input Schema, and input snapshot. The optional event key uses the same idempotency mechanism as `trigger()`; the server generates one when it is omitted. The current DSL has no top-level trigger-source field.
 
 ## Management operation map
 
@@ -146,9 +146,7 @@ Artifact has no id and is identified by its deployed `hash`.
 
 ## Authenticated management HTTP API
 
-All current routes are below `/api` and require authentication. The current
-implementation does not provide per-action ACL or audit hooks; do not claim
-finer-grained enforcement than authentication.
+All current routes are below `/api` and require authentication plus the `manage` action on `{ type: "settings", id: "workflow" }`. This single permission covers definitions, parameters, enable/disable, manual execution, runs and node results. The management pages use the same permission. In Settings → Authorization → Permission sets, grant Automation → Workflow → Manage and assign that permission set to the intended users. The root permission set already has unrestricted access; ordinary users are denied with HTTP 403 unless granted management access. Existing `read` grants do not confer management access and must be replaced deliberately by an administrator. Internal service calls and scheduled triggers retain their own business authorization boundaries. Per-workflow/per-action grants and audit hooks are not provided.
 
 | Method and path                                          | Purpose/body                                                                                  |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -209,3 +207,5 @@ The current public service and management routes do not expose node rerun or fai
 Resolve `@nocobase/app-plugin-workflow/server` through the project's package manager and inspect its installed declarations when verifying the runtime and route exports. Keep application calls on public package exports rather than importing plugin-internal file paths.
 
 For extension criteria, the public API, and a complete checker/build/Provider example, read [Custom Instructions](custom-instructions.md).
+
+Manual management execution returns the persisted run (including its ID) before waiting for node completion. Navigate to that run immediately; acceptance does not imply success. The runtime tracks background manual execution and drains it on shutdown.

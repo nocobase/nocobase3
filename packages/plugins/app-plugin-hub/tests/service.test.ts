@@ -123,7 +123,7 @@ describe('@nocobase/app-plugin-hub service', () => {
         host: {
           enabled: true,
           driver: 'tsx',
-          appDeploymentsDir: path.join(rootDir, 'app-deployments'),
+          appRevisionsDir: path.join(rootDir, 'app-deployments'),
           appVolumesDir: path.join(rootDir, 'app-volumes'),
           configPath: path.join(rootDir, 'hub', 'host-config.yml'),
         },
@@ -136,6 +136,54 @@ describe('@nocobase/app-plugin-hub service', () => {
     await service.shutdown();
     await database.destroy();
     await rm(rootDir, { recursive: true, force: true });
+  });
+
+  it('keeps desired configurations and deployment logs independent of the Host config path', async () => {
+    await service.shutdown();
+    const options = createServiceOptions();
+    service = new DefaultHubService({
+      ...options,
+      config: {
+        ...options.config,
+        desiredConfigsDir: path.join(rootDir, 'hub/desired-configs'),
+        logging: {
+          deployments: {
+            directory: path.join(rootDir, 'hub/logs/deployments'),
+          },
+        },
+        host: {
+          ...options.config.host,
+          configPath: path.join(rootDir, 'host/runtime/config.yml'),
+        },
+      },
+    });
+    await service.prepare();
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.0.0'),
+    });
+    const deployment = await service.deploy('customer', {
+      releaseId: release.id,
+    });
+    await waitForDeployment(service, 'customer', deployment.id);
+    expect(deployment.config.path).toBe(
+      path.join(
+        rootDir,
+        'hub/desired-configs/customer',
+        `${deployment.id}.yml`,
+      ),
+    );
+    expect(await readFile(deployment.config.path!, 'utf8')).toBeTruthy();
+    const logs = await service.readLogs(
+      'customer',
+      { fromStart: true },
+      deployment.id,
+    );
+    expect(logs.entries.length).toBeGreaterThan(0);
+    await service.remove('customer');
+    await expect(
+      readFile(deployment.config.path!, 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('allows the same name across owners while keeping IDs globally unique', async () => {
@@ -218,7 +266,7 @@ describe('@nocobase/app-plugin-hub service', () => {
       ),
     ).toEqual([]);
     expect(
-      await readdir(path.join(rootDir, 'hub/app-configs/customer/configs')),
+      await readdir(path.join(rootDir, 'hub/app-configs/customer')),
     ).toEqual([]);
   });
 
@@ -279,6 +327,16 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     await waitForDeployment(service, 'customer', uploaded.operationId!);
     expect((await service.listDeployments('customer')).total).toBe(1);
+    const logs = await service.readLogs(
+      'customer',
+      { fromStart: true },
+      uploaded.operationId!,
+    );
+    expect(logs.entries.map((entry) => entry.msg)).toEqual([
+      'Deployment queued',
+      'Deployment started',
+      'Deployment succeeded',
+    ]);
     const uploadOnly = await service.createRelease('customer', {
       bytes: await createArtifact(rootDir, '2.0.0'),
     });
@@ -447,6 +505,8 @@ describe('@nocobase/app-plugin-hub service', () => {
       idempotencyKey: 'deploy-1',
     });
     expect(again.id).toBe(first.id);
+    expect(first.reused).toBe(false);
+    expect(again.reused).toBe(true);
     await expect(
       service.deploy('customer', {
         releaseId: 'changed',
@@ -455,6 +515,38 @@ describe('@nocobase/app-plugin-hub service', () => {
     ).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
     await waitForDeployment(service, 'customer', first.id);
     expect((await service.listDeployments('customer')).total).toBe(1);
+  });
+
+  it('retains deployment logs and isolates them from other apps without starting Host', async () => {
+    await service.createApp({ id: 'customer', name: 'Customer' });
+    await service.createApp({ id: 'other', name: 'Other' });
+    const release = await service.createRelease('customer', {
+      bytes: await createArtifact(rootDir, '1.2.3'),
+    });
+    const queued = await service.deploy('customer', {
+      releaseId: release.id,
+      config: { mode: 'external' },
+    });
+    await waitForDeployment(service, 'customer', queued.id);
+    const ensure = vi.spyOn(host, 'ensureStarted');
+    const page = await service.readLogs(
+      'customer',
+      { fromStart: true },
+      queued.id,
+    );
+    expect(page.entries.map((entry) => entry.msg)).toEqual([
+      'Deployment queued',
+      'Deployment started',
+      'Deployment succeeded',
+    ]);
+    expect(ensure).not.toHaveBeenCalled();
+    await expect(service.readLogs('other', {}, queued.id)).rejects.toThrow(
+      'Deployment not found',
+    );
+    expect(
+      (await service.readLogs('customer', { cursor: page.cursor }, queued.id))
+        .entries,
+    ).toEqual([]);
   });
 
   it('paginates deployments with stable ordering and app isolation', async () => {
@@ -1183,47 +1275,60 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
   });
 
-  it('replaces example secrets and preserves them across deployments and publication', async () => {
-    const template =
-      '# Preserve this comment\nauth:\n  secret: replace-with-a-unique-secret\nsession:\n  secret: replace-with-a-unique-secret\n';
-    await service.createApp({ id: 'customer', name: 'Customer' });
-    const release = await service.createRelease('customer', {
-      bytes: await createArtifact(rootDir, '1.2.3', {
-        configTemplate: template,
-      }),
-    });
-    const first = await service.deploy('customer', { releaseId: release.id });
-    await waitForDeployment(service, 'customer', first.id);
-    const initial = await service.readConfig('customer');
-    const secrets = parseYaml(initial.content!) as {
-      auth: { secret: string };
-      session: { secret: string };
-    };
-    expect(secrets.auth.secret).toHaveLength(43);
-    expect(secrets.session.secret).toHaveLength(43);
-    expect(secrets.auth.secret).not.toBe(secrets.session.secret);
-    expect(initial.content).toContain('# Preserve this comment');
-    const second = await service.deploy('customer', {
-      releaseId: release.id,
-      config: { mode: 'file', content: template },
-    });
-    await waitForDeployment(service, 'customer', second.id);
-    expect(parseYaml((await service.readConfig('customer')).content!)).toEqual(
-      secrets,
-    );
-    const updated = await service.updateConfig('customer', {
-      content: template,
-    });
-    expect(parseYaml(updated.content!)).toEqual(secrets);
-    expect(
-      await service.updateConfig('customer', { content: updated.content! }),
-    ).toEqual(updated);
-    const custom =
-      'auth:\n  secret: supplied-auth-secret-at-least-32-characters\nsession:\n  secret: supplied-session-secret-at-least-32-characters\n';
-    expect(
-      (await service.updateConfig('customer', { content: custom })).content,
-    ).toBe(custom);
-  });
+  it.each([
+    [
+      'example secrets',
+      'auth:\n  secret: replace-with-a-unique-secret\nsession:\n  secret: replace-with-a-unique-secret\n',
+    ],
+    ['omitted secret sections', 'feature: enabled\n'],
+    [
+      'omitted session section',
+      'auth:\n  secret: replace-with-a-unique-secret\n',
+    ],
+    ['blank secrets', 'auth:\n  secret: ""\nsession:\n  secret: " "\n'],
+  ])(
+    'fills %s and preserves secrets across deployments and publication',
+    async (_name, config) => {
+      const template = `# Preserve this comment\n${config}`;
+      await service.createApp({ id: 'customer', name: 'Customer' });
+      const release = await service.createRelease('customer', {
+        bytes: await createArtifact(rootDir, '1.2.3', {
+          configTemplate: template,
+        }),
+      });
+      const first = await service.deploy('customer', { releaseId: release.id });
+      await waitForDeployment(service, 'customer', first.id);
+      const initial = await service.readConfig('customer');
+      const secrets = parseYaml(initial.content!) as {
+        auth: { secret: string };
+        session: { secret: string };
+      };
+      expect(secrets.auth.secret).toHaveLength(43);
+      expect(secrets.session.secret).toHaveLength(43);
+      expect(secrets.auth.secret).not.toBe(secrets.session.secret);
+      expect(initial.content).toContain('# Preserve this comment');
+      const second = await service.deploy('customer', {
+        releaseId: release.id,
+        config: { mode: 'file', content: template },
+      });
+      await waitForDeployment(service, 'customer', second.id);
+      expect(
+        parseYaml((await service.readConfig('customer')).content!),
+      ).toEqual(secrets);
+      const updated = await service.updateConfig('customer', {
+        content: template,
+      });
+      expect(parseYaml(updated.content!)).toEqual(secrets);
+      expect(
+        await service.updateConfig('customer', { content: updated.content! }),
+      ).toEqual(updated);
+      const custom =
+        'auth:\n  secret: supplied-auth-secret-at-least-32-characters\nsession:\n  secret: supplied-session-secret-at-least-32-characters\n';
+      expect(
+        (await service.updateConfig('customer', { content: custom })).content,
+      ).toBe(custom);
+    },
+  );
 
   it('reuses an existing auth secret and keeps a user-provided secret', async () => {
     await service.createApp({ id: 'customer', name: 'Customer' });
@@ -1663,9 +1768,7 @@ describe('@nocobase/app-plugin-hub service', () => {
     });
     const completed = await waitForDeployment(service, 'customer', rollback.id);
     expect(completed.config.path).not.toBe(first.config.path);
-    expect(path.basename(completed.config.path!)).toBe(
-      `config.${completed.id}.yml`,
-    );
+    expect(path.basename(completed.config.path!)).toBe(`${completed.id}.yml`);
     await vi.waitFor(async () => {
       await expect(stat(first.config.path!)).rejects.toMatchObject({
         code: 'ENOENT',

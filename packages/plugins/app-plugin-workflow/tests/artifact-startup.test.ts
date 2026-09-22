@@ -3,7 +3,7 @@ import sqlite from '@nocobase/db-sqlite';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDatabaseManager, type DatabaseManager } from '@nocobase/db';
 import {
   createQueueManager,
@@ -145,13 +145,17 @@ describe('application workflow Artifact lazy synchronization', () => {
       }),
       'The development-source run',
     );
-    const nodeRun = await requireRow(
-      workflowStore(f.database).nodeRuns.findOne({
-        filter: { workflowRunId: asIdFilter(asId(run.id)) },
-        select: (select) => select.fields('result'),
-      }),
-      'Its node run',
-    );
+    const nodeRun = await vi.waitFor(async () => {
+      const row = await requireRow(
+        workflowStore(f.database).nodeRuns.findOne({
+          filter: { workflowRunId: asIdFilter(asId(run.id)) },
+          select: (select) => select.fields('result'),
+        }),
+        'Its node run',
+      );
+      expect(row.result).not.toBeNull();
+      return row;
+    });
     expect(nodeRun.result).toBe('source');
     await service.dispose();
   });
@@ -243,13 +247,17 @@ describe('application workflow Artifact lazy synchronization', () => {
       'The artifact-run run',
     );
     expect(run.hash).toBe(v1);
-    const nodeRun = await requireRow(
-      workflowStore(f.database).nodeRuns.findOne({
-        filter: { workflowRunId: asIdFilter(asId(run.id)) },
-        select: (select) => select.fields('result'),
-      }),
-      'Its node run',
-    );
+    const nodeRun = await vi.waitFor(async () => {
+      const row = await requireRow(
+        workflowStore(f.database).nodeRuns.findOne({
+          filter: { workflowRunId: asIdFilter(asId(run.id)) },
+          select: (select) => select.fields('result'),
+        }),
+        'Its node run',
+      );
+      expect(row.result).not.toBeNull();
+      return row;
+    });
     expect(nodeRun.result).toBe('v1');
     await firstService.dispose();
 

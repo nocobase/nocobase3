@@ -1,4 +1,5 @@
 import type { ConfigMap } from '@nocobase/config';
+import type { Logger } from '@nocobase/logging';
 import type {
   ConfigLoadOptions,
   ConfigParser,
@@ -28,6 +29,7 @@ export interface AppConfigReloadResult {
 }
 
 export interface AppConfigAccessor {
+  setLogger?(logger: Pick<Logger, 'debug'>): void;
   mergeDefaults(values: ConfigMap): void;
   get<TValue = unknown>(key: string): TValue | undefined;
   raw(): ConfigMap;

@@ -99,32 +99,35 @@ describe('app client runtime', () => {
         .map((route) => ({
           name: route.name,
           path: route.path,
-          access: route.access,
+          authz: route.authz,
           title: route.navigation?.title,
         })),
     ).toEqual([
       {
         name: 'hub',
         path: '/apps',
-        access: { resource: 'hub', action: 'access' },
+        authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
         title: 'navigation.applications',
       },
       {
         name: 'hub-roles',
         path: '/roles',
-        access: { resource: 'users', action: 'access' },
+        authz: { resource: { type: 'page', id: 'users' }, action: 'access' },
         title: 'navigation.roles',
       },
       {
         name: 'hub-api-keys',
         path: '/api-keys',
-        access: { resource: 'hub.app:*', action: 'manage-api-keys' },
+        authz: {
+          resource: { type: 'hub.app', id: '*' },
+          action: 'manage-api-keys',
+        },
         title: 'navigation.apiKeys',
       },
       {
         name: 'users',
         path: '/users',
-        access: { resource: 'users', action: 'access' },
+        authz: { resource: { type: 'page', id: 'users' }, action: 'access' },
         title: 'nav.users',
       },
     ]);

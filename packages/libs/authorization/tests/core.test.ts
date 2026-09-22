@@ -33,7 +33,7 @@ function plugin(
     ...(options.providesGrants ? { grants: emptyGrants } : {}),
     requiresGrants: options.requiresGrants,
     setup(authz): void {
-      authz.resources.add({
+      authz.resourceTypes.add({
         resourceType: id,
         async authorize() {
           if (options.throws) throw new Error('broken handler');
@@ -65,7 +65,7 @@ const request = (type: string) => ({
 describe('Authorization Core', () => {
   it('allows applications to register resource authorization directly', async () => {
     const authorization = createAuthorization({ plugins: [] });
-    authorization.resources.add<{ userId: string }>({
+    authorization.resourceTypes.add<{ userId: string }>({
       resourceType: 'post',
       authorize(request) {
         return Promise.resolve({
@@ -220,7 +220,7 @@ describe('Authorization Core', () => {
         {
           id: 'documents',
           setup(authz): void {
-            authz.resources.add({
+            authz.resourceTypes.add({
               resourceType: 'document',
               authorize(request) {
                 receivedPrincipal = request.principal.id;
@@ -293,6 +293,39 @@ describe('Authorization Core', () => {
     });
   });
 
+  it('runs a step registered through use() together with a plugin step', async () => {
+    const rolesPlugin: AuthorizationPlugin = {
+      id: 'roles',
+      setup(authz): void {
+        authz.use(async (request, next) => {
+          request.subjects.add({ type: 'role', id: 'editor' });
+          await next();
+        });
+      },
+    };
+    const authorization = createAuthorization({
+      plugins: [rolesPlugin, plugin('orders')],
+    });
+    authorization.use(async (request, next) => {
+      request.principal = { type: 'user', id: 'alice' };
+      await next();
+    });
+    const router = new Hono<AuthorizationEnv>();
+    router.use('*', authorization.middleware());
+    router.get('/', (context) => {
+      const authz = context.get('authz');
+      return context.json({
+        principal: authz.identity.principal.id,
+        subjects: authz.identity.subjects,
+      });
+    });
+
+    await expect((await router.request('/')).json()).resolves.toEqual({
+      principal: 'alice',
+      subjects: [{ type: 'role', id: 'editor' }],
+    });
+  });
+
   it('guards routes with the scoped authorization request', async () => {
     let handled = 0;
     const identityPlugin: AuthorizationPlugin = {
@@ -307,7 +340,7 @@ describe('Authorization Core', () => {
     const postsPlugin: AuthorizationPlugin = {
       id: 'posts',
       setup(authz): void {
-        authz.resources.add<{ ownerId: string }>({
+        authz.resourceTypes.add<{ ownerId: string }>({
           resourceType: 'post',
           authorize(request) {
             const allowed =
@@ -392,4 +425,120 @@ describe('Authorization Core', () => {
       message: 'Authorization principal was not resolved',
     });
   });
+});
+
+describe('the subject types an application declares', () => {
+  it('passes every subject of an undeclared type through', async () => {
+    const authorization = createAuthorization({ plugins: [] });
+
+    await expect(
+      authorization.subjects.filterActive([
+        { type: 'authenticated', id: '*' },
+        { type: 'team', id: 'sales' },
+      ]),
+    ).resolves.toEqual([
+      { type: 'authenticated', id: '*' },
+      { type: 'team', id: 'sales' },
+    ]);
+  });
+
+  it('asks a declared type for its own ids and keeps the rest', async () => {
+    const authorization = createAuthorization({ plugins: [] });
+    const asked: (readonly string[])[] = [];
+    authorization.subjects.define('user', {
+      filterActive: (ids) => {
+        asked.push(ids);
+        return Promise.resolve(ids.filter((id) => id !== 'retired'));
+      },
+    });
+
+    await expect(
+      authorization.subjects.filterActive([
+        { type: 'user', id: 'root' },
+        { type: 'user', id: 'retired' },
+        { type: 'authenticated', id: '*' },
+      ]),
+    ).resolves.toEqual([
+      { type: 'user', id: 'root' },
+      { type: 'authenticated', id: '*' },
+    ]);
+    // One call for the whole type, and only the ids of that type.
+    expect(asked).toEqual([['root', 'retired']]);
+  });
+
+  it('groups a mixed list by type and hands each its own ids', async () => {
+    const authorization = createAuthorization({ plugins: [] });
+    const asked = new Map<string, readonly string[]>();
+    for (const type of ['user', 'team']) {
+      authorization.subjects.define(type, {
+        filterActive: (ids) => {
+          asked.set(type, ids);
+          return Promise.resolve(ids.slice(0, 1));
+        },
+      });
+    }
+
+    await expect(
+      authorization.subjects.filterActive([
+        { type: 'user', id: 'root' },
+        { type: 'team', id: 'sales' },
+        { type: 'user', id: 'retired' },
+        { type: 'team', id: 'closed' },
+        { type: 'authenticated', id: '*' },
+      ]),
+    ).resolves.toEqual([
+      { type: 'user', id: 'root' },
+      { type: 'team', id: 'sales' },
+      { type: 'authenticated', id: '*' },
+    ]);
+    expect([...asked]).toEqual([
+      ['user', ['root', 'retired']],
+      ['team', ['sales', 'closed']],
+    ]);
+  });
+
+  it('takes a subject of a type nobody declared without complaint', async () => {
+    const authorization = createAuthorization({ plugins: [] });
+    authorization.subjects.define('user', {
+      filterActive: (ids) => Promise.resolve(ids),
+    });
+
+    await expect(
+      authorization.subjects.filterActive([{ type: 'invented', id: 'x' }]),
+    ).resolves.toEqual([{ type: 'invented', id: 'x' }]);
+    expect(authorization.subjects.list()).toEqual(['user']);
+  });
+
+  it('releases a definition so the type passes through again', async () => {
+    const authorization = createAuthorization({ plugins: [] });
+    const release = authorization.subjects.define('user', {
+      filterActive: () => Promise.resolve([]),
+    });
+
+    await expect(
+      authorization.subjects.filterActive([{ type: 'user', id: 'root' }]),
+    ).resolves.toEqual([]);
+    release();
+    await expect(
+      authorization.subjects.filterActive([{ type: 'user', id: 'root' }]),
+    ).resolves.toEqual([{ type: 'user', id: 'root' }]);
+  });
+});
+
+it('resolves inherited subjects from current membership and excludes inactive teams', async () => {
+  const authz = createAuthorization({ plugins: [] });
+  let members = ['active', 'disabled'];
+  const release = authz.subjects.define('team', {
+    resolveFor: async (principal) => (principal.type === 'user' ? members : []),
+    filterActive: async (ids) => ids.filter((id) => id !== 'disabled'),
+  });
+  expect(
+    await authz.subjects.resolveFor({ type: 'user', id: 'alice' }),
+  ).toEqual([{ type: 'team', id: 'active' }]);
+  members = [];
+  expect(
+    await authz.subjects.resolveFor({ type: 'user', id: 'alice' }),
+  ).toEqual([]);
+  release();
+  expect(authz.subjects.list()).toEqual([]);
 });

@@ -19,12 +19,20 @@ export default createReactVitestConfig({
   },
   test: {
     root,
+    server: {
+      deps: {
+        // Transform the public Client surfaces so vi.mock applies, without duplicating the Server packages' identity tokens.
+        inline: [
+          /@nocobase\/app-plugin-authorization\/(?:dist\/)?client\//u,
+          /@nocobase\/app-plugin-notification-in-app\/(?:dist\/)?client\//u,
+        ],
+      },
+    },
     // A glob rather than a list of filenames. The list had to be edited by hand for every test added or removed and
     // silently drifted: it named a file that no longer existed while several real test files were absent from it, so
     // those tests were never run at all.
     include: ['tests/**/*.test.{ts,tsx}'],
-    // A generated application ships no `tests/` — the template's `files` field does not include it — so an empty run
-    // is the expected outcome there rather than a failure on `pnpm test` before a line of code has been written.
+    // Keep the command usable if an application intentionally removes all scaffold tests before adding its own.
     passWithNoTests: true,
     coverage: {
       provider: 'v8',

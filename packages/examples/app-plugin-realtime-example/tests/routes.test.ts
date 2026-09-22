@@ -1,4 +1,4 @@
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ describe('realtime example plugin routes', () => {
       appName: 'main',
       publicBasePath: '',
       config: { app: { name: 'main', publicBasePath: '' } },
-      paths: createConfigPaths({ rootDir: '/missing' }),
+      paths: createAppPaths({ rootDir: '/missing' }),
       router: new Hono(),
       container: new ServiceContainer(),
     });

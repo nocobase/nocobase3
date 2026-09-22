@@ -6,6 +6,7 @@ import { Config, type ConfigMap } from '@nocobase/config';
 import { jsonParser } from '@nocobase/config/parsers/json';
 import { tomlParser } from '@nocobase/config/parsers/toml';
 import { yamlParser } from '@nocobase/config/parsers/yaml';
+import type { Logger } from '@nocobase/logging';
 import { fileProvider } from '@nocobase/config/providers/file';
 
 import type {
@@ -14,7 +15,7 @@ import type {
   AppConfigReloadResult,
   AppConfigSource,
 } from './app-config-types.js';
-import type { ConfigPaths } from './types.js';
+import type { AppPaths } from './types.js';
 
 export class AppConfig {
   private readonly sources: AppConfigSource[] = [];
@@ -26,6 +27,20 @@ export class AppConfig {
   private defaults = new Config();
   private overrides = new Config();
   private reloadPromise: Promise<AppConfigReloadResult> | undefined;
+  private logger?: Pick<Logger, 'debug'>;
+  private loadDurationMs?: number;
+
+  /** Attach diagnostics after the logging configuration has been resolved. */
+  public setLogger(logger: Pick<Logger, 'debug'>): void {
+    this.logger = logger;
+    if (this.loadDurationMs !== undefined) {
+      logger.debug(
+        { durationMs: this.loadDurationMs },
+        'App configuration loaded',
+      );
+      this.loadDurationMs = undefined;
+    }
+  }
 
   public load(
     provider: AppConfigSource['provider'],
@@ -62,10 +77,8 @@ export class AppConfig {
     const startedAt = Date.now();
     const next = await this.loadConfig();
     this.current = next;
-    // Configuration diagnostics must not corrupt machine-readable CLI stdout.
-    console.error('App configuration loaded', {
-      durationMs: Date.now() - startedAt,
-    });
+    this.loadDurationMs = Date.now() - startedAt;
+    if (this.logger) this.setLogger(this.logger);
   }
 
   public get<TValue = unknown>(key: string): TValue | undefined {
@@ -102,10 +115,13 @@ export class AppConfig {
     const startedAt = Date.now();
     this.reloadPromise ??= this.performReload()
       .then((result) => {
-        console.error('App configuration reloaded', {
-          changedNamespaces: result.changedNamespaces,
-          durationMs: Date.now() - startedAt,
-        });
+        this.logger?.debug(
+          {
+            changedNamespaces: result.changedNamespaces,
+            durationMs: Date.now() - startedAt,
+          },
+          'App configuration reloaded',
+        );
         return result;
       })
       .finally(() => {
@@ -171,30 +187,11 @@ function resolveConfigFilePath(filePath: string): string {
   return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
-/**
- * Locate the application config file when no path was configured explicitly.
- *
- * A source checkout keeps `config.yml` at the application root. A built application runs with its root pointing at
- * `dist/`, while `pnpm build --tar` packs `config.example.yml` next to `dist/` rather than inside it, so a deployment
- * writes its `config.yml` there. The root is searched first so a file inside `dist/` keeps working, then the parent of
- * a `dist/` root. When no file exists anywhere the in-root candidate is returned, which keeps the install flow writing
- * to the location it has always used.
- *
- * The returned path carries no extension unless a file was found; `AppConfig.loadFile` completes it.
- */
+/** Resolve deployment configuration independently of the compiled code directory. */
 export function resolveDefaultAppConfigFile(
-  paths: Pick<ConfigPaths, 'root'>,
+  paths: Pick<AppPaths, 'deploymentRootDir'>,
 ): string {
-  const rootDir = paths.root();
-  const candidates = [path.join(rootDir, 'config')];
-  if (path.basename(rootDir) === 'dist') {
-    candidates.push(path.join(path.dirname(rootDir), 'config'));
-  }
-
-  for (const candidate of candidates) {
-    const resolved = resolveConfigFilePath(candidate);
-    if (existsSync(resolved)) return resolved;
-  }
-
-  return candidates[0];
+  const candidate = path.join(paths.deploymentRootDir, 'config');
+  const resolved = resolveConfigFilePath(candidate);
+  return existsSync(resolved) ? resolved : candidate;
 }

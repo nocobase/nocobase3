@@ -60,7 +60,12 @@ const FALLBACK_GITIGNORE = [
   '/database.sqlite-journal',
   '/database.sqlite-wal',
   '/database.sqlite-shm',
+  // Written by `pnpm collections:generate`: a snapshot of what this machine's database resolves every Collection
+  // to, regenerated after migrating rather than committed. Only the managed connection the template ships is named,
+  // because an `external` connection keeps its metadata.json in the repository as the metadata source.
+  '/database/main/collections/',
   '/.agents/',
+  '/.claude/skills/',
   '/.agent-annotations/',
   '/.nocobase/',
   '*.log',
@@ -76,6 +81,7 @@ const FALLBACK_GITIGNORE = [
 const REQUIRED_GITIGNORE_ENTRIES = [
   '/.env',
   '/.agents/',
+  '/.claude/skills/',
   '/.agent-annotations/',
 ] as const;
 
@@ -187,6 +193,7 @@ export interface ScaffoldOptions {
   name: string;
   /** Extra files to write once the template is in place, keyed by path relative to the target. */
   extraFiles?: Record<string, string>;
+  additionalDependencies?: Record<string, string>;
 }
 
 /**
@@ -216,6 +223,15 @@ export async function scaffoldFromTemplate(
   const templateName = typeof manifest.name === 'string' ? manifest.name : '';
 
   manifest.name = name;
+  if (
+    options.additionalDependencies &&
+    Object.keys(options.additionalDependencies).length
+  ) {
+    manifest.dependencies = {
+      ...(manifest.dependencies as Record<string, string> | undefined),
+      ...options.additionalDependencies,
+    };
+  }
 
   // Records which template this application was generated from, because nothing else left in the manifest can say.
   // `name` has just become the application's own, and `nocobase.templateKind` is `app` for both Default and Examples,

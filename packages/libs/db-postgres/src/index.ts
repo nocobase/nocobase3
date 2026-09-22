@@ -12,8 +12,12 @@ export type { PostgresConnectionConfig } from './config.js';
 
 const require = createRequire(import.meta.url);
 const Pg: unknown = require('pg') as unknown;
-const PgQueryStream =
-  require('pg-query-stream') as typeof import('pg-query-stream');
+// Keep native-driver types behind the private query boundary.
+const PgQueryStream = require('pg-query-stream') as new (
+  text: string,
+  values?: unknown[],
+  config?: PgQueryStreamConfig,
+) => unknown;
 
 export type PostgresOptions = Omit<
   PostgresConnectionConfig,

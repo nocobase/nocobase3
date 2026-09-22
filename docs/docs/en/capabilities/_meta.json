@@ -16,9 +16,10 @@
     "label": "Authentication"
   },
   {
-    "type": "file",
+    "type": "dir",
     "name": "authorization",
-    "label": "Permissions"
+    "label": "Permissions",
+    "collapsed": true
   },
   {
     "type": "dir",

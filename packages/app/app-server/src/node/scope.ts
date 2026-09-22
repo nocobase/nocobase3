@@ -45,6 +45,7 @@ export interface StandaloneAppScopeOptions {
 
 export interface CreateStandaloneScopeOptions {
   readonly rootDir?: string;
+  readonly deploymentRootDir?: string;
   readonly paths?: AppPathOptions;
   readonly appName?: string;
   readonly basePath?: string;
@@ -56,6 +57,7 @@ export interface CreateStandaloneScopeOptions {
 
 export interface ResolveStandaloneAppPathsOptions {
   readonly rootDir?: string;
+  readonly deploymentRootDir?: string;
   readonly paths?: AppPathOptions;
 }
 
@@ -89,8 +91,19 @@ export function createStandaloneScope(
   options: CreateStandaloneScopeOptions,
 ): StandaloneAppScope {
   const paths = resolveStandaloneAppPaths(options);
+  const deploymentRootDir = path.resolve(
+    paths.rootDir,
+    paths.deploymentRootDir ?? '.',
+  );
   const env = loadStandaloneAppEnv({
-    rootDir: paths.rootDir,
+    rootDir: deploymentRootDir,
+    files: [
+      ...(path.resolve(paths.rootDir) === deploymentRootDir
+        ? []
+        : [path.join(paths.rootDir, '.env')]),
+      path.join(deploymentRootDir, '.env'),
+      path.join(deploymentRootDir, '.env.local'),
+    ],
     overrides: options.env,
   });
   const defaultAppName = 'main';
@@ -160,13 +173,17 @@ export function resolveStandaloneAppPaths(
   }
 
   const rootDir = path.resolve(options.rootDir);
-  const built = path.basename(rootDir) === 'dist';
+  const deploymentRootDir = path.resolve(
+    rootDir,
+    options.deploymentRootDir ?? '.',
+  );
+  const built = rootDir !== deploymentRootDir;
 
   return {
     rootDir,
     serverDir: path.join(rootDir, 'server'),
     databaseDir: path.join(rootDir, 'database'),
     clientDir: path.join(rootDir, built ? 'client' : 'dist/client'),
-    storageDir: path.join(rootDir, 'storage'),
+    deploymentRootDir,
   };
 }

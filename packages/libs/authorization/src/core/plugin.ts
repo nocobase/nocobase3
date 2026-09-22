@@ -1,19 +1,35 @@
-import type { DatabaseConnection } from '@nocobase/db';
+import type { RecordAccessRegistry } from './record-access.js';
 import type { AuthorizationGrantService } from './grants.js';
+import type {
+  ResourceAuthorizationCheck,
+  ResourceAuthorizationConditions,
+  AuthorizationResources,
+  AuthorizationResourceGroups,
+} from './resources.js';
 import type { ResourceHandlerRegistry } from './registry.js';
 import type { AuthorizationMiddleware } from './middleware.js';
 import type { AccessConstraintRegistry } from './constraints.js';
+import type { AuthorizationSubjectRegistry } from './subjects.js';
+import type { AuthorizationRouteRegistry } from './routes.js';
 
-export interface AuthorizationPluginSetup {
-  readonly connection?: DatabaseConnection;
+export interface AuthorizationPluginSetup<TConnection = unknown> {
+  readonly recordAccess: RecordAccessRegistry;
+  /** The handle the host passed to `createAuthorization`, never inspected here. */
+  readonly connection?: TConnection;
   readonly grants: AuthorizationGrantService;
-  readonly resources: ResourceHandlerRegistry;
+  readonly resources: AuthorizationResources;
+  readonly resourceTypes: ResourceHandlerRegistry;
+  readonly resourceGroups: AuthorizationResourceGroups;
+  readonly getResource: ResourceHandlerRegistry['getResource'];
   readonly constraints: AccessConstraintRegistry;
+  readonly subjects: AuthorizationSubjectRegistry;
+  readonly routes: AuthorizationRouteRegistry;
   use(middleware: AuthorizationMiddleware): void;
 }
 
 export interface AuthorizationPlugin<
   TAuthorizationApi extends object = object,
+  TConnection = unknown,
 > {
   id: string;
   dependencies?: readonly string[];
@@ -23,7 +39,11 @@ export interface AuthorizationPlugin<
   requiresGrants?: boolean;
   /** Adds an authorization-owned API to the created Authorization instance. */
   authorizationApi?: TAuthorizationApi;
-  setup?(authz: AuthorizationPluginSetup): void;
+  /** Convert already-resolved composed checks into executable plugin conditions. */
+  composeConditions?(
+    checks: readonly ResourceAuthorizationCheck[],
+  ): Partial<Omit<ResourceAuthorizationConditions, 'type' | 'checks'>>;
+  setup?(authz: AuthorizationPluginSetup<TConnection>): void;
 }
 
 export type AuthorizationPluginApi<TPlugin> =

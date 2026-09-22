@@ -34,6 +34,7 @@ import {
 } from '../../permissions.js';
 
 const TAB_LABELS: Readonly<Record<DetailTab, string>> = {
+  logs: 'detail.tabs.logs',
   deployments: 'detail.tabs.deployments',
   releases: 'detail.tabs.releases',
   development: 'detail.tabs.development',
@@ -46,6 +47,7 @@ export function Detail({
   app,
   tab,
   busy,
+  refreshing = null,
   capabilities,
   onBack,
   onTab,
@@ -57,6 +59,7 @@ export function Detail({
   readonly app: AppDetail;
   readonly tab: DetailTab;
   readonly busy: boolean;
+  readonly refreshing?: 'auto' | 'manual' | null;
   readonly capabilities: HubCapabilities;
   readonly onBack: () => void;
   readonly onTab: (tab: DetailTab) => void;
@@ -163,13 +166,20 @@ export function Detail({
               </div>
               <div className='flex max-w-full flex-wrap justify-end gap-2.5'>
                 {capabilities.refresh ? (
-                  <Button disabled={busy} onClick={onRefresh} variant='outline'>
+                  <Button
+                    disabled={busy || refreshing !== null}
+                    aria-busy={refreshing !== null}
+                    onClick={onRefresh}
+                    variant='outline'
+                  >
                     <RefreshCw
-                      className={`size-4 ${busy ? 'animate-spin' : ''}`}
+                      className={`size-4 ${refreshing !== null ? 'animate-spin motion-reduce:animate-none' : ''}`}
                     />{' '}
-                    {t('detail.refreshStatus', {
-                      defaultValue: 'Refresh status',
-                    })}
+                    {refreshing === 'manual'
+                      ? t('detail.refreshing', { defaultValue: 'Refreshing…' })
+                      : t('detail.refreshStatus', {
+                          defaultValue: 'Refresh status',
+                        })}
                   </Button>
                 ) : null}
                 {visitUrl && visitAllowed ? (

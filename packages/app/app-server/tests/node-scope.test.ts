@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -83,17 +83,41 @@ describe('standalone app scope', () => {
       serverDir: '/srv/apps/main/server',
       databaseDir: '/srv/apps/main/database',
       clientDir: '/srv/apps/main/dist/client',
-      storageDir: '/srv/apps/main/storage',
+      deploymentRootDir: '/srv/apps/main',
     });
     expect(
-      resolveStandaloneAppPaths({ rootDir: '/srv/apps/main/dist' }),
+      resolveStandaloneAppPaths({
+        rootDir: '/srv/apps/main/dist',
+        deploymentRootDir: '..',
+      }),
     ).toEqual({
       rootDir: '/srv/apps/main/dist',
       serverDir: '/srv/apps/main/dist/server',
       databaseDir: '/srv/apps/main/dist/database',
       clientDir: '/srv/apps/main/dist/client',
-      storageDir: '/srv/apps/main/dist/storage',
+      deploymentRootDir: '/srv/apps/main',
     });
+  });
+
+  it('loads environment from the deployment root with explicit path inputs', () => {
+    const deploymentRoot = createTempDirectory();
+    writeFileSync(
+      path.join(deploymentRoot, '.env'),
+      'PATH_TEST_FROM_DEPLOYMENT=yes\n',
+    );
+    mkdirSync(path.join(deploymentRoot, 'build'));
+    writeFileSync(
+      path.join(deploymentRoot, 'build/.env'),
+      'PATH_TEST_FROM_DEPLOYMENT=packaged\nPATH_TEST_PACKAGED=yes\n',
+    );
+    const scope = createStandaloneScope({
+      paths: {
+        rootDir: path.join(deploymentRoot, 'build'),
+        deploymentRootDir: '..',
+      },
+    });
+    expect(scope.env.PATH_TEST_FROM_DEPLOYMENT).toBe('yes');
+    expect(scope.env.PATH_TEST_PACKAGED).toBe('yes');
   });
 
   it('prefers explicit application paths over the root directory convention', () => {

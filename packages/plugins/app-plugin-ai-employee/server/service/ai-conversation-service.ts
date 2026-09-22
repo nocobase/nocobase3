@@ -6,20 +6,28 @@
  * `AIEmployee` streaming / invocation flows.
  */
 
-import type { AppAuthorization } from '@nocobase/app-plugin-authorization/server';
+import type { AppAuthorizationService } from '@nocobase/app-plugin-authorization/server';
 import type { ConversationExecution } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
 import type { AIEmployeeEntity, AIMessageInput } from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
-import type { DatabaseConnection } from '@nocobase/db';
-import type { DatabaseManager } from '@nocobase/db';
+import type {
+  DatabaseConnection,
+  DatabaseManager,
+  FilterConditionNode,
+  FilterShorthand,
+} from '@nocobase/db';
 import type { Caching } from '@nocobase/caching';
 import type { FileStorage } from '@nocobase/ai-employee';
 import type { AIFileEntity } from '../repository/ai-file.js';
 import type { AIFileMetadataCreateContext } from '../repository/file-storage/ai-file-metadata-repository.js';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
-import type { Actor, Translate } from '../types.js';
+import type {
+  Actor,
+  ConversationManagementActor,
+  Translate,
+} from '../types.js';
 import { ResourceActionError, sendStreamError } from '../types.js';
 import type {
   AIMessageEntity,
@@ -42,6 +50,20 @@ import type { KnowledgeBaseManager } from '../manager/knowledge-base-manager.js'
 import type { LLMStreamCachedManager } from '../manager/llm-stream-cached-manager.js';
 import type { SubAgentsDispatcher } from '../manager/sub-agents/dispatcher.js';
 import type { WorkContextHandler } from '../manager/work-context/index.js';
+import type {
+  AIConversationEntity,
+  AIConversationListFilter,
+} from '../repository/ai-conversation.js';
+import type { GetAIConversationMessagesResult } from '../manager/ai-conversations-manager.js';
+import { requireConversationReadAccess } from './utils.js';
+
+export interface AllConversationsResult {
+  rows: AIConversationEntity[];
+  count: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
 
 async function getAIEmployee(
   repositories: RepositoryFactory,
@@ -213,7 +235,7 @@ export interface AIConversationServiceOptions {
   readonly ai: AIManager;
   readonly database: DatabaseConnection;
   readonly databaseManager: DatabaseManager;
-  readonly authorization?: AppAuthorization;
+  readonly authorization?: AppAuthorizationService;
   readonly logger: Logger;
   readonly caching: Caching;
   readonly fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
@@ -234,7 +256,7 @@ export class AIConversationService {
   private readonly ai: AIManager;
   private readonly database: DatabaseConnection;
   private readonly databaseManager: DatabaseManager;
-  private readonly authorization?: AppAuthorization;
+  private readonly authorization?: AppAuthorizationService;
   private readonly logger: Logger;
   private readonly snowflake: IdGeneratorService;
   private readonly repositories: RepositoryFactory;
@@ -356,27 +378,134 @@ export class AIConversationService {
     actorId: string | number;
     scope?: string;
     options?: {
-      filter?: Record<string, unknown>;
+      filter?: FilterShorthand<AIConversationEntity>;
       scope?: string;
       keyword?: string;
     };
   }) {
     loginInCheck(actorId);
     const userId = String(actorId);
-    const filter = isRecord(options.filter) ? options.filter : {};
-    if (options.keyword) filter.title = { $includes: options.keyword };
-    const where: Record<string, any> = {
+    const filter = options.filter ?? {};
+    const where: FilterShorthand<AIConversationEntity> = {
       ...filter,
       userId,
       from: filter.from ?? 'main-agent',
       category: 'chat',
       ...(typeof scope === 'string' && scope ? { scope } : {}),
     };
-    const rows = await this.repositories.aiConversations.find({
-      filter: where,
-      sort: ['-updatedAt'],
-    });
-    return rows;
+    const conditions = Object.entries(where)
+      .filter(
+        ([field, value]) =>
+          value !== undefined && !(options.keyword && field === 'title'),
+      )
+      .map(([field, value]): FilterConditionNode => ({
+        kind: 'condition',
+        path: [field],
+        operator: '$eq',
+        value,
+      }));
+    return await this.database
+      .repository<AIConversationEntity>('aiConversations')
+      .findMany({
+        filter: (f) =>
+          f.and([
+            ...conditions,
+            ...(options.keyword
+              ? [f.string('title').includes(options.keyword)]
+              : []),
+          ]),
+        sort: (s) => s.field('updatedAt').desc(),
+      });
+  }
+
+  async listAll({
+    actor,
+    keyword,
+    page = 1,
+    pageSize = 20,
+  }: {
+    actor: ConversationManagementActor;
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AllConversationsResult> {
+    requireConversationReadAccess(actor);
+    const offset = (page - 1) * pageSize;
+    if (
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      page > 10000 ||
+      !Number.isSafeInteger(pageSize) ||
+      pageSize < 1 ||
+      pageSize > 100 ||
+      !Number.isSafeInteger(offset)
+    ) {
+      throw new ResourceActionError(400, 'Invalid pagination');
+    }
+    if (
+      keyword !== undefined &&
+      (typeof keyword !== 'string' || keyword.length > 200)
+    ) {
+      throw new ResourceActionError(400, 'Invalid keyword');
+    }
+    const filter: AIConversationListFilter = {
+      ...(keyword?.trim() ? { title: { $includes: keyword.trim() } } : {}),
+    };
+    const [rows, count] = await Promise.all([
+      this.repositories.aiConversations.find({
+        filter,
+        sort: ['-updatedAt', '-sessionId'],
+        limit: pageSize,
+        offset,
+      }),
+      this.repositories.aiConversations.count({ filter }),
+    ]);
+    return {
+      rows,
+      count,
+      page,
+      pageSize,
+      totalPages: Math.ceil(count / pageSize),
+    };
+  }
+
+  async getAllMessages({
+    actor,
+    sessionId,
+    cursor,
+  }: {
+    actor: ConversationManagementActor;
+    sessionId: string;
+    cursor?: string;
+  }): Promise<GetAIConversationMessagesResult> {
+    requireConversationReadAccess(actor);
+    if (
+      typeof sessionId !== 'string' ||
+      !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(
+        sessionId,
+      )
+    ) {
+      throw new ResourceActionError(400, 'Invalid sessionId');
+    }
+    if (
+      cursor !== undefined &&
+      (typeof cursor !== 'string' ||
+        !/^\d{1,19}$/.test(cursor) ||
+        BigInt(cursor) > 9223372036854775807n)
+    ) {
+      throw new ResourceActionError(400, 'Invalid cursor');
+    }
+    try {
+      return await this.aiConversationsManager.getAllMessages({
+        sessionId,
+        cursor,
+      });
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'invalid sessionId') {
+        throw new ResourceActionError(404, 'Conversation not found');
+      }
+      throw error;
+    }
   }
 
   async unreadCount({ actorId }: { actorId: string | number }) {

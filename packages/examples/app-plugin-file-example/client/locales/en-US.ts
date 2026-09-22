@@ -1,4 +1,10 @@
 const messages: Record<string, string> = {
+  officePreviewTitle: 'Local Office preview',
+  officePreviewDescription:
+    'Upload a DOCX, XLSX or PPTX file below, then select Preview. Documents render in your browser without Office Online or an external preview service. Order attachments use the same preview.',
+  officePreviewLimits:
+    'No internet connection is required when the app and file service are reachable on your local network. This is not a fully disconnected mode. Legacy DOC, XLS, PPT and OpenDocument files remain download-only in this example.',
+
   title: 'Attachments',
   description:
     'Upload one or several files and preview them in place. Records are stored through the File Repository API.',
@@ -27,7 +33,7 @@ const messages: Record<string, string> = {
     'This file type has no inline preview. Download it instead.',
   previewFailed: 'The file could not be loaded.',
 
-  navGroup: 'File Repository',
+  navGroup: 'File example',
   navAttachments: 'Attachments',
   navProfiles: 'Profile avatars',
   navOrders: 'Order attachments',

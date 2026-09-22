@@ -1,22 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAuthorization,
-  databaseAuthorization,
   defaultAccess,
   permissionSets,
   restrictionRules,
   sharingRules,
-  recordsIOwn,
-  type AuthorizationGrantService,
+  type AccessConstraint,
   type AuthorizationPlugin,
+  type DefaultAccessOptions,
   type DefaultAccessRule,
   type DefaultAccessStore,
+  type PermissionSetsOptions,
+  type RestrictionRulesOptions,
+  type SharingRulesOptions,
   type SharingRule,
   type SharingRuleStore,
   type RestrictionRule,
   type RestrictionRuleStore,
-  defineRecordAccessPolicy,
-  pages,
 } from '../src/index.js';
 import { MockPermissionSetStore } from './mock-permission-set-store.js';
 
@@ -38,6 +38,10 @@ class MockDefaultAccessStore implements DefaultAccessStore {
   delete(): Promise<void> {
     return Promise.resolve();
   }
+  /** In-memory stores have no transactions. */
+  withTransaction(): DefaultAccessStore {
+    return this;
+  }
 }
 
 class MockSharingRuleStore implements SharingRuleStore {
@@ -56,6 +60,10 @@ class MockSharingRuleStore implements SharingRuleStore {
   }
   list(): Promise<readonly SharingRule[]> {
     return Promise.resolve(this.rules);
+  }
+  /** In-memory stores have no transactions. */
+  withTransaction(): SharingRuleStore {
+    return this;
   }
 }
 
@@ -76,174 +84,99 @@ class MockRestrictionRuleStore implements RestrictionRuleStore {
   list(): Promise<readonly RestrictionRule[]> {
     return Promise.resolve(this.rules);
   }
+  /** In-memory stores have no transactions. */
+  withTransaction(): RestrictionRuleStore {
+    return this;
+  }
 }
 
-const orders = {
-  name: 'orders',
-  actions: ['read', 'create', 'update', 'delete'],
-  fields: ['id', 'ownerId', 'amount', 'regionId'],
-  attributes: { owner: 'ownerId' },
-};
+const resource = {
+  type: 'database.collection',
+  id: 'main.orders',
+} as const;
 
-function setup() {
-  const store = new MockPermissionSetStore({
+/**
+ * A stand-in for a resource plugin: the library hands constraints out as
+ * opaque scope references and never interprets them, so what a handler
+ * received is the whole of what these tests can observe.
+ */
+function recordingResource(): {
+  plugin: AuthorizationPlugin;
+  received: AccessConstraint[][];
+} {
+  const received: AccessConstraint[][] = [];
+  return {
+    received,
+    plugin: {
+      id: 'recording',
+      requiresGrants: true,
+      setup(authz): void {
+        authz.resourceTypes.add({
+          resourceType: 'database.collection',
+          async authorize(request, context) {
+            const grants = await context.grants.resolve(request);
+            if (grants.length === 0) {
+              return { effect: 'deny', reasons: [] };
+            }
+            const constraints = await context.constraints.resolve(request);
+            received.push([...constraints]);
+            return {
+              effect: 'conditional',
+              conditions: { type: 'recording' },
+              reasons: [],
+            };
+          },
+          authorizeUnrestricted() {
+            return Promise.resolve({ effect: 'permit', reasons: [] });
+          },
+        });
+      },
+    },
+  };
+}
+
+function readerStore(): MockPermissionSetStore {
+  return new MockPermissionSetStore({
     permissionSets: [
       {
         key: 'order-reader',
-        grants: [
-          {
-            resource: { type: 'database.collection', id: 'main.orders' },
-            actions: [
-              {
-                action: 'read',
-                policy: {
-                  type: 'database',
-                  fields: { output: ['id', 'amount', 'ownerId'] },
-                  recordAccess: ['recordsIOwn'],
-                },
-              },
-            ],
-          },
-        ],
+        grants: [{ resource, actions: [{ action: 'read', policy: {} }] }],
       },
     ],
     assignments: [
       {
-        id: 'assignment-1',
+        id: 'reader-assignment',
         subject: { type: 'user', id: 'alice' },
         permissionSet: 'order-reader',
       },
     ],
   });
-  const database = databaseAuthorization();
-  const authorization = createAuthorization({
-    plugins: [permissionSets({ store }), database],
-  });
-  authorization.database.collections.add(orders);
-  return { authorization };
 }
 
-const request = () => ({
-  principal: { type: 'user', id: 'alice' },
-  resource: { type: 'database.collection', id: 'main.orders' },
-  action: 'read',
-  params: {
-    fields: { output: ['id', 'amount'] },
-  },
-});
-
 describe('official authorization plugins', () => {
-  it('registers database collections through the authorization API', () => {
-    const { authorization } = setup();
-    expect(authorization.database.collections.get('orders')?.name).toBe(
-      'main.orders',
+  // TypeScript requires the store; this is what a JavaScript caller sees.
+  it('requires a store', () => {
+    expect(() => permissionSets({} as PermissionSetsOptions)).toThrow(
+      /Permission Sets requires a store/,
     );
-    expect(authorization.database.collections.list()).toHaveLength(1);
-    expect(() => authorization.database.collections.add(orders)).toThrow(
-      /already registered/,
+    expect(() => defaultAccess({} as DefaultAccessOptions)).toThrow(
+      /Default Access requires a store/,
     );
-  });
-
-  it('requires a connection when Permission Sets uses its default store', () => {
-    expect(() => createAuthorization({ plugins: [permissionSets()] })).toThrow(
-      /requires createAuthorization\(\{ connection \}\)/,
+    expect(() => sharingRules({} as SharingRulesOptions)).toThrow(
+      /Sharing Rules requires a store/,
     );
-  });
-
-  it('keeps typed permission and database APIs on their own plugins', async () => {
-    const { authorization } = setup();
-    expect(authorization.describe()).toMatchObject({
-      plugins: ['permission-sets', 'database'],
-      resourceTypes: ['authorization.settings', 'database.collection'],
-      grantProvider: 'permission-sets',
-    });
-    expect(
-      authorization.database.grant('orders', {
-        read: {
-          fields: { output: ['id'] },
-          recordAccess: ['recordsIOwn'],
-        },
-      }),
-    ).toMatchObject({
-      resource: { type: 'database.collection', id: 'main.orders' },
-    });
-    expect(recordsIOwn()).toMatchObject({ key: 'recordsIOwn' });
-    const policy = defineRecordAccessPolicy({
-      key: 'regionalRecords',
-      resolve: ({ principal }) => ({
-        $and: [
-          {
-            regionId: {
-              $eq: String(principal.attributes?.regionId),
-            },
-          },
-        ],
-      }),
-    });
-    authorization.database.recordAccess.add(policy);
-    expect(authorization.database.recordAccess.get('regionalRecords')).toBe(
-      policy,
+    expect(() => restrictionRules({} as RestrictionRulesOptions)).toThrow(
+      /Restriction Rules requires a store/,
     );
-    expect(authorization.database.recordAccess.list()).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ key: 'allRecords' }),
-        expect.objectContaining({ key: 'recordsIOwn' }),
-        expect.objectContaining({ key: 'recordsICreated' }),
-        policy,
-      ]),
-    );
-    expect(() => authorization.database.recordAccess.add(policy)).toThrow(
-      /already registered/,
-    );
-    await expect(
-      authorization.permissionSets.getEffective({
-        principal: { type: 'user', id: 'alice' },
-      }),
-    ).resolves.toHaveLength(1);
-  });
-
-  it('returns a conditional Filter AST for collection operations', async () => {
-    const { authorization } = setup();
-    await expect(authorization.authorize(request())).resolves.toMatchObject({
-      effect: 'conditional',
-      conditions: {
-        type: 'database',
-        collection: 'main.orders',
-        action: 'read',
-        filter: {
-          $and: [
-            {
-              ownerId: {
-                $eq: 'alice',
-              },
-            },
-          ],
-        },
-      },
-    });
-    await expect(authorization.can(request())).resolves.toBe(false);
-    await expect(
-      authorization.authorize({
-        ...request(),
-        params: {
-          fields: { output: ['missing'] },
-        },
-      }),
-    ).resolves.toMatchObject({
-      effect: 'deny',
-      reasons: [{ code: 'UNKNOWN_DATABASE_FIELD' }],
-    });
   });
 
   it('manages permission sets and assignments through the plugin API', async () => {
-    const { authorization } = setup();
+    const authorization = createAuthorization({
+      plugins: [permissionSets({ store: readerStore() })],
+    });
     await authorization.permissionSets.create({
       key: 'order-creator',
-      grants: [
-        authorization.database.grant('orders', {
-          create: { fields: { input: ['amount'], output: ['id', 'amount'] } },
-        }),
-      ],
+      grants: [{ resource, actions: [{ action: 'create' }] }],
     });
     const assignment = await authorization.permissionSets.assign({
       subject: { type: 'user', id: 'bob' },
@@ -284,8 +217,9 @@ describe('official authorization plugins', () => {
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store, onAssignmentsChanged: changed })],
+      plugins: [permissionSets({ store })],
     });
+    authorization.onGrantsChanged(changed);
 
     await authorization.permissionSets.replaceSubjectAssignments({
       subject: { type: 'user', id: 'alice' },
@@ -330,8 +264,9 @@ describe('official authorization plugins', () => {
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store, onAssignmentsChanged: changed })],
+      plugins: [permissionSets({ store })],
     });
+    authorization.onGrantsChanged(changed);
 
     await authorization.permissionSets.update('operators', {
       key: 'renamed-operators',
@@ -419,37 +354,44 @@ describe('official authorization plugins', () => {
     const store = new MockPermissionSetStore({
       permissionSets: [
         {
-          key: 'pages',
+          key: 'settings',
           grants: [
             {
-              resource: { type: 'page', id: '*' },
-              actions: [{ action: 'access' }],
+              resource: { type: 'test-resource', id: '*' },
+              actions: [{ action: 'read' }],
             },
           ],
         },
       ],
       assignments: [
         {
-          id: 'pages-alice',
+          id: 'settings-alice',
           subject: { type: 'user', id: 'alice' },
-          permissionSet: 'pages',
+          permissionSet: 'settings',
         },
       ],
     });
     const authorization = createAuthorization({
-      plugins: [permissionSets({ store }), pages()],
+      plugins: [permissionSets({ store })],
+    });
+    authorization.resourceTypes.add({
+      resourceType: 'test-resource',
+      async authorize(request, context) {
+        await context.grants.resolve(request);
+        return { effect: 'permit', reasons: [] };
+      },
     });
     const authz = authorization.for({
       principal: { type: 'user', id: 'alice' },
     });
 
     await authz.can({
-      resource: { type: 'page', id: 'home' },
-      action: 'access',
+      resource: { type: 'test-resource', id: 'first' },
+      action: 'read',
     });
     await authz.can({
-      resource: { type: 'page', id: 'settings' },
-      action: 'access',
+      resource: { type: 'test-resource', id: 'second' },
+      action: 'read',
     });
     await authz.permissions();
 
@@ -457,241 +399,16 @@ describe('official authorization plugins', () => {
     expect(store.getPermissionSetCalls).toBe(1);
   });
 
-  it('registers an application-defined Record Access policy', async () => {
-    const regionalRecords = defineRecordAccessPolicy<{ field: string }>({
-      key: 'regionalRecords',
-      resolve: ({ principal, params }) => ({
-        $and: [
-          {
-            [params.field]: {
-              $eq: String(principal.attributes?.regionId),
-            },
-          },
-        ],
-      }),
-    });
-    const store = new MockPermissionSetStore({
-      permissionSets: [
-        {
-          key: 'regional-reader',
-          grants: [
-            {
-              resource: { type: 'database.collection', id: 'main.orders' },
-              actions: [
-                {
-                  action: 'read',
-                  policy: {
-                    type: 'database',
-                    fields: { output: ['id', 'regionId'] },
-                    recordAccess: [
-                      {
-                        key: 'regionalRecords',
-                        params: { field: 'regionId' },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-      assignments: [
-        {
-          id: 'regional-assignment',
-          subject: { type: 'user', id: 'rita' },
-          permissionSet: 'regional-reader',
-        },
-      ],
-    });
-    const authorization = createAuthorization({
-      plugins: [permissionSets({ store }), databaseAuthorization()],
-    });
-    authorization.database.collections.add(orders);
-    authorization.database.recordAccess.add(regionalRecords);
-    const base = {
-      principal: {
-        type: 'user',
-        id: 'rita',
-        attributes: { regionId: 'north' },
-      },
-      resource: { type: 'database.collection', id: 'main.orders' },
-      action: 'read',
-    };
-    await expect(
-      authorization.authorize({
-        ...base,
-        params: {
-          fields: { output: ['id', 'regionId'] },
-        },
-      }),
-    ).resolves.toMatchObject({
-      effect: 'conditional',
-      conditions: {
-        type: 'database',
-        filter: {
-          $and: [{ regionId: { $eq: 'north' } }],
-        },
-      },
-    });
-  });
-
-  it('returns input field constraints for create actions', async () => {
-    const store = new MockPermissionSetStore({
-      permissionSets: [
-        {
-          key: 'order-creator',
-          grants: [
-            {
-              resource: { type: 'database.collection', id: 'main.orders' },
-              actions: [
-                {
-                  action: 'create',
-                  policy: {
-                    type: 'database',
-                    fields: {
-                      input: ['amount', 'ownerId'],
-                      output: ['id'],
-                    },
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-      assignments: [
-        {
-          id: 'order-creator-alice',
-          subject: { type: 'user', id: 'alice' },
-          permissionSet: 'order-creator',
-        },
-      ],
-    });
-    const authorization = createAuthorization({
-      plugins: [permissionSets({ store }), databaseAuthorization()],
-    });
-    authorization.database.collections.add(orders);
-
-    await expect(
-      authorization.authorize({
-        principal: { type: 'user', id: 'alice' },
-        resource: { type: 'database.collection', id: 'main.orders' },
-        action: 'create',
-        params: { fields: { input: ['amount'] } },
-      }),
-    ).resolves.toMatchObject({
-      effect: 'conditional',
-      conditions: {
-        type: 'database',
-        collection: 'main.orders',
-        action: 'create',
-        filter: { $and: [] },
-        fields: {
-          input: ['amount', 'ownerId'],
-          output: ['id'],
-        },
-      },
-    });
-  });
-
-  it('rejects invalid Record Access Filter AST', async () => {
-    const store = new MockPermissionSetStore({
-      permissionSets: [
-        {
-          key: 'invalid-filter-reader',
-          grants: [
-            {
-              resource: { type: 'database.collection', id: 'main.orders' },
-              actions: [
-                {
-                  action: 'read',
-                  policy: {
-                    type: 'database',
-                    fields: { output: ['id'] },
-                    recordAccess: ['invalidFilter'],
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-      assignments: [
-        {
-          id: 'invalid-filter-assignment',
-          subject: { type: 'user', id: 'alice' },
-          permissionSet: 'invalid-filter-reader',
-        },
-      ],
-    });
-    const authorization = createAuthorization({
-      plugins: [permissionSets({ store }), databaseAuthorization()],
-    });
-    authorization.database.collections.add(orders);
-    authorization.database.recordAccess.add({
-      key: 'invalidFilter',
-      resolve: () => ({ unknownField: { $eq: 'value' } }),
-    });
-
-    await expect(
-      authorization.authorize({
-        principal: { type: 'user', id: 'alice' },
-        resource: { type: 'database.collection', id: 'main.orders' },
-        action: 'read',
-        params: { fields: { output: ['id'] } },
-      }),
-    ).resolves.toMatchObject({
-      effect: 'deny',
-      reasons: [
-        {
-          code: 'DATABASE_AUTHORIZATION_FAILED',
-          message: 'Database Filter AST must use $and or $or as its root',
-        },
-      ],
-    });
-  });
-
-  it('applies generic sharing and restriction scopes to database records', async () => {
-    const store = new MockPermissionSetStore({
-      permissionSets: [
-        {
-          key: 'order-reader',
-          grants: [
-            {
-              resource: { type: 'database.collection', id: 'main.orders' },
-              actions: [
-                {
-                  action: 'read',
-                  policy: {
-                    type: 'database',
-                    fields: { output: ['id', 'ownerId'] },
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-      assignments: [
-        {
-          id: 'reader-assignment',
-          subject: { type: 'user', id: 'alice' },
-          permissionSet: 'order-reader',
-        },
-      ],
-    });
+  it('hands sharing and restriction scopes to the resource handler', async () => {
     const rules = new MockSharingRuleStore([
       {
         key: 'shared-order',
-        resource: { type: 'database.collection', id: 'main.orders' },
+        title: 'Shared orders',
+        resource,
         actions: [
           {
             action: 'read',
-            selection: {
-              type: 'records',
-              ids: ['order-1', 'order-2'],
-            },
+            selection: { type: 'records', ids: ['order-1', 'order-2'] },
           },
         ],
         subjects: [{ type: 'user', id: 'alice' }],
@@ -700,49 +417,56 @@ describe('official authorization plugins', () => {
     const restrictions = new MockRestrictionRuleStore([
       {
         key: 'owned-only',
-        resource: { type: 'database.collection', id: 'main.orders' },
+        title: { key: 'owned', ns: 'orders' },
+        resource,
         actions: [
           {
             action: 'read',
-            scope: {
-              type: 'database',
-              recordAccess: 'recordsIOwn',
-            },
+            scope: { type: 'database', recordAccess: 'recordsIOwn' },
           },
         ],
         subjects: [{ type: 'user', id: 'alice' }],
       },
     ]);
+    const handler = recordingResource();
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({ store }),
+        permissionSets({ store: readerStore() }),
         sharingRules({ store: rules }),
         restrictionRules({ store: restrictions }),
-        databaseAuthorization(),
+        handler.plugin,
       ],
     });
-    authorization.database.collections.add(orders);
+
     await expect(
       authorization.authorize({
         principal: { type: 'user', id: 'alice' },
-        resource: { type: 'database.collection', id: 'main.orders' },
+        resource,
         action: 'read',
-        params: {
-          fields: { output: ['id', 'ownerId'] },
-        },
       }),
-    ).resolves.toMatchObject({
-      effect: 'conditional',
-      conditions: {
-        type: 'database',
-        filter: {
-          $and: [
-            { $and: [{ id: { $in: ['order-1', 'order-2'] } }] },
-            { $and: [{ ownerId: { $eq: 'alice' } }] },
-          ],
+    ).resolves.toMatchObject({ effect: 'conditional' });
+    expect(handler.received).toEqual([
+      [
+        {
+          source: {
+            plugin: 'sharing-rules',
+            id: 'shared-order',
+            title: 'Shared orders',
+          },
+          effect: 'expand',
+          value: { type: 'ids', ids: ['order-1', 'order-2'] },
         },
-      },
-    });
+        {
+          source: {
+            plugin: 'restriction-rules',
+            id: 'owned-only',
+            title: { key: 'owned', ns: 'orders' },
+          },
+          effect: 'restrict',
+          value: { type: 'database', recordAccess: 'recordsIOwn' },
+        },
+      ],
+    ]);
   });
 
   it('resolves independent scopes for each configured action', async () => {
@@ -771,184 +495,44 @@ describe('official authorization plugins', () => {
     ).resolves.toMatchObject([{ value: { type: 'ids', ids: ['order-1'] } }]);
   });
 
-  it('allows generic default access to expand a database grant scope', async () => {
-    const store = new MockPermissionSetStore({
-      permissionSets: [
-        {
-          key: 'reader',
-          grants: [
-            {
-              resource: { type: 'database.collection', id: 'main.orders' },
-              actions: [
-                {
-                  action: 'read',
-                  policy: {
-                    type: 'database',
-                    fields: { output: ['id'] },
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-      assignments: [
-        {
-          id: 'reader',
-          subject: { type: 'user', id: 'alice' },
-          permissionSet: 'reader',
-        },
-      ],
-    });
+  it('hands an expanding default access scope to the resource handler', async () => {
     const defaults = new MockDefaultAccessStore([
-      {
-        resource: { type: 'database.collection', id: 'main.orders' },
-        actions: [{ action: 'read', scope: { type: 'all' } }],
-      },
+      { resource, actions: [{ action: 'read', scope: { type: 'all' } }] },
     ]);
+    const handler = recordingResource();
     const authorization = createAuthorization({
       plugins: [
-        permissionSets({ store }),
+        permissionSets({ store: readerStore() }),
         defaultAccess({ store: defaults }),
-        databaseAuthorization(),
+        handler.plugin,
       ],
     });
-    authorization.database.collections.add(orders);
+
     await expect(
       authorization.authorize({
         principal: { type: 'user', id: 'alice' },
-        resource: { type: 'database.collection', id: 'main.orders' },
+        resource,
         action: 'read',
-        params: {
-          fields: { output: ['id'] },
-        },
       }),
-    ).resolves.toMatchObject({
-      effect: 'conditional',
-      conditions: {
-        type: 'database',
-        filter: { $and: [] },
-      },
-    });
-  });
-
-  it('resolves a custom filter Record Access policy from grant params', async () => {
-    const store = new MockPermissionSetStore({
-      permissionSets: [
+    ).resolves.toMatchObject({ effect: 'conditional' });
+    expect(handler.received).toEqual([
+      [
         {
-          key: 'regional-reader',
-          grants: [
-            {
-              resource: { type: 'database.collection', id: 'main.orders' },
-              actions: [
-                {
-                  action: 'read',
-                  policy: {
-                    type: 'database',
-                    fields: { output: ['id', 'regionId'] },
-                    recordAccess: [
-                      {
-                        key: 'customFilter',
-                        params: {
-                          filter: {
-                            $and: [{ regionId: { $eq: 'east' } }],
-                          },
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-      assignments: [
-        {
-          id: 'regional-reader',
-          subject: { type: 'user', id: 'alice' },
-          permissionSet: 'regional-reader',
-        },
-      ],
-    });
-    const authorization = createAuthorization({
-      plugins: [permissionSets({ store }), databaseAuthorization()],
-    });
-    authorization.database.collections.add(orders);
-    await expect(
-      authorization.authorize({
-        principal: { type: 'user', id: 'alice' },
-        resource: { type: 'database.collection', id: 'main.orders' },
-        action: 'read',
-        params: { fields: { output: ['id', 'regionId'] } },
-      }),
-    ).resolves.toMatchObject({
-      effect: 'conditional',
-      conditions: {
-        filter: { $and: [{ regionId: { $eq: 'east' } }] },
-      },
-    });
-  });
-
-  it('uses a Role grant provider without installing Permission Sets', async () => {
-    const roleGrants: AuthorizationGrantService = {
-      async resolve(input) {
-        if (
-          input.principal.id !== 'role-user' ||
-          input.resource.type !== 'database.collection' ||
-          input.resource.id !== 'main.orders' ||
-          input.action !== 'read'
-        ) {
-          return [];
-        }
-        return [
-          {
-            source: { plugin: 'roles', id: 'order-reader' },
-            resource: input.resource,
-            action: input.action,
-            policy: {
-              type: 'database',
-              fields: { output: ['id', 'amount'] },
-              recordAccess: ['allRecords'],
-            },
+          source: {
+            plugin: 'default-access',
+            id: 'database.collection:main.orders',
           },
-        ];
-      },
-      async resolveAll() {
-        return [];
-      },
-    };
-    const roles: AuthorizationPlugin = {
-      id: 'roles',
-      grants: roleGrants,
-    };
-    const authorization = createAuthorization({
-      plugins: [databaseAuthorization(), roles],
-    });
-    authorization.database.collections.add(orders);
-    expect(authorization.describe().plugins).toEqual(['roles', 'database']);
-    await expect(
-      authorization.authorize({
-        principal: { type: 'user', id: 'role-user' },
-        resource: { type: 'database.collection', id: 'main.orders' },
-        action: 'read',
-        params: {
-          fields: { output: ['id', 'amount'] },
+          effect: 'expand',
+          value: { type: 'all' },
         },
-      }),
-    ).resolves.toMatchObject({
-      effect: 'conditional',
-      conditions: {
-        type: 'database',
-        filter: { $and: [] },
-      },
-    });
+      ],
+    ]);
   });
 
   it('requires exactly one Grant Provider', () => {
     expect(() =>
       createAuthorization({
-        plugins: [databaseAuthorization()],
+        plugins: [recordingResource().plugin],
       }),
     ).toThrow(/requires a Grant Provider/);
     const roles: AuthorizationPlugin = {
@@ -1000,7 +584,7 @@ describe('official authorization plugins', () => {
       requiresGrants: true,
       setup(authz): void {
         const grants = authz.grants;
-        authz.resources.add({
+        authz.resourceTypes.add({
           resourceType: 'file.object',
           async authorize(request) {
             const resolved = await grants.resolve(request);
@@ -1025,4 +609,58 @@ describe('official authorization plugins', () => {
     ).resolves.toBe(true);
     expect(resolvedPolicyType).toBe('file');
   });
+});
+
+it('loads built-in rule lists once per inspection scope and reloads them in the next scope', async () => {
+  const defaults = new MockDefaultAccessStore([]);
+  const sharing = new MockSharingRuleStore([]);
+  const restrictions = new MockRestrictionRuleStore([]);
+  const reads = [
+    vi.spyOn(defaults, 'list'),
+    vi.spyOn(sharing, 'list'),
+    vi.spyOn(restrictions, 'list'),
+  ];
+  const authz = createAuthorization({
+    plugins: [
+      permissionSets({ store: readerStore() }),
+      defaultAccess({ store: defaults }),
+      sharingRules({ store: sharing }),
+      restrictionRules({ store: restrictions }),
+      {
+        id: 'batch-test',
+        setup(authorization) {
+          authorization.resourceTypes.add({
+            resourceType: 'batch',
+            async authorize(request, context) {
+              await context.constraints.resolve(request);
+              return { effect: 'permit', reasons: [] };
+            },
+          });
+        },
+      },
+    ],
+  });
+  const identity = { principal: { type: 'user', id: 'alice' } };
+  const scope = authz.for(identity);
+  await Promise.all(
+    Array.from({ length: 20 }, (_, i) =>
+      scope.explain({
+        resource: { type: 'batch', id: String(i) },
+        action: 'read',
+      }),
+    ),
+  );
+  reads.forEach((read) => expect(read).toHaveBeenCalledTimes(1));
+  await authz
+    .for(identity)
+    .explain({ resource: { type: 'batch', id: '0' }, action: 'read' });
+  reads.forEach((read) => expect(read).toHaveBeenCalledTimes(2));
+});
+
+it('does not install application settings or management routes', () => {
+  const authorization = createAuthorization({
+    plugins: [permissionSets({ store: new MockPermissionSetStore() })],
+  });
+  expect(authorization.routes.list()).toEqual([]);
+  expect(authorization.resourceTypes.get('settings')).toBeUndefined();
 });

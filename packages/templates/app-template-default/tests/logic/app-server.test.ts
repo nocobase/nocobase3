@@ -30,7 +30,7 @@ import {
   SessionProvider,
   sessionHttpMiddleware,
 } from '@nocobase/app-server/session';
-import { createConfigPaths } from '@nocobase/app-server/config';
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   type AppIdentityConfig,
   type AppConfigAccessor,
@@ -1223,7 +1223,7 @@ function createTestApp(options: CreateTestAppOptions = {}): TestApp {
     },
   };
   const config = createTestConfig(configValues);
-  const paths = createConfigPaths({ rootDir: '/test/app-template-default' });
+  const paths = createAppPaths({ rootDir: '/test/app-template-default' });
   const database =
     options.database === false
       ? undefined

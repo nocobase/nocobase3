@@ -4,7 +4,7 @@ import {
 } from '@nocobase/app-plugin-authentication';
 import {
   authorizationToken,
-  type AppAuthorization,
+  type Authorization,
 } from '@nocobase/app-plugin-authorization';
 import type { AppPluginApplication } from '@nocobase/app-server/plugins';
 import { ServiceContainer } from '@nocobase/service-provider';
@@ -88,7 +88,7 @@ async function createRouter(options: {
       context.set('authz', { can });
       await next();
     },
-  } as unknown as AppAuthorization);
+  } as unknown as Authorization);
   container.instance(schedulerServiceToken, {
     list: async () => [
       {

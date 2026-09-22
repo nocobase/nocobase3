@@ -111,7 +111,7 @@ export class ScheduleStore {
     finalize: boolean = false,
   ): Promise<void> {
     const plan = await this.database.transaction(async (connection) => {
-      await this.lockManifestOwners(connection, manifest, finalize);
+      await this.lockManifestOwners(connection);
       const seen = new Set<string>();
       const materializations: ScheduleMaterialization[] = [];
       for (const entry of manifest) {
@@ -473,31 +473,15 @@ export class ScheduleStore {
 
   private async lockManifestOwners(
     connection: DatabaseConnection,
-    _manifest: readonly ScheduleManifestEntry[],
-    _finalize: boolean,
   ): Promise<void> {
-    interface LockInsert {
-      onConflict(columns: readonly string[]): LockInsert;
-      ignore(): Promise<unknown>;
-    }
-    interface LockQuery {
-      where(values: Record<string, unknown>): LockQuery;
-      forUpdate(): LockQuery;
-      select(column: string): Promise<unknown>;
-      insert(values: Record<string, unknown>): LockInsert;
-    }
-    const client = await connection.client<{
-      (table: string): LockQuery;
-    }>();
     const now = this.now();
-    await client('schedule_sync_locks')
-      .insert({ app_name: this.appName, created_at: now, updated_at: now })
-      .onConflict(['app_name'])
-      .ignore();
-    await client('schedule_sync_locks')
-      .where({ app_name: this.appName })
-      .forUpdate()
-      .select('app_name');
+    // Repository upserts lock existing rows and recover concurrent inserts in a
+    // savepoint across dialects. The lock is held by the reconciliation transaction.
+    await connection.repository('scheduleSyncLocks').upsertOne({
+      filter: { appName: this.appName },
+      create: { appName: this.appName, createdAt: now, updatedAt: now },
+      update: { updatedAt: now },
+    });
   }
 }
 

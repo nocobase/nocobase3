@@ -39,6 +39,8 @@ const events = await db.collections('analytics').get('events');
 
 返回值是一份深拷贝。修改它不会影响缓存，也不会写回数据库：改结构用 Builder，改补充信息用 Metadata Service。
 
+Collection reads require the logical name. If an input resolves to a table owned by a different logical Collection, the read fails with `COLLECTION_NAME_CONFLICT` and identifies the expected name instead of returning fields without their metadata. Explicit logical names containing underscores remain valid; tables without metadata can still be read by their inferred logical names.
+
 ### 三个读取入口
 
 同一次解析的三种深度，输入都是逻辑名称：

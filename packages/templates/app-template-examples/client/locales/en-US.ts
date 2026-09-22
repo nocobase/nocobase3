@@ -1,6 +1,12 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  notifications: { unreadLabel: 'Notifications, {{count}} unread' },
+  overrides: {
+    '@nocobase/app-plugin-notification-in-app': {
+      inbox: { title: 'Notifications' },
+    },
+  },
   noticeLoading: 'Loading notice…',
   noticeLoadError: 'Unable to load the plugin notice.',
   'auth.welcome': 'Welcome back',
@@ -65,8 +71,6 @@ const enUS = {
   'navigation.brandApps': 'NocoBase applications',
   'auth.passwordMismatch': "Passwords don't match.",
   'status.deniedDescription': 'You do not have permission to access {{label}}.',
-  'status.settingFailedDescription':
-    'Setting {{label}} from {{packageName}} could not be loaded.',
   'status.routeFailedDescription':
     'Route {{label}} from {{packageName}} could not be loaded.',
   shell: {
@@ -87,6 +91,7 @@ const enUS = {
       'No enabled plugin contributes a settings page you have access to.',
   },
   dev: {
+    componentExamples: 'Component examples',
     title: 'Dev tools',
     emptyTitle: 'No dev tools available',
     emptyDescription:
@@ -209,6 +214,11 @@ const enUS = {
     },
   },
   examples: {
+    notifications: {
+      title: 'Notifications',
+      description:
+        'View your in-app notifications, filter unread messages, and manage their read state.',
+    },
     routeOverlays: {
       title: 'Route dialogs and drawers',
       description:
@@ -252,6 +262,11 @@ const enUS = {
       description:
         'Explore orders, line items and products in a connected business example.',
     },
+    authorization: {
+      title: 'Authorization',
+      description:
+        'Configure sales feature permissions and data scopes with default access, sharing and restriction rules.',
+    },
     files: {
       title: 'File management',
       description:
@@ -282,8 +297,7 @@ const enUS = {
     filter: 'Filter by status',
     search: 'Search titles…',
     loading: 'Loading articles…',
-    loadError:
-      'Unable to load articles. Check your connection and article permissions.',
+    loadError: 'Unable to load articles. Check your connection and try again.',
     retry: 'Try again',
     empty: 'No matching articles',
     emptyHint: 'Try another search or create your first article.',
@@ -309,7 +323,7 @@ const enUS = {
     light: 'Light',
     dark: 'Dark',
     system: 'System',
-    themes: { default: 'Default', compact: 'Compact' },
+    themes: { default: 'Spacious', compact: 'Compact' },
   },
   app: {
     title: 'NocoBase',
@@ -366,6 +380,7 @@ const enUS = {
     signingOut: 'Signing out…',
   },
   navigation: {
+    notifications: 'Notifications',
     numbers: 'Numeric types',
     externalCrm: 'External CRM',
     routeOverlays: 'Route dialogs and drawers',

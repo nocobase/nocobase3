@@ -29,6 +29,136 @@ function createTestDatabase(config: DatabaseConfig<SqliteConnectionConfig>) {
 }
 
 describe('DatabaseManager', () => {
+  it('keeps core manager construction synchronous and requires explicitly registered drivers', () => {
+    const db = createDatabaseManager({
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    expect(db).not.toBeInstanceOf(Promise);
+    expect(() => db.connection()).toThrow(
+      'Database dialect "sqlite" is not registered.',
+    );
+  });
+
+  it('refreshes a warmed naming index when a transaction creates an underscored collection', async () => {
+    const db = createTestDatabase({
+      metadataStore: new InMemoryCollectionMetadataStore(),
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    try {
+      await db.collections().list();
+      await db.transaction(async (connection) => {
+        await connection.collections.list();
+        await connection.builder.createCollection(
+          'invoice_files',
+          (collection) => {
+            collection.uuid('id').primary().notNull();
+            collection.datetime('createdAt').notNull();
+          },
+        );
+        await expect(
+          connection.collections.get('invoice_files'),
+        ).resolves.toMatchObject({ name: 'invoice_files' });
+      });
+      await expect(
+        db.collections().get('invoice_files'),
+      ).resolves.toMatchObject({ name: 'invoice_files' });
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it.each(['', 'app_'])(
+    'resolves Query relative table names with prefix %s while keeping Collection reads strict',
+    async (tablePrefix) => {
+      const db = createTestDatabase({
+        metadataStore: new InMemoryCollectionMetadataStore(),
+        connections: {
+          main: {
+            dialect: 'sqlite',
+            filename: ':memory:',
+            naming: { tablePrefix },
+          },
+        },
+      });
+      try {
+        await db
+          .builder()
+          .createCollection('scheduleDefinitions', (collection) => {
+            collection.string('id', { primaryKey: true });
+            collection.json('targetConfig');
+            collection.boolean('enabled');
+            collection.datetime('createdAt');
+          });
+        await db
+          .query()
+          .insertInto('schedule_definitions')
+          .values({
+            id: 'one',
+            targetConfig: { kind: 'test' },
+            enabled: true,
+            createdAt: new Date('2026-01-01T00:00:00Z'),
+          })
+          .execute();
+        await expect(
+          db
+            .query()
+            .selectFrom('schedule_definitions as schedules')
+            .selectAll()
+            .execute(),
+        ).resolves.toMatchObject([
+          { id: 'one', targetConfig: { kind: 'test' } },
+        ]);
+        await db
+          .query()
+          .updateTable('schedule_definitions')
+          .set({ targetConfig: { kind: 'updated' } })
+          .where('id', '=', 'one')
+          .execute();
+        await expect(
+          db.query().selectFrom('scheduleDefinitions').selectAll().execute(),
+        ).resolves.toMatchObject([{ targetConfig: { kind: 'updated' } }]);
+        await expect(
+          db.collections().get('schedule_definitions'),
+        ).rejects.toThrow('scheduleDefinitions');
+      } finally {
+        await db.destroy();
+      }
+    },
+  );
+
+  it('rejects physical aliases instead of dropping logical field metadata', async () => {
+    const db = createTestDatabase({
+      metadataStore: new InMemoryCollectionMetadataStore(),
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    try {
+      await db.builder().createCollection('customerOrders', (collection) => {
+        collection.increments('id');
+        collection.datetime('orderedAt');
+        collection.uuid('externalId');
+      });
+      for (const method of ['get', 'getResolution', 'getPhysical'] as const) {
+        await expect(
+          db.collections()[method]('customer_orders'),
+        ).rejects.toThrow('logical Collection "customerOrders"');
+      }
+      const collection = await db.collections().get('customerOrders');
+      expect(collection?.fields).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'orderedAt', type: 'datetime' }),
+          expect.objectContaining({ name: 'externalId', type: 'uuid' }),
+        ]),
+      );
+      await expect(
+        db.connection().schemaInspector.getPhysicalCollection({
+          tableName: 'customer_orders',
+        }),
+      ).resolves.toMatchObject({ tableName: 'customer_orders' });
+    } finally {
+      await db.destroy();
+    }
+  });
+
   it('mirrors connection collections through db.collections()', async () => {
     const db = createTestDatabase({
       default: 'main',
@@ -58,18 +188,6 @@ describe('DatabaseManager', () => {
     } finally {
       await db.destroy();
     }
-  });
-
-  it('requires an explicitly registered dialect package', () => {
-    const db = createDatabaseManager({
-      connections: {
-        main: { dialect: 'sqlite', filename: ':memory:' },
-      },
-    });
-
-    expect(() => db.connection()).toThrow(
-      'Database dialect "sqlite" is not registered. Install and register the corresponding @nocobase/db-sqlite package.',
-    );
   });
 
   it('returns lazy builder, query, and connection handles for the default connection', async () => {
@@ -990,7 +1108,7 @@ describe('DatabaseManager', () => {
       },
     });
     expect(() => invalidDialect.connection()).toThrow(
-      'Database dialect "custom" is not registered. Install and register the corresponding @nocobase/db-custom package.',
+      'Database dialect "custom" is not registered. Install and explicitly register the corresponding driver in database.drivers.',
     );
 
     const unsupportedUrl = createTestDatabase({

@@ -1,5 +1,9 @@
+import { ServiceContainer } from '@nocobase/service-provider';
+import { SnowflakeIdGenerator } from '@nocobase/snowflake';
+import { idGeneratorToken } from '../src/id-generator/token.js';
 import type { ConnectionConfigFromDrivers } from '@nocobase/db';
 import {
+  appendFileSync,
   mkdirSync,
   mkdtempSync,
   renameSync,
@@ -18,13 +22,14 @@ import mysql from '@nocobase/db-mysql';
 import sqlite from '@nocobase/db-sqlite';
 import oracle from '@nocobase/db-oracle';
 import mssql from '@nocobase/db-mssql';
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import { AppConfig, createAppPaths } from '../src/config/index.js';
 import {
   createAppDatabaseManager,
   type AppDatabaseConfig as GenericAppDatabaseConfig,
   type AppDatabaseTaskContributions,
   planAppDatabaseTasks,
   runAppDatabaseTasks,
+  type AppDatabaseTasksResult,
 } from '../src/database/index.js';
 import { executeAppDatabasePlan } from '../src/database/tasks.js';
 import { createAppDatabaseTaskContributions } from '../src/plugins/resolve.js';
@@ -45,7 +50,7 @@ function fixture() {
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'connections-'));
   roots.push(root);
-  const paths = createConfigPaths({ rootDir: root });
+  const paths = createAppPaths({ rootDir: root });
   const config: AppDatabaseConfig = {
     drivers,
     default: 'main',
@@ -108,6 +113,64 @@ async function inspect(
 }
 
 describe('connection-bound application database tasks', () => {
+  it('injects application config into manual migration and seed execution', async () => {
+    const { config, paths, contributions } = fixture();
+    const runtimeConfig = new AppConfig();
+    await runtimeConfig.loadAll();
+    runtimeConfig.mergeDefaults({
+      initialAdmin: { username: 'configured-admin' },
+    });
+    const container = new ServiceContainer();
+    container.instance(
+      idGeneratorToken,
+      new SnowflakeIdGenerator({ workerId: 0 }),
+    );
+    for (const kind of ['migrations', 'seeds'] as const) {
+      const directory = paths.database(`main/${kind}`);
+      mkdirSync(directory, { recursive: true });
+      const define = kind === 'migrations' ? 'defineMigration' : 'defineSeed';
+      const callback = kind === 'migrations' ? 'up' : 'run';
+      writeFileSync(
+        path.join(directory, '001_config.ts'),
+        `
+        import { ${define}, databaseManagerToken } from '@nocobase/db';
+        import { idGeneratorToken } from '@nocobase/app-server/id-generator';
+        export default ${define}({ name: '001_config', ${kind === 'migrations' ? 'irreversible: true,' : ''} async ${callback}({ config, container }) {
+          if (!container.resolve(idGeneratorToken).generateString()) throw new Error('missing IDs');
+          if (container.has(databaseManagerToken)) throw new Error('unrestricted container');
+          if (config.get('initialAdmin.username') !== 'configured-admin') throw new Error('config not injected');
+        } });
+      `,
+      );
+      const result = await runAppDatabaseTasks(config, {
+        kind,
+        paths,
+        contributions,
+        runtimeConfig,
+        container,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.results[0].executed).toEqual(['001_config']);
+    }
+  });
+
+  it('prepares official drivers for standalone migration tasks', async () => {
+    const { config, paths, contributions } = fixture();
+    migration(paths.database('main/migrations'), '001_auto_driver', 'autoRows');
+    const result = await runAppDatabaseTasks(
+      { ...config, drivers: undefined },
+      {
+        paths,
+        contributions,
+        kind: 'migrations',
+      },
+    );
+    expect(result.ok).toBe(true);
+    await inspect(config, 'main', async (client) => {
+      expect(await client.schema.hasTable('auto_rows')).toBe(true);
+    });
+  });
+
   it('isolates migrations, seeds and histories and runs plugins only on the default connection', async () => {
     const { config, paths, root } = fixture();
     migration(paths.database('main/migrations'), '001_main', 'mainRows');
@@ -170,6 +233,150 @@ describe('connection-bound application database tasks', () => {
       all: true,
     });
     expect(seeds.results.map((r) => r.executed)).toEqual([[], []]);
+  });
+
+  it('plans migrations and seeds together, and reseeds after a fresh rebuild', async () => {
+    const { config, paths, contributions } = fixture();
+    migration(paths.database('main/migrations'), '001_main', 'mainRows');
+    seed(paths.database('main/seeds'), 'mainRows');
+    const both = ['migrations', 'seeds'] as const;
+
+    const applied = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: both,
+    });
+    expect(applied.results.map((r) => [r.kind, r.executed])).toEqual([
+      ['migrations', ['001_main']],
+      ['seeds', ['002_seed']],
+    ]);
+    await inspect(config, 'main', async (client) => {
+      expect(await client('main_rows').select('value')).toEqual([
+        { value: 'initial' },
+      ]);
+    });
+
+    // Nothing is pending on a second run.
+    const again = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: both,
+    });
+    expect(again.results.flatMap((r) => r.executed ?? [])).toEqual([]);
+
+    // A reset drops the managed schema, including both history tables, then
+    // runs migrations and seeds again from empty.
+    await inspect(config, 'main', async (client) => {
+      await client('main_rows').update({ value: 'edited' });
+    });
+    const reset = await runAppDatabaseTasks(config, {
+      paths,
+      contributions,
+      kind: both,
+      fresh: true,
+    });
+    expect(reset.results.map((r) => [r.kind, r.executed])).toEqual([
+      ['migrations', ['001_main']],
+      ['seeds', ['002_seed']],
+    ]);
+    await inspect(config, 'main', async (client) => {
+      expect(await client('main_rows').select('value')).toEqual([
+        { value: 'initial' },
+      ]);
+    });
+  });
+
+  it('refuses a fresh run that would seed a connection it never rebuilds', async () => {
+    const { config, paths, contributions } = fixture();
+    seed(paths.database('main/seeds'), 'mainRows');
+    await expect(
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: 'seeds',
+        fresh: true,
+      }),
+    ).rejects.toThrow('A fresh run must include migrations.');
+  });
+
+  it('resolves onChecksumMismatch from connection and legacy configuration', async () => {
+    const { config, paths, contributions } = fixture();
+    const directory = paths.database('main/migrations');
+    migration(directory, '001_main', 'mainRows');
+    seed(paths.database('main/seeds'), 'mainRows');
+    const run = (
+      kind: 'migrations' | 'seeds',
+      override?: AppDatabaseConfig,
+    ): Promise<AppDatabaseTasksResult> =>
+      runAppDatabaseTasks(override ?? config, { paths, contributions, kind });
+    await run('migrations');
+    await run('seeds');
+    for (const file of [
+      'main/migrations/001_main.ts',
+      'main/seeds/002_seed.ts',
+    ])
+      appendFileSync(paths.database(file), '\n// changed after execution\n');
+
+    // Default policy: the drift is reported and the run continues.
+    for (const kind of ['migrations', 'seeds'] as const) {
+      const result = await run(kind);
+      expect(result.ok).toBe(true);
+      expect(result.results[0].warnings).toMatchObject([
+        {
+          packageName: 'test-app',
+          name: kind === 'migrations' ? '001_main' : '002_seed',
+        },
+      ]);
+    }
+
+    // Configured on the connection.
+    for (const kind of ['migrations', 'seeds'] as const) {
+      await expect(
+        run(kind, {
+          ...config,
+          connections: {
+            ...config.connections,
+            main: {
+              ...config.connections.main,
+              [kind]: { onChecksumMismatch: 'error' },
+            },
+          },
+        }),
+      ).rejects.toThrow('checksum changed');
+    }
+
+    // Configured through the legacy top-level field, which applies to the
+    // default connection.
+    await expect(
+      run('migrations', {
+        ...config,
+        migrations: { onChecksumMismatch: 'error' },
+      }),
+    ).rejects.toThrow('checksum changed');
+
+    // Repair clears it for both kinds, and the strict policy then passes.
+    for (const kind of ['migrations', 'seeds'] as const) {
+      const repaired = await runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind,
+        operation: 'repair',
+      });
+      expect(repaired.results[0].repaired).toHaveLength(1);
+      expect(repaired.results[0].dryRun).toBe(false);
+      await expect(
+        run(kind, {
+          ...config,
+          connections: {
+            ...config.connections,
+            main: {
+              ...config.connections.main,
+              [kind]: { onChecksumMismatch: 'error' },
+            },
+          },
+        }),
+      ).resolves.toMatchObject({ ok: true });
+    }
   });
 
   it('ignores task sources that reach the database configuration', async () => {
@@ -539,7 +746,7 @@ export default defineMigration({ name: '001_main', async up({ builder }) {
     const source = paths.database('analytics/migrations');
     migration(source, '001_compiled', 'compiledRows');
     seed(paths.database('analytics/seeds'), 'compiledRows');
-    const compiledPaths = createConfigPaths({
+    const compiledPaths = createAppPaths({
       rootDir: root,
       databaseDir: path.join(root, 'dist/database'),
     });

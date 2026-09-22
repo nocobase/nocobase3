@@ -1,41 +1,59 @@
 import path from 'node:path';
 
-import type { ConfigPaths } from './types.js';
-
-export interface CreateConfigPathsOptions {
-  rootDir: string;
-  serverDir?: string;
-  databaseDir?: string;
-  configDir?: string;
-  storageDir?: string;
+export interface AppPathOptions {
+  readonly rootDir: string;
+  readonly deploymentRootDir?: string;
+  readonly serverDir?: string;
+  readonly databaseDir?: string;
+  readonly clientDir?: string;
+  readonly configDir?: string;
+  readonly storageDir?: string;
 }
 
-export function createConfigPaths(
-  options: CreateConfigPathsOptions,
-): ConfigPaths {
+export interface AppPaths {
+  readonly rootDir: string;
+  readonly deploymentRootDir: string;
+  readonly serverDir: string;
+  readonly databaseDir: string;
+  readonly clientDir: string;
+  readonly configDir: string;
+  readonly storageDir: string;
+  root(relativePath?: string): string;
+  server(relativePath?: string): string;
+  database(relativePath?: string): string;
+  client(relativePath?: string): string;
+  config(relativePath?: string): string;
+  storage(relativePath?: string): string;
+}
+
+/** Resolve directory inputs once; all application consumers share this object. */
+export function createAppPaths(options: AppPathOptions): AppPaths {
   const rootDir = path.resolve(options.rootDir);
-  const serverDir = path.resolve(
-    options.serverDir ?? path.join(rootDir, 'server'),
+  const deploymentRootDir = path.resolve(
+    rootDir,
+    options.deploymentRootDir ?? '.',
   );
-  const databaseDir = path.resolve(
-    options.databaseDir ?? path.join(rootDir, 'database'),
-  );
-  const configDir = path.resolve(
-    options.configDir ?? path.join(serverDir, 'config'),
-  );
+  const serverDir = path.resolve(rootDir, options.serverDir ?? 'server');
+  const databaseDir = path.resolve(rootDir, options.databaseDir ?? 'database');
+  const clientDir = path.resolve(rootDir, options.clientDir ?? 'client');
+  const configDir = path.resolve(serverDir, options.configDir ?? 'config');
   const storageDir = path.resolve(
-    options.storageDir ?? path.join(rootDir, 'storage'),
+    deploymentRootDir,
+    options.storageDir ?? 'storage',
   );
-
-  return {
-    root: (pathInside = '') => resolveInside(rootDir, pathInside),
-    server: (pathInside = '') => resolveInside(serverDir, pathInside),
-    database: (pathInside = '') => resolveInside(databaseDir, pathInside),
-    config: (pathInside = '') => resolveInside(configDir, pathInside),
-    storage: (pathInside = '') => resolveInside(storageDir, pathInside),
-  };
-}
-
-function resolveInside(rootDir: string, pathInside: string): string {
-  return path.resolve(rootDir, pathInside);
+  return Object.freeze({
+    rootDir,
+    deploymentRootDir,
+    serverDir,
+    databaseDir,
+    clientDir,
+    configDir,
+    storageDir,
+    root: (relativePath = '') => path.resolve(rootDir, relativePath),
+    server: (relativePath = '') => path.resolve(serverDir, relativePath),
+    database: (relativePath = '') => path.resolve(databaseDir, relativePath),
+    client: (relativePath = '') => path.resolve(clientDir, relativePath),
+    config: (relativePath = '') => path.resolve(configDir, relativePath),
+    storage: (relativePath = '') => path.resolve(storageDir, relativePath),
+  });
 }

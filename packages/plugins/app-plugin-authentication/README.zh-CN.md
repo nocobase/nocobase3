@@ -38,6 +38,21 @@ UI registry 物化到模板中，安装后属于应用，可以直接修改。
 客户端 options，两端均从对应入口导入 `AuthConfig`。插件列表和回调写在 TS 中，部署
 密钥写在 `config.yml` 或 `AUTH_SECRET` 中。
 
+### 初始管理员
+
+在首次运行 Seed 前，通过应用的 `config.yml` 设置 `users.initialAdmin`：
+
+```yaml
+users:
+  initialAdmin:
+    username: my_admin
+    password: your-initial-password
+```
+
+不配置整个 `initialAdmin` 节点时，保留默认账号 `nocobase/admin123`；显式配置时必须提供非空密码，省略用户名则使用 `nocobase`。用户名支持 3–30 个字母、数字、下划线或点，存储时转为小写；邮箱保持 `admin@nocobase.com`。密码经哈希后写入数据库，配置值不传给 Better Auth 的运行时 options。
+
+配置只在用户表为空时生效。已有安装、重复执行 Seed 或之后修改配置，都不会重置账号或密码。root 授权 Seed 使用相同配置中的用户名定位管理员，Hub 后续的管理员初始化也使用该身份。
+
 ## 常用命令
 
 ```bash

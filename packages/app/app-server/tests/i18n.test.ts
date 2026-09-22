@@ -10,7 +10,7 @@ import {
   Application,
   type ApplicationOptions,
 } from '../src/application/index.js';
-import { AppConfig, createConfigPaths } from '../src/config/index.js';
+import { AppConfig, createAppPaths } from '../src/config/index.js';
 import {
   type AppI18nConfig,
   i18nToken,
@@ -248,5 +248,5 @@ async function createTestApplicationOptions(
     i18n: { defaultLocale: 'en-US' },
   });
 
-  return { config, paths: createConfigPaths({ rootDir: '/test/app' }) };
+  return { config, paths: createAppPaths({ rootDir: '/test/app' }) };
 }

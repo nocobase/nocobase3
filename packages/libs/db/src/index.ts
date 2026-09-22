@@ -3,7 +3,10 @@ export {
   CollectionMetadataStoreRequiredError,
   createDatabaseManager,
 } from './database/manager.js';
+export { upsertPhysicalRow } from './database/upsert-physical-row.js';
+export type { UpsertPhysicalRowOptions } from './database/upsert-physical-row.js';
 export { databaseManagerToken } from './database/token.js';
+export { resolveDatabaseDriver } from './database/resolve-driver.js';
 export { defineDatabase } from './database/config.js';
 export { SchemaManagementNotAllowedError } from './database/schema-management.js';
 export type {
@@ -98,11 +101,17 @@ export { loadMigrations, validateMigrations } from './migration/loader.js';
 export { createMigrator } from './migration/migrator.js';
 export type { Migrator } from './migration/migrator.js';
 export type {
+  ChecksumMismatch,
+  ChecksumMismatchPolicy,
+} from './migration/checksum-history.js';
+export type {
   CreateMigratorOptions,
   DatabaseMigratorOptions,
   MigrationContext,
   MigrationHistoryRecord,
   MigrationDefinition,
+  MigrationRepairOptions,
+  MigrationRepairResult,
   MigrationRollbackResult,
   MigrationRunResult,
   MigrationSource,
@@ -118,6 +127,8 @@ export type {
   DatabaseSeederOptions,
   SeedContext,
   SeedDefinition,
+  SeedRepairOptions,
+  SeedRepairResult,
   SeedRunResult,
   SeedSource,
   SeedTransactionMode,
@@ -407,3 +418,5 @@ export {
   type UpsertWritePolicyBuilder,
   type RelationWriteOperation,
 } from './repository/write-policy.js';
+
+export type { DatabaseTaskConfig } from './task-config.js';

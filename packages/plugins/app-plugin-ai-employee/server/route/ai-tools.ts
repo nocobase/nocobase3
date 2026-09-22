@@ -2,8 +2,28 @@ import type { ServiceFactory } from '../factory/service-factory.js';
 import type { Hono } from 'hono';
 import type { AIToolResourceInput } from './contracts.js';
 import { requiredString } from './utils.js';
+import { validationError } from '../types.js';
 
 export function createAIToolsRouter(app: Hono, services: ServiceFactory): void {
+  app.get('/aiTools:listAll', async (context) => {
+    const result = await services.toolService.listAll({
+      actor: context.get('toolsManagementActor'),
+    });
+    return context.json(result);
+  });
+
+  app.get('/aiTools:getDetails', async (context) => {
+    const names = context.req.queries('name');
+    if (!names || names.length !== 1) {
+      throw validationError('A single name is required');
+    }
+    const result = await services.toolService.getDetails({
+      actor: context.get('toolsManagementActor'),
+      name: names[0],
+    });
+    return context.json(result);
+  });
+
   app.get('/aiTools:list', async (context) => {
     const result = await services.toolService.list({});
     return context.json(result as never);

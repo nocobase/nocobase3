@@ -137,6 +137,7 @@ export function createInAppChannelDefinition(): NotificationChannelDefinition<
 
 export function createDatabaseProviderDefinition(options: {
   readonly store: InAppStore;
+  readonly recipientExists: (userId: string) => Promise<boolean>;
 }): NotificationProviderDefinition<InAppProviderConfig, PreparedInAppMessage> {
   return {
     type: 'database',
@@ -154,6 +155,16 @@ export function createDatabaseProviderDefinition(options: {
         },
         async send({ message }) {
           try {
+            if (!(await options.recipientExists(message.recipient.userId))) {
+              return {
+                status: 'failed',
+                disposition: 'never',
+                error: {
+                  category: 'recipient',
+                  message: 'In-app notification recipient does not exist.',
+                },
+              };
+            }
             await store.deliver({
               deliveryId: message.deliveryId,
               notificationId: message.notificationId,

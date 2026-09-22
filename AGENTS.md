@@ -2,6 +2,10 @@
 
 This is the NocoBase 3 source repository. Ignore globally installed NocoBase 2 Skills here; follow the nearest `AGENTS.md` and repository-local NocoBase 3 Skill instead.
 
+## Root README Policy
+
+Do not add content to the repository root `README.md`. Record repository development rules in `AGENTS.md` and put detailed usage documentation in dedicated documentation files. Do not refill an empty root README as part of documenting a change.
+
 ## Markdown Paragraph Formatting
 
 Write each prose paragraph in Markdown source on a single physical line, including in README, AGENTS.md, Skills, and other documentation. Do not insert manual line breaks to fit a column width or put each sentence on its own line; let the editor or renderer wrap the text visually. Separate paragraphs with blank lines. Preserve line breaks required by Markdown structure, such as headings, list items, tables, blockquotes, and code blocks.
@@ -39,6 +43,14 @@ Every published package lives under `packages/`, grouped into six directories by
 `packages/README.md` describes each directory in more detail and is the place to look when a new package does not obviously belong to one of them. `pnpm plugin:create` scaffolds into `packages/plugins/`.
 
 `docs/` is the seventh workspace member and the one exception to the table above. It is the documentation site rather than something an application depends on, so it sits at the repository root rather than under `packages/`, and it is the only workspace package that sets `private: true`. That placement is what keeps it out of `pnpm pack:check`, which discovers publishable packages by descending into `packages/<category>/` and would otherwise reject it for being private. See the "Documentation Site" section below before changing anything under it.
+
+## Repository Skills
+
+This repository's own Skills are committed under `.agents/skills/`, the agent-neutral location every agent can be pointed at. Claude Code does not read that path — it discovers Skills only under `~/.claude/skills/` and `<project>/.claude/skills/` — so `pnpm install` runs `scripts/link-claude-skills.mjs`, which mirrors each committed Skill into `.claude/skills/` as a relative symbolic link. `.claude/skills/` is therefore generated and ignored; `.agents/skills/` remains the single committed source, and editing a Skill through either path edits the same file.
+
+This is the same arrangement `nocobase skills sync` sets up inside a generated application, with the ownership reversed: an application's `.agents/skills/` is generated from its installed packages and ignored, while this repository writes its Skills by hand and commits them.
+
+The mirror never replaces a path that is not a symbolic link, so a Skill you keep only in `.claude/skills/` is reported and left alone rather than deleted. It also never fails the install: a warning is enough, because the Skills are still readable where they are committed. Adding or removing a Skill takes effect on the next `pnpm install`, or immediately with `node ./scripts/link-claude-skills.mjs`.
 
 ## Selecting and Using Shared Development Configuration
 
@@ -157,24 +169,11 @@ Before editing an existing migration, check its Git history and the status of th
 
 ## Database Integration Test Scheduling
 
-Run a dialect integration suite through the package that owns it:
-`pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no
-integration script of its own. It used to forward to each dialect, which made
-`pnpm --filter @nocobase/db test:integration` read as a full run when it only
-ran SQLite, and `test:integration:all` invite an eight-dialect serial run that
-CI performs on every pull request anyway. Run one suite at a time: never start
-two at once, and never leave one in the background. The runners isolate their
-Compose projects and host ports, so the hazard is not a collision but
-contention for one machine's CPU, memory, and Docker I/O, which pushes service
-health checks past their start period and reports a flaky startup failure
-instead of a result. CI parallelizes safely only because its matrix gives each
-dialect its own runner.
+Run a dialect integration suite through the package that owns it: `pnpm --filter @nocobase/db-<dialect> test:integration`. `@nocobase/db` has no integration script of its own. Run one suite at a time locally: never start two at once, and never leave one in the background. The runners isolate their Compose projects and host ports, so the hazard is not a collision but contention for one machine's CPU, memory, and Docker I/O, which pushes service health checks past their start period and reports a flaky startup failure instead of a result. CI parallelizes safely because each selected dialect gets its own job and runner.
 
-Which suites a given change actually requires, and the command forms that
-silently run nothing, are in the
-[`nocobase-db-integration-testing` Skill](.agents/skills/nocobase-db-integration-testing/SKILL.md).
-Every pull request already runs all eight dialects unconditionally, so run
-locally only the dialects the change puts at risk.
+On pull requests and pushes to `develop`, `scripts/select-db-integration-matrix.mjs` selects the Quality workflow's database matrix from changed paths. A dialect package change selects that dialect; changes to `db`, `db-testkit`, their shared dependencies, shared development configuration, or dependency/CI inputs select all eight. Unrelated changes skip the matrix. Selection covers entire package directories, including tests and documentation; deletions and both sides of renames count. An unavailable comparison range runs all eight conservatively. Keep the selector's shared paths current when adding database dependencies or changing the test setup.
+
+Which suites to run locally, and the command forms that silently run nothing, are in the [`nocobase-db-integration-testing` Skill](.agents/skills/nocobase-db-integration-testing/SKILL.md). Run locally only the dialects the change puts at risk; CI covers the selected matrix.
 
 ## Native Dependencies in Generated Applications
 

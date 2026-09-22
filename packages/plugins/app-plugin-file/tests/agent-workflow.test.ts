@@ -65,6 +65,7 @@ it('builds a business attachment feature from the shipped Skill and materialized
       'lucide-react',
       'react-markdown',
       'remark-gfm',
+      '@silurus/ooxml',
       'hono',
       'tsx',
     ]) {

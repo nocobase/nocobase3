@@ -53,9 +53,7 @@ for (const template of templates) {
         await copyFile(
           path.join(
             repoRoot,
-            'packages/templates',
-            template,
-            'scripts/utils',
+            'packages/tools/app-tools/src/scripts/utils',
             script,
           ),
           path.join(scripts, script),
@@ -79,7 +77,7 @@ for (const template of templates) {
           '--node-version',
           '24',
         ],
-        { encoding: 'utf8' },
+        { encoding: 'utf8', cwd: directory },
       );
 
       assert.equal(result.status, 0, result.stderr || result.stdout);

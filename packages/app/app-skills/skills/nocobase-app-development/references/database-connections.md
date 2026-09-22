@@ -2,25 +2,29 @@
 
 Use this page to switch the application's database or add a connection. For schema changes read [migrations and seeds](migrations.md); for runtime queries read [database and data access](database-and-data.md).
 
+## Creating an application
+
+Use `pnpm create @nocobase/app <directory> --dialect <dialect> --json` for non-interactive creation. Supported dialects are `sqlite` (default), `postgres`, `mysql`, `mssql`, `oracle`, `dameng`, `kingbase`, and `oceanbase`. Creation writes the selected `database.connections.main` to `config.yml`, adds the required driver dependency, and runs `pnpm install` unless `--no-install` is supplied. Generated applications default to `verifyDepsBeforeRun: false` in `pnpm-workspace.yaml`; run `pnpm install` explicitly after changing dependencies or when creation used `--no-install`, before starting or building. Check the exit code and JSON result; if installation fails, retry `pnpm install` in the generated directory rather than recreating it. For non-SQLite databases, obtain the actual connection settings and edit `config.yml` directly, including the password; no database `.env` is needed. Prepare the target database before running the returned `nextCommands` (`pnpm dev` for apps; build/start for Hub). Do not treat successful scaffolding as verified database connectivity. Keep `config.yml` gitignored and do not expose its secrets in output.
+
 ## Configuration responsibilities
 
 Start by reading `server/config/database.ts` and the connection structure in `config.example.yml`. The template's default connection is `main` on SQLite. Preserve other connections and driver registrations when changing one connection.
 
 | Location                    | Responsibility                                                                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `server/config/database.ts` | Import drivers and declare typed defaults with `defineAppDatabaseConfig`.                                                             |
+| `server/config/database.ts` | Declare connection defaults with `defineAppDatabaseConfig`; optionally register explicit drivers.                                     |
 | `config.yml`                | Override connection settings for the environment, including credentials. This file is gitignored.                                     |
 | `config.example.yml`        | Document the supported connection structure and credential placeholders for future installations. Keep it aligned with code defaults. |
 
-The callback passed to `defineAppDatabaseConfig` receives the runtime context and runs during configuration resolution, not at module import. Imported drivers determine the accepted dialects and connection fields in TypeScript. YAML overrides are resolved at runtime; passing `pnpm typecheck` does not validate their contents or prove connectivity.
+The callback passed to `defineAppDatabaseConfig` receives the runtime context and runs during configuration resolution, not at module import. When supplied, explicit drivers determine the accepted dialects and connection fields in TypeScript. Without registrations, use a driver-owned connection type with `satisfies` when strict dialect-specific checking is needed. YAML overrides are resolved at runtime; passing `pnpm typecheck` does not validate their contents or prove connectivity.
 
 `config.yml` deep-merges into code defaults. Changing a dialect in code does not remove an old YAML override or fields belonging to the previous dialect. Update both layers when switching, and check any existing environment overrides using the Configuration section of `README.MD` in the application root.
 
-A dialect must be imported and registered in code before a connection can use it. YAML cannot install or register a driver. The registration key must match the driver's declared dialect: `{ postgres }` is valid; aliases such as `{ pg: postgres }` and mismatches such as `{ mysql: postgres }` fail at runtime.
+Official drivers are optional peers of `@nocobase/app-server`. Install the needed package in application `dependencies` and configure its dialect; no driver import or registration is required. The application runtime awaits `resolveDatabaseConfig()` after configuration and defaults are merged, before provider registration. It imports only configured dialects and does not open connections. The core manager stays synchronous and requires prepared or explicitly registered drivers. YAML cannot install packages. Explicit `drivers` and connection-level `databaseDriver` values retain precedence and conflict checking. Custom dialects require explicit registration; registration keys must match their driver's dialect.
 
 ### SQLite paths
 
-TypeScript connections require `filename`, normally `runtime.configPaths.storage('database.sqlite')`. YAML also accepts `database: database.sqlite`: the SQLite driver resolves it under the application's storage directory. Absolute paths remain absolute, and `:memory:` is preserved.
+TypeScript connections require `filename`, normally `runtime.paths.storage('database.sqlite')`. YAML also accepts `database: database.sqlite`: the SQLite driver resolves it under the application's storage directory. Absolute paths remain absolute, and `:memory:` is preserved.
 
 The YAML `database` alias takes precedence over `filename` during normalization. If changing `filename` appears to have no effect, check for an existing `database` override. Use `filename` in typed code; the YAML alias is not part of `SqliteConnectionConfig`.
 
@@ -32,16 +36,14 @@ Install the dialect package if it is not already a dependency:
 pnpm add @nocobase/db-postgres
 ```
 
-Server driver imports belong in `dependencies` so they reach the deployed server. The dialect package includes its underlying driver dependency.
+Installed driver packages belong in `dependencies` so they reach the deployed server. The dialect package includes its underlying driver dependency.
 
-For an application with only `main`, the complete `server/config/database.ts` becomes:
+Configure the target in `config.yml` as shown below. Changing `server/config/database.ts` is optional; when updating the source defaults for an application with only `main`, use:
 
 ```ts
-import postgres from '@nocobase/db-postgres';
 import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
 
 export default defineAppDatabaseConfig(() => ({
-  drivers: { postgres },
   default: 'main',
   connections: {
     main: {
@@ -53,7 +55,7 @@ export default defineAppDatabaseConfig(() => ({
 }));
 ```
 
-If other connections still use SQLite or another dialect, retain their imports, registrations and configuration. Remove `filename` from the connection being switched.
+Preserve other connections and any explicit custom driver registrations. Remove `filename` from the connection being switched.
 
 Update `config.yml` to match the new dialect and target:
 
@@ -77,22 +79,19 @@ Keep `default: 'main'` when changing where `main` connects. Changing `database.d
 
 ## Add managed or external connections
 
-Reuse an installed driver for additional connections of the same dialect. Install and register a new driver only when needed. Keep the existing default connection unless the task includes moving the system database.
+Reuse an installed driver for additional connections of the same dialect. Install a new official driver only when needed; explicit registration is optional. Keep the existing default connection unless the task includes moving the system database.
 
 This example keeps the default SQLite connection and adds two PostgreSQL connections:
 
 ```ts
-import sqlite from '@nocobase/db-sqlite';
-import postgres from '@nocobase/db-postgres';
 import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
 
 export default defineAppDatabaseConfig((runtime) => ({
-  drivers: { sqlite, postgres },
   default: 'main',
   connections: {
     main: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('database.sqlite'),
+      filename: runtime.paths.storage('database.sqlite'),
       schemaManagement: 'managed',
     },
     analytics: {
@@ -147,8 +146,8 @@ Run `pnpm typecheck` for the typed defaults, then verify the specific connection
 
 | Change                        | Runtime verification                                                                                                                                                                                                    |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default managed connection    | Run `pnpm migrate` when applying pending migrations is intended. It targets `database.default`.                                                                                                                         |
-| Additional managed connection | Run `pnpm migrate --connection analytics` when applying that connection's pending migrations is intended. A successful default-connection migration does not verify it.                                                 |
+| Default managed connection    | Run `pnpm db:apply` when applying pending migrations and seeds is intended. It targets `database.default`.                                                                                                              |
+| Additional managed connection | Run `pnpm db:apply --connection analytics` when applying that connection's pending tasks is intended. A successful default-connection run does not verify it.                                                           |
 | External connection           | Perform a bounded read from an existing collection using `database.query('externalCrm')` in an application service or test. Verify the expected target, naming and metadata. Do not run migrations or seeds against it. |
 
 Migration commands execute schema changes and write migration history; they are not read-only connection probes. Manual execution ignores `autoRun`. For connectivity-only verification of a managed connection, use a bounded read of an existing collection instead. Follow [database and data access](database-and-data.md) for the query API.
@@ -159,16 +158,13 @@ When adding a driver dependency, also run `pnpm build` to verify deployment pack
 
 ## Troubleshooting and type details
 
-### Missing driver registration
+### Missing driver package
 
-An unregistered `dialect: postgres` fails at startup with:
+An official dialect without its package reports the connection name and an installation command such as `pnpm add @nocobase/db-postgres`. Install it in `dependencies`; no source registration is needed. Unknown dialects require an explicit custom driver. Errors inside an installed package retain their original cause and must not be treated as missing-driver errors.
 
-```text
-Database dialect "postgres" is not registered.
-Install and register the corresponding @nocobase/db-postgres package.
-```
+### Driver loading outside the application runtime
 
-Confirm the package is installed in `dependencies`, imported and included in `drivers`. Editing YAML alone cannot supply the registration.
+Import `resolveDatabaseConfig` from `@nocobase/app-server/database` and await it before synchronous database preparation or manager creation. The built-in standalone migration/seed runner and collection artifact generator already do this. Configured dialects load during preparation, including connections not used immediately; unconfigured dialects are not imported. Ordinary `tsx` development and Vitest configuration work without synchronous ESM loader overrides.
 
 ### Installation and platform binaries
 
@@ -180,8 +176,10 @@ Native dependencies must match the deployment platform and supported Node ABI. T
 
 ### Inference and declaration generation
 
-No manual connection union, `typeof drivers` annotation, `satisfies` clause or factory type annotation is needed with `defineAppDatabaseConfig`. Selecting a dialect selects its fields: SQLite requires `filename`, PostgreSQL accepts `host` and `port`, and SQLite's `filename` on a PostgreSQL connection is a type error. Application metadata paths, migration settings and seed settings remain available on every connection.
+With explicit `drivers`, no manual connection union, `typeof drivers` annotation, `satisfies` clause or factory type annotation is needed with `defineAppDatabaseConfig`. Selecting a dialect selects its fields: SQLite requires `filename`, PostgreSQL accepts `host` and `port`, and SQLite's `filename` on a PostgreSQL connection is a type error. Application metadata paths, migration settings and seed settings remain available on every connection.
 
 With multiple connections, TypeScript may omit suggestions inside an empty `dialect: ''` value. Enter the dialect name to receive its field suggestions; unregistered dialects and invalid fields are still rejected by type checking.
 
 Application server builds retain declaration emission with `isolatedDeclarations: false`, allowing direct default exports of configuration factory calls. The helper returns the common `AppConfigFactory<AppDatabaseConfig>` contract; its result does not expose the inferred concrete driver types. Library packages retain isolated declaration checking. `AppDatabaseConfigFromDrivers` remains available for explicit annotations outside the helper.
+
+Application templates do not declare `@nocobase/db-sqlite` as a default dependency. `create-app` adds the official driver selected by `--dialect`, including SQLite when the flag is omitted. When running a template directly instead of using `create-app`, explicitly install the driver required by its database configuration before deployment.

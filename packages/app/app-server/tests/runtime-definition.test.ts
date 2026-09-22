@@ -1,4 +1,3 @@
-import { Application } from '../src/application/index.js';
 import type { AppRuntimeContext } from '../src/runtime/definition.js';
 import { defaultAppConfigs } from '../src/config/index.js';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -11,6 +10,7 @@ import { AppConfig, defineAppConfig } from '../src/config/index.js';
 import { resolveStandaloneAppRuntime } from '../src/node/index.js';
 import { defineServerPlugins } from '../src/plugins/index.js';
 import {
+  createAppFromRuntime,
   defineAppRuntime,
   resolveAppRuntime,
   type AppRuntimeDefinition,
@@ -26,6 +26,53 @@ afterEach(() => {
 });
 
 describe('application runtime definition', () => {
+  it('loads configured drivers after deployment overrides and before providers, preserving them on reload', async () => {
+    const runtime = await resolveAppRuntime(
+      {
+        ...createDefinition(),
+        createAppConfig: () =>
+          new AppConfig().load({
+            name: 'deployment',
+            read: async () => ({
+              kind: 'map',
+              value: {
+                database: {
+                  connections: {
+                    main: { dialect: 'sqlite', filename: ':memory:' },
+                  },
+                },
+              },
+            }),
+          }),
+        defaultConfigs: () => ({
+          database: { connections: { main: { dialect: 'mysql' } } },
+        }),
+      },
+      createScope(createAppRoot()),
+    );
+    expect(runtime.config.get('database.drivers.sqlite')).toBeTypeOf(
+      'function',
+    );
+    expect(runtime.config.get('database.drivers.mysql')).toBeUndefined();
+    await runtime.config.reload();
+    expect(runtime.config.get('database.drivers.sqlite')).toBeTypeOf(
+      'function',
+    );
+  });
+
+  it.each(['true', 'false', undefined])(
+    'maps strict startup from the runtime environment: %s',
+    async (value) => {
+      const runtime = await resolveAppRuntime(createDefinition(), {
+        ...createScope(createAppRoot()),
+        env: { NOCOBASE_STRICT_STARTUP: value },
+      });
+      expect(createAppFromRuntime(runtime).strictStartup).toBe(
+        value === 'true',
+      );
+    },
+  );
+
   it('assembles configuration before application creation and preserves it on reload', async () => {
     let deploymentLabel: string | undefined = 'deployment';
     const callback = vi.fn();
@@ -57,11 +104,8 @@ describe('application runtime definition', () => {
       createScope(createAppRoot()),
     );
     expect(runtime.app).toBeUndefined();
-    const app = new Application({
-      config: runtime.config,
-      paths: runtime.configPaths,
-    });
-    runtime.app = app;
+    const app = createAppFromRuntime(runtime);
+    expect(app.paths).toBe(runtime.paths);
     expect(app.config).toBe(runtime.config);
     expect(runtime.config.get('feature.label')).toBe('deployment');
     const action = runtime.config.get<() => void>('feature.callback')!;
@@ -82,8 +126,38 @@ describe('application runtime definition', () => {
     );
 
     expect(runtime.config.get('feature')).toEqual({ label: 'default' });
-    expect(runtime.configPaths.root()).toBe(rootDir);
+    expect(runtime.paths.root()).toBe(rootDir);
     expect(runtime.plugins.appPackageName).toBe('@example/customer-app');
+  });
+
+  it('shares final paths across config factories, runtime and Application', async () => {
+    const rootDir = createAppRoot();
+    const definition = createDefinition();
+    const observed: unknown[] = [];
+    const runtime = await resolveAppRuntime(
+      {
+        ...definition,
+        resolvePaths: ({ paths }) => ({ ...paths, storageDir: 'persistent' }),
+        createAppConfig: (context) => {
+          observed.push(context.paths);
+          return new AppConfig();
+        },
+        defaultConfigs: ({ paths }) => {
+          observed.push(paths);
+          return { file: paths.storage('files') };
+        },
+      },
+      createScope(rootDir),
+    );
+    const app = createAppFromRuntime(runtime);
+    expect(observed).toEqual([runtime.paths, runtime.paths]);
+    expect(observed[0]).toBe(app.paths);
+    expect(runtime.app).toBe(app);
+    expect(runtime.config.get('file')).toBe(
+      path.join(rootDir, 'persistent/files'),
+    );
+    expect(runtime.paths.storage()).toBe(runtime.paths.storageDir);
+    expect(runtime.paths.client()).toBe(runtime.paths.clientDir);
   });
 
   it('creates standalone scopes from core defaults', async () => {

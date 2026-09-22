@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { UserMenu } from '../../client/shell/user-menu.tsx';
+import { UserMenu } from '../../client/layouts/components/user-menu.tsx';
 
 const { signOut, refresh, errorToast } = vi.hoisted(() => ({
   signOut: vi.fn(),
@@ -24,7 +24,7 @@ vi.mock('@nocobase/app-plugin-authentication/client', () => ({
     refresh,
   }),
 }));
-vi.mock('../../client/shell/language-switcher.js', () => ({
+vi.mock('../../client/layouts/components/language-switcher.js', () => ({
   LanguageSwitcher: () => null,
 }));
 

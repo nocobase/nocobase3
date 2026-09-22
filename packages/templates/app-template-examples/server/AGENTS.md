@@ -8,7 +8,7 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 
 - `routes/` holds your HTTP endpoints and the array `routes/index.ts` exports.
 - `providers/` holds your services, their tokens, and their lifecycle.
-- Database defaults use `export default defineAppDatabaseConfig((runtime) => ({ drivers, connections }))`; the helper infers connection fields from the returned drivers. Application server declarations use full TypeScript inference (`isolatedDeclarations: false`); see `.agents/skills/nocobase-app-development/references/database-connections.md` from the application root.
+- Database defaults use `export default defineAppDatabaseConfig((runtime) => ({ connections }))`. The application runtime asynchronously imports only configured official drivers before provider registration; optional explicit `drivers` registrations override them and retain connection-field inference. Application server declarations use full TypeScript inference (`isolatedDeclarations: false`); see `.agents/skills/nocobase-app-development/references/database-connections.md` from the application root.
 - `config/` defines editable module defaults with `defineAppConfig`; `config/index.ts` collects them with `defaultAppConfigs`. `config.ts` loads deployment settings and `environment.ts` maps environment variables.
 - `runtime.ts` is the composition root, declaring config, plugins, service providers, and routes.
 - `app.ts` assembles the application and its core providers and middleware.
@@ -24,8 +24,14 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 - Route paths are application-local. Do not repeat `/api`, and never write the deployment base path such as `/main` — the mount adapter strips and restores it.
 - Keep HTTP in the route and domain logic in a service. A service does not read a Hono context, return status codes, or decide retry behavior.
 - Bind services to tokens in a provider's `register()`. Import a token from where it is defined; two `createServiceToken` calls with the same name are two different keys.
-- Declaration modules are imported by `server:inspect`. Nothing at module top level may connect to a database, start a worker, or execute a route factory. Long-lived resources belong in `start()` and are released in `shutdown()`.
+- Nothing at module top level may connect to a database, start a worker, or execute a route factory. Long-lived resources belong in `start()` and are released in `shutdown()`.
 - Read configuration through the typed config, not `process.env`, inside providers and routes.
 - Schema changes are migrations in `../database/main/migrations/`, spelled out explicitly and never importing an evolving definition.
 
-Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. `pnpm server:inspect --json` prints the composition snapshot. It reports wiring, not correctness — cover behavior with tests.
+Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. Cover behavior with tests.
+
+## Runtime paths and application creation
+
+`runtime.paths`, configuration context `paths`, and `app.paths` share one resolved `AppPaths` object. Use `paths.storage('...')`, `paths.database('...')`, or the corresponding directory fields. `AppPathOptions` is input only; application path policies run before the final object is created and configuration is loaded. Standalone entries declare the deployment root in `server/runtime.ts` so the server and CLI share persistent storage outside the compiled code directory.
+
+`server/app.ts` calls `createAppFromRuntime(runtime)` to transfer configuration, paths, mode and Host logging policy and bind `runtime.app`. Keep Provider, middleware and route registration explicit and ordered; `startApplicationInScope` owns startup and shutdown binding.

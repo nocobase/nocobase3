@@ -32,7 +32,10 @@ import {
   sanitizeAppHostChildNodeOptions,
 } from '../dist/supervisor.js';
 import { AppHostSupervisor } from '../dist/supervisor.js';
-import { AppHostSupervisor as SourceAppHostSupervisor } from '../src/supervisor.ts';
+import {
+  AppHostSupervisor as SourceAppHostSupervisor,
+  appHostChildForcesColor,
+} from '../src/supervisor.ts';
 
 describe('AppHostSupervisor', () => {
   it('uses explicit options instead of ambient supervisor configuration', async () => {
@@ -40,7 +43,7 @@ describe('AppHostSupervisor', () => {
     vi.stubEnv('APP_HOST_MODE', 'invalid');
     vi.stubEnv('APP_HOST_URL', 'http://ambient.invalid');
     vi.stubEnv('APP_HOST_DRIVER', 'tsx');
-    vi.stubEnv('APP_DEPLOYMENTS_DIR', '/ambient/deployments');
+    vi.stubEnv('APP_REVISIONS_DIR', '/ambient/deployments');
     try {
       const supervisor = AppHostSupervisor.initialize({ mode: 'managed' });
       try {
@@ -49,7 +52,7 @@ describe('AppHostSupervisor', () => {
           driver: 'node',
           status: 'stopped',
           targetUrl: undefined,
-          appDeploymentsDir: undefined,
+          appRevisionsDir: undefined,
         });
       } finally {
         await supervisor.shutdown();
@@ -73,6 +76,15 @@ describe('AppHostSupervisor', () => {
         '--preserve-symlinks --preserve-symlinks-main',
       ),
     ).toBe('');
+  });
+
+  it('tells a managed child about terminal color only when nothing else states an intent', () => {
+    expect(appHostChildForcesColor({}, true)).toBe(true);
+    expect(appHostChildForcesColor({}, false)).toBe(false);
+    expect(appHostChildForcesColor({}, undefined)).toBe(false);
+    expect(appHostChildForcesColor({ FORCE_COLOR: '1' }, false)).toBe(false);
+    expect(appHostChildForcesColor({ FORCE_COLOR: '0' }, true)).toBe(false);
+    expect(appHostChildForcesColor({ NO_COLOR: '1' }, true)).toBe(false);
   });
 
   it('stops port probing at the requested upper bound', async () => {
@@ -161,7 +173,7 @@ describe('AppHostSupervisor', () => {
     const supervisor = SourceAppHostSupervisor.initialize({
       mode: 'managed',
       driver: 'auto',
-      appDeploymentsDir: fixture.appDeploymentsDir,
+      appRevisionsDir: fixture.appRevisionsDir,
       appVolumesDir: fixture.appVolumesDir,
       configPath: fixture.configPath,
       startTimeoutMs: 10_000,
@@ -259,7 +271,7 @@ describe('AppHostSupervisor', () => {
     const supervisor = InstalledSupervisor.initialize({
       mode: 'managed',
       driver: 'auto',
-      appDeploymentsDir: fixture.appDeploymentsDir,
+      appRevisionsDir: fixture.appRevisionsDir,
       appVolumesDir: fixture.appVolumesDir,
       configPath: fixture.configPath,
       startTimeoutMs: 10_000,
@@ -289,7 +301,7 @@ describe('AppHostSupervisor', () => {
     const supervisor = AppHostSupervisor.initialize({
       mode: 'managed',
       driver: 'tsx',
-      appDeploymentsDir: fixture.appDeploymentsDir,
+      appRevisionsDir: fixture.appRevisionsDir,
       appVolumesDir: fixture.appVolumesDir,
       configPath: fixture.configPath,
       startTimeoutMs: 10_000,
@@ -362,7 +374,7 @@ describe('AppHostSupervisor', () => {
 });
 
 async function createManagedFixture(rootDir: string): Promise<{
-  appDeploymentsDir: string;
+  appRevisionsDir: string;
   appVolumesDir: string;
   configPath: string;
   artifact: ArtifactReference;
@@ -371,7 +383,7 @@ async function createManagedFixture(rootDir: string): Promise<{
     new URL('../fixtures/app-dist/demo', import.meta.url),
   );
   const artifactDir = path.join(rootDir, 'app-artifacts');
-  const appDeploymentsDir = path.join(rootDir, 'app-deployments');
+  const appRevisionsDir = path.join(rootDir, 'app-deployments');
   const appVolumesDir = path.join(rootDir, 'app-volumes');
   const key = 'releases/demo/0.0.1.tar.gz';
   const archivePath = path.join(artifactDir, key);
@@ -392,13 +404,13 @@ async function createManagedFixture(rootDir: string): Promise<{
           location: artifactDir,
           visibility: 'private',
         },
-        appDeploymentsDir,
+        appRevisionsDir,
         appVolumesDir,
       },
     }),
   );
   return {
-    appDeploymentsDir,
+    appRevisionsDir,
     appVolumesDir,
     configPath,
     artifact: { key, appId: 'demo', version: '0.0.1', checksum },

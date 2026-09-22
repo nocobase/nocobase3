@@ -23,6 +23,7 @@
 import { readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import ts from 'typescript';
 
 /** Groups whose packages ship code to a consumer. Templates are applications; they are the end of the line. */
 const CHECKED_GROUPS = ['plugins', 'examples', 'libs', 'app'];
@@ -123,68 +124,71 @@ function packageNameOf(specifier, builtinModules) {
 }
 
 /**
- * Value-import specifiers in a source file.
- *
- * Matching is line-oriented for the static forms. An `import`/`export ... from` clause may wrap across lines, but it
- * never contains a blank line or a statement terminator, so the clause pattern excludes both: without that bound a
- * lazy `[\s\S]*?` walks from an unrelated `export interface` all the way to the next `from '...'` several statements
- * later and reports whatever it lands on.
- *
- * Comments and strings are not parsed away, so a specifier mentioned in prose could in principle be picked up. That
- * direction is safe — it reports a dependency to declare rather than hiding one that is missing — but a template
- * literal is not, since its specifier is only known at runtime and cannot name a package to declare.
+ * Collect actual runtime module references, not import-like text inside prose.
+ * Parse using the source filename so TS assertions and TSX elements are distinct.
+ * Computed module names remain outside the scope of this static check.
  */
-export function collectRuntimeSpecifiers(source) {
+export function collectRuntimeSpecifiers(source, fileName = 'source.tsx') {
+  const file = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  if (file.parseDiagnostics.length > 0) {
+    throw new Error(
+      `Cannot scan ${fileName}: ${ts.flattenDiagnosticMessageText(file.parseDiagnostics[0].messageText, '\n')}`,
+    );
+  }
   const specifiers = new Set();
-
-  // The body of an import or export clause: no blank line, no `;`, no `{`/`}` beyond the named-bindings group.
-  const clause = String.raw`(?:[^;'"\n]|\n(?!\s*\n))*?`;
-
-  // `import ... from 'x'`, excluding `import type ... from 'x'`.
-  for (const match of source.matchAll(
-    new RegExp(
-      String.raw`(?<![\w$.])import\s+(?!type\s)(${clause})\s+from\s*['"]([^'"]+)['"]`,
-      'gu',
-    ),
-  )) {
-    const bindings = /^\{([\s\S]*)\}$/u.exec(match[1].trim());
-
-    // `import { type A, type B } from 'x'` erases entirely, while `import { type A, b }` does not.
-    if (bindings) {
-      const names = bindings[1]
-        .split(',')
-        .map((binding) => binding.trim())
-        .filter(Boolean);
-      if (names.length > 0 && names.every((name) => name.startsWith('type '))) {
-        continue;
+  const add = (node) => {
+    if (
+      node &&
+      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+    ) {
+      specifiers.add(node.text);
+    }
+  };
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node)) {
+      const clause = node.importClause;
+      const bindings = clause?.namedBindings;
+      const typeOnly =
+        clause?.isTypeOnly ||
+        (!clause?.name &&
+          bindings &&
+          ts.isNamedImports(bindings) &&
+          bindings.elements.length > 0 &&
+          bindings.elements.every((item) => item.isTypeOnly));
+      if (!typeOnly) add(node.moduleSpecifier);
+    } else if (ts.isExportDeclaration(node)) {
+      const clause = node.exportClause;
+      const typeOnly =
+        node.isTypeOnly ||
+        (clause &&
+          ts.isNamedExports(clause) &&
+          clause.elements.length > 0 &&
+          clause.elements.every((item) => item.isTypeOnly));
+      if (!typeOnly) add(node.moduleSpecifier);
+    } else if (ts.isImportEqualsDeclaration(node)) {
+      if (
+        !node.isTypeOnly &&
+        ts.isExternalModuleReference(node.moduleReference)
+      ) {
+        add(node.moduleReference.expression);
+      }
+    } else if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      if (
+        callee.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(callee) && callee.text === 'require')
+      ) {
+        add(node.arguments[0]);
       }
     }
-
-    specifiers.add(match[2]);
-  }
-
-  // Side-effect imports, dynamic imports, and require calls. `import(` and `require(` are anchored on their opening
-  // parenthesis, so an array of strings such as `['import', 'types']` cannot be mistaken for one.
-  for (const pattern of [
-    /(?<![\w$.])import\s*['"]([^'"]+)['"]/gu,
-    /(?<![\w$.])import\s*\(\s*['"]([^'"]+)['"]\s*\)/gu,
-    /(?<![\w$.])require\s*\(\s*['"]([^'"]+)['"]\s*\)/gu,
-  ]) {
-    for (const match of source.matchAll(pattern)) {
-      specifiers.add(match[1]);
-    }
-  }
-
-  // `export ... from 'x'`, which re-exports values unless written as `export type`.
-  for (const match of source.matchAll(
-    new RegExp(
-      String.raw`(?<![\w$.])export\s+(?!type\s)(${clause})\s+from\s*['"]([^'"]+)['"]`,
-      'gu',
-    ),
-  )) {
-    specifiers.add(match[2]);
-  }
-
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
   return specifiers;
 }
 
@@ -246,7 +250,7 @@ export async function findViolations(
   const offenders = new Map();
   for (const file of files) {
     const source = await readFile(file, 'utf8');
-    for (const specifier of collectRuntimeSpecifiers(source)) {
+    for (const specifier of collectRuntimeSpecifiers(source, file)) {
       const name = packageNameOf(specifier, builtinModules);
       if (!name || name === manifest.name || declared.has(name)) continue;
       if (!offenders.has(name)) {

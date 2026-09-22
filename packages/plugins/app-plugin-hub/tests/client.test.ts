@@ -22,7 +22,7 @@ describe('@nocobase/app-plugin-hub', () => {
       name: 'hub',
       path: '/hub',
       auth: 'required',
-      access: { resource: 'hub', action: 'access' },
+      authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
       navigation: { title: 'navigation.applications', icon: Boxes },
     });
     await expect(routes.routes[0]?.componentLoader?.()).resolves.toMatchObject({
@@ -35,6 +35,7 @@ describe('@nocobase/app-plugin-hub', () => {
       routes.routes[0]?.children?.[0]?.children?.map((route) => route.path),
     ).toEqual([
       'deployments',
+      'logs',
       'releases',
       'development',
       'resources',
@@ -55,10 +56,10 @@ describe('@nocobase/app-plugin-hub', () => {
 
     expect(
       visibleHubDetailTabs({ hasReleases: true, deployed: true }, permissions),
-    ).toEqual(['releases', 'deployments']);
+    ).toEqual(['deployments']);
   });
 
-  it('shows Resources and settings only when their actions are granted', () => {
+  it('hides unfinished Resources while keeping authorized Configuration and Settings', () => {
     const permissions = {
       ...emptyHubCapabilities(),
       'read-release': true,
@@ -69,13 +70,7 @@ describe('@nocobase/app-plugin-hub', () => {
 
     expect(
       visibleHubDetailTabs({ hasReleases: true, deployed: true }, permissions),
-    ).toEqual([
-      'releases',
-      'deployments',
-      'resources',
-      'configuration',
-      'settings',
-    ]);
+    ).toEqual(['deployments', 'configuration', 'settings']);
   });
 
   it('chooses lifecycle defaults independently of display order and respects access', () => {
@@ -87,10 +82,10 @@ describe('@nocobase/app-plugin-hub', () => {
     };
     expect(
       defaultHubDetailTab({ hasReleases: false, deployed: false }, permissions),
-    ).toBe('development');
+    ).toBe('deployments');
     expect(
       defaultHubDetailTab({ hasReleases: true, deployed: false }, permissions),
-    ).toBe('releases');
+    ).toBe('deployments');
     expect(
       defaultHubDetailTab({ hasReleases: true, deployed: true }, permissions),
     ).toBe('deployments');
@@ -99,13 +94,13 @@ describe('@nocobase/app-plugin-hub', () => {
         { hasReleases: true, deployed: true },
         { ...permissions, 'read-deployment': false },
       ),
-    ).toBe('releases');
+    ).toBe('deployments');
     expect(
       defaultHubDetailTab(
         { hasReleases: false, deployed: false },
         { ...permissions, 'upload-release': false },
       ),
-    ).toBe('releases');
+    ).toBe('deployments');
     expect(
       defaultHubDetailTab(
         { hasReleases: true, deployed: true },
@@ -125,19 +120,22 @@ describe('@nocobase/app-plugin-hub', () => {
         {
           name: 'hub',
           path: '/apps',
-          access: { resource: 'hub', action: 'access' },
+          authz: { resource: { type: 'page', id: 'hub' }, action: 'access' },
           navigation: { title: 'navigation.applications', icon: Boxes },
         },
         {
           name: 'hub-roles',
           path: '/roles',
-          access: { resource: 'users', action: 'access' },
+          authz: { resource: { type: 'page', id: 'users' }, action: 'access' },
           navigation: { title: 'navigation.roles', icon: ShieldCheck },
         },
         {
           name: 'hub-api-keys',
           path: '/api-keys',
-          access: { resource: 'hub.app:*', action: 'manage-api-keys' },
+          authz: {
+            resource: { type: 'hub.app', id: '*' },
+            action: 'manage-api-keys',
+          },
           navigation: { title: 'navigation.apiKeys', icon: KeyRound },
         },
       ],

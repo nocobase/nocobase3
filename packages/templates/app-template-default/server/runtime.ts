@@ -10,6 +10,7 @@ import serviceProviders from './providers/index.js';
 import routes from './routes/index.js';
 
 const appRuntime: AppRuntimeDefinition = defineAppRuntime({
+  deploymentRootDir: import.meta.filename.endsWith('.ts') ? '.' : '..',
   createAppConfig,
   defaultConfigs,
   plugins,

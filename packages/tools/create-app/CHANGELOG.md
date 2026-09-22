@@ -1,5 +1,22 @@
 # @nocobase/create-app
 
+## 0.1.0-beta.18
+
+### Patch Changes
+
+- 8124b03: Mirror every synchronized skill into `.claude/skills/` as a relative symbolic link, so Claude Code discovers the skills an application's NocoBase packages ship. Claude Code reads only `~/.claude/skills/` and `<project>/.claude/skills/`, so a synchronized `.agents/skills/` was invisible to it while globally installed NocoBase 2 skills stayed available. Removing a package or a skill drops its link, application-owned entries are left alone, and a real directory occupying a `nocobase-` name is reported rather than overwritten. Ignore the generated mirror in the template and generated `.gitignore` files alongside `.agents/`.
+
+## 0.1.0-beta.17
+
+### Minor Changes
+
+- fe564d9: Support database selection with --dialect and non-interactive structured output with --json. Generate local database connection settings, install compatible drivers, and guide agents through configuration before startup.
+
+### Patch Changes
+
+- fe564d9: Default generated applications to verifyDepsBeforeRun: false so running development, build, or startup scripts does not implicitly install dependencies. Document explicit installation after dependency changes and preserve template-provided settings.
+- fe564d9: Classify occupied target directories as scaffold failures, select main for existing SQLite configurations, and explicitly report the limited scope of native dependency verification for other dialects.
+
 ## 0.1.0-beta.16
 
 ### Patch Changes

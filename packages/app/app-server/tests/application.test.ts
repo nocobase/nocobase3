@@ -6,7 +6,7 @@ import {
   Application,
   type ApplicationOptions,
 } from '../src/application/index.js';
-import { createConfigPaths } from '../src/config/index.js';
+import { createAppPaths } from '../src/config/index.js';
 import {
   defineApiRoutes,
   defineRootRoutes,
@@ -412,7 +412,7 @@ class RuntimePluginProvider extends ServiceProvider<Application> {
 function createTestApplicationOptions(): ApplicationOptions {
   return {
     config: testAppConfig,
-    paths: createConfigPaths({ rootDir: '/test/app' }),
+    paths: createAppPaths({ rootDir: '/test/app' }),
   };
 }
 

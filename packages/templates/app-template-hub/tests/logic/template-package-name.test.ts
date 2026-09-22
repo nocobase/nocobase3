@@ -10,9 +10,18 @@ const appRoot = path.resolve(
   '../..',
 );
 
-const templateName = JSON.parse(
+interface AppPackageJson {
+  readonly name: string;
+  readonly nocobase?: { readonly templatePackage?: string };
+}
+
+const appPackage = JSON.parse(
   readFileSync(path.join(appRoot, 'package.json'), 'utf8'),
-).name as string;
+) as AppPackageJson;
+const applicationName = appPackage.name;
+const originalTemplateName =
+  appPackage.nocobase?.templatePackage ?? applicationName;
+const isGeneratedApplication = originalTemplateName !== applicationName;
 
 /**
  * Sources present in this template that `create-app` rewrites, from `PACKAGE_NAME_SOURCES` in
@@ -44,33 +53,36 @@ describe('template package name', () => {
   /**
    * `create-app` rewrites this name to the application's in a fixed list of files. A source that embeds it but is not
    * on that list ships the template's name into every generated application, where the client would then declare an
-   * i18n namespace the server does not share and `pnpm client:inspect` would refuse to run.
+   * i18n namespace the server does not share.
    *
    * When this fails, either rewrite the new occurrence to derive the name at runtime, or add the file to
    * `PACKAGE_NAME_SOURCES` in `packages/tools/create-app/src/lib/scaffold.ts` and to `REWRITTEN_SOURCES` above.
    */
-  it('appears only in the sources create-app rewrites', () => {
+  it('keeps the original template name only where create-app rewrites it', () => {
     const offenders = SHIPPED_SOURCE_DIRECTORIES.filter((directory) =>
       statSync(path.join(appRoot, directory), { throwIfNoEntry: false }),
     )
       .flatMap((directory) => sourceFilesIn(directory))
-      .filter((relative) => !REWRITTEN_SOURCES.includes(relative))
+      .filter(
+        (relative) =>
+          isGeneratedApplication || !REWRITTEN_SOURCES.includes(relative),
+      )
       .filter((relative) =>
         readFileSync(path.join(appRoot, relative), 'utf8').includes(
-          templateName,
+          originalTemplateName,
         ),
       );
 
     expect(offenders).toEqual([]);
   });
 
-  /** The rewrite list is only correct while every file on it exists and still carries the name. */
-  it('is present in every source create-app expects to rewrite', () => {
+  /** The rewrite list is only correct while every file on it exists and carries the current application name. */
+  it('uses the application name in every source create-app rewrites', () => {
     for (const relative of REWRITTEN_SOURCES) {
       expect(
         readFileSync(path.join(appRoot, relative), 'utf8'),
-        `${relative} no longer contains ${templateName}`,
-      ).toContain(templateName);
+        `${relative} does not contain ${applicationName}`,
+      ).toContain(applicationName);
     }
   });
 });

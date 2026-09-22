@@ -1,3 +1,5 @@
+import { resolveDatabaseConfig } from '../database/resolve-config.js';
+import type { AppDatabaseConfig } from '../database/types.js';
 import type { AppConfigFactory } from '../config/index.js';
 import type { ConfigMap } from '@nocobase/config';
 import { AppConfig } from '../config/index.js';
@@ -8,8 +10,9 @@ import type {
 } from '../application/index.js';
 import {
   createConfigContext,
+  createAppPaths,
   type ConfigContext,
-  type ConfigPaths,
+  type AppPaths,
 } from '../config/index.js';
 import {
   resolveAppServerPlugins,
@@ -19,7 +22,6 @@ import {
 } from '../plugins/index.js';
 import type { AppRouteContribution } from '../router/index.js';
 import {
-  createAppConfigPaths,
   resolveAppScopeRuntime,
   type ResolvedAppScopeRuntime,
 } from './scope.js';
@@ -30,7 +32,6 @@ export type AppRuntimeConfig = object;
 export interface AppRuntimeConfigContext extends ConfigContext {
   readonly mode?: 'standalone' | 'embedded';
   readonly routing?: ResolvedAppScopeRuntime['routing'];
-  readonly runtimePaths?: AppPathOptions;
   readonly plugins?: ResolvedAppServerPlugins;
   readonly appPackageName?: string;
   readonly configPath?: string;
@@ -39,13 +40,16 @@ export interface AppRuntimeConfigContext extends ConfigContext {
 export interface ResolvedAppRuntimeConfigContext extends AppRuntimeConfigContext {
   readonly mode: 'standalone' | 'embedded';
   readonly routing: ResolvedAppScopeRuntime['routing'];
-  readonly runtimePaths: AppPathOptions;
   readonly plugins: ResolvedAppServerPlugins;
   readonly appPackageName: string;
   readonly configPath: string | undefined;
 }
 
 export interface AppRuntimeDefinition {
+  /** Standalone deployment root, absolute or relative to the code root; shared by server and CLI. */
+  readonly deploymentRootDir?: string;
+  /** Application-owned paths, applied consistently to server and CLI resolution. */
+  readonly resolvePaths?: (runtime: ResolvedAppScopeRuntime) => AppPathOptions;
   readonly defaultConfigs?: AppConfigFactory<ConfigMap>;
   readonly createAppConfig: (
     context: ResolvedAppRuntimeConfigContext,
@@ -59,7 +63,7 @@ export interface AppRuntimeDefinition {
 export interface AppRuntimeContext extends ResolvedAppScopeRuntime {
   app?: Application;
   readonly scope: AppScope;
-  readonly configPaths: ConfigPaths;
+  readonly paths: AppPaths;
   readonly plugins: ResolvedAppServerPlugins;
   readonly serviceProviders: readonly ApplicationServiceProviderConstructor[];
   readonly routes: readonly AppRouteContribution<Application>[];
@@ -83,7 +87,10 @@ export async function resolveAppRuntime(
   definition: AppRuntimeDefinition,
   scope: AppScope,
 ): Promise<ResolvedAppRuntime> {
-  const base = resolveAppScopeRuntime(scope);
+  const resolved = resolveAppScopeRuntime(scope);
+  const base = definition.resolvePaths
+    ? { ...resolved, paths: definition.resolvePaths(resolved) }
+    : resolved;
   const context = createAppRuntimeConfigContext(definition, scope, base);
   const appConfig = definition.createAppConfig(context);
   await appConfig.loadAll();
@@ -91,7 +98,7 @@ export async function resolveAppRuntime(
   const runtime: AppRuntimeContext = {
     ...base,
     scope,
-    configPaths: context.paths,
+    paths: context.paths,
     plugins: context.plugins,
     serviceProviders: definition.serviceProviders,
     routes: definition.routes,
@@ -101,6 +108,27 @@ export async function resolveAppRuntime(
   if (definition.defaultConfigs) {
     runtime.config.mergeDefaults(definition.defaultConfigs(runtime));
   }
+  const database = runtime.config.get<AppDatabaseConfig>('database');
+  if (database && database.default !== 'none') {
+    const resolvedDatabase = await resolveDatabaseConfig(database);
+    runtime.config.mergeDefaults({
+      database: {
+        drivers: resolvedDatabase.drivers,
+        connections: Object.fromEntries(
+          Object.entries(resolvedDatabase.connections)
+            .filter(
+              ([name, connection]) =>
+                connection.databaseDriver &&
+                !database.connections[name].databaseDriver,
+            )
+            .map(([name, connection]) => [
+              name,
+              { databaseDriver: connection.databaseDriver },
+            ]),
+        ),
+      },
+    });
+  }
   return runtime;
 }
 
@@ -109,17 +137,13 @@ function createAppRuntimeConfigContext(
   scope: AppScope,
   runtime: ResolvedAppScopeRuntime,
 ): ResolvedAppRuntimeConfigContext {
-  const configPaths = createAppConfigPaths(runtime.paths);
-  const plugins = resolveAppServerPlugins(
-    runtime.paths.rootDir,
-    definition.plugins,
-  );
+  const paths = createAppPaths(runtime.paths);
+  const plugins = resolveAppServerPlugins(paths.rootDir, definition.plugins);
 
   return {
-    ...createConfigContext({ env: runtime.env, paths: configPaths }),
+    ...createConfigContext({ env: runtime.env, paths }),
     mode: runtime.mode,
     routing: runtime.routing,
-    runtimePaths: runtime.paths,
     plugins,
     appPackageName: plugins.appPackageName,
     configPath: scope.configPath,

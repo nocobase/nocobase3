@@ -11,6 +11,7 @@ export const HUB_APP_ACTIONS: readonly [
   typeof HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
+  'read-log',
   typeof HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',
@@ -28,6 +29,7 @@ export const HUB_APP_ACTIONS: readonly [
   HUB_RELEASE_ACTIONS.upload,
   'read-config-template',
   'read-deployment',
+  'read-log',
   HUB_RELEASE_ACTIONS.deploy,
   'rollback',
   'read-config',
@@ -55,9 +57,13 @@ export function visibleHubDetailTabs(
     ...(!state.hasReleases && capabilities['upload-release']
       ? (['development'] as const)
       : []),
-    ...(capabilities['read-release'] ? (['releases'] as const) : []),
-    ...(capabilities['read-deployment'] ? (['deployments'] as const) : []),
-    ...(capabilities['read-config'] ? (['resources'] as const) : []),
+    ...(capabilities['read-release'] ||
+    capabilities['read-deployment'] ||
+    capabilities['upload-release']
+      ? (['deployments'] as const)
+      : []),
+    ...(capabilities['read-log'] ? (['logs'] as const) : []),
+    // Resources is unfinished; keep its implementation out of the public tab set.
     ...(state.deployed && capabilities['read-config']
       ? (['configuration'] as const)
       : []),
@@ -72,11 +78,7 @@ export function defaultHubDetailTab(
   capabilities: HubCapabilities,
 ): DetailTab | undefined {
   const visible = visibleHubDetailTabs(state, capabilities);
-  const preferred = state.deployed
-    ? 'deployments'
-    : state.hasReleases
-      ? 'releases'
-      : 'development';
+  const preferred = 'deployments';
   return visible.includes(preferred) ? preferred : visible[0];
 }
 
@@ -97,7 +99,7 @@ export async function loadHubCapabilities(
 ): Promise<HubCapabilities> {
   const allowed = await Promise.all(
     HUB_APP_ACTIONS.map((action) =>
-      authorization.can({ type: 'hub.app', id: appId }, action),
+      authorization.can({ resource: { type: 'hub.app', id: appId }, action }),
     ),
   );
   return Object.fromEntries(

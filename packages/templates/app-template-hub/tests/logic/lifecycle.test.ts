@@ -184,10 +184,12 @@ function createProviderApplication(
   values: Readonly<Record<string, unknown>>,
   container: ServiceContainer,
 ): {
+  paths: { storage: (...segments: string[]) => string };
   config: AppConfigAccessor;
   container: ServiceContainer;
 } {
   return {
+    paths: { storage: (...segments: string[]) => segments.join('/') },
     config: createTestConfig(values),
     container,
   };

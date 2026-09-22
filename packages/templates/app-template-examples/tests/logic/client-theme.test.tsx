@@ -1,3 +1,7 @@
+import { I18nRuntime } from '@nocobase/i18n';
+import { I18nProvider } from '@nocobase/i18n/client';
+import locales from '../../client/locales/index.js';
+import { themePresets } from '../../client/theme/theme-presets';
 import { initializeTheme } from '../../client/theme/theme-preferences';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -11,6 +15,34 @@ import {
 } from '../../client/theme/index.ts';
 
 describe('app client theme', () => {
+  it.each([
+    ['en-US', 'Appearance', 'Spacious'],
+    ['zh-CN', '外观', '宽松'],
+  ])(
+    'labels the default preset without implying default selection (%s)',
+    async (locale, appearance, label) => {
+      const runtime = new I18nRuntime({
+        defaultLocale: 'en-US',
+        locales: ['en-US', 'zh-CN'],
+        applicationNamespace: 'test-app',
+      });
+      runtime.registerApplicationNamespace('test-app', locales);
+      await runtime.init(locale);
+      render(
+        <I18nProvider runtime={runtime}>
+          <AppThemeProvider>
+            <ThemeSettings />
+          </AppThemeProvider>
+        </I18nProvider>,
+      );
+      await userEvent.click(screen.getByRole('button', { name: appearance }));
+      const option = screen.getByRole('radio', { name: label });
+      expect(option).toHaveAttribute('value', 'default');
+      await userEvent.click(option);
+      expect(localStorage.getItem('nocobase:crm:theme:preset')).toBe('default');
+    },
+  );
+
   it('falls back from the removed Ant Design preset without changing mode', async () => {
     localStorage.setItem('nocobase:crm:theme:preset', 'ant-design');
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'light');
@@ -23,11 +55,11 @@ describe('app client theme', () => {
     expect(
       screen.queryByRole('radio', { name: 'Ant-design' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Default' })).toBeChecked();
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(screen.getByRole('radio', { name: 'Compact' })).toBeChecked();
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     expect(document.documentElement).toHaveClass('light');
   });
-  it('omits Ocean and falls back from its saved ID to Default', async () => {
+  it('omits Ocean and falls back from its saved ID to Compact', async () => {
     localStorage.setItem('nocobase:crm:theme:preset', 'ocean');
     render(
       <AppThemeProvider>
@@ -38,9 +70,9 @@ describe('app client theme', () => {
     expect(
       screen.queryByRole('radio', { name: 'Ocean' }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: 'Default' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: 'Compact' })).toBeInTheDocument();
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(screen.getByRole('radio', { name: 'Compact' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Default' })).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
   });
 
   beforeEach(() => {
@@ -91,7 +123,10 @@ describe('app client theme', () => {
         localStorage.setItem('nocobase:crm:theme:color-scheme', savedMode);
       if (savedPreset)
         localStorage.setItem('nocobase:crm:theme:preset', savedPreset);
-      initializeTheme('/crm/', ['default', 'compact']);
+      initializeTheme(
+        '/crm/',
+        themePresets.map(({ id }) => id),
+      );
       expect(document.documentElement).toHaveClass(mode);
       expect(document.documentElement).toHaveAttribute('data-theme', preset);
       render(
@@ -116,6 +151,45 @@ describe('app client theme', () => {
       expect(
         localStorage.getItem('nocobase:crm:theme:color-scheme'),
       ).toBeNull();
+    },
+  );
+
+  it.each([
+    [undefined, undefined, 'compact'],
+    ['default', undefined, 'default'],
+    [undefined, 'default', 'default'],
+    ['default', 'compact', 'compact'],
+  ])(
+    'keeps startup and Provider consistent (%s, %s)',
+    async (configured, saved, expected) => {
+      const config = document.createElement('script');
+      config.id = 'nocobase-runtime-config';
+      config.type = 'application/json';
+      config.textContent = JSON.stringify({
+        version: 1,
+        config: { app: { defaultTheme: configured } },
+      });
+      document.body.append(config);
+      const key = 'nocobase:crm:theme:preset';
+      if (saved) localStorage.setItem(key, saved);
+      initializeTheme(
+        '/crm/',
+        themePresets.map(({ id }) => id),
+      );
+      expect(document.documentElement).toHaveAttribute('data-theme', expected);
+      render(
+        <AppThemeProvider>
+          <ThemeSettings />
+        </AppThemeProvider>,
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
+      expect(
+        screen.getByRole('radio', {
+          name: expected === 'compact' ? 'Compact' : 'Default',
+        }),
+      ).toBeChecked();
+      expect(document.documentElement).toHaveAttribute('data-theme', expected);
+      expect(localStorage.getItem(key)).toBe(saved ?? null);
     },
   );
 
@@ -163,7 +237,10 @@ describe('app client theme', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
     });
-    initializeTheme('/crm/', ['default', 'compact']);
+    initializeTheme(
+      '/crm/',
+      themePresets.map(({ id }) => id),
+    );
     expect(document.documentElement).toHaveClass('light');
     const { unmount } = render(
       <AppThemeProvider>
@@ -191,14 +268,17 @@ describe('app client theme', () => {
     config.type = 'application/json';
     config.textContent = JSON.stringify({ version: 1, config: { app } });
     document.body.append(config);
-    initializeTheme('/crm/', ['default', 'compact']);
+    initializeTheme(
+      '/crm/',
+      themePresets.map(({ id }) => id),
+    );
     render(
       <AppThemeProvider>
         <ThemeProbe />
       </AppThemeProvider>,
     );
     await waitFor(() => expect(document.documentElement).toHaveClass('dark'));
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
   });
 
   it('follows the system theme and persists explicit changes', async () => {
@@ -227,6 +307,7 @@ describe('app client theme', () => {
   });
 
   it('selects presets independently, restores them and ignores another app', async () => {
+    localStorage.setItem('nocobase:crm:theme:preset', 'default');
     render(
       <AppThemeProvider>
         <ThemeSettings />
@@ -266,7 +347,7 @@ describe('app client theme', () => {
   });
 
   it('restores a saved preset and resets both selections when storage is cleared', async () => {
-    localStorage.setItem('nocobase:crm:theme:preset', 'compact');
+    localStorage.setItem('nocobase:crm:theme:preset', 'default');
     localStorage.setItem('nocobase:crm:theme:color-scheme', 'light');
     render(
       <AppThemeProvider>
@@ -274,13 +355,13 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     await waitFor(() =>
-      expect(document.documentElement).toHaveAttribute('data-theme', 'compact'),
+      expect(document.documentElement).toHaveAttribute('data-theme', 'default'),
     );
     expect(document.documentElement).toHaveClass('light');
     localStorage.clear();
     fireEvent(window, new StorageEvent('storage', { key: null }));
     await waitFor(() => expect(document.documentElement).toHaveClass('dark'));
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
   });
   it('keeps selections usable when browser storage is unavailable', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
@@ -295,9 +376,9 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-    await userEvent.click(screen.getByRole('radio', { name: 'Compact' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Default' }));
     await userEvent.click(screen.getByRole('radio', { name: 'Light' }));
-    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
     expect(document.documentElement).toHaveClass('light');
   });
 
@@ -308,7 +389,7 @@ describe('app client theme', () => {
       </AppThemeProvider>,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Appearance' }));
-    await userEvent.click(screen.getByRole('radio', { name: 'Compact' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Default' }));
     fireEvent(
       window,
       new StorageEvent('storage', {
@@ -324,7 +405,7 @@ describe('app client theme', () => {
         newValue: 'removed',
       }),
     );
-    expect(document.documentElement).toHaveAttribute('data-theme', 'default');
+    expect(document.documentElement).toHaveAttribute('data-theme', 'compact');
     fireEvent(
       window,
       new StorageEvent('storage', {

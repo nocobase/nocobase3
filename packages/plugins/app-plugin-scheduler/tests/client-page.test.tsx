@@ -6,6 +6,7 @@ import {
   render,
   screen,
   within,
+  waitFor,
 } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -101,7 +102,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@nocobase/app-client', () => ({
+vi.mock('@nocobase/app-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@nocobase/app-client')>()),
   apiClientToken: Symbol('api-client'),
   useService: () => mocks.api,
 }));
@@ -189,13 +191,11 @@ function renderDetail(
   scheduleId: string = 'schedule-1',
 ): ReturnType<typeof render> {
   return render(
-    <MemoryRouter
-      initialEntries={[`/settings/automation/schedules/${scheduleId}`]}
-    >
+    <MemoryRouter initialEntries={[`/settings/schedules/${scheduleId}`]}>
       <Routes>
         <Route
           element={<ScheduleDetailPage />}
-          path='/settings/automation/schedules/:scheduleId'
+          path='/settings/schedules/:scheduleId'
         />
       </Routes>
     </MemoryRouter>,
@@ -234,7 +234,6 @@ describe('SchedulesPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Scheduled tasks' }),
     ).toBeTruthy();
-    expect(screen.getByText('Automation')).toBeTruthy();
     expect(screen.queryByText('Create')).toBeNull();
     expect(screen.queryByText('Read only')).toBeNull();
     expect(screen.queryByText('Read-only code-defined schedules.')).toBeNull();
@@ -252,7 +251,6 @@ describe('SchedulesPage', () => {
     renderList();
     expect(await screen.findByText('在上午 02:00')).toBeTruthy();
     expect(screen.getByRole('heading', { name: '定时任务' })).toBeTruthy();
-    expect(screen.getByText('自动化')).toBeTruthy();
     expect(screen.queryByText('只读')).toBeNull();
     expect(screen.queryByText('0 0 2 * * *')).toBeNull();
   });
@@ -308,24 +306,22 @@ describe('SchedulesPage', () => {
     expect(screen.getByText('Archive cleanup')).toBeTruthy();
 
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } });
-    fireEvent.change(
-      screen.getByRole('combobox', { name: 'Filter by status' }),
-      {
-        target: { value: 'active' },
-      },
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter by status' }));
+    await chooseOption(
+      await screen.findByRole('option', { name: 'Active', exact: true }),
     );
     expect(screen.getByText('Daily customer sync')).toBeTruthy();
     expect(screen.queryByText('Archive cleanup')).toBeNull();
 
-    fireEvent.change(
-      screen.getByRole('combobox', { name: 'Filter by status' }),
-      {
-        target: { value: 'all' },
-      },
+    fireEvent.click(screen.getByRole('combobox', { name: 'Filter by status' }));
+    await chooseOption(
+      await screen.findByRole('option', { name: 'All statuses', exact: true }),
     );
-    fireEvent.change(
+    fireEvent.click(
       screen.getByRole('combobox', { name: 'Filter by target type' }),
-      { target: { value: 'cleanup' } },
+    );
+    await chooseOption(
+      await screen.findByRole('option', { name: 'cleanup', exact: true }),
     );
     expect(screen.getByText('Archive cleanup')).toBeTruthy();
     expect(screen.queryByText('Daily customer sync')).toBeNull();
@@ -358,9 +354,7 @@ describe('SchedulesPage', () => {
     const link = await screen.findByRole('link', {
       name: 'Daily customer sync',
     });
-    expect(link.getAttribute('href')).toBe(
-      '/settings/automation/schedules/schedule-1',
-    );
+    expect(link.getAttribute('href')).toBe('/settings/schedules/schedule-1');
     expect(screen.queryByRole('link', { name: 'View details' })).toBeNull();
     expect(screen.queryByText('Schedule details')).toBeNull();
     expect(mocks.request).toHaveBeenCalledTimes(1);
@@ -476,15 +470,12 @@ describe('SchedulesPage', () => {
       Promise.resolve({ data: path === 'schedules' ? schedules : [] }),
     );
     render(
-      <MemoryRouter initialEntries={['/settings/automation/schedules']}>
+      <MemoryRouter initialEntries={['/settings/schedules']}>
         <Routes>
-          <Route
-            element={<SchedulesPage />}
-            path='/settings/automation/schedules'
-          />
+          <Route element={<SchedulesPage />} path='/settings/schedules' />
           <Route
             element={<ScheduleDetailPage />}
-            path='/settings/automation/schedules/:scheduleId'
+            path='/settings/schedules/:scheduleId'
           />
         </Routes>
       </MemoryRouter>,
@@ -533,7 +524,7 @@ describe('SchedulesPage', () => {
       screen
         .getByRole('link', { name: 'Back to scheduled tasks' })
         .getAttribute('href'),
-    ).toBe('/settings/automation/schedules');
+    ).toBe('/settings/schedules');
 
     expect(await screen.findByText('No triggers have started.')).toBeTruthy();
     expect(screen.queryByRole('tab')).toBeNull();
@@ -591,3 +582,9 @@ describe('SchedulesPage', () => {
     expect(screen.queryByText('private-value')).toBeNull();
   });
 });
+
+async function chooseOption(option: HTMLElement): Promise<void> {
+  fireEvent.pointerDown(option, { pointerType: 'mouse' });
+  fireEvent.click(option);
+  await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+}

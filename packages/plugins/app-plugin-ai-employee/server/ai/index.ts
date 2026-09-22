@@ -17,24 +17,29 @@ import tools from './tools/index.js';
 export interface AIResourceRegistrarOptions {
   readonly logger?: Logger;
   readonly mcpDirectory?: string;
-  readonly skillsDirectories?: readonly string[];
+  readonly skillsDirectories?: readonly (string | AISkillDirectory)[];
   readonly source?: string;
+}
+
+export interface AISkillDirectory {
+  readonly directory: string;
+  readonly source: string;
+  readonly optional?: boolean;
 }
 
 /** Explicit lifecycle contract for application-owned AI resources. */
 export abstract class AIResourceRegistrar {
   private readonly logger?: Logger;
   private readonly mcpDirectory?: string;
-  private readonly skillsDirectories: readonly string[];
-  private readonly source: string;
+  private readonly skillsDirectories: readonly AISkillDirectory[];
 
   public constructor(options: AIResourceRegistrarOptions = {}) {
     this.logger = options.logger;
     this.mcpDirectory = options.mcpDirectory;
     this.skillsDirectories = normalizeDirectories(
       options.skillsDirectories ?? [],
+      options.source ?? 'application',
     );
-    this.source = options.source ?? 'application';
   }
 
   public async registerAIResources(ai: AIManager): Promise<void> {
@@ -66,10 +71,10 @@ export abstract class AIResourceRegistrar {
   }
 
   protected async loadSkills(ai: AIManager): Promise<void> {
-    for (const directory of this.skillsDirectories) {
+    for (const { directory, source, optional } of this.skillsDirectories) {
       if (!fs.existsSync(directory)) {
-        this.logger?.warn?.(
-          { directory, source: this.source, stage: 'skills' },
+        this.logger?.[optional ? 'debug' : 'warn']?.(
+          { directory, source, stage: 'skills' },
           'AI Skill directory does not exist; skipping',
         );
         continue;
@@ -81,17 +86,17 @@ export abstract class AIResourceRegistrar {
         },
         logger: this.logger,
       }).load();
-      this.logger?.info?.(
-        { directory, source: this.source, stage: 'skills' },
+      this.logger?.debug?.(
+        { directory, source, stage: 'skills' },
         'AI Skill directory loaded',
       );
     }
   }
 
   private logStage(stage: string, resources: readonly unknown[]): void {
-    this.logger?.info?.(
-      { count: resources.length, source: this.source, stage },
-      `AI ${stage} resources registered`,
+    this.logger?.debug?.(
+      { total: resources.length, stage },
+      `AI ${stage} registration completed`,
     );
   }
 }
@@ -101,9 +106,11 @@ export class AIEmployeeResources extends AIResourceRegistrar {
   public constructor(options: AIResourceRegistrarOptions = {}) {
     super({
       ...options,
-      source: options.source ?? 'plugin-built-in',
       skillsDirectories: [
-        resolvePackageRootSkillDirectory(),
+        {
+          directory: resolvePackageRootSkillDirectory(),
+          source: 'plugin-built-in',
+        },
         ...(options.skillsDirectories ?? []),
       ],
     });
@@ -147,9 +154,24 @@ export function normalizeAISkillDirectories(
 }
 
 function normalizeDirectories(
-  directories: readonly string[],
-): readonly string[] {
-  return [...new Set(directories.map((directory) => path.resolve(directory)))];
+  directories: readonly (string | AISkillDirectory)[],
+  source: string,
+): readonly AISkillDirectory[] {
+  const unique = new Map<string, AISkillDirectory>();
+  for (const entry of directories) {
+    const item =
+      typeof entry === 'string' ? { directory: entry, source } : entry;
+    const directory = path.resolve(item.directory);
+    const previous = unique.get(directory);
+    unique.set(directory, {
+      ...item,
+      directory,
+      optional: previous
+        ? Boolean(previous.optional && item.optional)
+        : item.optional,
+    });
+  }
+  return [...unique.values()];
 }
 
 function resolvePackageRootSkillDirectory(): string {

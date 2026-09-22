@@ -1,17 +1,16 @@
-import { Releases } from '../releases.js';
-import { AppTabLoading, useHubAppPage } from '../app-page.js';
+import { Navigate, useLocation, useResolvedPath } from 'react-router';
 import type { ReactElement } from 'react';
 
 export default function ReleasesPage(): ReactElement {
-  const context = useHubAppPage();
-  if (context.panelLoading) return <AppTabLoading />;
+  const parent = useResolvedPath('..');
+  const location = useLocation();
   return (
-    <Releases
-      app={context.app}
-      selected={context.selectedReleaseId}
-      canUpload={context.capabilities['upload-release']}
-      onSelect={context.onRelease}
-      onUpload={context.onUpload}
+    <Navigate
+      replace
+      to={{
+        pathname: `${parent.pathname}/deployments`,
+        search: location.search,
+      }}
     />
   );
 }

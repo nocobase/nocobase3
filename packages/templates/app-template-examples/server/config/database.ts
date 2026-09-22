@@ -1,27 +1,18 @@
-import sqlite from '@nocobase/db-sqlite';
-import postgres from '@nocobase/db-postgres';
-import mysql from '@nocobase/db-mysql';
-import oracle from '@nocobase/db-oracle';
 import { defineAppDatabaseConfig } from '@nocobase/app-server/database';
 
-/**
- * The dialect packages this application installs. Drivers are code rather
- * than settings, so they are declared here and cannot be overridden from
- * config.yml; a connection may only use a dialect listed here.
- */
-export default defineAppDatabaseConfig((runtime) => ({
-  drivers: { sqlite, postgres, mysql, oracle },
+/** Installed official drivers are loaded synchronously when first needed. */
+export default defineAppDatabaseConfig(({ paths }) => ({
   default: 'main',
   connections: {
     main: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('database.sqlite'),
+      filename: paths.storage('database.sqlite'),
       schemaManagement: 'managed',
       debug: false,
     },
     analytics: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('analytics.sqlite'),
+      filename: paths.storage('analytics.sqlite'),
       schemaManagement: 'managed',
       migrations: { autoRun: true },
       seeds: { autoRun: true },
@@ -41,7 +32,7 @@ export default defineAppDatabaseConfig((runtime) => ({
      */
     externalCrm: {
       dialect: 'sqlite',
-      filename: runtime.configPaths.storage('external-crm.sqlite'),
+      filename: paths.storage('external-crm.sqlite'),
       schemaManagement: 'external',
       naming: { underscored: true, tablePrefix: 'crm_' },
     },

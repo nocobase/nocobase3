@@ -1,5 +1,6 @@
 import type {
   AnyConnectionConfig,
+  ChecksumMismatchPolicy,
   CollectionMetadataStore,
   CollectionMetadataStoreConfig,
   ConnectionConfig,
@@ -75,6 +76,13 @@ export interface AppDatabaseMigrationConfig {
   tableName?: string;
   lockTableName?: string;
   extensions?: readonly string[];
+  /**
+   * How to react when an executed migration's source no longer hashes to the
+   * checksum recorded for it. `warn` (the default) reports the drift and
+   * continues; `error` refuses to run until `nocobase app db repair` realigns the
+   * history. A migration the sources cannot explain at all always fails.
+   */
+  onChecksumMismatch?: ChecksumMismatchPolicy;
 }
 
 export interface AppDatabaseSeedConfig {
@@ -85,6 +93,13 @@ export interface AppDatabaseSeedConfig {
   tableName?: string;
   lockTableName?: string;
   extensions?: readonly string[];
+  /**
+   * How to react when an executed seed's source no longer hashes to the
+   * checksum recorded for it. `warn` (the default) reports the drift and
+   * continues; `error` refuses to run until `nocobase app db repair` realigns the
+   * history.
+   */
+  onChecksumMismatch?: ChecksumMismatchPolicy;
 }
 
 /** `Omit` over a union keeps only the common keys; distribute it so each dialect keeps its own. */

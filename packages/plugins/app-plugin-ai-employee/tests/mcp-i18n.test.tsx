@@ -4,7 +4,7 @@ import { I18nProvider } from '@nocobase/i18n/client';
 import { act, render, screen } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import locales from '../client/locales/index.js';
-import MCPPage from '../client/pages/mcp-page.js';
+import MCPServiceSettingsPage from '../client/pages/mcp-service-settings-page.js';
 
 vi.mock('@nocobase/app-client', () => ({
   useApiClient: () => api,
@@ -30,12 +30,22 @@ it('translates the MCP configuration notice and updates it when language changes
   await runtime.init('zh-CN');
   render(
     <I18nProvider runtime={runtime}>
-      <MCPPage />
+      <MCPServiceSettingsPage />
     </I18nProvider>,
   );
-  expect(await screen.findByText('MCP 服务配置于 config.yml。')).toBeVisible();
+  expect(
+    await screen.findByText(
+      '管理 MCP 服务状态和工具权限。服务连接在应用部署时配置。',
+    ),
+  ).toBeVisible();
+  expect(screen.getAllByText(/服务连接在应用部署时配置/)).toHaveLength(1);
   await act(() => runtime.changeLanguage('en-US'));
   expect(
-    screen.getByText('MCP servers are configured in config.yml.'),
+    screen.getByText(
+      'Manage MCP service status and tool permissions. Connections are configured during deployment.',
+    ),
   ).toBeVisible();
+  expect(
+    screen.getAllByText(/Connections are configured during deployment/),
+  ).toHaveLength(1);
 });

@@ -68,7 +68,7 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
     routes.use('*', auth.required(), authorization.middleware());
     routes.get('/', async (context) => {
       const allowed = await context.get('authz').can({
-        resource: { type: 'database.collection', id: 'main.orders' },
+        resource: { type: 'database.collection', id: 'orders' },
         action: 'read',
       });
       if (!allowed) {
@@ -85,33 +85,28 @@ export const orderAdminRoutes: AppApiRouteContribution<Application> =
 
 Use a stable `resource`/`action` pair per operation — `read` and `create` are distinct decisions.
 
-### When the answer is not yes or no
+### Enforce record, field and relation policies
 
-`can()` answers whether the caller may perform the action at all. Many real requirements are narrower than that: _a salesperson may only see the customers they own_. There the answer is neither yes nor no — it is "yes, for these rows, and these fields".
+Read [application permission development](authorization.md) and the installed `nocobase-app-plugin-authorization` Skill before building data access. Register each governed collection explicitly in the owning provider with `authz.db.collections.add({ name, title, actions? })`; DB supplies field/relation metadata. Unregistered collections are denied even to unrestricted users.
 
-`authorize()` returns that. Its decision carries `conditions` describing the row filter and the readable and writable field sets, which you pass into the query:
+For ordinary collection CRUD, resolve and bind the policy:
 
 ```ts
-const decision = await context.get('authz').authorize({
-  resource: { type: 'database.collection', id: 'main.customers' },
-  action: 'read',
-});
-
-if (
-  decision.effect !== 'conditional' ||
-  decision.conditions?.type !== 'database'
-) {
-  return context.json({ code: 'FORBIDDEN' }, 403);
-}
-
-return context.json({ data: await customers.list(decision.conditions) });
+const policy = await authz.db.policyFor('customers', context.get('authz'));
+if (policy.read === false) return context.json({ code: 'FORBIDDEN' }, 403);
+const customers = database.repository('customers').withPolicy(policy);
+return context.json({ data: await customers.findMany() });
 ```
 
-**Apply the conditions inside the query, in the same `WHERE` clause as everything else.** Fetching rows and filtering them in memory afterwards is not an implementation detail — it is a data leak whenever a bug, an early return, or a later refactor skips the filter, and it sends rows the caller may not see across the process boundary in the first place. The same applies to `update` and `delete`: the returned filter goes in the `WHERE` alongside the record id, so a record the caller does not own simply does not match.
+For a composed business operation, call the request scope's `authorize()` once, reject denied or missing policies, and bind each table's `decision.conditions.database[collection]` policy. Do not replace it with aggregate collection authorization: grants from another business operation could widen the result. `require` rejects conditional decisions; `can` reports feature visibility rather than access to a specific record.
 
-Honour the field sets too. `conditions.fields.output` limits what you may return, and `conditions.fields.input` limits what you may write.
+Bound repositories enforce rows, fields and relations together. Keep multi-table writes transactional and business-state predicates in the update. Map out-of-scope `RECORD_NOT_FOUND` errors consistently without exposing hidden records. Never fetch unrestricted rows and filter them in the browser.
 
-This is a summary. Registering a collection with its actions, fields, and owner attribute, configuring Permission Sets, and compiling a `DatabaseFilter` into a query builder are all covered by the authorization plugin's own Skill — read `nocobase-app-plugin-authorization` in `.agents/skills/` before building ownership rules, and its `references/orders-module.md` for a complete worked example with an `ownerId`.
+### Repository API endpoints
+
+Keep `defineRepositoryApiRoutes` and its static policies. For business authorization, follow the installed authorization Skill’s `references/repository-routes.md`: `authz.db.authorizeRepository({ repository, resource, actions })` binds Repository methods to typed business actions and narrows the existing policy through middleware. Authenticate first and cover every action of the protected exposure. Use the shortcut when one Repository operation and one database scope complete the action with standard input/output; independent type/length validation can remain middleware. Persisted-state checks, side effects, multiple scopes and enriched responses require custom handlers: project title/notes editing fits the shortcut, while draft quote editing, quote submission and order delivery do not. One resource can use both styles for different actions. Do not substitute collection-aggregated grants for a business-action decision.
+
+Static endpoint policies only narrow user grants. Read/write relation capabilities must be explicitly granted; a relation in the static shape does not create permission. Use the authorization Skill's `references/business-module.md` for the full workflow and `references/fluent-registration.md` for field/relation declarations. The installable authorization example demonstrates quote submission and delivery responsibilities.
 
 ## Scope middleware to paths you own
 
@@ -171,7 +166,7 @@ const routes: readonly AppRouteContribution<Application>[] = [
 export default routes;
 ```
 
-Declaration modules must not connect to the database, start workers, or execute route factories at import time. `server:inspect` imports them.
+Declaration modules must not connect to the database, start workers, or execute route factories at import time.
 
 ## Calling from the browser
 
