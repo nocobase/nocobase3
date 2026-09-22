@@ -78,6 +78,7 @@ describe('AIConversationService tool context', () => {
     expect(createAIEmployee).toHaveBeenCalledWith(
       expect.objectContaining({
         from: 'main-agent',
+        runtime: expect.objectContaining({ translate: expect.any(Function) }),
         state: {
           sessionId: 'session-1',
           model: resolvedModel,

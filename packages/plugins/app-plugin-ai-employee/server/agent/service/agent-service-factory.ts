@@ -14,6 +14,7 @@ import { loggingToken } from '@nocobase/app-server/logging';
 import { cachingToken } from '@nocobase/app-server/caching';
 import type {
   AgentContext,
+  AgentRuntime,
   AgentState,
   AIManager,
   ToolsEntity,
@@ -32,7 +33,7 @@ import type { ConversationPersistence } from '../contracts/persistence.js';
 import { DatabaseConversationPersistence } from '../conversation/persistence/database.js';
 import { ConversationProvider } from '../conversation/conversation-provider.js';
 import { createAgentContext } from '../context.js';
-import type { Actor, ModelRef, Translate } from '../../types.js';
+import type { Actor, ModelRef } from '../../types.js';
 import {
   repositoryFactoryToken,
   type RepositoryFactory,
@@ -64,8 +65,8 @@ export interface CreateEmployeeOptions {
    */
   readonly systemPrompt?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
-  readonly translate?: Translate;
-  readonly getHeader?: (name: string) => string | undefined;
+  /** What the host lends this execution, handed on to every tool of it. */
+  readonly runtime: AgentRuntime;
 }
 
 export interface CreateAgentOptions {
@@ -77,8 +78,8 @@ export interface CreateAgentOptions {
   readonly skills?: readonly string[];
   readonly persistence?: ConversationPersistence;
   readonly actor?: Actor;
-  readonly translate?: Translate;
-  readonly getHeader?: (name: string) => string | undefined;
+  /** Defaults to the application's own logger and no request. */
+  readonly runtime?: AgentRuntime;
 }
 
 export class AgentServiceFactory {
@@ -123,18 +124,13 @@ export class AgentServiceFactory {
     // The model is resolved here and nowhere else, so the state a tool reads
     // and the LLM the agent runs on come from this one call. It is the only
     // field of the state this factory replaces.
-    const agentContext = this.createContext(
-      actor,
-      options.translate,
-      options.getHeader,
-      {
-        ...options.state,
-        model: await managers.aiEmployeesManager.resolveModel(
-          employee,
-          options.state.model,
-        ),
-      },
-    );
+    const agentContext = this.createContext(actor, options.runtime, {
+      ...options.state,
+      model: await managers.aiEmployeesManager.resolveModel(
+        employee,
+        options.state.model,
+      ),
+    });
     const contextOptions = {
       employee,
       sessionId,
@@ -145,7 +141,7 @@ export class AgentServiceFactory {
         metadata: { kind: 'ai-employee' },
       },
       actor,
-      translate: options.translate,
+      translate: options.runtime.translate,
       agentContext,
       resolveModel: (model?: ModelRef | null) =>
         managers.aiEmployeesManager.resolveModel(employee, model),
@@ -159,7 +155,7 @@ export class AgentServiceFactory {
       toolMessages: repositories.aiToolMessages,
       usersAiEmployees: repositories.usersAiEmployees,
       frontendTools: options.state.frontendTools,
-      getHeader: options.getHeader,
+      getHeader: options.runtime.getHeader,
       systemMessage: options.systemPrompt,
       skillSettings: options.skillSettings,
       webSearch: options.state.webSearch,
@@ -197,7 +193,7 @@ export class AgentServiceFactory {
           fileStorage: managers.fileStorage,
           documentLoaders: managers.documentLoaders,
           caching: this.cachingService,
-          getHeader: options.getHeader,
+          getHeader: options.runtime.getHeader,
         }),
         checkpointer:
           options.from === 'sub-agent'
@@ -263,8 +259,7 @@ export class AgentServiceFactory {
       username: options.username,
       agentContext: this.createContext(
         options.actor ?? { id: 0, roles: [], isRoot: true },
-        options.translate,
-        options.getHeader,
+        options.runtime ?? { logger: this.loggerService },
         { sessionId, model },
       ),
       model,
@@ -295,14 +290,9 @@ export class AgentServiceFactory {
 
   private createContext(
     actor: Actor,
-    translate: Translate | undefined,
-    getHeader: ((name: string) => string | undefined) | undefined,
+    runtime: AgentRuntime,
     state: AgentState,
   ): AgentContext {
-    return createAgentContext({
-      actor,
-      state,
-      runtime: { logger: this.loggerService, translate, getHeader },
-    });
+    return createAgentContext({ actor, state, runtime });
   }
 }

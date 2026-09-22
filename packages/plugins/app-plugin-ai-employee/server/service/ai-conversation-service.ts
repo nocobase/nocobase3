@@ -11,6 +11,7 @@ import type { ConversationTransport } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
 import type {
   AgentContext,
+  AgentRuntime,
   AgentState,
   AIEmployeeEntity,
   AIMessageInput,
@@ -324,22 +325,26 @@ export class AIConversationService {
     this.subAgentsDispatcher = options.subAgentsDispatcher;
     this.agentServiceFactory = options.agentServiceFactory;
   }
+  /** What the host lends one execution: this application's logger, plus the
+   * caller's language and headers. */
+  private agentRuntime(transport: ConversationTransport): AgentRuntime {
+    return {
+      logger: this.logger,
+      translate: transport.translate,
+      getHeader: transport.getHeader,
+    };
+  }
+
   private createAgentContext({
     actor,
     state,
-    translate,
-    getHeader,
+    runtime,
   }: {
     actor: Actor;
     state: AgentState;
-    translate?: Translate;
-    getHeader?: (name: string) => string | undefined;
+    runtime: AgentRuntime;
   }): AgentContext {
-    return createAgentContext({
-      actor,
-      state,
-      runtime: { logger: this.logger, translate, getHeader },
-    });
+    return createAgentContext({ actor, state, runtime });
   }
 
   /**
@@ -807,7 +812,7 @@ export class AIConversationService {
   }) {
     const userId = String(actor.id);
     const { sessionId } = state;
-    const { translate, getHeader } = transport;
+    const { translate } = transport;
 
     try {
       if (!incomingMessages) {
@@ -905,8 +910,7 @@ export class AIConversationService {
           ...state,
           handoffMessages: userDecisions ? messages : undefined,
         },
-        translate,
-        getHeader,
+        runtime: this.agentRuntime(transport),
       });
       const runStream = (request: AgentRequest) =>
         this.consumeAgentStream(
@@ -1072,7 +1076,7 @@ export class AIConversationService {
   }) {
     const userId = String(actor.id);
     const { sessionId } = state;
-    const { translate, getHeader } = transport;
+    const { translate } = transport;
 
     try {
       const conversation = await this.aiConversationsManager.getConversation({
@@ -1140,8 +1144,7 @@ export class AIConversationService {
         systemPrompt,
         skillSettings,
         state: { ...state, messageId },
-        translate,
-        getHeader,
+        runtime: this.agentRuntime(transport),
       });
       const request: AgentRequest = {
         messageId,
@@ -1185,12 +1188,11 @@ export class AIConversationService {
   }) {
     const userId = String(actor.id);
     const { sessionId } = state;
-    const { translate, getHeader } = transport;
+    const { translate } = transport;
     const agentContext = this.createAgentContext({
       actor,
       state,
-      translate,
-      getHeader,
+      runtime: this.agentRuntime(transport),
     });
     const conversation = await this.aiConversationsManager.getConversation({
       sessionId,
@@ -1312,7 +1314,6 @@ export class AIConversationService {
   }) {
     const userId = String(actor.id);
     const { sessionId } = state;
-    const { translate, getHeader } = transport;
     const target = streamTarget(transport);
     try {
       const conversation = await this.aiConversationsManager.getConversation({
@@ -1372,8 +1373,7 @@ export class AIConversationService {
         systemPrompt,
         skillSettings,
         state: { ...state, messageId: message.messageId },
-        translate,
-        getHeader,
+        runtime: this.agentRuntime(transport),
       });
       await this.consumeAgentStream(
         sessionId,

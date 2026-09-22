@@ -59,6 +59,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
       },
     });
     const resolvedModel = { llmService: 'openai', model: 'gpt-5' };
+    const runtime = { logger: { error: vi.fn() } } as never;
     const createAIEmployee = vi.fn().mockResolvedValue({ invoke });
     const dispatcher = new SubAgentsDispatcher({
       ai: {} as never,
@@ -106,6 +107,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
         {
           actor: { id: 'user-1', roles: ['member'], isRoot: false },
           state: { sessionId: 'main-session', timezone: 'Asia/Shanghai' },
+          runtime,
         },
       ),
     ).resolves.toBe('Search result');
@@ -116,6 +118,7 @@ describe('SubAgentsDispatcher direct dependencies', () => {
       expect.objectContaining({
         actor: { id: 'user-1', roles: ['member'], isRoot: false },
         from: 'sub-agent',
+        runtime,
         state: expect.objectContaining({
           sessionId: 'sub-session',
           timezone: 'Asia/Shanghai',
