@@ -133,15 +133,12 @@ export class AgentServiceFactory {
     });
     const contextOptions = {
       employee,
-      sessionId,
       currentConversation: {
         sessionId,
         from: options.from ?? 'main-agent',
         username: String(employee.username ?? ''),
         metadata: { kind: 'ai-employee' },
       },
-      actor,
-      translate: options.runtime.translate,
       agentContext,
       resolveModel: (model?: ModelRef | null) =>
         managers.aiEmployeesManager.resolveModel(employee, model),
@@ -154,11 +151,8 @@ export class AgentServiceFactory {
       employees: repositories.aiEmployees,
       toolMessages: repositories.aiToolMessages,
       usersAiEmployees: repositories.usersAiEmployees,
-      frontendTools: options.state.frontendTools,
-      getHeader: options.runtime.getHeader,
       systemMessage: options.systemPrompt,
       skillSettings: options.skillSettings,
-      webSearch: options.state.webSearch,
     };
     const context = createAIEmployeeAgentContextProvider(contextOptions);
     const persistence = new DatabaseConversationPersistence({

@@ -17,7 +17,12 @@ const createFixture = (
       model: 'model-1',
     })),
   };
-  const agentContext = { actor, ai: {}, state };
+  const agentContext = {
+    actor,
+    ai: {},
+    state: { sessionId: 'session-1', ...state },
+    runtime: { logger: { warn: vi.fn(), error: vi.fn() } },
+  };
   const employeeModel = {
     llmService: 'employee-service',
     model: 'employee-model',
@@ -30,8 +35,6 @@ const createFixture = (
       about: 'Employee prompt',
       chatSettings: { systemPromptMode: promptMode },
     },
-    sessionId: 'session-1',
-    actor,
     agentContext,
     resolveModel,
     llmProviderManager,

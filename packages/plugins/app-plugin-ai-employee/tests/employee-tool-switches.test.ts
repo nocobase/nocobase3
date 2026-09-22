@@ -43,12 +43,18 @@ function createFixture(
       ...(enabledTools === undefined ? {} : { enabledTools }),
     },
   };
+  // Web search is state now, so a case that varies it varies the state.
+  const { webSearch = true, ...restOverrides } = overrides as {
+    webSearch?: boolean;
+  } & Partial<AIEmployeeAgentContextProviderOptions>;
   const options = {
     employee,
-    sessionId: 'test',
-    actor: { id: 1, roles: [], isRoot: false },
     currentConversation: { sessionId: 'test' },
-    agentContext: { state: { sessionId: 'test' } },
+    agentContext: {
+      actor: { id: 1, roles: [], isRoot: false },
+      state: { sessionId: 'test', webSearch },
+      runtime: { logger: { warn: vi.fn(), error: vi.fn() } },
+    },
     toolsManager: {
       listTools: vi.fn(async (filter: { scope?: string }) =>
         tools.filter((entry) => !filter.scope || entry.scope === filter.scope),
@@ -68,11 +74,10 @@ function createFixture(
     },
     conversations: { findOne: async () => null },
     toolMessages: { find: async () => [] },
-    webSearch: true,
     ...(sessionTools
       ? { skillSettings: { tools: sessionTools, toolsVersion: 1 } }
       : {}),
-    ...overrides,
+    ...restOverrides,
   } as unknown as AIEmployeeAgentContextProviderOptions;
   return {
     provider: new AIEmployeeAgentContextProvider(options),

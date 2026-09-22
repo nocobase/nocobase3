@@ -5,6 +5,7 @@ import type {
   ResolvedAgentLLM,
 } from '../../types.js';
 import type {
+  AgentActor,
   AgentContext,
   AIEmployee as AIEmployeeType,
   AIMessageInput,
@@ -18,7 +19,7 @@ import type {
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import type { AIEmployeeSkillSettings } from './options.js';
-import type { Actor, ModelRef, Translate } from '../../../types.js';
+import type { ModelRef, Translate } from '../../../types.js';
 import type { BuiltInManager } from '../../../manager/built-in-manager.js';
 import type { KnowledgeBaseManager } from '../../../manager/knowledge-base-manager.js';
 import type {
@@ -47,10 +48,12 @@ import {
 
 export interface AIEmployeeAgentContextProviderOptions {
   readonly employee: AIEmployeeType;
-  readonly sessionId: string;
   readonly currentConversation: CurrentConversation;
-  readonly actor: Actor;
-  readonly translate?: Translate;
+  /**
+   * What this execution is and what the host lent it. The session, the actor,
+   * the requested web search, the frontend tools, the caller's language and
+   * headers all live here; nothing restates them beside it.
+   */
   readonly agentContext: AgentContext;
   /**
    * Applies the employee's model policy to an optionally requested model. A
@@ -66,19 +69,13 @@ export interface AIEmployeeAgentContextProviderOptions {
   readonly employees: AIEmployeeRepository;
   readonly toolMessages: AIToolMessageRepository;
   readonly usersAiEmployees: UserAIEmployeeRepository;
-  readonly frontendTools?: readonly unknown[];
-  readonly getHeader?: (name: string) => string | undefined;
   readonly systemMessage?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
-  readonly webSearch?: boolean;
 }
 
 export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly employee: AIEmployeeType;
-  private readonly sessionId: string;
   private readonly conversation: CurrentConversation;
-  private readonly actor: Actor;
-  private readonly translate?: Translate;
   public readonly agentContext: AgentContext;
   private readonly resolveModel: (model?: ModelRef | null) => Promise<ModelRef>;
   private readonly llmProviderManager: LLMProviderManager;
@@ -90,18 +87,30 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly employees: AIEmployeeRepository;
   private readonly toolMessages: AIToolMessageRepository;
   private readonly usersAiEmployees: UserAIEmployeeRepository;
-  private readonly frontendTools: readonly unknown[];
-  private readonly getHeader: (name: string) => string | undefined;
   private readonly systemMessage: string;
   private readonly skillSettings?: AIEmployeeSkillSettings;
-  private readonly webSearch: boolean;
+
+  // Read from the context rather than copied beside it, so the two can never
+  // come apart.
+  private get sessionId(): string {
+    return this.agentContext.state.sessionId;
+  }
+  private get actor(): AgentActor {
+    return this.agentContext.actor;
+  }
+  private get translate(): Translate | undefined {
+    return this.agentContext.runtime.translate;
+  }
+  private get frontendTools(): readonly unknown[] {
+    return this.agentContext.state.frontendTools ?? [];
+  }
+  private get webSearch(): boolean {
+    return this.agentContext.state.webSearch ?? false;
+  }
 
   public constructor(options: AIEmployeeAgentContextProviderOptions) {
     this.employee = options.employee;
-    this.sessionId = options.sessionId;
     this.conversation = options.currentConversation;
-    this.actor = options.actor;
-    this.translate = options.translate;
     this.agentContext = options.agentContext;
     this.resolveModel = options.resolveModel;
     this.llmProviderManager = options.llmProviderManager;
@@ -113,11 +122,8 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     this.employees = options.employees;
     this.toolMessages = options.toolMessages;
     this.usersAiEmployees = options.usersAiEmployees;
-    this.frontendTools = options.frontendTools ?? [];
-    this.getHeader = options.getHeader ?? (() => undefined);
     this.systemMessage = options.systemMessage ?? '';
     this.skillSettings = options.skillSettings;
-    this.webSearch = options.webSearch ?? false;
     this.builtInManager.setupBuiltInInfo({
       employee: this.employee,
       translate: this.translate,
@@ -227,7 +233,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
 
     const availableSkills = await this.getAvailableSkills();
     const availableAIEmployees = await this.getAvailableAIEmployees();
-    const timezone = this.getHeader('x-timezone') ?? undefined;
+    const timezone = this.agentContext.state.timezone;
     const systemPrompt = getSystemPrompt({
       aiEmployee: {
         nickname: employee.nickname ?? employee.username,
