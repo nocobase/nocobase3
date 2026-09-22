@@ -45,6 +45,16 @@ export {
   type AppCollectionsArtifactResult,
 } from './collections-artifact.js';
 export {
+  runAppCollectionsDoctor,
+  type AppCollectionsDoctorConnectionResult,
+  type AppCollectionsDoctorOptions,
+  type AppCollectionsDoctorResult,
+} from './collections-doctor.js';
+export {
+  selectAppDatabaseConnections,
+  type AppDatabaseConnectionSelection,
+} from './connection-selection.js';
+export {
   runAppMigrations,
   runAppSeeds,
   runAppDatabaseTasks,

@@ -160,6 +160,7 @@
     "db:rollback": "tsx ./cli/index.ts app db rollback",
     "db:redo": "tsx ./cli/index.ts app db redo",
     "db:unlock": "tsx ./cli/index.ts app db unlock",
+    "db:doctor": "tsx ./cli/index.ts app db doctor",
     "plugin:register": "nocobase plugin register",
     "plugin:inspect": "nocobase plugin inspect",
     "plugin:unregister": "nocobase plugin unregister",

@@ -53,13 +53,15 @@ Once the branch is merged, do not edit it at all: write a new migration for the 
 
 Two things are never the answer here. `pnpm db:repair` only rewrites the recorded checksum, so it makes an un-applied change look applied — the schema stays wrong and nothing says so. Editing `__nocobase_migrations`, `__nocobase_collection_metadata` or a physical table by hand splits the two records of what exists: dropping a table without its metadata record leaves the Collection unresolvable, and the next run fails with `Metadata Collection "…" maps to missing physical table "…"` before it reaches your migration.
 
+`pnpm db:doctor` compares every metadata record with the table behind it and reports what disagrees; `--fix` deletes the records whose table is gone, which is the state a hand-rolled reset leaves behind. Anything else it finds is reported only — the table exists and something in it no longer matches what was recorded, which a migration has to reconcile.
+
 Each internal table has a command that maintains it, and none of them should be edited directly:
 
 | Table                                               | Holds                                     | Maintained by                                     |
 | --------------------------------------------------- | ----------------------------------------- | ------------------------------------------------- |
 | `__nocobase_migrations`                             | Which migrations ran, in which batch      | `db:apply`, `db:rollback`, `db:redo`, `db:repair` |
 | `__nocobase_seeds`                                  | Which seeds ran                           | `db:apply`, `db:repair`                           |
-| `__nocobase_collection_metadata`                    | The Collection metadata behind each table | Migrations, through `builder`                     |
+| `__nocobase_collection_metadata`                    | The Collection metadata behind each table | Migrations, through `builder`; `db:doctor`        |
 | `__nocobase_migration_lock`, `__nocobase_seed_lock` | The run in progress                       | The run itself, and `db:unlock`                   |
 
 ## When a run is killed while it holds the lock
@@ -99,6 +101,16 @@ A checksum recorded when a migration or seed ran no longer matching its current 
 `pnpm db:repair` (`nocobase app db repair`) rewrites the recorded checksums to match the current sources, which is how the warning is cleared once the change is confirmed intentional. One command covers both migrations and seeds. It executes nothing and changes no schema or data. Preview with `--dry-run` first; `--dry-run --json` is the form to run in CI when drift should gate a deploy. It never deletes a history record, so a repair cannot make an executed migration run again.
 
 Repair records a decision; it does not make one. It is the right tool for drift where the schema is already what the new source would produce — a reformat, a comment, a rebuild that produced different output. When the edit changed what the migration does, repair is the wrong tool in both directions: while the branch is unmerged, `pnpm db:redo` applies the correction; once it is merged, a new migration does. Rewriting the checksum instead leaves the database with the old schema and nothing recording that it differs.
+
+### Why the default is `warn`
+
+Reporting drift rather than refusing to run is a deliberate default, not an oversight, and it follows from what the checksum covers: a migration's checksum is a hash of its file contents, so running the formatter over the migration directory or adding a comment changes it. Under `error` that harmless edit stops the application from starting until someone runs `db repair`.
+
+The same default protects a deployment for a different reason. Startup runs migrations, and a failure there stops startup, so a policy of refusing to run turns drift into an outage. Drift is reachable on a legitimate upgrade path — the compiled representation of a migration is not guaranteed to hash the same as the source a database recorded, which is why verified legacy checksums are converted under the task lock rather than rejected.
+
+What `warn` costs is that an edit to an executed migration is easy to miss: the run says it skipped the migration, the database keeps the schema the old source produced, and only the warning says otherwise. That is what the warning's wording is for — it names `db redo` for an edit that changed what ran, and `db repair` only for one that did not.
+
+Set `onChecksumMismatch: 'error'` per connection when both halves of that trade look different in your project: the migration directory is not formatted or commented after the fact, and a pipeline already gates on `db repair --dry-run --json`, so a refusal is informative rather than an obstacle. Set it for the connection rather than at the top level, so a connection carrying plugin migrations — whose sources you do not control — is not held to it.
 
 ## Verify
 

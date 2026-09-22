@@ -56,6 +56,12 @@ export type {
 } from './collection/types.js';
 export type { CollectionBuilder } from './collection/builder/builder.js';
 export type {
+  CollectionDiagnosis,
+  CollectionDiagnosisIssue,
+  CollectionDiagnosisIssueCode,
+  ConnectionCollections,
+} from './collection/registry/types.js';
+export type {
   CollectionResolutionResult,
   CollectionResolutionWarning,
 } from './collection/resolver/types.js';
