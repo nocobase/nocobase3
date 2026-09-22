@@ -8,6 +8,7 @@ import DbReset from './commands/db-reset.js';
 import DbRepair from './commands/db-repair.js';
 import DbRollback from './commands/db-rollback.js';
 import DbRedo from './commands/db-redo.js';
+import DbUnlock from './commands/db-unlock.js';
 import Collections from './commands/collections-generate.js';
 import I18n from './commands/i18n-check.js';
 import Upload from './commands/upload.js';
@@ -28,6 +29,7 @@ export function createAppCommands(options: AppCommandsOptions): AppCliCommands {
     'db:repair': DbRepair,
     'db:rollback': DbRollback,
     'db:redo': DbRedo,
+    'db:unlock': DbUnlock,
     'collections:generate': Collections,
     'i18n:check': I18n,
     ...(options.publishing ? { upload: Upload, deploy: Deploy } : {}),

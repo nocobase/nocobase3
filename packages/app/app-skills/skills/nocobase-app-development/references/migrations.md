@@ -60,7 +60,19 @@ Each internal table has a command that maintains it, and none of them should be 
 | `__nocobase_migrations`                             | Which migrations ran, in which batch      | `db:apply`, `db:rollback`, `db:redo`, `db:repair` |
 | `__nocobase_seeds`                                  | Which seeds ran                           | `db:apply`, `db:repair`                           |
 | `__nocobase_collection_metadata`                    | The Collection metadata behind each table | Migrations, through `builder`                     |
-| `__nocobase_migration_lock`, `__nocobase_seed_lock` | The run in progress                       | Acquired and released by the run itself           |
+| `__nocobase_migration_lock`, `__nocobase_seed_lock` | The run in progress                       | The run itself, and `db:unlock`                   |
+
+## When a run is killed while it holds the lock
+
+Migrations and seeds each run inside a lock, so two runs cannot apply the same history at once. A run holds its lock only while it keeps a heartbeat current: if it is killed — SIGKILL, a stopped container, a lost machine — the row stays behind but stops being refreshed, and the next run takes it over after 30 seconds and continues. Nothing has to be cleaned up by hand, and the takeover is logged, because it means a previous run did not shut down cleanly.
+
+Waiting is not always wanted, and a lock is sometimes worth looking at:
+
+```bash
+pnpm db:unlock
+```
+
+It reports who holds each lock and releases the ones that have stopped beating. A lock that is still beating is reported rather than released: a run is working behind it, and `--force` releases it anyway, which lets a second run start beside the first. Both the migration and the seed lock are covered, for the selected connections.
 
 `migrate --fresh` was the earlier form and is gone. It reset the schema without reseeding, so it left the seed history cleared but no seed executed; the default connection recovered on the next startup and a connection with `autoRun: false` did not.
 

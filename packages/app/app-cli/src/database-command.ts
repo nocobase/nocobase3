@@ -185,6 +185,61 @@ export async function runDatabaseRedoCommand(
   if (!result.ok) command.exit(1);
 }
 
+/**
+ * Releases the migration and seed locks for the selected connections.
+ *
+ * A run that is killed leaves its lock row behind; it expires on its own once
+ * its holder stops sending heartbeats, and a later run takes it over. This is
+ * for the case where waiting is not wanted, and for reporting who holds one.
+ */
+export async function runDatabaseUnlockCommand(
+  command: CommandOutput,
+  flags: DatabaseSelectionFlags & { force?: boolean },
+  context: Pick<AppCommandContext, 'loadRuntime' | 'createApp'>,
+): Promise<void> {
+  const result = await executeWithApplication(command, flags, context, (app) =>
+    runAppDatabaseTasks(app.config.get<AppDatabaseConfig>('database')!, {
+      ...planOptions(app, flags),
+      kind: ['migrations', 'seeds'],
+      operation: 'unlock',
+      force: flags.force,
+    }),
+  );
+  if (!result) return;
+
+  if (flags.json) command.logJson(result);
+  else {
+    if (!result.results.length) command.log('No database is configured.');
+    for (const entry of result.results) {
+      command.log(
+        `[${entry.connection}] ${entry.kind}: ${entry.status}${entry.reason ? ` (${entry.reason})` : ''}${entry.error ? `: ${entry.error}` : ''}`,
+      );
+      if (entry.status !== 'completed') continue;
+      if (entry.released) {
+        command.log(`Released: ${describeLock(entry.lock)}`);
+        continue;
+      }
+      if (entry.lockReason === 'active') {
+        command.log(
+          `Held: ${describeLock(entry.lock)}. A run is still sending heartbeats; pass --force to release it anyway, which lets a second run start beside it.`,
+        );
+        continue;
+      }
+      command.log('Not held.');
+    }
+  }
+  if (!result.ok) command.exit(1);
+}
+
+function describeLock(lock: AppDatabaseTaskResult['lock']): string {
+  if (!lock) return 'unknown';
+  const since = lock.lockedAt ? ` since ${lock.lockedAt.toISOString()}` : '';
+  const beat = lock.heartbeatAt
+    ? `, last heartbeat ${lock.heartbeatAt.toISOString()}`
+    : '';
+  return `"${lock.lockedBy}"${since}${beat}`;
+}
+
 function runRollbackTasks(
   app: Application,
   flags: DatabaseSelectionFlags,

@@ -21,6 +21,7 @@ export function withSeedLock<T>(
       label: 'Seed',
       tableName: options.tableName ?? DEFAULT_SEED_LOCK_TABLE,
       acquireTimeoutMs: options.acquireTimeoutMs,
+      onStaleLock: options.onStaleLock,
     },
     fn,
   );
