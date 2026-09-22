@@ -58,6 +58,7 @@ class DefaultSeeder implements Seeder {
       seedConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_SEED_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
       },
       async () => {
         await ensureSeedTable(
@@ -106,6 +107,7 @@ class DefaultSeeder implements Seeder {
       seedConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_SEED_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
       },
       async () => {
         await ensureSeedTable(seedConnection, tableName);

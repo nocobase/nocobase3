@@ -2,6 +2,8 @@
 
 import process from 'node:process';
 
+import { watchStartupShutdownSignals } from '@nocobase/app-server/node';
+
 import { startAppHostFromEnv, type AppHost } from './index.ts';
 
 let appHost: AppHost | null = null;
@@ -28,14 +30,26 @@ const handleShutdownSignal = (): void => {
   });
 };
 
-process.once('SIGINT', handleShutdownSignal);
-process.once('SIGTERM', handleShutdownSignal);
+// Until the host exists there is nothing to shut down, and exiting outright
+// would abandon the migration and seed locks that startup holds. The signal is
+// recorded instead and answered once startup has released them.
+const startupSignals = watchStartupShutdownSignals();
 
 startAppHostFromEnv()
   .then((host) => {
     appHost = host;
+    const startupSignal = startupSignals.received();
+    startupSignals.dispose();
+    if (startupSignal) {
+      handleShutdownSignal();
+      return;
+    }
+
+    process.once('SIGINT', handleShutdownSignal);
+    process.once('SIGTERM', handleShutdownSignal);
   })
   .catch((error) => {
+    startupSignals.dispose();
     console.error(error);
     process.exit(1);
   });

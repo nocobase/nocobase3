@@ -99,6 +99,7 @@ class DefaultMigrator implements Migrator {
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
       },
       async () => {
         await ensureMigrationTable(
@@ -194,6 +195,7 @@ class DefaultMigrator implements Migrator {
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
       },
       async () => {
         await ensureMigrationTable(
@@ -262,6 +264,7 @@ class DefaultMigrator implements Migrator {
       migrationConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_MIGRATION_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
       },
       async () => {
         await ensureMigrationTable(migrationConnection, tableName);
