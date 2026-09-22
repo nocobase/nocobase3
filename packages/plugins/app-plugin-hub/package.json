@@ -80,7 +80,7 @@
     "@nocobase/drive": "workspace:^",
     "@sinclair/typebox": "catalog:",
     "hono": "catalog:",
-    "tar": "^7.4.3",
+    "tar": "catalog:",
     "yaml": "^2.8.1",
     "better-auth": "catalog:",
     "@nocobase/logging": "workspace:^"
