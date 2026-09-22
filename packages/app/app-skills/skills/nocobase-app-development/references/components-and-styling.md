@@ -41,6 +41,12 @@ pnpm exec shadcn search @shadcn -q dialog   # find one by keyword
 
 `search` takes a registry namespace and a `-q` query, not a bare component name.
 
+## Customize template and registry components
+
+Prefer configuring existing props, slots, and page composition before changing a template or registry component. If the extension lacks the required option, create an application-specific wrapper or replacement in `client/components/` (or a feature-owned directory outside `client/extensions/`) and compose it from the existing primitives and public hooks. A wrapper must genuinely control the requested behavior; hiding a hard-coded link through CSS or DOM manipulation is not a substitute for a custom form. Switch the consuming page to the new component while preserving the original extension files for reuse and upgrades.
+
+Application ownership permits edits but does not make editing `client/extensions/` the default customization path. Change the baseline only when the user explicitly requests it or composition is impractical; keep any such change narrow and explain why. New components should preserve shared theme tokens, accessibility, validation, and loading/error behavior rather than introduce a second implementation of the underlying service.
+
 ## Compose upward
 
 `client/components/ui/` holds primitives. Build your own components on top of them and put those in `client/components/`.

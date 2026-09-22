@@ -29,7 +29,7 @@ Add domain APIs here, in this application. Do not create a plugin package for a 
 - Read configuration through the typed config, not `process.env`, inside providers and routes.
 - Schema changes are migrations in `../database/main/migrations/`, spelled out explicitly and never importing an evolving definition.
 
-Before finishing, run `pnpm typecheck`, `pnpm test`, `pnpm lint`, and `pnpm build`. Cover behavior with tests.
+Before finishing, run only the formatting, lint, type checking, tests, builds, and runtime checks relevant to the change, scoped to affected files, projects, or packages and their affected consumers. Follow the verification scope rules in the application root `AGENTS.md`; do not default to full-application or workspace-wide checks after each edit. Cover behavior with tests.
 
 ## Runtime paths and application creation
 
