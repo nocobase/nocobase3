@@ -8,6 +8,7 @@
     "dev:registry": "pnpm registry:build",
     "registry:build": "pnpm exec shadcn build registry.json --output public/r",
     "build": "pnpm registry:build && vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
     "simple-icons": "^16.30.0"
   },
   "devDependencies": {
+    "@nocobase/dev-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
