@@ -1191,13 +1191,13 @@ export class AIConversationService {
     transport: ConversationTransport;
   }) {
     const userId = String(actor.id);
-    const { translate } = transport;
+    const { translate, getHeader } = transport;
     const agentContext = this.createAgentContext({
       actor,
       sessionId,
       turn,
       translate,
-      getHeader: transport.getHeader,
+      getHeader,
     });
     const conversation = await this.aiConversationsManager.getConversation({
       sessionId,
