@@ -14,6 +14,10 @@ import {
   recordSeedCompleted,
 } from './internal/history.js';
 import { DEFAULT_SEED_LOCK_TABLE, withSeedLock } from './internal/lock.js';
+import {
+  readTaskLockState,
+  releaseTaskLock,
+} from '../migration/internal/lock.js';
 import { loadSeeds } from './loader.js';
 import type {
   CreateSeederOptions,
@@ -23,6 +27,12 @@ import type {
   SeedRepairResult,
   SeedRunResult,
 } from './types.js';
+import type {
+  MigrationConnection,
+  TaskLockReleaseOptions,
+  TaskLockReleaseResult,
+  TaskLockState,
+} from '../migration/types.js';
 
 /** Executes pending seed definitions for one database connection. */
 export interface Seeder {
@@ -33,6 +43,10 @@ export interface Seeder {
    * reported by a run. Executes no seed and changes no data.
    */
   repair(options?: SeedRepairOptions): Promise<SeedRepairResult>;
+  /** The seed lock as it stands, or undefined when no run holds it. */
+  lock(): Promise<TaskLockState | undefined>;
+  /** Releases the seed lock; an active one needs `force`. */
+  unlock(options?: TaskLockReleaseOptions): Promise<TaskLockReleaseResult>;
 }
 
 /** Creates a seed runner backed by the supplied database manager. */
@@ -42,6 +56,30 @@ export function createSeeder(options: CreateSeederOptions): Seeder {
 
 class DefaultSeeder implements Seeder {
   constructor(private readonly options: CreateSeederOptions) {}
+
+  async lock(): Promise<TaskLockState | undefined> {
+    return readTaskLockState(this.lockConnection(), this.lockTableName());
+  }
+
+  async unlock(
+    options: TaskLockReleaseOptions = {},
+  ): Promise<TaskLockReleaseResult> {
+    return releaseTaskLock(
+      this.lockConnection(),
+      this.lockTableName(),
+      options,
+    );
+  }
+
+  private lockConnection(): MigrationConnection {
+    return createMigrationConnection(
+      this.options.database.connection(this.options.connection),
+    );
+  }
+
+  private lockTableName(): string {
+    return this.options.lockTableName ?? DEFAULT_SEED_LOCK_TABLE;
+  }
 
   async run(): Promise<SeedRunResult> {
     const connection = this.options.database.connection(
@@ -58,6 +96,8 @@ class DefaultSeeder implements Seeder {
       seedConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_SEED_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureSeedTable(
@@ -106,6 +146,8 @@ class DefaultSeeder implements Seeder {
       seedConnection,
       {
         tableName: this.options.lockTableName ?? DEFAULT_SEED_LOCK_TABLE,
+        acquireTimeoutMs: this.options.lockAcquireTimeoutMs,
+        onStaleLock: this.options.onStaleLock,
       },
       async () => {
         await ensureSeedTable(seedConnection, tableName);

@@ -1,5 +1,27 @@
 # @nocobase/app-tools
 
+## 0.0.2-beta.1
+
+### Patch Changes
+
+- 56613b2: Choose a development port that nothing already answers on, not merely one that can be bound. macOS lets a wildcard listener and a specific-address listener share a port, so binding loopback succeeds while the other process receives the loopback traffic — and readiness, which is probed over loopback, then observes a service that is not ours and waits forever. The port probe now connects before accepting a candidate, so `pnpm dev` moves to the next port instead of hanging.
+- dd0e02c: Use Execa to manage development process trees, preserve cleanup on repeated termination signals and launcher exit, and report startup progress. Remove automatic native watcher probes; polling is now explicitly configured.
+
+  Exclude installed dependencies from server file watching, including pnpm dependencies outside the application's directory.
+
+- Updated dependencies [fa01814]
+- Updated dependencies [ca3188e]
+- Updated dependencies [fa01814]
+- Updated dependencies [7bde7bd]
+- Updated dependencies [56613b2]
+- Updated dependencies [ea91af0]
+- Updated dependencies [fc34a66]
+- Updated dependencies [5380642]
+- Updated dependencies [3187ace]
+  - @nocobase/app-server@1.0.0-beta.23
+  - @nocobase/dev-config@0.1.0-beta.11
+  - @nocobase/nb3-cli@1.0.0-beta.11
+
 ## 0.0.2-beta.0
 
 ### Patch Changes

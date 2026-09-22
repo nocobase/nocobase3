@@ -129,7 +129,7 @@ Each context carries its own tools, and which one to use is not a free choice �
 The rules are absolute, because these files are history that has already run on other machines:
 
 - **Self-contained.** Spell out every table, field, index, constraint and metadata operation in the file. Never import a Collection definition, model, registry or shared constant that keeps evolving — that silently changes both the behavior and the checksum of something already applied.
-- **Immutable once merged.** Check with `git log -- <file>` if unsure. Before the branch is merged you may correct the file in place; after it, every change is a new, later file. Never hard-code a previous checksum to make an edited migration look untouched.
+- **Immutable once merged.** Check with `git log -- <file>` if unsure. Before the branch is merged you may correct the file in place; after it, every change is a new, later file. Never hard-code a previous checksum to make an edited migration look untouched. Correcting it in place changes nothing on its own — it is recorded as executed, so a plain apply skips it and the database keeps the schema the old file produced. `pnpm db:redo` rolls the latest batch back and applies it again.
 - **The file name body matches `name`**, and the name is unique across every source in the application.
 - **Declare `irreversible: true`** when there is no real reverse operation, instead of writing a `down()` that quietly does nothing.
 - **A seed is idempotent**, keyed on a stable business value backed by a unique constraint, so a repeated run is a no-op — `upsertOne` is the direct way to express that. A seed context has no `builder` at all, and a seed has no rollback or truncate behavior.
@@ -359,7 +359,7 @@ pnpm lint
 pnpm build
 ```
 
-`pnpm db:apply` against a disposable database is what proves a migration runs; asserting the builder's return value is not. `pnpm db:reset --force` drops the managed schema and reruns everything from empty without calling any `down()` — only for a database that is genuinely disposable. Regenerate collection artifacts afterwards, or `pnpm collections:generate --check` will fail.
+`pnpm db:apply` against a disposable database is what proves a migration runs; asserting the builder's return value is not. `pnpm db:redo` reruns the latest batch through its own `down()` and `up()`, which is what a correction to an unmerged migration needs. `pnpm db:reset --force` drops the managed schema and reruns everything from empty without calling any `down()` — only for a database that is genuinely disposable. Regenerate collection artifacts afterwards, or `pnpm collections:generate --check` will fail.
 
 Cover the empty result, the partial match and the absent relation, not only the happy path. Passing on SQLite does not verify PostgreSQL, MySQL, Oracle or SQL Server; report an unverified dialect rather than implying the behavior is uniform.
 

@@ -117,6 +117,16 @@ export interface CreateMigratorOptions extends LoadMigrationsOptions {
   readonly tableName?: string;
   readonly lockTableName?: string;
   /**
+   * How long to wait for a concurrent run to release the lock before failing.
+   * Defaults to 30 seconds.
+   */
+  readonly lockAcquireTimeoutMs?: number;
+  /**
+   * Called when a lock whose holder stopped sending heartbeats is taken over,
+   * which is how a run recovers from a previous one being killed.
+   */
+  readonly onStaleLock?: (takeover: StaleTaskLockTakeover) => void;
+  /**
    * How to react when an executed migration's source no longer hashes to the
    * checksum recorded for it. Defaults to `warn`.
    */
@@ -135,12 +145,38 @@ export interface MigrationRunResult {
   readonly warnings: ChecksumMismatch[];
 }
 
+export type {
+  StaleTaskLockTakeover,
+  TaskLockReleaseResult,
+  TaskLockState,
+} from './internal/lock.js';
+import type { StaleTaskLockTakeover } from './internal/lock.js';
+
+/** Options accepted by Migrator.unlock(). */
+export interface TaskLockReleaseOptions {
+  /** Release a lock that is still sending heartbeats. */
+  readonly force?: boolean;
+}
+
+/** Options accepted by Migrator.rollback(). */
+export interface MigrationRollbackOptions {
+  /** Report the batch that would roll back without running any `down`. */
+  readonly dryRun?: boolean;
+}
+
 /** Summary returned after rolling back the latest migration batch. */
 export interface MigrationRollbackResult {
   readonly batch: number;
   readonly rolledBack: string[];
+  /**
+   * The batch's history records, in the order they roll back. Present for a
+   * dry run too, so a caller can show what a run would undo and which package
+   * each migration belongs to.
+   */
+  readonly records: MigrationHistoryRecord[];
   /** Checksum drift the `warn` policy allowed the rollback to continue past. */
   readonly warnings: ChecksumMismatch[];
+  readonly dryRun: boolean;
 }
 
 /** Options accepted by Migrator.repair(). */

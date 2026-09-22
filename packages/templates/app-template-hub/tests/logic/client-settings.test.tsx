@@ -125,7 +125,9 @@ describe('settings centre', () => {
     await screen.findByText('Permission Sets page');
 
     expect(
-      await screen.findByRole('button', { name: 'Appearance' }),
+      await screen.findByRole('button', {
+        name: 'Switch between light and dark',
+      }),
     ).toBeVisible();
     // The account menu exposes user details in its panel without a native tooltip.
     expect(

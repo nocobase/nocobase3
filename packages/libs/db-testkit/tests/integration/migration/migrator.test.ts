@@ -306,7 +306,7 @@ describeIntegrationDatabases('migration runner', (context) => {
       skipped: migrationNames.slice(0, 2),
       warnings: [],
     });
-    await expect(migrator.rollback()).resolves.toEqual({
+    await expect(migrator.rollback()).resolves.toMatchObject({
       batch: 2,
       rolledBack: [migrationNames[2]],
       warnings: [],
@@ -440,7 +440,7 @@ describeIntegrationDatabases('migration runner', (context) => {
       },
     ]);
 
-    await expect(migrator.rollback()).resolves.toEqual({
+    await expect(migrator.rollback()).resolves.toMatchObject({
       batch: 1,
       rolledBack: ['202608180002_package_alpha', '202608180001_package_beta'],
       warnings: [],
@@ -558,8 +558,25 @@ describeIntegrationDatabases('migration runner', (context) => {
       await context.db.schema.hasTable(context.table('rollbackUsers')),
     ).toBe(true);
 
-    await expect(migrator.rollback()).resolves.toEqual({
+    // A dry run reports the batch it would undo, with the history record
+    // behind each migration, and touches neither the schema nor the history.
+    const preview = await migrator.rollback({ dryRun: true });
+    expect(preview).toMatchObject({
       batch: 1,
+      dryRun: true,
+      rolledBack: ['202608180001_create_rollback_users'],
+    });
+    expect(preview.records.map((record) => record.name)).toEqual([
+      '202608180001_create_rollback_users',
+    ]);
+    expect(
+      await context.db.schema.hasTable(context.table('rollbackUsers')),
+    ).toBe(true);
+    await expect(context.db(tableName).select()).resolves.toHaveLength(1);
+
+    await expect(migrator.rollback()).resolves.toMatchObject({
+      batch: 1,
+      dryRun: false,
       rolledBack: ['202608180001_create_rollback_users'],
       warnings: [],
     });

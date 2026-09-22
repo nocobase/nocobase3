@@ -30,10 +30,15 @@ const transportLabels: Record<MCPTransport, string> = {
   sse: 'mcp.transportSse',
 };
 
-const transportColors: Record<MCPTransport, string> = {
-  stdio: 'bg-blue-100 text-blue-800',
-  http: 'bg-green-100 text-green-800',
-  sse: 'bg-amber-100 text-amber-800',
+/**
+ * Transport is a category rather than a status, so the three tones come from the
+ * theme's chart series: those are the tokens a preset defines to be told apart
+ * from one another, and unlike fixed palette colours they follow the theme.
+ */
+const transportTones: Record<MCPTransport, string> = {
+  stdio: 'bg-chart-1/20',
+  http: 'bg-chart-2/20',
+  sse: 'bg-chart-3/20',
 };
 
 export default function MCPPage(): ReactElement {
@@ -105,7 +110,7 @@ export default function MCPPage(): ReactElement {
           {error}
         </div>
       ) : null}
-      <div className='overflow-hidden rounded-xl border bg-background'>
+      <div className='overflow-hidden rounded-xl border bg-card'>
         <Table>
           <TableHeader>
             <TableRow>
@@ -150,7 +155,7 @@ export default function MCPPage(): ReactElement {
                     <TableCell>{server.title || '—'}</TableCell>
                     <TableCell>
                       <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${transportColors[server.transport]}`}
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium text-foreground ${transportTones[server.transport]}`}
                       >
                         {t(transportLabels[server.transport])}
                       </span>
@@ -214,7 +219,7 @@ function MCPDrawer({
       }}
     >
       <aside
-        className='absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l bg-background shadow-xl'
+        className='absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l bg-popover shadow-xl'
         role='dialog'
         aria-modal='true'
         aria-label={t('mcp.toolsTitle')}

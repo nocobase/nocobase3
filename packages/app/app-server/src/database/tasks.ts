@@ -1,4 +1,5 @@
 import { createTaskServiceResolver } from './task-container.js';
+import { loggingToken } from '../logging/token.js';
 import type { ServiceResolver } from '@nocobase/service-provider';
 import { snapshotDatabaseTaskConfig } from './task-config.js';
 import type { DatabaseTaskConfig } from '@nocobase/db';
@@ -14,6 +15,9 @@ import {
   type ChecksumMismatch,
   type DatabaseDriverRegistration,
   type DatabaseManager,
+  type MigrationHistoryRecord,
+  type StaleTaskLockTakeover,
+  type TaskLockState,
 } from '@nocobase/db';
 
 import type { AppPaths } from '../config/index.js';
@@ -23,8 +27,12 @@ import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
 import type { AppDatabaseConfig } from './types.js';
 
-/** `repair` realigns recorded checksums; it executes no migration or seed. */
-export type AppDatabaseTaskOperation = 'run' | 'repair';
+/**
+ * `repair` realigns recorded checksums; it executes no migration or seed.
+ * `rollback` runs the latest migration batch's `down`, and applies to
+ * migrations alone: seeds have no inverse.
+ */
+export type AppDatabaseTaskOperation = 'run' | 'repair' | 'rollback' | 'unlock';
 
 export interface AppDatabaseTaskResult {
   connection: string;
@@ -36,6 +44,15 @@ export interface AppDatabaseTaskResult {
   executed?: string[];
   skipped?: string[];
   fresh?: boolean;
+  /** Migrations a rollback undid, or that a dry run would undo. */
+  rolledBack?: string[];
+  /** The rolled back batch's history records, in the order they roll back. */
+  records?: MigrationHistoryRecord[];
+  /** The task lock as it stood when an unlock ran. */
+  lock?: TaskLockState;
+  /** Whether an unlock deleted the lock row, and why it did not. */
+  released?: boolean;
+  lockReason?: 'not-held' | 'active';
   /** Checksum drift tolerated by the `warn` policy during a run. */
   warnings?: ChecksumMismatch[];
   /** Records a repair rewrote, or that a dry run would rewrite. */
@@ -69,6 +86,8 @@ export interface AppDatabasePlanExecutionOptions {
   readonly paths?: AppPaths;
   readonly drivers?: Record<string, DatabaseDriverRegistration>;
   readonly fresh?: boolean;
+  /** Unlock only: release a lock that is still sending heartbeats. */
+  readonly force?: boolean;
   readonly operation?: AppDatabaseTaskOperation;
   /** Repair only: report what would be rewritten without writing anything. */
   readonly dryRun?: boolean;
@@ -83,6 +102,7 @@ export async function executeAppDatabasePlan(
     paths,
     drivers,
     fresh = false,
+    force = false,
     operation = 'run',
     dryRun = false,
     runtimeConfig,
@@ -91,8 +111,14 @@ export async function executeAppDatabasePlan(
 ): Promise<AppDatabaseTasksResult> {
   if (fresh) {
     if (operation !== 'run')
-      throw new Error('A fresh run cannot be combined with repair.');
+      throw new Error(`A fresh run cannot be combined with ${operation}.`);
     assertFreshPlanOrder(plan);
+  }
+  if (operation === 'rollback' && plan.some((task) => task.kind === 'seeds')) {
+    throw new Error('A rollback covers migrations only; seeds have no down.');
+  }
+  if (operation === 'unlock' && fresh) {
+    throw new Error('A fresh run cannot be combined with unlock.');
   }
   const taskContainer = createTaskServiceResolver(container);
   const taskConfig = snapshotDatabaseTaskConfig(runtimeConfig);
@@ -125,17 +151,23 @@ export async function executeAppDatabasePlan(
         connection: task.connection,
         config: task.config,
         sources: task.config.sources,
+        onStaleLock: (takeover: StaleTaskLockTakeover): void =>
+          reportStaleLock(container, task, takeover),
       };
       const completed =
-        operation === 'repair'
-          ? task.kind === 'migrations'
-            ? await createAppMigrator(options).repair({ dryRun })
-            : await createAppSeeder(options).repair({ dryRun })
-          : task.kind === 'migrations'
-            ? await (fresh
-                ? createAppMigrator(options).fresh()
-                : createAppMigrator(options).latest())
-            : await createAppSeeder(options).run();
+        operation === 'unlock'
+          ? await unlockTask(task, options, force)
+          : operation === 'repair'
+            ? task.kind === 'migrations'
+              ? await createAppMigrator(options).repair({ dryRun })
+              : await createAppSeeder(options).repair({ dryRun })
+            : operation === 'rollback'
+              ? await createAppMigrator(options).rollback({ dryRun })
+              : task.kind === 'migrations'
+                ? await (fresh
+                    ? createAppMigrator(options).fresh()
+                    : createAppMigrator(options).latest())
+                : await createAppSeeder(options).run();
       result.results.push({
         ...identity,
         ...completed,
@@ -161,6 +193,50 @@ export async function executeAppDatabasePlan(
     }
   }
   return result;
+}
+
+/** Releases whichever lock belongs to the task's kind. */
+async function unlockTask(
+  task: AppDatabaseTask,
+  options: Parameters<typeof createAppMigrator>[0],
+  force: boolean,
+): Promise<
+  Pick<AppDatabaseTaskResult, 'status' | 'lock' | 'released' | 'lockReason'>
+> {
+  const released =
+    task.kind === 'migrations'
+      ? await createAppMigrator(options).unlock({ force })
+      : await createAppSeeder(options).unlock({ force });
+  // `reason` on a task result says why it was skipped, so the lock's own
+  // reason gets its own field rather than being read as a skip.
+  return {
+    status: 'completed',
+    released: released.released,
+    ...(released.lock ? { lock: released.lock } : {}),
+    ...(released.reason ? { lockReason: released.reason } : {}),
+  };
+}
+
+/**
+ * A lock taken over because its holder stopped beating means a previous run
+ * was killed. Nothing else records that, so it belongs in the application log.
+ */
+function reportStaleLock(
+  container: ServiceResolver | undefined,
+  task: AppDatabaseTask,
+  takeover: StaleTaskLockTakeover,
+): void {
+  if (!container?.has(loggingToken)) return;
+  container.resolve(loggingToken).getLogger('database').warn(
+    {
+      connection: task.connection,
+      kind: task.kind,
+      table: takeover.tableName,
+      lockedBy: takeover.lockedBy,
+      staleForMs: takeover.staleForMs,
+    },
+    `Took over the ${task.kind} lock "${takeover.tableName}" after its holder stopped responding; the run holding it did not shut down cleanly.`,
+  );
 }
 
 /**
@@ -201,6 +277,8 @@ export interface AppDatabaseTaskRunOptions extends AppRuntimeDatabaseTaskPlanOpt
   readonly operation?: AppDatabaseTaskOperation;
   /** Repair only: report what would be rewritten without writing anything. */
   readonly dryRun?: boolean;
+  /** Unlock only: release a lock that is still sending heartbeats. */
+  readonly force?: boolean;
 }
 
 export async function runAppDatabaseTasks(
@@ -254,6 +332,7 @@ export async function runAppDatabaseTasks(
       paths,
       drivers,
       fresh: options.fresh,
+      force: options.force,
       operation: options.operation,
       dryRun: options.dryRun,
       runtimeConfig: options.runtimeConfig,

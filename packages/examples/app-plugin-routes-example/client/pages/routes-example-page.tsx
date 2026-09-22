@@ -107,7 +107,7 @@ export default function RoutesExamplePage(): ReactElement {
           </p>
         ) : error ? (
           <div className='space-y-4'>
-            <p className='text-sm text-red-600'>
+            <p className='text-sm text-destructive'>
               {translateDemo(
                 error === 'Unable to load the server route.'
                   ? 'loadError'

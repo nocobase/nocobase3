@@ -286,6 +286,19 @@ describe('connection-bound application database tasks', () => {
     });
   });
 
+  it('refuses a rollback that would include seeds', async () => {
+    const { config, paths, contributions } = fixture();
+    seed(paths.database('main/seeds'), 'mainRows');
+    await expect(
+      runAppDatabaseTasks(config, {
+        paths,
+        contributions,
+        kind: ['migrations', 'seeds'],
+        operation: 'rollback',
+      }),
+    ).rejects.toThrow('A rollback covers migrations only; seeds have no down.');
+  });
+
   it('refuses a fresh run that would seed a connection it never rebuilds', async () => {
     const { config, paths, contributions } = fixture();
     seed(paths.database('main/seeds'), 'mainRows');

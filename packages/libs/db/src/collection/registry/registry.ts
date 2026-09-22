@@ -22,12 +22,17 @@ import type {
 import { CollectionNamingIndex } from './naming-index.js';
 import { CollectionRelationValidator } from './relation-validator.js';
 import type {
+  CollectionDiagnosis,
+  CollectionDiagnosisIssue,
   CollectionSummary,
   CollectionSummaryPage,
   ConnectionCollections,
   ListCollectionsOptions,
   ScanCollectionsOptions,
 } from './types.js';
+
+/** Metadata records read per page while diagnosing. */
+const DIAGNOSE_PAGE_SIZE = 200;
 
 export interface CollectionRegistryOptions {
   readonly inspector: SchemaInspector;
@@ -250,6 +255,56 @@ export class CollectionRegistry
 
   async validateRelations(name?: string): Promise<void> {
     await this.relationValidator.validateGraph(name);
+  }
+
+  async diagnose(): Promise<CollectionDiagnosis> {
+    const index = await this.namingIndex();
+    const issues: CollectionDiagnosisIssue[] = [];
+    let checked = 0;
+    let cursor: string | undefined;
+
+    do {
+      const page = await this.options.metadataStore.list({
+        limit: DIAGNOSE_PAGE_SIZE,
+        ...(cursor === undefined ? {} : { cursor }),
+      });
+      for (const { name } of page.items) {
+        checked += 1;
+        const { tableName } = index.resolveLogicalCollection(name);
+        const physical = await this.options.inspector.getPhysicalCollection({
+          tableName,
+        });
+        if (!physical) {
+          issues.push({
+            name,
+            tableName,
+            code: 'COLLECTION_TABLE_MISSING',
+            message: `Metadata Collection "${name}" maps to missing physical table "${tableName}".`,
+            orphaned: true,
+          });
+          continue;
+        }
+
+        // The table is there, so whatever disagrees is inside it. Resolving is
+        // what the runtime does, so its own issues are what to report.
+        try {
+          await this.get(name);
+        } catch (error) {
+          if (!(error instanceof CollectionResolutionError)) throw error;
+          for (const issue of error.issues)
+            issues.push({
+              name,
+              tableName,
+              code: issue.code,
+              message: issue.message,
+              orphaned: false,
+            });
+        }
+      }
+      cursor = page.nextCursor;
+    } while (cursor);
+
+    return { checked, issues };
   }
 
   private async load(

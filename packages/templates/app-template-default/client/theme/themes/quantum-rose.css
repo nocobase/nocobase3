@@ -1,0 +1,120 @@
+/*
+ * quantum-rose: colours and radius converted from the tweakcn preset of the same id.
+ * https://github.com/jnsahaj/tweakcn (Apache-2.0); see THIRD-PARTY-NOTICES.md in this directory.
+ * Typography, spacing and elevation are the values this application defines, unchanged.
+ */
+:root[data-theme='quantum-rose'],
+.theme-preview[data-theme='quantum-rose'] {
+  --font-sans:
+    ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+  --font-serif:
+    ui-serif, Georgia, Cambria, 'Times New Roman', 'Songti SC', SimSun, serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  --font-heading: var(--font-sans);
+  --spacing: 0.2rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: calc(1 / 0.75);
+  --text-sm: 0.875rem;
+  --text-sm--line-height: calc(1.2 / 0.875);
+  --text-base: 1rem;
+  --text-base--line-height: calc(1.4 / 1);
+  --text-lg: 1.125rem;
+  --text-lg--line-height: calc(1.6 / 1.125);
+  --text-xl: 1.25rem;
+  --text-xl--line-height: calc(1.6 / 1.25);
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: calc(1.8 / 1.5);
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: calc(2.1 / 1.875);
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: calc(2.3 / 2.25);
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 1;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 1;
+  --text-7xl: 4.5rem;
+  --text-7xl--line-height: 1;
+  --text-8xl: 6rem;
+  --text-8xl--line-height: 1;
+  --text-9xl: 8rem;
+  --text-9xl--line-height: 1;
+  --shadow-2xs: 0 1px rgb(0 0 0 / 0.05);
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl:
+    0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  --radius: 0.5rem;
+  --background: #fff0f8;
+  --foreground: #91185c;
+  --card: #fff7fc;
+  --card-foreground: #91185c;
+  --popover: #fff7fc;
+  --popover-foreground: #91185c;
+  --primary: #e6067a;
+  --primary-foreground: #ffffff;
+  --secondary: #ffd6ff;
+  --secondary-foreground: #91185c;
+  --muted: #ffe3f2;
+  --muted-foreground: #c04283;
+  --accent: #ffc1e3;
+  --accent-foreground: #91185c;
+  --destructive: #d13869;
+  --border: #ffc7e6;
+  --input: #ffd6ff;
+  --ring: #e6067a;
+  --chart-1: #e6067a;
+  --chart-2: #c44b97;
+  --chart-3: #9969b6;
+  --chart-4: #7371bf;
+  --chart-5: #5e84ff;
+  --sidebar: #ffedf6;
+  --sidebar-foreground: #91185c;
+  --sidebar-primary: #e6067a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ffc1e3;
+  --sidebar-accent-foreground: #91185c;
+  --sidebar-border: #ffddf0;
+  --sidebar-ring: #e6067a;
+}
+
+:root.dark[data-theme='quantum-rose'],
+:root.dark .theme-preview[data-theme='quantum-rose'] {
+  --background: #1a0922;
+  --foreground: #ffb3ff;
+  --card: #2a1435;
+  --card-foreground: #ffb3ff;
+  --popover: #2a1435;
+  --popover-foreground: #ffb3ff;
+  --primary: #ff6bef;
+  --primary-foreground: #180518;
+  --secondary: #46204f;
+  --secondary-foreground: #ffb3ff;
+  --muted: #331941;
+  --muted-foreground: #d67ad6;
+  --accent: #5a1f5d;
+  --accent-foreground: #ffb3ff;
+  --destructive: #ff2876;
+  --border: #4a1b5f;
+  --input: #46204f;
+  --ring: #ff6bef;
+  --chart-1: #ff6bef;
+  --chart-2: #c359e3;
+  --chart-3: #9161ff;
+  --chart-4: #6f73e2;
+  --chart-5: #547aff;
+  --sidebar: #1c0d25;
+  --sidebar-foreground: #ffb3ff;
+  --sidebar-primary: #ff6bef;
+  --sidebar-primary-foreground: #180518;
+  --sidebar-accent: #5a1f5d;
+  --sidebar-accent-foreground: #ffb3ff;
+  --sidebar-border: #4a1b5f;
+  --sidebar-ring: #ff6bef;
+}

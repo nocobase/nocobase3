@@ -140,3 +140,79 @@ describe('Migrator.history()', () => {
     }
   });
 });
+
+describe('Migrator.rollback({ dryRun })', () => {
+  it('reports the batch it would undo without running any down', async () => {
+    const db = createDatabaseManager({
+      drivers: { sqlite },
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    const directory = migrationDirectory();
+    try {
+      writeMigration(directory, '001_create_orders', 'orders');
+      writeMigration(directory, '002_create_items', 'items');
+      const migrator = db.createMigrator({ directory });
+      await migrator.latest();
+
+      const preview = await migrator.rollback({ dryRun: true });
+      expect(preview).toMatchObject({
+        batch: 1,
+        dryRun: true,
+        // Newest first, which is the order the downs would run in.
+        rolledBack: ['002_create_items', '001_create_orders'],
+      });
+      expect(
+        preview.records.map((record) => [record.packageName, record.name]),
+      ).toEqual([
+        ['app', '002_create_items'],
+        ['app', '001_create_orders'],
+      ]);
+
+      const knex = await db.connection().client<Knex>();
+      expect(await knex.schema.hasTable('orders')).toBe(true);
+      expect(await knex.schema.hasTable('items')).toBe(true);
+      expect(await migrator.history()).toHaveLength(2);
+
+      const rolledBack = await migrator.rollback();
+      expect(rolledBack).toMatchObject({
+        dryRun: false,
+        rolledBack: ['002_create_items', '001_create_orders'],
+      });
+      expect(await knex.schema.hasTable('orders')).toBe(false);
+      expect(await migrator.history()).toEqual([]);
+    } finally {
+      await db.destroy();
+    }
+  });
+
+  it('refuses before running anything when the batch is irreversible', async () => {
+    const db = createDatabaseManager({
+      drivers: { sqlite },
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    const directory = migrationDirectory();
+    try {
+      writeMigration(directory, '001_create_orders', 'orders');
+      writeFileSync(
+        path.join(directory, '002_touch.ts'),
+        `import { defineMigration } from '@nocobase/db';
+export default defineMigration({
+  name: '002_touch',
+  irreversible: true,
+  async up() {},
+});
+`,
+      );
+      const migrator = db.createMigrator({ directory });
+      await migrator.latest();
+
+      await expect(migrator.rollback({ dryRun: true })).rejects.toThrow(
+        'Migration "002_touch" is irreversible and cannot be rolled back.',
+      );
+      const knex = await db.connection().client<Knex>();
+      expect(await knex.schema.hasTable('orders')).toBe(true);
+    } finally {
+      await db.destroy();
+    }
+  });
+});

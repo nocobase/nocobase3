@@ -6,6 +6,10 @@ name: Release Beta
 on:
   workflow_dispatch:
     inputs:
+      include_pro:
+        description: 'Also release Pro plugins after the NocoBase3 release succeeds'
+        type: boolean
+        default: true
       dry_run:
         description: 'Dry run: compute versions and run checks without publishing or pushing'
         type: boolean
@@ -310,6 +314,7 @@ jobs:
     outputs:
       tag: ${{ needs.prepare.outputs.release_branch }}
       merged: ${{ steps.merge.outputs.merged }}
+      published: ${{ steps.publish_result.outputs.published }}
       create_app_version: ${{ steps.hub_versions.outputs.create_app_version }}
       hub_template_version: ${{ steps.hub_versions.outputs.hub_template_version }}
     steps:
@@ -423,7 +428,15 @@ jobs:
       # Publish the exact tarballs prepared and tested from the immutable release source state.
       - name: Publish to npm
         if: '!inputs.dry_run'
-        run: pnpm changeset publish --from-pack-dir "$RUNNER_TEMP/release-publish"
+        id: publish_result
+        run: |
+          set +e
+          node scripts/publish-plan-has-publications.mjs "$RUNNER_TEMP/release-publish/publish-plan.json"
+          PLAN_RC=$?
+          set -e
+          case "$PLAN_RC" in 0) PUBLISHED=true ;; 1) PUBLISHED=false ;; *) exit "$PLAN_RC" ;; esac
+          pnpm changeset publish --from-pack-dir "$RUNNER_TEMP/release-publish"
+          echo "published=$PUBLISHED" >> "$GITHUB_OUTPUT"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -600,3 +613,16 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+  follow-pro-release:
+    name: Release matching Pro beta
+    needs: [prepare, release, github-release]
+    if: >-
+      !cancelled() && inputs.include_pro && !inputs.dry_run
+      && needs.release.result == 'success' && needs.github-release.result == 'success'
+      && needs.release.outputs.merged == 'true' && needs.release.outputs.published == 'true'
+    uses: ./.github/workflows/pro-release-beta.yml
+    with:
+      oss_sha: ${{ needs.prepare.outputs.source_sha }}
+      dry_run: false
+    secrets: inherit

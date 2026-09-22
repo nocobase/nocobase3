@@ -168,13 +168,13 @@ export function SidePanel({
       onMouseDown={onClose}
     >
       <section
-        className={`flex h-full w-full flex-col overflow-hidden border-l bg-background shadow-2xl ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}
+        className={`flex h-full w-full flex-col overflow-hidden border-l bg-popover shadow-2xl ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}
         role='dialog'
         aria-modal='true'
         aria-label={title}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <header className='z-10 flex shrink-0 items-start justify-between border-b bg-background px-6 py-5'>
+        <header className='z-10 flex shrink-0 items-start justify-between border-b bg-popover px-6 py-5'>
           <div>
             <h2 className='text-lg font-semibold'>{title}</h2>
             {description ? (

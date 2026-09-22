@@ -34,10 +34,23 @@ describe('app client routes', () => {
         { auth: 'guest', name: 'reset-password', path: '/reset-password' },
       ],
     });
-    expect(settings).toEqual({ parent: 'settings', routes: [] });
+    // The settings contribution is this application's own page, so it names exactly the route it adds.
+    expect(settings).toMatchObject({ parent: 'settings' });
+    expect(settings.routes).toHaveLength(1);
+    expect(settings.routes[0]).toMatchObject({
+      authz: { action: 'access', resource: { id: 'theme', type: 'page' } },
+      name: 'theme',
+      navigation: { order: 100, title: 'appearance.theme.title' },
+      path: '/theme',
+    });
     expect(Object.isFrozen(app)).toBe(true);
     expect(Object.isFrozen(settings)).toBe(true);
     for (const route of app.routes) {
+      await expect(route.componentLoader()).resolves.toMatchObject({
+        default: expect.any(Function),
+      });
+    }
+    for (const route of settings.routes) {
       await expect(route.componentLoader()).resolves.toMatchObject({
         default: expect.any(Function),
       });
@@ -65,6 +78,11 @@ describe('app client routes', () => {
     // The landing page opted out of page authorization, so it is reachable by every signed-in user.
     expect(pageAuthorizations(resolved.routes)).toEqual([
       { name: 'home', authorizedAs: null },
+    ]);
+    // A settings page carries no rule by default. This one asks for a page grant, so it stays invisible until an
+    // administrator is granted it — which is the whole reason its name is pinned here.
+    expect(pageAuthorizations(resolved.settingsRouteTree)).toEqual([
+      { name: 'theme', authorizedAs: 'theme' },
     ]);
   });
 });

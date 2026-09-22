@@ -108,7 +108,7 @@ export default function NotificationLogsPage(): ReactElement {
         actions={
           <>
             <button
-              className='inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
+              className='inline-flex h-9 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
               disabled={loading}
               onClick={refresh}
               type='button'
@@ -274,7 +274,7 @@ function TestNotificationDialog({
       <section
         aria-labelledby='notification-test-title'
         aria-modal='true'
-        className='max-h-[calc(100svh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border bg-background shadow-xl'
+        className='max-h-[calc(100svh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border bg-popover shadow-xl'
         role='dialog'
       >
         <div className='flex items-start justify-between gap-4 border-b px-5 py-4'>
@@ -328,7 +328,7 @@ function TestNotificationDialog({
                 aria-label={t('test.channelProvider', {
                   defaultValue: 'Delivery method',
                 })}
-                className='h-9 w-full rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
+                className='h-9 w-full rounded-md border bg-transparent px-3 font-normal outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
                 disabled={sending}
                 onChange={(event) => {
                   setSelected(
@@ -397,7 +397,7 @@ function TestNotificationDialog({
               {field.type === 'textarea' ? (
                 <textarea
                   aria-label={field.label}
-                  className='min-h-24 resize-y rounded-md border bg-background px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
+                  className='min-h-24 resize-y rounded-md border bg-transparent px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-ring'
                   disabled={sending}
                   maxLength={field.maxLength}
                   onChange={(event) =>
@@ -413,7 +413,7 @@ function TestNotificationDialog({
               ) : (
                 <input
                   aria-label={field.label}
-                  className='h-9 rounded-md border bg-background px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
+                  className='h-9 rounded-md border bg-transparent px-3 font-normal outline-none focus:ring-2 focus:ring-ring'
                   disabled={sending}
                   maxLength={field.maxLength}
                   onChange={(event) =>
@@ -444,7 +444,7 @@ function TestNotificationDialog({
         </div>
         <div className='flex justify-end gap-2 border-t px-5 py-4'>
           <button
-            className='inline-flex h-9 items-center justify-center rounded-md border bg-background px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
+            className='inline-flex h-9 items-center justify-center rounded-md border bg-transparent px-4 text-sm font-medium shadow-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50'
             disabled={sending}
             onClick={onClose}
             type='button'
@@ -649,7 +649,7 @@ function DeliveryTable({
   }
 
   return (
-    <div className='overflow-x-auto rounded-lg border bg-background'>
+    <div className='overflow-x-auto rounded-lg border bg-card'>
       <table className='w-full min-w-[760px] text-sm'>
         <thead className='bg-muted/35 text-left'>
           <tr className='border-b'>

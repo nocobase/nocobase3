@@ -25,7 +25,7 @@ export function ConfirmDialog({
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Backdrop className='fixed inset-0 z-50 bg-black/35 backdrop-blur-[2px]' />
-        <DialogPrimitive.Popup className='fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border/80 bg-background text-foreground shadow-2xl outline-none'>
+        <DialogPrimitive.Popup className='fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border/80 bg-popover text-popover-foreground shadow-2xl outline-none'>
           <div className='p-6'>
             <div className='flex gap-4'>
               <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-700 ring-1 ring-amber-500/20 dark:text-amber-400'>

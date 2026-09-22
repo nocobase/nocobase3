@@ -62,7 +62,7 @@ export default function RolesPage(): ReactElement {
   }, [load]);
 
   return (
-    <main className='min-h-[calc(100svh-4rem)] bg-muted/20'>
+    <main className='min-h-[calc(100svh-4rem)] bg-background'>
       <PageContainer>
         <PageHeader
           title={t('roles.title')}
