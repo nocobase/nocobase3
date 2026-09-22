@@ -27,7 +27,11 @@ const createFixture = (
     llmService: 'employee-service',
     model: 'employee-model',
   };
-  const resolveModel = vi.fn(async (model?: unknown) => model ?? employeeModel);
+  // The provider asks the manager that owns the employee's model policy.
+  const resolveModel = vi.fn(
+    async (_employee: unknown, model?: unknown) => model ?? employeeModel,
+  );
+  const aiEmployeesManager = { resolveModel };
   const options = {
     employee: {
       username: 'dara',
@@ -36,7 +40,7 @@ const createFixture = (
       chatSettings: { systemPromptMode: promptMode },
     },
     agentContext,
-    resolveModel,
+    aiEmployeesManager,
     llmProviderManager,
     toolsManager: {},
     skillsManager: {},
@@ -98,8 +102,16 @@ describe('AIEmployeeAgentContextProvider', () => {
     await context.resolveLLM();
     await context.resolveLLM();
 
-    expect(resolveModel).toHaveBeenNthCalledWith(1, asked);
-    expect(resolveModel).toHaveBeenNthCalledWith(2, asked);
+    expect(resolveModel).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ username: 'dara' }),
+      asked,
+    );
+    expect(resolveModel).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ username: 'dara' }),
+      asked,
+    );
     expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(1, asked);
     expect(llmProviderManager.getLLMService).toHaveBeenNthCalledWith(2, asked);
   });

@@ -140,8 +140,7 @@ export class AgentServiceFactory {
         metadata: { kind: 'ai-employee' },
       },
       agentContext,
-      resolveModel: (model?: ModelRef | null) =>
-        managers.aiEmployeesManager.resolveModel(employee, model),
+      aiEmployeesManager: managers.aiEmployeesManager,
       llmProviderManager: this.aiManager.llmProviderManager,
       toolsManager: this.aiManager.toolsManager,
       skillsManager: this.aiManager.skillsManager,

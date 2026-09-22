@@ -19,7 +19,8 @@ import type {
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import type { AIEmployeeSkillSettings } from './options.js';
-import type { ModelRef, Translate } from '../../../types.js';
+import type { Translate } from '../../../types.js';
+import type { AIEmployeesManager } from '../../../manager/ai-employees-manager.js';
 import type { BuiltInManager } from '../../../manager/built-in-manager.js';
 import type { KnowledgeBaseManager } from '../../../manager/knowledge-base-manager.js';
 import type {
@@ -55,11 +56,7 @@ export interface AIEmployeeAgentContextProviderOptions {
    * headers all live here; nothing restates them beside it.
    */
   readonly agentContext: AgentContext;
-  /**
-   * Applies the employee's model policy to an optionally requested model. A
-   * caller may ask for a model but never widen what the employee allows.
-   */
-  readonly resolveModel: (model?: ModelRef | null) => Promise<ModelRef>;
+  readonly aiEmployeesManager: AIEmployeesManager;
   readonly llmProviderManager: LLMProviderManager;
   readonly toolsManager: ToolsManager;
   readonly skillsManager: SkillsManager;
@@ -77,7 +74,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly employee: AIEmployeeType;
   private readonly conversation: CurrentConversation;
   public readonly agentContext: AgentContext;
-  private readonly resolveModel: (model?: ModelRef | null) => Promise<ModelRef>;
+  private readonly aiEmployeesManager: AIEmployeesManager;
   private readonly llmProviderManager: LLMProviderManager;
   private readonly toolsManager: ToolsManager;
   private readonly skillsManager: SkillsManager;
@@ -112,7 +109,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     this.employee = options.employee;
     this.conversation = options.currentConversation;
     this.agentContext = options.agentContext;
-    this.resolveModel = options.resolveModel;
+    this.aiEmployeesManager = options.aiEmployeesManager;
     this.llmProviderManager = options.llmProviderManager;
     this.toolsManager = options.toolsManager;
     this.skillsManager = options.skillsManager;
@@ -138,7 +135,12 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     // The employee's own configuration decides the model. The turn may ask for
     // one, but only a model the employee allows is honoured, and a turn that
     // asks for none is resolved rather than rejected.
-    const model = await this.resolveModel(this.agentContext.state.model);
+    // The employee's own configuration decides the model, so the manager that
+    // owns that policy is asked directly.
+    const model = await this.aiEmployeesManager.resolveModel(
+      this.employee,
+      this.agentContext.state.model,
+    );
     const resolved = await this.llmProviderManager.getLLMService(model);
     return {
       providerName: resolved.service.provider,
