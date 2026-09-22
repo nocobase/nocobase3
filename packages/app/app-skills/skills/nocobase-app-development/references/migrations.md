@@ -35,6 +35,33 @@ Manual execution ignores `autoRun`. `--connection` and `--all` are mutually excl
 
 `pnpm db:reset` is a destructive reset for managed connections. It removes the managed schema objects — which clears migration and seed history along with every row in a managed table — then reruns all currently visible migrations and seeds from empty. It never calls migration `down()`. In an interactive terminal it asks for confirmation. CI and non-interactive terminals require `--force`, so use `pnpm db:reset --force` only when the target is intentionally disposable. It is rejected for an explicitly selected external connection; `--all` processes managed connections and reports external connections as skipped. It is limited to connections with a registered driver reset capability.
 
+`pnpm db:rollback` runs `down()` for every migration in the latest batch, newest first, and deletes its history records. The batch is the unit the history records, so a batch that mixed application and plugin migrations rolls back as one: the confirmation lists every migration and the package it belongs to before anything runs. It fails, having run nothing, when any migration in the batch is irreversible or has no `down()`. Data in anything those migrations drop is lost, and seeds are not re-run, so rows a seed inserted into a table the batch recreates are not restored. CI and non-interactive terminals require `--force`.
+
+`pnpm db:redo` is `db:rollback` followed by `db:apply`, which is what correcting an unmerged migration needs.
+
+## Re-running a migration you corrected
+
+Editing a migration that has already run changes nothing by itself. It is recorded as executed, so the next `pnpm db:apply` skips it, and the database keeps the schema the old source produced. What it does change is the recorded checksum, which is why the run then reports drift.
+
+While the branch is unmerged, re-run it:
+
+```bash
+pnpm db:redo
+```
+
+Once the branch is merged, do not edit it at all: write a new migration for the correction.
+
+Two things are never the answer here. `pnpm db:repair` only rewrites the recorded checksum, so it makes an un-applied change look applied — the schema stays wrong and nothing says so. Editing `__nocobase_migrations`, `__nocobase_collection_metadata` or a physical table by hand splits the two records of what exists: dropping a table without its metadata record leaves the Collection unresolvable, and the next run fails with `Metadata Collection "…" maps to missing physical table "…"` before it reaches your migration.
+
+Each internal table has a command that maintains it, and none of them should be edited directly:
+
+| Table                                               | Holds                                     | Maintained by                                     |
+| --------------------------------------------------- | ----------------------------------------- | ------------------------------------------------- |
+| `__nocobase_migrations`                             | Which migrations ran, in which batch      | `db:apply`, `db:rollback`, `db:redo`, `db:repair` |
+| `__nocobase_seeds`                                  | Which seeds ran                           | `db:apply`, `db:repair`                           |
+| `__nocobase_collection_metadata`                    | The Collection metadata behind each table | Migrations, through `builder`                     |
+| `__nocobase_migration_lock`, `__nocobase_seed_lock` | The run in progress                       | Acquired and released by the run itself           |
+
 `migrate --fresh` was the earlier form and is gone. It reset the schema without reseeding, so it left the seed history cleared but no seed executed; the default connection recovered on the next startup and a connection with `autoRun: false` did not.
 
 `schemaManagement: external` describes ownership, not read-only credentials. Startup and `--all` skip external connections; explicitly targeting one for migrations or seeds is an error. The application resolves a metadata store for runtime access, using `database/<connectionName>/collections/` when neither a connection-level nor shared store is configured; see [database connections](database-connections.md#add-managed-or-external-connections). Seeds also use history and lock tables, so they are not a workaround for external schema ownership.
@@ -59,7 +86,7 @@ A checksum recorded when a migration or seed ran no longer matching its current 
 
 `pnpm db:repair` (`nocobase app db repair`) rewrites the recorded checksums to match the current sources, which is how the warning is cleared once the change is confirmed intentional. One command covers both migrations and seeds. It executes nothing and changes no schema or data. Preview with `--dry-run` first; `--dry-run --json` is the form to run in CI when drift should gate a deploy. It never deletes a history record, so a repair cannot make an executed migration run again.
 
-Repair records a decision; it does not make one. It is the right tool for drift you can explain — a reformat, a comment, a rebuild that produced different output. It is not a way to edit a merged migration: the applied database still has the old schema, and rewriting the checksum only hides that. Correct a merged migration with a new migration.
+Repair records a decision; it does not make one. It is the right tool for drift where the schema is already what the new source would produce — a reformat, a comment, a rebuild that produced different output. When the edit changed what the migration does, repair is the wrong tool in both directions: while the branch is unmerged, `pnpm db:redo` applies the correction; once it is merged, a new migration does. Rewriting the checksum instead leaves the database with the old schema and nothing recording that it differs.
 
 ## Verify
 

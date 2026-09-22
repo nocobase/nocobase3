@@ -140,12 +140,25 @@ export interface MigrationRunResult {
   readonly warnings: ChecksumMismatch[];
 }
 
+/** Options accepted by Migrator.rollback(). */
+export interface MigrationRollbackOptions {
+  /** Report the batch that would roll back without running any `down`. */
+  readonly dryRun?: boolean;
+}
+
 /** Summary returned after rolling back the latest migration batch. */
 export interface MigrationRollbackResult {
   readonly batch: number;
   readonly rolledBack: string[];
+  /**
+   * The batch's history records, in the order they roll back. Present for a
+   * dry run too, so a caller can show what a run would undo and which package
+   * each migration belongs to.
+   */
+  readonly records: MigrationHistoryRecord[];
   /** Checksum drift the `warn` policy allowed the rollback to continue past. */
   readonly warnings: ChecksumMismatch[];
+  readonly dryRun: boolean;
 }
 
 /** Options accepted by Migrator.repair(). */
