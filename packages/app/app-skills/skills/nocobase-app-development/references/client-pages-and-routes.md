@@ -2,6 +2,8 @@
 
 Pages are React components in `client/pages/`. Routes and menu entries are declared in `client/routes.ts`. For nested pages, Tabs and groups, also read [child routes](client-child-routes.md).
 
+When `client/pages/reference/examples/` exists, read the screen closest to the one you are about to build before writing it — a list starts from `orders`, a record editor from `product-form`, a settings screen from `team-settings`. Those pages are deliberately unrouted, so copy their structure into a page of your own rather than importing or routing them.
+
 ## Add a page
 
 Declare the route with a lazy `componentLoader`:

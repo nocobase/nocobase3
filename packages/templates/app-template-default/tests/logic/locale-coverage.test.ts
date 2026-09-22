@@ -6,12 +6,11 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import enUS from '../../client/locales/en-US.ts';
-import zhCN from '../../client/locales/zh-CN.ts';
+import enUS from '../../client/pages/reference/locales/en-US.ts';
+import zhCN from '../../client/pages/reference/locales/zh-CN.ts';
 
 const clientDirectory = fileURLToPath(new URL('../../client', import.meta.url));
 const referenceDirectory = path.join(clientDirectory, 'pages', 'reference');
-const routesFile = path.join(clientDirectory, 'routes.ts');
 
 /**
  * Every addressable key of a locale, as the dot-separated path `t()` is called with.
@@ -66,15 +65,13 @@ interface References {
 /**
  * The keys the reference pages ask for, with the file that asks for them.
  *
- * Reading every dotted literal rather than the first argument of `t()` is what covers a whole page: `routes.ts`
- * declares `title: 'components.card.title'` and the navigation translates it, and a page holds
- * `titleKey: 'components.checkbox.addOnSupport'` in data so that `t(addOn.titleKey)` can reach it later. Neither
- * is a literal argument to `t()` there. A dotted string counts as a key only when its root is a namespace the
- * locale declares, which is what keeps a file path or a domain name out of the scan. Commented-out routes are
- * skipped: an entry whose page does not exist yet names keys that are not written yet either.
+ * Reading every dotted literal rather than the first argument of `t()` is what covers a whole page: a page holds
+ * `titleKey: 'components.checkbox.addOnSupport'` in data so that `t(addOn.titleKey)` can reach it later, which is
+ * not a literal argument to `t()` there. A dotted string counts as a key only when its root is a namespace the
+ * locale declares, which is what keeps a file path or a domain name out of the scan.
  */
 function referencedKeys(): References[] {
-  const files = [...sourceFiles(referenceDirectory), routesFile];
+  const files = sourceFiles(referenceDirectory);
   return files.map((file) => {
     const keys = new Set<string>();
     const prefixes = new Set<string>();
@@ -122,7 +119,7 @@ describe('reference page translations', () => {
       0,
     );
     expect(named).toBeGreaterThan(700);
-    expect(references.map(({ file }) => file)).toContain('routes.ts');
+    expect(references.length).toBeGreaterThan(70);
   });
 
   it('translates every key the reference pages use into English', () => {

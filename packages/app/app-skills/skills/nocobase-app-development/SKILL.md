@@ -67,12 +67,27 @@ Run `pnpm package:remove @nocobase/example`. The command uses the application's 
 
 If an older application has the command but not the script, use `pnpm nocobase package remove @nocobase/example`. If its CLI predates the command, update `@nocobase/nb3-cli` first; on a version that already has `skills:sync`, a compatibility fallback is to remove the package with the package manager and then run `pnpm skills:sync`. With the current CLI, after an interrupted or manual removal, verify that the manifest no longer declares the package and run a full `pnpm skills:sync` to reconcile stale package-owned output. Passing an already-absent package to `package:remove` cleans recorded historical Skill ownership without uninstalling or cleaning another package.
 
+## Start from a worked page
+
+Check for `client/pages/reference/` before writing UI of your own. An application generated from the default template carries it; one generated from another template may not, and its absence is not a defect.
+
+It is source kept to be read. Nothing routes it, so a build never reaches it and no user sees it:
+
+- `examples/` holds complete business screens on mock data — a dashboard, an order list, a customer directory, a product form, a support inbox, an onboarding survey, a settings screen with tabs, a team calendar. Each is a folder holding its page beside the data that page reads, as `examples/orders/orders.tsx` and `orders.data.ts`.
+- `components/` holds one page per shadcn/ui primitive, showing its variants, its states and a realistic use of it.
+- `shared.tsx` is the frame both groups use.
+
+Match the task to the closest page and read it before you design anything. It answers the questions that otherwise get answered by guessing: which primitive the job calls for, how a summary row of cards is laid out, where filters and actions sit, how a detail view opens, what confirms a destructive action, how colors come from tokens rather than literals. A list screen starts from `examples/orders`, a record editor from `examples/product-form`, a settings screen from `examples/team-settings`.
+
+Copy the structure and leave the mock data behind. Do not import from `client/pages/reference/` in a page you ship, and do not give one a route — it is reference material, not a feature.
+
 ## Choose your reference
 
 Read the page for the task in front of you. Do not read all of them.
 
 | Task                                                                                | Read                                                             |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Copy a worked screen instead of designing one from nothing                          | `client/pages/reference/` in the application                     |
 | Create a page, write a page component, configure routes or navigation               | [client pages and routes](references/client-pages-and-routes.md) |
 | Add child pages, page Tabs, Dialogs, or Drawers using child routes; add menu groups | [child routes and overlays](references/client-child-routes.md)   |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode    | [components and styling](references/components-and-styling.md)   |

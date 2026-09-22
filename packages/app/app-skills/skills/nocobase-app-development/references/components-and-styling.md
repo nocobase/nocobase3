@@ -2,6 +2,12 @@
 
 The UI is shadcn/ui primitives, composed into application components, styled with Tailwind semantic tokens.
 
+## Read a worked page first
+
+If the application has `client/pages/reference/`, open the closest page there before composing anything. `components/` has one page per shadcn/ui primitive with its variants and a realistic use, and `examples/` has complete business screens on mock data. Nothing routes either group, so they exist only to be read.
+
+Use `components/<primitive>.tsx` to see how a primitive is actually composed here — which parts it needs, what its controlled form looks like, how its states are styled — instead of inferring an API from its source or from memory. Use `examples/` for the shape of a whole screen. Copy the structure, not the mock data, and never import from either group in a page you ship.
+
 For icon buttons in the page's top-right header, read [header action interactions](header-actions.md) before adding or changing an entry. It defines when to use a tooltip versus a hover panel and how to preserve the components' default dismissal behavior.
 
 ## Page container

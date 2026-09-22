@@ -5,7 +5,11 @@ import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeAll, expect, it, vi } from 'vitest';
 
-import enUS from '../../client/locales/en-US.ts';
+import appEnUS from '../../client/locales/en-US.ts';
+import referenceEnUS from '../../client/pages/reference/locales/en-US.ts';
+
+// A reference page reads its own wording and the handful of application keys shared components use.
+const enUS = { ...appEnUS, ...referenceEnUS };
 
 /**
  * Renders every reference page against the real English wording.
