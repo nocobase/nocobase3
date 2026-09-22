@@ -1,0 +1,15 @@
+---
+'@nocobase/app-plugin-ai-employee': patch
+---
+
+Rewrite the AI Employee App Skill as a build order rather than a cross-cutting reference
+
+The Skill was 501 lines of `SKILL.md` over five references organized by which part of the package a fact belonged to. An agent asked to build something — "let the assistant read this screenshot and file the lead" — could read all of it and still not know what to do first, because nothing said what to do first. It also documented three things that are not true: Skill directories do not discover tools, `ai:testFlight` is not implemented, and the built-in tool list named ten of the nineteen tools that exist and none of the three built-in Skills.
+
+`SKILL.md` is now 92 lines and says, in order: who owns what, what has to exist before anything works, which resource kind answers which request, the end-to-end path through them, the safety rules, and how to tell it worked. `argument-hint` is gone; the file no longer asks an agent to classify a task into an area and a verb before it can start.
+
+The references are split by what the reader is doing rather than by package structure. `capabilities.md` covers everything an App declares — employees, tools, skills, MCP, the knowledge base, the built-in tools and skills with what each is for, and the whole `config.yml` `ai` block. `chat-surfaces.md` covers the browser half, absorbing `frontend-registry.md`. `server-runs.md` covers registering App resources and driving an agent directly, absorbing `agent-service.md`. `contracts.md` is dissolved into the three, so a contract now sits beside the guidance that uses it rather than in a separate file that had to be cross-referenced; `index.md` is dropped, since `SKILL.md` already routes. `api-reference.md` stays, demoted to what it is: the reference for the rare case of calling `/api/ai` without the installed service.
+
+Four things an agent previously had to guess are written down. Configuring an LLM service happens before the application can start, so there is no NocoBase API to ask what models exist: the Skill now carries each provider's default base URL, model-list request and authentication, tells the agent to fetch the list and pick from it, and says to omit `enabledModels` entirely rather than invent one when the list cannot be obtained. Keys go in the environment behind `${NAME}`, with the check that `.env` is ignored before anything is written. Avatars must come from the plugin's own 60 keys, because an unknown key silently renders a fallback rather than failing. And chat attachments land on a disk that defaults to the application's general uploads, which is a decision to raise with the user rather than inherit.
+
+MCP now documents one configuration path instead of two, and each resource kind documents one registration path: tools and employees in code, Skills by directory, MCP and LLM services in `config.yml`. A tool that writes business data is told what it owns that the runtime does not — authorization against `ctx.actor`, its own transaction, and idempotency, because a model retries.

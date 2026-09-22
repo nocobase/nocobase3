@@ -1,6 +1,8 @@
 # Exact `/api/ai` and AI Service Contracts
 
-Prefer the installed `nocobaseAIService` and chat transport. Use direct routes only from a centralized App adapter. All route paths below are relative to `/api/ai` and use `resource:action` notation.
+Read this only when the App must call `/api/ai` directly. The installed `nocobaseAIService` and chat transport already cover employee and model discovery, conversation lifecycle and history, file upload, SSE send/resend/resume, tool decisions, frontend-tool results, and reconnect recovery — so a handwritten request is warranted only for an operation the service does not expose, and belongs in one centralized App adapter rather than in a page component.
+
+When you do write one, preserve current-user scope, abort signals, SSE framing, approval and resume, and error handling. All route paths below are relative to `/api/ai` and use `resource:action` notation.
 
 ## Table of contents
 
@@ -298,7 +300,7 @@ type HistoryToolCall = {
 | `content.from`, `content.subAgentConversations` | Top-level rows are marked `main-agent`. When sub-agent metadata exists, nested sessions carry `sessionId`, the dispatch `toolCallId`, status, and parsed messages marked `sub-agent`; a session can have an empty `messages` array.                                                                                                                                                                                                                                         |
 | `content.reasoning`, `content.reference`        | Optional provider additions. Reasoning can include `{ status: 'stop', content: string }`; references can include titles/URLs. Do not require them or assume every provider returns the same structure.                                                                                                                                                                                                                                                                      |
 
-Normalize optional arrays with an array check rather than assuming every response contains `[]`. The Registry service requests `paginate=false`, reverses the rows, removes tool/system roles, and maps them to UI messages; its `AIChatMessage[]` return value is not the HTTP response schema. See the [HTTP walkthrough](#http-conversation-walkthrough), [message boundary pitfalls](contracts.md#message-input-and-history-boundaries), and [server manager history boundary](agent-service.md#conversation-manager-methods).
+Normalize optional arrays with an array check rather than assuming every response contains `[]`. The Registry service requests `paginate=false`, reverses the rows, removes tool/system roles, and maps them to UI messages; its `AIChatMessage[]` return value is not the HTTP response schema. See the [HTTP walkthrough](#http-conversation-walkthrough) and the [server manager history boundary](server-runs.md#aiconversationsmanager).
 
 ### `GET aiConversations:get`
 

@@ -1,501 +1,92 @@
 ---
 name: nocobase-app-plugin-ai-employee
-description: Use when code agents develop a CLI-created NocoBase App and need to consume @nocobase/ai-employee for application employees, skills, tools, MCP resources, AI frontend experiences, settings pages, or server integrations.
-argument-hint: '[area: resources|frontend|api|settings|runtime] [task: inspect|implement|extend|verify]'
-allowed-tools: Bash, Read, Write, Grep, Glob
-owner: platform-tools
-version: 1.5.0
-last-reviewed: 2026-09-21
-risk-level: low
+description: Use when a NocoBase App needs an AI employee — "let the assistant read this screenshot and create the record", "add a chat box to this page", "give it a tool that writes a lead", "let it research a company", "configure an LLM service / MCP server / attachment storage", "the composer is disabled and I don't know why". Not for the collections, pages, permissions, or workflows the employee acts on: those stay with nocobase-app-development, and this Skill assumes they already exist.
+metadata:
+  short-description: Build AI employees, tools, skills, and chat surfaces in a NocoBase App
 ---
 
-# Goal
+# AI Employee in a NocoBase App
 
-Guide a code agent working inside a NocoBase App created with the CLI:
+This Skill covers the application-owned half of `@nocobase/app-plugin-ai-employee`: what the App writes, where it writes it, and what the plugin already does so the App does not rebuild it. Work inside a CLI-created App (`pnpm create @nocobase/app <name>`); the current directory is the App root when it holds `client/`, `server/`, and `package.json`.
 
-```bash
-pnpm create @nocobase/app crm
-cd crm
-pnpm install
-pnpm dev
+## Ownership
+
+```text
+App owns       employees, backend tools, skills, config.yml, page composition,
+               business collections, business authorization, invocation timing
+Plugin owns    chat transport and SSE, conversation persistence, tool approval,
+               attachment parsing, built-in tools and skills, LLM providers, /api/ai
+Public entry   @nocobase/ai-employee root, @nocobase/app-plugin-ai-employee/server,
+               the nocobase-ai Registry item installed at client/extensions/nocobase-ai
+Do not bypass  plugin server/agent source paths, @nocobase/ai-employee/src/*,
+               the synchronized copy under .agents/skills/
 ```
 
-Treat the current directory as the App source root. Build application-owned AI features through public `@nocobase/ai-employee` APIs, the enabled AI Employee plugin, and the App's installed AI frontend extension. Do not continue development of NocoBase framework packages.
-
-# Architectural View
-
-Use these layers in order:
-
-1. **App source** — edit the current App's `ai/`, `client/`, `server/`, and tests.
-2. **Core dependency** — import framework-neutral definitions and managers from the public root `@nocobase/ai-employee`.
-3. **AI Employee App plugin** — keep `@nocobase/app-plugin-ai-employee` enabled for application resource loading, conversation persistence, and `/api/ai`.
-4. **AI frontend extension** — use the App-owned `client/extensions/nocobase-ai` source for chat, context, forms, and browser tools; install it from the `nocobase-ai` Registry item when the App does not have it yet.
-5. **Framework internals** — never deep-import or modify internal dependency/plugin source to complete an App feature.
-
-`@nocobase/ai-employee` provides contracts, resource definitions/loaders/managers, LLM providers, repositories, and helpers. The enabled `@nocobase/app-plugin-ai-employee` additionally provides authenticated `/api/ai`, database-backed conversations, and a public server-container integration surface: `AIConversationsManager` and `AgentServiceFactory`.
-
-# Scope
-
-- Add App-owned employees, skills, backend tools, MCP definitions, and LLM configurations under `ai/`.
-- Use built-in employees and tools without copying their definitions into the App.
-- Build chat, page context, form filling, tasks, shortcuts, frontend tools, and result renderers in the App's AI frontend extension.
-- Consume `/api/ai` through the existing `NocoBaseAIService` and chat transport.
-- Add an independent Settings page to the `aiGroup` sidebar group from an App plugin.
-- Use `createAIManager()` only for isolated server code that deliberately does not need the plugin's App runtime.
-- For trusted App server integrations, resolve `aiConversationsManagerToken` and `agentServiceFactoryToken` from the public plugin server entry; create a conversation first, then call `createAIEmployee()` or `createAgent`.
-
-# Non-Goals
-
-- Do not modify or patch `@nocobase/ai-employee` or `@nocobase/app-plugin-ai-employee` for an App feature.
-- Do not copy built-in employees/tools into `ai/`.
-- Do not import private plugin server/agent paths.
-- Do not rebuild chat streaming, conversation storage, tool approval, or frontend-tool protocol.
-- Do not present `AgentService` as a browser/client API; direct use belongs to an App-owned server integration and must use the public server container tokens.
-
-# Input Contract
-
-| Input    | Required             | Default     | Validation                                               | Clarification Question                               |
-| -------- | -------------------- | ----------- | -------------------------------------------------------- | ---------------------------------------------------- |
-| `area`   | yes                  | none        | `resources`, `frontend`, `api`, `settings`, or `runtime` | "Which App AI area should be implemented?"           |
-| `task`   | yes                  | `implement` | `inspect`, `implement`, `extend`, or `verify`            | "Should I inspect, implement, extend, or verify it?" |
-| `target` | implementation tasks | none        | employee, skill, tool, page, route, tab, or service      | "What App feature should be changed?"                |
-
-Resolve whether the target belongs in:
-
-- `ai/` for server-loaded AI resources;
-- `client/extensions/nocobase-ai/` for installed AI UI behavior;
-- `client/` for App routes/providers/pages;
-- `server/` for App server services;
-- an App plugin for reusable server/client/database/settings contributions.
-
-# Mandatory Clarification Gate
-
-- Stop if the requested App feature or client/server boundary is unclear.
-- For tools, confirm execution location (`backend` or `frontend`) and permission (`ASK` or `ALLOW`).
-- For frontend actions, confirm whether they change only local UI or persist business data.
-- For server integrations, confirm whether existing `/api/ai` behavior is sufficient before proposing direct manager access.
-- If required input is missing or ambiguous, stop before any mutation and ask the user; never guess a target, permission, execution location, or persistence behavior.
-
-Clarification bounds: max clarification rounds = 2; max questions per round = 3. If the user says “you decide”, use the safest defaults: normal `/api/ai` transport for UI, `SPECIFIED` + backend + `ASK` for application tools, and conversation-first creation with the default database persistence for direct server agents.
-
-# Workflow
-
-1. Confirm the current directory is the CLI-created App root (`client/`, `server/`, `package.json`).
-2. Read App-local `ai/README.md` and `client/extensions/nocobase-ai/README.md` when present. Before frontend work, confirm `client/extensions/nocobase-ai/` is installed, and install it first when it is missing; see [Install the AI Frontend Extension](#install-the-ai-frontend-extension).
-3. Load [Exact contracts](references/contracts.md). If installed declarations are available, compare them before coding; otherwise treat the documented shapes as authoritative and never guess a field name, enum, nullability, default, request body, or return shape.
-4. Choose an App-owned extension point; never start by editing a dependency.
-5. Implement the smallest App change and add tests in the App's existing test layout.
-6. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` when available; every write path requires immediate readback of the changed file or a focused check that proves the intended content is present.
-7. For direct AgentService integrations, verify conversation-first creation, session id continuity, authorization, persistence, and failure/abort behavior separately from ordinary UI checks.
-8. Report App files changed, public APIs consumed, and any missing framework capability separately.
-
-# Reference Loading Map
-
-| Reference                                         | Use When                                | Notes                                                                                                       |
-| ------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| [App source map](references/source-map.md)        | starting every task                     | Choose App-local paths and public package boundaries.                                                       |
-| [Frontend guide](references/frontend-registry.md) | building App UI                         | Chat, context, forms, tasks, browser tools, and settings.                                                   |
-| [API guide](references/api-reference.md)          | integrating backend actions             | Prefer existing service/transport over handwritten requests.                                                |
-| [Runtime boundaries](references/agent-service.md) | direct server AgentService integrations | Container tokens, conversation-first creation, `createAIEmployee`, `createAgent`, context, and persistence. |
-
-# Register application AI Employees and Tools from server/ai
-
-Application Employees and Tools are defined under `server/ai/employees/` and `server/ai/tools/`, aggregated with static imports in `server/ai/index.ts`, and registered from the application's Server Provider.
-
-Employee and Tool implementations use `defineAIEmployee()` and `defineTools()`. Put the Employee prompt in its `systemPrompt` field and configure its Skill and Tool names explicitly.
-
-Use the public `AIResourceRegistrar` contract exported by `@nocobase/app-plugin-ai-employee/server`:
-
-```ts
-import { AIResourceRegistrar } from '@nocobase/app-plugin-ai-employee/server';
-import type { AIEmployeeManager, ToolsManager } from '@nocobase/ai-employee';
-import employee from './employees/sales/index.js';
-import tool from './tools/lookup-lead.js';
-
-export default class AppAIResources extends AIResourceRegistrar {
-  protected override async registerAIEmployees(
-    aiEmployeeManager: AIEmployeeManager,
-  ): Promise<void> {
-    await aiEmployeeManager.registerEmployee(employee);
-  }
-
-  protected override async registerTools(
-    toolsManager: ToolsManager,
-  ): Promise<void> {
-    await toolsManager.registerTools(tool);
-  }
-}
-```
-
-In the application's Provider `boot()`, resolve the existing `aiManagerToken` and call `registerAIResources(ai)`. Do not create another AI Manager. Register order is Tool, MCP, Skill, then Employee; make same-name Tool behavior an explicit registration decision rather than relying on directory scan order.
-
-## Configure additional Skill directories
-
-The plugin always loads its published package-root `ai/skills`, then the App-root `ai/skills` as a second default directory, then any application or shared Skill directories listed in `ai.skills.paths` in `config.yml`. Paths may be absolute or relative to the App root, are trimmed and de-duplicated, and later directories have later-registration semantics.
-
-Skill files must be named `SKILL.md`; their frontmatter contract is unchanged. This configuration affects only Skill loading. It does not discover Employees or Tools.
-
-## Employee
-
-## Backend tool
-
-```ts
-import { defineTools } from '@nocobase/ai-employee';
-import { z } from 'zod';
-
-export default defineTools({
-  scope: 'SPECIFIED',
-  execution: 'backend',
-  defaultPermission: 'ASK',
-  i18n: { namespace: '@acme/sales-app' }, // Use this App's actual package.json name.
-  introduction: {
-    title: 'Look up lead',
-    about: 'Find a lead available to the current user.',
-  },
-  definition: {
-    name: 'lookup-lead',
-    description: 'Look up one lead authorized for the current user.',
-    schema: z.object({ id: z.string() }),
-  },
-  invoke: async (_ctx, { id }) => ({
-    status: 'success',
-    content: { id },
-  }),
-});
-```
-
-Explicitly choose scope, execution, and permission. Validate input, enforce business authorization inside the tool, and return serializable output. Use `GENERAL` only when every employee should see it; otherwise activate a `SPECIFIED` tool from an employee or skill.
-
-## Tool and Skill display translations
-
-Declare top-level `i18n: { namespace: '<actual package.json name>' }` on every Tool or Skill that opts into translated display metadata. The namespace is the owning plugin's or application's actual package name, not the AI Employee plugin that displays it, a Skill name, or an application namespace sentinel. Factories and dynamic Tool providers must put this metadata on each returned resource. A Skill and each Tool it references are independent resources: a Tool keeps its own namespace and must not inherit the Skill's namespace.
-
-Tool `introduction.title` and `introduction.about`, and Skill `introduction.title` and `description`, contain readable English source text. These fields are the explicit exception to the usual semantic translation-key rule: use the entire exact English text as a flat locale key, including punctuation, spaces, and capitalization. Do not substitute semantic identifiers or `{{t(...)}}` templates. Do not add a Skill `about` field for this purpose.
-
-Register translations through the owner's Client locale contribution in `client/locales/`, not `server/locales/`. Every source key requires an explicit English-to-English entry in `client/locales/en-US.ts` as well as translated entries in other locales; readable fallback text does not replace the English entry. For the Tool above, the App's locale files include:
-
-```ts
-// client/locales/en-US.ts
-export default {
-  'Look up lead': 'Look up lead',
-  'Find a lead available to the current user.':
-    'Find a lead available to the current user.',
-};
-
-// client/locales/zh-CN.ts
-export default {
-  'Look up lead': '查找线索',
-  'Find a lead available to the current user.': '查找当前用户可访问的线索。',
-};
-```
-
-Translation is display-only. Keep stable names, Tool `definition.description`, schemas, Skill instruction bodies, persisted values, and model-facing Skill descriptions unchanged. Resources without namespace metadata and missing translations display their original source text. Tool and Skill catalogs sort by localized display title in the current locale, with the stable resource `name` as the tie-breaker; changing locale must update both labels and ordering. See [Exact contracts](references/contracts.md#tool-and-skill-display-i18n) for the Skill frontmatter and ownership rules.
-
-## Skill, MCP, and LLM services
-
-- Skill: create `SKILL.md` with `scope`, `name`, `description`, optional `tools`, and instructions. Skill-local tools are discovered automatically.
-- MCP: configure `ai.mcpServers` in `config.yml`; the settings page is read-only and only tests connections or displays discovered tools. Keep credentials in environment/config.
-- LLM services: configure `config.yml` `ai.llmServices` with environment placeholders and explicit enabled models. The name set is authoritative; reload application config after edits. No process restart or AI resource rescan is required.
-
-The App runtime already owns its `AIManager`; do not call `createAIManager()` merely to load normal `ai/` resources.
-
-# Built-in Tools
-
-Common built-ins include:
-
-- `formFiller`: fills visible registered fields; never submits or saves.
-- `loadFrontendTool` and `executeFrontendTool`: exact-id, allowlisted browser actions.
-- `suggestions`: selectable next prompts.
-- `chartGenerator`: chart options/result presentation.
-- `getSkill`: loads a specified skill.
-- `knowledge-base-retrieve`: on-demand retrieval when configured.
-- Atlas tools: `list-ai-employees`, `get-ai-employee`, `dispatch-sub-agent-task`.
-
-Do not import their implementation modules. Activate them through employee/skill settings or page context.
-
-# Install the AI Frontend Extension
-
-The React UI is a shadcn Registry item named `nocobase-ai`, owned by `@nocobase/app-plugin-ai-employee` and installed as App source at `client/extensions/nocobase-ai`. It is application-owned: install it once, then edit and commit it like any other App file. The plugin package exports no chat UI, so a missing extension is never a reason to import React components from `@nocobase/ai-employee`, to patch the plugin package, or to rebuild chat in `client/`.
-
-Before any frontend task, check whether `client/extensions/nocobase-ai/index.ts` exists. When it does, reuse it and skip installation. When it does not, install it with the first option below that applies to the current working tree.
-
-## Option 1 — install from the App's installed package
-
-Preferred inside a generated App. The published plugin ships its canonical source and a self-contained Registry JSON, so the App can install from the copy already resolved in its own `node_modules`: the installed UI then matches the plugin version the App actually runs, with no network access and no NocoBase source checkout.
-
-Run from the App root:
-
-```bash
-node --input-type=module -e '
-import fs from "node:fs";
-import path from "node:path";
-import { createRequire } from "node:module";
-
-const require = createRequire(path.join(process.cwd(), "package.json"));
-const manifest = require.resolve("@nocobase/app-plugin-ai-employee/package.json");
-const item = JSON.parse(
-  fs.readFileSync(path.join(path.dirname(manifest), "public/r/nocobase-ai.json"), "utf8"),
-);
-for (const file of item.files) {
-  const target = path.resolve(process.cwd(), file.target);
-  if (!target.startsWith(process.cwd() + path.sep)) {
-    throw new Error(`Unsafe Registry target: ${file.target}`);
-  }
-  if (fs.existsSync(target)) {
-    throw new Error(`Refusing to overwrite: ${file.target}`);
-  }
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, file.content);
-}
-console.log(`Installed ${item.files.length} files into client/extensions/nocobase-ai.`);
-'
-```
-
-Resolve the JSON through the package manifest, not through a hand-written `node_modules` path; pnpm does not place the package at a predictable depth. Take every destination from `files[].target` and never invent one. The refusal on an existing target is deliberate: installation must not overwrite App-owned source.
-
-## Option 2 — materialize from a NocoBase source workspace
-
-Use this only when the current tree is the NocoBase source repository, such as when preinstalling the extension into an application template:
-
-```bash
-pnpm registry materialize \
-  --package @nocobase/app-plugin-ai-employee \
-  --item nocobase-ai \
-  --output-root /absolute/path/to/app
-```
-
-It copies source only and refuses an existing target. It does not run from a generated App, because it reads `registry.config.json` from the workspace rather than from an installed package.
-
-## Option 3 — install from a hosted Registry
-
-`shadcn add <registry-url>/nocobase-ai.json` works only after the Registry JSON is published behind an HTTP(S) URL; an npm tarball containing `public/r/` is not a Registry. It resolves the item's declared npm dependencies, but it installs whatever version that URL currently serves, which can differ from the plugin version the App has installed. Prefer Option 1 whenever the plugin is already a dependency, and state the version risk explicitly when only this option is available.
-
-## After installing
-
-The item declares npm `dependencies` that the App must provide; its `registryDependencies` list is empty, so no shadcn primitive is required. Verify the declarations from the App root and add whatever is reported:
-
-```bash
-node --input-type=module -e '
-import fs from "node:fs";
-import path from "node:path";
-import { createRequire } from "node:module";
-
-const require = createRequire(path.join(process.cwd(), "package.json"));
-const manifest = require.resolve("@nocobase/app-plugin-ai-employee/package.json");
-const item = JSON.parse(
-  fs.readFileSync(path.join(path.dirname(manifest), "public/r/nocobase-ai.json"), "utf8"),
-);
-const app = JSON.parse(fs.readFileSync("package.json", "utf8"));
-const declared = { ...app.dependencies, ...app.devDependencies };
-const missing = item.dependencies
-  .map((spec) => spec.slice(0, spec.lastIndexOf("@")))
-  .filter((name) => !declared[name]);
-console.log(missing.length ? `Missing: ${missing.join(" ")}` : "All Registry dependencies are declared.");
-'
-```
-
-This client source is compiled by the App's own Vite build, so its npm dependencies belong in the App's `devDependencies` unless the App already depends on the package at runtime. Then read `client/extensions/nocobase-ai/README.md`, confirm the import alias the App uses for the extension, and run the App's lint, typecheck, test, and build commands before building UI on top of it.
-
-## Upgrading an installed extension
-
-Never rerun an installer over an installed copy; both installers refuse it precisely because the App may have edited that source. Install the new version into a separate temporary directory, three-way merge the previous Registry source, the new Registry source, and the App copy, and preserve App customizations. Keep the extension's declared dependencies in step with the merged source.
-
-# Frontend App Integration
-
-Use the installed `client/extensions/nocobase-ai` source; install it first when it is missing. React UI does not come from `@nocobase/ai-employee`. Employee and model discovery is asynchronous: mount `AIChatProvider` only after `useAI()` reports `configurationStatus === 'ready'`, at least one employee, and `hasEnabledModels`. Keep the readiness check inside `NocoBaseAIRootProvider` and outside `AIChatProvider`; a loading overlay over an already mounted chat does not defer its initialization.
-
-The following minimal page includes the required loading and unavailable states. Adapt the import alias to the App's installed extension path, and localize the messages using the App's existing i18n setup.
-
-```tsx
-import {
-  AIChatProvider,
-  AIChatWindow,
-  ChatInline,
-  NocoBaseAIRootProvider,
-  nocobaseAIService,
-  useAI,
-  useAIChatController,
-} from '@/extensions/nocobase-ai';
-
-function ConfiguredChat() {
-  const {
-    configurationStatus,
-    configurationError,
-    modelConfigurationError,
-    employees,
-    hasEnabledModels,
-  } = useAI();
-  const controller = useAIChatController();
-
-  if (configurationStatus === 'loading') {
-    return <p role='status'>Loading AI configuration...</p>;
-  }
-  if (configurationStatus === 'error') {
-    return (
-      <p role='alert'>
-        {configurationError?.message ?? 'Unable to load AI configuration.'}{' '}
-        Check your connection, employee access, and AI settings, then reload
-        this page.
-      </p>
-    );
-  }
-  if (!employees.length) {
-    return <p role='alert'>No AI employees are available for this user.</p>;
-  }
-  if (modelConfigurationError) {
-    return (
-      <p role='alert'>
-        {modelConfigurationError.message} Check and enable a model in AI
-        settings, then reload this page.
-      </p>
-    );
-  }
-  if (!hasEnabledModels) {
-    return (
-      <p role='alert'>
-        No enabled AI model is available. Configure and enable a model in AI
-        settings, then reload this page.
-      </p>
-    );
-  }
-
-  return (
-    <AIChatProvider id='sales-chat' controller={controller}>
-      <ChatInline>
-        <AIChatWindow />
-      </ChatInline>
-    </AIChatProvider>
-  );
-}
-
-export default function SalesChatPage() {
-  return (
-    <NocoBaseAIRootProvider service={nocobaseAIService}>
-      <ConfiguredChat />
-    </NocoBaseAIRootProvider>
-  );
-}
-```
-
-If the App already has a root AI provider, render `ConfiguredChat` beneath that provider instead of adding another root. Call hooks unconditionally before the guard returns. Do not use `models.length` as the availability check: the provider may expose an unconfigured placeholder model. Model discovery can fail while `configurationStatus` is still `'ready'`, so check `modelConfigurationError` and `hasEnabledModels` separately. The example deliberately withholds the composer until configuration is usable; after correcting access or model configuration, reload the page to retry discovery. Do not require an employee/model switch as a recovery step.
-
-Patterns:
-
-- Global chat: reuse the installed global AI extension/provider.
-- Embedded chat: `AIChatProvider` + `ChatInline`/`AIChatWindow`.
-- Dialog/side panel/page: existing chat surfaces.
-- Employee task: `AIChatProvider.employeeTasks` or `AIEmployeeShortcut`.
-- Page context: `useAIPageElementHandle`, `AIPageContextScope`, or picker APIs.
-- Form filler: `useAIForm`; do not create a duplicate tool.
-- Browser action: `defineAIFrontendTool` in a page-element descriptor.
-- Rich result UI: pass custom `toolRenderers` to the root provider.
-
-Context, tool arguments, and results must be serializable. Use `ASK` for frontend tools that persist, navigate with side effects, or change business state. Keep one provider/controller mounted for one conversation scene.
-
-# API Usage
-
-Prefer `nocobaseAIService` and the installed chat transport. They already provide employee/model discovery, conversation lifecycle/history, file uploads, SSE send/resend/resume, tool decisions, frontend-tool results, and reconnect recovery.
-
-Only call `/api/ai` directly from a centralized App service adapter when an operation is not exposed by the existing service. Preserve current-user scope, abort signals, SSE framing, approval/resume, and error handling. Never duplicate the stream parser inside a page component.
-
-# Adding AI Settings Pages
-
-An App plugin contributes independent sidebar pages through its client `routes`, without replacing AI Employees:
-
-```ts
-import { defineSettingsRoutes } from '@nocobase/app-client/plugins';
-
-export default defineSettingsRoutes([
-  {
-    parent: 'aiGroup',
-    name: 'sales-ai',
-    path: '/ai/sales',
-    navigation: { title: 'Sales AI' },
-    authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
-    componentLoader: () => import('./pages/sales-ai-settings.js'),
-  },
-]);
-```
-
-Register this contribution in the plugin's `routes` and add its locale resources. The example preserves the existing AI settings access policy; server operations still enforce their own permissions. Keep detail routes beneath their owning page, with an `Outlet` and appropriate guards. AI Employees at `/settings/ai` never renders cross-feature tabs; employee detail/editor tabs are unaffected. `registerAISettingsTabs` and `getAISettingsTabs` remain deprecated compatibility APIs, but registered tabs no longer render. Migrate old custom tab contributions to sidebar routes.
-
-# Direct Core Runtime Use
-
-Use `createAIManager()` directly only for an isolated worker, CLI, test, or server integration that deliberately does not need App authentication, database conversations, `/api/ai`, SSE, settings UI, or Registry chat.
-
-```ts
-import { createAIManager } from '@nocobase/ai-employee';
-
-const ai = createAIManager(logger);
-await ai.employeeManager.registerEmployee(employeeDefinition);
-await ai.toolsManager.registerTools(toolDefinition);
-```
-
-For an App-owned server integration that needs the plugin's persisted conversation and configured runtime, do not use a separate manager. Resolve `aiConversationsManagerToken` and `agentServiceFactoryToken` from `@nocobase/app-plugin-ai-employee/server`; read `references/agent-service.md` for the complete contracts and creation order.
-
-The direct `AgentService` API is server-only. It is intentionally not a client/browser resource API.
-`AgentService` is available only through the AI Employee plugin's public server-container factory integration described in `references/agent-service.md`; it is not exported by `@nocobase/ai-employee` and is not a browser/client API. Do not deep-import plugin server/agent files.
-
-# Rollback and Recovery for high-impact actions
-
-- If a direct agent integration creates a conversation but agent creation fails, do not retry blindly; record the session id, inspect the conversation state, and use an App-owned cleanup/archive path if the product requires one.
-- If streaming disconnects, do not create a second conversation or send the mutation again automatically. Read the existing conversation and resume only when the operation and message state prove it is safe.
-- If a custom `ConversationPersistence` violates transaction or message-id invariants, disable that integration and return to the plugin's default database persistence before investigating further.
-
-# Safety Gate
-
-- Keep LLM/MCP credentials out of committed source; use environment placeholders/configuration.
-- Never use `ALLOW` for irreversible or persistent actions.
-- Never expose arbitrary repository access through a general tool.
-- Never send DOM nodes, callbacks, class instances, credentials, or unbounded records as context.
-- Never retry a streaming mutation blindly after disconnect; inspect conversation state/history first.
-- Never modify or deep-import dependency/plugin internals silently.
-
-# Verification Checklist
-
-- All changes are App-owned or belong to an App plugin.
-- `@nocobase/ai-employee` imports use its public root.
-- `ai/` resources default-export valid definitions and built-ins are not copied.
-- The AI extension is installed at `client/extensions/nocobase-ai` from the App's own installed plugin version, its declared npm dependencies are present in the App manifest, and no installer overwrote existing App source.
-- Frontend uses the installed AI extension and existing service/transport.
-- Chat mounts only after employee/model discovery is usable; loading, failed discovery, missing employees, and unavailable models show explicit states rather than an enabled composer.
-- On first entry and after a full page reload, the displayed default employee/model can send immediately without switching either selection; verify conversation creation, the stream request, and the cleared draft.
-- Context and tool data are serializable and permission guarded.
-- Settings registration is side-effect imported and its lazy page has a default export.
-- No private AI Employee plugin server path is imported.
-- Run App-local lint, typecheck, test, and build commands.
-
-# Minimal Test Scenarios
-
-1. Add an App employee, skill, and tool; verify they load after built-ins.
-2. Use a built-in employee in embedded chat without copying its definition.
-3. Send page context and verify the latest serializable values.
-4. Fill a registered form and verify no automatic submit/save.
-5. Execute an `ASK` frontend tool through approval and resume.
-6. Add an independent Settings page under `aiGroup` from an App plugin.
-7. Verify App code has no private dependency/plugin imports.
-8. Create a persisted conversation, create an AI Employee agent with its session id, and verify invoke/stream uses the same session (success path).
-9. Create a conversation without `aiEmployee`, create a fixed `AgentService` with `createAgent`, and verify direct model execution (success path).
-10. Verify a custom context provider resolves model/prompt/tools without directly loading or saving conversation messages; a missing model must produce a clear error (failure path).
-11. Verify a custom persistence implementation keeps assistant messages and usage events atomic and preserves tool status transitions; a usage write error must roll back the message (failure path).
-12. Verify unauthorized user/session access is denied and disconnect recovery does not duplicate a mutation (permission/recovery path).
-
-# Output Contract
-
-Final response must include:
-
-- App feature and extension point;
-- App-owned files changed;
-- public dependency, AI extension, or plugin-client APIs consumed;
-- tests/checks run;
-- any missing public capability requiring separate framework work.
-
-# References
-
-- [App source map](references/source-map.md): use before choosing an extension point.
-- [Install the AI Frontend Extension](#install-the-ai-frontend-extension): use before any frontend task, to confirm or install `client/extensions/nocobase-ai`.
-- [Frontend guide](references/frontend-registry.md): use for chat, context, forms, tools, tasks, and settings.
-- [API guide](references/api-reference.md): use for `/api/ai` behavior and service mapping.
-- [Runtime boundaries](references/agent-service.md): use before direct manager or custom agent work.
-- [Exact contracts](references/contracts.md): use before writing resource definitions, React props, settings routes, tool schemas, or request bodies.
-- [NocoBase App quickstart](../../../../../docs/docs/en/plugin-development/quick-start.md): use when App creation or local development workflow is unclear.
+An importable subpath is not a runtime contribution. `@nocobase/app-plugin-ai-employee/server` exports tokens and the registrar base class; importing it never registers anything. Registration happens in the App's own Provider, once, in `boot()`.
+
+Import a token from the package that created it. `createServiceToken` is keyed by object identity, so a second `createServiceToken('ai-manager')` is a different key that resolves nothing.
+
+## Prerequisites
+
+1. `@nocobase/app-plugin-ai-employee` is enabled in `package.json#nocobase.plugins`.
+2. `config.yml` declares at least one usable `ai.llmServices` entry. Nothing works without it, and its models must be real — see [capabilities.md § LLM services](references/capabilities.md#llm-services-configyml).
+3. Frontend work needs `client/extensions/nocobase-ai/index.ts` to exist. If it does not, install the Registry item first — see [chat-surfaces.md § Install the extension](references/chat-surfaces.md#install-the-extension).
+4. Chat attachments need a storage disk decided deliberately — see [capabilities.md § Attachment storage](references/capabilities.md#attachment-storage-configyml).
+
+## What to build for what the user asked
+
+| The user wants                                            | Build                                             | Where                                 |
+| --------------------------------------------------------- | ------------------------------------------------- | ------------------------------------- |
+| A chat box on a page                                      | a chat surface behind the readiness gate          | App page                              |
+| The assistant to see what is on screen                    | a page element with `getContext`                  | App page                              |
+| The assistant to fill a visible form                      | `useAIForm`                                       | App page                              |
+| The assistant to change something visible, without saving | a frontend tool                                   | App page element                      |
+| The assistant to read or write business data              | a backend tool with declared `dependencies`       | `server/ai/tools/<name>.ts`           |
+| The assistant to follow a named procedure                 | a Skill                                           | `ai/skills/<name>/SKILL.md`           |
+| A named persona with a fixed set of skills and tools      | an Employee                                       | `server/ai/employees/<name>/index.ts` |
+| Tools from an external MCP server                         | `ai.mcpServers`                                   | `config.yml`                          |
+| Current information from the web                          | activate the built-in `subAgentWebSearch`         | employee `tools`                      |
+| Answers grounded in uploaded documents                    | a knowledge base, then `knowledge-base-retrieve`  | AI settings, then employee `tools`    |
+| The assistant to read an image or PDF the user dropped in | nothing — enable attachments and configure a disk | chat surface props, `config.yml`      |
+
+Reach for an App-defined tool before concluding a capability is missing: a backend tool may declare any container token as a dependency, so anything an App service can do, a tool can do. Do not copy a built-in employee, tool, or skill into the App to modify it.
+
+## Shortest end-to-end path
+
+Do these in order; each step depends on the one before it.
+
+1. **Configure a model.** Add an `ai.llmServices` entry with `${NAME}` placeholders, verify the key resolves a real model list from the provider, and restart. Verify in the UI that a model is selectable.
+2. **Write the tool first, then the skill that names it.** A tool is registered in code; a Skill references it by name and cannot define one. `ai/skills/` holds Skills only.
+3. **Aggregate and register.** Static-import employees and tools in `server/ai/index.ts` through a subclass of `AIResourceRegistrar`, then call `registerAIResources()` from an App `ServiceProvider.boot()` with `aiManagerToken`. See [server-runs.md § Register App resources](references/server-runs.md#register-app-resources).
+4. **Define the employee.** `defineAIEmployee()` with a stable `username`, a `systemPrompt`, an `avatar` copied from the plugin's list, and explicit `skills` and `tools`. See [capabilities.md § Employees](references/capabilities.md#employees).
+5. **Mount a chat surface** behind the readiness gate, enabling attachments when the flow starts from a dropped image or a pasted document.
+6. **Verify by observation**, not by reading the source back. Run the checks below.
+
+## Safety
+
+- Credentials belong in the environment. Write `${OPENAI_API_KEY}` in `config.yml`, put the real value in `.env`, and confirm `.env` is in `.gitignore` before writing it. Never commit a key, and never place one in `config.yml.client`, which the browser can read.
+- Never invent a model id, a provider `baseURL`, or an avatar key. A wrong model id fails at call time; a wrong avatar key silently renders the fallback avatar. Fetch the model list from the provider, and take avatar keys from the plugin's list.
+- `defaultPermission: 'ALLOW'` is for reversible, local, low-consequence actions. Anything that persists, charges, sends, or deletes stays `ASK`.
+- A tool that writes business data owns three things the runtime will not do for it: authorize against `ctx.actor`, keep its writes in one transaction, and make a repeat call safe. A model retries.
+- Context and tool results must survive structured cloning. Never send DOM nodes, callbacks, class instances, credentials, or unbounded record sets.
+- After a stream disconnects, read the conversation before doing anything. Do not resend a mutation blindly, and do not create a second conversation.
+- Never modify or deep-import plugin internals to finish an App feature. If a public surface is genuinely missing, say so and stop.
+
+## Completion checks
+
+- A first-time visitor lands on the page, sees a usable composer without switching employee or model, sends, and gets a reply. Reload and repeat: this tests a fresh mount, not a warm one.
+- Each unhappy configuration shows its own actionable message rather than a composer that looks ready: discovery loading, discovery failed, no accessible employees, model discovery failed, no enabled models.
+- The App employee, tool, and skill appear in AI settings after start, and the employee's tool list shows exactly what was declared.
+- The new tool runs from chat, is approved when its permission is `ASK`, returns a serializable result, and leaves the expected database row behind. Run it twice and verify no duplicate.
+- An unauthorized user is refused by the tool, not only by the prompt.
+- If attachments are enabled: dropping an image and pasting a document both reach the assistant, and the reply shows it read them.
+- App-local `lint`, `typecheck`, `test`, and `build` pass.
+- No App file imports a plugin private path, and no changed file lives under `.agents/skills/`.
+
+## References
+
+- [source-map.md](references/source-map.md) — where each App file goes, and what to read before choosing an extension point.
+- [capabilities.md](references/capabilities.md) — employees, tools, skills, MCP, knowledge base, avatars, the built-in tools and skills, and the whole `config.yml` `ai` block.
+- [chat-surfaces.md](references/chat-surfaces.md) — installing the extension, the readiness gate, surfaces, attachments, page context, forms, frontend tools, renderers, settings pages.
+- [server-runs.md](references/server-runs.md) — registering App resources, and running an agent directly from App server code.
+- [api-reference.md](references/api-reference.md) — read only when calling `/api/ai` directly instead of through the installed service; the installed transport already covers every normal case.

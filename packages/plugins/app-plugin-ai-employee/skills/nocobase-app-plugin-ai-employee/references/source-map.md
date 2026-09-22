@@ -1,4 +1,6 @@
-# NocoBase App AI Source Map
+# App Source Map
+
+Where each piece of AI work goes in a CLI-created App, and what to read before choosing an extension point.
 
 ## Table of contents
 
@@ -6,12 +8,10 @@
 - [App AI resources](#app-ai-resources)
 - [App frontend](#app-frontend)
 - [App server](#app-server)
-- [Installed public dependency](#installed-public-dependency)
+- [The installed dependency](#the-installed-dependency)
 - [Tests and validation](#tests-and-validation)
 
 ## Identify the App root
-
-A NocoBase App is normally created with:
 
 ```bash
 pnpm create @nocobase/app crm
@@ -19,100 +19,89 @@ cd crm
 pnpm install
 ```
 
-The current directory is the App root when it contains `client/`, `server/`, and `package.json`. Work relative to this root. Do not require users to know which npm template package generated it.
+The current directory is the App root when it holds `client/`, `server/`, and `package.json`. Work relative to it, and do not require the user to know which npm template generated it.
 
-Read these App-local files when present:
+Read these App-local files when present, before writing anything:
 
-- `README.md`: App setup and development notes.
-- `AGENTS.md`: App-specific coding rules.
-- `package.json`: enabled plugins, dependencies, and scripts.
-- `ai/README.md`: AI resource layer and build behavior.
-- `client/extensions/nocobase-ai/README.md`: installed AI frontend capabilities. Its absence means the Registry item is not installed yet, not that the App lacks AI UI support.
+- `README.md` — setup and development notes.
+- `AGENTS.md` — App-specific coding rules; they outrank this Skill's defaults.
+- `package.json` — enabled plugins (`nocobase.plugins`), dependencies, scripts.
+- `config.yml` — the `ai` block; see [capabilities.md](capabilities.md#llm-services-configyml).
+- `.env` and `.gitignore` — confirm secrets are ignored before adding a variable.
+- `ai/README.md` — the AI resource layer and its build behavior.
+- `client/extensions/nocobase-ai/README.md` — the installed AI frontend. Its absence means the Registry item is not installed yet, not that the App cannot have AI UI.
 
 ## App AI resources
 
-- `config.yml` `ai.llmServices`: LLM service application config with environment placeholders.
-- `config.yml` `ai.mcpServers`: MCP server connection configuration with environment placeholders.
-- `server/ai/employees/<name>/index.ts`: App Employee definition with an inline `systemPrompt`.
-- `server/ai/tools/<name>.ts`: App backend Tool definition.
-- `ai/skills/<name>/SKILL.md`: App Skill; optional Skill-local `tools/` remain Skill-loader behavior.
+| Path                                  | Holds                                                           |
+| ------------------------------------- | --------------------------------------------------------------- |
+| `config.yml` `ai.llmServices`         | LLM services, with `${NAME}` environment placeholders           |
+| `config.yml` `ai.mcpServers`          | MCP connections — the only place they can be configured         |
+| `config.yml` `ai.aiEmployee.storage`  | the disk chat attachments are written to                        |
+| `config.yml` `ai.skills.paths`        | extra Skill directories beyond the App root's `ai/skills`       |
+| `server/ai/employees/<name>/index.ts` | one `defineAIEmployee()` with an inline `systemPrompt`          |
+| `server/ai/tools/<name>.ts`           | one `defineTools()` backend tool                                |
+| `server/ai/index.ts`                  | static imports, aggregated by an `AIResourceRegistrar` subclass |
+| `server/providers/ai-resources.ts`    | the `ServiceProvider` that calls `registerAIResources()`        |
+| `ai/skills/<name>/SKILL.md`           | one Skill; it names tools, and defines none                     |
 
-Aggregate Employees and Tools through static imports in `server/ai/index.ts`, subclass the public `AIResourceRegistrar` from `@nocobase/app-plugin-ai-employee/server`, and invoke it from the App Provider `boot()` with the existing `aiManagerToken`. There is no Employee/Tool filesystem scan and no Employee-local prompt, Skill, or Tool auto-binding.
+There is no filesystem scan for employees or tools, and no employee-local prompt, skill, or tool auto-binding. See [capabilities.md § Where each resource is registered](capabilities.md#where-each-resource-is-registered) and [server-runs.md § Register App resources](server-runs.md#register-app-resources).
 
 ## App frontend
 
-Active App source is under `client/`. Common extension points:
+App source lives under `client/`. The usual extension points are `client/routes.ts`, `client/providers.ts`, `client/pages/`, `client/locales/`, and the installed `client/extensions/nocobase-ai/`.
 
-- `client/routes.ts`: App-owned routes.
-- `client/providers.ts`: App providers.
-- `client/pages/`: App pages.
-- `client/extensions/nocobase-ai/`: installed, App-owned AI frontend source.
+Inside the extension, the files worth opening:
 
-Inside the AI frontend extension, inspect:
+| Path                                                                           | What it is                                                       |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `index.ts`                                                                     | the export surface                                               |
+| `components/ai-root-provider.tsx`                                              | `NocoBaseAIRootProvider`, the composition of the three providers |
+| `providers/ai-provider.tsx`                                                    | discovery, transport, invokers                                   |
+| `providers/ai-context.ts`                                                      | the `useAI()` contract, including the readiness fields           |
+| `providers/chat-transport.ts`                                                  | requests and the SSE transport                                   |
+| `providers/page-context.tsx`, `page-context-store.ts`, `page-context-utils.ts` | context scopes and tool/form allowlists                          |
+| `providers/frontend-tool-registry.ts`                                          | browser tool registration and execution                          |
+| `providers/form-registry.ts`                                                   | form validation and filling                                      |
+| `services/types.ts`                                                            | the `AIService` contract                                         |
+| `services/nocobase-ai-service.ts`                                              | the `/api/ai` adapter                                            |
+| `components/chat/`                                                             | the chat UI, composer, attachments                               |
+| `components/surfaces/`                                                         | inline, page, dialog, side-panel containers                      |
+| `components/page-elements/`                                                    | page-element and form hooks                                      |
+| `components/tools/`                                                            | tool result renderers                                            |
+| `adapters/react-hook-form.ts`                                                  | `applyReactHookFormValues`, for `useAIForm.setValues`            |
 
-- `index.ts`: exports.
-- `global-ai-chat.tsx`: global provider/chat entry.
-- `services/types.ts`: `AIService` contract.
-- `services/nocobase-ai-service.ts`: `/api/ai` adapter.
-- `providers/ai-provider.tsx` and `providers/ai-context.ts`: configuration, transport and invokers, and the `useAI` hooks that read them.
-- `providers/chat-transport.ts`: requests and SSE transport.
-- `providers/page-context.tsx`, `providers/page-context-store.ts` and `providers/page-context-utils.ts`: context scopes and tool/form allowlists.
-- `providers/frontend-tool-registry.ts`: browser tool registration/execution.
-- `providers/form-registry.ts`: form validation/filling.
-- `components/page-elements/`: page-element and form hooks.
-- `components/surfaces/`: inline/page/dialog/side-panel chat.
-- `components/chat/`: chat UI.
-- `components/tools/`: result renderers.
-- `demo/` or example pages: complete integration examples when installed.
+A module that exports a component exports nothing else: an App lints this source with its own Portal configuration, and Fast Refresh requires it. A component's context, hooks, and helpers live in a sibling module — `page-element-store.ts` beside `page-element-provider.tsx`, `tool-call-utils.ts` beside `tool-call-card.tsx` — so import a hook or helper from that sibling, and put new non-component exports there too.
 
-A module that exports a component exports nothing else, because an application lints this source with its own Portal configuration and Fast Refresh requires it. A component's context, hooks and helpers live in a sibling module — `page-element-store.ts` beside `page-element-provider.tsx`, `tool-call-utils.ts` beside `tool-call-card.tsx` — so import a hook or helper from that sibling rather than from the component file, and put new non-component exports there too.
-
-If `client/extensions/nocobase-ai` is not installed, install the `nocobase-ai` Registry item that `@nocobase/app-plugin-ai-employee` owns before doing frontend work. The Skill's "Install the AI Frontend Extension" section gives the ordered options; inside a generated App, install from the plugin already resolved in the App's `node_modules` so the UI matches the installed plugin version. A missing extension is never a reason to import UI from `@nocobase/ai-employee` or to rebuild chat under `client/`.
+If `client/extensions/nocobase-ai` is missing, install the Registry item before doing frontend work; see [chat-surfaces.md § Install the extension](chat-surfaces.md#install-the-extension). A missing extension is never a reason to import UI from `@nocobase/ai-employee` or to rebuild chat under `client/`.
 
 ## App server
 
-- `server/`: App-owned services, routes, runtime, and plugin integration.
-- `package.json#nocobase.plugins`: enabled App plugins.
-- The App runtime normally owns a single `AIManager` used by the enabled AI Employee plugin.
+`server/` holds the App's own services, routes, runtime, and plugin integration. `package.json#nocobase.plugins` lists the enabled plugins. The App runtime owns one `AIManager`, created by the AI Employee plugin.
 
-Use the plugin runtime for authenticated conversations, persistence, `/api/ai`, SSE, and settings. Direct manager use is for isolated server integrations only.
+Use the plugin runtime for authenticated conversations, persistence, `/api/ai`, SSE, and settings. Direct `AgentService` use is for isolated App-owned server integrations only — see [server-runs.md](server-runs.md#when-to-drive-an-agent-directly).
 
-## Installed public dependency
+An App backend tool reaches App services through its declared `dependencies`, so a service the tool needs must be registered in the App container under a token the tool can import.
 
-Inspect installed declarations and exports for `@nocobase/ai-employee` through editor navigation or `node_modules/@nocobase/ai-employee` when necessary. Application code must import only from the package's public root:
+## The installed dependency
+
+App code imports `@nocobase/ai-employee` from its public root only:
 
 ```ts
-import {
-  createAIManager,
-  defineAIEmployee,
-  defineMCP,
-  defineTools,
-} from '@nocobase/ai-employee';
+import { defineAIEmployee, defineTools } from '@nocobase/ai-employee';
 ```
 
-Relevant public areas include:
+The root also covers employee and tool managers, `AgentContext`, resource loaders, repositories, LLM providers and helpers, and the knowledge/vector contracts. Inspect the installed declarations under `node_modules/@nocobase/ai-employee` when a shape is in doubt.
 
-- employee options/managers;
-- tool options/managers and `AgentContext`;
-- MCP options/managers;
-- resource loaders;
-- repositories;
-- LLM providers and helpers;
-- knowledge/vector feature contracts.
+Two exports look useful and are not. `createAIManager()` builds a second manager; it is only for an isolated worker, CLI, or test that deliberately wants no App runtime. `defineMCP()` belongs to the loader, not to an App: configure MCP in `config.yml` `ai.mcpServers`, which is the one supported path.
 
-The enabled `@nocobase/app-plugin-ai-employee` also exposes its server integration entry at `@nocobase/app-plugin-ai-employee/server`. Import only the documented `aiConversationsManagerToken` and `agentServiceFactoryToken` from that entry for trusted App server integrations; read `agent-service.md` before using them.
+The enabled plugin exposes its server entry at `@nocobase/app-plugin-ai-employee/server`. Import only `aiManagerToken`, `aiConversationsManagerToken`, `agentServiceFactoryToken`, `AIResourceRegistrar`, the config types and helpers, and the agent request/result types.
 
-Never import `@nocobase/ai-employee/src/...` or plugin-private server/agent paths.
+Never import `@nocobase/ai-employee/src/...` or a plugin-private server, agent, or factory path. An importable subpath is not a runtime contribution: importing the server entry registers nothing, and registration happens only in the App's own Provider.
 
 ## Tests and validation
 
-Follow the App's existing test layout. Common locations include:
-
-- `tests/logic/` or `tests/` for unit/integration tests;
-- `e2e/` for authenticated browser/API flows;
-- tests colocated inside the installed AI extension only when that extension already follows that convention.
-
-Use App-local scripts:
+Follow the App's existing test layout — commonly `tests/logic/` or `tests/` for unit and integration tests, and `e2e/` for authenticated browser or API flows. Colocate tests inside the installed AI extension only if that extension already does.
 
 ```bash
 pnpm lint
@@ -121,4 +110,4 @@ pnpm test
 pnpm build
 ```
 
-If a script is absent, inspect `package.json` and run the closest available check. Verify that built App output includes the `ai/` resources and that the enabled AI Employee plugin loads them.
+If a script is absent, read `package.json` and run the closest equivalent. Verify that the built output carries the `ai/` resources and that the enabled AI Employee plugin loads them.
