@@ -19,6 +19,8 @@ describe('application command factories', () => {
       'db:apply',
       'db:reset',
       'db:repair',
+      'db:rollback',
+      'db:redo',
       'collections:generate',
       'i18n:check',
     ]);

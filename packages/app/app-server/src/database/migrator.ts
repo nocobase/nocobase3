@@ -11,7 +11,9 @@ import {
   type DatabaseManager,
   type MigrationRepairOptions,
   type MigrationRepairResult,
+  type MigrationHistoryRecord,
   type MigrationSource,
+  type MigrationRollbackOptions,
   type MigrationRollbackResult,
   type MigrationRunResult,
 } from '@nocobase/db';
@@ -21,7 +23,9 @@ import type { AppDatabaseMigrationConfig } from './types.js';
 export interface AppMigrator {
   latest(): Promise<AppMigrationRunResult>;
   fresh(): Promise<AppMigrationRunResult>;
-  rollback(): Promise<AppMigrationRollbackResult>;
+  rollback(
+    options?: MigrationRollbackOptions,
+  ): Promise<AppMigrationRollbackResult>;
   repair(options?: MigrationRepairOptions): Promise<AppMigrationRepairResult>;
 }
 
@@ -41,7 +45,10 @@ export interface AppMigrationRollbackResult {
   reason?: AppMigrationSkippedReason;
   batch?: number;
   rolledBack?: string[];
+  /** The batch's history records, in the order they roll back. */
+  records?: MigrationHistoryRecord[];
   warnings?: ChecksumMismatch[];
+  dryRun?: boolean;
 }
 
 export interface AppMigrationRepairResult {
@@ -86,13 +93,15 @@ export function createAppMigrator(
       return completedRunResult(await createDatabaseMigrator(options).latest());
     },
 
-    async rollback(): Promise<AppMigrationRollbackResult> {
+    async rollback(
+      rollbackOptions?: MigrationRollbackOptions,
+    ): Promise<AppMigrationRollbackResult> {
       if (!hasMigrationDirectory(options)) {
         return skippedMigrationResult();
       }
 
       return completedRollbackResult(
-        await createDatabaseMigrator(options).rollback(),
+        await createDatabaseMigrator(options).rollback(rollbackOptions),
       );
     },
 
@@ -176,7 +185,9 @@ function completedRollbackResult(
     status: 'completed',
     batch: result.batch,
     rolledBack: result.rolledBack,
+    records: result.records,
     warnings: result.warnings,
+    dryRun: result.dryRun,
   };
 }
 

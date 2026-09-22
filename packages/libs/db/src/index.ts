@@ -112,6 +112,7 @@ export type {
   MigrationDefinition,
   MigrationRepairOptions,
   MigrationRepairResult,
+  MigrationRollbackOptions,
   MigrationRollbackResult,
   MigrationRunResult,
   MigrationSource,

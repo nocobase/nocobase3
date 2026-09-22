@@ -14,6 +14,7 @@ import {
   type ChecksumMismatch,
   type DatabaseDriverRegistration,
   type DatabaseManager,
+  type MigrationHistoryRecord,
 } from '@nocobase/db';
 
 import type { AppPaths } from '../config/index.js';
@@ -23,8 +24,12 @@ import { createAppSeeder, type AppSeedRunResult } from './seeder.js';
 import { prepareAppDatabaseStorage } from './storage.js';
 import type { AppDatabaseConfig } from './types.js';
 
-/** `repair` realigns recorded checksums; it executes no migration or seed. */
-export type AppDatabaseTaskOperation = 'run' | 'repair';
+/**
+ * `repair` realigns recorded checksums; it executes no migration or seed.
+ * `rollback` runs the latest migration batch's `down`, and applies to
+ * migrations alone: seeds have no inverse.
+ */
+export type AppDatabaseTaskOperation = 'run' | 'repair' | 'rollback';
 
 export interface AppDatabaseTaskResult {
   connection: string;
@@ -36,6 +41,10 @@ export interface AppDatabaseTaskResult {
   executed?: string[];
   skipped?: string[];
   fresh?: boolean;
+  /** Migrations a rollback undid, or that a dry run would undo. */
+  rolledBack?: string[];
+  /** The rolled back batch's history records, in the order they roll back. */
+  records?: MigrationHistoryRecord[];
   /** Checksum drift tolerated by the `warn` policy during a run. */
   warnings?: ChecksumMismatch[];
   /** Records a repair rewrote, or that a dry run would rewrite. */
@@ -91,8 +100,11 @@ export async function executeAppDatabasePlan(
 ): Promise<AppDatabaseTasksResult> {
   if (fresh) {
     if (operation !== 'run')
-      throw new Error('A fresh run cannot be combined with repair.');
+      throw new Error(`A fresh run cannot be combined with ${operation}.`);
     assertFreshPlanOrder(plan);
+  }
+  if (operation === 'rollback' && plan.some((task) => task.kind === 'seeds')) {
+    throw new Error('A rollback covers migrations only; seeds have no down.');
   }
   const taskContainer = createTaskServiceResolver(container);
   const taskConfig = snapshotDatabaseTaskConfig(runtimeConfig);
@@ -131,11 +143,13 @@ export async function executeAppDatabasePlan(
           ? task.kind === 'migrations'
             ? await createAppMigrator(options).repair({ dryRun })
             : await createAppSeeder(options).repair({ dryRun })
-          : task.kind === 'migrations'
-            ? await (fresh
-                ? createAppMigrator(options).fresh()
-                : createAppMigrator(options).latest())
-            : await createAppSeeder(options).run();
+          : operation === 'rollback'
+            ? await createAppMigrator(options).rollback({ dryRun })
+            : task.kind === 'migrations'
+              ? await (fresh
+                  ? createAppMigrator(options).fresh()
+                  : createAppMigrator(options).latest())
+              : await createAppSeeder(options).run();
       result.results.push({
         ...identity,
         ...completed,

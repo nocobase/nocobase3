@@ -19,7 +19,9 @@ import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   runDatabaseApplyCommand,
+  runDatabaseRedoCommand,
   runDatabaseRepairCommand,
+  runDatabaseRollbackCommand,
 } from '../src/database-command.js';
 import { createAppPaths, AppConfig } from '@nocobase/app-server/config';
 import type { AppDatabaseConfig } from '@nocobase/app-server/database';
@@ -488,4 +490,114 @@ it('warns about checksum drift and repairs it across both task kinds', async () 
       .at(-1)?.[0]
       .results.flatMap((entry: { repaired: unknown[] }) => entry.repaired),
   ).toEqual([]);
+});
+
+it('rolls the latest batch back and lets it run again', async () => {
+  const { runtime, command, migration } = fixture();
+  migration('main');
+  await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
+
+  await runDatabaseRollbackCommand(
+    command,
+    { json: true, all: false, force: true },
+    runtime,
+  );
+  expect(command.logJson).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      ok: true,
+      results: [
+        expect.objectContaining({
+          connection: 'main',
+          kind: 'migrations',
+          status: 'completed',
+          batch: 1,
+          rolledBack: ['001_create'],
+          dryRun: false,
+        }),
+      ],
+    }),
+  );
+
+  // The history record is gone, so the corrected migration runs again rather
+  // than being skipped as already executed.
+  await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
+  expect(command.logJson).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      results: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'migrations',
+          executed: ['001_create'],
+        }),
+      ]),
+    }),
+  );
+  expect(command.exit).not.toHaveBeenCalled();
+});
+
+it('redoes the batch in one command, reporting both halves', async () => {
+  const { runtime, command, migration } = fixture();
+  migration('main');
+  await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
+
+  await runDatabaseRedoCommand(
+    command,
+    { json: true, all: false, force: true },
+    runtime,
+  );
+  expect(command.logJson).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      ok: true,
+      results: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'migrations',
+          rolledBack: ['001_create'],
+        }),
+        expect.objectContaining({
+          kind: 'migrations',
+          executed: ['001_create'],
+        }),
+      ]),
+    }),
+  );
+  expect(command.exit).not.toHaveBeenCalled();
+});
+
+it('reports an empty history as nothing to roll back', async () => {
+  const { runtime, command, migration } = fixture();
+  migration('main');
+  await runDatabaseRollbackCommand(
+    command,
+    { json: true, all: false, force: true },
+    runtime,
+  );
+  expect(command.logJson).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      ok: true,
+      results: [
+        expect.objectContaining({
+          status: 'completed',
+          batch: 0,
+          rolledBack: [],
+          dryRun: true,
+        }),
+      ],
+    }),
+  );
+  expect(command.exit).not.toHaveBeenCalled();
+});
+
+it('requires --force where it cannot prompt', async () => {
+  const { runtime, command, migration } = fixture();
+  migration('main');
+  await runDatabaseApplyCommand(command, { json: true, all: false }, runtime);
+
+  await expect(
+    runDatabaseRollbackCommand(command, { json: true, all: false }, runtime),
+  ).rejects.toThrow('exit 1');
+  expect(command.logJson).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      ok: false,
+      error: 'A rollback requires --force in CI or a non-interactive terminal.',
+    }),
+  );
 });

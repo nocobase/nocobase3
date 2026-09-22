@@ -30,6 +30,7 @@ import type {
   MigrationHistoryRecord,
   MigrationRepairOptions,
   MigrationRepairResult,
+  MigrationRollbackOptions,
   MigrationRollbackResult,
   MigrationRunResult,
 } from './types.js';
@@ -41,7 +42,9 @@ export interface Migrator {
   /** Applies pending migrations through the named migration, inclusive. */
   upTo(name: string): Promise<MigrationRunResult>;
   /** Rolls back the most recently applied migration batch. */
-  rollback(): Promise<MigrationRollbackResult>;
+  rollback(
+    options?: MigrationRollbackOptions,
+  ): Promise<MigrationRollbackResult>;
   /**
    * Rewrites recorded checksums to match the current sources, clearing drift
    * reported by a run. Executes no migration and changes no schema.
@@ -172,7 +175,10 @@ class DefaultMigrator implements Migrator {
     return readMigrationHistory(migrationConnection, tableName);
   }
 
-  async rollback(): Promise<MigrationRollbackResult> {
+  async rollback(
+    options: MigrationRollbackOptions = {},
+  ): Promise<MigrationRollbackResult> {
+    const dryRun = options.dryRun ?? false;
     const connection = this.options.database.connection(
       this.options.connection,
     );
@@ -215,7 +221,7 @@ class DefaultMigrator implements Migrator {
 
         const batch = currentBatch(history);
         if (batch === 0) {
-          return { batch: 0, rolledBack: [], warnings };
+          return { batch: 0, rolledBack: [], records: [], warnings, dryRun };
         }
 
         const migrationsByName = new Map(
@@ -234,6 +240,19 @@ class DefaultMigrator implements Migrator {
           validateRollbackMigration(migration.migration);
           return migration;
         });
+        // Validation above already rejected an irreversible batch, so a dry run
+        // reports what a run would undo and why it could not, without running
+        // any `down`.
+        if (dryRun) {
+          return {
+            batch,
+            rolledBack: rollbackItems.map((migration) => migration.name),
+            records,
+            warnings,
+            dryRun,
+          };
+        }
+
         const rolledBack: string[] = [];
 
         for (const migration of rollbackItems) {
@@ -241,10 +260,11 @@ class DefaultMigrator implements Migrator {
           rolledBack.push(migration.name);
         }
 
-        return { batch, rolledBack, warnings };
+        return { batch, rolledBack, records, warnings, dryRun };
       },
     );
-    if (result.rolledBack.length > 0) connection.collections.invalidate();
+    if (!dryRun && result.rolledBack.length > 0)
+      connection.collections.invalidate();
     return result;
   }
 
