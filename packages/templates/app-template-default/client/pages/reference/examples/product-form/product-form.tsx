@@ -941,7 +941,11 @@ export default function ProductFormExamplePage(): ReactElement {
           </div>
         </div>
 
-        <div className='sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border bg-card/95 p-4 text-card-foreground backdrop-blur'>
+        {/* A rounded, bordered bar pinned at bottom-0 meets the edge of the
+            scroll area with its corners cut off and reads as a clipped card.
+            The offset lets it float, and it still comes to rest inside the
+            page's own bottom padding once the form is scrolled to its end. */}
+        <div className='sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-lg border bg-card/95 p-4 text-card-foreground backdrop-blur'>
           <p className='hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex'>
             {t('examples.productForm.saveHint')}
             <KbdGroup>
