@@ -146,7 +146,7 @@ export function PermissionSetEditor({
   return (
     <>
       <form
-        className='flex min-h-0 flex-1 flex-col overflow-hidden bg-background'
+        className='flex min-h-0 flex-1 flex-col overflow-hidden'
         onSubmit={(event) => {
           if (readOnly) {
             event.preventDefault();

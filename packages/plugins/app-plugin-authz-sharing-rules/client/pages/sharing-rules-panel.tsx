@@ -668,7 +668,7 @@ function SharingActionsEditor({
             <Field label={t('sharingRules.recordsToShare')}>
               <SelectField
                 aria-label={t('sharingRules.recordsToShare')}
-                className='h-8 w-full rounded-lg border bg-background px-3 text-sm'
+                className='h-8 w-full rounded-lg border bg-transparent px-3 text-sm'
                 value={current.selection.type}
                 onValueChange={(selectedValue) =>
                   changeSharingAction(

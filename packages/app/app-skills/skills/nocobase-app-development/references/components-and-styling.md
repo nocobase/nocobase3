@@ -123,6 +123,10 @@ Read [the token reference](theme-tokens.md) when styling UI. It is the shared co
 
 Tokens are defined in `client/theme/themes/*.css` for both themes. A literal color looks fine in whichever theme you happened to be viewing and breaks in the other — this is the most common styling defect in this codebase.
 
+Picking the right surface token matters as much as avoiding a literal. Each one names a layer rather than a shade: `bg-background` is the page, `bg-card` is a panel resting on it, `bg-popover` is a floating surface such as a dialog or drawer, and a form control names no surface at all so it inherits whatever it sits on, the way the shared `Input` and `Textarea` do with `bg-transparent`. An opaque sticky header or footer has to name one, and it names the surface it scrolls within rather than the page behind it.
+
+Reaching for `bg-background` because it happens to look right is what puts a page-coloured block inside a panel. Under a preset whose page and card are near-identical the mistake is invisible, and under one where they differ it is the first thing anyone notices — two tabs of the same panel disagreeing, or one page's list framed as a card while its sibling's is flat.
+
 Body uses `font-sans text-base`; semantic h1–h6 use `font-heading`, and code/pre/kbd/samp use `font-mono`. A title rendered as another element needs `font-heading`. Use `text-sm`, `p-4`, `gap-2`, `h-8`, `rounded-lg`, and `shadow-md` instead of equivalent arbitrary values. Sidebar and chart colors have their own semantic classes.
 
 Retain deliberate constraints (image sizes, viewport limits, circular icons), but check whether fixed sizes, explicit line heights, or shadow color classes override the intended theme. Do not globally restyle isolated third-party content. Font resources must be loaded before a font variable can select them.

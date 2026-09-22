@@ -176,7 +176,7 @@ function KnowledgeBaseMultiSelect({
     >
       <summary
         aria-label={label}
-        className={`flex min-h-10 list-none items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm marker:content-none ${disabled ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
+        className={`flex min-h-10 list-none items-center gap-2 rounded-md border bg-transparent px-3 py-2 text-sm marker:content-none ${disabled ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
       >
         <span className='flex min-w-0 flex-1 flex-wrap gap-1'>
           {selectedOptions.length ? (
@@ -283,7 +283,7 @@ function ModelMultiSelect({
       }}
     >
       <summary
-        className={`flex min-h-10 list-none items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm marker:content-none ${disabled ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
+        className={`flex min-h-10 list-none items-center gap-2 rounded-md border bg-transparent px-3 py-2 text-sm marker:content-none ${disabled ? 'pointer-events-none opacity-50' : 'cursor-pointer'}`}
       >
         <span className='flex min-w-0 flex-1 flex-wrap gap-1'>
           {value.length ? (
@@ -956,7 +956,7 @@ export default function AIEmployeePage(): ReactElement {
                                   : event.target.value,
                             })
                           }
-                          className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-background p-3'
+                          className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-transparent p-3'
                         />
                       )}
                     </fieldset>
@@ -968,7 +968,7 @@ export default function AIEmployeePage(): ReactElement {
                         onChange={(event) =>
                           patchDraft({ about: event.target.value })
                         }
-                        className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-background p-3'
+                        className='min-h-0 w-full flex-1 resize-none overflow-auto rounded-md border bg-transparent p-3'
                         placeholder={t('employees.rolePlaceholder')}
                       />
                     </label>
@@ -1305,7 +1305,7 @@ export default function AIEmployeePage(): ReactElement {
                         patchDraft({ knowledgeBasePrompt: event.target.value })
                       }
                       aria-invalid={!knowledgeBasePromptValid}
-                      className={`min-h-28 rounded-lg border bg-background p-3 disabled:opacity-50 ${knowledgeBasePromptValid ? '' : 'border-destructive'}`}
+                      className={`min-h-28 rounded-lg border bg-transparent p-3 disabled:opacity-50 ${knowledgeBasePromptValid ? '' : 'border-destructive'}`}
                     />
                     {!knowledgeBasePromptValid ? (
                       <span className='text-sm text-destructive'>
@@ -1331,7 +1331,7 @@ export default function AIEmployeePage(): ReactElement {
                             },
                           })
                         }
-                        className='h-10 rounded-md border bg-background px-3 disabled:opacity-50'
+                        className='h-10 rounded-md border bg-transparent px-3 disabled:opacity-50'
                       />
                       <span className='text-muted-foreground'>
                         {t(
@@ -1356,7 +1356,7 @@ export default function AIEmployeePage(): ReactElement {
                             },
                           })
                         }
-                        className='h-10 rounded-md border bg-background px-3 disabled:opacity-50'
+                        className='h-10 rounded-md border bg-transparent px-3 disabled:opacity-50'
                       />
                       <span className='text-muted-foreground'>
                         {t(

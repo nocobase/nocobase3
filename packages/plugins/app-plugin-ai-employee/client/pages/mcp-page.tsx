@@ -110,7 +110,7 @@ export default function MCPPage(): ReactElement {
           {error}
         </div>
       ) : null}
-      <div className='overflow-hidden rounded-xl border bg-background'>
+      <div className='overflow-hidden rounded-xl border bg-card'>
         <Table>
           <TableHeader>
             <TableRow>
@@ -219,7 +219,7 @@ function MCPDrawer({
       }}
     >
       <aside
-        className='absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l bg-background shadow-xl'
+        className='absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l bg-popover shadow-xl'
         role='dialog'
         aria-modal='true'
         aria-label={t('mcp.toolsTitle')}
