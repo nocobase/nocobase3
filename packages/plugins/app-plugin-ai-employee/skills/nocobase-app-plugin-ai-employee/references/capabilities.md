@@ -42,20 +42,20 @@ Registration runs in one fixed order: tools, MCP, skills, employees. An employee
 import { defineAIEmployee } from '@nocobase/ai-employee';
 
 export default defineAIEmployee({
-  username: 'lead-intake', // required, stable key; conversations are stored against it
-  nickname: 'Iris',
-  position: 'Lead intake',
+  username: 'order-desk', // required, stable key; conversations are stored against it
+  nickname: 'Order desk',
+  position: 'Order support',
   avatar: 'nocobase-016-female', // must be a key from the plugin's list; see Avatars
-  description: 'Turns screenshots, emails and notes into structured leads.',
-  bio: 'I read what you paste or drop in, extract the lead, and record it.',
-  greeting: 'Drop a screenshot or paste a note and I will file the lead.',
+  description: 'Answers questions about orders and records new ones.',
+  bio: 'I look up order history, and create an order once you give me the details.',
+  greeting: 'Ask me about an order, or give me the details for a new one.',
   category: 'business',
   sort: 10,
-  systemPrompt: `You extract sales leads from unstructured input. ...`,
-  skills: ['lead-intake'],
+  systemPrompt: `You help staff look up and record orders. ...`,
+  skills: ['order-intake'],
   tools: [
-    { name: 'create-lead' },
-    { name: 'subAgentWebSearch', autoCall: true },
+    { name: 'create-order' },
+    { name: 'dataSourceQuery', autoCall: true },
   ],
   chatSettings: {
     systemPromptMode: 'default',
@@ -93,31 +93,31 @@ Use one of those keys, or a `data:`, `blob:`, or `http(s)://` URL, which are pas
 ```ts
 import { defineTools } from '@nocobase/ai-employee';
 import { z } from 'zod';
-import { leadServiceToken } from '../services/lead-service.js';
+import { orderServiceToken } from '../services/order-service.js';
 
 export default defineTools({
   scope: 'SPECIFIED',
   execution: 'backend',
   defaultPermission: 'ASK',
-  i18n: { namespace: '@acme/sales-app' }, // this App's real package.json name
+  i18n: { namespace: '@acme/example-app' }, // this App's real package.json name
   introduction: {
-    title: 'Create lead',
-    about: 'Record a new sales lead from extracted contact details.',
+    title: 'Create order',
+    about: 'Record a new order for a customer.',
   },
   definition: {
-    name: 'create-lead',
-    description: 'Create one sales lead. Call once per distinct company.',
+    name: 'create-order',
+    description: 'Create one order. Call once per order.',
     schema: z.object({
-      company: z.string(),
-      contact: z.string().optional(),
-      source: z.enum(['wechat', 'whatsapp', 'email', 'note']),
+      customer: z.string(),
+      product: z.string(),
+      quantity: z.number().int().positive(),
       notes: z.string().optional(),
     }),
   },
-  dependencies: { leads: leadServiceToken },
+  dependencies: { orders: orderServiceToken },
   invoke: async (ctx, args) => {
-    const lead = await ctx.deps.leads.create(ctx.actor, args);
-    return { status: 'success', content: { id: lead.id } };
+    const order = await ctx.deps.orders.create(ctx.actor, args);
+    return { status: 'success', content: { id: order.id } };
   },
 });
 ```
@@ -196,19 +196,19 @@ A Skill is a Markdown file at `ai/skills/<name>/SKILL.md` — a procedure the mo
 ```yaml
 ---
 scope: SPECIFIED # SPECIFIED | GENERAL | CUSTOM; defaults to SPECIFIED
-name: lead-intake # required, stable, matches the directory
-description: Extract a sales lead from a screenshot, email or freeform note and record it.
+name: order-intake # required, stable, matches the directory
+description: Record a new order once the customer, product and quantity are confirmed.
 i18n:
-  namespace: '@acme/sales-app'
+  namespace: '@acme/example-app'
 introduction:
-  title: Lead intake
+  title: Order intake
 tools:
-  - create-lead
+  - create-order
   - getSkill
 ---
-# Lead intake
+# Order intake
 
-1. Read every attachment and every pasted block before extracting anything.
+1. Confirm the customer, the product and the quantity before creating anything.
 ...
 ```
 
@@ -227,16 +227,14 @@ Tool `introduction.title` and `introduction.about`, and Skill `introduction.titl
 ```ts
 // client/locales/en-US.ts — the English-to-English entry is required, not optional
 export default {
-  'Create lead': 'Create lead',
-  'Record a new sales lead from extracted contact details.':
-    'Record a new sales lead from extracted contact details.',
+  'Create order': 'Create order',
+  'Record a new order for a customer.': 'Record a new order for a customer.',
 };
 
 // client/locales/zh-CN.ts
 export default {
-  'Create lead': '创建线索',
-  'Record a new sales lead from extracted contact details.':
-    '根据提取到的联系信息创建线索。',
+  'Create order': '创建订单',
+  'Record a new order for a customer.': '为客户创建一条新订单。',
 };
 ```
 
@@ -280,7 +278,7 @@ Activate a `SPECIFIED` built-in by naming it in an employee's `tools` or a Skill
 
 The seven data tools and the two data Skills read nothing the App has not opted into, and the opt-in is not the collection itself. Three things must all hold for one collection, and all three are the App's to arrange:
 
-1. It is registered for authorization under the **two-part** name `<connection>.<collection>` — `authz.db.collections.add({ name: 'main.leads', title: 'Leads' })`. A registration under a bare `leads` works for the rest of the application and is skipped here: the catalog keeps only names that split into exactly two dot-separated parts, and the first part must match a configured connection name exactly. There is no default-connection alias.
+1. It is registered for authorization under the **two-part** name `<connection>.<collection>` — `authz.db.collections.add({ name: 'main.orders', title: 'Orders' })`. A registration under a bare `orders` works for the rest of the application and is skipped here: the catalog keeps only names that split into exactly two dot-separated parts, and the first part must match a configured connection name exactly. There is no default-connection alias.
 2. Its registration keeps the `read` action. The default action set includes it; a narrowed `actions` list can drop it.
 3. The current user's permission set actually grants read on it, producing a conditional decision with fields and a scope.
 
@@ -376,11 +374,11 @@ On reload, the name set is authoritative — new names are created, existing nam
 ```yaml
 ai:
   mcpServers:
-    company-search: # the object key is the stable server name
+    search: # the object key is the stable server name
       transport: http # stdio | http | sse
-      url: ${COMPANY_MCP_URL}
+      url: ${SEARCH_MCP_URL}
       headers:
-        Authorization: Bearer ${COMPANY_MCP_TOKEN}
+        Authorization: Bearer ${SEARCH_MCP_TOKEN}
     filesystem:
       transport: stdio
       command: npx
@@ -416,9 +414,9 @@ ai:
         - ai-files # must already exist in the App's file-storage configuration
 ```
 
-Falling through to the application default is a real decision, not a neutral one: chat attachments can be screenshots of customer conversations, contracts, or identity documents, and they land wherever the App's general uploads land, under that disk's retention and access policy. **Raise this with the user and ask whether to configure a dedicated disk now**, before enabling attachments. State which disk the default resolves to, and what would then be sharing it.
+Falling through to the application default is a real decision, not a neutral one: chat attachments can carry contracts, identity documents, or private correspondence, and they land wherever the App's general uploads land, under that disk's retention and access policy. **Raise this with the user and ask whether to configure a dedicated disk now**, before enabling attachments. State which disk the default resolves to, and what would then be sharing it.
 
-What reaches the model, once stored: images and PDFs are sent as multimodal content blocks, so a dropped screenshot is read directly with no extra tool. Other recognized document types are extracted to text by the document loader. Anything else produces a message telling the user that type is not supported. Whether an image is actually understood still depends on the provider and model.
+What reaches the model, once stored: images and PDFs are sent as multimodal content blocks, so a dropped image is read directly with no extra tool. Other recognized document types are extracted to text by the document loader. Anything else produces a message telling the user that type is not supported. Whether an image is actually understood still depends on the provider and model.
 
 ## Extra Skill directories (`config.yml`)
 

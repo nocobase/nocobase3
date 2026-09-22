@@ -1,6 +1,6 @@
 ---
 name: nocobase-app-plugin-ai-employee
-description: Use when a NocoBase App needs an AI employee — "let the assistant read this screenshot and create the record", "add a chat box to this page", "give it a tool that writes a lead", "let it research a company", "configure an LLM service / MCP server / attachment storage", "the composer is disabled and I don't know why". Not for the collections, pages, permissions, or workflows the employee acts on: those stay with nocobase-app-development, and this Skill assumes they already exist.
+description: Use when a NocoBase App needs an AI employee — "add a chat box to this page", "let the assistant read the file I dropped in", "give it a tool that writes to one of our collections", "let it look something up on the web", "configure an LLM service / MCP server / attachment storage", "the composer is disabled and I don't know why". Not for the collections, pages, permissions, or workflows the employee acts on: those stay with nocobase-app-development, and this Skill assumes they already exist.
 metadata:
   short-description: Build AI employees, tools, skills, and chat surfaces in a NocoBase App
 ---
@@ -52,7 +52,7 @@ Import a token from the package that created it. `createServiceToken` is keyed b
 
 Reach for an App-defined tool before concluding a capability is missing: a backend tool may declare any container token as a dependency, so anything an App service can do, a tool can do. Do not copy a built-in employee, tool, or skill into the App to modify it.
 
-The last two rows of that table are alternatives more often than they look. When the values come from something the model interpreted — a screenshot, a pasted note, a scraped page — prefer filling a visible form the user submits over writing the record directly. Extraction is where a model is least reliable and the fields are exactly what a person can check at a glance, and the built-in form filler never submits, so review is structural rather than a habit. Write directly when the values are already structured, when no one is watching, or when the user asked for it.
+Two of those rows are alternatives more often than they look. When the values were interpreted by the model rather than supplied as data — read out of an uploaded file, extracted from free text, taken off a page it fetched — prefer filling a visible form the user submits over writing the record directly. Extraction is where a model is least reliable and the fields are exactly what a person can check at a glance, and the built-in form filler never submits, so review is structural rather than a habit. Write directly when the values are already structured, when no one is watching, or when the user asked for it.
 
 ## Shortest end-to-end path
 

@@ -14,8 +14,8 @@ Where each piece of AI work goes in a CLI-created App, and what to read before c
 ## Identify the App root
 
 ```bash
-pnpm create @nocobase/app crm
-cd crm
+pnpm create @nocobase/app my-app
+cd my-app
 pnpm install
 ```
 

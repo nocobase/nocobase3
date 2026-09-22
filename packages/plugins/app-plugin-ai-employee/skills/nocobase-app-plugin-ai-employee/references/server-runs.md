@@ -25,18 +25,18 @@ The App does not create an `AIManager`. The plugin already made one; the App han
 ```ts
 import { AIResourceRegistrar } from '@nocobase/app-plugin-ai-employee/server';
 import type { AIEmployeeManager, ToolsManager } from '@nocobase/ai-employee';
-import leadIntake from './employees/lead-intake/index.js';
-import createLead from './tools/create-lead.js';
+import orderDesk from './employees/order-desk/index.js';
+import createOrder from './tools/create-order.js';
 
 export default class AppAIResources extends AIResourceRegistrar {
   protected override async registerAIEmployees(
     manager: AIEmployeeManager,
   ): Promise<void> {
-    await manager.registerEmployee(leadIntake);
+    await manager.registerEmployee(orderDesk);
   }
 
   protected override async registerTools(manager: ToolsManager): Promise<void> {
-    await manager.registerTools(createLead);
+    await manager.registerTools(createOrder);
   }
 }
 ```
@@ -102,21 +102,19 @@ These two, plus `aiManagerToken`, are the whole public server surface, along wit
 ```ts
 const conversation = await conversations.create({
   userId: actor.id,
-  aiEmployee: { username: 'lead-intake' },
-  title: 'Inbound lead',
+  aiEmployee: { username: 'order-desk' },
+  title: 'Order enquiry',
 });
 
 const agent = await factory.createAIEmployee({
-  username: 'lead-intake',
+  username: 'order-desk',
   state: { sessionId: conversation.sessionId },
   actor,
   runtime: { logger },
 });
 
 const { message } = await agent.invoke({
-  userMessages: [
-    { role: 'user', content: 'File the lead in the attached note.' },
-  ],
+  userMessages: [{ role: 'user', content: 'How many orders are still open?' }],
 });
 ```
 
@@ -221,10 +219,10 @@ When the integration needs data rather than prose, supply a Zod `responseFormat`
 
 ```ts
 const { structuredResponse } = await agent.invoke({
-  userMessages: [{ role: 'user', content: 'Extract the lead from this note.' }],
+  userMessages: [{ role: 'user', content: 'Summarize this month of orders.' }],
   responseFormat: z.object({
-    company: z.string(),
-    contact: z.string().optional(),
+    total: z.number(),
+    openCount: z.number(),
   }),
 });
 ```

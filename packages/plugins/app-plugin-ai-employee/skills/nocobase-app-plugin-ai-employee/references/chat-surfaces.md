@@ -191,7 +191,7 @@ function ConfiguredChat() {
   }
 
   return (
-    <AIChatProvider id='lead-intake-chat' controller={controller}>
+    <AIChatProvider id='assistant-chat' controller={controller}>
       <ChatInline>
         <AIChatWindow enableAttachments />
       </ChatInline>
@@ -199,7 +199,7 @@ function ConfiguredChat() {
   );
 }
 
-export default function LeadIntakePage() {
+export default function AssistantPage() {
   return (
     <NocoBaseAIRootProvider service={nocobaseAIService}>
       <ConfiguredChat />
@@ -251,9 +251,9 @@ type AIChatWindowProps = {
 
 `enableAttachments` is off by default. Turning it on gives the composer a file action, drag-and-drop over the chat window, and paste of files from the clipboard — no extra code. Uploads go to `aiFiles:create` and land on the disk resolved in [capabilities.md § Attachment storage](capabilities.md#attachment-storage-configyml); decide that disk with the user before switching this on.
 
-What the assistant then sees is decided server-side, not by the page: images and PDFs are sent to the model as multimodal content blocks, other recognized document types are extracted to text, and anything else produces a message telling the user the type is unsupported. So "drop a screenshot and have the assistant read it" needs no tool and no OCR step — it needs `enableAttachments`, a configured disk, and a model that accepts images.
+What the assistant then sees is decided server-side, not by the page: images and PDFs are sent to the model as multimodal content blocks, other recognized document types are extracted to text, and anything else produces a message telling the user the type is unsupported. So "drop a file in and have the assistant read it" needs no tool and no OCR step — it needs `enableAttachments`, a configured disk, and a model that accepts images.
 
-That last one is on you to get right. `AIModel` carries `supportWebSearch` but nothing for image input, so neither the selector nor the composer can warn that the selected model will not read the picture; the failure arrives from the provider, mid-turn, in whatever words it chooses. When a flow starts from an image, say so in the employee's description and make the employee's default model one that accepts images.
+That last one is on you to get right. `AIModel` carries `supportWebSearch` but nothing for image input, so neither the selector nor the composer can warn that the selected model will not read the picture; the failure arrives from the provider, mid-turn, in whatever words it chooses. When a flow can start from an image, say so in the employee's description and make its default model one that accepts images.
 
 ## Tasks and shortcuts
 
@@ -310,15 +310,11 @@ type AIPageElementDescriptor = {
 
 ```tsx
 const formRef = useAIForm({
-  id: 'lead-form',
-  title: 'Lead form',
+  id: 'order-form',
+  title: 'Order form',
   fields: [
-    { name: 'company', type: 'string', required: true },
-    {
-      name: 'source',
-      type: 'string',
-      enum: ['wechat', 'whatsapp', 'email', 'note'],
-    },
+    { name: 'customer', type: 'string', required: true },
+    { name: 'status', type: 'string', enum: ['draft', 'confirmed'] },
   ],
   getValues: () => form.getValues(),
   setValues: (values) => applyReactHookFormValues(form, values),
@@ -395,11 +391,11 @@ import { defineSettingsRoutes } from '@nocobase/app-client/plugins';
 export default defineSettingsRoutes([
   {
     parent: 'aiGroup',
-    name: 'sales-ai',
-    path: '/ai/sales',
-    navigation: { title: 'Sales AI' },
+    name: 'acme-ai',
+    path: '/ai/acme',
+    navigation: { title: 'Acme AI' },
     authz: { resource: { type: 'page', id: 'ai.settings' }, action: 'access' },
-    componentLoader: () => import('./pages/sales-ai-settings.js'),
+    componentLoader: () => import('./pages/acme-ai-settings.js'),
   },
 ]);
 ```

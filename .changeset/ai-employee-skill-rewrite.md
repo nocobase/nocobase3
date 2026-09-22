@@ -4,7 +4,7 @@
 
 Rewrite the AI Employee App Skill as a build order rather than a cross-cutting reference
 
-The Skill was 501 lines of `SKILL.md` over five references organized by which part of the package a fact belonged to. An agent asked to build something — "let the assistant read this screenshot and file the lead" — could read all of it and still not know what to do first, because nothing said what to do first. It also documented three things that are not true: Skill directories do not discover tools, `ai:testFlight` is not implemented, and the built-in tool list named ten of the nineteen tools that exist and none of the three built-in Skills.
+The Skill was 501 lines of `SKILL.md` over five references organized by which part of the package a fact belonged to. An agent asked to build something — "let the assistant read the file I dropped in and create a record" — could read all of it and still not know what to do first, because nothing said what to do first. It also documented three things that are not true: Skill directories do not discover tools, `ai:testFlight` is not implemented, and the built-in tool list named ten of the nineteen tools that exist and none of the three built-in Skills.
 
 `SKILL.md` is now 95 lines and says, in order: who owns what, what has to exist before anything works, which resource kind answers which request, the end-to-end path through them, the safety rules, and how to tell it worked. `argument-hint` is gone; the file no longer asks an agent to classify a task into an area and a verb before it can start.
 
