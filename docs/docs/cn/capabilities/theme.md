@@ -12,14 +12,36 @@ keywords: 'NocoBase 3,主题,外观,深色模式,Coding Agent'
 
 ## 内置了哪些主题
 
-当前内置两套主题：
+当前内置 32 套主题：默认、紧凑，以及 30 套按风格挑选的主题。
 
 | 主题 | 外观特点                                                                 |
 | ---- | ------------------------------------------------------------------------ |
 | 默认 | 中性配色，常规间距和圆角                                                 |
 | 紧凑 | 和默认主题使用相同配色，通过更小的间距、部分文字的行高和圆角提高信息密度 |
 
-页面右上角的按钮用来在「浅色」和「深色」之间切换，主题列表则在 **设置 → 主题** 页面中选择。**主题和颜色模式是两个独立选项**：默认主题和紧凑主题都支持浅色、深色显示。
+其余 30 套主题取自 [tweakcn](https://github.com/jnsahaj/tweakcn) 的内置预设（Apache-2.0 许可），只使用它们的颜色和圆角：字体、字号、间距和阴影沿用默认主题，因此中文渲染和排版密度与默认主题一致，也不需要额外加载字体。来源、版本、许可和转换范围记录在 `client/theme/themes/THIRD-PARTY-NOTICES.md`。
+
+这些主题保留上游配色，没有重新调整对比度。如果某套主题的文字或按钮对比度不理想，可以让 Coding Agent 调整它的颜色。
+
+| 主题 ID          | 名称     | 主题 ID           | 名称     |
+| ---------------- | -------- | ----------------- | -------- |
+| `modern-minimal` | 现代极简 | `amber-minimal`   | 琥珀     |
+| `violet-bloom`   | 紫罗兰   | `neo-brutalism`   | 新粗野   |
+| `mocha-mousse`   | 摩卡     | `solar-dusk`      | 落日     |
+| `bubblegum`      | 泡泡糖   | `claymorphism`    | 陶土     |
+| `amethyst-haze`  | 紫晶雾   | `cyberpunk`       | 赛博     |
+| `notebook`       | 手账     | `pastel-dreams`   | 粉彩     |
+| `graphite`       | 石墨     | `clean-slate`     | 白板     |
+| `perpetuity`     | 恒青     | `caffeine`        | 咖啡因   |
+| `kodama-grove`   | 木灵     | `ocean-breeze`    | 海风     |
+| `cosmic-night`   | 宇宙夜   | `retro-arcade`    | 复古街机 |
+| `tangerine`      | 橘色     | `midnight-bloom`  | 午夜花   |
+| `quantum-rose`   | 量子玫瑰 | `candyland`       | 糖果     |
+| `nature`         | 自然     | `northern-lights` | 极光     |
+| `bold-tech`      | 硬朗科技 | `vintage-paper`   | 复古纸   |
+| `elegant-luxury` | 典雅     | `sunset-horizon`  | 日落     |
+
+页面右上角的按钮用来在「浅色」和「深色」之间切换，主题列表则在 **设置 → 主题** 页面中选择。**主题和颜色模式是两个独立选项**：每套主题都支持浅色、深色显示。
 
 「主题」是设置里的一个页面，默认只有管理员能进入。要让其他角色也能选择主题，需要在权限中为对应角色授予 `theme` 页面的访问权限。
 
@@ -80,15 +102,16 @@ Coding Agent 会完成主题创建、加入可选列表和名称配置。新增�
 
 如果想了解 Coding Agent 改动了哪些内容，可以参考下面的文件说明。这些路径相对于你创建的应用项目根目录，以默认应用模板为例，不需要手动逐个修改。
 
-| 文件                                | 作用                     | 涉及的操作                 |
-| ----------------------------------- | ------------------------ | -------------------------- |
-| `client/theme/themes/default.css`   | 默认主题的外观           | 修改默认主题               |
-| `client/theme/themes/compact.css`   | 紧凑主题的外观           | 修改或删除紧凑主题         |
-| `client/theme/themes/<主题 ID>.css` | 自定义主题的外观         | 新增、修改或删除自定义主题 |
-| `client/theme/theme-presets.ts`     | 「主题」页面中的主题列表 | 新增或删除主题             |
-| `client/pages/settings/theme/`      | 「主题」设置页           | 调整卡片网格或搜索行为     |
-| `client/styles.css`                 | 加载主题样式             | 新增或删除主题             |
-| `client/locales/zh-CN.ts`           | 中文主题名称             | 新增、删除或改名           |
-| `client/locales/en-US.ts`           | 英文主题名称             | 新增、删除或改名           |
+| 文件                                         | 作用                         | 涉及的操作                 |
+| -------------------------------------------- | ---------------------------- | -------------------------- |
+| `client/theme/themes/default.css`            | 默认主题的外观               | 修改默认主题               |
+| `client/theme/themes/compact.css`            | 紧凑主题的外观               | 修改或删除紧凑主题         |
+| `client/theme/themes/<主题 ID>.css`          | 自定义主题的外观             | 新增、修改或删除自定义主题 |
+| `client/theme/themes/THIRD-PARTY-NOTICES.md` | 第三方主题的来源、版本和许可 | 接入或移除第三方主题       |
+| `client/theme/theme-presets.ts`              | 「主题」页面中的主题列表     | 新增或删除主题             |
+| `client/pages/settings/theme/`               | 「主题」设置页               | 调整卡片网格或搜索行为     |
+| `client/styles.css`                          | 加载主题样式                 | 新增或删除主题             |
+| `client/locales/zh-CN.ts`                    | 中文主题名称                 | 新增、删除或改名           |
+| `client/locales/en-US.ts`                    | 英文主题名称                 | 新增、删除或改名           |
 
 调整已有主题的外观，通常只需要修改对应的主题文件。新增或删除主题时，Coding Agent 会同时维护主题列表、样式加载和语言文件。如果项目还有其他语言，或需要引入新字体，也会涉及对应的翻译文件或字体资源。

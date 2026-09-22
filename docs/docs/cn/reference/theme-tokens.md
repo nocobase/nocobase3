@@ -8,7 +8,7 @@ keywords: 'NocoBase 3,主题变量,颜色,字体,字号,间距,圆角,阴影,Tai
 
 NocoBase 应用的主题由 CSS 变量组成。在 `client/theme/themes/` 中定义主题预设，在 `client/styles.css` 中把这些变量映射到 Tailwind。组件优先使用这些语义化变量，这样切换主题或颜色模式时可以保持一致。
 
-当前实现以 `client/theme/themes/default.css` 和 `client/theme/themes/compact.css` 为准。两套预设共用颜色、字体和阴影，只在间距、圆角以及部分字号行高上有所区别。
+当前实现以 `client/theme/themes/default.css` 为准。`compact.css` 与它配色相同，只在间距、圆角以及部分字号行高上更紧凑；其余内置主题只改颜色和圆角，字体、字号、间距和阴影都沿用默认主题。
 
 ## 主题预设和颜色模式
 
@@ -157,7 +157,7 @@ NocoBase 应用的主题由 CSS 变量组成。在 `client/theme/themes/` 中定
 
 `--shadow-2xs`、`--shadow-xs`、`--shadow-sm`、`--shadow-md`、`--shadow-lg`、`--shadow-xl` 和 `--shadow-2xl`。
 
-默认值记录在 `default.css` 和 `compact.css` 中，两套预设目前相同。组件使用 `shadow-2xs` 到 `shadow-2xl`，需要取消层级时使用 `shadow-none`。
+默认值记录在 `default.css` 中；除紧凑主题之外，其余预设沿用这组值。组件使用 `shadow-2xs` 到 `shadow-2xl`，需要取消层级时使用 `shadow-none`。
 
 Tailwind 通常会把具名阴影编译成固定值。`client/styles.css` 先声明这些名称，再为每一档提供 `@utility`，把它们连接到 `var(--shadow-*)`，所以运行时切换预设仍然有效。修改主题时保留这些适配工具，不要用固定阴影覆盖变量；阴影值本身已经包含颜色。
 
@@ -187,6 +187,8 @@ Tailwind v4 会扫描应用代码；`styles.css` 还通过 `@source "./component
 - 在浅色和深色选择器中定义全部颜色，并让 `.theme-preview` 使用同一组变量
 - 在 `client/styles.css` 中导入主题文件
 - 在 `client/theme/theme-presets.ts` 中注册 ID 和翻译 key，并补充各语言的名称
+
+接入第三方主题时，只取对方的颜色和圆角，字体、间距和阴影沿用默认值，并在 `client/theme/themes/THIRD-PARTY-NOTICES.md` 中记录来源、版本、许可和转换范围。
 
 完成后在应用项目根目录运行下面的测试：
 
