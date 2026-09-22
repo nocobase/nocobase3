@@ -12,7 +12,7 @@ Examples retains Default’s Users and API Keys integration alongside its demons
 
 ## Load the development skills
 
-If `.agents/skills/nocobase-app-development/` is missing, run `pnpm install` and then `pnpm skills:sync` from the application root.
+`pnpm install` runs `pnpm skills:sync` through the application's `postinstall` hook. If `.agents/skills/nocobase-app-development/` is missing, install dependencies from the application root; if install scripts were disabled or synchronized Skills are stale, run `pnpm skills:sync` explicitly.
 
 `.agents/skills/nocobase-app-development/` holds the detailed guidance behind this file. Read its `SKILL.md` first — it routes to the reference that matches your task instead of making you read everything:
 
@@ -59,9 +59,15 @@ A page with children or page-local helpers uses a folder with `index.tsx`; child
 
 A feature with a page and an API touches five places: a migration for the table, a route in `server/routes/`, a page in `client/pages/` declared in `client/routes.ts`, navigation on the page route, and strings in `client/locales/`.
 
+`client/runtime.ts` composes the browser application; `client/react-providers.ts` declares React providers in outer-to-inner layers `root`, `application`, and `extension`. Applications use the first two and plugins own the last; `before` and `after` order providers only within their layer.
+
+`server/runtime.ts` composes configuration, plugins, providers and routes; `server/app.ts` assembles the application. `server/standalone.ts` starts the Node listener and `server/embedded.ts` lets a host mount the same runtime. Register endpoints through `server/routes/index.ts`; background jobs in `server/jobs/` are discovered automatically. Editable module defaults live in `server/config/` and are collected by `defaultAppConfigs` in its `index.ts`; `server/config.ts` loads deployment settings and `server/environment.ts` maps environment variables.
+
 ### The rest is framework structure
 
 Layouts own breadcrumb route context; `AppRouter` selects routes and layouts. See [page routes](.agents/skills/nocobase-app-development/references/client-pages-and-routes.md#putting-the-page-in-a-breadcrumb-trail) for each layout's scope.
+
+`client/layouts/components/layout-header.tsx` and `layout-sidebar.tsx` are presentation containers accepting children. App, Settings and Dev layouts own menus, branding, permissions, redirects, sidebar arrangement and mobile close controls; sidebar contents own scrolling and collapsed presentation. Desktop icon mode uses tooltips for leaf labels and hover popovers for groups, preserving filtered navigation, parent-page links and inline nested groups. Keep this behavior aligned across layouts. Desktop collapse state is shared through `useSidebarPreference` at `nocobase:sidebar:collapsed` across applications on the same origin; mobile visibility stays local to each layout.
 
 The Settings header entry appears only when the user has an accessible page in the settings navigation, and stays visible on that page. The header reads the registered settings tree through `useClientApplication().runtime.settingsRouteTree`, reusing the application context. The Dev tools entry stays visible on its destination pages, is development-only, and must remain absent from production builds.
 
@@ -99,7 +105,9 @@ Use `defineSettingsRoutes()` for administrative pages, which mount under `/setti
 
 **Declare navigation on the route.** App, Settings and Dev menus read `navigation: { title: 'navigation.orders' }`; titles resolve in the owning locale namespace. Add the translation in `client/locales/`. Refine resources remain for CRUD and do not add menu entries.
 
-Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For examples and the exact file list, read `.agents/skills/nocobase-app-development/references/client-child-routes.md`.
+Use recursive groups to organize menus; their path is optional. Pages may also have children, but must manually render `Outlet`. For URL-addressable dialogs and drawers, declare the child in `defineAppRoutes()` in `client/routes.ts`, place the owning page's `Outlet`, then render `RouteDialog` or `RouteDrawer`. Call `useRouteOverlay()` only from a descendant rendered inside the overlay, including its footer, never from the page returning the wrapper. Read `.agents/skills/nocobase-app-development/references/client-child-routes.md` before implementing overlays or close guards.
+
+`authz` controls page authorization: use `{ resource: { type: 'page', id: 'orders' }, action: 'access' }` or `'skip'`. Without an explicit rule, authenticated App pages with no page ancestor check their route name as a page resource; child pages, Settings, Dev, guest and optional pages add no check. Parent guards still apply when a child skips. Menus and loaders use the same normalized rule; endpoints enforce authorization independently. Route names identify stored page grants, so renaming one requires migrating grants that reference it.
 
 ### Components and styling
 
@@ -113,7 +121,7 @@ Build your own components by composing these primitives, and put them in `client
 
 **Read the reference pages before building a page.** `client/pages/reference/` is worked source, not part of the running application: nothing routes it, so a build never reaches it and no user ever sees it. `examples/` holds eight complete business screens on mock data — a dashboard, orders, customers, a product form, an inbox, a survey, team settings and a schedule — and `components/` holds one page per shadcn/ui primitive showing its variants and a realistic use. Both share the frame in `shared.tsx`. An example is a folder holding its page beside the mock data that page reads — `examples/orders/orders.tsx` and `orders.data.ts` — so the screen and its records move together.
 
-Their wording lives beside them in `client/pages/reference/locales/`, not in `client/locales/`, because these pages are not part of the application and their strings have no reason to reach a browser; kept in the application locale they were 96% of it. A page given a route temporarily therefore shows its key paths until you merge that module into `client/locales/index.ts` by hand.
+Their wording lives beside them in `client/pages/reference/locales/`, not in `client/locales/`, because these pages are not part of the application and their strings have no reason to reach a browser; kept in the application locale they were 96% of it. A page given a route temporarily therefore shows its key paths until you merge that module into `client/locales/index.ts` by hand. Add reference-page wording to both reference locale files; `tests/logic/locale-coverage.test.ts` checks all referenced keys, including keys completed at runtime.
 
 Start from its `README.md`: one table maps the screen you are asked for to the example page and the blocks inside it, a second maps the interaction you need to the component page, and each example page opens with a module comment naming its patterns and its demonstration filler. Open the closest one and copy its structure rather than inventing your own: `PageContainer` and `PageHeader`, `Card` grids for summaries, `DataTable` for lists, `Sheet` or `Dialog` for detail and create flows, `AlertDialog` before a destructive action, `toast` for confirmation. Copy the shape and the token usage; leave the mock data behind. Do not import from `client/pages/reference/` in a page you ship, and do not route one — a shadcn gallery inside somebody's product is a defect, and `tests/logic/client-routes.test.ts` fails if a reference page reaches the router.
 
@@ -147,11 +155,15 @@ Scope middleware to the exact paths you own, or to an isolated sub-router mounte
 
 A webhook that a third party calls cannot use a login session, so it is deliberately public — but public still means verifying a signature, timestamp, or one-time state, and testing that anonymous requests without a valid signature are rejected.
 
-Keep HTTP concerns in the route and domain logic in a service under `server/providers/`.
+Keep HTTP concerns in the route and domain logic in a service under `server/providers/`. Services do not read Hono contexts, return HTTP status codes, or decide retry behavior.
+
+Bind services to their existing tokens in a provider's `register()`; calling `createServiceToken` twice with the same name creates different keys. Do not connect to databases, start workers, or execute route factories at module top level. Acquire long-lived resources in `start()` and release them in `shutdown()`. Providers and routes read typed configuration rather than `process.env`.
 
 ### Database
 
 Schema changes are migrations under `database/main/migrations/`. Data the application requires to run is a seed under `database/main/seeds/`. Seeds never create structure.
+
+Declare database defaults with `export default defineAppDatabaseConfig((runtime) => ({ connections }))`. Before provider registration, the runtime asynchronously imports configured official drivers; explicit `drivers` registrations override them. Keep `isolatedDeclarations: false` for application server declarations so configuration and connection fields retain inference. See `.agents/skills/nocobase-app-development/references/database-connections.md`.
 
 `database/<connection>/collections/` holds what the database currently resolves each Collection to — `collection.json`, `metadata.json` and `schema.json` per Collection plus a `_manifest.json` — written by `pnpm collections:generate` after migrating. On a managed connection every file there is derived: edit metadata through migrations or the Collection Metadata Service and regenerate, never by hand. On an `external` connection `metadata.json` is the exception — it is the metadata source, read at startup, so edit it by hand and regenerate; the other files stay derived. Never import any of these files from a migration. `pnpm collections:generate --check` fails when they are out of date.
 
@@ -245,6 +257,8 @@ Let `pnpm plugin:register` and `pnpm plugin:unregister` add and remove entries. 
 Update one registered plugin with `pnpm plugin:update @nocobase/app-plugin-authentication`, or omit the name to update all registered plugins. Prefer the full package name; `authentication` is also accepted as a short name. The name is a positional argument, not `--plugin`. Use `--dry-run` to preview. With pnpm, updates stay within declared version ranges; after a successful update, all registered plugin Skills are re-synchronized. See [Plugins in the README](README.MD#plugins) for examples and update scope.
 
 To customize a page a plugin owns, pass an option on its registration, add a source extension under `client/extensions/*/extension.ts`, or add an entry to `client/route-overrides.ts`. Do not redeclare the plugin's route — a duplicate `/install` is a conflict, not a customization. An override replaces only `componentLoader`; route identity, path, and auth mode stay with the plugin. One route takes one override across all three mechanisms. Authentication pages are not plugin-owned: `/login`, `/register`, `/forgot-password`, and `/reset-password` are application routes declared in `client/routes.ts`.
+
+Route overrides must stay lazy, declare a `componentEntry`, and load a default-exported component. Authentication pages in `client/pages/auth/` use relative links and the authentication plugin's `client/actions` hooks; do not call authentication endpoints directly or create a second session store.
 
 ### Read a plugin's Skill before building what it already does
 

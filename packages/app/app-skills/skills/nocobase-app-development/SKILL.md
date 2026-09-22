@@ -39,7 +39,7 @@ Build the feature in the application. Do not run a plugin generator, create a `p
 
 ## Check the installed plugins first
 
-NocoBase packages may publish Skills under `.agents/skills/`. Run `pnpm skills:sync` if that directory is missing or stale, then confirm that the package is a direct `@nocobase/*` dependency or a registered plugin before relying on its Skill. The common capability mappings are:
+NocoBase packages may publish Skills under `.agents/skills/`. Current application templates run `pnpm skills:sync` automatically through `postinstall`; run it manually if install scripts were disabled or that directory is missing or stale. Confirm that the package is a direct `@nocobase/*` dependency or a registered plugin before relying on its Skill. The common capability mappings are:
 
 | The requirement sounds like                               | Read the Skill for                    |
 | --------------------------------------------------------- | ------------------------------------- |
