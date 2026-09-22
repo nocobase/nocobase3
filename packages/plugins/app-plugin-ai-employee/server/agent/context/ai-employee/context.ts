@@ -5,6 +5,7 @@ import type {
   ResolvedAgentLLM,
 } from '../../types.js';
 import type {
+  AgentContext,
   AgentState,
   AIEmployee as AIEmployeeType,
   AIMessageInput,
@@ -18,7 +19,6 @@ import type {
 import { listSystemTools, SYSTEM_TOOLS } from '@nocobase/ai-employee';
 import _ from 'lodash';
 import type { AIEmployeeSkillSettings } from './options.js';
-import type { AppAgentContext } from '../../context.js';
 import { isModelRef } from '../../../types.js';
 import type { Actor, ModelRef, Translate } from '../../../types.js';
 import type { BuiltInManager } from '../../../manager/built-in-manager.js';
@@ -53,7 +53,7 @@ export interface AIEmployeeAgentContextProviderOptions {
   readonly currentConversation: CurrentConversation;
   readonly actor: Actor;
   readonly translate?: Translate;
-  readonly toolRuntimeContext: AppAgentContext;
+  readonly toolRuntimeContext: AgentContext;
   /**
    * Applies the employee's model policy to an optionally requested model. A
    * caller may ask for a model but never widen what the employee allows.
@@ -81,7 +81,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
   private readonly conversation: CurrentConversation;
   private readonly actor: Actor;
   private readonly translate?: Translate;
-  private readonly runtimeContext: AppAgentContext;
+  private readonly runtimeContext: AgentContext;
   private readonly resolveModel: (model?: ModelRef | null) => Promise<ModelRef>;
   private readonly llmProviderManager: LLMProviderManager;
   private readonly toolsManager: ToolsManager;
@@ -130,7 +130,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
     return this.conversation;
   }
 
-  public toolRuntimeContext(): AppAgentContext {
+  public toolRuntimeContext(): AgentContext {
     return this.runtimeContext;
   }
 
@@ -341,7 +341,7 @@ export class AIEmployeeAgentContextProvider implements AgentContextProvider {
             ) =>
               tool.invoke(
                 {
-                  ...(ctx as AppAgentContext),
+                  ...(ctx as AgentContext),
                   availableSkills: () => this.getAvailableSkills(),
                 },
                 args,

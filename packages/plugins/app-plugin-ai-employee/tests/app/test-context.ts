@@ -5,10 +5,10 @@ import { loggingToken } from '@nocobase/app-server/logging';
 import { databaseManagerToken } from '@nocobase/db';
 import { ServiceContainer } from '@nocobase/service-provider';
 
+import type { AgentContext } from '@nocobase/ai-employee';
 import {
   createAgentContext,
   toAgentState,
-  type AppAgentContext,
 } from '../../server/agent/context.js';
 import type { ConversationTurn } from '../../server/agent/contracts.js';
 import type { Actor } from '../../server/types.js';
@@ -104,7 +104,7 @@ export function createTestAgentContext({
   actor?: Actor;
   turn?: ConversationTurn;
   decided?: Parameters<typeof toAgentState>[1];
-} = {}): AppAgentContext {
+} = {}): AgentContext {
   const fixture = createTestAIEmployeeFixture();
   return createAgentContext({
     actor,
@@ -118,8 +118,8 @@ export function createTestAgentContext({
  * way `AgentService` does: the execution context plus that tool's own deps.
  */
 export function withTestToolDeps<TDeps>(
-  context: AppAgentContext,
+  context: AgentContext,
   deps: TDeps,
-): AppAgentContext & { deps: TDeps } {
+): AgentContext<TDeps> {
   return { ...context, deps };
 }

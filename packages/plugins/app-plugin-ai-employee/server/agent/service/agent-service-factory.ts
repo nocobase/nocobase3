@@ -12,7 +12,12 @@ import {
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { cachingToken } from '@nocobase/app-server/caching';
-import type { AgentState, AIManager, ToolsEntity } from '@nocobase/ai-employee';
+import type {
+  AgentContext,
+  AgentState,
+  AIManager,
+  ToolsEntity,
+} from '@nocobase/ai-employee';
 import type { Caching } from '@nocobase/caching';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
@@ -26,11 +31,7 @@ import { NativeCollectionSaver } from '../checkpoint/index.js';
 import type { ConversationPersistence } from '../contracts/persistence.js';
 import { DatabaseConversationPersistence } from '../conversation/persistence/database.js';
 import { ConversationProvider } from '../conversation/conversation-provider.js';
-import {
-  createAgentContext,
-  toAgentState,
-  type AppAgentContext,
-} from '../context.js';
+import { createAgentContext, toAgentState } from '../context.js';
 import type { ConversationTurn } from '../contracts.js';
 import type { Actor, ModelRef, Translate } from '../../types.js';
 import {
@@ -296,7 +297,7 @@ export class AgentServiceFactory {
     translate?: Translate,
     getHeader?: (name: string) => string | undefined,
     state?: Partial<AgentState>,
-  ): AppAgentContext {
+  ): AgentContext {
     return createAgentContext({
       actor,
       state,

@@ -12,15 +12,6 @@ import type { Logger } from '@nocobase/logging';
 import type { ConversationTurn } from './contracts.js';
 import type { Actor, ModelRef, Translate } from '../types.js';
 
-/**
- * The context every backend tool of this application starts from. It carries
- * what this execution is — who is asking, what the turn holds — and nothing
- * else. A tool that needs a manager, repository or service declares its
- * container token, and `AgentService` resolves it into `deps` for that tool
- * alone.
- */
-export type AppAgentContext = AgentContext;
-
 export interface CreateAgentContextOptions {
   readonly actor: Actor;
   readonly state?: Partial<AgentState>;
@@ -56,13 +47,20 @@ export function toAgentState(
   };
 }
 
+/**
+ * Builds the context every backend tool of this application starts from. It
+ * carries what this execution is — who is asking, what the turn holds — and
+ * nothing else: `deps` starts empty, and a tool that needs a manager,
+ * repository or service declares its container token for `AgentService` to
+ * resolve into `deps` for that tool alone.
+ */
 export function createAgentContext({
   actor,
   state: stateOverrides,
   logger,
   translate,
   getHeader,
-}: CreateAgentContextOptions): AppAgentContext {
+}: CreateAgentContextOptions): AgentContext {
   return {
     deps: {},
     actor: {

@@ -17,6 +17,7 @@ import getSkill from '../server/ai/tools/getSkill.js';
 import { ToolMessage } from 'langchain';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AgentContext } from '@nocobase/ai-employee';
 import { AIEmployeeResources } from '../server/ai/index.js';
 import { AIEmployeeAgentContextProvider } from '../server/agent/context/ai-employee/context.js';
 import type { AIEmployeeAgentContextProviderOptions } from '../server/agent/context/ai-employee/context.js';
@@ -24,7 +25,6 @@ import type { AIEmployeeSkillSettings } from '../server/agent/context/ai-employe
 import { ConversationMessageStoreImpl } from '../server/agent/conversation/message-store.js';
 import { skillToolBindingMiddleware } from '../server/agent/middleware/skill-tools.js';
 import { toolCallStatusMiddleware } from '../server/agent/middleware/tools.js';
-import type { AppAgentContext } from '../server/agent/context.js';
 import { createTestAgentContext } from './app/test-context.js';
 import { MemoryConversationPersistence } from './memory-conversation-persistence.js';
 import { createMockServer } from './mock-server.js';
@@ -120,7 +120,7 @@ async function createFixture(services?: DataServices) {
       timezone: 'UTC',
     })),
   };
-  const runtimeContext: AppAgentContext = createTestAgentContext();
+  const runtimeContext: AgentContext = createTestAgentContext();
   // Stands in for the container: what each declared token resolves to here.
   const resolved = new Map<unknown, unknown>([
     [dataServicesFactoryToken, () => services ?? data],
@@ -142,7 +142,7 @@ async function createFixture(services?: DataServices) {
     sessionId = 'analysis',
     employeeSettings: Partial<EmployeeSkillSettings> = {},
   ) {
-    const context: AppAgentContext = {
+    const context: AgentContext = {
       ...runtimeContext,
       state: { sessionId },
     };

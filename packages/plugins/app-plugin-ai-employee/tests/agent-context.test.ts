@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { defineTools, type AgentContext } from '@nocobase/ai-employee';
+import { defineTools } from '@nocobase/ai-employee';
 import {
   createTestActor,
   createTestAgentContext,
   createTestConversationTurn,
 } from './app/test-context.js';
 
-const contextTool = defineTools<AgentContext<{}, {}>>({
+const contextTool = defineTools({
   scope: 'GENERAL',
   definition: { name: 'read-context', description: 'read context' },
   invoke: async (ctx) => ({ sessionId: ctx.state.sessionId }),
 });
 
-const contextFreeTool = defineTools<AgentContext<{}, {}>>({
+const contextFreeTool = defineTools({
   scope: 'GENERAL',
   requiresContext: false,
   definition: { name: 'context-free', description: 'context free' },

@@ -13,6 +13,7 @@ import type {
 } from '../agent/contracts.js';
 import type { ConversationStreamTarget } from '../types.js';
 import type {
+  AgentContext,
   AIEmployeeEntity,
   AIMessageInput,
   UserDecision,
@@ -47,11 +48,7 @@ import type {
   AIToolMessageEntity,
 } from '../repository/index.js';
 import { AgentSSEAdapter } from '../agent/transport/sse.js';
-import {
-  createAgentContext,
-  toAgentState,
-  type AppAgentContext,
-} from '../agent/context.js';
+import { createAgentContext, toAgentState } from '../agent/context.js';
 import { EXECUTE_FRONTEND_TOOL_NAME } from '../agent/context/ai-employee/common/frontend-tool-contracts.js';
 import { findCurrentFrontendTool } from '../agent/context/ai-employee/frontend-tools.js';
 import type { CreateEmployeeOptions } from '../agent/service/agent-service-factory.js';
@@ -341,7 +338,7 @@ export class AIConversationService {
     turn?: ConversationTurn;
     translate?: Translate;
     getHeader?: (name: string) => string | undefined;
-  }): AppAgentContext {
+  }): AgentContext {
     return createAgentContext({
       actor,
       state: toAgentState(turn, { sessionId }),
