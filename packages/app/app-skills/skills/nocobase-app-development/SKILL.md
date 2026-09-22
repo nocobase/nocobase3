@@ -94,6 +94,7 @@ Read the page for the task in front of you. Do not read all of them.
 | Create a page, write a page component, configure routes or navigation               | [client pages and routes](references/client-pages-and-routes.md) |
 | Add child pages, page Tabs, Dialogs, or Drawers using child routes; add menu groups | [child routes and overlays](references/client-child-routes.md)   |
 | Add or compose UI, add a shadcn primitive, style consistently, support dark mode    | [components and styling](references/components-and-styling.md)   |
+| Add or change frontend form validation, field errors, or validation schemas         | [React Hook Form and Zod](references/react-hook-form.md)         |
 | Add or change top-right header buttons, tooltips, menus, or configuration panels    | [header action interactions](references/header-actions.md)       |
 | Add an API endpoint, a webhook, or a callback; authenticate and authorize it        | [server routes](references/server-routes.md)                     |
 | Call an API from the frontend using the application's HTTP client                   | [client API requests](references/client-api.md)                  |
@@ -110,6 +111,8 @@ A feature with a page and an API usually needs four: migrations, server routes, 
 The three database pages above are the application side — where the files live, which commands run them, how connections are configured. The database API they are written against belongs to `@nocobase/db` and is documented by the `nocobase-db` Skill synchronized alongside this one. Read that Skill before writing a migration, a seed, or a query.
 
 For creating, editing or removing theme presets, read [themes](references/themes.md). For any UI styling, read [the shared token reference](references/theme-tokens.md); prefer these tokens so AI-authored components respond to theme changes.
+
+When a task involves frontend form validation, read the relevant sections of [React Hook Form and Zod](references/react-hook-form.md) before implementing it. Use it for schema validation, field error rendering, and accessibility; adapt examples to the application's installed dependencies, component APIs, and translation keys. Frontend validation complements server-side validation and does not replace it.
 
 ## Business permissions
 
