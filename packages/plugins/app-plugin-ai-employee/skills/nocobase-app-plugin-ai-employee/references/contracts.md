@@ -118,30 +118,39 @@ Declare the factory or manager the work actually needs — `repositoryFactoryTok
 ```ts
 type AgentContext<TDeps = Record<string, never>> = {
   deps: TDeps;
-  logger: Logger;
-  state: {
-    sessionId?: string;
-    messageId?: string;
-    messages?: AIMessageInput[];
-    model?: Record<string, unknown>;
-    webSearch?: boolean;
-    important?: string;
-    frontendTools?: unknown[];
-    toolCallResults?: { id: string; result: unknown }[];
-    timezone?: string;
-  };
   actor: {
     id: string | number;
     roles: string[];
     isRoot: boolean;
     locale?: string;
   };
-  translate?: (key: string, options?: Record<string, unknown>) => string;
-  getHeader?: (name: string) => string | undefined;
+  /** What this execution is. Built where the request is parsed. */
+  state: {
+    sessionId: string;
+    messageId?: string;
+    /** Only set when handing an interrupted sub-agent the message that interrupted it. */
+    handoffMessages?: AIMessageInput[];
+    /** Already resolved against the employee's policy; read it as given. */
+    model?: { llmService: string; model: string };
+    webSearch?: boolean;
+    important?: string;
+    frontendTools?: unknown[];
+    toolCallResults?: { id: string; result: unknown }[];
+    timezone?: string;
+  };
+  /** What the host lends the execution while it runs. */
+  runtime: {
+    logger: Logger;
+    translate?: (key: string, options?: Record<string, unknown>) => string;
+    /** Absent where the execution serves no request. */
+    getHeader?: (name: string) => string | undefined;
+  };
   /** Host-owned authorization boundary for loading skill content. */
   availableSkills?: () => Promise<readonly SkillsEntity[]>;
 };
 ```
+
+`state` and `actor` say what the execution is; `runtime` is what the host lends it; `deps` is what this tool declared. A tool logs through `ctx.runtime.logger` and localizes through `ctx.runtime.translate`, and reads the timezone from `ctx.state.timezone` rather than the `x-timezone` header, which the route has already resolved.
 
 `actor` is the authorization identity; never treat a model-provided id as authorized without checking it. Reading business data belongs behind an actor-bound capability rather than a raw Repository: this package's data tools declare `dataServicesFactoryToken` and call it with `ctx.actor`, so every read is authorized before it reaches a collection.
 

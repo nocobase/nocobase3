@@ -187,43 +187,36 @@ The manager uses the same [pagination rules](api-reference.md#history-response-e
 Use this entry point when the employee is a persisted or built-in AI Employee selected by stable `username`:
 
 ```ts
-interface CreateAIEmployeeOptions {
+interface CreateEmployeeOptions {
   readonly username: string;
-  readonly sessionId?: string;
-  readonly systemPrompt?: string;
-  readonly actor?: Actor;
-  readonly frontendTools?: readonly unknown[];
+  /** What this execution is. Its `sessionId` is the conversation the agent runs in. */
+  readonly state: AgentState;
+  /** What the host lends it: logger, and the caller's language and headers. */
+  readonly runtime: AgentRuntime;
+  readonly actor: Actor;
   readonly from?: 'main-agent' | 'sub-agent';
-  readonly translate?: Translate;
-  readonly getHeader?: (name: string) => string | undefined;
+  readonly systemPrompt?: string;
   readonly skillSettings?: AIEmployeeSkillSettings;
-  readonly webSearch?: boolean;
-  readonly tools?: readonly { name: string }[];
-  readonly execution?: ConversationExecution;
-  readonly state?: Partial<AgentState>;
 }
 
-createAIEmployee(options: CreateAIEmployeeOptions): Promise<AgentService>;
+createAIEmployee(options: CreateEmployeeOptions): Promise<AgentService>;
 ```
 
 Parameter rules:
 
 - `username` is required and must identify an accessible employee. Do not copy a built-in employee definition into the App.
-- `sessionId` should normally be the value returned by `AIConversationsManager.create()`.
-- `actor` is the authorization identity used by tools and employee access checks. Construct it from the authenticated request or trusted server job context, not from request JSON.
-- `systemPrompt` is a request-level addition/override for this service instance; keep secrets and authorization rules out of model-controlled prompt text.
-- `frontendTools` is a serializable manifest of currently available browser tools. It is not a place to send callbacks, DOM nodes, or executable functions.
+- `state` is what the execution is, and it becomes the agent context every backend tool receives. Build it where the request is parsed, not field by field at the call site. Its `sessionId` should normally be the value returned by `AIConversationsManager.create()`, and its `frontendTools` is a serializable manifest of currently available browser tools — not a place for callbacks, DOM nodes, or executable functions.
+- `runtime` is what the host lends the execution: a logger, and the caller's language and headers where there is a request.
+- `actor` is required and is the authorization identity used by tools and employee access checks. Construct it from the authenticated request or trusted server job context, not from request JSON. There is no implicit root.
+- `systemPrompt` and `skillSettings` are the conversation's own configuration, held on the conversation record; they narrow or extend the employee's configured capabilities without bypassing permission checks.
 - `from` identifies main-agent versus sub-agent execution and affects persistence/checkpoint behavior.
-- `translate` and `getHeader` are optional App adapters for localization and trusted request headers.
-- `skillSettings`, `webSearch`, and `tools` narrow or extend the employee's configured capabilities; they do not bypass permission checks.
-- The model is the employee's, not the caller's: the service applies the employee's model policy to `AgentRequest.model` on every execution, honours a requested model only when the employee's configuration allows it, and resolves the employee's own model when a request selects none. Do not pre-resolve a model to work around a missing one.
-- `execution` and `state` describe the request this agent runs for. Together they become the agent context every backend tool receives, so supply them here: `state` is applied over `execution`, and the factory fills in `sessionId`, `webSearch`, and `frontendTools` from the options above when neither supplies them.
+- The model is the employee's, not the caller's. The factory resolves `state.model` against the employee's policy once, when the agent is created, honours a requested model only when the employee's configuration allows it, and resolves the employee's own when the state names none. A request cannot carry a model, so there is nothing to pre-resolve around.
 
 The factory resolves the employee, model, tools, skills, knowledge-base behavior, conversation persistence, default middleware, and the tool context. The caller should not instantiate those internal objects separately.
 
 ### The tool context is fixed here
 
-Every backend tool declares `requiresContext` and receives the agent context the service was created with. `AgentServiceFactory` builds that context once, from `actor`, `translate`, `getHeader`, `execution`, and `state`, and the service supplies it on every execution. A caller never passes it: an `agentContext` key on `AgentRequest.context` is ignored, so request data cannot substitute another actor, session, or set of services. A tool that needs a model, a session id, or the current messages reads them from `state`, which is why an integration that activates tools should pass `execution`/`state` rather than leaving them empty.
+Every backend tool declares `requiresContext` and receives the agent context the service was created with. `AgentServiceFactory` builds that context once, from `actor`, `state` and `runtime`, and the service supplies it on every execution. A caller never passes it: an `agentContext` key on `AgentRequest.runtime` is ignored, so request data cannot substitute another actor, session, or set of services. A tool that needs a session id or the resolved model reads them from `ctx.state`, which is why an integration that activates tools supplies a real `state` rather than an empty one.
 
 ## `AgentServiceFactory.createAgent()`
 
@@ -231,32 +224,27 @@ Use this entry point when no AI Employee needs to be pre-created or selected. It
 
 ```ts
 interface CreateAgentOptions {
-  readonly sessionId?: string;
-  readonly username?: string;
+  readonly sessionId: string;
+  readonly actor: Actor;
+  readonly runtime: AgentRuntime;
   readonly model?: ModelRef;
   readonly systemPrompt?: string;
   readonly tools?: readonly string[];
   readonly skills?: readonly string[];
   readonly persistence?: ConversationPersistence;
-  readonly actor?: Actor;
-  readonly translate?: Translate;
-  readonly getHeader?: (name: string) => string | undefined;
-  readonly execution?: ConversationExecution;
-  readonly state?: Partial<AgentState>;
 }
 
-createAgent(options?: CreateAgentOptions): Promise<AgentService>;
+createAgent(options: CreateAgentOptions): Promise<AgentService>;
 ```
 
 Rules:
 
+- `sessionId`, `actor` and `runtime` are all required. A fixed agent has nowhere to persist to without a session, and there is no implicit root actor to fall back on.
 - `messages` is not a creation option. Supply the current turn's messages to `invoke()` or `stream()`.
-- `model` is the default model for this service. A request-level `AgentRequest.model` can override it.
-- `username` is optional metadata/context identity; it does not make this an AI Employee lookup.
+- `model` is this service's model, fixed when it is created. A request cannot override it.
 - `systemPrompt` is the fixed context prompt.
 - `tools` contains registered tool names to activate; `skills` contains registered skill names whose tools should be activated.
 - `persistence` replaces the default database persistence. Use it only when the integration owns a compatible storage implementation; see the Persistence section below.
-- `actor`, `translate`, `getHeader`, `execution`, and `state` build the tool context for this service exactly as they do for `createAIEmployee()`. Supply `actor` whenever `tools` or `skills` are activated; the default is a root actor.
 - If no model is supplied, the service must receive a usable model through the supported configuration path before execution.
 
 ## Executing `AgentService`
@@ -264,15 +252,18 @@ Rules:
 The service exposes the same execution object for multiple turns:
 
 ```ts
+// Only what varies per call. Whatever is fixed for the agent's lifetime — the
+// actor, the session, the model — is in the state it was created with, so a
+// request cannot swap it.
 interface AgentRequest {
-  model?: ModelRef;
   messageId?: string;
   userMessages?: AIMessageInput[];
   userDecisions?: {
     interruptId?: string;
     decisions: UserDecision[];
   };
-  context?: Record<string, unknown>;
+  /** Per-call channel for the middleware pipeline, such as `appendMessages`. */
+  runtime?: Record<string, unknown>;
   writer?: (chunk: unknown) => void;
   signal?: AbortSignal;
 }
@@ -345,17 +336,19 @@ Do not infer HTTP behavior from that return value: [`sendMessages` with `stream:
 
 ## Implementing `AgentContextProvider`
 
-`AgentContextProvider` is the extension point for the context an `AgentService` consumes. `toolRuntimeContext()` returns this execution's data only — actor, state, logger, translate — and never a database handle, a manager registry or the App container. What a tool may additionally reach is whatever it declared in `dependencies`, which `AgentService` resolves from the container into that tool's own `ctx.deps`:
+`AgentContextProvider` is the extension point for the context an `AgentService` consumes. `agentContext` is this execution's data only — actor, state, runtime — and never a database handle, a manager registry or the App container. What a tool may additionally reach is whatever it declared in `dependencies`, which `AgentService` resolves from the container into that tool's own `ctx.deps`:
 
 ```ts
 interface AgentContextProvider {
   currentConversation(): CurrentConversation;
-  resolveLLM(request: AgentRequest): Promise<ResolvedAgentLLM>;
+  /** No argument: the model comes from the agent's own state. */
+  resolveLLM(): Promise<ResolvedAgentLLM>;
   getSystemPrompt(
     messages: readonly AIMessageInput[],
   ): Promise<string | undefined>;
   discoveredTools(): Promise<DiscoveredTools>;
-  toolRuntimeContext(): unknown;
+  /** Fixed when the AgentService is created; a property, not a method. */
+  readonly agentContext: AgentContext;
 }
 
 interface CurrentConversation {
@@ -381,15 +374,15 @@ interface DiscoveredTools {
 Implementations should follow these rules:
 
 1. Keep `currentConversation()` stable for the lifetime of the service. Its `sessionId` must match the ConversationPersistence/session created for the agent.
-2. Resolve the model by applying the provider's own policy to the request's model, falling back to the provider's fixed/default context. Do not reject a request that selects no model while the provider can resolve one, and do not accept a requested model the policy disallows. Throw a clear error when no model can be resolved; do not silently create another AI manager.
+2. Resolve the model by applying the provider's own policy to the model its `agentContext.state` carries, falling back to the provider's fixed/default. Do not reject a state that names no model while the provider can resolve one, and do not accept a named model the policy disallows. Throw a clear error when no model can be resolved; do not silently create another AI manager.
 3. Return a prompt string or `undefined`. Do not put authorization decisions solely in a prompt; enforce them in tool code and service policy.
 4. Return only registered, serializable tool definitions. `activeTools()` controls which discovered tools are enabled for this execution.
-5. Return the same `toolRuntimeContext()` for the lifetime of the service, snapshotting the trusted actor and request state when the provider is constructed. It is the only context a backend tool receives; a provider that returns nothing makes every tool with `requiresContext` fail.
+5. Hold the same `agentContext` for the lifetime of the service, snapshotting the trusted actor and execution state when the provider is constructed. It is the only context a backend tool receives, and being a property rather than a method is what makes that literal — there is nothing to recompute per call.
 6. Do not load or save messages in the context provider. Message history and tool state belong to the ConversationProvider.
 7. Do not put `DatabaseManager`, repositories, `ServiceFactory`, `ConversationProvider`, or a mutable aggregate options object into the public context contract. Keep infrastructure dependencies private inside the App-owned adapter and expose only the results above.
 8. If context is request-sensitive, snapshot the trusted actor/request data when constructing the provider and never trust equivalent fields from model output.
 
-A fixed context normally stores `sessionId`, optional `username`, optional `from`, a default `ModelRef`, a resolved `LLMProvider`, prompt text, a read-only tool map, and active tool names. An employee context additionally resolves the employee, model, configured skills/tools, knowledge-base prompt, frontend-tool manifest, and actor policy. These are implementation choices behind the contract, not extra fields for callers to pass to `AgentService`.
+A fixed context normally stores `sessionId`, optional `from`, a default `ModelRef`, a resolved `LLMProvider`, prompt text, a read-only tool map, and active tool names. An employee context additionally resolves the employee, model, configured skills/tools, knowledge-base prompt, frontend-tool manifest, and actor policy. These are implementation choices behind the contract, not extra fields for callers to pass to `AgentService`.
 
 The factory's standard construction path owns the `AgentContextProvider` selection. An App should implement a custom provider only in an App-owned server integration that also owns a compatible AgentService assembly boundary; do not deep-import private plugin implementation classes merely to replace one method.
 
