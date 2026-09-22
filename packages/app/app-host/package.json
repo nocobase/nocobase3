@@ -57,7 +57,7 @@
     "@nocobase/config": "workspace:^",
     "@nocobase/drive": "workspace:^",
     "@nocobase/logging": "workspace:^",
-    "tar": "^7.4.3"
+    "tar": "catalog:"
   },
   "scripts": {
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",

@@ -226,7 +226,7 @@ progress('Running beforeDev hooks');
 runHookStage(readCliHooks(rootDir).dev, 'beforeDev', runDevHook);
 const pluginWatchIncludes = proxyTarget
   ? []
-  : resolvePluginWatchIncludes(rootDir);
+  : await resolvePluginWatchIncludes(rootDir);
 
 // Only a run that owns a local server contends for the application's database;
 // a proxy run talks to someone else's and may share the root. Claimed before
