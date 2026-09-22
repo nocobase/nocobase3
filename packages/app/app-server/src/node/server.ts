@@ -173,6 +173,82 @@ export function registerNodeShutdownHandlers(
   return unregister;
 }
 
+export interface StartupSignalWatchOptions {
+  readonly logger?: NodeAppServerLogger;
+  readonly signals?: readonly NodeJS.Signals[];
+  /** Signal source; defaults to the process. Injected by tests. */
+  readonly emitter?: StartupSignalEmitter;
+  /** Escalation for a repeated signal; defaults to process.exit. */
+  readonly forceExit?: (code: number) => void;
+}
+
+export interface StartupSignalEmitter {
+  on(event: string, listener: () => void): unknown;
+  off(event: string, listener: () => void): unknown;
+}
+
+export interface StartupSignalWatch {
+  /** The first signal received while starting, if any. */
+  received(): NodeJS.Signals | undefined;
+  dispose(): void;
+}
+
+export const DEFAULT_STARTUP_SIGNALS: readonly NodeJS.Signals[] = [
+  'SIGINT',
+  'SIGTERM',
+];
+
+/**
+ * Covers the window before the HTTP server owns the signals, which is where
+ * startup runs migrations and seeds. Node's default disposition terminates the
+ * process on SIGTERM, so without this the task lock is abandoned held and the
+ * next start has to wait it out. Recording the signal and letting startup
+ * finish releases the lock the ordinary way; the caller then shuts down
+ * instead of listening.
+ */
+export function watchStartupShutdownSignals(
+  options: StartupSignalWatchOptions = {},
+): StartupSignalWatch {
+  const logger = options.logger ?? defaultLogger;
+  const emitter = options.emitter ?? process;
+  const forceExit =
+    options.forceExit ?? ((code: number): void => process.exit(code));
+  const signals = options.signals ?? DEFAULT_STARTUP_SIGNALS;
+  let received: NodeJS.Signals | undefined;
+  const listeners = new Map<NodeJS.Signals, () => void>();
+
+  const dispose = (): void => {
+    for (const [signal, listener] of listeners) {
+      emitter.off(signal, listener);
+    }
+    listeners.clear();
+  };
+
+  for (const signal of signals) {
+    const listener = (): void => {
+      if (received) {
+        logger.error(
+          `Received ${signal} again while the app server was still starting; forcing exit.`,
+        );
+        forceExit(1);
+        return;
+      }
+
+      received = signal;
+      logger.error(
+        `Received ${signal} while the app server was starting; finishing startup tasks before shutting down.`,
+      );
+    };
+    listeners.set(signal, listener);
+    emitter.on(signal, listener);
+  }
+
+  return {
+    received: (): NodeJS.Signals | undefined => received,
+    dispose,
+  };
+}
+
 export async function shutdownNodeAppServer(
   app: ClosableNodeAppServer,
   server: NodeAppHttpServer,

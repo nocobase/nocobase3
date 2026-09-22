@@ -434,6 +434,13 @@ export class CollectionBuilder {
     operations: CollectionOperation[],
   ): Promise<CollectionCompilerContext> {
     const names = new Set<string>();
+    /**
+     * Collections these operations define themselves. Their entry below comes
+     * from the operation, so resolving the stored one would be discarded — and
+     * resolving fails outright for a name whose metadata outlived its table,
+     * which is exactly the state a recreating migration is there to repair.
+     */
+    const defined = new Set<string>();
     const includesRename = operations.some(
       (operation) => operation.type === 'renameCollection',
     );
@@ -444,6 +451,7 @@ export class CollectionBuilder {
         case 'replaceViewCollection':
         case 'createMaterializedViewCollection':
           names.add(operation.name);
+          defined.add(operation.name);
           collectReferencedCollections(names, operation.definition);
           break;
         case 'alterCollection':
@@ -490,7 +498,7 @@ export class CollectionBuilder {
     }
     await Promise.all(
       [...names].map(async (name) => {
-        if (Object.hasOwn(collections, name)) {
+        if (Object.hasOwn(collections, name) || defined.has(name)) {
           return;
         }
         collections[name] = await this.collections?.get(name);

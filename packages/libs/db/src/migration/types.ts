@@ -117,6 +117,11 @@ export interface CreateMigratorOptions extends LoadMigrationsOptions {
   readonly tableName?: string;
   readonly lockTableName?: string;
   /**
+   * How long to wait for a concurrent run to release the lock before failing.
+   * Defaults to 30 seconds.
+   */
+  readonly lockAcquireTimeoutMs?: number;
+  /**
    * How to react when an executed migration's source no longer hashes to the
    * checksum recorded for it. Defaults to `warn`.
    */
