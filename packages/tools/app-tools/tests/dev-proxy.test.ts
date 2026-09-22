@@ -364,7 +364,8 @@ describe('remote development runner', () => {
     ]);
     expect(run.resolvePluginWatchIncludes).toHaveBeenCalledTimes(1);
     expect(run.resolveConfigWatch).toHaveBeenCalledTimes(1);
-    expect(run.watch).toHaveBeenCalledTimes(1);
+    // The configuration file, plus the dependency files an install rewrites.
+    expect(run.watch).toHaveBeenCalledTimes(2);
     expect(
       run.waitForHttpReady.mock.calls.map(([options]) => options.label),
     ).toEqual(['Vite dev server', 'Application server']);
@@ -639,6 +640,14 @@ async function runDevMode(
       },
       readCliHooks: () => ({ dev: { beforeDev: [hook] } }),
       resolveConfigWatch,
+      resolveDependencyWatch: () => [
+        { directory: '/app', filenames: new Set(['package.json']) },
+      ],
+      DEPENDENCY_SETTLE_MS: 3000,
+      acquireDevInstanceLock: () => ({ acquired: true, release: vi.fn() }),
+      resolveDevShutdownEnv: () => ({ APP_SHUTDOWN_TIMEOUT_MS: '4000' }),
+      setTimeout,
+      clearTimeout,
       resolvePluginWatchIncludes,
       rootDir: '/app',
       runHookStage: (

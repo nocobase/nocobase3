@@ -15,6 +15,18 @@ import {
 export const DEFAULT_HTTP_DRAIN_TIMEOUT_MS: number = 30_000;
 export const DEFAULT_FORCE_EXIT_TIMEOUT_MS: number = 35_000;
 
+/**
+ * Total shutdown budget, when the host supplies one. A supervisor that kills
+ * the process after a fixed wait — `tsx watch` escalates to SIGKILL after five
+ * seconds — makes the 30 second default unreachable, and a hard kill during
+ * startup or shutdown leaves the migration lock held.
+ */
+export const SHUTDOWN_TIMEOUT_ENV = 'APP_SHUTDOWN_TIMEOUT_MS';
+
+/** How much of the budget is reserved for closing what the drain leaves. */
+const SHUTDOWN_FORCE_EXIT_MARGIN_MS = 1_000;
+const MIN_HTTP_DRAIN_TIMEOUT_MS = 250;
+
 export type NodeAppHttpServer = ServerType;
 
 export interface ClosableNodeAppServer extends AppServer {
@@ -53,6 +65,25 @@ const defaultLogger: NodeAppServerLogger = {
     console.error(message, error);
   },
 };
+
+/**
+ * Reads the shutdown budget from the environment. An unset or unusable value
+ * keeps the defaults, which suit a deployment behind a load balancer.
+ */
+export function resolveNodeShutdownTimeouts(
+  env: Readonly<Record<string, string | undefined>>,
+): NodeShutdownOptions {
+  const budget = Number(env[SHUTDOWN_TIMEOUT_ENV]);
+  if (!Number.isFinite(budget) || budget <= 0) return {};
+
+  return {
+    forceExitTimeoutMs: budget,
+    httpDrainTimeoutMs: Math.max(
+      budget - SHUTDOWN_FORCE_EXIT_MARGIN_MS,
+      MIN_HTTP_DRAIN_TIMEOUT_MS,
+    ),
+  };
+}
 
 export function startNodeAppServer(
   app: ClosableNodeAppServer,

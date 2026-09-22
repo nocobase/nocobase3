@@ -15,7 +15,9 @@ import {
   type StandaloneAppScope,
 } from './scope.js';
 import {
+  resolveNodeShutdownTimeouts,
   type ClosableNodeAppServer,
+  type NodeShutdownOptions,
   disposeAfterStartupFailure,
   startNodeAppServer,
   watchStartupShutdownSignals,
@@ -32,6 +34,8 @@ export interface StandaloneServerListenOptions {
 export interface StandaloneServer extends ClosableNodeAppServer {
   readonly application: Application;
   readonly listenOptions: StandaloneServerListenOptions;
+  /** Shutdown budget resolved from the environment; empty keeps the defaults. */
+  readonly shutdownOptions: NodeShutdownOptions;
   readonly signal: AbortSignal;
 }
 
@@ -98,6 +102,7 @@ export async function createStandaloneServer(
     };
     const server: StandaloneServer = {
       application,
+      shutdownOptions: resolveNodeShutdownTimeouts(scope.env),
       close: (): Promise<void> => scope.destroy(),
       fetch: (request, env, executionContext) =>
         proxy?.matches(new URL(request.url).pathname)
@@ -219,6 +224,7 @@ async function startStandaloneServer(
             },
           }
         : {}),
+      ...app.shutdownOptions,
       hostname: app.listenOptions.hostname,
       port: app.listenOptions.port,
       onListen: (info): void => {

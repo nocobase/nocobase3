@@ -152,6 +152,27 @@ describe('standalone runtime server', () => {
     expect(shutdown).toHaveBeenCalledOnce();
   });
 
+  it('resolves the shutdown budget a supervisor supplies', async () => {
+    const rootDir = createAppRoot();
+    const definition = createStandaloneDefinition(rootDir, '/main');
+
+    const supervised = await createStandaloneServer({
+      ...definition,
+      env: { APP_SHUTDOWN_TIMEOUT_MS: '4000' },
+    });
+    // What `pnpm dev` supplies, because tsx force-kills five seconds after
+    // SIGTERM and a hard kill never releases the migration lock.
+    expect(supervised.shutdownOptions).toEqual({
+      forceExitTimeoutMs: 4000,
+      httpDrainTimeoutMs: 3000,
+    });
+    await supervised.close();
+
+    const deployed = await createStandaloneServer(definition);
+    expect(deployed.shutdownOptions).toEqual({});
+    await deployed.close();
+  });
+
   it('always returns an independent wrapper when the base path is empty', async () => {
     const definition = createStandaloneDefinition(createAppRoot(), '');
     const server = await createStandaloneServer({
