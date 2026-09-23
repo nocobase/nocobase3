@@ -201,7 +201,7 @@ Run a dialect integration suite through the package that owns it: `pnpm --filter
 
 On pull requests and pushes to `develop`, `scripts/select-db-integration-matrix.mjs` selects the Quality workflow's database matrix from changed paths. A dialect package change selects that dialect; changes to `db`, `db-testkit`, their shared dependencies, shared development configuration, or dependency/CI inputs select all eight. Unrelated changes skip the matrix. Selection covers entire package directories, including tests and documentation; deletions and both sides of renames count. An unavailable comparison range runs all eight conservatively. Keep the selector's shared paths current when adding database dependencies or changing the test setup.
 
-Run locally only the dialects the change puts at risk; CI covers the selected matrix. After changing `packages/libs/db`, `packages/libs/db-testkit`, or a `packages/libs/db-<dialect>` package, read [packages/libs/db-testkit/TESTING.md](packages/libs/db-testkit/TESTING.md) for which suites a change requires, how to narrow a run, and the command forms that silently run nothing.
+Run locally only the dialects the change puts at risk; CI covers the selected matrix. After changing `packages/libs/db`, `packages/libs/db-testkit`, or a `packages/libs/db-<dialect>` package, read [packages/libs/db-testkit/docs/integration-testing.md](packages/libs/db-testkit/docs/integration-testing.md) for which suites a change requires, how to narrow a run, and the command forms that silently run nothing.
 
 ## Native Dependencies in Generated Applications
 
