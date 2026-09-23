@@ -27,7 +27,7 @@ Read these App-local files when present, before writing anything:
 - `AGENTS.md` — App-specific coding rules; they outrank this Skill's defaults.
 - `package.json` — dependencies and scripts. Plugin registration is in `server/plugins.ts` and `client/plugins.ts`, not here.
 - `config.yml` — the `ai` block; see [capabilities.md](capabilities.md#llm-services-configyml).
-- `.env` and `.gitignore` — confirm secrets are ignored before adding a variable.
+- `.gitignore` — confirm `config.yml` and `.env` are ignored and untracked before a key goes near either; see [capabilities.md § Where the key lives](capabilities.md#where-the-key-lives).
 - `ai/README.md` — the AI resource layer and its build behavior.
 - `client/extensions/nocobase-ai/README.md` — the installed AI frontend. Its absence means the Registry item is not installed yet, not that the App cannot have AI UI.
 

@@ -408,17 +408,76 @@ ai:
       sort: 10
 ```
 
-`${NAME}` placeholders are expanded recursively **after** validation. A missing variable becomes an empty string, which typically surfaces as an authentication failure rather than a configuration error, so confirm the variable exists. In a built and deployed server the application's `.env` is not merged into `process.env`, so set real environment variables there rather than shipping a `.env` file.
+`${NAME}` placeholders are expanded recursively **after** validation, from `process.env`. A missing variable becomes an empty string, which typically surfaces as an authentication failure rather than a configuration error, so confirm the variable exists — see [Where the key lives](#where-the-key-lives).
 
-### Keys never go in source
+### Where the key lives
 
-Put the real value in `.env`, reference it as `${NAME}`, and before writing anything check that `.env` is ignored and not already tracked:
+Settle this with the user before writing any configuration. The goal is fixed: the key never enters the repository, never reaches a commit, and never passes through the agent. Never ask the user to paste a key into the conversation, never write one yourself, and never read a file or print a variable that holds one. Hand the user a command with a placeholder, and have them run it in their own terminal rather than through the agent, since a command the agent runs carries the key into its transcript.
+
+Offer the three places in this order, say why they rank this way, and let the user choose:
+
+| Option          | Where the key is                                                | `config.yml` holds          | Works in                                                                                                  |
+| --------------- | --------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 1 — recommended | a system environment variable                                   | `apiKey: ${OPENAI_API_KEY}` | development and a built server, the same way                                                              |
+| 2               | `config.yml` itself, once it is confirmed ignored and untracked | the key's value             | development and a built server, but the agent sees the key whenever it reads the file                     |
+| 3 — last resort | `.env`                                                          | `apiKey: ${OPENAI_API_KEY}` | **`pnpm dev` only** in this version — see [SKILL.md § Known gaps](../SKILL.md#known-gaps-in-this-version) |
+
+Whichever is chosen, check first that the files involved stay out of the repository. Each line prints `ok` or stops the work:
 
 ```bash
-grep -n '^\.env' .gitignore ; git ls-files --error-unmatch .env 2>/dev/null && echo "TRACKED — stop"
+git check-ignore -q config.yml && ! git ls-files --error-unmatch config.yml >/dev/null 2>&1 && echo "config.yml ok" || echo "config.yml NOT IGNORED — stop"
+git check-ignore -q .env && ! git ls-files --error-unmatch .env >/dev/null 2>&1 && echo ".env ok" || echo ".env NOT IGNORED — stop"   # option 3 only
 ```
 
-Add the variable name, with no value, to `.env.example` so the next person knows it is needed. Tell the user plainly that the key stays out of the repository and out of any build artifact, and never put it in `config.yml.client`, which is served to the browser.
+`config.example.yml` is committed, so it always carries `${OPENAI_API_KEY}` and never a value, whichever option the App uses. A key never goes under `config.yml`'s `client:` block, which is served to the browser.
+
+**Option 1 — a system environment variable.** The server reads `process.env` wherever it runs, so the same `${NAME}` works in development and in a deployment; only the place that sets the variable differs. Give the user the line for their shell, with the variable name filled in and the value left as a placeholder. It replaces an earlier line for the same variable rather than appending a second one:
+
+```bash
+# zsh (macOS default)
+sed -i.bak '/^export OPENAI_API_KEY=/d' ~/.zshrc && rm -f ~/.zshrc.bak && echo 'export OPENAI_API_KEY="<your-key>"' >> ~/.zshrc && source ~/.zshrc
+
+# bash
+sed -i.bak '/^export OPENAI_API_KEY=/d' ~/.bashrc && rm -f ~/.bashrc.bak && echo 'export OPENAI_API_KEY="<your-key>"' >> ~/.bashrc && source ~/.bashrc
+```
+
+```powershell
+# Windows: applies to terminals opened afterwards, not the current one
+setx OPENAI_API_KEY "<your-key>"
+```
+
+`source` updates only the terminal it runs in. Every other open terminal, and any server already running, keeps the environment it started with — so open a new terminal or `source` the file there, then restart the server from it. The command, key included, also lands in the shell history; a user who minds that can add the same line to the profile in an editor instead.
+
+Confirm the variable exists without printing it:
+
+```bash
+[ -n "$OPENAI_API_KEY" ] && echo "OPENAI_API_KEY is set" || echo "OPENAI_API_KEY is missing"
+```
+
+If the agent's own shell started before the variable was set, it reports `missing` even when the user's terminal has it; ask the user to run the check.
+
+**Option 2 — the value in `config.yml`.** Only after the check above prints `config.yml ok`. Write the entry with a marker in place of the key, `apiKey: "REPLACE_WITH_OPENAI_API_KEY"`, and give the user the command that swaps it for the real value:
+
+```bash
+sed -i.bak 's|REPLACE_WITH_OPENAI_API_KEY|<your-key>|' config.yml && rm -f config.yml.bak
+```
+
+The key is now in a file the agent reads to do its work, which is why this ranks second. From then on, edit `config.yml` by targeted replacement rather than printing it whole, and never quote its `apiKey` line back.
+
+**Option 3 — `.env`.** Only after the check above prints `.env ok`, and only when the user accepts that it works under `pnpm dev` alone. `pnpm dev` merges `.env` into the server's environment; a built server does not, so under `pnpm start` or in a deployment the placeholder expands to an empty string. Say that to the user rather than leaving it to be found on the server. Add the variable name, with no value, to `.env.example`, then give them:
+
+```bash
+touch .env && sed -i.bak '/^OPENAI_API_KEY=/d' .env && rm -f .env.bak && echo 'OPENAI_API_KEY=<your-key>' >> .env
+```
+
+**A change takes effect on restart.** The server reads its environment, `config.yml` and `.env` when it starts, so after setting a variable, editing `config.yml`, or editing `.env`, restart it — from a terminal that already has the new variable when it is option 1.
+
+**Deployment is configured separately.** `pnpm build` ships `dist/` and `config.example.yml`, never `config.yml` or `.env`, and a deployment keeps its own `config.yml` beside `dist/`. Tell the user to check two things before the first start there:
+
+- the deployment's `config.yml` has the `ai.llmServices` entry — it is not copied from the development machine;
+- with option 1, the variable is set where the service manager starts the process — a systemd `Environment=`, the process manager's env, the container's environment. A service does not read a login shell's `~/.zshrc`, so a variable that works in the user's terminal can still be missing from the service.
+
+How a deployment sets its environment belongs to the `nocobase-deployment` Skill.
 
 ### Choose models from the provider, never from memory
 
@@ -464,7 +523,7 @@ So, in order:
 2. If the request fails or the key is not available yet, ask the user which models to enable.
 3. If that is still unresolved, leave `enabledModels` out **and tell the user the service has no usable model until someone picks one in AI settings**. Omitting it is not a soft default: the list normalizes to an empty provider-mode list, an empty list drops the service out of `ai:listAllEnabledModels` altogether, and the application then has a configured service and nothing to chat with. An omitted list is honest; an invented one is a bug that surfaces as a failed chat.
 
-Where the key is available, prove the configuration end to end with one small completion against a chosen model before declaring it done. A model list can succeed while the account has no access to the model that was picked.
+Where the key is available, prove the configuration end to end with one small completion against a chosen model before declaring it done. Both requests reference the key by variable name, as in `-H "Authorization: Bearer $OPENAI_API_KEY"`, and never by value; when the agent's shell does not have the variable, or the key lives in `config.yml`, give the user the request to run instead. A model list can succeed while the account has no access to the model that was picked.
 
 ### `enabledModels` applies once, unless you say otherwise
 
