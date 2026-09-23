@@ -2,6 +2,8 @@ import type { DatabaseConnection } from '@nocobase/db';
 import {
   APIError,
   betterAuth,
+  getBaseURL,
+  getOrigin,
   type BetterAuthOptions,
   type BetterAuthPlugin,
   type FilteredAPI,
@@ -164,6 +166,59 @@ export class Auth {
     return session;
   }
 
+  /** Protect writes authenticated by a browser cookie, including routes that skip normal session lookup. */
+  private async checkCookieWriteOrigin(
+    context: Context,
+  ): Promise<Response | undefined> {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(context.req.method)) return;
+    // A credential header is not proof that it was used: an invalid API key may fall back to a valid cookie.
+    // Cookie-free API key requests have no ambient browser credential to forge.
+    if (!context.req.header('cookie')) return;
+
+    const authContext = await this.auth.$context;
+    const origin = context.req.header('origin');
+    const inferredBaseURL =
+      origin === 'null' &&
+      context.req.header('sec-fetch-site') === 'same-origin'
+        ? getBaseURL(
+            undefined,
+            authContext.options.basePath,
+            context.req.raw,
+            false,
+            authContext.options.advanced?.trustedProxyHeaders,
+          )
+        : undefined;
+    const source =
+      (inferredBaseURL ? getOrigin(inferredBaseURL) : undefined) ??
+      origin ??
+      context.req.header('referer');
+    if (!source || source === 'null') {
+      return context.json({ code: 'INVALID_CSRF_ORIGIN' }, 403);
+    }
+
+    // Better Auth also accepts per-request trusted origins. Its static context contains the
+    // configured base URL, static origins, plugin origins, and BETTER_AUTH_TRUSTED_ORIGINS.
+    const configuredOrigins = authContext.options.trustedOrigins;
+    const mergedOrigins =
+      typeof configuredOrigins === 'function'
+        ? await configuredOrigins(context.req.raw)
+        : (configuredOrigins ?? []);
+    const requestAuthContext = Object.create(authContext) as typeof authContext;
+    requestAuthContext.trustedOrigins = [
+      ...authContext.trustedOrigins,
+      ...mergedOrigins.filter(
+        (origin): origin is string =>
+          typeof origin === 'string' && Boolean(origin),
+      ),
+    ];
+    const trustedByAuth = requestAuthContext.isTrustedOrigin(source, {
+      allowRelativePaths: false,
+    });
+    if (!trustedByAuth) {
+      return context.json({ code: 'INVALID_CSRF_ORIGIN' }, 403);
+    }
+  }
+
   /** Returns only a registered plugin's API methods, including the normal hook pipeline. */
   pluginApi<TPlugin extends BetterAuthPlugin>(
     pluginId: TPlugin['id'],
@@ -191,6 +246,8 @@ export class Auth {
 
   optional(options: AuthMiddlewareOptions = {}): MiddlewareHandler<AuthEnv> {
     return async (context, next) => {
+      const originFailure = await this.checkCookieWriteOrigin(context);
+      if (originFailure) return originFailure;
       if (options.skip?.(context)) {
         await next();
         return;
@@ -212,6 +269,8 @@ export class Auth {
 
   required(options: AuthMiddlewareOptions = {}): MiddlewareHandler<AuthEnv> {
     return async (context, next) => {
+      const originFailure = await this.checkCookieWriteOrigin(context);
+      if (originFailure) return originFailure;
       if (options.skip?.(context)) {
         await next();
         return;

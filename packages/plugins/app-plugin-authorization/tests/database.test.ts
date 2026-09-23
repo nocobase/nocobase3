@@ -1,6 +1,15 @@
+// @vitest-environment node
+
 import { fileURLToPath } from 'node:url';
 
-import { validateMigrations, validateSeeds } from '@nocobase/db';
+import {
+  createDatabaseManager,
+  createMigrator,
+  createSeeder,
+  validateMigrations,
+  validateSeeds,
+} from '@nocobase/db';
+import sqlite from '@nocobase/db-sqlite';
 import { describe, expect, it } from 'vitest';
 
 describe('@nocobase/app-plugin-authorization database', () => {
@@ -25,5 +34,62 @@ describe('@nocobase/app-plugin-authorization database', () => {
         name: '202608250002_authorization_create_member_set',
       },
     ]);
+  });
+
+  it('assigns the root permission set to the configured initial administrator', async () => {
+    const database = createDatabaseManager({
+      drivers: { sqlite },
+      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    });
+    const source = (plugin: string, kind: 'migrations' | 'seeds') => ({
+      packageName: `@nocobase/${plugin}`,
+      directory: fileURLToPath(
+        new URL(`../../${plugin}/database/${kind}`, import.meta.url),
+      ),
+    });
+    try {
+      await createMigrator({
+        database,
+        sources: [
+          source('app-plugin-authentication', 'migrations'),
+          source('app-plugin-authorization', 'migrations'),
+        ],
+      }).latest();
+      const query = database.connection().query;
+      await query
+        .insertInto('user')
+        .values({
+          id: 'initial-admin',
+          name: 'Custom administrator',
+          username: 'custom.admin',
+          email: 'admin@example.com',
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .execute();
+      const seeder = createSeeder({
+        database,
+        sources: [source('app-plugin-authorization', 'seeds')],
+        config: {
+          get<T>(key: string): T | undefined {
+            return (
+              key === 'users.initialAdmin.username' ? 'Custom.Admin' : undefined
+            ) as T | undefined;
+          },
+        },
+      });
+      await seeder.run();
+      await seeder.run();
+      expect(
+        await query
+          .selectFrom('authorizationPermissionSetAssignments')
+          .select(['subjectId', 'permissionSetKey'])
+          .where('permissionSetKey', '=', 'root')
+          .execute(),
+      ).toEqual([{ subjectId: 'initial-admin', permissionSetKey: 'root' }]);
+    } finally {
+      await database.destroy();
+    }
   });
 });
