@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import routes from '../../client/routes.js';
 
 describe('client routes', () => {
+  // Loading a page module transforms its whole import graph on first use, which can outlast the default 5 s timeout
+  // when a release runner runs every package's tests at once. Both tests below load one.
   it('defines App, Settings, and Dev Routes through one Client entry', async () => {
     const [appContribution, settingsContribution] = routes;
     if (
@@ -37,7 +39,7 @@ describe('client routes', () => {
     await expect(settingsRoute?.componentLoader()).resolves.toHaveProperty(
       'default',
     );
-  });
+  }, 30_000);
 
   it('declares a dev page that a production build would drop', async () => {
     // Tests run under Node, where `import.meta.env` is undefined. That is a development context, so the routes are
@@ -60,5 +62,5 @@ describe('client routes', () => {
     await expect(devRoute?.componentLoader()).resolves.toHaveProperty(
       'default',
     );
-  });
+  }, 30_000);
 });
