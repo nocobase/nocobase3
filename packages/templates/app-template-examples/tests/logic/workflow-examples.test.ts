@@ -96,6 +96,7 @@ beforeAll(async function startExampleServer() {
   writeFileSync(
     configPath,
     JSON.stringify({
+      app: { publicOrigin: 'http://localhost' },
       workflow: { distRoot: artifactRoot },
       database: {
         default: 'main',
