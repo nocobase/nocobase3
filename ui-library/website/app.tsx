@@ -89,7 +89,9 @@ export function App(): ReactElement {
   const resolved = previewTheme ?? resolveTheme(preference, prefersDark);
 
   useEffect(() => {
+    // index.html sets both on first load; the inline color-scheme outranks the stylesheet's, so it has to follow too.
     document.documentElement.classList.toggle('dark', resolved === 'dark');
+    document.documentElement.style.colorScheme = resolved;
     if (!previewTheme) {
       localStorage.setItem('nocobase-ui-library-theme', preference);
     }

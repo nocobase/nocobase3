@@ -5,6 +5,10 @@
   "extends": "@nocobase/dev-config/tsconfig/client-library.json",
   "compilerOptions": {
     "noEmit": true,
+    // The library and the unused-local check plugins compile client code with, as packages/tools/create-plugin's
+    // template sets them, so an item cannot rely on a newer built-in than the plugin that installs it.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noUnusedLocals": true,
     // Declaration checks would also cover the preview's shadcn copies below, which do not annotate their exports, so
     // the explicit export types a plugin's declaration build requires are a rule in MAINTAINING.md instead.
     "declaration": false,
