@@ -175,12 +175,7 @@ it('creates a reusable Fixed AgentService through the factory with Memory Persis
   const persistence = new MemoryConversationPersistence('factory-memory');
   const provider = {
     createModel: () =>
-      new FakeListChatModel({
-        responses: [
-          new AIMessage('factory-first'),
-          new AIMessage('factory-second'),
-        ],
-      }),
+      new FakeListChatModel({ responses: ['factory-first', 'factory-second'] }),
     resolveTools: () => [],
     prepareStoredAssistantAdditionalKwargs: (
       additionalKwargs?: Record<string, unknown>,

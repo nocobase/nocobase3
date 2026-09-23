@@ -8,6 +8,7 @@ import {
   type DatabaseManager,
   type DatabaseConnection,
 } from '@nocobase/db';
+import { MemorySaver } from '@langchain/langgraph';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { cachingToken } from '@nocobase/app-server/caching';
@@ -214,7 +215,7 @@ export class AgentServiceFactory {
         options.tools.map((name) => this.aiManager.toolsManager.getTools(name)),
       );
       for (const tool of configuredTools) {
-        if (tool) tools.set(tool.definition.name, tool);
+        if (tool) tools.set(tool.definition.name, withResolvedAuto(tool));
       }
     }
     if (options.skills?.length) {
@@ -230,7 +231,7 @@ export class AgentServiceFactory {
         ),
       );
       for (const tool of skillTools) {
-        if (tool) tools.set(tool.definition.name, tool);
+        if (tool) tools.set(tool.definition.name, withResolvedAuto(tool));
       }
     }
     const context = new FixedAgentContextProvider({
@@ -261,6 +262,15 @@ export class AgentServiceFactory {
         container: this.container,
         logger: this.loggerService,
         converters: undefined,
+        // Without one, a tool that asks cannot pause the run or resume it. A
+        // caller's own persistence keeps the checkpoints beside it, in process.
+        checkpointer: options.persistence
+          ? new MemorySaver()
+          : new NativeCollectionSaver({
+              checkpoints: repositories.lcCheckpoints,
+              blobs: repositories.lcCheckpointBlobs,
+              writes: repositories.lcCheckpointWrites,
+            }),
       }),
     );
   }
@@ -272,4 +282,10 @@ export class AgentServiceFactory {
   ): AgentContext {
     return createAgentContext({ actor, state, runtime });
   }
+}
+
+// A fixed agent has no employee presets, so a tool runs unattended only when it
+// declares ALLOW, which is the employee path's fallback for the same tool.
+function withResolvedAuto(tool: ToolsEntity): ToolsEntity {
+  return { ...tool, auto: tool.defaultPermission === 'ALLOW' };
 }
