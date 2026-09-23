@@ -80,7 +80,10 @@ Tell the user:
 - The application directory and the URL.
 - The first sign-in account. It comes from `users.initialAdmin` in the configuration: by default the username `nocobase` (email `admin@nocobase.com`) with the password `admin123`. Read that key rather than assuming the defaults, never repeat a password the user chose, and remind them to change the default one after signing in.
 - How to stop and restart the service.
-- To start a new agent session in the application directory before continuing, giving its full path. The application's `AGENTS.md` and Skills appeared after this session started, so this session may not have loaded them; a new session loads them reliably.
+- To start a new agent session in the application directory before continuing, so that the application's `AGENTS.md` and Skills are loaded. They appeared after this session started, so this session may not have loaded them; a new session loads them reliably. Say exactly how:
+  - When the application is in this session's directory, the user only needs to end this session and start a new one in the same directory.
+  - Otherwise, give the full path and the command that starts your own agent there, for example `cd /work/my-app && claude` for Claude Code.
+  - In a desktop client, the user opens that directory as the project and starts a new session there.
 
 If the user wants to keep working in this session instead, do not rely on those Skills being loaded: follow the application's `AGENTS.md` and read the relevant `.agents/skills/<name>/SKILL.md` directly.
 
