@@ -22,16 +22,17 @@ docs/theme/components/NavScreen/
 docs/theme/components/Search/
 docs/theme/components/HomeHero/
 
-# Skills are prose written for agents to read, not source this repository's formatter should reflow. `.claude/skills/`
-# additionally holds symbolic links into `.agents/skills/` — written by scripts/link-claude-skills.mjs here and by
-# `nocobase skills sync` in an application — so formatting through one would check the same file twice under two
-# paths and write the result back into `.agents/`.
+# Skills are prose written for agents to read, not source this repository's formatter should reflow. `.agents/skills/`
+# and `.claude/skills/` hold symbolic links — into `skills/`, written by scripts/sync-skills.mjs here, and into
+# `.agents/skills/` in an application, written by `nocobase skills sync` — so formatting through one would check the
+# same file twice under two paths and write the result back into the committed source.
 #
 # The `**/` matters: an unanchored path matches only the repository root, and each template under packages/templates/
 # has both directories of its own. `.gitignore` lists them too, but `--ignore-path` replaces `.gitignore` rather than
 # adding to it, and both `pnpm format` and `pnpm format:all` pass it.
 #
-# The root `skills/` holds the Skills users install globally with `npx skills add`, and is prose for the same reason.
+# The root `skills/` holds this repository's committed Skills, including those users install globally with
+# `npx skills add`, and is prose for the same reason.
 **/.agents/skills/
 **/.claude/skills/
 /skills/

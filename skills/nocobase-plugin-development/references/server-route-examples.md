@@ -420,11 +420,11 @@ Add focused tests for authenticated success, `AuthorizationDeniedError` to `403`
 
 ## Current maintained source
 
-- [Runnable Root and API contribution implementations](../../../../packages/examples/app-plugin-routes-example/server/routes)
-- [Production `createRouter()` contribution tests and middleware-leak check](../../../../packages/examples/app-plugin-routes-example/tests/routes.test.ts)
-- [Typed real-`Auth` test fixture backed by SQLite](../../../../packages/examples/app-plugin-repository-example/tests/helpers.ts)
-- [Authentication middleware and `AuthEnv`](../../../../packages/plugins/app-plugin-authentication/server/auth.ts)
-- [Authorization middleware, error mapping, and protected handlers](../../../../packages/plugins/app-plugin-authorization/server/routes/authorization.ts)
-- [Route contribution contracts](../../../../packages/app/app-server/src/router/routes.ts)
+- Runnable Root and API contribution implementations (`packages/examples/app-plugin-routes-example/server/routes`)
+- Production `createRouter()` contribution tests and middleware-leak check (`packages/examples/app-plugin-routes-example/tests/routes.test.ts`)
+- Typed real-`Auth` test fixture backed by SQLite (`packages/examples/app-plugin-repository-example/tests/helpers.ts`)
+- Authentication middleware and `AuthEnv` (`packages/plugins/app-plugin-authentication/server/auth.ts`)
+- Authorization middleware, error mapping, and protected handlers (`packages/plugins/app-plugin-authorization/server/routes/authorization.ts`)
+- Route contribution contracts (`packages/app/app-server/src/router/routes.ts`)
 
 When these implementations change, update the examples to match the exported APIs rather than preserving an obsolete snippet.

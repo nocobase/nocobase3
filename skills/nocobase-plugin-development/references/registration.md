@@ -130,4 +130,4 @@ Use `pnpm --filter <target-app> client:inspect --json` or `server:inspect --json
 | Skills are stale                              | Verify upstream source and run App-scoped synchronization                   |
 | Automatic source editing was skipped          | Read the reported reason/manual edits; do not call partial success complete |
 
-Finish with [testing and delivery](testing.md). Source references: [registration planner](../../../../packages/tools/cli/src/lib/plugin-registration.ts) and [lifecycle commands](../../../../packages/tools/cli/src/commands/plugin).
+Finish with [testing and delivery](testing.md). Source references: registration planner (`packages/tools/cli/src/lib/plugin-registration.ts`) and lifecycle commands (`packages/tools/cli/src/commands/plugin`).

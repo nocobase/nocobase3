@@ -187,4 +187,4 @@ Use a fresh `ServiceContainer` and a minimal typed App fixture. Cover these obse
 
 `server:inspect` can show Provider ownership, constructor name, and composition order. It does not instantiate Providers or prove bindings, lifecycle behavior, cleanup, or Service behavior.
 
-For maintained code, see [ServiceContainer](../../../../packages/libs/service-provider/src/container.ts), [Provider lifecycle registry](../../../../packages/libs/service-provider/src/registry.ts), and the [runnable ServiceProvider example](../../../../packages/examples/app-plugin-service-provider-example).
+For maintained code, see ServiceContainer (`packages/libs/service-provider/src/container.ts`), Provider lifecycle registry (`packages/libs/service-provider/src/registry.ts`), and the runnable ServiceProvider example (`packages/examples/app-plugin-service-provider-example`).

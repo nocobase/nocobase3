@@ -212,4 +212,4 @@ Also cover inherited auth, access denial, nested routing and Outlet behavior, pl
 
 Run the plugin's focused checks and the target App tests when registration or final routing changes. `pnpm --filter <target-app> client:inspect --json` helps diagnose final identities, paths, owners, loaders, groups, and overrides, but it does not load pages or prove authorization behavior.
 
-Use the maintained [route example declaration](../../../../packages/examples/app-plugin-routes-example/client/routes.ts), [route declaration tests](../../../../packages/examples/app-plugin-routes-example/tests/client/routes.test.ts), and [app-client child route tests](../../../../packages/app/app-client/tests/child-routes.test.ts) for current contracts.
+Use the maintained route example declaration (`packages/examples/app-plugin-routes-example/client/routes.ts`), route declaration tests (`packages/examples/app-plugin-routes-example/tests/client/routes.test.ts`), and app-client child route tests (`packages/app/app-client/tests/child-routes.test.ts`) for current contracts.

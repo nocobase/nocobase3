@@ -167,4 +167,4 @@ Verify each changed layer at the layer that owns the behavior:
 - Run the plugin's focused `lint`, `typecheck`, `test`, and `build`, then run the target App checks when registration or composition changes.
 - Use `pnpm --filter <target-app> client:inspect --json` only when contribution composition changed or a contribution is missing.
 
-For the current public contracts, consult the repository's [app-client README](../../../../packages/app/app-client/README.md) and [Client plugin definitions](../../../../packages/app/app-client/src/plugins.ts).
+For the current public contracts, consult the repository's app-client README (`packages/app/app-client/README.md`) and Client plugin definitions (`packages/app/app-client/src/plugins.ts`).

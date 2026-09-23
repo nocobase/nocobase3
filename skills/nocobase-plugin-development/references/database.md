@@ -107,9 +107,9 @@ it('creates logical and physical audit schema and rolls it back', async () => {
 });
 ```
 
-The maintained [Repository migration test](../../../../packages/examples/app-plugin-repository-example/tests/database.test.ts) additionally verifies relation metadata, physical foreign keys, indexes, optimistic-lock fields, and reverse deletion order.
+The maintained Repository migration test (`packages/examples/app-plugin-repository-example/tests/database.test.ts`) additionally verifies relation metadata, physical foreign keys, indexes, optimistic-lock fields, and reverse deletion order.
 
-Run the dialect integration suites selected by the repository-local `nocobase-db-integration-testing` Skill when the change affects shared `packages/libs/db*` behavior. A normal plugin-specific Migration usually needs its real test database and target App upgrade path rather than every dialect locally.
+Run the dialect integration suites selected by `packages/libs/db-testkit/docs/integration-testing.md` when the change affects shared `packages/libs/db*` behavior. A normal plugin-specific Migration usually needs its real test database and target App upgrade path rather than every dialect locally.
 
 ## Write deterministic Seeds
 
@@ -216,4 +216,4 @@ Client code calls `api.repository('auditLogs')`, which sends `POST /api/auditLog
 
 Test anonymous access to every exposed action, caller-dependent policy, allowed and forbidden fields and relations, maximum limits, errors, and at least one real database read/write through HTTP. Verify unrelated Repository names and actions remain unavailable and middleware does not affect later routes.
 
-For maintained details, see [database task checksum contract](../../../../packages/libs/db/CHECKSUMS.md), [DatabaseManager](../../../../packages/libs/db/src/database/manager.ts), [Repository Route implementation](../../../../packages/app/app-server/src/router/repository-routes.ts), and the [runnable Repository plugin](../../../../packages/examples/app-plugin-repository-example).
+For maintained details, see database task checksum contract (`packages/libs/db/CHECKSUMS.md`), DatabaseManager (`packages/libs/db/src/database/manager.ts`), Repository Route implementation (`packages/app/app-server/src/router/repository-routes.ts`), and the runnable Repository plugin (`packages/examples/app-plugin-repository-example`).
