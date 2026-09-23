@@ -273,17 +273,83 @@ describe('runConfigInit', () => {
     expect(result.dialect).toBe('mysql');
   });
 
+  /**
+   * Re-running a setup sequence after it failed part-way through is what agents and people both do, so the step that
+   * already succeeded succeeds again instead of stopping the sequence. All four extensions count: the runtime probes
+   * them all, and writing config.yml beside an existing config.toml would produce a file nothing reads.
+   */
   it.each(['yml', 'yaml', 'toml', 'json'])(
-    'refuses when config.%s already exists',
+    'leaves an existing config.%s alone and reports it unchanged',
     async (extension) => {
       const { rootDir } = await createApplication({ drivers: ['sqlite'] });
-      await writeFile(path.join(rootDir, `config.${extension}`), '');
+      const existing = path.join(rootDir, `config.${extension}`);
+      await writeFile(existing, 'kept');
 
-      await expect(
-        runConfigInit({ rootDir, environment: {} }),
-      ).rejects.toMatchObject({ reason: 'already-configured' });
+      const result = await runConfigInit({ rootDir, environment: {} });
+
+      expect(result).toMatchObject({
+        status: 'unchanged',
+        configFile: existing,
+        nextCommands: ['pnpm config:check', 'pnpm dev'],
+      });
+      expect(await readFile(existing, 'utf8')).toBe('kept');
     },
   );
+
+  it('reports the same dialect as unchanged too', async () => {
+    const { rootDir } = await createApplication({ drivers: ['sqlite'] });
+    await writeFile(path.join(rootDir, 'config.yml'), 'kept');
+
+    await expect(
+      runConfigInit({
+        rootDir,
+        dialect: 'sqlite',
+        environment: {},
+        readConfiguredDialect: async () => 'sqlite',
+      }),
+    ).resolves.toMatchObject({ status: 'unchanged', dialect: 'sqlite' });
+  });
+
+  /** Reporting success here would claim a change to the database that never happened. */
+  it('refuses a different dialect for an application already configured', async () => {
+    const { rootDir } = await createApplication({
+      drivers: ['sqlite', 'postgres'],
+    });
+    await writeFile(path.join(rootDir, 'config.yml'), 'kept');
+
+    await expect(
+      runConfigInit({
+        rootDir,
+        dialect: 'postgres',
+        environment: {},
+        readConfiguredDialect: async () => 'sqlite',
+      }),
+    ).rejects.toMatchObject({
+      reason: 'already-configured',
+      message: expect.stringContaining('configured for sqlite'),
+      details: { configuredDialect: 'sqlite', requestedDialect: 'postgres' },
+    });
+    expect(await readFile(path.join(rootDir, 'config.yml'), 'utf8')).toBe(
+      'kept',
+    );
+  });
+
+  /** When the configured dialect cannot be read, a --dialect cannot be confirmed as the same one, so it is refused. */
+  it('refuses --dialect when the existing configuration cannot be read', async () => {
+    const { rootDir } = await createApplication({ drivers: [] });
+    await writeFile(path.join(rootDir, 'config.yml'), 'kept');
+
+    await expect(
+      runConfigInit({
+        rootDir,
+        dialect: 'postgres',
+        environment: {},
+        readConfiguredDialect: async () => {
+          throw new Error('does not load');
+        },
+      }),
+    ).rejects.toMatchObject({ reason: 'already-configured' });
+  });
 
   /**
    * Existing configuration is the first thing reported. Asking which dialect to use, or saying a driver is missing,
@@ -296,29 +362,133 @@ describe('runConfigInit', () => {
     await writeFile(path.join(rootDir, 'config.yml'), 'auth:\n  secret: x\n');
     let asked = false;
 
-    await expect(
-      runConfigInit({
-        rootDir,
-        environment: {},
-        selectDialect: async () => {
-          asked = true;
-          return 'mysql';
-        },
-      }),
-    ).rejects.toMatchObject({
-      reason: 'already-configured',
-      details: { configFile: path.join(rootDir, 'config.yml') },
+    const result = await runConfigInit({
+      rootDir,
+      environment: {},
+      selectDialect: async () => {
+        asked = true;
+        return 'mysql';
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: 'unchanged',
+      configFile: path.join(rootDir, 'config.yml'),
     });
     expect(asked).toBe(false);
   });
 
-  it('reports existing configuration even when no driver is installed', async () => {
-    const { rootDir } = await createApplication({ drivers: [] });
-    await writeFile(path.join(rootDir, 'config.yml'), 'auth:\n  secret: x\n');
+  it('lists the placeholder settings a database other than SQLite still needs', async () => {
+    const { rootDir } = await createApplication({
+      drivers: ['sqlite', 'postgres'],
+    });
+
+    const sqlite = await runConfigInit({
+      rootDir,
+      dialect: 'sqlite',
+      environment: {},
+    });
+    expect(sqlite.requiredSettings).toEqual([]);
+    await rm(sqlite.configFile);
+
+    const postgres = await runConfigInit({
+      rootDir,
+      dialect: 'postgres',
+      environment: {},
+    });
+    expect(postgres).toMatchObject({
+      status: 'configured',
+      nextCommands: ['pnpm config:check', 'pnpm dev'],
+      requiredSettings: [
+        'database.connections.main.host',
+        'database.connections.main.port',
+        'database.connections.main.database',
+        'database.connections.main.username',
+        'database.connections.main.password',
+      ],
+    });
+  });
+
+  it('writes the connection settings it was given and stops listing them', async () => {
+    const { rootDir } = await createApplication({ drivers: ['postgres'] });
+    const offered: Record<string, unknown>[] = [];
+
+    const result = await runConfigInit({
+      rootDir,
+      dialect: 'postgres',
+      environment: {},
+      askConnection: async (_dialect, defaults) => {
+        offered.push({ ...defaults });
+        return {
+          host: 'db.internal',
+          port: 6543,
+          username: 'crm',
+          password: 's3cret',
+        };
+      },
+    });
+
+    expect(offered[0]).toMatchObject({ host: 'localhost', port: 5432 });
+    expect(result.requiredSettings).toEqual([
+      'database.connections.main.database',
+    ]);
+    const parsed = parse(await readFile(result.configFile, 'utf8')) as {
+      database: { connections: { main: Record<string, unknown> } };
+    };
+    expect(parsed.database.connections.main).toMatchObject({
+      host: 'db.internal',
+      port: 6543,
+      username: 'crm',
+      password: 's3cret',
+    });
+  });
+
+  /** A declined write after a failed connection leaves nothing behind, like every other failure. */
+  it('tests the connection first and writes nothing when that is declined', async () => {
+    const { rootDir } = await createApplication({ drivers: ['postgres'] });
+    const tested: unknown[] = [];
 
     await expect(
-      runConfigInit({ rootDir, dialect: 'postgres', environment: {} }),
-    ).rejects.toMatchObject({ reason: 'already-configured' });
+      runConfigInit({
+        rootDir,
+        dialect: 'postgres',
+        environment: {},
+        askConnection: async () => ({ host: '127.0.0.1', port: 1 }),
+        onConnectionTested: async (result) => {
+          tested.push(result);
+          return false;
+        },
+      }),
+    ).rejects.toMatchObject({ reason: 'cancelled' });
+
+    expect(tested).toEqual([
+      expect.objectContaining({
+        name: 'main',
+        dialect: 'postgres',
+        status: 'failed',
+      }),
+    ]);
+    expect(existsSync(path.join(rootDir, 'config.yml'))).toBe(false);
+  });
+
+  it('never asks about a SQLite connection', async () => {
+    const { rootDir } = await createApplication({ drivers: ['sqlite'] });
+    let asked = false;
+
+    await runConfigInit({
+      rootDir,
+      environment: {},
+      askConnection: async () => {
+        asked = true;
+        return {};
+      },
+      onConnectionTested: async () => {
+        asked = true;
+        return true;
+      },
+    });
+
+    expect(asked).toBe(false);
   });
 
   it('replaces an existing file with --force', async () => {

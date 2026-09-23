@@ -12,7 +12,11 @@ import {
   runConfigInit,
   type ConfigInitResult,
 } from '../lib/config-init.js';
-import { selectDialect } from '../lib/prompts.js';
+import {
+  confirmWriteAnyway,
+  promptConnection,
+  selectDialect,
+} from '../lib/prompts.js';
 
 export default class AppConfigInit extends AppCommand {
   static override summary =
@@ -65,6 +69,22 @@ export default class AppConfigInit extends AppCommand {
         selectDialect: interactive
           ? (available: readonly OfficialDialect[]) => selectDialect(available)
           : undefined,
+        readConfiguredDialect: () => this.readConfiguredDialect(),
+        askConnection: interactive
+          ? (dialect, defaults) => promptConnection(dialect, defaults)
+          : undefined,
+        onConnectionTested: interactive
+          ? async (tested) => {
+              if (tested.status === 'ok') {
+                this.log(`✓ Connected to the ${tested.dialect} database.`);
+                return true;
+              }
+              this.log(
+                `✗ Could not connect: ${tested.reason ?? 'unknown error'}`,
+              );
+              return confirmWriteAnyway();
+            }
+          : undefined,
       });
     } catch (error) {
       this.reportFailure(error, flags.json);
@@ -74,20 +94,34 @@ export default class AppConfigInit extends AppCommand {
     if (flags.json) {
       this.logJson({
         ok: true,
-        status: 'configured',
+        status: result.status,
         mode: result.mode,
-        dialect: result.dialect,
+        ...(result.dialect ? { dialect: result.dialect } : {}),
         configFile: result.configFile,
         configKey: result.configKey,
         overriddenByEnvironment: result.overriddenByEnvironment,
+        requiredSettings: result.requiredSettings,
+        nextCommands: result.nextCommands,
+        ...(result.connectionTest
+          ? { connectionTest: result.connectionTest }
+          : {}),
       });
       return;
     }
 
-    this.log(`Wrote ${result.configFile} for ${result.dialect}.`);
-    if (result.dialect !== 'sqlite') {
+    if (result.status === 'unchanged') {
       this.log(
-        `Edit ${result.configKey} with the settings for your database, and prepare it, before starting.`,
+        `Already configured: ${result.configFile}. Edit it with pnpm config:set, or run with --force to replace it.`,
+      );
+      return;
+    }
+    this.log(`Wrote ${result.configFile} for ${result.dialect}.`);
+    if (result.requiredSettings.length > 0) {
+      this.log(
+        `Set these for your database before starting: ${result.requiredSettings.join(', ')}.`,
+      );
+      this.log(
+        '  For example: pnpm config:set database.connections.main.host=<host>, and pnpm config:set --from-env database.connections.main.password=<VARIABLE>',
       );
     }
     if (result.overriddenByEnvironment.length > 0) {
@@ -95,6 +129,25 @@ export default class AppConfigInit extends AppCommand {
       this.log(
         `Note: ${result.overriddenByEnvironment.join(' and ')} are set in this environment and override the file.`,
       );
+    }
+  }
+
+  /**
+   * The dialect the existing configuration uses, read through the application rather than from the file, so a dialect
+   * that only its code defaults set is seen too. Unknown when the configuration does not load.
+   */
+  private async readConfiguredDialect(): Promise<string | undefined> {
+    const runtime = await this.appContext.loadRuntime();
+    try {
+      const database = runtime.config.get<{
+        default?: string;
+        connections?: Record<string, { dialect?: unknown }>;
+      }>('database');
+      const name = database?.default ?? 'main';
+      const dialect = database?.connections?.[name]?.dialect;
+      return typeof dialect === 'string' ? dialect : undefined;
+    } finally {
+      await runtime.scope.destroy();
     }
   }
 

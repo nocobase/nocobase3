@@ -6,21 +6,28 @@ What a connection means once code touches it — `schemaManagement` as a schema-
 
 ## Creating and configuring an application
 
-Use `pnpm create @nocobase/app <directory> --json` for non-interactive creation. Creation no longer chooses a database: it scaffolds the project, installs dependencies unless `--no-install` is supplied, and returns the remaining procedure in `nextCommands`. Run those commands in order.
+Use `pnpm create @nocobase/app <directory> --json` for non-interactive creation. Creation does not choose a database: it scaffolds the project, installs dependencies unless `--no-install` is supplied, and returns the remaining procedure in `nextCommands`. Run those commands in order.
 
-Configuration is a separate step inside the application:
+Configuration uses three commands of the application, each with `--json`:
 
 ```bash
-pnpm config:init --dialect sqlite --json
+pnpm config:init --dialect postgres --json      # write config.yml
+pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm --json
+pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD --json
+pnpm config:check --json                        # verify, database connection included
 ```
 
-This writes `database.connections.main` and generated `auth.secret` and `session.secret` into `config.yml`, built from `config.example.yml` so its comments survive. Supported dialects are `sqlite`, `postgres`, `mysql`, `mssql`, `oracle`, `dameng`, `kingbase`, and `oceanbase`.
+`config:init` writes `database.connections.main` and generated `auth.secret` and `session.secret` into `config.yml`, built from `config.example.yml` so its comments survive. Supported dialects are `sqlite`, `postgres`, `mysql`, `mssql`, `oracle`, `dameng`, `kingbase`, and `oceanbase`. For anything but SQLite its JSON result lists `requiredSettings` — the connection settings still at a placeholder — and `nextCommands`. On an application that is already configured it reports `status: "unchanged"` and exits 0, and it fails only when `--dialect` asks for a different database than the one configured.
 
-`config:init` installs nothing. Which dialects an application can run on is decided by the driver packages it depends on, so a dialect whose driver is absent is reported with the `pnpm add` that supplies it and nothing is written — run it again once the driver is installed. Templates depend on `@nocobase/db-sqlite`, so SQLite needs no install; another dialect needs its driver added first, and `pnpm remove @nocobase/db-sqlite` if nothing else uses SQLite.
+`config:init` installs nothing. Which dialects an application can run on is decided by the driver packages it depends on, so a dialect whose driver is absent is reported with a `suggestedCommand` — the `pnpm add` pinned to the range the runtime accepts — and nothing is written: run that command, then run `config:init` again. Templates depend on `@nocobase/db-sqlite`, so SQLite needs no install; another dialect needs its driver added, and `pnpm remove @nocobase/db-sqlite` if nothing else uses SQLite.
 
-Applications default to `verifyDepsBeforeRun: false` in `pnpm-workspace.yaml`; run `pnpm install` explicitly after changing dependencies or when creation used `--no-install`, before configuring, starting or building. Check exit codes and JSON results; if installation fails, retry `pnpm install` in the generated directory rather than recreating it. For non-SQLite databases, obtain the actual connection settings and edit `config.yml` directly, including the password; no database `.env` is needed. Prepare the target database before starting. Do not treat successful scaffolding or configuration as verified connectivity. Keep `config.yml` gitignored and do not expose its secrets in output.
+`config:set` sets `key=value` assignments in the file the application reads, keeping comments. It refuses a section the application does not know, with the nearest known name, and reports a key an environment variable overrides. Pass a password with `--from-env` and the name of a variable the user has set; never put a secret on the command line or in the conversation. Lists, such as notification channels, are edited in the file itself.
 
-`pnpm dev` and `pnpm start` refuse to run until the application has a configuration source — a file, or `AUTH_SECRET` and `SESSION_SECRET` in the environment. `pnpm build` does not, because building reads no secret.
+`config:check` exits non-zero with a finding per problem — a missing driver, a missing or placeholder secret, a failed connection — each with `key` and, where there is one, a `fix` command to run. It also warns about a section nothing reads, a `${NAME}` that is used as literal text (only the AI employee plugin's `llmServices` and `mcpServers` expand those), and a session secret that is regenerated at every start. Treat a passing check as the confirmation that the application can start; do not treat successful scaffolding or `config:init` as verified connectivity.
+
+Applications default to `verifyDepsBeforeRun: false` in `pnpm-workspace.yaml`; run `pnpm install` explicitly after changing dependencies or when creation used `--no-install`, before configuring, starting or building. If installation fails, retry `pnpm install` in the generated directory rather than recreating it. Keep `config.yml` gitignored and do not expose its secrets in output.
+
+`pnpm dev` refuses to run until the application has a configuration source — a file, or `AUTH_SECRET` in the environment — and `pnpm start` exits at once without `auth.secret`. `pnpm build` needs neither, because building reads no secret.
 
 ## Configuration responsibilities
 

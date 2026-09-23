@@ -148,6 +148,8 @@
     "test:coverage": "vitest run --coverage",
     "nocobase": "tsx ./cli/index.ts",
     "config:init": "tsx ./cli/index.ts app config init",
+    "config:check": "tsx ./cli/index.ts app config check",
+    "config:set": "tsx ./cli/index.ts app config set",
     "collections:generate": "tsx ./cli/index.ts app collections generate",
     "db:apply": "tsx ./cli/index.ts app db apply",
     "db:reset": "tsx ./cli/index.ts app db reset",

@@ -117,26 +117,32 @@ The template is downloaded (`@nocobase/app-template-default@latest` by default) 
 
 ## Configuring the application
 
-Creation stops at a project that can be configured, not at one that can run. The application has no `config.yml` yet, and `pnpm dev` and `pnpm start` refuse to run without one:
+Creation stops at a project that can be configured, not at one that can run. The application has no `config.yml` yet, and `pnpm dev` and `pnpm start` refuse to run without one. Three commands of the application's own take it from there — `config:init` writes the file, `config:set` changes it, and `config:check` checks it:
 
 ```bash
 cd crm
 pnpm config:init
+pnpm config:check
 pnpm dev
 ```
 
-`config:init` writes `config.yml` from the template's `config.example.yml`, keeping its comments, and fills in `auth.secret` and `session.secret`. It is part of the application rather than of this command, so it is also how an application is configured on a server, and how a configuration is replaced later.
+`config:init` writes `config.yml` from the template's `config.example.yml`, keeping its comments, and fills in `auth.secret` and `session.secret`. It is part of the application rather than of this command, so it is also how an application is configured on a server. Run again on a configured application it leaves the file alone and reports it unchanged.
 
-The templates depend on `@nocobase/db-sqlite`, which is the dialect their own `server/config/database.ts` defaults to, so a new application is ready to configure without installing anything. Another database means installing its driver first, because which dialects an application can run on is decided by what it depends on:
+The templates depend on `@nocobase/db-sqlite`, which is the dialect their own `server/config/database.ts` defaults to, so a new application is ready to configure without installing anything. Another database means installing its driver first, because which dialects an application can run on is decided by what it depends on, and then filling in the connection:
 
 ```bash
 cd crm
 pnpm add @nocobase/db-postgres
 pnpm remove @nocobase/db-sqlite   # optional, if nothing else uses SQLite
 pnpm config:init --dialect postgres
+pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm
+pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD
+pnpm config:check
 ```
 
-`config:init` installs nothing. A dialect whose driver is absent is reported with the `pnpm add` that supplies it, and nothing is written — so the command can simply be run again once the driver is there. It generates localhost, a default port, a sample username and database and an empty password; Oracle uses `serviceName`, and Dameng uses `schema`. Edit those and prepare the target database before starting. Other connections are left exactly as the template declared them, including the Examples template's additional SQLite databases. Official drivers load automatically; registering them in source code is unnecessary.
+`config:init` installs nothing. A dialect whose driver is absent is reported with the `pnpm add` that supplies it, pinned to the range the installed runtime accepts, and nothing is written — so the command can simply be run again once the driver is there. It writes placeholder connection settings for anything but SQLite and lists them as `requiredSettings`; on a terminal it asks for them instead, reading the password without echo, and tries the connection before writing. Other connections are left exactly as the template declared them, including the Examples template's additional SQLite databases.
+
+`config:set` keeps the file's comments, refuses a section the application does not know, and with `--from-env` reads a value from an environment variable so a secret never reaches the shell history. `config:check` loads the configuration the way a start would and connects to every database but SQLite; it reports a driver that is missing, a secret that is missing or still the placeholder, a section nothing reads, and a `${NAME}` that would be used as literal text.
 
 ## Agent output
 
@@ -146,7 +152,7 @@ pnpm create @nocobase/app crm --json
 
 JSON mode never prompts. It writes one final JSON object to stdout and progress to stderr. The result includes `status`, `stage`, `directory`, `projectCreated`, `dependenciesInstalled`, `configured`, `nextCommands`, `message`, and `warnings` where available. `--help --json` and `--version --json` return the requested information as JSON.
 
-`nextCommands` is the whole remaining procedure in order, so an agent can run it as written rather than reconstructing it from prose. It always begins with `pnpm config:init`, preceded by `pnpm install` after `--no-install`, and a Hub ends with `pnpm build` and `pnpm start` instead of `pnpm dev`.
+`nextCommands` is the whole remaining procedure in order, so an agent can run it as written rather than reconstructing it from prose. It always begins with `pnpm config:init` and `pnpm config:check`, preceded by `pnpm install` after `--no-install`, and a Hub ends with `pnpm build` and `pnpm start` instead of `pnpm dev`. `config:init --json` returns the rest the same way: its own `nextCommands`, and `requiredSettings` for a database whose connection still has to be filled in.
 
 Success exits with 0, invalid input with 2, and operational failures with 1. An install failure reports `stage: "install"`, preserves generated files, and directs the agent to retry `pnpm install` in the existing directory. `configured` is always `false`: creation writes no configuration, and nothing here verifies a database connection. The CLI never starts the application itself.
 

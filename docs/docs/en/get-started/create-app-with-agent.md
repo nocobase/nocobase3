@@ -52,9 +52,20 @@ After the user chooses, configure the application from its own directory. SQLite
 pnpm config:init --dialect sqlite --json
 ```
 
-Any other database needs its driver first, for example `pnpm add @nocobase/db-postgres`, and then the same command with that dialect. `pnpm config:init` installs nothing and writes nothing when the driver is missing: it reports the `pnpm add` that supplies it, so install and run it again. A dialect name in configuration does not supply a driver. Preserve existing business data; do not delete a database or configuration file to make configuration run again — use `--force` only when the user asks for the configuration to be replaced.
+Any other database needs its driver first, for example `pnpm add @nocobase/db-postgres`, and then the same command with that dialect. `pnpm config:init` installs nothing and writes nothing when the driver is missing: it returns a `suggestedCommand` with the `pnpm add` that supplies it, so run that and run `config:init` again. A dialect name in configuration does not supply a driver. Its result lists `requiredSettings` — the connection settings still at a placeholder — which you then set:
 
-Let the user enter database passwords in local configuration. Do not require passwords in the conversation or print complete configuration files. Generated applications have no installation web page; `pnpm config:init` is the only configuration step, and `pnpm dev` refuses to start until it has run.
+```bash
+pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm --json
+pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD --json
+```
+
+Have the user put the password in an environment variable and pass its name with `--from-env`. Do not ask for passwords in the conversation, pass them on the command line, or print complete configuration files. Then verify the configuration, which also connects to the database:
+
+```bash
+pnpm config:check --json
+```
+
+A failed check lists each problem with a `fix` to run. Preserve existing business data; do not delete a database or configuration file to make configuration run again — `config:init` on a configured application reports it unchanged, and `--force` replaces it only when the user asks. Generated applications have no installation web page, and `pnpm dev` refuses to start until the application is configured.
 
 ## 5. Start the application and provide sign-in instructions
 

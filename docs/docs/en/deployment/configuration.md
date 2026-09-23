@@ -318,13 +318,14 @@ When a business feature generates external callbacks or links, still check the p
 
 ## Confirm the configuration took effect
 
-| Check                          | How                                                                                                                         |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Configuration source           | Standalone: check `APP_CONFIG_FILE` and the mounts. Hub-hosted: check the App's current configuration and deployment record |
-| Environment variable overrides | Standalone: when a change to the file has no effect, look for the matching environment variable                             |
-| Database connection            | Read the startup log and fetch a known business record from the target database                                             |
-| Public address                 | Sign in through the real domain, refresh a nested page, and check asset and callback URLs                                   |
-| Realtime connection            | Confirm the WebSocket features the application uses work                                                                    |
-| Data persistence               | Create a test record and a file and confirm they survive a restart; with Docker, also recreate the container                |
+| Check                          | How                                                                                                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Whole configuration            | Standalone: run `pnpm config:check` inside `dist/` on the target machine; it loads the configuration as the service will and connects to every database but SQLite |
+| Configuration source           | Standalone: check `APP_CONFIG_FILE` and the mounts. Hub-hosted: check the App's current configuration and deployment record                                        |
+| Environment variable overrides | Standalone: when a change to the file has no effect, look for the matching environment variable                                                                    |
+| Database connection            | Read the startup log and fetch a known business record from the target database                                                                                    |
+| Public address                 | Sign in through the real domain, refresh a nested page, and check asset and callback URLs                                                                          |
+| Realtime connection            | Confirm the WebSocket features the application uses work                                                                                                           |
+| Data persistence               | Create a test record and a file and confirm they survive a restart; with Docker, also recreate the container                                                       |
 
 Never print the whole configuration when reading logs. When something is wrong, see [Troubleshooting](./operations#troubleshooting).

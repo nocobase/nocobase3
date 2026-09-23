@@ -40,6 +40,44 @@ export const OFFICIAL_DIALECTS: readonly OfficialDialect[] = Object.freeze(
   Object.keys(officialDriverLoaders) as OfficialDialect[],
 );
 
+/** A connection whose official driver package is not installed. */
+export interface MissingDatabaseDriver {
+  readonly connection: string;
+  readonly dialect: OfficialDialect;
+  readonly packageName: string;
+}
+
+/**
+ * Every configured connection whose driver is missing, reported at once.
+ *
+ * Stopping at the first one turned a configuration with two missing drivers — the Examples template on PostgreSQL
+ * still needs SQLite for its analytics connection — into two failed starts, each naming half the problem. The
+ * connections are listed so tooling can point at each one, and the message carries the single command that installs
+ * all of them.
+ *
+ * The remedy names the application rather than "here" on purpose: in a deployment this runs from a built `dist`, where
+ * installing a driver is undone by the next build. The driver has to reach the application's dependencies, and a
+ * deployment has to be built again afterwards.
+ */
+export class MissingDatabaseDriversError extends Error {
+  public readonly missing: readonly MissingDatabaseDriver[];
+
+  public constructor(missing: readonly MissingDatabaseDriver[]) {
+    const packages = [...new Set(missing.map((entry) => entry.packageName))];
+    const subject =
+      missing.length === 1
+        ? `Database connection "${missing[0].connection}" requires "${missing[0].packageName}".`
+        : `Database connections ${missing
+            .map((entry) => `"${entry.connection}" (${entry.packageName})`)
+            .join(', ')} require drivers that are not installed.`;
+    super(
+      `${subject} Add ${packages.length === 1 ? 'it' : 'them'} to the application's dependencies with "pnpm add ${packages.join(' ')}"; a deployment needs to be built again afterwards.`,
+    );
+    this.name = 'MissingDatabaseDriversError';
+    this.missing = missing;
+  }
+}
+
 /** Configuration properties needed for driver loading; other properties are preserved. */
 export type DatabaseConfigInput = Pick<
   AppDatabaseConfig,
@@ -69,6 +107,7 @@ export async function resolveDatabaseConfig<
       .map((connection) => connection.dialect),
   );
   const loaded = new Map<string, DatabaseDriverRegistration>();
+  const missing: MissingDatabaseDriver[] = [];
   for (const [name, connection] of Object.entries(connections)) {
     if (
       resolveDatabaseDriver(
@@ -104,13 +143,13 @@ export async function resolveDatabaseConfig<
             `Cannot find package '${packageName}' imported from `,
           )
         ) {
-          // The remedy names the application rather than "here" on purpose: in a deployment this runs from a built
-          // `dist`, where installing a driver is undone by the next build. The driver has to reach the application's
-          // dependencies, and a deployment has to be built again afterwards.
-          throw new Error(
-            `Database connection "${name}" requires "${packageName}". Add it to the application's dependencies with "pnpm add ${packageName}"; a deployment needs to be built again afterwards.`,
-            { cause },
-          );
+          // Collected rather than thrown, so every connection missing its driver is reported in one run.
+          missing.push({
+            connection: name,
+            dialect: dialect as OfficialDialect,
+            packageName,
+          });
+          continue;
         }
         throw new Error(
           `Failed to load database driver "${packageName}" for connection "${name}".`,
@@ -145,5 +184,6 @@ export async function resolveDatabaseConfig<
       drivers[dialect] = driver;
     }
   }
+  if (missing.length > 0) throw new MissingDatabaseDriversError(missing);
   return { ...config, drivers, connections };
 }

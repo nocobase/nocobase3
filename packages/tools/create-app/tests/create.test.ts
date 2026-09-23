@@ -74,7 +74,7 @@ describe('JSON creation flow', () => {
       projectCreated: true,
       dependenciesInstalled: true,
       configured: false,
-      nextCommands: ['pnpm config:init', 'pnpm dev'],
+      nextCommands: ['pnpm config:init', 'pnpm config:check', 'pnpm dev'],
     });
     expect(installDependencies).toHaveBeenCalledOnce();
     // Creation writes no configuration at all, so there is no secret for it to leak and nothing for `config:init` to
@@ -115,6 +115,7 @@ describe('JSON creation flow', () => {
       nextCommands: [
         'pnpm install',
         'pnpm config:init',
+        'pnpm config:check',
         'pnpm build',
         'pnpm start',
       ],

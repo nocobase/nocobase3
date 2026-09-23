@@ -2,13 +2,21 @@ import { existsSync, readFileSync } from 'node:fs';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { createAppPaths } from '@nocobase/app-server/config';
 import {
   OFFICIAL_DIALECTS,
+  resolveDatabaseConfig,
+  type AppDatabaseConfig,
   type OfficialDialect,
 } from '@nocobase/app-server/database';
+import { parseDocument } from 'yaml';
 
 import { buildConfigFile } from './config-file.js';
 import { configureDatabase } from './database-config.js';
+import {
+  checkConnections,
+  type ConnectionCheckResult,
+} from './database-connections.js';
 
 /**
  * Where the command is running, which decides both what it may offer and what it can tell the user to do about a
@@ -29,6 +37,7 @@ export type ConfigInitErrorReason =
   | 'already-configured'
   | 'dialect-required'
   | 'directory-missing'
+  | 'cancelled'
   | 'application-not-found';
 
 export class ConfigInitError extends Error {
@@ -68,16 +77,58 @@ export interface ConfigInitOptions {
   readonly selectDialect?: (
     available: readonly OfficialDialect[],
   ) => Promise<OfficialDialect>;
+  /**
+   * The dialect an existing configuration uses, as the application resolves it. Asked only when the application is
+   * already configured and `--dialect` was given, to tell a repeated run from one that asks for something else.
+   */
+  readonly readConfiguredDialect?: () => Promise<string | undefined>;
+  /**
+   * Asks for the main connection's settings, starting from the generated ones. Supplied by the command when a
+   * terminal is attached; without it the generated placeholders are written and listed in `requiredSettings`.
+   */
+  readonly askConnection?: (
+    dialect: OfficialDialect,
+    defaults: Readonly<Record<string, unknown>>,
+  ) => Promise<Readonly<Record<string, unknown>>>;
+  /**
+   * Receives the result of connecting with the settings about to be written, and decides whether to write them.
+   * Without it no connection is attempted.
+   */
+  readonly onConnectionTested?: (
+    result: ConnectionCheckResult,
+  ) => Promise<boolean>;
 }
 
 export interface ConfigInitResult {
+  /** `unchanged` when the application was already configured and nothing asked for a different configuration. */
+  readonly status: 'configured' | 'unchanged';
   readonly mode: ConfigInitMode;
-  readonly dialect: OfficialDialect;
+  /** The dialect written, or the one an unchanged configuration uses when it could be read. */
+  readonly dialect?: OfficialDialect;
   readonly configFile: string;
   readonly configKey: string;
   /** Environment variables that already carry a value this file also sets, and therefore override it. */
   readonly overriddenByEnvironment: readonly string[];
+  /**
+   * Settings still at a generated placeholder that have to be set before the application can reach its database —
+   * with `pnpm config:set`, or `pnpm config:set --from-env` for the password.
+   */
+  readonly requiredSettings: readonly string[];
+  /** The commands to run next, in order. */
+  readonly nextCommands: readonly string[];
+  /** The connection attempted before writing, when one was. */
+  readonly connectionTest?: ConnectionCheckResult;
 }
+
+/** Connection settings a generated configuration fills with placeholders, in the order they are asked for. */
+const CONNECTION_FIELDS = [
+  'host',
+  'port',
+  'database',
+  'serviceName',
+  'username',
+  'password',
+] as const;
 
 /** The extensions the runtime accepts, in the order it probes them. */
 const CONFIG_EXTENSIONS = ['.yml', '.yaml', '.toml', '.json'] as const;
@@ -179,12 +230,17 @@ export async function runConfigInit(
   // First, before drivers are looked at or anything is asked. An application that is already configured is the one
   // answer that makes every other question moot: prompting for a dialect, or reporting a driver as missing, and only
   // then saying the file already exists would make someone decide something that was never going to be used.
-  await assertNotConfigured({
-    configFile,
-    deploymentRootDir,
-    explicit: options.configPath !== undefined,
-    force: options.force === true,
-  });
+  const existing =
+    options.force === true
+      ? undefined
+      : findExistingConfiguration({
+          configFile,
+          deploymentRootDir,
+          explicit: options.configPath !== undefined,
+        });
+  if (existing !== undefined) {
+    return alreadyConfigured(existing, mode, options);
+  }
 
   const available = await findAvailableDialects(rootDir, mode);
   const dialect = await resolveDialect(
@@ -211,27 +267,191 @@ export async function runConfigInit(
   );
 
   const example = await readConfigExample(deploymentRootDir);
-  const contents = buildConfigFile({
-    example: configureDatabase(
-      example ?? '',
-      dialect,
-      path.basename(deploymentRootDir),
-    ),
-  });
+  let configured = configureDatabase(
+    example ?? '',
+    dialect,
+    path.basename(deploymentRootDir),
+  );
 
-  await writeFile(configFile, contents, {
+  // SQLite is a file beside the application: there is nothing to ask and nothing to reach.
+  const generated = mainConnection(configured);
+  const answers =
+    dialect !== 'sqlite' && options.askConnection
+      ? await options.askConnection(dialect, pickConnectionFields(generated))
+      : {};
+  if (Object.keys(answers).length > 0) {
+    configured = applyConnection(configured, answers);
+  }
+
+  let connectionTest: ConnectionCheckResult | undefined;
+  if (dialect !== 'sqlite' && options.onConnectionTested) {
+    connectionTest = await testConnection(
+      { ...generated, ...answers },
+      rootDir,
+      deploymentRootDir,
+    );
+    if (!(await options.onConnectionTested(connectionTest))) {
+      throw new ConfigInitError(
+        'cancelled',
+        'Nothing was written. Run pnpm config:init again with the right settings.',
+        { details: { connectionTest } },
+      );
+    }
+  }
+
+  await writeFile(configFile, buildConfigFile({ example: configured }), {
     encoding: 'utf8',
     flag: options.force === true ? 'w' : 'wx',
     mode: 0o600,
   });
 
   return {
+    status: 'configured',
     mode,
     dialect,
     configFile,
     configKey: 'database.connections.main',
     overriddenByEnvironment,
+    requiredSettings:
+      dialect === 'sqlite'
+        ? []
+        : Object.keys(pickConnectionFields(generated))
+            .filter((field) => !(field in answers))
+            .map((field) => `database.connections.main.${field}`),
+    nextCommands: nextCommands(mode),
+    ...(connectionTest ? { connectionTest } : {}),
   };
+}
+
+/** What follows configuration: check it, then start. A deployment starts from its own `dist` script. */
+function nextCommands(mode: ConfigInitMode): readonly string[] {
+  return ['pnpm config:check', mode === 'source' ? 'pnpm dev' : 'pnpm start'];
+}
+
+/**
+ * An already configured application is not an error to run this against.
+ *
+ * Re-running a setup sequence after a failure part-way through is exactly what an agent — and often a person — does,
+ * and refusing the step that already succeeded stops the sequence for nothing. It is only refused when `--dialect` asks
+ * for something other than what the configuration already uses, because treating that as success would report a
+ * change that never happened.
+ */
+async function alreadyConfigured(
+  existing: string,
+  mode: ConfigInitMode,
+  options: ConfigInitOptions,
+): Promise<ConfigInitResult> {
+  const requested = options.dialect;
+  let current: string | undefined;
+  if (requested !== undefined || options.readConfiguredDialect) {
+    current = await options.readConfiguredDialect?.().catch(() => undefined);
+  }
+
+  if (requested !== undefined && requested !== current) {
+    if (!isOfficialDialect(requested)) {
+      throw new ConfigInitError(
+        'unknown-dialect',
+        `Unknown dialect "${requested}". Choose one of: ${OFFICIAL_DIALECTS.join(', ')}.`,
+      );
+    }
+    throw new ConfigInitError(
+      'already-configured',
+      current === undefined
+        ? `This application is already configured: ${existing}, and which database it uses could not be read. Edit that file, or run with --force to replace it.`
+        : `This application is already configured for ${current}: ${existing}. Run with --force to replace it with a configuration for ${requested}, or edit that file.`,
+      {
+        details: {
+          configFile: existing,
+          requestedDialect: requested,
+          ...(current ? { configuredDialect: current } : {}),
+        },
+      },
+    );
+  }
+
+  return {
+    status: 'unchanged',
+    mode,
+    ...(current !== undefined && isOfficialDialect(current)
+      ? { dialect: current }
+      : {}),
+    configFile: existing,
+    configKey: 'database.connections.main',
+    overriddenByEnvironment: [],
+    requiredSettings: [],
+    nextCommands: nextCommands(mode),
+  };
+}
+
+function mainConnection(yaml: string): Record<string, unknown> {
+  const value: unknown = parseDocument(yaml).getIn(
+    ['database', 'connections', 'main'],
+    false,
+  );
+  const plain =
+    typeof value === 'object' && value !== null && 'toJSON' in value
+      ? (value as { toJSON(): unknown }).toJSON()
+      : value;
+  return isRecord(plain) ? plain : {};
+}
+
+function pickConnectionFields(
+  connection: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    CONNECTION_FIELDS.filter((field) => field in connection).map((field) => [
+      field,
+      connection[field],
+    ]),
+  );
+}
+
+function applyConnection(
+  yaml: string,
+  answers: Readonly<Record<string, unknown>>,
+): string {
+  const document = parseDocument(yaml);
+  for (const [field, value] of Object.entries(answers)) {
+    document.setIn(['database', 'connections', 'main', field], value);
+  }
+  return document.toString();
+}
+
+/**
+ * Connects with the settings about to be written, before writing them. The driver is loaded the way the runtime loads
+ * it, so a connection that works here is one the application can open.
+ */
+async function testConnection(
+  connection: Readonly<Record<string, unknown>>,
+  rootDir: string,
+  deploymentRootDir: string,
+): Promise<ConnectionCheckResult> {
+  const dialect = String(connection.dialect);
+  try {
+    const database = await resolveDatabaseConfig({
+      default: 'main',
+      connections: { main: connection },
+    } as unknown as AppDatabaseConfig);
+    const [result] = await checkConnections(
+      database,
+      createAppPaths({ rootDir, deploymentRootDir }),
+    );
+    return (
+      result ?? {
+        name: 'main',
+        dialect,
+        status: 'failed',
+        reason: 'No connection was configured.',
+      }
+    );
+  } catch (error) {
+    return {
+      name: 'main',
+      dialect,
+      status: 'failed',
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 /**
@@ -339,7 +559,7 @@ function noDriversError(where: DriverLocation): ConfigInitError {
  * request, and the answer describes this application rather than the latest release. Without a readable range, or in a
  * workspace where it is still a `workspace:` protocol, the command falls back to the bare name.
  */
-function installCommand(rootDir: string, packageName: string): string {
+export function installCommand(rootDir: string, packageName: string): string {
   const range = readPeerRange(rootDir, packageName);
   if (range === undefined) return `pnpm add ${packageName}`;
   const specifier = `${packageName}@${range}`;
@@ -389,36 +609,22 @@ function resolveConfigFile(
 }
 
 /**
- * Refuses to touch an application that already has configuration.
+ * The configuration file an application already has, if any.
  *
  * All four extensions are checked, not just the one being written, because the runtime probes all four and takes the
  * first: writing `config.yml` beside an existing `config.toml` produces a file that is silently ignored.
  */
-async function assertNotConfigured(options: {
+function findExistingConfiguration(options: {
   readonly configFile: string;
   readonly deploymentRootDir: string;
   readonly explicit: boolean;
-  readonly force: boolean;
-}): Promise<void> {
-  if (options.force) {
-    return;
-  }
-
+}): string | undefined {
   const candidates = options.explicit
     ? [options.configFile]
     : CONFIG_EXTENSIONS.map((extension) =>
         path.join(options.deploymentRootDir, `config${extension}`),
       );
-
-  const existing = candidates.find((candidate) => existsSync(candidate));
-
-  if (existing !== undefined) {
-    throw new ConfigInitError(
-      'already-configured',
-      `This application is already configured: ${existing}. Edit that file to change it, or run with --force to replace it.`,
-      { details: { configFile: existing } },
-    );
-  }
+  return candidates.find((candidate) => existsSync(candidate));
 }
 
 /** The example is optional: an application without one still gets the secrets it cannot start without. */

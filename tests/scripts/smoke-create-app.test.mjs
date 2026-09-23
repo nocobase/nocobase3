@@ -12,11 +12,13 @@ const fullRun = [
   // Configuration comes first: creation leaves the application unconfigured, and nothing after this can run without
   // it.
   'config:init',
+  'config:check',
   'skills:sync',
   'test',
   'dev',
   'build',
   'start',
+  'deploy:config:check',
   'server:deps:retarget',
 ];
 const otherTarget =
@@ -42,6 +44,12 @@ if (command === 'config') {
   // create-app leaves the application unconfigured and keeps the template's example for config:init to build from.
   fs.writeFileSync(path.join(process.argv[4], 'config.example.yml'), 'auth:\\n  secret: replace-me\\n');
   if (process.argv.includes('--json')) console.log(JSON.stringify({ status: 'success', dependenciesInstalled: true }));
+} else if (command === 'config:check' && process.cwd() === path.join(state, 'deploy', 'dist')) {
+  // The deployed archive checks its configuration with its own CLI before it is started.
+  fs.appendFileSync(path.join(state, 'commands'), 'deploy:config:check\\n');
+  if (process.env.APP_CONFIG_FILE !== path.join(state, 'deploy', 'config.yml')) throw new Error('The deployed check must read the deployed config.yml');
+  if (scenario === 'deploy-config-check-fails') { console.log(JSON.stringify({ ok: false })); process.exit(1); }
+  console.log(JSON.stringify({ ok: true, status: 'passed', findings: [] }));
 } else {
   if (process.cwd() !== path.join(state, 'crm')) throw new Error('Not in generated application');
   fs.appendFileSync(path.join(state, 'commands'), command + '\\n');
@@ -55,6 +63,9 @@ if (command === 'config') {
       fs.writeFileSync('config.yml', 'auth:\\n  secret: generated\\n');
       console.log(JSON.stringify({ ok: true, status: 'configured', dialect: 'sqlite', configFile: path.join(process.cwd(), 'config.yml') }));
     }
+  } else if (command === 'config:check') {
+    if (scenario === 'config-check-fails') { console.log(JSON.stringify({ ok: false, findings: [{ level: 'error', code: 'connection-failed' }] })); process.exit(1); }
+    console.log(JSON.stringify({ ok: true, status: 'passed', findings: [] }));
   } else if (command === 'skills:sync') {
     if (scenario === 'skills-fails') process.exit(8);
   } else if (command === 'test') {
@@ -310,18 +321,23 @@ for (const [scenario, commands, error] of [
     'contains runtime configuration or data',
   ],
   [
+    'deploy-config-check-fails',
+    ['dev', 'build', 'start', 'deploy:config:check'],
+    'pnpm config:check failed in the deployed archive',
+  ],
+  [
     'standalone-exits',
-    ['dev', 'build', 'start'],
+    ['dev', 'build', 'start', 'deploy:config:check'],
     'the deployed archive exited before the application became ready',
   ],
   [
     'retarget-fails',
-    ['dev', 'build', 'start', 'server:deps:retarget'],
+    ['dev', 'build', 'start', 'deploy:config:check', 'server:deps:retarget'],
     'Retargeting native modules for',
   ],
   [
     'retarget-leaves-binaries',
-    ['dev', 'build', 'start', 'server:deps:retarget'],
+    ['dev', 'build', 'start', 'deploy:config:check', 'server:deps:retarget'],
     'Binaries for other platforms remain',
   ],
 ]) {
@@ -330,6 +346,7 @@ for (const [scenario, commands, error] of [
     assert.equal(result.code, 1, result.output);
     assert.deepEqual(result.commands, [
       'config:init',
+      'config:check',
       'skills:sync',
       'test',
       ...commands,
@@ -338,16 +355,32 @@ for (const [scenario, commands, error] of [
   });
 }
 
+test('stops before anything runs when the configuration check fails', async (t) => {
+  const result = await runSmoke(t, 'config-check-fails');
+  assert.equal(result.code, 1, result.output);
+  assert.deepEqual(result.commands, ['config:init', 'config:check']);
+  assert.match(result.output, /pnpm config:check reported a problem/u);
+});
+
 test('stops before dev when NocoBase package Skills cannot be synchronized', async (t) => {
   const result = await runSmoke(t, 'skills-fails');
   assert.equal(result.code, 8, result.output);
-  assert.deepEqual(result.commands, ['config:init', 'skills:sync']);
+  assert.deepEqual(result.commands, [
+    'config:init',
+    'config:check',
+    'skills:sync',
+  ]);
 });
 
 test('stops before dev, build, and start when the generated application tests fail', async (t) => {
   const result = await runSmoke(t, 'test-fails');
   assert.equal(result.code, 1, result.output);
-  assert.deepEqual(result.commands, ['config:init', 'skills:sync', 'test']);
+  assert.deepEqual(result.commands, [
+    'config:init',
+    'config:check',
+    'skills:sync',
+    'test',
+  ]);
   assert.match(result.output, /pnpm test failed/u);
 });
 

@@ -141,6 +141,8 @@ describe('server package generation', () => {
         seed: 'node ./cli/index.js app seed',
         nocobase: 'node ./cli/index.js',
         'config:init': 'node ./cli/index.js app config init',
+        'config:check': 'node ./cli/index.js app config check',
+        'config:set': 'node ./cli/index.js app config set',
       },
       engines: { node: '>=24.0.0' },
     });
@@ -214,6 +216,7 @@ describe('server package generation', () => {
     );
     expect(workspace).toContain('nodeLinker: hoisted');
     expect(workspace).toContain('autoInstallPeers: false');
+    expect(workspace).toContain('verifyDepsBeforeRun: false');
     expect(workspace).toMatch(
       /allowBuilds:\n(?:.*\n)*? {2}better-sqlite3: true/,
     );

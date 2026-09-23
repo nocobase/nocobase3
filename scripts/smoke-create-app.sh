@@ -151,6 +151,16 @@ if [ -n "$CONFIG" ]; then
   node "$SCRIPT_DIR/local-registry-config.mjs" "$APP_DIR/config.yml" "$CONFIG" "$DIALECT"
 fi
 echo "::endgroup::"
+
+echo "::group::Check the configuration with pnpm config:check"
+# Loads the configuration through the application and, for anything but SQLite, connects to the database — so a
+# broken configuration fails here with a named cause rather than as a startup that never becomes ready.
+if ! pnpm config:check --json > "$WORKDIR/config-check.json"; then
+  cat "$WORKDIR/config-check.json"
+  echo "::error::pnpm config:check reported a problem with the generated configuration"
+  exit 1
+fi
+echo "::endgroup::"
 echo "::group::Synchronize NocoBase package Skills"
 # create-app reports a synchronization failure as a warning. Exercise the command
 # explicitly so an invalid published Skill cannot pass this smoke test.
@@ -401,6 +411,13 @@ tar -xzf "$ARCHIVE" -C "$DEPLOY_DIR"
 # own storage rather than opening the database `pnpm start` used.
 cp "$APP_DIR/config.yml" "$DEPLOY_DIR/config.yml"
 mkdir -p "$DEPLOY_DIR/storage"
+# The deployment guide checks the configuration from inside dist before starting, with the build's own CLI. This is the
+# only place dist/cli is run at all, so a CLI that builds but does not run in a deployment fails here.
+if ! (cd "$DEPLOY_DIR/dist" && APP_CONFIG_FILE="$DEPLOY_DIR/config.yml" pnpm config:check --json > "$WORKDIR/deploy-config-check.json"); then
+  cat "$WORKDIR/deploy-config-check.json"
+  echo "::error::pnpm config:check failed in the deployed archive"
+  exit 1
+fi
 
 DEPLOY_PORT=$(free_port)
 DEPLOY_URL="http://127.0.0.1:$DEPLOY_PORT$APP_PATH"

@@ -59,7 +59,20 @@ pnpm add @nocobase/db-postgres
 pnpm config:init --dialect postgres
 ```
 
-`pnpm config:init` installs nothing: a dialect whose driver is missing is reported with the command that installs it, and nothing is written, so you can simply run it again afterwards. For anything other than SQLite, fill in the connection address, database name and account details in `config.yml` and prepare the target database before starting.
+`pnpm config:init` installs nothing: a dialect whose driver is missing is reported with the command that installs it, and nothing is written, so you can simply run it again afterwards. For anything other than SQLite it asks for the connection settings when run in a terminal, and tries the connection before writing. You can also set them afterwards — the password read from an environment variable, so it stays out of your shell history:
+
+```bash
+pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm
+pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD
+```
+
+## Check the configuration
+
+```bash
+pnpm config:check
+```
+
+This loads the configuration the way the application will, connects to the database unless it is SQLite, and reports anything that would stop the application from starting — a missing driver, a missing secret, a database it cannot reach — with the command that fixes it.
 
 ## Start the application
 

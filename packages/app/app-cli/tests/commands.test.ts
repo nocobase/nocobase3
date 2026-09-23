@@ -17,6 +17,8 @@ describe('application command factories', () => {
     expect(Object.keys(first)).toEqual([
       'info',
       'config:init',
+      'config:check',
+      'config:set',
       'db:apply',
       'db:reset',
       'db:repair',
