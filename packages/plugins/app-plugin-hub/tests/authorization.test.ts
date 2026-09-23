@@ -104,7 +104,7 @@ describe('Hub user role scope', () => {
     });
     await authorization.permissionSets.assign({
       subject: { type: 'user', id: 'user-1' },
-      permissionSet: 'hub-viewer',
+      permissionSet: 'hub-operator',
     });
     await authorization.permissionSets.assign({
       subject: { type: 'user', id: 'user-1' },
@@ -113,7 +113,7 @@ describe('Hub user role scope', () => {
     const scope = createHubUserRoleScope(authorization.permissionSets);
 
     await database.transaction((connection) =>
-      scope.replace('user-1', 'hub-operator', connection),
+      scope.replace('user-1', 'hub-administrator', connection),
     );
 
     const assignments = await authorization.permissionSets.listAssignments();
@@ -122,7 +122,7 @@ describe('Hub user role scope', () => {
         .filter(({ subject }) => subject.id === 'user-1')
         .map(({ permissionSet }) => permissionSet)
         .sort(),
-    ).toEqual(['hub-operator', 'other-role']);
+    ).toEqual(['hub-administrator', 'other-role']);
     await expect(
       database.transaction((connection) =>
         scope.replace('user-1', 'unknown-role', connection),
@@ -130,7 +130,11 @@ describe('Hub user role scope', () => {
     ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
     await expect(
       database.transaction((connection) =>
-        scope.replace('user-1', ['hub-viewer', 'hub-operator'], connection),
+        scope.replace(
+          'user-1',
+          ['hub-administrator', 'hub-operator'],
+          connection,
+        ),
       ),
     ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
   });
@@ -149,12 +153,6 @@ describe('Hub user role scope', () => {
         labelI18nKey: 'roles.names.hub-operator',
         labelI18nNs: '@nocobase/app-plugin-hub',
       }),
-      expect.objectContaining({
-        value: 'hub-viewer',
-        assignable: false,
-        labelI18nKey: 'roles.names.hub-viewer',
-        labelI18nNs: '@nocobase/app-plugin-hub',
-      }),
     ]);
     expect(scope).toMatchObject({
       labelI18nKey: 'roles.scope',
@@ -162,47 +160,17 @@ describe('Hub user role scope', () => {
     });
   });
 
-  it('preserves existing Viewers without allowing new assignments or automatic promotion', async () => {
-    await createUser(database, 'legacy');
-    await createUser(database, 'new-user');
-    await authorization.permissionSets.assign({
-      subject: { type: 'user', id: 'legacy' },
-      permissionSet: 'hub-viewer',
-    });
+  it('rejects the removed Viewer role like any other unknown role', async () => {
+    await createUser(database, 'user-1');
     const scope = createHubUserRoleScope(authorization.permissionSets);
-    expect(
-      (await scope.options())
-        .filter((option) => option.assignable !== false)
-        .map((option) => option.value),
-    ).toEqual(['hub-administrator', 'hub-operator']);
-    const before = await authorization.permissionSets.listAssignments();
-    await expect(
-      database.transaction((connection) =>
-        scope.replace('new-user', 'hub-viewer', connection),
-      ),
-    ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
-    await database.transaction((connection) =>
-      scope.replace('legacy', 'hub-viewer', connection),
-    );
-    expect(await authorization.permissionSets.listAssignments()).toEqual(
-      before,
-    );
-    expect(await scope.get('legacy', database.connection())).toBe('hub-viewer');
-    expect(await scope.getMany?.(['legacy'], database.connection())).toEqual({
-      legacy: 'hub-viewer',
-    });
-    expect(
-      await scope.findUserIds?.('hub-viewer', database.connection()),
-    ).toEqual(['legacy']);
-    await database.transaction((connection) =>
-      scope.replace('legacy', 'hub-operator', connection),
-    );
-    expect(await scope.get('legacy', database.connection())).toBe(
+
+    expect((await scope.options()).map((option) => option.value)).toEqual([
+      'hub-administrator',
       'hub-operator',
-    );
+    ]);
     await expect(
       database.transaction((connection) =>
-        scope.replace('legacy', 'hub-viewer', connection),
+        scope.replace('user-1', 'hub-viewer', connection),
       ),
     ).rejects.toMatchObject({ code: 'INVALID_ROLE_SCOPE_VALUE' });
   });

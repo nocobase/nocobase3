@@ -80,7 +80,12 @@ beforeEach(async () => {
   authz = createAppAuthorization({ connection: db.connection() });
   registerHubResources(authz, db.connection());
   const now = new Date();
-  for (const id of ['admin', 'operator', 'viewer']) {
+  for (const [id, permissionSet] of [
+    ['admin', 'hub-administrator'],
+    ['operator', 'hub-operator'],
+    // Holds no Hub role; tests grant it bespoke Permission Sets as needed.
+    ['unprivileged', null],
+  ] as const) {
     await db
       .connection()
       .query.insertInto('user')
@@ -95,10 +100,11 @@ beforeEach(async () => {
         disabledAt: null,
       })
       .execute();
-    await authz.permissionSets.assign({
-      subject: { type: 'user', id },
-      permissionSet: id === 'admin' ? 'hub-administrator' : `hub-${id}`,
-    });
+    if (permissionSet)
+      await authz.permissionSets.assign({
+        subject: { type: 'user', id },
+        permissionSet,
+      });
   }
   for (const id of ['crm', 'erp'])
     await db
@@ -304,10 +310,12 @@ describe('Hub publishing key lifecycle and permissions', () => {
     await expect(
       service.verify(`${secret}x`, 'crm', 'upload-release'),
     ).rejects.toMatchObject({ status: 401 });
-    await expect(service.disable(key.id, 'viewer')).rejects.toMatchObject({
-      name: 'AuthorizationDeniedError',
-    });
-    await expect(service.remove(key.id, 'viewer')).rejects.toThrow();
+    await expect(service.disable(key.id, 'unprivileged')).rejects.toMatchObject(
+      {
+        name: 'AuthorizationDeniedError',
+      },
+    );
+    await expect(service.remove(key.id, 'unprivileged')).rejects.toThrow();
     await expect(
       service.verify(secret, 'crm', 'upload-release'),
     ).resolves.toMatchObject({ id: key.id });
@@ -359,7 +367,7 @@ describe('Hub publishing key lifecycle and permissions', () => {
     ).rejects.toMatchObject({ status: 401 });
   });
   it('requires key management and cannot grant missing owner permissions', async () => {
-    for (const user of ['operator', 'viewer']) {
+    for (const user of ['operator', 'unprivileged']) {
       await expect(
         service.create(user, {
           name: 'CI',
@@ -367,7 +375,8 @@ describe('Hub publishing key lifecycle and permissions', () => {
           scopes: ['deploy'],
         }),
       ).rejects.toThrow();
-      if (user === 'viewer') await expect(service.list(user)).rejects.toThrow();
+      if (user === 'unprivileged')
+        await expect(service.list(user)).rejects.toThrow();
       else expect(await service.list(user)).toEqual([]);
     }
     await authz.permissionSets.create({
@@ -380,17 +389,17 @@ describe('Hub publishing key lifecycle and permissions', () => {
       ],
     });
     await authz.permissionSets.assign({
-      subject: { type: 'user', id: 'viewer' },
+      subject: { type: 'user', id: 'unprivileged' },
       permissionSet: 'key-manager',
     });
     await expect(
-      service.create('viewer', {
+      service.create('unprivileged', {
         name: 'CI',
         appIds: ['crm'],
         scopes: ['deploy'],
       }),
     ).rejects.toThrow();
-    expect(await service.appOptions('viewer')).toEqual([]);
+    expect(await service.appOptions('unprivileged')).toEqual([]);
   });
   it('rechecks the owner and removes keys when an App is deleted', async () => {
     const { secret } = await create();
@@ -411,8 +420,8 @@ describe('Hub publishing key lifecycle and permissions', () => {
       .execute();
     await authz.permissionSets.replaceSubjectAssignments({
       subject: { type: 'user', id: 'admin' },
-      managedPermissionSets: ['hub-administrator', 'hub-viewer'],
-      permissionSets: ['hub-viewer'],
+      managedPermissionSets: ['hub-administrator'],
+      permissionSets: [],
     });
     await expect(
       service.verify(secret, 'crm', 'upload-release'),
@@ -551,8 +560,8 @@ describe('Hub publishing key lifecycle and permissions', () => {
     ).resolves.toHaveProperty('id');
     await authz.permissionSets.replaceSubjectAssignments({
       subject: { type: 'user', id: 'admin' },
-      managedPermissionSets: ['hub-administrator', 'hub-viewer'],
-      permissionSets: ['hub-viewer'],
+      managedPermissionSets: ['hub-administrator'],
+      permissionSets: [],
     });
     await expect(
       service.verify(global.secret, 'future', 'deploy'),
@@ -713,20 +722,20 @@ describe('Hub publishing key lifecycle and permissions', () => {
       ],
     });
     await authz.permissionSets.assign({
-      subject: { type: 'user', id: 'viewer' },
+      subject: { type: 'user', id: 'unprivileged' },
       permissionSet: 'limited-manager',
     });
     await db
       .query()
       .updateTable('hubApps')
-      .set({ createdBy: 'viewer' })
+      .set({ createdBy: 'unprivileged' })
       .where('id', '=', 'crm')
       .execute();
-    expect(await service.appOptions('viewer')).toEqual([
+    expect(await service.appOptions('unprivileged')).toEqual([
       { id: 'crm', name: 'crm', permissions: ['upload-release'] },
     ]);
     await expect(
-      service.create('viewer', {
+      service.create('unprivileged', {
         name: 'Escalation',
         appIds: ['crm', 'erp'],
         scopes: ['upload-release'],
@@ -734,14 +743,14 @@ describe('Hub publishing key lifecycle and permissions', () => {
     ).rejects.toThrow();
     expect(await service.list('admin')).toEqual([]);
     await expect(
-      service.create('viewer', {
+      service.create('unprivileged', {
         name: 'All apps escalation',
         allApps: true,
         appIds: [],
         scopes: ['upload-release'],
       }),
     ).rejects.toThrow();
-    const created = await service.create('viewer', {
+    const created = await service.create('unprivileged', {
       name: 'Allowed',
       appIds: ['crm'],
       scopes: ['upload-release'],
@@ -763,11 +772,11 @@ describe('Operator publishing key ownership', () => {
     await db
       .connection()
       .query.updateTable('hubApps')
-      .set({ createdBy: 'viewer' })
+      .set({ createdBy: 'unprivileged' })
       .where('id', '=', 'erp')
       .execute();
     await authz.permissionSets.assign({
-      subject: { type: 'user', id: 'viewer' },
+      subject: { type: 'user', id: 'unprivileged' },
       permissionSet: 'hub-operator',
     });
   });
@@ -778,7 +787,7 @@ describe('Operator publishing key ownership', () => {
       appIds: ['crm'],
       scopes: ['upload-release'],
     });
-    const other = await service.create('viewer', {
+    const other = await service.create('unprivileged', {
       name: 'Other CI',
       appIds: ['erp'],
       scopes: ['deploy'],
@@ -787,7 +796,7 @@ describe('Operator publishing key ownership', () => {
     expect((await service.list('operator')).map((key) => key.id)).toEqual([
       own.key.id,
     ]);
-    expect((await service.list('viewer')).map((key) => key.id)).toEqual([
+    expect((await service.list('unprivileged')).map((key) => key.id)).toEqual([
       other.key.id,
     ]);
     expect(await service.list('admin')).toHaveLength(2);
@@ -869,14 +878,14 @@ describe('Operator publishing key ownership', () => {
     await db
       .connection()
       .query.updateTable('hubApps')
-      .set({ createdBy: 'viewer' })
+      .set({ createdBy: 'unprivileged' })
       .where('id', '=', 'crm')
       .execute();
     await expect(service.verify(secret, 'crm', 'deploy')).rejects.toThrow();
     await authz.permissionSets.replaceSubjectAssignments({
       subject: { type: 'user', id: 'operator' },
-      managedPermissionSets: ['hub-operator', 'hub-viewer'],
-      permissionSets: ['hub-viewer'],
+      managedPermissionSets: ['hub-operator'],
+      permissionSets: [],
     });
     await expect(service.verify(secret, 'erp', 'deploy')).rejects.toThrow();
     await expect(service.list('operator')).rejects.toThrow();
@@ -1348,8 +1357,8 @@ describe('Hub API Key HTTP boundary', () => {
   });
 
   it('enforces management and owner ACL for credential recovery with no-store', async () => {
-    const { router: viewer } = await router('viewer');
-    expect((await viewer.request('/hub/api-keys')).status).toBe(403);
+    const { router: unprivileged } = await router('unprivileged');
+    expect((await unprivileged.request('/hub/api-keys')).status).toBe(403);
     const { router: admin } = await router('admin');
     const response = await admin.request('/hub/api-keys', {
       method: 'POST',
@@ -1375,9 +1384,9 @@ describe('Hub API Key HTTP boundary', () => {
     expect(await recovered.json()).toEqual({
       data: { secret: created.data.secret },
     });
-    expect((await viewer.request(revealPath, { method: 'POST' })).status).toBe(
-      403,
-    );
+    expect(
+      (await unprivileged.request(revealPath, { method: 'POST' })).status,
+    ).toBe(403);
     const { router: anonymous } = await router();
     expect(
       (await anonymous.request(revealPath, { method: 'POST' })).status,

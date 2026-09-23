@@ -41,7 +41,7 @@ import {
   deploymentResponse,
   deploymentListResponse,
 } from './responses.js';
-import { HUB_ACTIVE_ROLE_KEYS } from '../authorization.js';
+import { HUB_PERMISSION_SET_KEYS } from '../authorization.js';
 
 const MAX_ARTIFACT_SIZE = 256 * 1024 * 1024;
 
@@ -283,7 +283,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
         sets.map((permissionSet) => [permissionSet.key, permissionSet]),
       );
       return context.json({
-        data: HUB_ACTIVE_ROLE_KEYS.flatMap((key) => {
+        data: HUB_PERMISSION_SET_KEYS.flatMap((key) => {
           const permissionSet = byKey.get(key);
           return permissionSet
             ? [
