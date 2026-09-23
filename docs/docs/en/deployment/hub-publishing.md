@@ -19,6 +19,8 @@ The current artifact is `storage/exports/dist.tar.gz`. Upload it from the App de
 
 ## Publish through the CLI
 
+`HUB_API_KEY` is created in Hub, not in the application. Open **API Keys** in the Hub navigation (`<HUB_URL>/api-keys`, which requires `hub.app / manage-api-keys`, granted to `hub-administrator` and `hub-operator` by default) and choose **Create API Key**: select the target application under **Applications**, or **All applications (including future apps)**, then grant **Upload release** for uploads and both **Upload release** and **Deploy release** for anything that deploys. The plaintext key is shown once at creation and can be copied again by its creator while the key is active. Bound applications and permissions cannot be changed afterwards, so a key with the wrong scope is deleted and recreated. A key never exceeds its creator's current permissions.
+
 Provide `HUB_URL` (including its mount path), `HUB_APP_ID`, and `HUB_API_KEY` through a protected environment or the project's gitignored `.env`. Flags override process environment, which overrides `.env`; publishing does not load `.env.local`.
 
 ```bash
