@@ -1,6 +1,6 @@
-import defaultAccessRoutes from '../../app-plugin-authz-default-access/server/routes.js';
-import sharingRulesRoutes from '../../app-plugin-authz-sharing-rules/server/routes.js';
-import restrictionRulesRoutes from '../../app-plugin-authz-restriction-rules/server/routes.js';
+import defaultAccessRoutes from '../../../plugins/app-plugin-authz-default-access/server/routes.js';
+import sharingRulesRoutes from '../../../plugins/app-plugin-authz-sharing-rules/server/routes.js';
+import restrictionRulesRoutes from '../../../plugins/app-plugin-authz-restriction-rules/server/routes.js';
 import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
 import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
@@ -22,23 +22,26 @@ import {
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createOrdersDatabase, orderFields } from './orders-database.js';
+import {
+  createOrdersDatabase,
+  orderFields,
+} from '../../../plugins/app-plugin-authorization/tests/orders-database.js';
 
 import {
   createAppAuthorization,
   type CreateAppAuthorizationOptions,
-} from '../server/authorization.js';
+} from '../../../plugins/app-plugin-authorization/server/authorization.js';
 import type {
   Authorization,
   AuthorizationPlugin,
 } from '@nocobase/authorization/core';
 
-import type { AuthorizationConfig } from '../server/authorization.js';
-import { apiRoutes } from '../server/routes/index.js';
+import type { AuthorizationConfig } from '../../../plugins/app-plugin-authorization/server/authorization.js';
+import { apiRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
 import {
   authorizationToken,
   type AppAuthorizationService,
-} from '../server/tokens.js';
+} from '../../../plugins/app-plugin-authorization/server/tokens.js';
 
 /** Collection metadata comes from db, so the options endpoints need a real one. */
 let database: DatabaseManager;

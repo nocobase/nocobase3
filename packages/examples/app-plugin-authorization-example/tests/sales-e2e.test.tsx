@@ -31,8 +31,7 @@ import type {
   PermissionSet,
 } from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
 vi.mock('@nocobase/i18n/client', async () => {
-  const { translate } =
-    await import('../../../plugins/app-plugin-authorization/tests/locale-harness.js');
+  const { translate } = await import('./locale-harness.js');
   const { default: example } = await import('../client/locales/en-US.js');
   return {
     useTranslation: () => ({
@@ -249,8 +248,7 @@ it('saves one operation scope from the real editor without changing view or quot
   const response = await admin('permission-sets/options');
   const raw = (await response.json())
     .data as AuthorizationOptions<LocalizedText>;
-  const { translate } =
-    await import('../../../plugins/app-plugin-authorization/tests/locale-harness.js');
+  const { translate } = await import('./locale-harness.js');
   const example = (await import('../client/locales/en-US.js')).default;
   const options = localizeOptions(raw, (key, params) =>
     params?.ns === '@nocobase/app-plugin-authorization-example'

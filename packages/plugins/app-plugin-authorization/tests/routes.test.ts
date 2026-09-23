@@ -3,7 +3,7 @@ import { createPermissionSetHandler } from '../server/management/permission-sets
 import sqlite from '@nocobase/db-sqlite';
 import { fileURLToPath } from 'node:url';
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createDatabaseManager,
   createMigrator,
@@ -17,14 +17,7 @@ import {
 } from '@nocobase/app-plugin-authentication';
 
 import { permissionSets } from '@nocobase/authorization';
-import {
-  AuthorizationRouteRegistry,
-  type AuthorizationPlugin,
-} from '@nocobase/authorization/core';
-import {
-  createDefaultAccessHandler,
-  DEFAULT_ACCESS_ROUTE_PATH,
-} from '../../app-plugin-authz-default-access/server/handler.js';
+import { type AuthorizationPlugin } from '@nocobase/authorization/core';
 
 import {
   authorizationToken,
@@ -67,61 +60,6 @@ describe('@nocobase/app-plugin-authorization routes', () => {
       message: 'Authentication required',
     });
   });
-
-  it.each([
-    { existing: undefined, expected: 'configure' },
-    {
-      existing: {
-        resource: { type: 'database.collection', id: 'orders' },
-        actions: [],
-      },
-      expected: 'configure',
-    },
-  ])(
-    'checks $expected when setting default access',
-    async ({ existing, expected }) => {
-      const container = new ServiceContainer();
-      const require = vi.fn(() => Promise.resolve());
-      const set = vi.fn((rule: object) => Promise.resolve(rule));
-      const routes = new AuthorizationRouteRegistry();
-      routes.add(
-        DEFAULT_ACCESS_ROUTE_PATH,
-        createDefaultAccessHandler({
-          list: () => Promise.resolve([]),
-          get: () => Promise.resolve(existing),
-          set,
-          delete: () => Promise.resolve(),
-        }),
-      );
-      container.instance(authenticationToken, {
-        required: () => async (_context, next) => next(),
-      } as unknown as Auth);
-      container.instance(authorizationToken, {
-        middleware: () => async (context, next) => {
-          context.set('authz', { require });
-          await next();
-        },
-        routes,
-      } as unknown as Authorization);
-      const router = await protectedRouter(container);
-
-      const response = await router.request('/api/authz/default-access', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          resource: { type: 'database.collection', id: 'orders' },
-          actions: [{ action: 'read', scope: { type: 'all' } }],
-        }),
-      });
-
-      expect(response.status).toBe(200);
-      expect(require).toHaveBeenCalledWith({
-        resource: { type: 'settings', id: 'authorization.default-access' },
-        action: expected,
-      });
-      expect(set).toHaveBeenCalledOnce();
-    },
-  );
 
   it('rejects generic writes to protected Permission Sets and assignments', async () => {
     const { container, authorization } = await protectedFixture();
