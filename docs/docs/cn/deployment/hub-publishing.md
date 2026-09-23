@@ -78,11 +78,19 @@ APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
 
 ### 创建发布 API Key
 
-CLI 用的 `HUB_API_KEY` 在 Hub 中创建，不在业务应用中生成。打开 Hub 导航的「API Key」页（`<HUB_URL>/api-keys`，需要 `hub.app / manage-api-keys` 权限，默认授予 `hub-administrator` 和 `hub-operator`），点击「创建 API Key」：
+CLI 用的 `HUB_API_KEY` 在 Hub 中创建，不在业务应用中生成。打开 Hub 导航的「API Key」页（`<HUB_URL>/api-keys`，需要 `hub.app / manage-api-keys` 权限，默认授予 `hub-administrator` 和 `hub-operator`）。
+
+![Hub 的 API Key 页，右上角是创建入口，尚未创建任何 Key](https://static-docs.nocobase.com/20260923151656.png)
+
+点击「创建 API Key」：
 
 1. 在「应用」中勾选目标应用，或选择「所有应用（含未来新增）」；
-2. 在「权限范围」中按后续命令勾选：仅上传勾「上传版本」，需要部署时同时勾上「部署版本」；
+2. 在「权限范围」中按后续命令勾选：仅上传勾「上传版本」（Upload release），需要部署时同时勾上「部署版本」（Deploy release）；
 3. 按需设置过期时间，创建后复制密钥明文。
+
+未选择应用前，权限选项不可勾选，界面会提示先选应用。
+
+![创建 API Key 对话框：填写名称与过期时间，选择应用范围，再勾选上传版本和部署版本权限](https://static-docs.nocobase.com/20260923151943.png)
 
 明文只在创建时完整显示，密钥有效期内创建者可在同一页面再次复制。**绑定的应用和权限创建后不可修改**，勾错只能删除后重建。API Key 的权限还受创建者当前权限和应用归属约束：每次请求都会重新校验创建者的当前权限，创建者失去目标应用权限后，用该 Key 发起的上传和部署会被拒绝。凭证通过 CI secret 或本地受保护环境配置，避免放在命令参数、版本库或日志中。
 
