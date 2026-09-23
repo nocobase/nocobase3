@@ -112,4 +112,4 @@ pnpm test
 pnpm build
 ```
 
-If a script is absent, read `package.json` and run the closest equivalent. Employees and tools are TypeScript compiled into the build, so they deploy normally. `ai/skills` does not — check for it explicitly rather than assuming the build carried it.
+If a script is absent, read `package.json` and run the closest equivalent. Employees and tools are TypeScript compiled into the build; the Markdown under `ai/skills` is copied into `dist/ai/skills` by a build step of its own. Both deploy.
