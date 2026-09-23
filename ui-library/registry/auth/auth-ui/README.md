@@ -1,7 +1,6 @@
 # NocoBase Authentication UI
 
-Application-owned authentication UI backed by
-`@nocobase/app-plugin-authentication`.
+Application-owned authentication UI backed by `@nocobase/app-plugin-authentication`.
 
 This registry item is preinstalled into application templates at:
 
@@ -9,10 +8,7 @@ This registry item is preinstalled into application templates at:
 client/extensions/nocobase-auth-ui/
 ```
 
-After materialization, the files belong to the application and may be edited
-freely. The item includes the page layout, form tabs, SSO button group, four
-password forms, branding and marketing panel. The application composes each
-authentication route directly with `AuthLayout`:
+After materialization, the files belong to the application and may be edited freely. The item includes the page layout, form tabs, SSO button group, four password forms, branding and marketing panel. The application composes each authentication route directly with `AuthLayout`:
 
 ```tsx
 <AuthLayout
@@ -35,16 +31,10 @@ authentication route directly with `AuthLayout`:
 />
 ```
 
-Use `form` for one form, or `forms` for multiple authentication methods. The
-`forms` prop renders an accessible tab switcher, so an application can combine
-password, LDAP, passkey, or other application-owned forms in one page. Each
-provided form renders its own standard navigation and status footer.
-`AuthSsoButtons` renders any number of SSO providers below the forms. The
-application owns route declarations, branding, SSO actions, and marketing
-content; a custom form can replace a built-in form and its footer.
+Use `form` for one form, or `forms` for multiple authentication methods. The `forms` prop renders an accessible tab switcher, so an application can combine password, LDAP, passkey, or other application-owned forms in one page. Each provided form renders its own standard navigation and status footer. `AuthSsoButtons` renders any number of SSO providers below the forms. The application owns route declarations, branding, SSO actions, and marketing content; a custom form can replace a built-in form and its footer.
 
-The authentication plugin remains responsible for the auth client, session
-state, guards, providers, and headless actions. Forms should use the plugin's
-stable `client/actions` export; page routes and links belong to the application
-that installs this item. Do not import plugin-internal components or add another
-copy of shadcn primitives.
+The authentication plugin remains responsible for the auth client, session state, guards, providers, and headless actions. Forms should use the plugin's stable `client/actions` export; page routes and links belong to the application that installs this item. Do not import plugin-internal components or add another copy of shadcn primitives.
+
+## Translations
+
+Every string goes through `useTranslation()` from `@nocobase/i18n/client` under an `auth.*` key with its English wording as `defaultValue`, so the item renders in English wherever a key is missing. The components name no namespace: the keys resolve in the namespace that renders them, which inside a plugin's route is the plugin's own with the application's as its fallback. The application templates ship the complete set in `client/locales/en-US.ts` and `client/locales/zh-CN.ts`, so an application created from a template already translates the item; anywhere else, copy the `auth.*` entries from there into the locale resources of the namespace that renders it. Explicit props such as `submitLabel` take precedence over the translated defaults.

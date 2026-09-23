@@ -13,7 +13,7 @@ const FORMATTABLE =
  *
  * Everything under `packages/` is covered by the root configuration and must not be listed.
  */
-const SELF_LINTING_DIRECTORIES = ['docs'];
+const SELF_LINTING_DIRECTORIES = ['docs', 'ui-library'];
 
 /**
  * ESLint runs once per package rather than once for every staged file.

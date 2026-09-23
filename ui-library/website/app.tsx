@@ -16,6 +16,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type ReactElement,
   type ReactNode,
@@ -81,26 +82,18 @@ export function App(): ReactElement {
   const [preference, setPreference] =
     useState<ThemePreference>(readThemePreference);
   const previewTheme = readPreviewTheme();
-  const [resolved, setResolved] = useState<ResolvedTheme>(
-    () => previewTheme ?? resolveTheme(preference),
+  const prefersDark = useSyncExternalStore(
+    subscribeToColorScheme,
+    readPrefersDark,
   );
+  const resolved = previewTheme ?? resolveTheme(preference, prefersDark);
 
   useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const applyTheme = () => {
-      const nextTheme = previewTheme ?? resolveTheme(preference);
-      setResolved(nextTheme);
-      document.documentElement.classList.toggle('dark', nextTheme === 'dark');
-      if (!previewTheme) {
-        localStorage.setItem('nocobase-ui-library-theme', preference);
-      }
-    };
-
-    applyTheme();
-    if (previewTheme) return;
-    media.addEventListener('change', applyTheme);
-    return () => media.removeEventListener('change', applyTheme);
-  }, [preference, previewTheme]);
+    document.documentElement.classList.toggle('dark', resolved === 'dark');
+    if (!previewTheme) {
+      localStorage.setItem('nocobase-ui-library-theme', preference);
+    }
+  }, [preference, previewTheme, resolved]);
 
   return (
     <ThemeContext.Provider value={{ preference, resolved, setPreference }}>
@@ -123,7 +116,8 @@ function RegistryDocs(): ReactElement {
   const [activeName, setActiveName] = useState<string>(authUiItem.name);
 
   useEffect(() => {
-    fetch('/r/registry.json')
+    const controller = new AbortController();
+    fetch('/r/registry.json', { signal: controller.signal })
       .then((response) => response.json())
       .then((data: { items?: RegistryItem[] }) => {
         const nextItems = data.items?.length ? data.items : [authUiItem];
@@ -143,7 +137,10 @@ function RegistryDocs(): ReactElement {
           });
         }
       })
-      .catch(() => setItems([authUiItem]));
+      .catch(() => {
+        if (!controller.signal.aborted) setItems([authUiItem]);
+      });
+    return () => controller.abort();
   }, []);
 
   const visibleItems = items.filter((item) => {
@@ -679,11 +676,24 @@ function readThemePreference(): ThemePreference {
   return 'system';
 }
 
-function resolveTheme(preference: ThemePreference): ResolvedTheme {
+function resolveTheme(
+  preference: ThemePreference,
+  prefersDark: boolean,
+): ResolvedTheme {
   if (preference === 'light' || preference === 'dark') return preference;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches
-    ? 'dark'
-    : 'light';
+  return prefersDark ? 'dark' : 'light';
+}
+
+const colorSchemeQuery = '(prefers-color-scheme: dark)';
+
+function subscribeToColorScheme(onChange: () => void): () => void {
+  const media = window.matchMedia(colorSchemeQuery);
+  media.addEventListener('change', onChange);
+  return () => media.removeEventListener('change', onChange);
+}
+
+function readPrefersDark(): boolean {
+  return window.matchMedia(colorSchemeQuery).matches;
 }
 
 function readPreviewTheme(): ResolvedTheme | undefined {

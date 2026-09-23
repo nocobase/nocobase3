@@ -11,10 +11,11 @@
       },
       "dependencies": [
         "@nocobase/app-plugin-authentication@^0.1.0-beta.20",
+        "@nocobase/i18n@^1.0.0-beta.4",
         "lucide-react@^0.487.0"
       ],
       "registryDependencies": ["button", "input", "label"],
-      "docs": "Requires @nocobase/app-plugin-authentication. Compose application-owned routes with AuthLayout and the installed forms.",
+      "docs": "Requires @nocobase/app-plugin-authentication and @nocobase/i18n. Compose application-owned routes with AuthLayout and the installed forms. Every string is translated under an auth.* key and falls back to its English default.",
       "files": [
         {
           "path": "auth-ui/components/auth-brand.tsx",
