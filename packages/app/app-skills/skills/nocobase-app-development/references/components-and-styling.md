@@ -141,7 +141,7 @@ Retain deliberate constraints (image sizes, viewport limits, circular icons), bu
 
 ## Dark mode
 
-Both themes come from the same tokens, so using them correctly means dark mode already works. `client/theme/` owns the theme provider and the light/dark header button; choosing a preset is a Settings page, `client/pages/settings/theme/`.
+Both themes come from the same tokens, so using them correctly means dark mode already works. `client/theme/` owns the theme provider and the System/Light/Dark selector.
 
 Check both themes before finishing. `dark:` variants are for the rare case a token cannot express; reaching for them often means a literal color slipped in.
 

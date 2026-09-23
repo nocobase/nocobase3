@@ -51,13 +51,13 @@ Each size has two variables: `--text-<size>` and `--text-<size>--line-height`. S
 | Size | Default rem | Default line height |
 | ---- | ----------- | ------------------- |
 | xs   | 0.75        | 1 / 0.75            |
-| sm   | 0.875       | 1.2 / 0.875         |
-| base | 1           | 1.4                 |
-| lg   | 1.125       | 1.6 / 1.125         |
-| xl   | 1.25        | 1.6 / 1.25          |
-| 2xl  | 1.5         | 1.8 / 1.5           |
-| 3xl  | 1.875       | 2.1 / 1.875         |
-| 4xl  | 2.25        | 2.3 / 2.25          |
+| sm   | 0.875       | 1.25 / 0.875        |
+| base | 1           | 1.5                 |
+| lg   | 1.125       | 1.75 / 1.125        |
+| xl   | 1.25        | 1.75 / 1.25         |
+| 2xl  | 1.5         | 2 / 1.5             |
+| 3xl  | 1.875       | 2.25 / 1.875        |
+| 4xl  | 2.25        | 2.5 / 2.25          |
 | 5xl  | 3           | 1                   |
 | 6xl  | 3.75        | 1                   |
 | 7xl  | 4.5         | 1                   |
@@ -68,7 +68,7 @@ Use `text-xs` through `text-9xl`; body uses `text-base`. A separate `leading-*` 
 
 ## Spacing
 
-`--spacing` is a positive CSS length, initially `0.2rem`. Classes such as `p-4`, `gap-2`, `h-8`, `size-4`, and `w-64` multiply it by their numeric suffix.
+`--spacing` is a positive CSS length, initially `0.25rem`. Classes such as `p-4`, `gap-2`, `h-8`, `size-4`, and `w-64` multiply it by their numeric suffix.
 
 Changing it affects padding, gaps, control/icon sizes and navigation width together. Validate typography and spacing together: text must not be clipped and targets must remain usable. Percentage, viewport, container-width and fixed-pixel values do not all use this scale. Breakpoints are unchanged.
 
@@ -76,7 +76,7 @@ Prefer numeric utility classes for ordinary spacing and sizes. Keep deliberate c
 
 ## Radius
 
-`--radius` is a nonnegative CSS length, initially `0.375rem`. Public utilities derive from it:
+`--radius` is a nonnegative CSS length, initially `0.5rem`. Public utilities derive from it:
 
 | Utility       | Multiplier |
 | ------------- | ---------- |

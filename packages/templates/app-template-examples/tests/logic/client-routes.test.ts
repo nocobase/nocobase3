@@ -111,11 +111,6 @@ describe('app client routes', () => {
       { name: 'i18n-examples', authorizedAs: 'i18n-examples' },
       { name: 'external-crm', authorizedAs: 'external-crm' },
     ]);
-    // A settings page carries no rule by default. This one asks for a page grant, so it stays invisible until an
-    // administrator is granted it — which is the whole reason its name is pinned here.
-    expect(pageAuthorizations(resolved.settingsRouteTree)).toEqual([
-      { name: 'theme', authorizedAs: 'theme' },
-    ]);
   });
 });
 

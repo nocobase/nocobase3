@@ -22,9 +22,7 @@ import { DevLayout } from '../../client/layouts/dev-layout.js';
 vi.mock('../../client/routing/client-route.js', () => ({
   ClientRoute: () => <p>Preferences content</p>,
 }));
-vi.mock('../../client/theme/index.js', () => ({
-  ThemeModeToggle: () => null,
-}));
+vi.mock('../../client/theme/index.js', () => ({ ThemeSettings: () => null }));
 vi.mock('../../client/layouts/components/user-menu.js', () => ({
   UserMenu: () => null,
 }));
