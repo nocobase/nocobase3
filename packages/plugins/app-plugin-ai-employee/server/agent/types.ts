@@ -61,13 +61,26 @@ export interface AgentInvokeRequest<TStructured = never> extends AgentRequest {
 }
 
 /**
+ * A human-in-the-loop pause an `invoke()` stopped at. The paused tool calls
+ * have already been recorded as `interrupted`, so a decision can be attached to
+ * each and the execution resumed with `resumeInvoke()` or `resumeStream()`.
+ */
+export interface AgentInvokeInterrupt {
+  id: string;
+  actions: AgentInterruptAction[];
+}
+
+/**
  * What one `invoke()` produced, in this package's own message shape rather
  * than the underlying graph state. `structuredResponse` is present only when
- * the request supplied a `responseFormat`.
+ * the request supplied a `responseFormat`; `interrupt` only when the execution
+ * paused for a human decision instead of finishing, in which case `message` is
+ * the assistant turn that requested the paused tool calls.
  */
 export interface AgentInvokeResult<TStructured = never> {
   message: AIMessageInput | null;
   structuredResponse?: TStructured;
+  interrupt?: AgentInvokeInterrupt;
 }
 
 export interface AgentMessageIndex {

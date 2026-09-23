@@ -1,7 +1,7 @@
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import type { LLMResult } from '@langchain/core/outputs';
 import { concat } from '@langchain/core/utils/stream';
-import { Command } from '@langchain/langgraph';
+import { Command, getConfig, isGraphInterrupt } from '@langchain/langgraph';
 import { createAgent } from 'langchain';
 import type { BaseCheckpointSaver } from '@langchain/langgraph';
 import { buildTool } from '@nocobase/ai-employee';
@@ -17,12 +17,14 @@ import type {
   AgentContextProvider,
   AgentThread,
   AgentInterruptAction,
+  AgentInvokeInterrupt,
   AgentInvokeRequest,
   AgentInvokeResult,
   AgentOperation,
   AgentProviders,
   AgentRequest,
   AgentStreamEvent,
+  CurrentConversation,
   PreparedAgentContext,
   ResolvedAgentLLM,
 } from '../types.js';
@@ -64,7 +66,29 @@ type InterruptValue = {
 };
 
 type Interrupt = {
+  id?: string;
   value?: InterruptValue;
+};
+
+/** An interrupt action recorded against a persisted tool call. */
+type RecordedInterruptAction = {
+  action: AgentInterruptAction;
+  toolCall: { id: string; name: string };
+  conversation: CurrentConversation;
+  messageId: string;
+};
+
+/**
+ * The interrupt a root graph reports from `invoke()`. A root graph returns it
+ * in the state under `__interrupt__` rather than throwing; only a graph nested
+ * in another graph's node throws `GraphInterrupt`, for its parent to handle.
+ */
+const readInvokeInterrupt = (result: unknown): Interrupt | undefined => {
+  const interrupts = (result as { __interrupt__?: unknown } | null)
+    ?.__interrupt__;
+  return Array.isArray(interrupts)
+    ? (interrupts[0] as Interrupt | undefined)
+    : undefined;
 };
 
 const toInterruptActions = (interrupt: Interrupt): AgentInterruptAction[] => {
@@ -470,6 +494,7 @@ export class AgentService {
   private async toInvokeResult<TStructured>(
     result: unknown,
     prepared: PreparedAgentContext,
+    interrupt?: AgentInvokeInterrupt,
   ): Promise<AgentInvokeResult<TStructured>> {
     const state = (result ?? {}) as {
       messages?: unknown;
@@ -480,9 +505,49 @@ export class AgentService {
     const message = answer
       ? await this.providers.converters.assistant.convert(answer, prepared)
       : null;
-    return 'structuredResponse' in state
-      ? { message, structuredResponse: state.structuredResponse as TStructured }
-      : { message };
+    return {
+      message,
+      ...('structuredResponse' in state
+        ? { structuredResponse: state.structuredResponse as TStructured }
+        : {}),
+      ...(interrupt ? { interrupt } : {}),
+    };
+  }
+
+  /**
+   * Marks the tool calls an interrupt paused as `interrupted` and records the
+   * interrupt on their assistant message. A reviewer's decision attaches only
+   * to an `interrupted` tool call, and a resume rebuilds its Command from the
+   * recorded `interruptId`, so an interrupt left unrecorded cannot be answered.
+   * An action is skipped when its conversation has no saved assistant message
+   * to record it against.
+   */
+  private async recordInterrupt(
+    interruptId: string,
+    actions: readonly AgentInterruptAction[],
+    messageIdFor: (sessionId: string) => string | undefined,
+  ): Promise<RecordedInterruptAction[]> {
+    const recorded: RecordedInterruptAction[] = [];
+    for (const action of actions) {
+      const { toolCall, currentConversation } = action;
+      if (!toolCall || !currentConversation) continue;
+      const messageId = messageIdFor(currentConversation.sessionId);
+      if (!messageId) continue;
+      await this.providers.conversation.messages.updateToolInterrupted(
+        currentConversation.sessionId,
+        messageId,
+        toolCall.id,
+        interruptId,
+        action,
+      );
+      recorded.push({
+        action,
+        toolCall,
+        conversation: currentConversation,
+        messageId,
+      });
+    }
+    return recorded;
   }
 
   private async executeInvoke<TStructured>(
@@ -490,8 +555,34 @@ export class AgentService {
     request: AgentInvokeRequest<TStructured>,
   ): Promise<AgentInvokeResult<TStructured>> {
     const { conversation } = this.providers;
+    const identity = this.agentContext.currentConversation();
     const { controller, signal, token } = this.begin(request);
     let activeProvider: LLMProvider | undefined;
+    // An interrupt names the conversation it paused but not the message, and a
+    // sub-agent's saved messages are reported only through the writer, so the
+    // writer is observed. Events still reach whoever would have received them:
+    // the caller's writer, or, without one, the enclosing graph's.
+    const messageIds = new Map<string, string>();
+    const forward =
+      request.writer ??
+      (getConfig() as { writer?: (chunk: unknown) => void } | undefined)
+        ?.writer;
+    const writer = (chunk: unknown): void => {
+      const event = chunk as {
+        action?: unknown;
+        body?: { messageId?: unknown };
+        currentConversation?: { sessionId?: unknown };
+      } | null;
+      const messageId = event?.body?.messageId;
+      if (event?.action === 'AfterAIMessageSaved' && messageId) {
+        const sessionId = event.currentConversation?.sessionId;
+        messageIds.set(
+          typeof sessionId === 'string' ? sessionId : identity.sessionId,
+          String(messageId),
+        );
+      }
+      forward?.(chunk);
+    };
     await conversation.event.beforeExecution('invoking');
     try {
       const llm = await this.resolveLLM().catch((error: unknown) => {
@@ -500,16 +591,37 @@ export class AgentService {
       activeProvider = llm.provider;
       const prepared = await this.prepare(
         operation,
-        { ...request, signal },
+        { ...request, signal, writer },
         llm,
       );
       const result = await this.create(prepared).invoke(
         prepared.input as any,
         { ...prepared.config, signal } as any,
       );
-      return await this.toInvokeResult<TStructured>(result, prepared);
+      const interrupt = readInvokeInterrupt(result);
+      if (!interrupt?.id)
+        return await this.toInvokeResult<TStructured>(result, prepared);
+      const actions = toInterruptActions(interrupt);
+      // The graph state carries the message this execution last saved, which is
+      // the one a resume re-enters when it saves nothing new.
+      const stateMessageId = (result as { messageId?: unknown }).messageId;
+      await this.recordInterrupt(
+        interrupt.id,
+        actions,
+        (sessionId) =>
+          messageIds.get(sessionId) ??
+          (sessionId === identity.sessionId && stateMessageId
+            ? String(stateMessageId)
+            : undefined),
+      );
+      return await this.toInvokeResult<TStructured>(result, prepared, {
+        id: interrupt.id,
+        actions,
+      });
     } catch (error) {
-      if ((error as any)?.name === 'GraphInterrupt') throw error;
+      // A graph nested in another graph's node throws its interrupt instead of
+      // returning it; the enclosing execution records it.
+      if (isGraphInterrupt(error)) throw error;
       if (signal.aborted)
         throw new AgentServiceError('ABORTED', 'Agent execution aborted', {
           cause: error,
@@ -630,25 +742,23 @@ export class AgentService {
           const interrupt = chunks?.__interrupt__?.[0];
           if (interrupt?.id) {
             const actions = toInterruptActions(interrupt);
-            for (const action of actions) {
-              if (!action.toolCall || !action.currentConversation) continue;
-              const messageId = messageIds.get(
-                action.currentConversation.sessionId,
-              );
-              if (!messageId) continue;
-              await conversation.messages.updateToolInterrupted(
-                action.currentConversation.sessionId,
-                messageId,
-                action.toolCall.id,
-                interrupt.id,
-                action,
-              );
+            const recorded = await this.recordInterrupt(
+              interrupt.id,
+              actions,
+              (sessionId) => messageIds.get(sessionId),
+            );
+            for (const {
+              action,
+              toolCall,
+              conversation: target,
+              messageId,
+            } of recorded) {
               sent++;
               yield {
                 type: 'tool_call_status',
-                conversation: action.currentConversation,
+                conversation: target,
                 status: {
-                  toolCall: { ...action.toolCall, messageId },
+                  toolCall: { ...toolCall, messageId },
                   invokeStatus: 'interrupted',
                   interruptAction: action,
                 },

@@ -94,7 +94,7 @@ const conversations = container.resolve(aiConversationsManagerToken);
 const factory = container.resolve(agentServiceFactoryToken);
 ```
 
-These two, plus `aiManagerToken`, are the whole public server surface, along with the `AgentRequest`, `AgentInvokeRequest`, `AgentInvokeResult`, and `AgentStreamEvent` types exported from the same entry. The plugin's internal factories — its repository, manager, service, and data-service tokens — are not exported and are not part of the contract; an App tool declares the App's own service tokens instead. Never deep-import a plugin server or agent source file.
+These two, plus `aiManagerToken`, are the whole public server surface, along with the `AgentRequest`, `AgentInvokeRequest`, `AgentInvokeResult`, `AgentInvokeInterrupt`, `AgentInterruptAction`, and `AgentStreamEvent` types exported from the same entry. The plugin's internal factories — its repository, manager, service, and data-service tokens — are not exported and are not part of the contract; an App tool declares the App's own service tokens instead. Never deep-import a plugin server or agent source file.
 
 `AgentServiceFactory` is an App-level singleton, but every `createAIEmployee()` or `createAgent()` call produces a new session-scoped `AgentService` with its own private context and conversation objects. Do not cache an `AgentService` globally or register one as a singleton.
 
@@ -200,7 +200,8 @@ interface AgentRequest {
 }
 
 interface AgentInvokeRequest<T = never> extends AgentRequest { responseFormat?: ZodType<T>; }
-interface AgentInvokeResult<T = never> { message: AIMessageInput | null; structuredResponse?: T; }
+interface AgentInvokeInterrupt { id: string; actions: AgentInterruptAction[]; }
+interface AgentInvokeResult<T = never> { message: AIMessageInput | null; structuredResponse?: T; interrupt?: AgentInvokeInterrupt; }
 
 invoke<T>(request?: AgentInvokeRequest<T>): Promise<AgentInvokeResult<T>>;
 stream(request?: AgentRequest): AsyncGenerator<AgentStreamEvent>;
@@ -214,7 +215,7 @@ abort(reason?: unknown): void;
 
 `AIMessageInput` is `{ role, content, createdAt?, toolCalls?, attachments?, workContext?, metadata? }`; `messageId` and `sessionId` are server-assigned, so omit them.
 
-`invoke()` reports the assistant turn it produced as `message`, in this package's own message shape rather than the underlying graph state. `message` is `null` when the execution produced no assistant content. An interrupted turn is not that case: it **rejects** with an error named `GraphInterrupt`, which is passed through rather than wrapped, so it carries no `AgentServiceErrorCode`.
+`invoke()` reports the assistant turn it produced as `message`, in this package's own message shape rather than the underlying graph state. `message` is `null` when the execution produced no assistant content. A turn that paused for a human decision resolves rather than rejects, with `interrupt` set: its `id` is what a resume passes as `interruptId`, `actions` lists the paused tool calls in decision order, and `message` is the assistant turn that requested them rather than a finished answer. Before `invoke()` returns, those tool calls are already recorded as `interrupted` on the conversation, so a decision can be attached to each of them through the HTTP API as well. `interrupt` is absent when the execution finished, so check it before treating `message` as the answer. Only an agent nested inside another agent's tool, such as a sub-agent, rejects with a `GraphInterrupt` instead, for the enclosing agent to record.
 
 When the integration needs data rather than prose, supply a Zod `responseFormat` and read `structuredResponse`:
 
@@ -242,15 +243,23 @@ An agent driven from a job, a schedule, a workflow node, or any other caller wit
 
 **Pass an `AbortSignal` and own the cancellation.** `AgentRequest.signal` is merged with the service's own controller, so either can stop the run. Give it the signal the surrounding system already cancels with — a job timeout, a shutdown hook, a user cancelling upstream — rather than inventing a second timer. There is no built-in wall-clock limit; the only automatic stop is a graph recursion limit of 200 steps, which surfaces as its own error code. On abort the run rejects with `code: 'ABORTED'` and no assistant message is persisted, so an aborted attempt leaves nothing half-written to reason about.
 
-**Decide what an interrupt means before it happens.** A tool whose resolved permission is not automatic suspends the run to ask a person, and in an unattended run there is nobody to ask. `invoke()` then rejects with a `GraphInterrupt`, and the interrupt id and the pending actions are surfaced on the streaming path and persisted onto the tool message — neither reaches an `invoke()` caller. So the reliable arrangement is not to interrupt at all: activate only tools that run automatically, which for `SPECIFIED` and `GENERAL` means `defaultPermission: 'ALLOW'`, and for `CUSTOM` means `autoCall`. If a tool that asks is genuinely required, the caller is deciding on the user's behalf and should say so — resume with an explicit decision rather than a blanket approval:
+**Decide what an interrupt means before it happens.** A tool whose resolved permission is not automatic suspends the run to ask a person, and in an unattended run there is nobody to ask. `invoke()` then resolves with `interrupt` set and the paused tool calls recorded, and the run stays suspended until someone resumes it. So the reliable arrangement is not to interrupt at all: activate only tools that run automatically, which for `SPECIFIED` and `GENERAL` means `defaultPermission: 'ALLOW'`, and for `CUSTOM` means `autoCall`. If a tool that asks is genuinely required, the caller is deciding on the user's behalf and should say so — resume with an explicit decision rather than a blanket approval:
 
 ```ts
-await agent.resumeInvoke({
-  userDecisions: {
-    interruptId,
-    decisions: [{ type: 'approve' }], // or 'reject' with a message, or 'edit' with editedAction
-  },
-});
+const { interrupt } = await agent.invoke({ userMessages });
+if (interrupt) {
+  await agent.resumeInvoke({
+    userDecisions: {
+      interruptId: interrupt.id,
+      // One decision per action, in `interrupt.actions` order.
+      decisions: interrupt.actions.map((action) =>
+        action.toolCall?.name === 'draft-reply'
+          ? { type: 'approve' }
+          : { type: 'reject', message: 'Not allowed in an unattended run' },
+      ), // 'edit' with editedAction is the third choice
+    },
+  });
+}
 ```
 
 Approving whatever is pending, unconditionally, turns every `ASK` into an `ALLOW` without the tool or the employee saying so. If that is the intent, make it the tool's declared permission instead, where it is visible.
@@ -275,7 +284,7 @@ The two retryable ones are retryable because a model is not deterministic: anoth
 
 Read `rootMessage` rather than walking `cause`: it returns the deepest message in the chain, guarding against cycles, and it is the one worth logging — the wrapper's own message is usually the least specific thing available.
 
-A `GraphInterrupt` is none of these. It is not an `AgentServiceError` and has no code, so a caller matching on `code` misses it entirely — match the error `name`.
+A paused run is none of these either: `invoke()` resolves with `interrupt` set rather than rejecting. Only a nested agent rejects with a `GraphInterrupt`, which is not an `AgentServiceError` and has no code — match the error `name` if calling one directly.
 
 ## Replacing the context provider
 

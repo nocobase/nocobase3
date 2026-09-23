@@ -41,6 +41,8 @@ export { agentServiceFactoryToken } from './agent/service/agent-service-factory.
 // The Skill tells integrations to import from this entry rather than deep-import
 // a source file, so the types it documents are exported here.
 export type {
+  AgentInterruptAction,
+  AgentInvokeInterrupt,
   AgentInvokeRequest,
   AgentInvokeResult,
   AgentRequest,
