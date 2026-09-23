@@ -1,5 +1,25 @@
 # @nocobase/app-plugin-database-explorer
 
+## 0.1.0-beta.5
+
+### Patch Changes
+
+- Updated dependencies [cda1175]
+- Updated dependencies [e286e0d]
+- Updated dependencies [808bf34]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [80ef702]
+  - @nocobase/app-plugin-authentication@1.0.0-beta.21
+  - @nocobase/app-plugin-authorization@0.2.0-beta.18
+  - @nocobase/app-server@1.0.0-beta.25
+  - @nocobase/db@1.0.0-beta.15
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/i18n@1.0.0-beta.4
+
 ## 0.1.0-beta.4
 
 ### Patch Changes
