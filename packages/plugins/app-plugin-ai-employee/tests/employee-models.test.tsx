@@ -149,14 +149,53 @@ function Probe() {
   );
 }
 
+function HistoryProbe() {
+  const chat = useAIChat();
+  const answer = chat.messages.findLast(
+    (message) => message.role === 'assistant',
+  );
+  return (
+    <div>
+      <span data-testid='model'>{chat.currentModel.value}</span>
+      <span data-testid='conversations'>{chat.conversations.length}</span>
+      <span data-testid='messages'>{chat.messages.length}</span>
+      <button
+        type='button'
+        onClick={() => chat.selectConversation('old-session')}
+      >
+        Open
+      </button>
+      <button
+        type='button'
+        disabled={!answer}
+        onClick={() => answer && void chat.retryMessage(answer)}
+      >
+        Retry
+      </button>
+      <input
+        aria-label='Message'
+        value={chat.draft}
+        onChange={(event) => chat.setDraft(event.target.value)}
+      />
+      <button
+        type='button'
+        disabled={!chat.canSend}
+        onClick={() => void chat.send()}
+      >
+        Send
+      </button>
+    </div>
+  );
+}
+
 /** Mounts the chat once configuration is ready, as the Skill's gate does. */
-function ReadyChat() {
+function ReadyChat({ children = <Probe /> }: { children?: React.ReactNode }) {
   const { configurationStatus, employees, hasEnabledModels } = useAI();
   if (configurationStatus !== 'ready' || !employees.length || !hasEnabledModels)
     return null;
   return (
     <AIChatProvider id='models' defaultEmployee='order-desk'>
-      <Probe />
+      {children}
     </AIChatProvider>
   );
 }
@@ -186,6 +225,78 @@ describe('the chat for an employee with its own models', () => {
     const body = JSON.stringify(service.sendMessagesStream.mock.calls[0]?.[0]);
     expect(body).toContain('fast-model');
     expect(body).not.toContain('general-model');
+  });
+
+  it('runs a past conversation on an allowed model when it recorded one no longer allowed', async () => {
+    const service = createService() as ReturnType<typeof createService> & {
+      resendMessagesStream: ReturnType<typeof vi.fn>;
+    };
+    service.listConversations = vi.fn().mockResolvedValue([
+      {
+        id: 'old-session',
+        title: 'Earlier order',
+        employeeUsername: 'order-desk',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+        model: { llmService: 'main', model: 'general-model' },
+      },
+    ]);
+    service.getConversationMessages = vi.fn().mockResolvedValue([
+      {
+        id: 'question',
+        role: 'user',
+        parts: [{ type: 'text', text: 'Where is my order?' }],
+        metadata: { serverMessageId: 'server-question' },
+      },
+      {
+        id: 'answer',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'On its way.' }],
+        metadata: { serverMessageId: 'server-answer' },
+      },
+    ]);
+    service.resendMessagesStream = vi
+      .fn()
+      .mockImplementation(
+        async () => new ReadableStream<Uint8Array>({ start: (c) => c.close() }),
+      );
+    render(
+      <AIProvider service={service}>
+        <ReadyChat>
+          <HistoryProbe />
+        </ReadyChat>
+      </AIProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('conversations')).toHaveTextContent('1'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('messages')).toHaveTextContent('2'),
+    );
+    expect(screen.getByTestId('model')).toHaveTextContent('fast-model');
+
+    // A retry builds its request from the conversation's own record.
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() =>
+      expect(service.resendMessagesStream).toHaveBeenCalled(),
+    );
+    const resent = JSON.stringify(service.resendMessagesStream.mock.calls[0]);
+    expect(resent).toContain('fast-model');
+    expect(resent).not.toContain('general-model');
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message' }), {
+      target: { value: 'And the invoice?' },
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(service.sendMessagesStream).toHaveBeenCalled());
+    const sent = JSON.stringify(service.sendMessagesStream.mock.calls[0]?.[0]);
+    expect(sent).toContain('old-session');
+    expect(sent).toContain('fast-model');
+    expect(sent).not.toContain('general-model');
   });
 
   it('cannot send when every model the employee lists is disabled', async () => {
