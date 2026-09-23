@@ -237,6 +237,36 @@ describe('overrideEnabledModels', () => {
     });
   });
 
+  it('keeps a disabled service disabled even when the config says enabled', async () => {
+    const ai = createManager();
+    await ai.llmServiceManager.registerLLMService({
+      name: 'openai',
+      provider: 'openai',
+      enabledModels: ['curated-in-the-ui'],
+      enabled: false,
+    });
+
+    await new LLMServiceConfigSynchronizer(ai.llmServiceManager).synchronize([
+      {
+        name: 'openai',
+        provider: 'openai',
+        overrideEnabledModels: true,
+        enabled: true,
+        enabledModels: [{ label: 'From config', value: 'from-config' }],
+      },
+    ]);
+
+    await expect(
+      ai.llmServiceManager.getLLMService('openai'),
+    ).resolves.toMatchObject({
+      enabledModels: {
+        mode: 'custom',
+        models: [{ label: 'From config', value: 'from-config' }],
+      },
+      enabled: false,
+    });
+  });
+
   it('rejects a non-boolean overrideEnabledModels', async () => {
     const ai = createManager();
     await expect(

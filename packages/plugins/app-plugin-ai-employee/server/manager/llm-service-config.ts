@@ -70,7 +70,7 @@ export class LLMServiceConfigSynchronizer {
             // Reapplying the model list must not also reset the enable switch,
             // which is a separate administrator decision.
             ...(overrideEnabledModels === true
-              ? { enabled: service.enabled ?? current.enabled }
+              ? { enabled: current.enabled }
               : {}),
           }
         : service;
