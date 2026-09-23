@@ -76,6 +76,9 @@ describe('MCP loader test cases', () => {
   });
 
   it('should expose cached mcp tools and allow updating permissions', async () => {
+    await mcpServerManager.registerMCP({
+      weather: { transport: 'http', url: 'http://127.0.0.1:1/mcp' },
+    });
     const manager = mcpServerManager as any;
     manager.toolsMap = {
       weather: [
@@ -159,6 +162,41 @@ describe('MCP loader test cases', () => {
     (restarted as any).toolsMap = manager.toolsMap;
     const tools = await restarted.listMCPTools();
     expect(tools.weather?.[0]?.permission).toBe('ALLOW');
+  });
+
+  it('refuses a permission for a tool no connected server exposes', async () => {
+    await mcpServerManager.registerMCP({
+      weather: { transport: 'http', url: 'http://127.0.0.1:1/mcp' },
+    });
+
+    await expect(
+      mcpServerManager.updateMCPToolPermission(
+        'mcp-weather-setDefaultCity',
+        'ALLOW',
+      ),
+    ).rejects.toThrow('MCP tool is not available: mcp-weather-setDefaultCity');
+    expect(
+      (await mcpServerManager.getMCP('weather'))?.toolPermissions ?? {},
+    ).toEqual({});
+    const tools = await mcpServerManager.listMCPTools();
+    expect(tools.weather).toBeUndefined();
+  });
+
+  it('refuses a permission for a tool whose server is no longer saved', async () => {
+    const manager = mcpServerManager as any;
+    manager.toolsMap = {
+      weather: [{ name: 'setDefaultCity', description: 'Set default city' }],
+    };
+    await mcpServerManager.listMCPTools();
+
+    await expect(
+      mcpServerManager.updateMCPToolPermission(
+        'mcp-weather-setDefaultCity',
+        'ALLOW',
+      ),
+    ).rejects.toThrow('MCP server is not saved: weather');
+    const tools = await mcpServerManager.listMCPTools();
+    expect(tools.weather?.[0]?.permission).toBe('ASK');
   });
 
   it('logs a server it cannot reach instead of failing, and exposes none of its tools', async () => {

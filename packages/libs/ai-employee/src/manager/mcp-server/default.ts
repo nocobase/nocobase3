@@ -177,13 +177,15 @@ export class DefaultMCPServerManager implements MCPServerManager {
     toolName: string,
     permission: Permission,
   ): Promise<void> {
-    this.toolsPermissionMap[toolName] = permission;
+    // Only a tool of a connected server has an owner, and only a saved server
+    // can keep the choice across a restart; anything else would be dropped.
     const owner = this.toolOwners[toolName];
-    if (!owner) return;
+    if (!owner) throw new Error(`MCP tool is not available: ${toolName}`);
     const server = await this.repository.findOne({
       filter: { name: owner.server },
     });
-    if (!server) return;
+    if (!server) throw new Error(`MCP server is not saved: ${owner.server}`);
+    this.toolsPermissionMap[toolName] = permission;
     await this.repository.update({
       filter: { name: owner.server },
       values: {

@@ -115,6 +115,13 @@ export class AIMCPServerService {
     if (permission !== 'ASK' && permission !== 'ALLOW') {
       throw badRequest('permission must be ASK or ALLOW');
     }
+    // A tool is listed only while its server is connected; a permission for
+    // any other name has nowhere to be kept.
+    const tools = await this.ai.mcpServerManager.listMCPTools();
+    const listed = Object.values(tools).some((entries) =>
+      entries.some((entry) => entry.name === toolName),
+    );
+    if (!listed) throw notFound('MCP tool', toolName);
     await this.ai.mcpServerManager.updateMCPToolPermission(
       toolName,
       permission,
