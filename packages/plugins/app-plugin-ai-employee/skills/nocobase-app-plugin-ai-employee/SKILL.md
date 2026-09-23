@@ -71,7 +71,7 @@ Do these in order; each step depends on the one before it.
 2. **Write the tool first, then the skill that names it.** A tool is registered in code; a Skill references it by name and cannot define one. `ai/skills/` holds Skills only.
 3. **Aggregate and register.** Static-import employees and tools in `server/ai/index.ts` through a subclass of `AIResourceRegistrar`, then call `registerAIResources()` from an App `ServiceProvider.boot()` with `aiManagerToken`. See [server-runs.md § Register App resources](references/server-runs.md#register-app-resources).
 4. **Define the employee.** `defineAIEmployee()` with a stable `username`, a `systemPrompt`, an `avatar` copied from the plugin's list, and the `skills` that bring its tools — list a tool in `tools` only when no Skill names it. See [capabilities.md § Employees](references/capabilities.md#employees).
-5. **Mount a chat surface** behind the readiness gate, passing `defaultEmployee` so the page opens on the App's employee rather than whichever one sorts first — the built-in `atlas` has `sort: 0` and wins by default. Enable attachments when the flow can start from an uploaded file.
+5. **Mount a chat surface** behind the readiness gate, passing `defaultEmployee` so the page opens on the App's employee rather than whichever one sorts first — the built-in `atlas` has `sort: 0` and wins by default. Enable attachments when the flow can start from an uploaded file. Start from the plugin's working page for the surface, task, page context or tool renderer you are building — see [source-map.md § Working examples](references/source-map.md#working-examples) for where they are and what not to copy.
 6. **Verify by observation**, not by reading the source back. Run the checks below.
 
 ## Safety

@@ -1,6 +1,6 @@
 # Chat Surfaces in an App
 
-Everything the browser half needs: getting the UI source into the App, mounting it so the first send works, and the four ways a page tells the assistant what it is looking at.
+Everything the browser half needs: getting the UI source into the App, mounting it so the first send works, and the four ways a page tells the assistant what it is looking at. Each capability here also has a working page in the plugin, listed with what an App must not copy from it in [source-map.md § Working examples](source-map.md#working-examples).
 
 ## Table of contents
 
@@ -284,7 +284,7 @@ function FloatingChat() {
 }
 ```
 
-A `ChatDialog` or `ChatSidePanel` opened by a trigger is wired the same way: `open={open}` and `onOpenChange={controller.setOpen}`. The plugin's own floating demo, which also pushes the page aside instead of covering it, is listed in [source-map.md](source-map.md).
+A `ChatDialog` or `ChatSidePanel` opened by a trigger is wired the same way: `open={open}` and `onOpenChange={controller.setOpen}`. The plugin's own floating demo, which also pushes the page aside instead of covering it, is listed in [source-map.md § Working examples](source-map.md#working-examples).
 
 `AIChatWindow` is the chat itself:
 

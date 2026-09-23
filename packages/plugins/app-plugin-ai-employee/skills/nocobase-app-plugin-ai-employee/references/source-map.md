@@ -7,6 +7,7 @@ Where each piece of AI work goes in a CLI-created App, and what to read before c
 - [Identify the App root](#identify-the-app-root)
 - [App AI resources](#app-ai-resources)
 - [App frontend](#app-frontend)
+- [Working examples](#working-examples)
 - [App server](#app-server)
 - [The installed dependency](#the-installed-dependency)
 - [Tests and validation](#tests-and-validation)
@@ -75,9 +76,33 @@ Inside the extension, the files worth opening:
 
 A module that exports a component exports nothing else: an App lints this source with its own Portal configuration, and Fast Refresh requires it. A component's context, hooks, and helpers live in a sibling module — `page-element-store.ts` beside `page-element-provider.tsx`, `tool-call-utils.ts` beside `tool-call-card.tsx` — so import a hook or helper from that sibling, and put new non-component exports there too.
 
-A working floating chat — trigger, push side panel, and expand to dialog, all on one controller — ships with the plugin as its demo page: `node_modules/@nocobase/app-plugin-ai-employee/dist/client/dev/demo/floating.js`, built from `client/dev/demo/floating.tsx` in the plugin's source. It imports the Registry through the plugin's own relative paths, so copy its wiring rather than its imports, and import from the App's `@/extensions/nocobase-ai`. The controlled-surface rule it follows is in [chat-surfaces.md § Surfaces](chat-surfaces.md#surfaces).
-
 If `client/extensions/nocobase-ai` is missing, install the Registry item before doing frontend work; see [chat-surfaces.md § Install the extension](chat-surfaces.md#install-the-extension). A missing extension is never a reason to import UI from `@nocobase/ai-employee` or to rebuild chat under `client/`.
+
+## Working examples
+
+The plugin ships a working page for each frontend capability. Read the matching one before building a chat surface, a task, page context, a form the assistant fills, or a tool renderer: it shows the whole wiring in one place, where this Skill describes it rule by rule. While `pnpm dev` runs, the same pages are live under the App's base path at `/dev/ai-components/<page>` — for example `http://127.0.0.1:13000/main/dev/ai-components/floating` — so the user can try the behaviour before you build it. They are development routes only: a production build does not have them.
+
+| Page (`/dev/ai-components/…`) | Files under `client/dev/demo/`                                            | What it shows                                                                                                                                                                       |
+| ----------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat`                        | `index`, `container-showcase`, `interaction-showcase`, `prompt-generator` | `AIChatWindow` in each container — `ChatInline`, `ChatPage`, `ChatSurface` — and message interactions                                                                               |
+| `floating`                    | `floating`                                                                | `AIChatFloatingTrigger`, a push side panel that expands to a dialog, all on one controller; the controlled-surface rule in [chat-surfaces.md § Surfaces](chat-surfaces.md#surfaces) |
+| `tasks`                       | `shortcut`                                                                | `AIEmployeeShortcut` and tasks bound to employees, inside a chat and from buttons elsewhere on the page                                                                             |
+| `context`                     | `page-context`, `page-element-showcase`, `page-context-prompt-generator`  | `useAIPageElement`, the element picker as a composer action, `AIPageContextScope`, `useAIForm`, and frontend tools that update the page                                             |
+| `tools`                       | `tool-cards`                                                              | tool renderers, and the shared card a tool without one falls back to                                                                                                                |
+
+Where to read them:
+
+- **In an App**, the built files: `node_modules/@nocobase/app-plugin-ai-employee/dist/client/dev/demo/<file>.js`. They are compiled, so JSX appears as `_jsx(...)` calls, but the components, props, hooks and imports are all there. The page-to-file map is `dist/client/dev/demo-pages.js`, and the routes are in `dist/client/routes.js`.
+- **In the plugin's source repository**, `packages/plugins/app-plugin-ai-employee/client/dev/demo/<file>.tsx`.
+
+Copy the wiring, not the demo around it. Every page carries scaffolding an App must not keep:
+
+- **Imports.** The demos reach the Registry through relative paths such as `../../../registry/nocobase-ai/providers/index.js`; an App imports the same names from its installed copy, `@/extensions/nocobase-ai` or its `components` and `providers` modules.
+- **The configuration gate.** `AIConfigurationGate` renders the page on a preview service with invented employees and a placeholder model when nothing is configured, so a demo looks alive without a server. An App never does this: use the readiness gate in [chat-surfaces.md § The readiness gate](chat-surfaces.md#the-readiness-gate), which shows an actionable message instead.
+- **`defaultEmployee`.** Several demos leave it out and open on whichever employee sorts first. An App passes its own employee's username.
+- **Presentation.** `PageHeader`, `PromptCard`, the `demo.*` translation keys and the sample business data exist only to explain the page; use the App's own layout, locales and data.
+
+When a demo and this Skill disagree, the Skill is the contract; the demo shows the wiring.
 
 ## App server
 
