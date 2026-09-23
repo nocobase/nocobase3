@@ -11,7 +11,13 @@ This Skill gets a new application created, configured and running. It does not d
 
 - If the working directory already holds a NocoBase application — a `package.json` with a `nocobase` field, next to an `AGENTS.md` — do not use this Skill. Read that `AGENTS.md` and continue from it.
 - NocoBase 3 is created with `pnpm create @nocobase/app`. Never fall back to NocoBase 2 instructions or the `nb` CLI, including when a package cannot be found; see Troubleshooting instead.
-- Check `node --version` (24 or later) and `pnpm --version` (11). If either is missing or older, tell the user what to install before continuing.
+- On Windows, work in WSL. The commands below assume a POSIX shell such as Bash; the subshell and the inline environment variable do not work in PowerShell or cmd.
+- Check `node --version` (24 or later) and `pnpm --version` (11). If either is missing or does not match, stop before creating anything and tell the user:
+  - which tool is missing or which version was found, and which version is required;
+  - the command to install it on their operating system, preferring a version manager they already use, such as `nvm install 24` or `fnm install 24`, and for pnpm `corepack enable && corepack prepare pnpm@11 --activate` or `npm install -g pnpm@11`;
+  - to open a new shell afterwards, so the new version is on `PATH`.
+
+  Do not install either yourself unless the user asks. Check both versions again before continuing.
 - Create the application in the directory the user names, or in the current directory when it is empty. The directory must be new or empty, and its name becomes the application name: it starts with a lowercase letter or digit and contains only lowercase letters, digits, dots, dashes and underscores. If the directory is not empty or its name is invalid, ask the user for another one. Never overwrite files, and never create a nested project and move its files afterwards.
 
 ## Create
@@ -33,19 +39,19 @@ Read the result before doing anything else:
 | `status: "success"`       | Continue below. Report any `warnings`.                                                                     |
 | `stage: "input"` (exit 2) | Fix the arguments. Nothing was created.                                                                    |
 | `stage: "download"`       | Check the network, and that `https://npm.nocobase.ai/` is reachable. Nothing was created.                  |
-| `stage: "install"`        | The project exists. Run its `nextCommands` (`pnpm install`) inside it to retry. Do not create it again.    |
+| `stage: "install"`        | The project exists. Run `pnpm install` inside it to retry, then continue with Configure. Do not create it again. |
 | `stage: "verify"`         | The SQLite driver's native addon did not load, even after a rebuild. Report `message`; it names the cause. |
 | any other error           | Report `message` and `directory` to the user.                                                              |
 
-Never delete the directory to retry. A warning that the Skills could not be synchronized is fixed with `pnpm skills:sync` inside the project.
+Never delete the directory to retry.
 
 ## Configure
 
-Work from the application directory from here on. Read its `AGENTS.md` now: it is not loaded into this session on its own.
+Work from the application directory from here on. Read its `AGENTS.md` now: it appeared after this session started, so it may not be loaded.
 
-Run the result's `nextCommands` in order. They configure the application with its own commands, then start it; the steps below say what each configuration command needs, including the `config:set` that goes between `config:init` and `config:check` for a database other than SQLite. Pass `--json` to every `pnpm config:*` command and act on the result, not on the exit code alone.
+The result's `nextCommands` configure the application for SQLite and then start it. When a retried install left you without them, they are `pnpm config:init`, `pnpm config:check`, then `pnpm dev`. Unless the user has already named a database, ask which one they want before running them, and adapt them as the steps below describe: a database other than SQLite needs its driver, a `--dialect`, and a `config:set` between `config:init` and `config:check`. Pass `--json` to every `pnpm config:*` command and act on the result, not on the exit code alone.
 
-1. **Choose the database.** Ask which one the user wants. SQLite needs nothing installed: the template depends on its driver. For any other database, install its driver first, for example `pnpm add @nocobase/db-postgres`.
+1. **Choose the database.** Use the one the user named, or ask. SQLite needs nothing installed: the template depends on its driver. For any other database, install its driver first, for example `pnpm add @nocobase/db-postgres`.
 2. **`pnpm config:init --dialect <dialect> --json`** writes `config.yml` from the application's `config.example.yml`, with generated secrets.
    - It installs nothing. When the driver is missing it writes nothing and returns a `suggestedCommand`; run that, then run `config:init` again.
    - An application that is already configured is reported `unchanged`, so re-running the sequence is safe.
@@ -59,7 +65,7 @@ If the application has no `config:*` scripts in its `package.json`, it predates 
 
 ## Start
 
-`pnpm dev` does not exit. Run it in the background, wait for the URL it prints, and confirm that the page opens before reporting success. It refuses to start an application that is not configured; run `pnpm config:check --json` and follow its fixes.
+The last of the `nextCommands`, `pnpm dev`, does not exit. Run it in the background and wait for the URL it prints: it prints a `Local:` line only once the application is ready, and the URL includes the application's path, such as `/main/`. Request that exact URL, for example with `curl -I`, expecting a successful response before reporting success. It refuses to start an application that is not configured; run `pnpm config:check --json` and follow its fixes.
 
 ## Secrets
 
@@ -73,8 +79,18 @@ Tell the user:
 
 - The application directory and the URL.
 - The first sign-in account. It comes from `users.initialAdmin` in the configuration: by default the username `nocobase` (email `admin@nocobase.com`) with the password `admin123`. Read that key rather than assuming the defaults, never repeat a password the user chose, and remind them to change the default one after signing in.
-- How to stop and restart the service.
-- To start a new agent session in the application directory before continuing. The application's Skills are loaded when a session starts, so this session does not have them.
+- That the service was started by this session and stops when the session ends, and how to start it again: `pnpm dev` in the application directory, run in their own terminal or by the next session.
+- To start a new agent session in the application directory before continuing, so that the application's `AGENTS.md` and Skills are loaded. They appeared after this session started, so this session may not have loaded them; a new session loads them reliably. Say exactly how:
+  - When the application is in this session's directory, the user only needs to end this session and start a new one in the same directory.
+  - Otherwise, give the full path and the command that starts your own agent there, for example `cd /work/my-app && claude` for Claude Code.
+  - In a desktop client, the user opens that directory as the project and starts a new session there.
+- What to ask for in the new session:
+  - A small first feature, for example: "Read the project's AGENTS.md first, then add an order list where signed-in users can create and edit orders, saved to the application database."
+  - The step-by-step guide: https://github.com/nocobase/nocobase3/blob/develop/docs/docs/en/get-started/first-feature.md
+
+Keep this handover short: one line per point, commands and paths in code formatting, and only the session case that applies to this user.
+
+If the user wants to keep working in this session instead, do not rely on those Skills being loaded: follow the application's `AGENTS.md` and read the relevant `.agents/skills/<name>/SKILL.md` directly.
 
 ## Troubleshooting
 
@@ -83,6 +99,7 @@ Tell the user:
 | `@nocobase/...` not found (404) in the application   | Its `.npmrc` lacks `@nocobase:registry=https://npm.nocobase.ai/`. Add that line to the project's `.npmrc`.   |
 | No version matches, or the newest one is ignored     | Set `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` for the command.                                                     |
 | `Could not locate the bindings file`                 | Install scripts were disabled (`ignore-scripts=true`). Run `pnpm rebuild better-sqlite3` in the application. |
+| A warning that the Skills could not be synchronized  | Run `pnpm skills:sync` in the application.                                                                   |
 | `pnpm dev` or `pnpm start` says it is not configured | Run `pnpm config:init --json`, then `pnpm config:check --json`, and follow the result.                       |
 
 The full guide: https://github.com/nocobase/nocobase3/blob/develop/docs/docs/en/get-started/create-app-with-agent.md

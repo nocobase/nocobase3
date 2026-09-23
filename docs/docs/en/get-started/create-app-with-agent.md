@@ -15,22 +15,21 @@ If it already contains the application, read its guidance and continue. If it co
 
 ## 2. Check the environment and create the project
 
-Check Node.js 24 and pnpm 11. If a tool is missing or incompatible, explain what is needed and prepare the environment for the user's operating system before continuing. After generation, use the package manager version specified in the project's `package.json`.
+Check Node.js 24 and pnpm 11. If a tool is missing or incompatible, stop before creating anything. Tell the user which version was found and which is required, give the command that installs it on their operating system — preferring a version manager they already use, such as `nvm install 24`, and for pnpm `corepack enable && corepack prepare pnpm@11 --activate` — and ask them to open a new shell afterwards. Install it only if they ask you to, and check both versions again before continuing. After generation, use the package manager version specified in the project's `package.json`.
 
-These commands are for Bash on Linux or WSL. Suppose the session's directory is `/work/my-app`, which already exists and is empty. Check the environment and configure the registry, then run creation from `/work` with `my-app` as the target. Substitute the actual path and name.
+These commands are for Bash on Linux or WSL. Suppose the session's directory is `/work/my-app`, which already exists and is empty. Check the environment, then run creation from `/work` with `my-app` as the target. Substitute the actual path and name.
 
 The creation tool does not accept `.` as an application name. Running it from the parent with the current directory's name generates files directly into the empty directory. Do not create a nested project and move its files afterward.
 
 ```bash
 node --version
 pnpm --version
-pnpm config set @nocobase:registry https://npm.nocobase.ai/
-(cd /work && PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 pnpm create @nocobase/app my-app)
+(cd /work && PNPM_CONFIG_MINIMUM_RELEASE_AGE=0 pnpm create @nocobase/app my-app --json)
 ```
 
-The `@nocobase` packages currently use the internal registry. `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` applies to this command and its child processes, allowing newly published versions. Use the scoped registry setting above. If using an environment variable instead, pnpm 11 uses `pnpm_config_registry`, not `npm_config_registry`.
+`@nocobase/create-app` comes from the public npm. It downloads the template and installs the dependencies from `https://npm.nocobase.ai/` itself, and records that registry in the project's `.npmrc`, so do not change the user's pnpm configuration, for example with `pnpm config set @nocobase:registry`. `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` applies to this command and its child processes, allowing newly published versions. `--json` never prompts: it prints one JSON result on stdout, whose `nextCommands` are the configuration and startup commands to run next.
 
-Once officially published to the public npm registry, use `pnpm create @nocobase/app my-app`. Do not switch to NocoBase 2 installation instructions when a package is unavailable on the public registry.
+Do not switch to NocoBase 2 installation instructions when a package cannot be found.
 
 Wait for creation to finish and check project generation, dependency installation, and development guidance synchronization. Explain and resolve failed steps; an existing directory alone does not mean creation succeeded. Do not recreate the same project.
 
@@ -38,13 +37,13 @@ Wait for creation to finish and check project generation, dependency installatio
 
 The subshell changes the directory only for the creation command; the session remains rooted in the application directory. After creation, explicitly read the generated `AGENTS.md` and relevant development guidance, then continue configuration. Do not assume that new instructions loaded automatically.
 
-After creation and startup, tell the user to start a new session in the application directory before continuing development. NocoBase synchronizes the development Skills into `.agents/skills/` in the project directory, and AI Agents load Skills when a session starts; staying in the current session leaves later development without that project guidance. If the user chose a different application directory, give its actual path as well and ask them to end the current session, enter that directory, and start a new session. In a desktop client, open or create the project for that directory and start a new session.
+After creation and startup, recommend that the user start a new session in the application directory before continuing development. NocoBase synchronizes the development Skills into `.agents/skills/` in the project directory, and they appeared after the current session started, so it may not have loaded them; a new session loads them reliably. If the user keeps working in the current session, follow `AGENTS.md` and read the relevant `.agents/skills/<name>/SKILL.md` directly rather than relying on them being loaded. When the application is in the session's own directory, ending the session and starting a new one there is enough. If the user chose a different application directory, give its actual path and the command that starts the agent there, for example `cd /work/my-app && claude`, and ask them to end the current session first. In a desktop client, open or create the project for that directory and start a new session.
 
 ## 4. Confirm the database and configuration
 
 Confirm that the working directory is the application root. Read `AGENTS.md`, `package.json`, and relevant local development guidance. Inspect existing configuration and continue unfinished work.
 
-Ask which database the user wants; do not choose it for them in the initial creation prompt. Common options include SQLite, PostgreSQL, and MySQL. SQLite uses a local file; PostgreSQL and MySQL require a reachable database service. For other databases, consult the project's current database guidance for the driver and connection requirements.
+Use the database the user named; otherwise ask which one they want, and do not choose it for them. Common options include SQLite, PostgreSQL, and MySQL. SQLite uses a local file; PostgreSQL and MySQL require a reachable database service. For other databases, consult the project's current database guidance for the driver and connection requirements.
 
 After the user chooses, configure the application from its own directory. SQLite needs nothing installed, because the templates depend on its driver:
 
@@ -75,13 +74,13 @@ Start the development service from the application root using its project script
 pnpm dev
 ```
 
-Keep the service running, inspect the actual URL in its output, and confirm that the page opens. Complete required installation or configuration before checking the sign-in page. A reachable installation page alone does not mean initialization is complete.
+`pnpm dev` does not exit, so run it in the background. Inspect the actual URL in its output and confirm that the page opens by requesting it, for example with `curl -I`, and expecting a successful response. Complete required installation or configuration before checking the sign-in page. A reachable installation page alone does not mean initialization is complete.
 
 Provide the user with:
 
 - The application directory and actual URL
 - The account to use for first sign-in and where to obtain its password
-- How to stop and restart the service
+- That the service started by the agent stops when the agent's session ends, and how to start it again with `pnpm dev` in the application directory
 - Any remaining configuration tasks or startup errors
 
 If the template uses its initial administrator, the account is `admin@nocobase.com` with password `admin123`; confirm this against the generated project's account guidance before presenting it. If the user configured an administrator or connected an existing database, use the actual account information instead of assuming the defaults. Do not repeat user-defined passwords in the conversation.
