@@ -23,13 +23,7 @@ describe('@nocobase/app-plugin-notification provider', () => {
     const provider = new NotificationProvider({
       config: {
         get: () => ({
-          channels: [
-            {
-              type: 'email',
-              enabled: true,
-              providers: [{ type: 'fake', name: 'primary' }],
-            },
-          ],
+          channels: { email: { provider: 'fake', enabled: true } },
         }),
       },
       container,
@@ -45,18 +39,22 @@ describe('@nocobase/app-plugin-notification provider', () => {
         async createChannel() {
           return {
             type: 'email',
+            validateMessage: (message: object) => ({
+              message,
+              recipients: [{}],
+            }),
             async prepare(input): Promise<object> {
               return input.message;
             },
           };
         },
       })
-      .registerProvider('email', {
+      .registerProvider({
+        messageType: 'email',
         type: 'fake',
         async createProvider(_context, config) {
           return {
-            name: config.name,
-            type: config.type,
+            type: config.provider,
             async send() {
               return { status: 'accepted' } as const;
             },
@@ -118,7 +116,7 @@ describe('@nocobase/app-plugin-notification provider', () => {
   it('fails fast when the required database dependency is missing', () => {
     const container = createContainer(false);
     const provider = new NotificationProvider({
-      config: { get: () => ({ channels: [] }) },
+      config: { get: () => ({ channels: {} }) },
       container,
     });
 

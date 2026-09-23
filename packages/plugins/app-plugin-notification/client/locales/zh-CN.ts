@@ -73,10 +73,12 @@ const zhCN: NotificationResource = {
     unknown: '状态未知',
     preparing: '准备中',
     submitting: '提交中',
+    retrying: '重试中',
     accepted: '已受理',
   },
   errors: {
     requestFailed: '通知请求失败。',
+    inAppRecipientNotFound: '站内信接收用户不存在。',
   },
 };
 

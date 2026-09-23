@@ -30,11 +30,8 @@ Merge this configuration into `config.yml`, preserving other settings:
 ```yaml
 notification:
   channels:
-    - type: in-app
-      enabled: true
-      providers:
-        - type: database
-          name: default
+    inbox:
+      provider: in-app
 ```
 
 Check that notification, in-app notification, and notification provider plugins are registered. Use the application's `plugin:inspect` command when needed. Restart after configuration changes and check the effective channel. Configure the channel in `config.yml`; `config.example.yml` is only a reference.
@@ -44,9 +41,9 @@ Check that notification, in-app notification, and notification provider plugins 
 ```text
 Read the Notification and In-app Notification Skills. Extend the tutorial-order-result Run script.
 
-Read the actual order using orderId and version. Send only for approved or rejected states. Use ownerId as the recipient, a decision title, the order number as the body, and /tutorial-orders/<orderID> as actionUrl.
+Read the actual order using orderId and version. Send only for approved or rejected states. Use ownerId as the recipient, a decision title, the order number as the body, and a `target` pointing to the internal `/tutorial-orders/<orderID>` route.
 
-Resolve the registered notificationServiceToken through options.services and call send(). Do not insert inbox rows or call a Provider directly. Use channels ['in-app'], source.type tutorial-order, and the order ID as source.referenceId.
+Resolve the registered notificationServiceToken through options.services and call send(). Do not insert inbox rows or call a Provider directly. Use `messages.inbox` to select the named `inbox` Channel, source.type tutorial-order, and the order ID as source.referenceId.
 
 Use tutorial-order:<orderID>:decision:<version> as idempotencyKey. Repeated execution of the same event must not create a second notification.
 
@@ -61,12 +58,13 @@ Resolve the service with `options.services.resolve(notificationServiceToken)`. A
 await notification.send({
   idempotencyKey: `tutorial-order:${order.id}:decision:${order.version}`,
   source: { type: 'tutorial-order', referenceId: order.id },
-  to: { type: 'user', id: order.ownerId },
-  channels: ['in-app'],
-  content: {
-    title: order.status === 'approved' ? 'Order approved' : 'Order rejected',
-    body: order.number,
-    actionUrl: `/tutorial-orders/${order.id}`,
+  messages: {
+    inbox: {
+      to: order.ownerId,
+      title: order.status === 'approved' ? 'Order approved' : 'Order rejected',
+      body: order.number,
+      target: { type: 'route', path: `/tutorial-orders/${order.id}` },
+    },
   },
 });
 ```

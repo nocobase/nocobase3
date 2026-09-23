@@ -9,7 +9,13 @@ import {
 export type NotificationLogStatus =
   'pending' | 'processing' | 'completed' | 'partial' | 'failed' | 'unknown';
 export type NotificationDeliveryStatus =
-  'pending' | 'preparing' | 'submitting' | 'accepted' | 'failed' | 'unknown';
+  | 'pending'
+  | 'preparing'
+  | 'submitting'
+  | 'retrying'
+  | 'accepted'
+  | 'failed'
+  | 'unknown';
 export type NotificationAttemptStatus =
   'submitting' | 'accepted' | 'failed' | 'unknown';
 
@@ -34,10 +40,10 @@ export interface NotificationLogRecord {
 export interface NotificationDeliveryRecord {
   readonly id: string;
   readonly notificationId: string;
-  readonly channel: string;
+  readonly channelName: string;
+  readonly channelType: string;
   readonly recipientSnapshot: object;
   readonly messageSnapshot: object;
-  readonly providerName: string;
   readonly providerType: string;
   readonly attemptCount: number;
   readonly status: NotificationDeliveryStatus;
@@ -60,7 +66,6 @@ export interface NotificationAttemptRecord {
   readonly id: string;
   readonly deliveryId: string;
   readonly sequence: number;
-  readonly providerName: string;
   readonly providerType: string;
   readonly status: NotificationAttemptStatus;
   readonly startedAt: string;
@@ -71,10 +76,7 @@ export interface NotificationAttemptRecord {
 }
 
 export interface NotificationRetryResolutionRecord {
-  readonly type:
-    | 'safe_provider_idempotency'
-    | 'duplicate_risk_accepted'
-    | 'terminal_failure';
+  readonly type: 'terminal_failure';
   readonly reason: string;
   readonly requestedAt: string;
 }
@@ -131,10 +133,6 @@ export interface NotificationStore {
     attempt: NotificationAttemptRecord,
     leaseExpiresAt: string,
   ): Promise<NotificationDeliveryRecord | undefined>;
-  updateAttemptRetryResolution(
-    delivery: NotificationDeliveryRecord,
-    attempt: NotificationAttemptRecord,
-  ): Promise<NotificationDeliveryRecord | undefined>;
   renewLease(
     id: string,
     leaseToken: string,
@@ -145,7 +143,7 @@ export interface NotificationStore {
     delivery: NotificationDeliveryRecord,
     status: Extract<
       NotificationDeliveryStatus,
-      'accepted' | 'failed' | 'unknown'
+      'accepted' | 'failed' | 'retrying' | 'unknown'
     >,
     error?: NotificationErrorRecord,
     nextRunAt?: string,
@@ -160,7 +158,6 @@ export interface NotificationStore {
   ): Promise<NotificationDeliveryRecord | undefined>;
   retryDelivery(
     id: string,
-    expectedStatus: Extract<NotificationDeliveryStatus, 'failed' | 'unknown'>,
     resolution: NotificationRetryResolutionRecord,
   ): Promise<NotificationDeliveryRecord | undefined>;
   recoverExpired(now: string): Promise<readonly NotificationDeliveryRecord[]>;
@@ -179,10 +176,10 @@ interface NotificationRow extends Row {
 interface DeliveryRow extends Row {
   id: string;
   notificationId: string;
-  channel: string;
+  channelName: string;
+  channelType: string;
   recipientSnapshot: object | string;
   messageSnapshot: object | string;
-  providerName: string;
   providerType: string;
   attemptCount: number;
   status: NotificationDeliveryStatus;
@@ -200,7 +197,6 @@ interface AttemptRow extends Row {
   id: string;
   deliveryId: string;
   sequence: number;
-  providerName: string;
   providerType: string;
   status: NotificationAttemptStatus;
   startedAt: string;
@@ -351,7 +347,7 @@ export class DatabaseNotificationStore implements NotificationStore {
         builder.or([
           builder.eb('status', '=', 'pending'),
           builder.eb.and([
-            builder.eb('status', '=', 'failed'),
+            builder.eb('status', '=', 'retrying'),
             builder.eb('nextRunAt', '<=', now),
           ]),
         ]),
@@ -410,7 +406,7 @@ export class DatabaseNotificationStore implements NotificationStore {
         builder.or([
           builder.eb('status', '=', 'pending'),
           builder.eb.and([
-            builder.eb('status', '=', 'failed'),
+            builder.eb('status', '=', 'retrying'),
             builder.eb('nextRunAt', '<=', now),
           ]),
         ]),
@@ -462,54 +458,12 @@ export class DatabaseNotificationStore implements NotificationStore {
     );
   }
 
-  async updateAttemptRetryResolution(
-    delivery: NotificationDeliveryRecord,
-    attempt: NotificationAttemptRecord,
-  ): Promise<NotificationDeliveryRecord | undefined> {
-    const now = await this.now();
-    try {
-      await this.database.transaction(async (connection): Promise<void> => {
-        const attemptResult = await connection.query
-          .updateTable<AttemptRow>('notificationDeliveryAttempts')
-          .set({
-            retryResolution: attempt.retryResolution
-              ? JSON.stringify(attempt.retryResolution)
-              : null,
-          })
-          .where('id', '=', attempt.id)
-          .where('deliveryId', '=', delivery.id)
-          .where('status', '=', 'submitting')
-          .execute();
-        if (attemptResult.updatedCount !== 1)
-          throw new StaleNotificationTransitionError();
-        const deliveryResult = await connection.query
-          .updateTable<DeliveryRow>('notificationDeliveries')
-          .set({
-            retryResolution: delivery.retryResolution
-              ? JSON.stringify(delivery.retryResolution)
-              : null,
-            updatedAt: now,
-          })
-          .where('id', '=', delivery.id)
-          .where('status', '=', 'submitting')
-          .where('leaseToken', '=', delivery.leaseToken ?? '')
-          .execute();
-        if (deliveryResult.updatedCount !== 1)
-          throw new StaleNotificationTransitionError();
-      });
-    } catch (error) {
-      if (error instanceof StaleNotificationTransitionError) return undefined;
-      throw error;
-    }
-    return this.getDelivery(delivery.id);
-  }
-
   async finishAttemptAndDelivery(
     attempt: NotificationAttemptRecord,
     delivery: NotificationDeliveryRecord,
     status: Extract<
       NotificationDeliveryStatus,
-      'accepted' | 'failed' | 'unknown'
+      'accepted' | 'failed' | 'retrying' | 'unknown'
     >,
     error?: NotificationErrorRecord,
     nextRunAt?: string,
@@ -610,7 +564,6 @@ export class DatabaseNotificationStore implements NotificationStore {
 
   async retryDelivery(
     id: string,
-    expectedStatus: Extract<NotificationDeliveryStatus, 'failed' | 'unknown'>,
     resolution: NotificationRetryResolutionRecord,
   ): Promise<NotificationDeliveryRecord | undefined> {
     const now = await this.now();
@@ -620,26 +573,24 @@ export class DatabaseNotificationStore implements NotificationStore {
           .selectFrom<DeliveryRow>('notificationDeliveries')
           .selectAll()
           .where('id', '=', id)
-          .where('status', '=', expectedStatus)
+          .where('status', '=', 'failed')
           .where('nextRunAt', 'is', null)
           .executeTakeFirst<DeliveryRow>();
         if (!current) return false;
         const result = await connection.query
           .updateTable<DeliveryRow>('notificationDeliveries')
           .set({
-            status: 'pending',
-            nextRunAt: null,
+            status: 'retrying',
+            nextRunAt: now,
             lastError: null,
             retryResolution: JSON.stringify(resolution),
-            ...(resolution.type === 'safe_provider_idempotency'
-              ? {}
-              : { providerIdempotency: null }),
+            providerIdempotency: null,
             leaseToken: null,
             leaseExpiresAt: null,
             updatedAt: now,
           })
           .where('id', '=', id)
-          .where('status', '=', expectedStatus)
+          .where('status', '=', 'failed')
           .where('nextRunAt', 'is', null)
           .execute();
         if (result.updatedCount !== 1) return false;
@@ -768,19 +719,14 @@ export function summarizeNotificationDeliveries(
         item.status === 'pending' ||
         item.status === 'preparing' ||
         item.status === 'submitting' ||
-        (item.status === 'failed' && item.nextRunAt !== undefined),
+        item.status === 'retrying',
     )
   )
     return 'processing';
   if (deliveries.some((item) => item.status === 'unknown')) return 'unknown';
   if (deliveries.every((item) => item.status === 'accepted'))
     return 'completed';
-  if (
-    deliveries.every(
-      (item) => item.status === 'failed' && item.nextRunAt === undefined,
-    )
-  )
-    return 'failed';
+  if (deliveries.every((item) => item.status === 'failed')) return 'failed';
   return 'partial';
 }
 
@@ -802,7 +748,7 @@ function fromLogRow(
 ): NotificationLogRecord {
   const messageSnapshot: Record<string, object> = {};
   for (const delivery of deliveries)
-    messageSnapshot[delivery.channel] = delivery.messageSnapshot;
+    messageSnapshot[delivery.channelName] = delivery.messageSnapshot;
   return {
     id: row.id,
     idempotencyKey: row.idempotencyKey ?? undefined,
@@ -824,10 +770,10 @@ function toDeliveryRow(record: NotificationDeliveryRecord): DeliveryRow {
   return {
     id: record.id,
     notificationId: record.notificationId,
-    channel: record.channel,
+    channelName: record.channelName,
+    channelType: record.channelType,
     recipientSnapshot: JSON.stringify(record.recipientSnapshot),
     messageSnapshot: JSON.stringify(record.messageSnapshot),
-    providerName: record.providerName,
     providerType: record.providerType,
     attemptCount: record.attemptCount,
     status: record.status,
@@ -850,10 +796,10 @@ function fromDeliveryRow(row: DeliveryRow): NotificationDeliveryRecord {
   return {
     id: row.id,
     notificationId: row.notificationId,
-    channel: row.channel,
+    channelName: row.channelName,
+    channelType: row.channelType,
     recipientSnapshot: parseObject(row.recipientSnapshot, 'recipient'),
     messageSnapshot: parseObject(row.messageSnapshot, 'message'),
-    providerName: row.providerName,
     providerType: row.providerType,
     attemptCount: row.attemptCount,
     status: row.status,
@@ -909,7 +855,6 @@ function toAttemptRow(record: NotificationAttemptRecord): AttemptRow {
     id: record.id,
     deliveryId: record.deliveryId,
     sequence: record.sequence,
-    providerName: record.providerName,
     providerType: record.providerType,
     status: record.status,
     startedAt: record.startedAt,
@@ -937,7 +882,6 @@ function fromAttemptRow(row: AttemptRow): NotificationAttemptRecord {
     id: row.id,
     deliveryId: row.deliveryId,
     sequence: row.sequence,
-    providerName: row.providerName,
     providerType: row.providerType,
     status: row.status,
     startedAt: row.startedAt,

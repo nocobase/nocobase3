@@ -1,3 +1,4 @@
+import { isNotificationTarget } from '@nocobase/app-plugin-notification/client';
 import { PageHeader } from './page-header.js';
 import { useApiClient } from '@nocobase/app-client';
 import { useTranslation } from '@nocobase/i18n/client';
@@ -418,10 +419,17 @@ function InboxRow({ item, onMutate }: InboxRowProps): ReactElement {
           <time dateTime={item.createdAt}>
             {new Date(item.createdAt).toLocaleString()}
           </time>
-          {item.actionUrl ? (
+          {isNotificationTarget(item.target) ? (
             <Button
               nativeButton={false}
-              render={<NavLink to={item.actionUrl} />}
+              role='link'
+              render={
+                item.target.type === 'route' ? (
+                  <NavLink to={item.target.path} />
+                ) : (
+                  <a href={item.target.url} />
+                )
+              }
               variant='link'
               size='sm'
               className='h-auto px-1 text-xs'
