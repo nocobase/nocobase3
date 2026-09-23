@@ -11,7 +11,12 @@ This Skill gets a new application created, configured and running. It does not d
 
 - If the working directory already holds a NocoBase application — a `package.json` with a `nocobase` field, next to an `AGENTS.md` — do not use this Skill. Read that `AGENTS.md` and continue from it.
 - NocoBase 3 is created with `pnpm create @nocobase/app`. Never fall back to NocoBase 2 instructions or the `nb` CLI, including when a package cannot be found; see Troubleshooting instead.
-- Check `node --version` (24 or later) and `pnpm --version` (11). If either is missing or older, tell the user what to install for their operating system, and install it only if they ask you to.
+- Check `node --version` (24 or later) and `pnpm --version` (11). If either is missing or does not match, stop before creating anything and tell the user:
+  - which tool is missing or which version was found, and which version is required;
+  - the command to install it on their operating system, preferring a version manager they already use, such as `nvm install 24` or `fnm install 24`, and for pnpm `corepack enable && corepack prepare pnpm@11 --activate` or `npm install -g pnpm@11`;
+  - to open a new shell afterwards, so the new version is on `PATH`.
+
+  Do not install either yourself unless the user asks. Check both versions again before continuing.
 - Create the application in the directory the user names, or in the current directory when it is empty. The directory must be new or empty, and its name becomes the application name: it starts with a lowercase letter or digit and contains only lowercase letters, digits, dots, dashes and underscores. If the directory is not empty or its name is invalid, ask the user for another one. Never overwrite files, and never create a nested project and move its files afterwards.
 
 ## Create

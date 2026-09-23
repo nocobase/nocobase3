@@ -15,7 +15,7 @@ If it already contains the application, read its guidance and continue. If it co
 
 ## 2. Check the environment and create the project
 
-Check Node.js 24 and pnpm 11. If a tool is missing or incompatible, tell the user what to install for their operating system, and install it only if they ask you to. After generation, use the package manager version specified in the project's `package.json`.
+Check Node.js 24 and pnpm 11. If a tool is missing or incompatible, stop before creating anything. Tell the user which version was found and which is required, give the command that installs it on their operating system — preferring a version manager they already use, such as `nvm install 24`, and for pnpm `corepack enable && corepack prepare pnpm@11 --activate` — and ask them to open a new shell afterwards. Install it only if they ask you to, and check both versions again before continuing. After generation, use the package manager version specified in the project's `package.json`.
 
 These commands are for Bash on Linux or WSL. Suppose the session's directory is `/work/my-app`, which already exists and is empty. Check the environment, then run creation from `/work` with `my-app` as the target. Substitute the actual path and name.
 
