@@ -1,3 +1,4 @@
+import { AgentServiceError } from '../agent/types.js';
 import { DomainError } from '../types.js';
 import type { AuthEnv, AuthSession } from '@nocobase/app-plugin-authentication';
 import type { Logger } from '@nocobase/logging';
@@ -72,12 +73,21 @@ async function runSSEAction(
     await handler();
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    const code = agentErrorCode(error);
     target.write(
-      `data: ${JSON.stringify({ type: 'error', body: message })}\n\n`,
+      `data: ${JSON.stringify({ type: 'error', body: message, ...(code ? { code } : {}) })}\n\n`,
     );
   } finally {
     target.end();
   }
+}
+
+// The agent failure behind an error, if there is one: the stream always
+// answers 200, so its error event is where a caller tells failures apart.
+function agentErrorCode(error: unknown): string | undefined {
+  if (error instanceof AgentServiceError) return error.code;
+  const cause = (error as { cause?: unknown } | undefined)?.cause;
+  return cause instanceof AgentServiceError ? cause.code : undefined;
 }
 
 export function errorResponse(error: unknown): Response {

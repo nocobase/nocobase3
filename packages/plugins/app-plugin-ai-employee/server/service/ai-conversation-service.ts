@@ -127,8 +127,9 @@ function isAIEmployeeEnabled(
 function sendErrorResponse(
   target: ConversationStreamTarget,
   errorMessage: string,
+  code?: string,
 ) {
-  sendStreamError(target, errorMessage);
+  sendStreamError(target, errorMessage, undefined, code);
 }
 
 /**
@@ -353,7 +354,7 @@ export class AIConversationService {
   private describeFailure(
     error: unknown,
     translate: Translate,
-  ): { status: number; message: string } {
+  ): { status: number; message: string; code?: AgentServiceErrorCode } {
     this.logger.error?.(error);
     if (error instanceof ResourceActionError)
       return { status: error.status, message: error.message };
@@ -361,6 +362,7 @@ export class AIConversationService {
       return {
         status: AGENT_ERROR_STATUS[error.code] ?? 500,
         message: error.rootMessage,
+        code: error.code,
       };
     if (error instanceof Error) return { status: 500, message: error.message };
     return { status: 500, message: translate('Server unexpected error occur') };
@@ -931,12 +933,12 @@ export class AIConversationService {
       }
       return await runInvoke(request);
     } catch (err: unknown) {
-      const { status, message } = this.describeFailure(err, translate);
+      const { status, message, code } = this.describeFailure(err, translate);
       if (!stream) {
-        throw new ResourceActionError(status, message);
+        throw new ResourceActionError(status, message, { cause: err });
       }
       const target = streamTarget(transport);
-      sendErrorResponse(target, message);
+      sendErrorResponse(target, message, code);
       if (!target.writableEnded) target.end();
       return undefined;
     }
@@ -1142,12 +1144,12 @@ export class AIConversationService {
       }
       return await agent.forkInvoke(request);
     } catch (err: unknown) {
-      const { status, message } = this.describeFailure(err, translate);
+      const { status, message, code } = this.describeFailure(err, translate);
       if (!stream) {
-        throw new ResourceActionError(status, message);
+        throw new ResourceActionError(status, message, { cause: err });
       }
       const target = streamTarget(transport);
-      sendErrorResponse(target, message);
+      sendErrorResponse(target, message, code);
       if (!target.writableEnded) target.end();
       return undefined;
     }
