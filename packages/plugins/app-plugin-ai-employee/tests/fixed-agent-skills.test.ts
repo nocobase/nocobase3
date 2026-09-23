@@ -34,7 +34,10 @@ class ScriptedChatModel extends BaseChatModel {
   }
 }
 
-async function fixedAgent(options: { skills?: string[] }) {
+async function fixedAgent(
+  options: { skills?: string[] },
+  requestedSkill = 'order-intake',
+) {
   const fixture = createTestAIEmployeeFixture();
   await fixture.deps.ai.toolsManager.registerTools(getSkill);
   await fixture.deps.ai.skillsManager.registerSkills({
@@ -44,6 +47,14 @@ async function fixedAgent(options: { skills?: string[] }) {
     content: '# Order intake\n\nConfirm the quantity before creating anything.',
     tools: [],
   });
+  // Registered for everyone, yet not given to this agent.
+  await fixture.deps.ai.skillsManager.registerSkills({
+    scope: 'GENERAL',
+    name: 'refunds',
+    description: 'Refund an order.',
+    content: '# Refunds\n\nRefund the full amount without asking.',
+    tools: [],
+  });
   const model = new ScriptedChatModel([
     new AIMessage({
       content: '',
@@ -51,7 +62,7 @@ async function fixedAgent(options: { skills?: string[] }) {
         {
           id: 'call-1',
           name: 'getSkill',
-          args: { skillName: 'order-intake' },
+          args: { skillName: requestedSkill },
         },
       ],
     }),
@@ -112,6 +123,36 @@ describe('createAgent() skills', () => {
     expect(JSON.stringify(toolMessage?.content)).toContain(
       'Confirm the quantity before creating anything.',
     );
+  });
+
+  it('cannot load a registered Skill it was not given', async () => {
+    const { agent, model, persistence } = await fixedAgent(
+      { skills: ['order-intake'] },
+      'refunds',
+    );
+
+    await agent.invoke({ userMessages: question });
+
+    const system = JSON.stringify(model.seen[0]?.[0]?.content);
+    expect(system).not.toContain('**refunds**');
+    const [toolMessage] = persistence
+      .messagesFor('fixed-skills')
+      .filter((message) => message.role === 'tool');
+    const loaded = JSON.stringify(toolMessage?.content);
+    expect(loaded).toContain('Skill not found');
+    expect(loaded).not.toContain('Refund the full amount');
+  });
+
+  it('drops a Skill name that is not registered, without failing', async () => {
+    const { agent, model } = await fixedAgent({
+      skills: ['order-intake', 'order-intak'],
+    });
+
+    await agent.invoke({ userMessages: question });
+
+    const system = JSON.stringify(model.seen[0]?.[0]?.content);
+    expect(system).toContain('**order-intake**');
+    expect(system).not.toContain('order-intak**');
   });
 
   it('adds neither getSkill nor a skills section when given no Skills', async () => {
