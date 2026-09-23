@@ -1,12 +1,12 @@
 ---
 title: 'Tool 卡片'
 description: '为 AI Tool 的审批、执行状态和结构化结果注册专用渲染组件。'
-keywords: 'AIToolRendererProvider,ToolCallCard,Tool renderer,ASK,ALLOW'
+keywords: 'AIToolRendererProvider,toolRenderers,AIToolRendererProps,Tool renderer,ASK,ALLOW'
 ---
 
 # Tool 卡片
 
-聊天窗口会用 `ToolCallCard` 呈现模型发起的 Tool 调用。通用卡片可以显示输入、执行状态、错误和结果；业务应用还可以按 `toolName` 注册专用 Renderer，把结构化结果呈现为选择器、图表、报告或工作流确认界面。
+聊天窗口会用内置的通用 Tool 卡片呈现模型发起的 Tool 调用。通用卡片可以显示输入、执行状态、错误和结果；业务应用还可以按 Tool 注册名注册专用 Renderer，把结构化结果呈现为选择器、图表、报告或工作流确认界面。通用卡片是聊天窗口的内部组件，没有从 Registry 的入口导出，应用通过 Renderer 扩展它，而不是直接引用它。
 
 ![Tool 卡片组件示例](https://static-docs.nocobase.com/20260914111142-ai-components-tools.png)
 
@@ -19,7 +19,7 @@ keywords: 'AIToolRendererProvider,ToolCallCard,Tool renderer,ASK,ALLOW'
 | `output-available` | Tool 已返回结果                 |
 | `output-error`     | Tool 执行失败，展示可理解的错误 |
 
-`ASK` Tool 在 `input-available` 时显示允许、拒绝或修改参数操作。Renderer 只负责交互和展示，审批决定仍交给 `AIChatProvider` 和 Transport 处理。
+`ASK` Tool 在 `input-available` 时显示允许、拒绝或修改参数操作。Renderer 只负责交互和展示，审批决定通过传入的回调交给 `AIChatProvider` 和 Transport 处理，Renderer 不要自己修改已保存的 Tool 状态。
 
 ## 注册专用 Renderer
 
@@ -28,14 +28,16 @@ keywords: 'AIToolRendererProvider,ToolCallCard,Tool renderer,ASK,ALLOW'
 ```tsx
 <NocoBaseAIRootProvider
   toolRenderers={{
-    suggestions: SuggestionsToolCard,
-    businessReportGenerator: BusinessReportCard,
-    chartGenerator: ChartToolCard,
+    'find-customer': CustomerToolCard,
   }}
 >
   {children}
 </NocoBaseAIRootProvider>
 ```
+
+内置 Renderer 已经覆盖 `suggestions`、`chartGenerator`、`businessReportGenerator`、子员工委派和工作流输出，传入的映射会和它们合并。使用相同的键会替换内置 Renderer，只有确实要换掉内置界面时才这样做。
+
+Renderer 组件接收 `AIToolRendererProps`：`part` 是这次 Tool 调用的内容和状态，`disabled` 表示当前不可操作，`onApprove`、`onReject`、`onEdit` 和 `onRevise` 用来提交用户的审批决定。映射的值可以直接是组件，也可以是 `{ component, handlesApproval?, standalone? }`：`handlesApproval` 表示 Renderer 自己提供审批操作，`standalone` 表示它脱离通用卡片的布局单独渲染。
 
 Renderer 必须能够显示历史消息中已经完成的 Tool part。不要只处理实时执行回调，否则刷新会话后卡片会变为空白。输入和输出都应先做运行时校验，再渲染可信字段。
 

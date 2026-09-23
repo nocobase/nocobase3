@@ -21,7 +21,7 @@ ai:
         - ai-files
   skills:
     paths:
-      - ./company-ai-skills
+      - /srv/nocobase/ai-skills # 部署环境提供的绝对路径
   llmServices:
     - name: gpt
       title: GPT
@@ -42,6 +42,8 @@ ai:
 ```
 
 AI 员工插件会递归展开 `llmServices` 和 `mcpServers` 中的 `${NAME}`。其他任意 `config.yml` 字段没有这项通用能力。密钥不要写进任何入库的文件，也不要放到 `config.yml` 的 `client` 块，这个块会下发到浏览器。密钥可以放在哪里、各自的限制，见[快速开始 · 第二步](../quick-start.md#第二步配置密钥并重启)。
+
+`ai.skills.paths` 可以写绝对路径，也可以写相对于应用根目录的路径，不过应用根目录在开发和部署时不是同一个目录：开发时是源码根目录，构建后的服务从 `dist/` 运行，相对路径会解析到 `dist/` 里，而构建不会复制这个目录，于是它被悄悄跳过，也不会有任何提示。构建只会复制应用自己的 `ai/skills`。部署环境请写部署环境自己提供的绝对路径，详见 [注册 Skill](../development/skill.md#skill-怎样被加载)。
 
 ## 修改后重启
 
@@ -64,3 +66,4 @@ AI 员工插件会递归展开 `llmServices` 和 `mcpServers` 中的 `${NAME}`�
 - [附件存储](./storage.md) — AI Employee 文件磁盘优先级
 - [MCP 服务](./mcp.md) — `stdio`、`http` 和 `sse` 配置
 - [管理 AI 服务](../management/index.md) — 查看运行时同步结果
+- [注册 Skill](../development/skill.md) — Skill 目录的加载顺序和路径解析

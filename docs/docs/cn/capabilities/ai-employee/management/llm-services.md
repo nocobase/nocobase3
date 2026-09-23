@@ -1,12 +1,12 @@
 ---
 title: 'LLM 服务管理'
-description: '在 AI Employee 设置页查看 LLM 服务、启用服务并选择 Provider 或自定义模型。'
+description: '在设置页的 LLM 服务页查看 LLM 服务、启用服务并选择 Provider 或自定义模型。'
 keywords: 'LLM Service,Provider models,custom models,Enabled,NocoBase'
 ---
 
 # LLM 服务管理
 
-「LLM Service」Tab 列出 `config.yml` 已声明的服务。表格显示 UID、标题、Provider、开放模型和 Enabled 状态；连接密钥不会显示在浏览器中。
+设置页侧栏「AI」分组中的「LLM 服务」页（`/settings/ai/llm-services`）列出 `config.yml` 已声明的服务。表格显示 UID、标题、Provider、开放模型和 Enabled 状态；连接密钥不会显示在浏览器中。
 
 ![编辑 LLM 服务模型](https://static-docs.nocobase.com/20260914111142-ai-employee-llm-services.png)
 
@@ -14,7 +14,7 @@ keywords: 'LLM Service,Provider models,custom models,Enabled,NocoBase'
 
 使用每行右侧的 Enabled 开关控制服务是否可供员工使用。切换失败时，页面会恢复原值并显示错误。
 
-修改 `config.yml` 并重启服务后，同名服务的 Provider、标题、连接参数、默认模型参数和排序会按配置重写，但管理页保存的 Enabled 状态和模型列表会保留。配置里省略的连接参数和默认模型参数会被重置，详见 [同步行为](../configuration/llm.md#同步行为)。新增服务使用配置中的初始值。
+修改 `config.yml` 并重启服务后，同名服务的 Provider、标题、连接参数、默认模型参数和排序会按配置重写，但管理页保存的 Enabled 状态和模型列表会保留。例外是给服务打开了 `overrideEnabledModels: true`：这时模型列表每次启动都会按 `config.yml` 的 `enabledModels` 重新套用，管理页上对它的模型改动会被覆盖，Enabled 状态仍然保留，详见 [让 config.yml 接管模型列表](../configuration/llm.md#让-configyml-接管模型列表)。配置里省略的连接参数和默认模型参数会被重置，详见 [同步行为](../configuration/llm.md#同步行为)。新增服务使用配置中的初始值。
 
 ## 选择 Provider 模型
 
@@ -29,11 +29,11 @@ Provider 无法列出模型，或者要使用自定义网关模型时，选择�
 - Model ID：真正发送给 Provider 的值
 - Display name：界面中显示的名称
 
-同一个服务内 Model ID 应保持唯一。保存后，再到 AI Employee 的 Model settings 中把它分配给指定员工。
+同一个服务内 Model ID 应保持唯一。保存后，再到「AI 员工」页的 Model settings 中把它分配给指定员工。
 
 ## 配置职责
 
-管理页只维护 Enabled 和模型列表。服务 `name`、Provider、API Key、Base URL 和默认模型参数仍由 `config.yml` 管理。不要把密钥放进前端代码或浏览器配置。
+管理页只维护 Enabled 和模型列表，打开了 `overrideEnabledModels` 的服务，模型列表也由 `config.yml` 管理。服务 `name`、Provider、API Key、Base URL 和默认模型参数仍由 `config.yml` 管理。不要把密钥放进前端代码或浏览器配置。
 
 ## 相关链接
 

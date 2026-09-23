@@ -15,11 +15,12 @@ keywords: 'AI Skill,SKILL.md,SkillsLoader,ai.skills.paths,NocoBase'
 ```md
 ---
 name: customer-follow-up
-description: Review customer context and prepare a practical follow-up plan.
+description: Prepare a follow-up plan when a customer record needs a next action.
 scope: SPECIFIED
+i18n:
+  namespace: '@acme/example-app'
 introduction:
   title: Customer follow-up
-  about: Review account context and prepare the next action.
 tools:
   - find-customer
 ---
@@ -36,6 +37,10 @@ tools:
 ```
 
 `name` 和 `description` 必填。`scope` 支持 `SPECIFIED`、`GENERAL` 和 `CUSTOM`，省略时默认是 `SPECIFIED`。`tools` 中填写 Tool 的注册名，不要填写文件路径。
+
+`description` 是给模型看的，模型根据它判断要不要加载这个 Skill，所以要写成触发条件，而不是标题。正文会在加载时交给模型。
+
+`i18n.namespace` 填拥有这个 Skill 的应用或插件 `package.json` 的真实 `name`。管理页显示 Skill 时用的是 `introduction.title` 和 `description`，这两段英文原文本身就是翻译键，在应用 `client/locales/` 的语言包里用同一段英文提供 `en-US` 和 `zh-CN` 的条目。不需要为显示再加一个 `about` 字段。翻译只影响显示，模型读到的内容保持不变。Skill 和它点名的 Tool 各自声明自己的 `i18n`，Tool 不会继承 Skill 的命名空间。
 
 **员工 Skill 只有一个文件。** 模型通过 `getSkill` 加载 Skill 时，拿到的只是 `SKILL.md` 的正文，而且没有能读文件的 Tool，所以正文里指向 `references/` 的链接，模型打不开。完成这项工作需要的内容都写进 `SKILL.md` 正文；`references/` 里的页面只给维护它的人看。
 

@@ -18,7 +18,7 @@ ai:
       provider: openai
       options:
         apiKey: ${OPENAI_API_KEY}
-        baseURL: https://api.openai.com
+        # baseURL: https://gateway.internal/v1   # 可选，覆盖 Provider 的默认地址
       enabledModels:
         - label: GPT-5.6
           value: gpt-5.6
@@ -62,6 +62,8 @@ ai:
 | `orcarouter`         | OrcaRouter              | 聚合模型路由服务                  |
 | `shengsuanyun`       | 胜算云                  | 胜算云模型服务                    |
 | `xai`                | xAI                     | Grok 模型                         |
+
+`baseURL` 省略时使用 Provider 的默认地址。请求路径会直接拼在 `baseURL` 后面，所以自定义地址要和默认地址保持同样的层级。比如 `openai` 和 `openai-completions` 的默认地址是 `https://api.openai.com/v1`，网关地址也要写到 `/v1` 为止，写成 `https://api.openai.com` 会把请求发到不存在的路径上；`deepseek`、`anthropic` 的默认地址则不带 `/v1`，分别是 `https://api.deepseek.com` 和 `https://api.anthropic.com`。
 
 Provider 注册键区分大小写。`provider: openai` 当前对应 Responses API；已有网关只兼容 Chat Completions 时，改用 `openai-completions`。
 

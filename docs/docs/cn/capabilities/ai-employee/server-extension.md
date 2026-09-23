@@ -88,7 +88,7 @@ const result = await agent.invoke({
 });
 ```
 
-`createAgent()` 不查找 Employee，`sessionId`、`actor` 和 `runtime` 都是必填项。它会解析模型、已注册 Tool 和 Skill 绑定的 Tool，并默认使用数据库会话持久化。固定 Agent 没有员工的 Tool 预设，每个 Tool 是否需要确认由它自己的 `defaultPermission` 决定：`ALLOW` 直接执行，`ASK`（没有声明时也是 `ASK`）会像员工一样暂停，由 `invoke()` 返回 `interrupt`，再通过 `resumeInvoke()` 继续。
+`createAgent()` 不查找 Employee，`sessionId`、`actor` 和 `runtime` 都是必填项。它在创建时就解析模型：没有传 `model` 时取第一个启用的模型，一个都没有就在创建时报错。它会激活 `tools` 点名的 Tool 和 `skills` 里各个 Skill 点名的 Tool；传了 `skills` 时还会自动带上 `getSkill`，并在系统提示词里列出这些 Skill，模型遇到匹配的请求时就能加载 Skill 的正文。它默认使用数据库会话持久化。固定 Agent 没有员工的 Tool 预设，每个 Tool 是否需要确认由它自己的 `defaultPermission` 决定：`ALLOW` 直接执行，`ASK`（没有声明时也是 `ASK`）会像员工一样暂停，由 `invoke()` 返回 `interrupt`，再通过 `resumeInvoke()` 继续。
 
 ## 无人值守运行
 
@@ -96,12 +96,14 @@ const result = await agent.invoke({
 
 **用 `invoke()`，不用 `stream()`。** `stream()` 只有被消费时才会推进，无人消费就会停在一个打开的会话上。需要结构化结果时，传 Zod `responseFormat` 并读取 `structuredResponse`。
 
-**传入 `AbortSignal`，由调用方负责取消。** `signal` 会和服务自己的控制器合并，任何一方都能停止运行。用外部系统已有的取消信号，例如任务超时或关机钩子。除了 200 步的递归上限，没有内置的时长限制。abort 之后只有正在生成的那一轮助手消息会被丢弃：用户消息在运行开始时已经保存，之前各步的助手消息和 Tool 结果也已保存，执行过的 Tool 副作用已经发生。所以重试前先读会话，看运行进行到哪一步，并依赖 Tool 自身可以安全地重复调用。
+**用一个真实存在、并且有授权的用户运行。** 任务背后没有登录用户，但 Agent 仍然需要一个。会话的 `userId` 指向用户表，随便编一个 id 会在 `conversations.create` 时失败；数据工具按这个用户在授权服务里的权限读取数据，不看 `isRoot`，没有授权的用户只会读到一个空目录，而不会报错。建议为任务建一个专用的服务账号，只授予任务需要读写的权限，再把这个用户作为 `actor` 传入。
+
+**传入 `AbortSignal`，由调用方负责取消。** `signal` 会和服务自己的控制器合并，任何一方都能停止运行。用外部系统已有的取消信号，例如任务超时或关机钩子。除了 200 步的递归上限，没有内置的时长限制。abort 之后只有正在生成的那一轮助手消息会被丢弃：用户消息在运行开始时已经保存，之前各步的助手消息和 Tool 结果也已保存，执行过的 Tool 副作用已经发生。所以重试前先读会话，看运行进行到哪一步，并依赖 Tool 自身可以安全地重复调用。取消信号触发时还在执行的 Tool，会被记成 `status: 'error'`、内容是取消原因，但它的工作可能已经完成：记录显示失败，副作用却可能已经发生，所以判断进度要看 Tool 写入的业务数据，不能只看这个状态。
 
 **事先决定中断怎么处理。** 最可靠的做法是让运行根本不会中断，也就是清楚它能用到的每一个 Tool：
 
-- `createAgent()` 只能用到它点名的 Tool 和 Skill 点名的 Tool，只点名 `defaultPermission: 'ALLOW'` 的 Tool 即可。
-- `createAIEmployee()` 还会带上所有 `GENERAL` Tool，其中有两个一定会中断：`suggestions` 需要确认，`formFiller` 要在浏览器里执行。用会话级的 `skillSettings` 列出这次运行允许使用的 Tool，就能把它们排除掉：
+- `createAgent()` 只能用到它点名的 Tool、Skill 点名的 Tool，以及有 Skill 时自动带上的 `getSkill`。只点名声明了 `defaultPermission: 'ALLOW'`、并且在服务端执行的 Tool：`execution: 'frontend'` 的 Tool 只能在浏览器里执行，不管权限怎么声明都会中断。
+- `createAIEmployee()` 还会带上所有 `GENERAL` Tool，其中会中断的有：`suggestions` 需要确认；`formFiller` 要在浏览器里执行；其他没有声明 `ALLOW` 的 `GENERAL` Tool 也一样，包括配置了 MCP 服务之后，名字不以 `get` 开头的 MCP Tool，因为 MCP Tool 都以 `GENERAL` 注册。用会话级的 `skillSettings` 列出这次运行允许使用的 Tool，就能把它们排除掉：
 
 ```ts
 const agent = await factory.createAIEmployee({
@@ -109,22 +111,37 @@ const agent = await factory.createAIEmployee({
   state: { sessionId: conversation.sessionId },
   actor,
   runtime: { logger },
-  // 这次运行可以使用的全部 Tool，包括 Skill 会激活的 Tool
-  skillSettings: { toolsVersion: 1, tools: ['getSkill', 'dataQuery'] },
+  // 这次运行可以使用的全部 Tool，包括 Skill 会激活的 Tool。
+  // data-query 会让模型先加载 data-metadata，所以两者的 Tool 都要列出
+  skillSettings: {
+    toolsVersion: 1,
+    tools: [
+      'getSkill',
+      'getDataSources',
+      'getCollectionNames',
+      'getCollectionMetadata',
+      'searchFieldMetadata',
+      'dataSourceQuery',
+      'dataSourceCounting',
+      'dataQuery',
+    ],
+  },
 });
 ```
 
-这个列表只能在员工已有的 Tool 里做减法，不能添加员工没有的 Tool；它同时作用于基础 Tool 和 Skill 激活的 Tool。系统 Tool（`getSkill`、`subAgentWebSearch`、`knowledge-base-retrieve`、`aiEmployeeWorkflowTaskOutput`）不受它限制，但仍受各自的开关控制。`toolsVersion` 只影响空列表：有它时 `tools: []` 只保留系统 Tool，没有它时空列表等于不过滤。
+这个列表只能在员工已有的 Tool 里做减法，不能添加员工没有的 Tool；它同时作用于基础 Tool 和 Skill 激活的 Tool，所以 Skill 的 Tool 也要列进去。一个 Skill 要求模型再加载另一个 Skill 时（比如 `data-query` 和 `data-metadata`），整条链上的 Tool 都要列出，否则模型中途会拿到「Tool unavailable.」，运行不会报错，只会得出一个猜出来的结果。有两类 Tool 不受它限制：系统 Tool（`getSkill`、`subAgentWebSearch`、`knowledge-base-retrieve`、`aiEmployeeWorkflowTaskOutput`），仍受各自的开关控制；以及 `loadFrontendTool` 和 `executeFrontendTool`，它们只在会话带有前端工具清单时出现，出现就一定会中断，所以服务端运行不要传前端工具清单。`toolsVersion` 只影响空列表：有它时 `tools: []` 只保留系统 Tool，没有它时空列表等于不过滤。
 
 确实需要一个会确认的 Tool 时，调用方就是在替用户做决定，要按每个 action 明确给出决定，并且只给出 action 允许的决定：
 
 ```ts
-const { interrupt } = await agent.invoke({ userMessages });
-if (interrupt) {
-  await agent.resumeInvoke({
+let result = await agent.invoke({ userMessages });
+// 恢复之后，运行可能在下一个 Tool 上再次暂停
+while (result.interrupt) {
+  const { id, actions } = result.interrupt;
+  result = await agent.resumeInvoke({
     userDecisions: {
-      interruptId: interrupt.id,
-      decisions: interrupt.actions.map((action) =>
+      interruptId: id,
+      decisions: actions.map((action) =>
         action.toolCall?.name === 'draft-reply' &&
         action.allowedDecisions?.includes('approve')
           ? { type: 'approve' }
@@ -137,7 +154,7 @@ if (interrupt) {
 
 action 只标识 Tool 调用（`toolCall.id` 和 `toolCall.name`），不带参数；需要按参数做决定时，从同一个结果的 `message.toolCalls` 里按 `id` 取。一个既没有恢复、也没有人处理的运行会一直保持暂停。不要往这个会话里直接发新的一轮，另开一个会话，或者恢复原来的那个。
 
-**区分失败类型。** 运行失败时抛出 `AgentServiceError`，调用方按 `code` 和 `retryable` 决定是否重试：
+**区分失败类型。** 运行失败时抛出 `AgentServiceError`，调用方按 `code` 和 `retryable` 决定是否重试。两个工厂方法都在创建 Agent 时解析模型，所以没有可用模型会在创建时就以 `CONFIGURATION_ERROR` 失败，`try` 要把创建也包进去；员工 `username` 不存在则在创建时抛出普通的 `Error`，这是调用方的错误，不是可以重试的状态：
 
 | `code`                  | 含义                                | `retryable` |
 | ----------------------- | ----------------------------------- | ----------- |

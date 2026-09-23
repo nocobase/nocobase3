@@ -48,11 +48,19 @@ AI 员工插件会递归展开 MCP 配置中的 `${NAME}`。变量缺失时替�
 
 ## 重启和诊断
 
-服务重启后会同步新增、更新和删除的服务，并重建 MCP Client。打开 `/settings/ai` 的「MCP」Tab，可以启用服务并查看它发现的 Tool。
+服务重启后会同步新增、更新和删除的服务，并重建 MCP Client。打开设置页侧栏「AI」分组中的「MCP 服务」页（`/settings/ai/mcp-services`），可以启用服务并查看它发现的 Tool。
+
+服务条目里可以写 `enabled`，但它只在服务第一次被创建时生效。之后启用状态以管理页的开关为准，开关和 Tool 权限都保存在数据库中，重启后保持不变。
 
 ![MCP 服务和 Tool](https://static-docs.nocobase.com/20260914111142-ai-employee-mcp-services.png)
 
 管理页是只读连接视图。需要修改 URL、命令、参数或 Header 时，编辑 `config.yml` 后重启服务。
+
+## 发现的 Tool
+
+MCP 服务发现的 Tool 注册为 `GENERAL` Tool，注册名是 `mcp-<服务名>-<Tool 名>`，比如上面 `company-search` 服务的 `search` Tool 会注册成 `mcp-company-search-search`。服务连上之后所有员工都能用到它；在 Skill 的 `tools`、员工的 `tools` 或会话的 `skillSettings` 中引用时，使用这个完整的注册名。
+
+名称以 `get` 开头的 Tool 默认权限是 `ALLOW`，其他默认 `ASK`。这个默认值只是根据名称推断，可以在管理页逐个调整，详见 [MCP 服务管理](../management/mcp-services.md#设置-tool-权限)。
 
 ## 安全建议
 
