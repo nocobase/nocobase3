@@ -285,6 +285,42 @@ describe('runConfigInit', () => {
     },
   );
 
+  /**
+   * Existing configuration is the first thing reported. Asking which dialect to use, or saying a driver is missing,
+   * before mentioning that the file is already there would have someone decide something that was never used.
+   */
+  it('reports existing configuration before asking anything', async () => {
+    const { rootDir } = await createApplication({
+      drivers: ['sqlite', 'mysql'],
+    });
+    await writeFile(path.join(rootDir, 'config.yml'), 'auth:\n  secret: x\n');
+    let asked = false;
+
+    await expect(
+      runConfigInit({
+        rootDir,
+        environment: {},
+        selectDialect: async () => {
+          asked = true;
+          return 'mysql';
+        },
+      }),
+    ).rejects.toMatchObject({
+      reason: 'already-configured',
+      details: { configFile: path.join(rootDir, 'config.yml') },
+    });
+    expect(asked).toBe(false);
+  });
+
+  it('reports existing configuration even when no driver is installed', async () => {
+    const { rootDir } = await createApplication({ drivers: [] });
+    await writeFile(path.join(rootDir, 'config.yml'), 'auth:\n  secret: x\n');
+
+    await expect(
+      runConfigInit({ rootDir, dialect: 'postgres', environment: {} }),
+    ).rejects.toMatchObject({ reason: 'already-configured' });
+  });
+
   it('replaces an existing file with --force', async () => {
     const { rootDir } = await createApplication({ drivers: ['sqlite'] });
     await writeFile(path.join(rootDir, 'config.yml'), 'stale: true\n');

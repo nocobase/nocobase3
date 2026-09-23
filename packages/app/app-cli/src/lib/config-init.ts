@@ -170,6 +170,22 @@ export async function runConfigInit(
   const rootDir = path.resolve(options.rootDir);
   const mode = await detectConfigInitMode(rootDir);
   const deploymentRootDir = resolveDeploymentRootDir(rootDir, mode);
+  const configFile = resolveConfigFile(
+    rootDir,
+    deploymentRootDir,
+    options.configPath,
+  );
+
+  // First, before drivers are looked at or anything is asked. An application that is already configured is the one
+  // answer that makes every other question moot: prompting for a dialect, or reporting a driver as missing, and only
+  // then saying the file already exists would make someone decide something that was never going to be used.
+  await assertNotConfigured({
+    configFile,
+    deploymentRootDir,
+    explicit: options.configPath !== undefined,
+    force: options.force === true,
+  });
+
   const available = await findAvailableDialects(rootDir, mode);
   const dialect = await resolveDialect(
     options.dialect,
@@ -177,18 +193,6 @@ export async function runConfigInit(
     { rootDir, mode },
     options.selectDialect,
   );
-  const configFile = resolveConfigFile(
-    rootDir,
-    deploymentRootDir,
-    options.configPath,
-  );
-
-  await assertNotConfigured({
-    configFile,
-    deploymentRootDir,
-    explicit: options.configPath !== undefined,
-    force: options.force === true,
-  });
 
   // Checked here rather than left to the write, so that a mistyped --config reports the directory it could not find
   // instead of an ENOENT naming the file the user did ask for.
@@ -411,7 +415,7 @@ async function assertNotConfigured(options: {
   if (existing !== undefined) {
     throw new ConfigInitError(
       'already-configured',
-      `The application is already configured: ${existing}. Edit it, or pass --force to replace it.`,
+      `This application is already configured: ${existing}. Edit that file to change it, or run with --force to replace it.`,
       { details: { configFile: existing } },
     );
   }
