@@ -71,11 +71,19 @@ export class AIMCPServerService {
   }): Promise<MCPTestResult> {
     const record = asRecord(input);
     if (!record) throw badRequest('Resource body must be an object');
-    const configured =
-      typeof record.name === 'string'
-        ? await this.ai.mcpServerManager.getMCP(record.name)
-        : undefined;
-    const source = configured ? (asRecord(configured) ?? {}) : record;
+    let source = record;
+    if (record.name !== undefined) {
+      // A named test uses only the configured server, never the request body.
+      const name = requiredString(record.name, 'name');
+      const configured = await this.ai.mcpServerManager.getMCP(name);
+      if (!configured) throw notFound('aiMcpServers', name);
+      source = asRecord(configured) ?? {};
+    } else if (record.transport === 'stdio') {
+      // stdio spawns `command` on this host, so it must come from config.yml.
+      throw badRequest(
+        'A stdio server can only be tested by the name of a configured server',
+      );
+    }
     const transport = source.transport;
     if (transport !== 'stdio' && transport !== 'sse' && transport !== 'http') {
       throw badRequest('transport must be stdio, sse, or http');

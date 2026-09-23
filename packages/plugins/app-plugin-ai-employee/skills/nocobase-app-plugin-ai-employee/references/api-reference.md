@@ -145,7 +145,7 @@ Other model actions:
 - `GET ai:listLLMProviders`: no input; returns provider metadata.
 - `GET ai:listLLMServices?model=<model-id>`: `model` optional.
 - `GET ai:listModels?llmService=<service>&model=<model-id>`: `llmService` required by behavior; `model` optional.
-- `POST ai:listProviderModels`: body `{ llmService: string; search?: string }`; returns `{ id: string }[]`.
+- `POST ai:listProviderModels`: body `{ llmService: string; search?: string }`; returns `{ id: string }[]`. It calls the provider with the service's stored key, so it requires AI settings access like the [management resources](#management-resources).
 
 ## Conversation lifecycle
 
@@ -686,7 +686,7 @@ Query `{ id: string }`. Returns a file preview response, not a JSON envelope.
 
 ## Management resources
 
-These are administrative/settings actions and should not be exposed to ordinary users without App authorization.
+The endpoints behind the AI settings page. Besides a signed-in session, every action in this section requires access to that page — `page:ai.settings` with the `access` action — and answers 403 without it; an ordinary chat user reaches none of them. LLM services and MCP servers are configured in `config.yml`, and their actions here only change what the settings page manages.
 
 ### Employees
 
@@ -768,7 +768,9 @@ A managed backend tool cannot be created from JSON alone without an existing exe
 
 ### MCP servers
 
-Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `aiMcpServers`.
+MCP servers are configured only in `config.yml` `ai.mcpServers`; there is no action that creates, edits, or deletes one. Actions on resource `aiMcpServers`: `GET list`, `GET get?key`, `GET listTools`, `POST testConnection`, `POST updateEnabled` (`{ name, enabled }`), and `POST updateToolPermission` (`{ toolName, permission: 'ASK' | 'ALLOW' }`).
+
+A configured server as returned by `list`/`get`:
 
 ```ts
 {
@@ -788,23 +790,30 @@ Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `a
 
 List/get responses redact secret-like environment/header values.
 
+`testConnection` takes either `{ name }`, which tests that configured server and ignores any other field in the body, or inline `{ transport: 'http' | 'sse', url, headers? }` for a remote server. A `stdio` server runs a local command, so it can only be tested by `name`; an inline `transport: 'stdio'` body is rejected with 400, and an unknown `name` returns 404.
+
 ### LLM services
 
-Actions: `list`, `get?key`, `create`, `update?key`, `destroy?key` on resource `llmServices`.
+LLM services are defined only in `config.yml` `ai.llmServices`; there is no action that creates, deletes, or reconfigures one. Actions on resource `llmServices`: `GET list`, `GET get?key`, and two narrow updates of a configured service's state:
+
+- `POST updateEnabled` with `{ name: string; enabled: boolean }`
+- `POST updateEnabledModels` with `{ name: string; enabledModels: { mode: 'provider' | 'custom'; models: { label: string; value: string }[] } }`
+
+Each changes only its one field and ignores any other in the body, returns the updated service, answers 404 for a name that is not configured, and never creates a service. A `list`/`get` response has this shape, with secret-like `options` redacted:
 
 ```ts
 {
-  name?: string; // create requires a usable name; update query key forces it
-  title?: string;
-  provider?: string;
-  options?: Record<string, unknown>;
-  enabledModels?: {
+  name: string;
+  title: string;
+  provider: string;
+  options: Record<string, unknown>;
+  enabledModels: {
     mode: 'provider' | 'custom';
     models: { label: string; value: string }[];
   };
   modelOptions?: Record<string, unknown>;
-  enabled?: boolean;
-  sort?: number;
+  enabled: boolean;
+  sort: number;
 }
 ```
 
@@ -844,4 +853,4 @@ JSON failures use an envelope compatible with:
 }
 ```
 
-Validation commonly returns HTTP 400, not-found 404, and unexpected errors 500. Routes use the authenticated App session and current-user conversation ownership. Backend tools must still enforce business authorization using `ctx.actor` and supplied services/repositories. The presence of a management endpoint does not grant ordinary-user access.
+Every route requires a signed-in session and answers 401 without one; there is no anonymous caller. The [management resources](#management-resources) and `ai:listProviderModels` also require AI settings access and answer 403 without it; the chat actions — conversations, files, `aiEmployees:listByUser` and `updateUserPrompt`, `ai:listAllEnabledModels` — are open to every signed-in user, scoped to the conversations that user owns. Validation commonly returns HTTP 400, not-found 404, and unexpected errors 500. Backend tools must still enforce business authorization using `ctx.actor` and supplied services/repositories.

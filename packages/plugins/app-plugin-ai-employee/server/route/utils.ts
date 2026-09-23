@@ -1,6 +1,5 @@
 import { DomainError } from '../types.js';
-import type { Auth, AuthSession } from '@nocobase/app-plugin-authentication';
-import { APIError } from 'better-auth';
+import type { AuthEnv, AuthSession } from '@nocobase/app-plugin-authentication';
 import type { Logger } from '@nocobase/logging';
 import type { Actor } from '../types.js';
 import type { Context as HonoContext, MiddlewareHandler } from 'hono';
@@ -18,11 +17,12 @@ export interface AIRequestMiddlewareOptions {
   readonly logger: Logger;
 }
 
-export function createAIActorMiddleware(auth: Auth): MiddlewareHandler {
+/** Runs after `authentication.required()`, which has already set the session. */
+export function createAIActorMiddleware(): MiddlewareHandler<AuthEnv> {
   return async (context, next) => {
     context.set(
       'currentUser',
-      await resolveAuthenticatedUser(auth, context.req.raw),
+      actorFromSession(context.var.auth, context.req.raw),
     );
     await next();
   };
@@ -111,19 +111,10 @@ function statusForError(message: string): number {
   return 500;
 }
 
-async function resolveAuthenticatedUser(
-  auth: Auth,
-  request: Request,
-): Promise<Actor> {
-  let session: AuthSession = null;
-  try {
-    session = await auth.getSession(request.headers);
-  } catch (error) {
-    // A refused credential (Better Auth APIError) is not signed in, here.
-    if (!(error instanceof APIError)) throw error;
-  }
+function actorFromSession(session: AuthSession, request: Request): Actor {
   const user = session?.user;
-  if (!user?.id) return { id: 'anonymous', roles: ['member'], isRoot: false };
+  // Unreachable once `required()` runs first; fail closed if it ever does not.
+  if (!user?.id) throw new Error('AI actions require an authenticated session');
   const profile = user as typeof user & Record<string, unknown>;
   const roles = Array.isArray(profile.roles)
     ? profile.roles.filter((role): role is string => typeof role === 'string')

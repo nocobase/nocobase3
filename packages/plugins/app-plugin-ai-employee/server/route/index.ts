@@ -8,6 +8,10 @@ import { createAIConversationsRouter } from './ai-conversations.js';
 import { requireConversationManagement } from './conversation-management.js';
 import { requireSkillsManagement } from './skills-management.js';
 import { requireToolsManagement } from './tools-management.js';
+import {
+  AI_SETTINGS_ACTIONS,
+  requireAISettingsAccess,
+} from './settings-access.js';
 import { createAIEmployeeRouter } from './ai-employees.js';
 import { createAIFilesRouter } from './ai-files.js';
 import { createAIMCPServersRouter } from './ai-mcp-servers.js';
@@ -35,34 +39,28 @@ export function createAIEmployeeRoutes(
 ): Hono {
   const routes = new Hono();
   routes.onError((error) => errorResponse(error));
+  // Every AI action runs as a signed-in user; there is no anonymous caller.
+  routes.use(
+    '*',
+    options.authentication.required(),
+    options.authorization.middleware(),
+  );
   for (const path of [
     '/aiConversations:listAll',
     '/aiConversations:getAllMessages',
   ]) {
-    routes.use(
-      path,
-      options.authentication.required(),
-      options.authorization.middleware(),
-      requireConversationManagement(),
-    );
+    routes.use(path, requireConversationManagement());
   }
   for (const path of ['/aiSkills:listAll', '/aiSkills:getDetails']) {
-    routes.use(
-      path,
-      options.authentication.required(),
-      options.authorization.middleware(),
-      requireSkillsManagement(),
-    );
+    routes.use(path, requireSkillsManagement());
   }
   for (const path of ['/aiTools:listAll', '/aiTools:getDetails']) {
-    routes.use(
-      path,
-      options.authentication.required(),
-      options.authorization.middleware(),
-      requireToolsManagement(),
-    );
+    routes.use(path, requireToolsManagement());
   }
-  routes.use('*', createAIActorMiddleware(options.authentication));
+  for (const action of AI_SETTINGS_ACTIONS) {
+    routes.use(`/${action}`, requireAISettingsAccess());
+  }
+  routes.use('*', createAIActorMiddleware());
   routes.use(
     '*',
     createAIRequestMiddleware({

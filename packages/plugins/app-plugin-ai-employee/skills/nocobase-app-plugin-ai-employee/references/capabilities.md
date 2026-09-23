@@ -411,7 +411,7 @@ On a provider that cannot search, the tool returns `status: 'error'` saying no s
 
 ## LLM services (`config.yml`)
 
-`ai.llmServices` is the authoritative set of service names. It is the only supported way to configure a service from source; there is no constructor argument for it.
+`ai.llmServices` is the authoritative set of service names. It is the only way to create, remove, or reconfigure a service; there is no constructor argument or API for it. AI settings can only switch a configured service on or off and choose its models.
 
 ```yaml
 ai:

@@ -21,15 +21,17 @@ export interface MCPRecord extends Record<string, unknown> {
   headers: Record<string, string>;
 }
 
-export interface MCPTestValues {
-  name?: string;
-  transport: MCPTransport;
-  command?: string;
-  url?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  headers?: Record<string, string>;
-}
+/**
+ * A configured server is tested by name. Only a remote server can be tested
+ * from inline values; stdio runs a local command and must be configured.
+ */
+export type MCPTestValues =
+  | { name: string }
+  | {
+      transport: Exclude<MCPTransport, 'stdio'>;
+      url: string;
+      headers?: Record<string, string>;
+    };
 
 export interface MCPTestResult {
   success: boolean;

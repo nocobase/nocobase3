@@ -1,14 +1,14 @@
 import {
   normalizeEnabledModelsConfig,
   type LLMServiceEntity,
+  type LLMServiceOptions as LLMServiceRegistration,
 } from '@nocobase/ai-employee';
 import type { AIManager } from '@nocobase/ai-employee';
-import type { LLMServiceDto, LLMServiceResourceInput } from '../types.js';
+import type { LLMServiceDto } from '../types.js';
 import {
   asRecord,
   badRequest,
   notFound,
-  optionalString,
   redactSecrets,
   requiredString,
 } from './utils.js';
@@ -35,32 +35,51 @@ export class LLMService {
     return serializeLLMService(service);
   }
 
-  async upsert({
+  async updateEnabled({ input }: { input: unknown }): Promise<LLMServiceDto> {
+    const record = asRecord(input);
+    if (!record) throw badRequest('Resource body must be an object');
+    const name = requiredString(record.name, 'name');
+    if (typeof record.enabled !== 'boolean')
+      throw badRequest('enabled must be a boolean');
+    return this.patch(name, { enabled: record.enabled });
+  }
+
+  async updateEnabledModels({
     input,
   }: {
-    input: LLMServiceResourceInput;
+    input: unknown;
   }): Promise<LLMServiceDto> {
     const record = asRecord(input);
     if (!record) throw badRequest('Resource body must be an object');
     const name = requiredString(record.name, 'name');
-    const current = await this.ai.llmServiceManager.getLLMService(name);
-    if (!current && !record.provider) throw badRequest('provider is required');
-    await this.ai.llmServiceManager.registerLLMService({
-      name,
-      title: optionalString(record.title) ?? current?.title ?? name,
-      provider: optionalString(record.provider) ?? current?.provider ?? '',
-      options: asRecord(record.options) ?? current?.options ?? {},
-      enabledModels: record.enabledModels ?? current?.enabledModels ?? null,
-      enabled:
-        typeof record.enabled === 'boolean' ? record.enabled : current?.enabled,
-      modelOptions: asRecord(record.modelOptions) ?? current?.modelOptions,
-      sort: typeof record.sort === 'number' ? record.sort : current?.sort,
+    const enabledModels = asRecord(record.enabledModels);
+    if (
+      !enabledModels ||
+      (enabledModels.mode !== 'provider' && enabledModels.mode !== 'custom') ||
+      !Array.isArray(enabledModels.models)
+    ) {
+      throw badRequest(
+        'enabledModels must be { mode: "provider" | "custom", models: [] }',
+      );
+    }
+    return this.patch(name, {
+      enabledModels: normalizeEnabledModelsConfig(enabledModels),
     });
-    return this.get({ name });
   }
 
-  async delete({ name }: { name: string }): Promise<void> {
-    await this.ai.llmServiceManager.deleteLLMService(name);
+  // Changes one field of a configured service and keeps the rest as stored.
+  private async patch(
+    name: string,
+    values: Pick<LLMServiceRegistration, 'enabled' | 'enabledModels'>,
+  ): Promise<LLMServiceDto> {
+    const current = await this.ai.llmServiceManager.getLLMService(name);
+    if (!current) throw notFound('llmServices', name);
+    await this.ai.llmServiceManager.registerLLMService({
+      name,
+      provider: current.provider,
+      ...values,
+    });
+    return this.get({ name });
   }
 }
 

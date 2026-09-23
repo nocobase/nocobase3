@@ -125,9 +125,6 @@ export type LLMServiceDto = {
   modelOptions?: Record<string, unknown>;
   sort: number;
 };
-export type LLMServiceResourceInput = Partial<LLMServiceDto> & {
-  name?: string;
-};
 export type ProviderModelListRequest = {
   llmService: string;
   search?: string;
