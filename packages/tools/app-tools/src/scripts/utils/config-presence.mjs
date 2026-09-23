@@ -70,18 +70,19 @@ export function assertConfigurationPresent(rootDir, env, label) {
     return;
   }
 
+  // Worded like the runtime's own message for a start without a secret, so the two entry points read as one rule.
+  // Only AUTH_SECRET is named: without a session secret the application still starts, and `config:check` is where
+  // the consequences of that are explained.
   const lines =
     source === undefined
       ? [
-          `[${label}] This application has no configuration.`,
+          `[${label}] This application is not configured: it has no configuration file, and AUTH_SECRET is not set.`,
           '',
-          'Create it with:',
+          'Create the configuration with:',
           '  pnpm config:init',
-          '',
-          'Or supply auth.secret and session.secret through AUTH_SECRET and SESSION_SECRET.',
         ]
       : [
-          `[${label}] APP_CONFIG_FILE points at a file that does not exist:`,
+          `[${label}] This application is not configured: APP_CONFIG_FILE points at a file that does not exist.`,
           `  ${source.file}`,
         ];
 

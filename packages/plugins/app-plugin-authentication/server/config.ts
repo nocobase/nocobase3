@@ -22,15 +22,10 @@ export function resolveAuthSecret(secret: string | undefined): string {
 
   if (secret) return secret;
 
-  throw new ApplicationNotConfiguredError(
-    [
-      'This application is not configured: auth.secret is not set.',
-      '',
-      'Create the configuration with:',
-      '  pnpm config:init',
-      '',
-      'For a built application, run it inside dist/. If the application already has a configuration file, set',
-      'auth.secret in it, or AUTH_SECRET in the environment.',
-    ].join('\n'),
-  );
+  // The fact only: a standalone start adds `pnpm config:init`, and a Hub shows this to an operator whose
+  // configuration lives in the Hub, where that advice would be wrong.
+  throw new ApplicationNotConfiguredError('auth.secret is not set.', {
+    key: 'auth.secret',
+    environmentVariable: 'AUTH_SECRET',
+  });
 }
