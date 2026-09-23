@@ -573,7 +573,7 @@ ai:
 
 `stdio` spawns a child process in the NocoBase server's environment — scope its command, working directory and file access to the minimum. `http` and `sse` take `url` and optional `headers`. `${NAME}` is expanded recursively here too.
 
-A server's tools register as `GENERAL` tools named `mcp-<server>-<tool>`, so every employee has them from the moment the server connects — there is no per-employee opt-in. Use that exact name wherever a tool is named: in a Skill's `tools`, an employee's `tools`, or a session's `skillSettings`. Narrowing them for one employee is its tool selection in AI settings, or a session's `skillSettings` allowlist.
+A server's tools register as `GENERAL` tools named `mcp-<server>-<tool>`, so every employee whose tool selection has never been saved has them from the moment the server connects. Once an employee's tool switches are saved in AI settings, that selection is a fixed list, and a tool discovered afterwards — a new MCP tool included — stays off for that employee until someone switches it on. Use that exact name wherever a tool is named: in a Skill's `tools`, an employee's `tools`, or a session's `skillSettings`. Narrowing them for one employee is its tool selection in AI settings, or a session's `skillSettings` allowlist.
 
 A tool whose server-side name starts with `get` defaults to `ALLOW`, and every other tool to `ASK`; the settings page, or `aiMcpServers:updateToolPermission`, changes that per tool. The default is a guess from the name, not from what the tool does, so review each discovered tool's description and parameters, and keep anything that writes or has an external effect on `ASK` — including a `get…` tool that turns out to have one.
 

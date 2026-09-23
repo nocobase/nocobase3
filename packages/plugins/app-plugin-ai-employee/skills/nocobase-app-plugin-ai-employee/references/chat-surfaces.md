@@ -251,7 +251,7 @@ type AIChatWindowProps = {
 };
 ```
 
-`AIChatFloatingTrigger` takes `aiEmployee?`, `controller?`, `unreadCount?` (0), `position?` (`'fixed'`), `hideWhenOpen?` (true), and `className?`.
+`AIChatFloatingTrigger` takes `aiEmployee?`, `controller?`, `unreadCount?` (0), `position?` (`'fixed'`), `hideWhenOpen?` (true), and `className?`. The trigger opens the chat on its own `aiEmployee`, falling back to `employees[0]`, and does not read the provider's `defaultEmployee` — so a floating chat passes the same username to both, or it opens on the built-in `atlas`.
 
 ## Attachments
 
