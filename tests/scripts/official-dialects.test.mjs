@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { OFFICIAL_DIALECTS } from '../../packages/app/app-server/src/database/resolve-config.ts';
-import { dialects as localRegistryDialects } from '../../scripts/local-registry-config.mjs';
+import { dialects as smokeDialects } from '../../scripts/smoke-database-config.mjs';
 import { databases as integrationDatabases } from '../../scripts/select-db-integration-matrix.mjs';
 
 // The runtime's list is authoritative: it is typed against the loaders, so a dialect added there without a driver,
@@ -11,8 +11,8 @@ import { databases as integrationDatabases } from '../../scripts/select-db-integ
 // registry run that rejects a dialect the runtime supports. This is what notices.
 const expected = [...OFFICIAL_DIALECTS].sort();
 
-test('the local registry offers exactly the dialects the runtime can load', () => {
-  assert.deepEqual([...localRegistryDialects].sort(), expected);
+test('the unreleased smoke test offers exactly the dialects the runtime can load', () => {
+  assert.deepEqual([...smokeDialects].sort(), expected);
 });
 
 test('database integration CI covers exactly the dialects the runtime can load', () => {

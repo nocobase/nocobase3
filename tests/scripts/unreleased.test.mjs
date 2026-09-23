@@ -11,27 +11,27 @@ import {
   formatShellEnv,
   registryEnv,
   registryEnvOverrides,
-} from '../../scripts/local-registry.mjs';
+} from '../../scripts/unreleased.mjs';
 import {
   mergeMainConfig,
   readMainConfig,
-} from '../../scripts/local-registry-config.mjs';
+} from '../../scripts/smoke-database-config.mjs';
 
-test('local registry arguments select templates and reject incomplete database configuration', () => {
-  assert.equal(parseArgs(['verify']).template, 'default');
-  assert.equal(parseArgs(['verify', '--template', 'hub']).template, 'hub');
+test('unreleased arguments select templates and reject incomplete database configuration', () => {
+  assert.equal(parseArgs(['smoke']).template, 'default');
+  assert.equal(parseArgs(['smoke', '--template', 'hub']).template, 'hub');
   assert.equal(parseArgs(['prepare', '--port', '4874']).port, 4874);
   assert.equal(
-    parseArgs(['verify', '--dialect', 'postgres', '--config', '/tmp/test.yml'])
+    parseArgs(['smoke', '--dialect', 'postgres', '--config', '/tmp/test.yml'])
       .dialect,
     'postgres',
   );
   for (const args of [
-    ['verify', '--template', 'bad'],
-    ['verify', '--dialect', 'postgres'],
+    ['smoke', '--template', 'bad'],
+    ['smoke', '--dialect', 'postgres'],
     ['prepare', '--port', '65536'],
-    ['verify', '--timeout', '0'],
-    ['stop', '--port', '4873'],
+    ['smoke', '--timeout', '0'],
+    ['clean', '--port', '4873'],
     ['env', '--port', '4873'],
   ])
     assert.throws(() => parseArgs(args));
@@ -66,7 +66,7 @@ test('shell env exports exactly what registryEnv sets and unsets inherited confi
 });
 
 test('shell env overrides a scoped registry saved with pnpm config set', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-registry-shell-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'unreleased-shell-'));
   try {
     const registry = 'http://127.0.0.1:4873/';
     const npmrc = path.join(root, 'session', 'npmrc');
@@ -121,7 +121,7 @@ test('registry environment overrides npm and pnpm without changing the process e
 });
 
 test('workdir validation refuses existing files and repository descendants', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-registry-test-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'unreleased-test-'));
   try {
     const repo = path.join(root, 'repo');
     fs.mkdirSync(repo);
@@ -136,7 +136,7 @@ test('workdir validation refuses existing files and repository descendants', () 
 });
 
 test('database config merge preserves generated secrets and other connections', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-registry-config-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'unreleased-config-'));
   try {
     const source = path.join(root, 'source.yml');
     const target = path.join(root, 'config.yml');
@@ -163,7 +163,7 @@ test('database config merge preserves generated secrets and other connections', 
 });
 
 test('npm and pnpm resolve the isolated scope registry instead of user configuration', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-registry-env-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'unreleased-env-'));
   try {
     const npmrc = path.join(root, 'npmrc');
     const registry = 'http://127.0.0.1:4873/';
@@ -220,8 +220,8 @@ test('reset is a boolean option exclusive to prepare', () => {
   assert.equal(parseArgs(['prepare', '--reset', '--port', '4874']).reset, true);
   assert.equal(parseArgs(['prepare', '--port', '4874', '--reset']).port, 4874);
   for (const args of [
-    ['stop', '--reset'],
-    ['verify', '--reset'],
+    ['clean', '--reset'],
+    ['smoke', '--reset'],
     ['create', 'crm', '--reset'],
     ['prepare', '--reset', 'false'],
   ])
@@ -235,17 +235,18 @@ for (const scenario of [
   'foreign',
   'remove-fails',
   'locked',
+  'legacy',
 ]) {
   test(`prepare reset lifecycle: ${scenario}`, () => {
     const root = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'registry-reset-')),
+      fs.mkdtempSync(path.join(os.tmpdir(), 'unreleased-reset-')),
     );
     const repo = path.join(root, 'repo');
     fs.mkdirSync(path.join(repo, 'scripts'), { recursive: true });
     // Use a separate checkout identity so tests cannot touch a developer's session.
     const script = fs
       .readFileSync(
-        new URL('../../scripts/local-registry.mjs', import.meta.url),
+        new URL('../../scripts/unreleased.mjs', import.meta.url),
         'utf8',
       )
       .replace(
@@ -256,17 +257,22 @@ for (const scenario of [
         ),
       )
       .replace(
-        "'./local-registry-config.mjs'",
+        "'./smoke-database-config.mjs'",
         JSON.stringify(
-          new URL('../../scripts/local-registry-config.mjs', import.meta.url)
+          new URL('../../scripts/smoke-database-config.mjs', import.meta.url)
             .href,
         ),
       );
-    fs.writeFileSync(path.join(repo, 'scripts/local-registry.mjs'), script);
+    fs.writeFileSync(path.join(repo, 'scripts/unreleased.mjs'), script);
     const id = createHash('sha256').update(repo).digest('hex').slice(0, 12);
-    const stateDir = path.join(os.tmpdir(), `nocobase-local-registry-${id}`);
+    const stateDir = path.join(os.tmpdir(), `nocobase-unreleased-${id}`);
     const stateFile = path.join(stateDir, 'state.json');
-    const container = `nocobase-local-registry-${id}`;
+    const container = `nocobase-unreleased-${id}`;
+    const legacyStateDir = path.join(
+      os.tmpdir(),
+      `nocobase-local-registry-${id}`,
+    );
+    const legacyContainer = `nocobase-local-registry-${id}`;
     fs.mkdirSync(stateDir, { recursive: true });
     const state = {
       repo,
@@ -274,8 +280,15 @@ for (const scenario of [
       registry: 'http://127.0.0.1:4873/',
       ready: true,
     };
-    if (scenario !== 'fresh')
+    if (scenario !== 'fresh' && scenario !== 'legacy')
       fs.writeFileSync(stateFile, JSON.stringify(state));
+    if (scenario === 'legacy') {
+      fs.mkdirSync(legacyStateDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(legacyStateDir, 'state.json'),
+        JSON.stringify({ ...state, container: legacyContainer }),
+      );
+    }
     fs.writeFileSync(path.join(stateDir, 'old-cache'), 'old snapshot');
     if (scenario === 'locked')
       fs.writeFileSync(path.join(stateDir, 'lock'), String(process.pid));
@@ -296,7 +309,7 @@ for (const scenario of [
 const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args, locked: fs.existsSync(${JSON.stringify(path.join(stateDir, 'lock'))}) }) + '\\n');
-if (args[0] === 'ps') console.log(${JSON.stringify(container)});
+if (args[0] === 'ps') console.log(${JSON.stringify(scenario === 'legacy' ? legacyContainer : container)});
 if (args[0] === 'inspect') console.log(${JSON.stringify(scenario === 'foreign' ? 'another-checkout' : id)});
 if (args[0] === 'rm' && ${JSON.stringify(scenario)} === 'remove-fails') process.exit(1);
 // End the fixture at startup; no real Docker daemon, build, or publish is used.
@@ -308,7 +321,7 @@ if (args[0] === 'run') process.exit(23);
       const result = spawnSync(
         process.execPath,
         [
-          path.join(repo, 'scripts/local-registry.mjs'),
+          path.join(repo, 'scripts/unreleased.mjs'),
           'prepare',
           ...(scenario === 'existing' ? [] : ['--reset']),
           '--port',
@@ -335,11 +348,15 @@ if (args[0] === 'run') process.exit(23);
         calls.every(({ locked }) => locked),
         'cleanup and startup must retain the operation lock',
       );
-      if (scenario === 'reset' || scenario === 'fresh') {
+      if (['reset', 'fresh', 'legacy'].includes(scenario)) {
         assert.deepEqual(
           commands,
-          scenario === 'reset' ? ['ps', 'inspect', 'rm', 'run'] : ['run'],
+          scenario === 'fresh' ? ['run'] : ['ps', 'inspect', 'rm', 'run'],
         );
+        if (scenario === 'legacy') {
+          assert.deepEqual(calls[2].args, ['rm', '-f', '-v', legacyContainer]);
+          assert.equal(fs.existsSync(legacyStateDir), false);
+        }
         assert.match(result.stderr, /docker run failed.*23/);
         assert.equal(fs.existsSync(path.join(stateDir, 'old-cache')), false);
         assert.equal(
@@ -378,6 +395,7 @@ if (args[0] === 'run') process.exit(23);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
       fs.rmSync(stateDir, { recursive: true, force: true });
+      fs.rmSync(legacyStateDir, { recursive: true, force: true });
     }
   });
 }

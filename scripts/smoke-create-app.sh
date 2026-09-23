@@ -148,7 +148,7 @@ if [ ! -f "$APP_DIR/config.yml" ]; then
   exit 1
 fi
 if [ -n "$CONFIG" ]; then
-  node "$SCRIPT_DIR/local-registry-config.mjs" "$APP_DIR/config.yml" "$CONFIG" "$DIALECT"
+  node "$SCRIPT_DIR/smoke-database-config.mjs" "$APP_DIR/config.yml" "$CONFIG" "$DIALECT"
 fi
 echo "::endgroup::"
 

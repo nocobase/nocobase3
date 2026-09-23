@@ -9,7 +9,7 @@ This directory holds every Skill this repository commits. `pnpm install` links e
 
 The rest of this file is about `nocobase-create-app`. It is installed once, globally, so that an agent knows how to reach NocoBase 3 before any application exists. Everything an agent needs after that ships inside the application it creates, under `.agents/skills/`, synchronized from the installed packages.
 
-There are two ways to use it: against the published packages, which is what users do, and against a local registry holding this checkout, which is how a change is tested before it is released.
+There are two ways to use it: against the published packages, which is what users do, and against the unreleased checkout, published to a local npm registry, which is how a change is tested before it is released.
 
 ## Install from the published packages
 
@@ -69,15 +69,15 @@ pnpm config:set database.connections.main.host=db.internal database.connections.
 pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD
 ```
 
-## Install from a local registry
+## Install the unreleased checkout
 
-Use this to test a change before it is released: a change to the Skill, or to a package it drives, such as `create-app`, a template or `app-cli`. The checkout is published to a registry on your machine, and a shell is pointed at it, so the Skill's unchanged `pnpm create @nocobase/app` installs the unreleased code.
+Use this to test a change before it is released: a change to the Skill, or to a package it drives, such as `create-app`, a template or `app-cli`. The checkout is published to a local npm registry on your machine, and a shell is pointed at it, so the Skill's unchanged `pnpm create @nocobase/app` installs the unreleased code.
 
 A global Skill is released by merging it into `develop`, while packages are released by `release-beta`. A change to the Skill that describes new package behavior therefore has to be tried here first, because the published packages cannot show whether it works.
 
 ### Requirements
 
-- Everything above, plus Docker, which runs the registry.
+- Everything above, plus Docker, which runs the local npm registry.
 - A checkout of this repository with dependencies installed.
 
 ### 1. Publish the checkout
@@ -85,10 +85,10 @@ A global Skill is released by merging it into `develop`, while packages are rele
 From the repository root:
 
 ```bash
-pnpm local-registry:prepare
+pnpm unreleased:prepare
 ```
 
-This builds every publishable package, publishes it to a Verdaccio on `http://127.0.0.1:4873/`, and points each package's `latest` tag at the snapshot. Add `--reset` to replace a previous snapshot. The session lives under `$TMPDIR/nocobase-local-registry-<id>/` and does not depend on which branch is checked out, so switching branches afterwards keeps it usable.
+This builds every publishable package, publishes it to a Verdaccio on `http://127.0.0.1:4873/`, and points each package's `latest` tag at the snapshot. Add `--reset` to replace a previous snapshot. The session lives under `$TMPDIR/nocobase-unreleased-<id>/` and does not depend on which branch is checked out, so switching branches afterwards keeps it usable.
 
 ### 2. Link the Skill from the checkout
 
@@ -100,23 +100,23 @@ ln -sfn "$PWD/skills/nocobase-create-app" ~/.claude/skills/nocobase-create-app
 
 The link follows the working tree, so it breaks while a branch without the Skill is checked out. For any agent, `npx skills add ./skills/nocobase-create-app -g` installs a copy instead, which has to be repeated after every edit.
 
-### 3. Point a shell at the registry
+### 3. Point a shell at the snapshot
 
 Open a new shell, and from the repository root:
 
 ```bash
-eval "$(pnpm -s local-registry:env)"
+eval "$(pnpm -s unreleased:env)"
 pnpm config get @nocobase:registry
 ```
 
 The second command must print `http://127.0.0.1:4873/`. `-s` keeps pnpm's own `$ node …` line out of what the shell evaluates.
 
-`local-registry:env` prints the same variables `local-registry:create` and `local-registry:verify` run with, including a session-only store and cache. Setting a few of them by hand is not enough, and fails silently:
+`unreleased:env` prints the same variables `unreleased:create` and `unreleased:smoke` run with, including a session-only store and cache. Setting a few of them by hand is not enough, and fails silently:
 
 - A snapshot carries the same version numbers as the last release until one is cut. A package resolved from `https://npm.nocobase.ai/` looks identical to pnpm, so a partly configured shell produces an application that mixes a new template with old packages, and nothing reports it. The symptoms are a `config.yml` created before `config:init` ran, no `.npmrc`, and `command app:config:check not found`.
 - `pnpm config set @nocobase:registry …` saves the scoped registry to `auth.ini` in pnpm's global configuration directory, `~/Library/Preferences/pnpm` on macOS. `PNPM_CONFIG_USERCONFIG` does not replace that file, and only `XDG_CONFIG_HOME` moves the directory, so the command sets it for the whole shell. Tools that keep their own settings there, such as `gh`, will not find them until you open a new shell.
 
-If the shell uses an HTTP proxy, keep `127.0.0.1` in `NO_PROXY` so the registry is reached directly.
+If the shell uses an HTTP proxy, keep `127.0.0.1` in `NO_PROXY` so the local npm registry is reached directly.
 
 ### 4. Ask the agent
 
@@ -132,7 +132,7 @@ Ask for an application exactly as in the published case. A snapshot install can 
 - `.npmrc` contains `@nocobase:registry=http://127.0.0.1:4873/`.
 - `node_modules/@nocobase/app-cli/dist/commands/` contains `config-init.js`, `config-check.js` and `config-set.js`.
 
-To look at what the registry serves, query it with `curl`. In a shell without the variables above, a scoped registry in your own configuration overrides `npm view --registry`, and the answer comes from `https://npm.nocobase.ai/` instead:
+To look at what the local npm registry serves, query it with `curl`. In a shell without the variables above, a scoped registry in your own configuration overrides `npm view --registry`, and the answer comes from `https://npm.nocobase.ai/` instead:
 
 ```bash
 curl -s http://127.0.0.1:4873/@nocobase%2fcreate-app
@@ -148,13 +148,13 @@ Worth covering when the Skill changes:
 
 ### Without an agent
 
-`pnpm local-registry:create my-app` creates an application from the snapshot under `../nocobase-local-apps/`, and `pnpm local-registry:verify` runs the create-app smoke test against it. Both set up the environment themselves.
+`pnpm unreleased:create my-app` creates an application from the snapshot under `../nocobase-local-apps/`, and `pnpm unreleased:smoke` runs the create-app smoke test against it. Both set up the environment themselves.
 
 ### 5. Clean up
 
 ```bash
 rm ~/.claude/skills/nocobase-create-app
-pnpm local-registry:stop
+pnpm unreleased:clean
 ```
 
-`local-registry:stop` removes the registry and its caches, not the applications created from it.
+`unreleased:clean` removes the local npm registry and its caches, not the applications created from it.
