@@ -25,6 +25,7 @@ import type { Caching } from '@nocobase/caching';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 import { createAgentService, type AgentService } from './agent-service.js';
+import { toConfigurationError } from '../errors.js';
 import { createAIEmployeeAgentContextProvider } from '../context/ai-employee/context.js';
 import { formatSkillsPrompt } from '../context/ai-employee/prompts.js';
 import type { AIEmployeeSkillSettings } from '../context/ai-employee/options.js';
@@ -118,10 +119,11 @@ export class AgentServiceFactory {
     // The one field of the state this factory replaces.
     const agentContext = this.createContext(actor, options.runtime, {
       ...options.state,
-      model: await managers.aiEmployeesManager.resolveModel(
-        employee,
-        options.state.model,
-      ),
+      model: await managers.aiEmployeesManager
+        .resolveModel(employee, options.state.model)
+        .catch((error: unknown) => {
+          throw toConfigurationError(error);
+        }),
     });
     const contextOptions = {
       employee,
@@ -206,11 +208,7 @@ export class AgentServiceFactory {
         toolMessages: repositories.aiToolMessages,
         usageEvents: repositories.aiUsageEvents,
       });
-    const model = await this.aiManager.llmProviderManager.resolveModel(
-      options.model,
-    );
-    const resolved =
-      await this.aiManager.llmProviderManager.getLLMService(model);
+    const { model, resolved } = await this.resolveFixedLLM(options.model);
     const configuredToolNames = new Set(options.tools ?? []);
     const tools = new Map<string, ToolsEntity>();
     if (options.tools?.length) {
@@ -292,6 +290,20 @@ export class AgentServiceFactory {
             }),
       }),
     );
+  }
+
+  // A fixed agent resolves its model once, here, so a missing one fails the
+  // creation with the error an employee's execution would report.
+  private async resolveFixedLLM(requested?: ModelRef) {
+    try {
+      const model =
+        await this.aiManager.llmProviderManager.resolveModel(requested);
+      const resolved =
+        await this.aiManager.llmProviderManager.getLLMService(model);
+      return { model, resolved };
+    } catch (error) {
+      throw toConfigurationError(error);
+    }
   }
 
   private createContext(

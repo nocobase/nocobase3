@@ -154,7 +154,7 @@ describe('fixed AgentService contracts', () => {
     expect(providers).not.toContain('model: options.model');
     expect(providers).toContain('this.agentContext.state.model');
     expect(providers).toContain('getLLMService(model)');
-    expect(factory).toContain('managers.aiEmployeesManager.resolveModel(');
+    expect(factory).toMatch(/managers\.aiEmployeesManager\s*\.resolveModel\(/);
     expect(conversationService).not.toContain('resolveModel(');
     expect(conversationService).not.toContain('const agentRequest = {');
     expect(subAgentDispatcher).not.toContain('resolveModel(');
