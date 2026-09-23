@@ -7,6 +7,23 @@
  * For more information, please refer to: https://www.nocobase.com/agreement.
  */
 
+/**
+ * The prompt section that tells a model which Skills it can load with
+ * `getSkill`. Shared by employee and fixed agents so both describe Skills the
+ * same way.
+ */
+export function formatSkillsPrompt(
+  availableSkills?: readonly { name: string; description?: string }[],
+): string {
+  if (!availableSkills?.length) return '';
+  return `<skills>
+You have access to the following skills (tools groups). When a user's request matches a skill's description, use the **getSkill** tool to load that skill's detailed content and available tools
+
+${availableSkills.map((skill) => `- **${skill.name}**: ${skill.description || 'No description'}`).join('\n')}
+</skills>
+`;
+}
+
 export function getSystemPrompt({
   aiEmployee,
   personal,
@@ -158,16 +175,7 @@ ${environment.currentDateTime ? `<current_datetime>${environment.currentDateTime
 ${environment.timezone ? `<timezone>${environment.timezone}</timezone>` : ''}
 </environment>
 
-${
-  availableSkills?.length
-    ? `<skills>
-You have access to the following skills (tools groups). When a user's request matches a skill's description, use the **getSkill** tool to load that skill's detailed content and available tools
-
-${availableSkills.map((skill) => `- **${skill.name}**: ${skill.description || 'No description'}`).join('\n')}
-</skills>
-`
-    : ''
-}
+${formatSkillsPrompt(availableSkills)}
 
 ${
   availableAIEmployees?.length

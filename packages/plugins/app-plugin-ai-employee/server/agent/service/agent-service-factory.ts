@@ -12,18 +12,21 @@ import { MemorySaver } from '@langchain/langgraph';
 import { idGeneratorToken } from '@nocobase/app-server/id-generator';
 import { loggingToken } from '@nocobase/app-server/logging';
 import { cachingToken } from '@nocobase/app-server/caching';
-import type {
-  AgentContext,
-  AgentRuntime,
-  AgentState,
-  AIManager,
-  ToolsEntity,
+import {
+  SYSTEM_TOOLS,
+  type AgentContext,
+  type AgentRuntime,
+  type AgentState,
+  type AIManager,
+  type SkillsEntity,
+  type ToolsEntity,
 } from '@nocobase/ai-employee';
 import type { Caching } from '@nocobase/caching';
 import type { Logger } from '@nocobase/logging';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 import { createAgentService, type AgentService } from './agent-service.js';
 import { createAIEmployeeAgentContextProvider } from '../context/ai-employee/context.js';
+import { formatSkillsPrompt } from '../context/ai-employee/prompts.js';
 import type { AIEmployeeSkillSettings } from '../context/ai-employee/options.js';
 import { FixedAgentContextProvider } from '../context/fixed/context.js';
 import { createAgentProviders } from '../providers.js';
@@ -218,8 +221,9 @@ export class AgentServiceFactory {
         if (tool) tools.set(tool.definition.name, withResolvedAuto(tool));
       }
     }
+    let skills: SkillsEntity[] = [];
     if (options.skills?.length) {
-      const skills = await this.aiManager.skillsManager.getSkills([
+      skills = await this.aiManager.skillsManager.getSkills([
         ...options.skills,
       ]);
       for (const skill of skills) {
@@ -233,6 +237,18 @@ export class AgentServiceFactory {
       for (const tool of skillTools) {
         if (tool) tools.set(tool.definition.name, withResolvedAuto(tool));
       }
+      // A Skill's procedure reaches the model only through getSkill, so a fixed
+      // agent given Skills gets it too, able to load exactly those Skills.
+      const getSkill = await this.aiManager.toolsManager.getTools(
+        SYSTEM_TOOLS.GET_SKILL,
+      );
+      if (getSkill) {
+        tools.set(
+          getSkill.definition.name,
+          withResolvedAuto(withAvailableSkills(getSkill, skills)),
+        );
+        configuredToolNames.add(getSkill.definition.name);
+      }
     }
     const context = new FixedAgentContextProvider({
       sessionId,
@@ -244,7 +260,10 @@ export class AgentServiceFactory {
       provider: resolved.provider,
       providerName: resolved.service.provider,
       llmService: resolved.service.name,
-      systemPrompt: options.systemPrompt,
+      systemPrompt:
+        [options.systemPrompt, formatSkillsPrompt(skills)]
+          .filter(Boolean)
+          .join('\n\n') || undefined,
       tools,
       activeTools: configuredToolNames,
     });
@@ -288,4 +307,21 @@ export class AgentServiceFactory {
 // declares ALLOW, which is the employee path's fallback for the same tool.
 function withResolvedAuto(tool: ToolsEntity): ToolsEntity {
   return { ...tool, auto: tool.defaultPermission === 'ALLOW' };
+}
+
+// Binds getSkill to the Skills this agent was created with, whatever context
+// the tool is later invoked with.
+function withAvailableSkills(
+  tool: ToolsEntity,
+  skills: readonly SkillsEntity[],
+): ToolsEntity {
+  return {
+    ...tool,
+    invoke: (ctx, args, runtime) =>
+      tool.invoke(
+        { ...(ctx as AgentContext), availableSkills: async () => skills },
+        args,
+        runtime,
+      ),
+  };
 }
