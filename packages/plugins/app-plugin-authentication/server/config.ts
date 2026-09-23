@@ -1,4 +1,7 @@
-import { assertSecretIsNotPlaceholder } from '@nocobase/app-server/config';
+import {
+  ApplicationNotConfiguredError,
+  assertSecretIsNotPlaceholder,
+} from '@nocobase/app-server/config';
 
 export type AuthConfig = import('better-auth').BetterAuthOptions;
 
@@ -19,7 +22,15 @@ export function resolveAuthSecret(secret: string | undefined): string {
 
   if (secret) return secret;
 
-  throw new Error(
-    'auth.secret is required. Configure the application with "nocobase app config init", or set AUTH_SECRET.',
+  throw new ApplicationNotConfiguredError(
+    [
+      'This application is not configured: auth.secret is not set.',
+      '',
+      'Create the configuration with:',
+      '  pnpm config:init',
+      '',
+      'For a built application, run it inside dist/. If the application already has a configuration file, set',
+      'auth.secret in it, or AUTH_SECRET in the environment.',
+    ].join('\n'),
   );
 }

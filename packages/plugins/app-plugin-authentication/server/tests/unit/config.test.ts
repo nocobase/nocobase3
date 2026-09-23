@@ -1,6 +1,9 @@
 // @vitest-environment node
 
-import { PLACEHOLDER_SECRET } from '@nocobase/app-server/config';
+import {
+  ApplicationNotConfiguredError,
+  PLACEHOLDER_SECRET,
+} from '@nocobase/app-server/config';
 import { describe, expect, it } from 'vitest';
 import { resolveAuthSecret } from '../../config.js';
 
@@ -29,7 +32,10 @@ describe('resolveAuthSecret', () => {
    * session on restart — so this refuses, and names the command that writes one.
    */
   it.each([undefined, ''])('refuses to invent a secret for %j', (secret) => {
-    expect(() => resolveAuthSecret(secret)).toThrow('auth.secret is required.');
-    expect(() => resolveAuthSecret(secret)).toThrow('config init');
+    expect(() => resolveAuthSecret(secret)).toThrow(
+      ApplicationNotConfiguredError,
+    );
+    expect(() => resolveAuthSecret(secret)).toThrow('auth.secret is not set');
+    expect(() => resolveAuthSecret(secret)).toThrow('pnpm config:init');
   });
 });
