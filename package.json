@@ -65,7 +65,8 @@
     "local-registry:prepare": "node ./scripts/local-registry.mjs prepare",
     "local-registry:verify": "node ./scripts/local-registry.mjs verify",
     "local-registry:stop": "node ./scripts/local-registry.mjs stop",
-    "local-registry:create": "node ./scripts/local-registry.mjs create"
+    "local-registry:create": "node ./scripts/local-registry.mjs create",
+    "local-registry:env": "node ./scripts/local-registry.mjs env"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "catalog:",

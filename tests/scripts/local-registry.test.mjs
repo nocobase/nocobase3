@@ -8,7 +8,9 @@ import test from 'node:test';
 import {
   parseArgs,
   assertWorkdir,
+  formatShellEnv,
   registryEnv,
+  registryEnvOverrides,
 } from '../../scripts/local-registry.mjs';
 import {
   mergeMainConfig,
@@ -30,8 +32,81 @@ test('local registry arguments select templates and reject incomplete database c
     ['prepare', '--port', '65536'],
     ['verify', '--timeout', '0'],
     ['stop', '--port', '4873'],
+    ['env', '--port', '4873'],
   ])
     assert.throws(() => parseArgs(args));
+  assert.equal(parseArgs(['env']).action, 'env');
+});
+
+test('shell env exports exactly what registryEnv sets and unsets inherited configuration', () => {
+  const state = {
+    repo: '/work/nocobase',
+    registry: 'http://127.0.0.1:4873/',
+    npmrc: "/tmp/it's a session/npmrc",
+  };
+  const output = formatShellEnv(state, {
+    npm_config_ignore_scripts: 'true',
+    npm_config_registry: 'https://registry.example/',
+    PATH: '/usr/bin',
+  });
+  // npm_config_registry is overridden, so only the other inherited setting needs removing.
+  assert.match(output, /^unset npm_config_ignore_scripts$/m);
+  assert.doesNotMatch(output, /^unset .*npm_config_registry/m);
+
+  const script = `${output}\nnode -e 'process.stdout.write(JSON.stringify(process.env))'`;
+  const result = spawnSync('sh', ['-c', script], {
+    env: { PATH: process.env.PATH, npm_config_ignore_scripts: 'true' },
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const evaluated = JSON.parse(result.stdout);
+  for (const [key, value] of Object.entries(registryEnvOverrides(state)))
+    assert.equal(evaluated[key], value, key);
+  assert.equal(evaluated.npm_config_ignore_scripts, undefined);
+});
+
+test('shell env overrides a scoped registry saved with pnpm config set', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'local-registry-shell-'));
+  try {
+    const registry = 'http://127.0.0.1:4873/';
+    const npmrc = path.join(root, 'session', 'npmrc');
+    fs.mkdirSync(path.dirname(npmrc));
+    fs.writeFileSync(
+      npmrc,
+      `registry=${registry}\n@nocobase:registry=${registry}\n`,
+    );
+    // Where `pnpm config set @nocobase:registry …` writes, which PNPM_CONFIG_USERCONFIG does not replace.
+    const userConfig = path.join(root, 'user-config');
+    fs.mkdirSync(path.join(userConfig, 'pnpm'), { recursive: true });
+    fs.writeFileSync(
+      path.join(userConfig, 'pnpm', 'auth.ini'),
+      '@nocobase:registry=https://published.invalid/\n',
+    );
+    const env = { ...process.env, XDG_CONFIG_HOME: userConfig };
+    const resolve = (prefix) =>
+      spawnSync('sh', ['-c', `${prefix}\npnpm config get @nocobase:registry`], {
+        env,
+        encoding: 'utf8',
+      });
+
+    const withUserConfigOnly = resolve(
+      `export PNPM_CONFIG_USERCONFIG='${npmrc}'`,
+    );
+    assert.equal(withUserConfigOnly.status, 0, withUserConfigOnly.stderr);
+    assert.equal(
+      withUserConfigOnly.stdout.trim(),
+      'https://published.invalid/',
+      'the fixture must reproduce the leak for this test to mean anything',
+    );
+
+    const withShellEnv = resolve(
+      formatShellEnv({ repo: root, registry, npmrc }, env),
+    );
+    assert.equal(withShellEnv.status, 0, withShellEnv.stderr);
+    assert.equal(withShellEnv.stdout.trim(), registry);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('registry environment overrides npm and pnpm without changing the process environment', () => {
