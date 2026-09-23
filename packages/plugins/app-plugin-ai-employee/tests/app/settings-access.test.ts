@@ -6,9 +6,54 @@ import { createMigrator } from '@nocobase/db';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { createAIEmployeeRoutes } from '../../server/route/index.js';
 import { aiEmployeeApiRoutes } from '../../server/route/plugin.js';
 import { AI_SETTINGS_ACTIONS } from '../../server/route/settings-access.js';
 import { createTestAIEmployeeFixture } from './test-context.js';
+
+/**
+ * Every action a signed-in user reaches without AI settings access: the chat,
+ * its files, and the non-secret model catalog the chat and other plugins read.
+ * An action missing from here and from the gated lists is a route nobody
+ * decided about, and the classification test below fails on it.
+ */
+const SIGNED_IN_ACTIONS = [
+  'ai:listAllEnabledModels',
+  'ai:listLLMProviders',
+  'ai:listLLMServices',
+  'ai:listModels',
+  'ai:testFlight',
+  'aiConversations:abort',
+  'aiConversations:create',
+  'aiConversations:destroy',
+  'aiConversations:get',
+  'aiConversations:getMessages',
+  'aiConversations:list',
+  'aiConversations:resendMessages',
+  'aiConversations:resumeStream',
+  'aiConversations:resumeToolCall',
+  'aiConversations:sendMessages',
+  'aiConversations:unreadCount',
+  'aiConversations:unreadCounts',
+  'aiConversations:update',
+  'aiConversations:updateOptions',
+  'aiConversations:updateToolArgs',
+  'aiConversations:updateUserDecision',
+  'aiEmployees:listByUser',
+  'aiEmployees:updateUserPrompt',
+  'aiFiles:create',
+  'aiFiles:preview',
+];
+
+/** Management reads with a guard of their own, checking the same page access. */
+const SELF_GUARDED_ACTIONS = [
+  'aiConversations:listAll',
+  'aiConversations:getAllMessages',
+  'aiSkills:listAll',
+  'aiSkills:getDetails',
+  'aiTools:listAll',
+  'aiTools:getDetails',
+];
 
 const READS = new Set([
   'list',
@@ -145,6 +190,37 @@ describe('AI settings access', () => {
     for (const action of AI_SETTINGS_ACTIONS) {
       expect((await request(action)).status, action).not.toBe(403);
     }
+  });
+
+  it('classifies every registered action exactly once', () => {
+    const { deps, services: routeServices } = createTestAIEmployeeFixture();
+    const registered = new Set(
+      createAIEmployeeRoutes({
+        authentication: deps.auth,
+        authorization: deps.authorization,
+        services: routeServices,
+        logger: deps.logging.getLogger('ai-employee-test'),
+      })
+        .routes.filter((route) => route.method !== 'ALL')
+        .map((route) => route.path.replace(/^\//, '')),
+    );
+    const classified = [
+      ...AI_SETTINGS_ACTIONS,
+      ...SELF_GUARDED_ACTIONS,
+      ...SIGNED_IN_ACTIONS,
+    ];
+
+    expect(new Set(classified).size, 'an action is in two lists').toBe(
+      classified.length,
+    );
+    expect(
+      [...registered].filter((action) => !classified.includes(action)),
+      'registered but not classified',
+    ).toEqual([]);
+    expect(
+      classified.filter((action) => !registered.has(action)),
+      'classified but not registered',
+    ).toEqual([]);
   });
 
   it('leaves the chat open to every signed-in user', async () => {
