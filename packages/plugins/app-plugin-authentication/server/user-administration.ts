@@ -1,5 +1,9 @@
 import type { Knex } from 'knex';
-import type { DatabaseConnection } from '@nocobase/db';
+import type {
+  DatabaseConnection,
+  FilterBuilder,
+  FilterNode,
+} from '@nocobase/db';
 import type { RealtimeService } from '@nocobase/app-server/realtime';
 
 import type { Auth } from './auth.js';
@@ -105,41 +109,50 @@ class DefaultUserAdministrationService implements UserAdministrationService {
   ): Promise<AdministratedUserPage> {
     const page = positiveInteger(input.page, 1);
     const pageSize = Math.min(positiveInteger(input.pageSize, 20), 100);
-    let query = this.options.connection.query
-      .selectFrom('user')
-      .where('deletedAt', 'is', null);
-    if (input.status === 'enabled')
-      query = query.where('disabledAt', 'is', null);
-    if (input.status === 'disabled')
-      query = query.where('disabledAt', 'is not', null);
-    if (input.userIds) {
-      if (input.userIds.length === 0) {
-        return { items: [], total: 0, page, pageSize };
-      }
-      query = query.where('id', 'in', [...input.userIds]);
+    if (input.userIds && input.userIds.length === 0) {
+      return { items: [], total: 0, page, pageSize };
     }
+    const userIds = input.userIds;
     const search = input.search?.trim();
-    if (search) {
-      query = query.where((builder) =>
-        builder.or([
-          builder('name', 'like', `%${search}%`),
-          builder('username', 'like', `%${search}%`),
-          builder('email', 'like', `%${search}%`),
-        ]),
-      );
-    }
-    const countRow = await query
-      .select(({ fn }) => [fn.countAll().as('count')])
-      .executeTakeFirst<{ count: number | string }>();
-    const rows = await query
-      .select(userColumns)
-      .orderBy('createdAt', 'desc')
-      .limit(pageSize)
-      .offset((page - 1) * pageSize)
-      .execute();
+    // Read through the Repository rather than the Query API: its `includes`
+    // matches the search term as literal text, so `%` and `_` typed into the
+    // search box mean themselves instead of acting as SQL wildcards.
+    const users = this.options.connection.repository('user');
+    const condition = (builder: FilterBuilder): FilterNode =>
+      builder.and([
+        builder.date('deletedAt').empty(),
+        ...(input.status === 'enabled'
+          ? [builder.date('disabledAt').empty()]
+          : []),
+        ...(input.status === 'disabled'
+          ? [builder.date('disabledAt').notEmpty()]
+          : []),
+        ...(userIds
+          ? [builder.or(userIds.map((id) => builder.string('id').eq(id)))]
+          : []),
+        ...(search
+          ? [
+              builder.or([
+                builder.string('name').includes(search),
+                builder.string('username').includes(search),
+                builder.string('email').includes(search),
+              ]),
+            ]
+          : []),
+      ]);
+    const total = await users.count({ filter: condition });
+    const rows = await users.findMany({
+      filter: condition,
+      select: (select) => select.fields(...userColumns),
+      // `createdAt` alone is not a total order, so a shared timestamp could
+      // drop or repeat a row across pages; `id` breaks the tie.
+      sort: (sort) => [sort.field('createdAt').desc(), sort.field('id').asc()],
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+    });
     return {
-      items: rows.map(toAdministratedUser),
-      total: Number(countRow?.count ?? 0),
+      items: rows.map((row) => toAdministratedUser(row)),
+      total,
       page,
       pageSize,
     };

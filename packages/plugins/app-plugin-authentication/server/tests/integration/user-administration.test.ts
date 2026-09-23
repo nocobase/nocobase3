@@ -6,8 +6,8 @@ import { createAuthFixture } from './support.js';
 
 describe('user administration', () => {
   const fixtures: Awaited<ReturnType<typeof createAuthFixture>>[] = [];
-  const setup = async () => {
-    const fixture = await createAuthFixture();
+  const setup = async (naming?: { readonly underscored: boolean }) => {
+    const fixture = await createAuthFixture({}, naming);
     fixtures.push(fixture);
     const disconnectUser = vi.fn();
     const users = createUserAdministrationService({
@@ -16,6 +16,31 @@ describe('user administration', () => {
       realtime: { disconnectUser } as never,
     });
     return { ...fixture, users, disconnectUser };
+  };
+  const setupList = async (naming?: { readonly underscored: boolean }) => {
+    const fixture = await setup(naming);
+    const now = new Date();
+    for (const [id, name, email, disabled] of [
+      ['plain', 'Alice Smith', 'alice@example.com', false],
+      ['percent', '100% Coverage', 'percent@example.com', false],
+      ['underscore', 'a_c report', 'underscore@example.com', false],
+      ['literal', 'abc report', 'literal@example.com', false],
+      ['inactive', 'Alice Retired', 'retired@example.com', true],
+    ] as const) {
+      await fixture.connection.query
+        .insertInto('user')
+        .values({
+          id,
+          name,
+          email,
+          emailVerified: false,
+          ...(disabled ? { disabledAt: now } : {}),
+          createdAt: now,
+          updatedAt: now,
+        })
+        .execute();
+    }
+    return fixture;
   };
   afterEach(async () => {
     await Promise.all(fixtures.splice(0).map((fixture) => fixture.dispose()));
@@ -199,29 +224,64 @@ describe('user administration', () => {
     expect(disconnectUser).toHaveBeenCalledWith(id);
   });
 
-  it('filters and pages users by status and search', async () => {
-    const { users } = await setup();
-    const alice = await users.create({
-      name: 'Alice',
-      username: 'alice',
-      email: 'alice@example.com',
-      password: 'strong-password',
-    });
-    await users.create({
-      name: 'Bob',
-      username: 'bob',
-      email: 'bob@example.com',
-      password: 'strong-password',
-    });
-    await users.disable(alice.id);
+  it.each([undefined, { underscored: false }] as const)(
+    'searches literal text under naming %s',
+    async (naming) => {
+      const { users } = await setupList(naming);
+      await expect(users.list({ search: '%' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'percent' }],
+      });
+      const underscore = await users.list({ search: 'a_c' });
+      expect(underscore.items.map(({ id }) => id)).toEqual(['underscore']);
+      expect(
+        (await users.list({ search: 'alice' })).items.map(({ id }) => id),
+      ).toEqual(['inactive', 'plain']);
+      await expect(users.list({ status: 'disabled' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'inactive' }],
+      });
+    },
+  );
+
+  it('keeps pages stable when users have the same creation time', async () => {
+    const { users } = await setupList();
+    const first = await users.list({ pageSize: 3 });
+    const second = await users.list({ page: 2, pageSize: 3 });
+    expect(first.total).toBe(5);
+    expect([
+      ...first.items.map(({ id }) => id),
+      ...second.items.map(({ id }) => id),
+    ]).toEqual(['inactive', 'literal', 'percent', 'plain', 'underscore']);
+  });
+
+  it('combines status and ID filters and hides soft-deleted users', async () => {
+    const { users } = await setupList();
+    expect((await users.list({ status: 'enabled' })).total).toBe(4);
     expect(
-      (await users.list({ status: 'disabled' })).items.map((user) => user.id),
-    ).toEqual([alice.id]);
-    expect(
-      (await users.list({ search: 'bob' })).items.map((user) => user.name),
-    ).toEqual(['Bob']);
-    const page = await users.list({ pageSize: 1, page: 2 });
-    expect(page.total).toBe(2);
-    expect(page.items).toHaveLength(1);
+      (
+        await users.list({ userIds: ['plain', 'inactive', 'absent'] })
+      ).items.map(({ id }) => id),
+    ).toEqual(['inactive', 'plain']);
+    await expect(
+      users.list({ userIds: ['plain', 'inactive'], status: 'enabled' }),
+    ).resolves.toMatchObject({ total: 1, items: [{ id: 'plain' }] });
+    await expect(
+      users.list({ userIds: ['plain', 'percent'], search: 'alice' }),
+    ).resolves.toMatchObject({ total: 1, items: [{ id: 'plain' }] });
+    await expect(users.list({ userIds: [] })).resolves.toMatchObject({
+      total: 0,
+      items: [],
+    });
+    await users.remove('plain', 'operator');
+    expect((await users.list()).total).toBe(4);
+    await expect(users.list({ search: 'alice' })).resolves.toMatchObject({
+      total: 1,
+      items: [{ id: 'inactive' }],
+    });
+    await expect(users.list({ userIds: ['plain'] })).resolves.toMatchObject({
+      total: 0,
+      items: [],
+    });
   });
 });

@@ -10,11 +10,18 @@ export const testSecret = 'development-secret-at-least-32-characters';
 
 export async function createAuthFixture(
   options: Partial<Omit<AuthOptions, 'connection'>> = {},
+  naming?: { readonly underscored: boolean },
 ) {
   const database = createDatabaseManager({
     drivers: { sqlite },
     default: 'main',
-    connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+    connections: {
+      main: {
+        dialect: 'sqlite',
+        filename: ':memory:',
+        ...(naming ? { naming } : {}),
+      },
+    },
   });
   await createMigrator({
     database,
