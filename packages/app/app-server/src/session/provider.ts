@@ -27,6 +27,7 @@ export class SessionProvider extends ServiceProvider<AppPluginApplication> {
       createSessionManager(
         resolveAppSessionConfig(
           this.app.config.get<AppSessionConfigInput>('session')!,
+          this.app.config.get<{ secret?: string }>('auth')?.secret,
           this.ephemeralSecret,
         ),
       ),
@@ -40,12 +41,21 @@ export class SessionProvider extends ServiceProvider<AppPluginApplication> {
 
 export function resolveAppSessionConfig(
   configured: AppSessionConfigInput,
+  authSecret: string | undefined,
   ephemeralSecret: string,
 ): AppSessionConfig {
-  const { gcLottery: configuredGcLottery, secret, ...rest } = configured;
+  const {
+    gcLottery: configuredGcLottery,
+    secret: configuredSecret,
+    ...rest
+  } = configured;
+  const secret = configuredSecret ?? authSecret;
   // Before the fallback below, because a placeholder is a value that was configured rather than one that was left
   // unset, and silently replacing it with an ephemeral secret would hide the mistake rather than report it.
-  assertSecretIsNotPlaceholder(secret, 'session.secret');
+  assertSecretIsNotPlaceholder(
+    secret,
+    configuredSecret === undefined ? 'auth.secret' : 'session.secret',
+  );
   const gcLottery = configuredGcLottery ?? { hits: 2, total: 100 };
   if (gcLottery.hits > gcLottery.total) {
     throw new Error(

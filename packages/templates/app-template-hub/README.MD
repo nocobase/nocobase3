@@ -55,7 +55,7 @@ APP_SERVER_PORT=13399 PROXY_TARGET_URL=http://127.0.0.1:13000/main pnpm dev
 
 ### Review your configuration
 
-`config.yml` was generated from `config.example.yml` when the project was created, with `auth.secret` and `session.secret` filled in. It gets you running on SQLite; adjust it for your situation:
+`config.yml` was generated from `config.example.yml` when the project was created, with `auth.secret` filled in; `session.secret` inherits it unless explicitly configured. It gets you running on SQLite; adjust it for your situation:
 
 - **Database.** SQLite needs no server and works as it is. To use another one, register its dialect in `server/config/database.ts`, add the matching `@nocobase/db-*` package, and point the connection here at it — host, port, and credentials. Drivers are code rather than settings, so a dialect the application does not register cannot be introduced from this file.
 - **Where the application is served.** `APP_BASE_PATH` is the public mount path, `/main` by default, so the development URL looks like `http://127.0.0.1:13000/main/`. `APP_SERVER_PORT` and `APP_SERVER_HOST` change what the server binds to.

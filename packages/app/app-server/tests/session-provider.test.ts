@@ -48,7 +48,11 @@ describe('SessionProvider', () => {
       gcLottery: { hits: 1, total: 10 },
     });
 
-    const resolved = resolveAppSessionConfig(configured, 'ephemeral-secret');
+    const resolved = resolveAppSessionConfig(
+      configured,
+      undefined,
+      'ephemeral-secret',
+    );
 
     expect(resolved.secret).toBe(
       'configured-session-secret-at-least-32-characters',
@@ -57,13 +61,25 @@ describe('SessionProvider', () => {
     expect(resolved.gcLottery).toEqual([1, 10]);
   });
 
+  it('uses auth.secret when session.secret is omitted', () => {
+    const configured = createRuntimeConfig({});
+
+    expect(
+      resolveAppSessionConfig(
+        configured,
+        'configured-auth-secret-at-least-32-characters',
+        'ephemeral-secret',
+      ).secret,
+    ).toBe('configured-auth-secret-at-least-32-characters');
+  });
+
   it('rejects a GC lottery whose hits exceed its total', () => {
     const configured = createRuntimeConfig({
       gcLottery: { hits: 2, total: 1 },
     });
 
     expect(() =>
-      resolveAppSessionConfig(configured, 'ephemeral-secret'),
+      resolveAppSessionConfig(configured, undefined, 'ephemeral-secret'),
     ).toThrow('session.gcLottery.hits must not exceed');
   });
 
@@ -75,7 +91,7 @@ describe('SessionProvider', () => {
     const configured = createRuntimeConfig({ secret: PLACEHOLDER_SECRET });
 
     expect(() =>
-      resolveAppSessionConfig(configured, 'ephemeral-secret'),
+      resolveAppSessionConfig(configured, undefined, 'ephemeral-secret'),
     ).toThrow('session.secret is still set to the placeholder');
   });
 
@@ -85,7 +101,7 @@ describe('SessionProvider', () => {
     });
 
     expect(() =>
-      resolveAppSessionConfig(configured, 'ephemeral-secret'),
+      resolveAppSessionConfig(configured, undefined, 'ephemeral-secret'),
     ).toThrow('session.secret is still set to the placeholder');
   });
 });

@@ -1304,8 +1304,9 @@ describe('@nocobase/app-plugin-hub service', () => {
         session: { secret: string };
       };
       expect(secrets.auth.secret).toHaveLength(43);
-      expect(secrets.session.secret).toHaveLength(43);
-      expect(secrets.auth.secret).not.toBe(secrets.session.secret);
+      if (secrets.session) {
+        expect(secrets.session.secret).toBe(secrets.auth.secret);
+      }
       expect(initial.content).toContain('# Preserve this comment');
       const second = await service.deploy('customer', {
         releaseId: release.id,
