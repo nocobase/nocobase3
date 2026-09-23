@@ -3,6 +3,7 @@ import {
   FileText,
   Home,
   Hash,
+  Languages,
   Palette,
   PanelsTopLeft,
   Plug,
@@ -122,6 +123,13 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     name: 'numeric-examples',
     navigation: { title: 'navigation.numbers', icon: Hash },
     path: '/numeric-examples',
+  },
+  {
+    auth: 'required',
+    componentLoader: () => import('./pages/i18n-examples/index.js'),
+    name: 'i18n-examples',
+    navigation: { title: 'navigation.i18nExamples', icon: Languages },
+    path: '/i18n-examples',
   },
   {
     auth: 'required',

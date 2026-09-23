@@ -108,6 +108,7 @@ describe('app client routes', () => {
       { name: 'routeChildPageRenewal', authorizedAs: null },
       { name: 'articles', authorizedAs: null },
       { name: 'numeric-examples', authorizedAs: 'numeric-examples' },
+      { name: 'i18n-examples', authorizedAs: 'i18n-examples' },
       { name: 'external-crm', authorizedAs: 'external-crm' },
     ]);
     // A settings page carries no rule by default. This one asks for a page grant, so it stays invisible until an
