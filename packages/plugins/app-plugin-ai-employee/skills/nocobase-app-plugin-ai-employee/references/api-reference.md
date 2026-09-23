@@ -682,7 +682,7 @@ Multipart form data with exactly one field named `file` whose value is a browser
 
 ### `GET aiFiles:preview`
 
-Query `{ id: string }`. Returns a file preview response, not a JSON envelope.
+Query `{ id: string }`. Returns a file preview response, not a JSON envelope. The user who uploaded the file can preview it; anyone else, and anyone previewing a file that records no uploader, needs AI settings access, and gets 403 without it.
 
 ## Management resources
 
@@ -768,7 +768,7 @@ A managed backend tool cannot be created from JSON alone without an existing exe
 
 ### MCP servers
 
-MCP servers are configured only in `config.yml` `ai.mcpServers`; there is no action that creates, edits, or deletes one. Actions on resource `aiMcpServers`: `GET list`, `GET get?key`, `GET listTools`, `POST testConnection`, `POST updateEnabled` (`{ name, enabled }`), and `POST updateToolPermission` (`{ toolName, permission: 'ASK' | 'ALLOW' }`).
+MCP servers are configured only in `config.yml` `ai.mcpServers`; there is no action that creates, edits, or deletes one. The enable switch and tool permissions these actions change are stored and survive a restart; a tool is named `mcp-<server>-<tool>`. Actions on resource `aiMcpServers`: `GET list`, `GET get?key`, `GET listTools`, `POST testConnection`, `POST updateEnabled` (`{ name, enabled }`), and `POST updateToolPermission` (`{ toolName, permission: 'ASK' | 'ALLOW' }`).
 
 A configured server as returned by `list`/`get`:
 
@@ -844,7 +844,7 @@ Always pass an `AbortSignal`. After disconnect, inspect active state/history and
 
 ## Errors and security
 
-JSON failures use an envelope compatible with:
+Failures the plugin raises use an envelope compatible with:
 
 ```ts
 {
@@ -853,4 +853,10 @@ JSON failures use an envelope compatible with:
 }
 ```
 
-Every route requires a signed-in session and answers 401 without one; there is no anonymous caller. The [management resources](#management-resources) and `ai:listProviderModels` also require AI settings access and answer 403 without it; the chat actions — conversations, files, `aiEmployees:listByUser` and `updateUserPrompt`, `ai:listAllEnabledModels` — are open to every signed-in user, scoped to the conversations that user owns. Validation commonly returns HTTP 400, not-found 404, and unexpected errors 500. Backend tools must still enforce business authorization using `ctx.actor` and supplied services/repositories.
+Two responses come from elsewhere and do not: a missing session answers 401 with the authentication plugin's `{ code: 'UNAUTHORIZED', message }`, and an action that does not exist answers a plain-text 404.
+
+Every route requires a signed-in session; there is no anonymous caller. Beyond that, actions fall into three groups:
+
+- **AI settings access** (`page:ai.settings`, `access`), 403 without it: every [management resource](#management-resources), `ai:listProviderModels`, and the settings-page reads `aiConversations:listAll` and `getAllMessages`, `aiSkills:listAll` and `getDetails`, and `aiTools:listAll` and `getDetails`.
+- **Every signed-in user**, scoped to what that user owns: the conversation actions other than those two, `aiFiles:create` and `aiFiles:preview` (with the ownership rule above), `aiEmployees:listByUser` and `updateUserPrompt`, and `ai:listAllEnabledModels`.
+- **Every signed-in user, because the data is not sensitive**: `ai:listLLMProviders`, `ai:listLLMServices` and `ai:listModels` return the provider catalog and configured service and model names, never credentials, and other plugins read them to offer a model choice. Validation commonly returns HTTP 400, not-found 404, and unexpected errors 500. Backend tools must still enforce business authorization using `ctx.actor` and supplied services/repositories.

@@ -1,6 +1,6 @@
 # AI Capabilities an App Defines
 
-What an App can add to the AI Employee runtime, what is already there, and the `config.yml` block that turns it on. Every shape here is the current public contract; keep names and enum values exact, and treat "optional" as "may be omitted", never as "may be `null`".
+What an App can add to the AI Employee runtime, what is already there, and the `config.yml` block that turns it on. Every shape here is the current public contract; keep names and enum values exact, and treat "optional" as "may be omitted", never as "may be `null`" — the one exception is an employee's `systemPrompt`, which is `string | null`.
 
 ## Table of contents
 
@@ -73,7 +73,7 @@ export default defineAIEmployee({
 
 `tools[].name` must match a registered tool name exactly.
 
-`autoCall` is narrower than it reads, and in one case it does the opposite of what it sounds like. The runtime consults it only for `CUSTOM` tools; for `SPECIFIED` and `GENERAL` it is ignored entirely and automatic calling follows `defaultPermission === 'ALLOW'`. On a `CUSTOM` tool listed here, `autoCall` replaces `defaultPermission` altogether: `autoCall: true` makes the call automatic, overriding an `ASK` default rather than respecting it, and leaving `autoCall` out makes it ask, even when the tool declares `ALLOW`. So a `CUSTOM` tool listed in `tools` states `autoCall` either way. The value is also written to the employee record the first time the employee is registered, and a stored `true` or `false` wins over whatever the definition says afterwards — changing `autoCall` in code later does not change a deployed employee; the administrator changes it in AI settings.
+`autoCall` is narrower than it reads, and in one case it does the opposite of what it sounds like. The runtime consults it only for `CUSTOM` tools; for `SPECIFIED` and `GENERAL` it is ignored entirely and automatic calling follows `defaultPermission === 'ALLOW'`. On a `CUSTOM` tool listed here, `autoCall` replaces `defaultPermission` altogether: `autoCall: true` makes the call automatic, overriding an `ASK` default rather than respecting it, and leaving `autoCall` out makes it ask, even when the tool declares `ALLOW`. So a `CUSTOM` tool listed in `tools` states `autoCall` either way. A value the definition sets is also written to the employee record the first time the employee is registered, and a stored `true` or `false` wins over whatever the definition says afterwards — once one is stored, changing `autoCall` in code does not change a deployed employee; the administrator changes it in AI settings.
 
 `skills` and `tools` are the employee's declared capability set, but listing a tool is not always enough to reach it: a tool named by any registered Skill stays behind that Skill until the conversation loads it. Read [How Skills and Tools relate](#how-skills-and-tools-relate) before deciding which of the two lists a capability belongs in — the choice is not cosmetic, and the failure mode is a tool that never activates and never complains.
 
@@ -332,7 +332,7 @@ Nineteen, in six families. All are `backend` unless the table says otherwise, an
 | `businessReportGenerator` | `SPECIFIED` | `ALLOW`    | Validate and prepare a Markdown report for preview and export; gated behind its Skill |
 | `chartGenerator`          | `GENERAL`   | `ALLOW`    | Produce ECharts options from data the agent already holds; no Skill gates it          |
 
-**Browser (3)** — `GENERAL`, `ALLOW`, `execution: 'frontend'`. These run in the page and need the chat's page context; they do nothing on a server-only agent.
+**Browser (3)** — `GENERAL`, `ALLOW`, `execution: 'frontend'`. These run in the page and need the chat's page context. On an agent driven from server code a call to one pauses the run, whatever its permission, because only a browser can carry it out — see [server-runs.md § Running unattended](server-runs.md#running-unattended).
 
 | Tool                  | What it does                                                               |
 | --------------------- | -------------------------------------------------------------------------- |
@@ -436,7 +436,7 @@ ai:
 
 ### Where the key lives
 
-Settle this with the user before writing any configuration. The goal is fixed: the key never enters the repository, never reaches a commit, and never enters the conversation transcript. Never ask the user to paste a key into the conversation and never write one yourself. Hand the user a command with a placeholder, and have them run it in their own terminal rather than through the agent, since a command the agent runs carries the key into its transcript.
+Settle this with the user before writing any configuration. The goal is fixed: the key never enters the repository, never reaches a commit, and never enters the conversation transcript. Never ask the user to paste a key into the conversation and never write one yourself. Hand the user a command that prompts for the key, and have them run it in their own terminal rather than through the agent, since a command the agent runs carries the key into its transcript.
 
 Your own shell may already hold the key. An agent's shell usually starts from the user's profile, so a variable the user set before this session is in its environment, and printing it prints the key. Never run anything that prints the environment or a variable's value — listing the environment, tracing executed commands, echoing the variable, verbose HTTP output against a provider (`google-genai` takes its key in the query string) — and never print a shell profile, `.env`, or a `config.yml` that holds a value. When you need to know whether a variable exists, use a test that reports only set or missing.
 
@@ -460,14 +460,15 @@ There is no one right command. Which file sets a variable, how it is reloaded, a
 
 Whatever the environment, the command you hand over must:
 
-- leave the value as a placeholder the user replaces;
-- create what it writes to if it does not exist yet;
+- read the key from a hidden prompt when it runs — the shell's silent read, or a secure-string prompt — rather than carry it in the command, so the key never appears on screen, in the command line, or in the shell history;
+- create what it writes to if it does not exist yet, and not leave a new file readable by other users;
 - replace an earlier entry for the same variable rather than add a second, so running it twice leaves one, and keep everything else in the file;
 - write through a file that is a symbolic link rather than replacing the link;
-- insert the value literally, whatever characters it contains;
+- write the value so that the target's own parser reads back exactly what was typed: quoted by that shell's rules in a shell profile; in this App's `.env`, where `$NAME` and `${NAME}` are expanded even inside quotes, with every `$` written as `\$`; in YAML, as a single-quoted scalar with each `'` doubled;
+- call commands by name without depending on the user's aliases or functions;
 - print nothing of the value.
 
-Before handing it over, run it yourself against a throwaway copy of the target with a fake value, in the same shell when it is available to you, and confirm each of those properties — never with the real key. If you cannot verify a command for the user's environment, give them an instruction to add the line in an editor instead. Say that the command, key included, lands in the shell history, and how that shell can leave a command out of it, if it can.
+Before handing it over, run it yourself against a throwaway copy of the target with a fake value that contains quotes, `$`, a backslash and a backtick, in the same shell when it is available to you, and read the value back with the target's own parser — never with the real key. If you cannot verify a command for the user's environment, give them the manual edit instead: the line to add in an editor, or on Windows the account's environment variables dialog.
 
 Then give the user a check to run in a new terminal that reports whether the variable is set without printing it. A variable set during this session is in neither the agent's shell nor any process already running — including a `pnpm dev` the agent starts, which then expands `${OPENAI_API_KEY}` to an empty string. Either the user starts the server from their own terminal, or the agent session is restarted from a terminal that has the variable.
 
@@ -547,7 +548,7 @@ A duplicate name, a wrong field type, an empty `name`/`provider`, or a non-boole
 
 ## MCP servers (`config.yml`)
 
-`ai.mcpServers` is the only way to configure MCP. The settings page is read-only: it enables a server and shows the tools it discovered, and it cannot create, edit, or delete a connection.
+`ai.mcpServers` is the only way to configure MCP. The settings page enables or disables a server, shows the tools it discovered, and sets each tool's permission; it cannot create, edit, or delete a connection. Both the enable switch and the tool permissions are stored in the database and survive a restart: `enabled` in `config.yml` applies when a server is first created, and after that the switch is the administrator's, as it is for LLM services.
 
 ```yaml
 ai:
@@ -572,7 +573,9 @@ ai:
 
 `stdio` spawns a child process in the NocoBase server's environment — scope its command, working directory and file access to the minimum. `http` and `sse` take `url` and optional `headers`. `${NAME}` is expanded recursively here too.
 
-Review every discovered tool's description and parameters before letting an employee use it, and keep anything that writes or has an external effect on `ASK`.
+A server's tools register as `GENERAL` tools named `mcp-<server>-<tool>`, so every employee has them from the moment the server connects — there is no per-employee opt-in. Use that exact name wherever a tool is named: in a Skill's `tools`, an employee's `tools`, or a session's `skillSettings`. Narrowing them for one employee is its tool selection in AI settings, or a session's `skillSettings` allowlist.
+
+A tool whose server-side name starts with `get` defaults to `ALLOW`, and every other tool to `ASK`; the settings page, or `aiMcpServers:updateToolPermission`, changes that per tool. The default is a guess from the name, not from what the tool does, so review each discovered tool's description and parameters, and keep anything that writes or has an external effect on `ASK` — including a `get…` tool that turns out to have one.
 
 ## Attachment storage (`config.yml`)
 
@@ -594,7 +597,7 @@ ai:
 
 Falling through to the application default is a real decision, not a neutral one: chat attachments can carry contracts, identity documents, or private correspondence, and they land wherever the App's general uploads land, under that disk's retention and access policy. **Raise this with the user and ask whether to configure a dedicated disk now**, before enabling attachments. State which disk the default resolves to, and what would then be sharing it.
 
-What reaches the model, once stored: images and PDFs are sent as multimodal content blocks, so a dropped image is read directly with no extra tool. Other recognized document types are extracted to text by the document loader. Anything else produces a message telling the user that type is not supported. Whether an image is actually understood still depends on the provider and model.
+What reaches the model, once stored: images are sent as content blocks, so a dropped image is read directly with no extra tool; a PDF is sent as a document or as extracted text depending on the provider — see [What each provider can actually do](#what-each-provider-can-actually-do). Other recognized document types are extracted to text by the document loader. Anything else produces a message telling the user that type is not supported. Whether an image is actually understood still depends on the provider and model.
 
 ## Extra Skill directories (`config.yml`)
 

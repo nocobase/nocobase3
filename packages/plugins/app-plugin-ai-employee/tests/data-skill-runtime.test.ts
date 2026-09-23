@@ -294,18 +294,34 @@ describe('package-owned data skill runtime', () => {
     expect(unfiltered.discovered.tools.has('suggestions')).toBe(true);
     expect(unfiltered.discovered.tools.has('formFiller')).toBe(true);
 
+    // data-query tells the model to load data-metadata first, so the list
+    // names both Skills' tools, not only the one the query runs on.
     const unattended = await fixture.runtime({
       toolsVersion: 1,
-      tools: ['getSkill', 'dataQuery'],
+      tools: [
+        'getSkill',
+        'getDataSources',
+        'getCollectionNames',
+        'getCollectionMetadata',
+        'searchFieldMetadata',
+        'dataSourceQuery',
+        'dataSourceCounting',
+        'dataQuery',
+      ],
     });
 
     expect(unattended.discovered.tools.has('suggestions')).toBe(false);
     expect(unattended.discovered.tools.has('formFiller')).toBe(false);
     await unattended.call('getSkill', { skillName: 'data-query' });
+    await unattended.call('getSkill', { skillName: 'data-metadata' });
     expect(await unattended.visibleTools()).toEqual(
-      expect.arrayContaining(['getSkill', 'dataQuery']),
+      expect.arrayContaining(['getSkill', 'getCollectionNames', 'dataQuery']),
     );
     expect(await unattended.visibleTools()).not.toContain('suggestions');
+    expect(
+      (await unattended.call('getCollectionNames', { dataSource: 'main' }))
+        .result,
+    ).toMatchObject({ status: 'success' });
   });
 
   it('does not activate selected skill tools until an available skill is loaded', async () => {
