@@ -5,8 +5,7 @@ Apply these rules when adding or changing icon buttons in the page's top-right h
 | Entry behavior                                          | Hover behavior                                                                                                                                    | Examples                                    |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | Navigates to another page                               | Show a short tooltip describing the destination or purpose.                                                                                       | Component examples, Settings, Notifications |
-| Opens a menu or configuration panel on the current page | Open the panel on hover; close a hover-opened panel when the pointer leaves the trigger and panel interaction region. Do not also show a tooltip. | Account                                     |
-| Switches state immediately in place                     | Show a short tooltip naming the action.                                                                                                           | Light/dark toggle                           |
+| Opens a menu or configuration panel on the current page | Open the panel on hover; close a hover-opened panel when the pointer leaves the trigger and panel interaction region. Do not also show a tooltip. | Appearance, Account                         |
 
 ## Navigation entries
 
@@ -22,11 +21,7 @@ Moving from the trigger into its panel, or between a menu and its portalled subm
 
 Follow the component's default distinction: a hover-opened panel closes on pointer exit, while a click-opened panel may remain open until an outside click or Escape. Do not force click-opened panels to behave like hover-opened panels with custom mouse-leave handlers, coordinate checks, timers, or extra open state. Prefer the existing public component options over recreating their behavior.
 
-When choosing a menu option completes the action, use the component's built-in dismissal. Account language radio items use `closeOnClick` so the menu closes immediately after selection; radio items otherwise default to remaining open.
-
-## Immediate state toggles
-
-A control whose click completes the change needs no panel: apply the new state at once and give it a tooltip that names the action. The light/dark button switches to the opposite explicit mode, picks its icon from the mode in effect, and keeps one fixed label such as “Switch between light and dark” rather than describing the mode it would switch to. Give it its own `TooltipProvider` when it can render outside the header, as the standalone sign-in pages do; nesting it inside the header one is harmless.
+When choosing a menu option completes the action, use the component's built-in dismissal. Account language radio items use `closeOnClick` so the menu closes immediately after selection; radio items otherwise default to remaining open. Appearance controls remain available for further adjustments and follow the Popover's default dismissal.
 
 ## Consistency
 

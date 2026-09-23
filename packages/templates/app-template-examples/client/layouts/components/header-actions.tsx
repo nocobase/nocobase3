@@ -9,7 +9,7 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 
-import { ThemeModeToggle } from '../../theme/index.js';
+import { ThemeSettings } from '../../theme/index.js';
 import { UserMenu } from './user-menu.js';
 import { NotificationButton } from '@/components/notification-button';
 
@@ -63,7 +63,7 @@ export function HeaderActions({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        <ThemeModeToggle />
+        <ThemeSettings />
         <UserMenu />
       </div>
     </TooltipProvider>

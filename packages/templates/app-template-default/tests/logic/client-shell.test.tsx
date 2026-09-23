@@ -63,9 +63,7 @@ describe('application shell', () => {
     expect(
       await screen.findByRole('button', { name: 'Open account menu' }),
     ).not.toHaveAttribute('title');
-    expect(
-      screen.getByRole('button', { name: 'Switch between light and dark' }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
     expect(
       screen.queryByRole('link', { name: 'Settings' }),
     ).not.toBeInTheDocument();
@@ -234,9 +232,7 @@ describe('application shell', () => {
     expect(
       screen.queryByRole('navigation', { name: 'Application navigation' }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Switch between light and dark' }),
-    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Appearance' })).toBeVisible();
   });
 });
 
