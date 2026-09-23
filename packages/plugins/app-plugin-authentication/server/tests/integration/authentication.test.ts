@@ -90,6 +90,17 @@ describe('Authentication', () => {
     router.get('/api/optional', auth.optional(), (context) =>
       context.json({ auth: context.get('auth') }),
     );
+    router.post('/api/private', auth.required(), (context) =>
+      context.json({ ok: true }),
+    );
+    router.post('/api/optional', auth.optional(), (context) =>
+      context.json({ authenticated: Boolean(context.get('auth')) }),
+    );
+    router.post(
+      '/api/skipped',
+      auth.required({ skip: () => true }),
+      (context) => context.json({ ok: true }),
+    );
   });
 
   it('requires an explicit authentication secret', () => {
@@ -216,6 +227,127 @@ describe('Authentication', () => {
         session: { id: expect.any(String), userId: expect.any(String) },
       },
     });
+  });
+
+  it('checks the browser origin before cookie-authenticated business writes', async () => {
+    const send = (path: string, headers: Record<string, string>) =>
+      router.request(path, { method: 'POST', headers: { cookie, ...headers } });
+
+    expect(
+      (await send('/api/private', { origin: 'http://localhost' })).status,
+    ).toBe(200);
+    expect(
+      (await send('/api/private', { referer: 'http://localhost/app/page' }))
+        .status,
+    ).toBe(200);
+    expect(
+      (
+        await send('/api/private', {
+          origin: 'null',
+          'sec-fetch-site': 'same-origin',
+        })
+      ).status,
+    ).toBe(200);
+    for (const headers of [
+      {},
+      { origin: 'null' },
+      { origin: 'https://evil.example' },
+      { origin: 'http://localhost.evil.example' },
+      { origin: 'https://evil.example', authorization: 'Bearer fake' },
+    ]) {
+      const response = await send('/api/private', headers);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        code: 'INVALID_CSRF_ORIGIN',
+      });
+    }
+
+    expect((await send('/api/optional', {})).status).toBe(403);
+    expect(
+      (await send('/api/skipped', { authorization: 'Bearer fake' })).status,
+    ).toBe(403);
+    expect(
+      (await router.request('/api/private', { method: 'POST' })).status,
+    ).toBe(401);
+  });
+
+  it('infers a null origin from trusted proxy headers when configured', async () => {
+    const proxyAuth = new Auth({
+      connection: database.connection(),
+      baseURL: 'https://app.example.com/api/auth',
+      secret: 'development-secret-at-least-32-characters',
+      advanced: { cookiePrefix: 'nocobase3', trustedProxyHeaders: true },
+      session: { storeSessionInDatabase: true },
+    });
+    const proxyRouter = new Hono<AuthEnv>();
+    proxyRouter.post('/write', proxyAuth.optional(), (context) =>
+      context.json({ ok: true }),
+    );
+    const headers = {
+      cookie,
+      origin: 'null',
+      'sec-fetch-site': 'same-origin',
+      'x-forwarded-host': 'app.example.com',
+      'x-forwarded-proto': 'https',
+    };
+
+    expect(
+      (
+        await proxyRouter.request('http://internal.example/write', {
+          method: 'POST',
+          headers,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await proxyRouter.request('http://internal.example/write', {
+          method: 'POST',
+          headers: { ...headers, 'x-forwarded-host': 'evil.example' },
+        })
+      ).status,
+    ).toBe(403);
+  });
+
+  it('accepts explicitly trusted origins, including dynamic patterns', async () => {
+    const trustedAuth = new Auth({
+      connection: database.connection(),
+      baseURL: 'http://localhost/api/auth',
+      secret: 'development-secret-at-least-32-characters',
+      trustedOrigins: async () => ['https://*.example.com'],
+      plugins: [
+        {
+          id: 'test-trusted-origin',
+          init: () => ({
+            options: {
+              trustedOrigins: async () => ['https://plugin.example.net'],
+            },
+          }),
+        },
+      ],
+      advanced: { cookiePrefix: 'nocobase3' },
+      session: { storeSessionInDatabase: true },
+    });
+    const trustedRouter = new Hono<AuthEnv>();
+    trustedRouter.post('/write', trustedAuth.required(), (context) =>
+      context.json({ ok: true }),
+    );
+
+    const allowed = await trustedRouter.request('/write', {
+      method: 'POST',
+      headers: { cookie, origin: 'https://app.example.com' },
+    });
+    expect(allowed.status).toBe(200);
+    const pluginAllowed = await trustedRouter.request('/write', {
+      method: 'POST',
+      headers: { cookie, origin: 'https://plugin.example.net' },
+    });
+    expect(pluginAllowed.status).toBe(200);
+    const denied = await trustedRouter.request('/write', {
+      method: 'POST',
+      headers: { cookie, origin: 'https://example.com.attacker.test' },
+    });
+    expect(denied.status).toBe(403);
   });
 
   it('supports optional sessions', async () => {
@@ -472,7 +604,7 @@ describe('Authentication seed', () => {
         .where('email', '=', 'admin@nocobase.com')
         .executeTakeFirst();
       expect(user).toMatchObject({
-        name: 'nocobase',
+        name: 'Super Admin',
         username: 'nocobase',
         email: 'admin@nocobase.com',
         emailVerified: true,
@@ -511,7 +643,7 @@ describe('Authentication seed', () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
         user: {
-          name: 'nocobase',
+          name: 'Super Admin',
           username: 'nocobase',
           email: 'admin@nocobase.com',
         },
@@ -567,6 +699,154 @@ describe('Authentication seed', () => {
           .select('id')
           .execute(),
       ).resolves.toEqual([]);
+    } finally {
+      await database.destroy();
+    }
+  });
+});
+
+describe('user administration list', () => {
+  async function setup(naming?: { readonly underscored: boolean }) {
+    const database = createDatabaseManager({
+      drivers: { sqlite },
+      default: 'main',
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          ...(naming ? { naming } : {}),
+        },
+      },
+    });
+    await migrateAuthentication(database);
+    const connection = database.connection();
+    const now = new Date();
+    for (const [id, name, email, disabled] of [
+      ['plain', 'Alice Smith', 'alice@example.com', false],
+      ['percent', '100% Coverage', 'percent@example.com', false],
+      ['underscore', 'a_c report', 'underscore@example.com', false],
+      ['literal', 'abc report', 'literal@example.com', false],
+      ['inactive', 'Alice Retired', 'retired@example.com', true],
+    ] as const) {
+      await connection.query
+        .insertInto('user')
+        .values({
+          id,
+          name,
+          email,
+          emailVerified: false,
+          ...(disabled ? { disabledAt: now } : {}),
+          createdAt: now,
+          updatedAt: now,
+        })
+        .execute();
+    }
+    const users = createUserAdministrationService({
+      auth: new Auth({
+        connection,
+        secret: 'development-secret-at-least-32-characters',
+        baseURL: 'http://localhost/api/auth',
+      }),
+      connection,
+    });
+    return { database, users };
+  }
+
+  it('matches the search term as literal text rather than as a SQL pattern', async () => {
+    const { database, users } = await setup();
+    try {
+      // `%` used to be a wildcard, so this listed every account.
+      await expect(users.list({ search: '%' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'percent' }],
+      });
+      // `_` used to match any single character, so this also found "abc".
+      const underscore = await users.list({ search: 'a_c' });
+      expect(underscore.total).toBe(1);
+      expect(underscore.items.map(({ id }) => id)).toEqual(['underscore']);
+      const alice = await users.list({ search: 'alice' });
+      expect(alice.items.map(({ id }) => id)).toEqual(['inactive', 'plain']);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('orders a page by creation time and breaks ties on id', async () => {
+    const { database, users } = await setup();
+    try {
+      const first = await users.list({ pageSize: 3 });
+      const second = await users.list({ page: 2, pageSize: 3 });
+      expect(first.total).toBe(5);
+      // Every row was inserted with the same timestamp, so only the tiebreaker
+      // keeps the two pages from overlapping.
+      expect([
+        ...first.items.map(({ id }) => id),
+        ...second.items.map(({ id }) => id),
+      ]).toEqual(['inactive', 'literal', 'percent', 'plain', 'underscore']);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('filters by account status and by an explicit set of ids', async () => {
+    const { database, users } = await setup();
+    try {
+      await expect(users.list({ status: 'disabled' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'inactive' }],
+      });
+      expect((await users.list({ status: 'enabled' })).total).toBe(4);
+      const selected = await users.list({
+        userIds: ['plain', 'inactive', 'absent'],
+      });
+      expect(selected.items.map(({ id }) => id)).toEqual(['inactive', 'plain']);
+      // The id set and the other filters apply together.
+      await expect(
+        users.list({ userIds: ['plain', 'inactive'], status: 'enabled' }),
+      ).resolves.toMatchObject({ total: 1, items: [{ id: 'plain' }] });
+      await expect(
+        users.list({ userIds: ['plain', 'percent'], search: 'alice' }),
+      ).resolves.toMatchObject({ total: 1, items: [{ id: 'plain' }] });
+      await expect(users.list({ userIds: [] })).resolves.toMatchObject({
+        total: 0,
+        items: [],
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('hides a soft-deleted account from every filter', async () => {
+    const { database, users } = await setup();
+    try {
+      await users.remove('plain', 'operator');
+      expect((await users.list()).total).toBe(4);
+      await expect(users.list({ search: 'alice' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'inactive' }],
+      });
+      await expect(users.list({ userIds: ['plain'] })).resolves.toMatchObject({
+        total: 0,
+        items: [],
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('resolves the same columns under a non-default naming strategy', async () => {
+    // The Repository resolves logical field names through the Collection,
+    // which is a different path from the one the Query API used.
+    const { database, users } = await setup({ underscored: false });
+    try {
+      await expect(users.list({ search: '%' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'percent', name: '100% Coverage' }],
+      });
+      await expect(users.list({ status: 'disabled' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'inactive' }],
+      });
     } finally {
       await database.destroy();
     }

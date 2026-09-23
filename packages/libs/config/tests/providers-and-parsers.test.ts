@@ -111,3 +111,10 @@ describe('providers and parsers', () => {
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+
+it('rejects duplicate nested YAML Channel names instead of overwriting configuration', () => {
+  const input = new TextEncoder().encode(
+    'notification:\n  channels:\n    inbox:\n      provider: in-app\n    inbox:\n      provider: smtp\n',
+  );
+  expect(() => yamlParser().parse(input)).toThrow(/unique|duplicate/i);
+});

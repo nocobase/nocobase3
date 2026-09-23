@@ -1,6 +1,6 @@
 {
   "name": "@nocobase/app-cli",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "description": "Shared application runtime CLI commands.",
   "type": "module",
   "license": "Apache-2.0",

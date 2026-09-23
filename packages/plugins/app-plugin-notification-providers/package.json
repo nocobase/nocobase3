@@ -2,7 +2,7 @@
   "name": "@nocobase/app-plugin-notification-providers",
   "displayName": "Notification Providers App Plugin",
   "description": "Provides built-in notification Channels and Providers.",
-  "version": "0.2.0-beta.6",
+  "version": "0.2.0-beta.7",
   "type": "module",
   "prettier": "@nocobase/dev-config/prettier",
   "engines": {
@@ -12,7 +12,6 @@
   "files": [
     "dist",
     "CHANGELOG.md",
-    "docs",
     "README.md"
   ],
   "main": "./dist/server/index.js",
@@ -62,7 +61,7 @@
     "clean": "node ./scripts/clean-dist.mjs",
     "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.json",
     "prepack": "pnpm build",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.type-tests.json --noEmit",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix --max-warnings 0",

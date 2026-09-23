@@ -100,6 +100,9 @@ describe('Auth.getSession', () => {
       router.get('/optional', auth.optional(), (context) =>
         context.json({ auth: context.get('auth') }),
       );
+      router.post('/required', auth.required(), (context) =>
+        context.json({ ok: true }),
+      );
       return router;
     };
     const refused = { headers: { [CREDENTIAL_HEADER]: 'expired' } };
@@ -164,6 +167,13 @@ describe('Auth.getSession', () => {
         headers: { 'x-test-user': '1' },
       });
       expect(signedIn.status).toBe(200);
+
+      // An explicit non-cookie credential can make a write without a browser origin.
+      const credentialWrite = await router.request('/required', {
+        method: 'POST',
+        headers: { 'x-test-user': '1' },
+      });
+      expect(credentialWrite.status).toBe(200);
 
       const anonymous = await router.request('/required');
       expect(anonymous.status).toBe(401);

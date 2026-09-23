@@ -14,11 +14,13 @@ const zhCN: InAppNotificationResource = {
     channels: { inApp: '站内信' },
     providers: { builtIn: '系统内置' },
     fields: {
+      route: '内部路由（不含部署前缀）',
+      url: '完整 HTTP(S) 链接',
       recipientUserId: '接收用户 ID',
       title: '标题',
       message: '消息',
     },
-    placeholders: { currentUser: '默认发送给当前用户' },
+    placeholders: { currentUser: '应用用户 ID' },
     defaults: {
       title: 'NocoBase 通知测试',
       body: '这是一条来自 NocoBase 的测试通知。',

@@ -219,6 +219,11 @@ const enUS = {
       description:
         'View your in-app notifications, filter unread messages, and manage their read state.',
     },
+    notificationTasks: {
+      title: 'Task notifications',
+      description:
+        'Assign tasks to different users and let recipients update the task from the notification detail page.',
+    },
     routeOverlays: {
       title: 'Route dialogs and drawers',
       description:

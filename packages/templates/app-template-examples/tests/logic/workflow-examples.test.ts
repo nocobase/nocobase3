@@ -37,19 +37,20 @@ async function request(
   body?: object,
   eventKey?: string,
 ): Promise<Response> {
+  const target = new URL(
+    `http://localhost${server.application.publicBasePath}/api${url}`,
+  );
   return server.fetch(
-    new Request(
-      `http://localhost${server.application.publicBasePath}/api${url}`,
-      {
-        method: body === undefined ? 'GET' : 'POST',
-        headers: {
-          cookie,
-          'content-type': 'application/json',
-          ...(eventKey ? { 'event-key': eventKey } : {}),
-        },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    new Request(target, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: {
+        cookie,
+        'content-type': 'application/json',
+        ...(body === undefined ? {} : { origin: target.origin }),
+        ...(eventKey ? { 'event-key': eventKey } : {}),
       },
-    ),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }),
   );
 }
 async function data<T>(response: Response): Promise<T> {
@@ -95,6 +96,7 @@ beforeAll(async function startExampleServer() {
   writeFileSync(
     configPath,
     JSON.stringify({
+      app: { publicOrigin: 'http://localhost' },
       workflow: { distRoot: artifactRoot },
       database: {
         default: 'main',

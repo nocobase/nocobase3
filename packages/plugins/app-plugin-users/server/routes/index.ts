@@ -24,6 +24,19 @@ import {
   type UserRoleValue,
 } from '../tokens.js';
 
+/**
+ * Raised by this module's own request parsing. Only this type answers 400, so
+ * a programming error that happens to surface as a `TypeError` is reported as
+ * the server fault it is instead of being returned to the caller as invalid
+ * input with an internal message.
+ */
+class UserInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UserInputError';
+  }
+}
+
 export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
   defineApiRoutes(({ container }) => {
     const router = new Hono();
@@ -71,7 +84,7 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
           status,
         );
       }
-      if (error instanceof TypeError) {
+      if (error instanceof UserInputError) {
         return context.json(
           { code: 'INVALID_USER_INPUT', message: error.message },
           400,
@@ -139,7 +152,8 @@ export const apiRoutes: AppApiRouteContribution<AppPluginApplication> =
       const userId = context.req.param('userId');
       await requireUserAction(context, userId, 'delete');
       const input = record(await context.req.json(), 'User deletion');
-      if (input.confirm !== true) throw new TypeError('Confirm user deletion.');
+      if (input.confirm !== true)
+        throw new UserInputError('Confirm user deletion.');
       await users.remove(userId, context.get('authz').identity.principal.id);
       logSecurityEvent(securityLogger, context, 'user.delete', userId);
       return context.json({ data: { success: true } });
@@ -265,7 +279,7 @@ function parseRoleValue(value: unknown): UserRoleValue {
   if (isStringArray(value)) {
     return value;
   }
-  throw new TypeError('User role scope value must be a role or role list');
+  throw new UserInputError('User role scope value must be a role or role list');
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -282,7 +296,7 @@ function optionalNumber(value: string | undefined): number | undefined {
   if (value === undefined) return undefined;
   const number = Number(value);
   if (!Number.isInteger(number) || number <= 0) {
-    throw new TypeError('Pagination values must be positive integers');
+    throw new UserInputError('Pagination values must be positive integers');
   }
   return number;
 }
@@ -292,19 +306,19 @@ function optionalStatus(
 ): 'enabled' | 'disabled' | undefined {
   if (value === undefined) return undefined;
   if (value === 'enabled' || value === 'disabled') return value;
-  throw new TypeError('User status must be enabled or disabled');
+  throw new UserInputError('User status must be enabled or disabled');
 }
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError(`${label} must be an object`);
+    throw new UserInputError(`${label} must be an object`);
   }
   return value as Record<string, unknown>;
 }
 
 function string(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
-    throw new TypeError(`${label} must be a non-empty string`);
+    throw new UserInputError(`${label} must be a non-empty string`);
   }
   return value.trim();
 }

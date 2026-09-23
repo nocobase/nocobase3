@@ -101,7 +101,7 @@ export class FakeNotificationStore implements NotificationStore {
       .filter(
         (delivery) =>
           delivery.status === 'pending' ||
-          (delivery.status === 'failed' &&
+          (delivery.status === 'retrying' &&
             delivery.nextRunAt !== undefined &&
             delivery.nextRunAt <= now),
       )
@@ -131,7 +131,7 @@ export class FakeNotificationStore implements NotificationStore {
       !delivery ||
       (delivery.status !== 'pending' &&
         !(
-          delivery.status === 'failed' &&
+          delivery.status === 'retrying' &&
           delivery.nextRunAt !== undefined &&
           delivery.nextRunAt <= now
         ))
@@ -180,34 +180,6 @@ export class FakeNotificationStore implements NotificationStore {
     return next;
   }
 
-  async updateAttemptRetryResolution(
-    delivery: NotificationDeliveryRecord,
-    attempt: NotificationAttemptRecord,
-  ): Promise<NotificationDeliveryRecord | undefined> {
-    const current = this.deliveries.get(delivery.id);
-    const attempts = this.attempts.get(delivery.id) ?? [];
-    const currentAttempt = attempts.find((item) => item.id === attempt.id);
-    if (
-      !current ||
-      current.status !== 'submitting' ||
-      current.leaseToken !== delivery.leaseToken ||
-      currentAttempt?.status !== 'submitting'
-    ) {
-      return undefined;
-    }
-    this.attempts.set(
-      delivery.id,
-      attempts.map((item) => (item.id === attempt.id ? attempt : item)),
-    );
-    const next = {
-      ...current,
-      retryResolution: delivery.retryResolution,
-      updatedAt: await this.now(),
-    };
-    this.deliveries.set(next.id, next);
-    return next;
-  }
-
   private async finishAttempt(
     attempt: NotificationAttemptRecord,
   ): Promise<void> {
@@ -225,7 +197,7 @@ export class FakeNotificationStore implements NotificationStore {
     delivery: NotificationDeliveryRecord,
     status: Extract<
       NotificationDeliveryStatus,
-      'accepted' | 'failed' | 'unknown'
+      'accepted' | 'failed' | 'retrying' | 'unknown'
     >,
     error?: NotificationErrorRecord,
     nextRunAt?: string,
@@ -300,25 +272,22 @@ export class FakeNotificationStore implements NotificationStore {
 
   async retryDelivery(
     id: string,
-    expectedStatus: 'failed' | 'unknown',
     resolution: NotificationRetryResolutionRecord,
   ): Promise<NotificationDeliveryRecord | undefined> {
     const delivery = this.deliveries.get(id);
     if (
       !delivery ||
-      delivery.status !== expectedStatus ||
+      delivery.status !== 'failed' ||
       delivery.nextRunAt !== undefined
     )
       return undefined;
     const retried: NotificationDeliveryRecord = {
       ...delivery,
-      status: 'pending',
+      status: 'retrying',
+      nextRunAt: await this.now(),
       lastError: undefined,
       retryResolution: resolution,
-      providerIdempotency:
-        resolution.type === 'safe_provider_idempotency'
-          ? delivery.providerIdempotency
-          : undefined,
+      providerIdempotency: undefined,
       updatedAt: await this.now(),
     };
     this.retryAudits.set(id, [

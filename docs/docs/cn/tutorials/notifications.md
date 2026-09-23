@@ -9,7 +9,7 @@ description: '审批结果通过真实工作流投递到申请人的站内信。
 
 ## 本章目标与起点
 
-上一章已经能提交、通过和驳回订单，并触发结果工作流。本章把消息接到这个真实事件上：正确的申请人收到通知，点击后到达正确订单，同一结果重复处理不会重复发消息。
+上一章已经能提交、通过和驳回订单，并触发结果工作流。本章给申请人发送审批通知，点击通知可以打开对应订单，并确保同一结果不会重复发送。
 
 ## 一条通知需要哪些信息
 
@@ -21,7 +21,7 @@ description: '审批结果通过真实工作流投递到申请人的站内信。
 | 点击去哪里   | 这张订单的详情地址               |
 | 如何判断重复 | 订单 ID 与审批版本组成的固定标识 |
 
-站内信是用户之后仍能打开的消息记录。页面上短暂出现的“保存成功”提示只能反馈当前操作，不能代替通知。管理员查看投递记录，申请人查看自己的收件箱，两者用途也不同。
+站内信会保存在收件箱中，申请人之后仍可查看。页面上的“保存成功”提示只表示当前操作完成，不能代替通知；管理员可以在投递日志中查看发送结果。
 
 ## 启用站内信
 
@@ -30,11 +30,8 @@ description: '审批结果通过真实工作流投递到申请人的站内信。
 ```yaml
 notification:
   channels:
-    - type: in-app
-      enabled: true
-      providers:
-        - type: database
-          name: default
+    inbox:
+      provider: in-app
 ```
 
 确认通知、站内信和通知服务商插件已经注册；需要时使用应用提供的 `plugin:inspect` 检查。修改配置后重启开发服务，再确认渠道已经启用。渠道需要配置在 `config.yml` 中，`config.example.yml` 仅供参考。
@@ -44,9 +41,9 @@ notification:
 ```text
 读取通知和站内信 Skill，扩展 tutorial-order-result 工作流的 Run 脚本。
 
-根据 orderId 和 version 读取真实订单，只有 approved 或 rejected 状态才能发送。接收人是订单 ownerId；标题说明通过或驳回，正文包含订单号，actionUrl 为 /tutorial-orders/<订单ID>。
+根据 orderId 和 version 读取真实订单，只有 approved 或 rejected 状态才能发送。接收人是订单 ownerId；标题说明通过或驳回，正文包含订单号，`target` 使用 `/tutorial-orders/<订单ID>` 这个内部路由。
 
-通过 options.services 解析已注册的 notificationServiceToken，调用 send()，不要直接写站内信表或绕过通知服务调用 Provider。channels 使用 ['in-app']，source.type 为 tutorial-order，source.referenceId 为订单 ID。
+通过 options.services 解析已注册的 notificationServiceToken，调用 send()，不要直接写站内信表或绕过通知服务调用 Provider。`messages.inbox` 选择名为 `inbox` 的 Channel，source.type 为 tutorial-order，source.referenceId 为订单 ID。
 
 idempotencyKey 固定为 tutorial-order:<订单ID>:decision:<版本>，同一事件重复执行不能产生第二条通知。
 
@@ -61,12 +58,13 @@ idempotencyKey 固定为 tutorial-order:<订单ID>:decision:<版本>，同一事
 await notification.send({
   idempotencyKey: `tutorial-order:${order.id}:decision:${order.version}`,
   source: { type: 'tutorial-order', referenceId: order.id },
-  to: { type: 'user', id: order.ownerId },
-  channels: ['in-app'],
-  content: {
-    title: order.status === 'approved' ? '订单审批通过' : '订单审批驳回',
-    body: order.number,
-    actionUrl: `/tutorial-orders/${order.id}`,
+  messages: {
+    inbox: {
+      to: order.ownerId,
+      title: order.status === 'approved' ? '订单审批通过' : '订单审批驳回',
+      body: order.number,
+      target: { type: 'route', path: `/tutorial-orders/${order.id}` },
+    },
   },
 });
 ```

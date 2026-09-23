@@ -16,15 +16,11 @@ import { beforeEach, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   count: 120,
   session: { user: { id: 'user-1' } } as { user: { id: string } } | null,
-  allowed: true,
   cleanup: vi.fn(),
   request: vi.fn(),
 }));
 vi.mock('@nocobase/app-plugin-authentication/client', () => ({
   useAuthentication: () => ({ session: mocks.session, isPending: false }),
-}));
-vi.mock('@nocobase/app-plugin-authorization/client', () => ({
-  useCan: () => ({ can: mocks.allowed }),
 }));
 vi.mock('@nocobase/app-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@nocobase/app-client')>();
@@ -46,7 +42,6 @@ let runtime: I18nRuntime;
 beforeEach(async () => {
   mocks.count = 120;
   mocks.session = { user: { id: 'user-1' } };
-  mocks.allowed = true;
   runtime = new I18nRuntime({
     defaultLocale: 'en-US',
     locales: ['en-US', 'zh-CN'],
@@ -73,19 +68,17 @@ it('caps the badge, follows the app base, refreshes unread state, and resets on 
   });
   expect(link).toHaveAttribute('href', '/demo/notifications');
   expect(screen.getByText('99+')).toBeInTheDocument();
+  expect(screen.getByText('99+')).toHaveClass('h-4', 'min-w-5', 'rounded-full');
   mocks.count = 2;
   fireEvent(window, new Event('focus'));
   await screen.findByRole('link', { name: 'Notifications, 2 unread' });
+  expect(screen.getByText('2')).toHaveClass('h-4', 'w-4', 'rounded-full');
   mocks.count = 0;
   mocks.session = { user: { id: 'user-2' } };
   view.rerender(renderButton());
   await screen.findByRole('link', { name: 'Notifications' });
   expect(screen.queryByText('2')).not.toBeInTheDocument();
   await waitFor(() => expect(mocks.cleanup).toHaveBeenCalledTimes(2));
-  mocks.allowed = false;
-  view.rerender(renderButton());
-  expect(screen.queryByRole('link')).not.toBeInTheDocument();
-  mocks.allowed = true;
   mocks.session = null;
   view.rerender(renderButton());
   expect(screen.queryByRole('link')).not.toBeInTheDocument();

@@ -13,6 +13,7 @@ import users from '@nocobase/app-plugin-users/client';
 import databaseExplorer from '@nocobase/app-plugin-database-explorer/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/client';
+import notificationExample from '@nocobase/app-plugin-notification-example/client';
 import routesExample from '@nocobase/app-plugin-routes-example/client';
 import i18n from '@nocobase/app-plugin-i18n/client';
 import workflow from '@nocobase/app-plugin-workflow/client';
@@ -39,6 +40,7 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   i18n(),
   notificationProvider(),
   notificationInApp(),
+  notificationExample(),
   routesExample(),
   workflow(),
   notification(),
