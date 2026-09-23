@@ -55,11 +55,10 @@ export default defineAIEmployee({
   category: 'business',
   sort: 10,
   systemPrompt: `You help staff look up and record orders. ...`,
+  // `order-intake` names `create-order`, so the tool activates when that Skill is loaded;
+  // listing it in `tools` as well would do nothing. Reading orders needs no entry either —
+  // the built-in `data-query` Skill is GENERAL. Use `tools` only for a tool no Skill names.
   skills: ['order-intake'],
-  tools: [
-    { name: 'create-order' },
-    { name: 'dataSourceQuery', autoCall: true },
-  ],
   chatSettings: {
     systemPromptMode: 'default',
     enableSkills: true,
@@ -78,7 +77,7 @@ export default defineAIEmployee({
 
 `skills` and `tools` are the employee's declared capability set, but listing a tool is not always enough to reach it: a tool named by any registered Skill stays behind that Skill until the conversation loads it. Read [How Skills and Tools relate](#how-skills-and-tools-relate) before deciding which of the two lists a capability belongs in — the choice is not cosmetic, and the failure mode is a tool that never activates and never complains.
 
-The persisted employee record carries more than the definition does — `enabled`, `builtIn`, `deprecated`, `about`, `defaultPrompt`, `skillSettings`, `knowledgeBase`, model settings, roles. Those are administered in AI settings. Do not put them in the definition.
+The persisted employee record carries more than the definition does — `enabled`, `builtIn`, `deprecated`, `about`, `defaultPrompt`, `skillSettings`, `knowledgeBase`, model settings. Those are administered in AI settings. Do not put them in the definition.
 
 ## Avatars
 
@@ -331,7 +330,7 @@ Nineteen, in six families. All are `backend` unless the table says otherwise, an
 | `knowledge-base-retrieve` | `SPECIFIED` | `ALLOW`    | Retrieve passages from the conversation employee's bound knowledge base. Needs the feature enabled |
 | `subAgentWebSearch`       | `SPECIFIED` | `ALLOW`    | Search the web, one provider call per query in parallel. Refuses when the provider cannot search   |
 
-**Sub-agents (3)** — `SPECIFIED`, `ALLOW`. Delegation between employees. They see enabled, non-deprecated employees in the `business` category; like the chat employee list, they do not filter by role.
+**Sub-agents (3)** — `SPECIFIED`, `ALLOW`. Delegation between employees. They see enabled, non-deprecated employees in the `business` category.
 
 | Tool                      | What it does                                                           |
 | ------------------------- | ---------------------------------------------------------------------- |

@@ -38,10 +38,9 @@ Import a token from the package that created it. `createServiceToken` is keyed b
 
 ## Known gaps in this version
 
-Two things do not yet work the way they should. They are open defects rather than intended behaviour, and fixes are planned; neither can be fixed from the App in the meantime, so work around them until the release that closes them. If you are reading this from a newer version of the plugin, check whether a gap still applies before designing around it.
+One thing does not yet work the way it should. It is an open defect rather than intended behaviour, and a fix is planned; it cannot be fixed from the App in the meantime, so work around it until the release that closes it. If you are reading this from a newer version of the plugin, check whether it still applies before designing around it.
 
 - **`.env` does not reach a built server.** `${NAME}` in `ai.llmServices` and `ai.mcpServers` expands from `process.env`. `pnpm dev` passes a merged environment to the server process, so it works; `pnpm start` loads the built server in-process and the application's `.env` is not merged into `process.env`, so the placeholder becomes an empty string and the provider reports an authentication failure. For now, set real environment variables in the deployment rather than relying on a `.env` file beside `dist/`.
-- **Nothing yet limits which employees a user can talk to.** An employee record has a `roles` field, but no code path reads it: `aiEmployees:listByUser` filters on `enabled` only, starting a conversation checks only that the employee exists, and the sub-agent tools filter on `enabled`, `category` and `deprecated` without consulting roles either. So every authenticated user can list, converse with, and delegate to every enabled employee. Until per-employee access lands, the only boundary is each tool's own check against `ctx.actor` — put the access decision in the tool, and do not rely on an employee being unreachable.
 
 ## What to build for what the user asked
 
@@ -70,7 +69,7 @@ Do these in order; each step depends on the one before it.
 1. **Configure a model.** Add an `ai.llmServices` entry with `${NAME}` placeholders and a real `enabledModels` list fetched from the provider, and reload the application configuration — a process restart and an AI resource rescan are not required. Record the same keys in `config.example.yml`, which is committed while `config.yml` is not. Verify in the UI that a model is selectable. `enabledModels` is applied when the service row is first created and ignored afterwards unless the service sets `overrideEnabledModels`, so getting it right now matters more than it looks — see [capabilities.md § LLM services](references/capabilities.md#llm-services-configyml).
 2. **Write the tool first, then the skill that names it.** A tool is registered in code; a Skill references it by name and cannot define one. `ai/skills/` holds Skills only.
 3. **Aggregate and register.** Static-import employees and tools in `server/ai/index.ts` through a subclass of `AIResourceRegistrar`, then call `registerAIResources()` from an App `ServiceProvider.boot()` with `aiManagerToken`. See [server-runs.md § Register App resources](references/server-runs.md#register-app-resources).
-4. **Define the employee.** `defineAIEmployee()` with a stable `username`, a `systemPrompt`, an `avatar` copied from the plugin's list, and explicit `skills` and `tools`. See [capabilities.md § Employees](references/capabilities.md#employees).
+4. **Define the employee.** `defineAIEmployee()` with a stable `username`, a `systemPrompt`, an `avatar` copied from the plugin's list, and the `skills` that bring its tools — list a tool in `tools` only when no Skill names it. See [capabilities.md § Employees](references/capabilities.md#employees).
 5. **Mount a chat surface** behind the readiness gate, passing `defaultEmployee` so the page opens on the App's employee rather than whichever one sorts first — the built-in `atlas` has `sort: 0` and wins by default. Enable attachments when the flow can start from an uploaded file.
 6. **Verify by observation**, not by reading the source back. Run the checks below.
 
