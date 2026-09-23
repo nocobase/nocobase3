@@ -331,7 +331,7 @@ Nineteen, in six families. All are `backend` unless the table says otherwise, an
 | `knowledge-base-retrieve` | `SPECIFIED` | `ALLOW`    | Retrieve passages from the conversation employee's bound knowledge base. Needs the feature enabled |
 | `subAgentWebSearch`       | `SPECIFIED` | `ALLOW`    | Search the web, one provider call per query in parallel. Refuses when the provider cannot search   |
 
-**Sub-agents (3)** — `SPECIFIED`, `ALLOW`. Delegation between employees; role filtering applies here, unlike the chat employee list.
+**Sub-agents (3)** — `SPECIFIED`, `ALLOW`. Delegation between employees. They see enabled, non-deprecated employees in the `business` category; like the chat employee list, they do not filter by role.
 
 | Tool                      | What it does                                                           |
 | ------------------------- | ---------------------------------------------------------------------- |
