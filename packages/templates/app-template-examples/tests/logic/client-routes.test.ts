@@ -59,6 +59,15 @@ describe('app client routes', () => {
     }
   });
 
+  it('keeps notifications out of the application navigation', () => {
+    // The inbox is reached from the header bell, so it deliberately declares no menu entry.
+    expect(
+      applicationRoutes[0].routes.find(
+        (route) => route.name === 'notifications',
+      ),
+    ).not.toHaveProperty('navigation');
+  });
+
   it('never imports or routes a reference page', () => {
     // The reference pages are worked source to read while building a page, not screens this application serves. A
     // route reaches one through an `import()` its page loader names, so scanning specifiers catches the route as well

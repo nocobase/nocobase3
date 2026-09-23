@@ -1,5 +1,4 @@
 import {
-  Bell,
   FileText,
   Home,
   Hash,
@@ -26,11 +25,12 @@ const appRoutes: AppClientRouteContribution = defineAppRoutes([
     path: '/',
   },
   {
+    // The header bell is where a user looks for unread items, so this page is reached from there. Declaring no
+    // navigation keeps a second menu entry from pointing at the one destination the bell already owns.
     authz: 'skip',
     auth: 'required',
     componentLoader: () => import('./pages/notifications.js'),
     name: 'notifications',
-    navigation: { title: 'navigation.notifications', icon: Bell },
     path: '/notifications',
   },
   {

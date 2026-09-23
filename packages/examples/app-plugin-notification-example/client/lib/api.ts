@@ -27,13 +27,29 @@ interface DataResponse<T> {
   readonly data: T;
 }
 
+export interface TaskPage {
+  readonly data: Task[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface TaskPageOptions {
+  readonly page: number;
+  readonly pageSize: number;
+}
+
 const basePath = 'notification-example';
 
-export async function listTasks(api: ApiClient): Promise<Task[]> {
-  const response = await api.request<DataResponse<Task[]>>({
+export async function listTasks(
+  api: ApiClient,
+  options: TaskPageOptions,
+): Promise<TaskPage> {
+  const response = await api.request<TaskPage>({
     path: `${basePath}/tasks`,
+    query: { page: options.page, pageSize: options.pageSize },
   });
-  return response.data;
+  return response;
 }
 
 export async function getTask(api: ApiClient, id: string): Promise<Task> {
