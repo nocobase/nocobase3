@@ -33,9 +33,20 @@ describe('resolveAuthSecret', () => {
    */
   it.each([undefined, ''])('refuses to invent a secret for %j', (secret) => {
     expect(() => resolveAuthSecret(secret)).toThrow(
+      expect.objectContaining({
+        name: 'ApplicationNotConfiguredError',
+        message: 'auth.secret is not set.',
+        key: 'auth.secret',
+        environmentVariable: 'AUTH_SECRET',
+      }),
+    );
+  });
+
+  /** A Hub shows this to an operator whose configuration lives in the Hub, so it carries no standalone advice. */
+  it('states what is missing without prescribing a command', () => {
+    expect(() => resolveAuthSecret(undefined)).toThrow(
       ApplicationNotConfiguredError,
     );
-    expect(() => resolveAuthSecret(secret)).toThrow('auth.secret is not set');
-    expect(() => resolveAuthSecret(secret)).toThrow('pnpm config:init');
+    expect(() => resolveAuthSecret(undefined)).not.toThrow('config:init');
   });
 });
