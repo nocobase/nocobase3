@@ -36,7 +36,7 @@ ai:
 | `title`                 | 否       | 管理页显示名称                                        |
 | `options`               | 否       | Provider 连接参数，通常包含 `apiKey` 和可选 `baseURL` |
 | `enabledModels`         | 否       | 自定义模式下开放的 `{ label, value }` 模型数组        |
-| `overrideEnabledModels` | 否       | 是否每次重载都重新套用 `enabledModels`，默认 `false`  |
+| `overrideEnabledModels` | 否       | 是否每次启动都重新套用 `enabledModels`，默认 `false`  |
 | `modelOptions`          | 否       | 传给模型客户端的默认参数                              |
 | `enabled`               | 否       | 新服务首次同步时的初始启用状态                        |
 | `sort`                  | 否       | 管理页排序值                                          |
@@ -81,7 +81,7 @@ NocoBase 不维护内置模型目录，`value` 是否可用完全取决于服务
 
 ## 同步行为
 
-配置重载时，`ai.llmServices` 的名称集合是权威集合：新增名称会创建服务，保留名称会更新 Provider、标题、连接结构和排序，删除名称会移除相应配置服务。
+每次服务启动时，`ai.llmServices` 的名称集合是权威集合：新增名称会创建服务，保留名称会更新 Provider、标题、连接结构和排序，删除名称会移除相应配置服务。
 
 **模型列表和 Enabled 状态不在更新范围内。** 它们被当作管理员的配置——匹配到已有服务时，以数据库里的值为准，`config.yml` 里的 `enabledModels` 和 `enabled` 会被忽略。所以这两个字段实际只在服务**第一次被创建**时生效。
 
@@ -93,7 +93,7 @@ NocoBase 不维护内置模型目录，`value` 是否可用完全取决于服务
 
 ### 让 config.yml 接管模型列表
 
-给单个服务加上 `overrideEnabledModels: true`，它的 `enabledModels` 就会在每次配置重载时重新套用：
+给单个服务加上 `overrideEnabledModels: true`，它的 `enabledModels` 就会在每次服务启动时重新套用：
 
 ```yaml
 ai:
@@ -106,7 +106,7 @@ ai:
           value: gpt-5.6
 ```
 
-这个开关按服务声明，默认 `false`，不写就是原来的行为。打开之后模型列表就以 `config.yml` 为准——管理页上对这个服务的模型改动会在下次重载时被覆盖，所以通常来说只在希望用配置文件管理模型清单时才打开。
+这个开关按服务声明，默认 `false`，不写就是原来的行为。打开之后模型列表就以 `config.yml` 为准——管理页上对这个服务的模型改动会在下次服务启动时被覆盖，所以通常来说只在希望用配置文件管理模型清单时才打开。
 
 开关只管模型列表。管理员在管理页关掉的服务不会因为重新套用模型列表被打开，Enabled 状态仍然以数据库为准。
 

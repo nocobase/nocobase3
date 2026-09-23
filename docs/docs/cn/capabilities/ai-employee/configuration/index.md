@@ -41,13 +41,13 @@ ai:
         Authorization: Bearer ${COMPANY_MCP_TOKEN}
 ```
 
-AI 员工插件会递归展开 `llmServices` 和 `mcpServers` 中的 `${NAME}`。其他任意 `config.yml` 字段没有这项通用能力。密钥只放在 Server 可读取的环境中，不要放到 `config.yml.client`。
+AI 员工插件会递归展开 `llmServices` 和 `mcpServers` 中的 `${NAME}`。其他任意 `config.yml` 字段没有这项通用能力。密钥不要写进任何入库的文件，也不要放到 `config.yml` 的 `client` 块，这个块会下发到浏览器。密钥可以放在哪里、各自的限制，见[快速开始 · 第二步](../quick-start.md#第二步配置密钥并重启)。
 
-## 配置重载
+## 修改后重启
 
-LLM 和 MCP 配置订阅 `ai` 命名空间，配置重载后会重新同步。Employee、Tool 和 Skill 等静态资源不会随配置重载重新加载，修改它们后要重启服务。
+服务只在启动时读取环境变量、`config.yml` 和 `.env`。修改其中任何一项，都要重启服务才会生效；启动时 LLM 和 MCP 配置会重新同步。修改 Employee、Tool 和 Skill 等静态资源同样要重启服务。
 
-为了减少首次配置时的状态差异，[快速开始](../quick-start.md) 统一使用“修改配置后重启”的操作路径。
+环境变量还要先在启动服务的终端里生效：执行 `source` 重新加载 shell 配置文件，或者重开一个终端，再从这个终端重启服务。已经在运行的进程不会读到新设置的变量。
 
 ## 数据所有权
 

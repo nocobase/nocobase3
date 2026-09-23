@@ -63,15 +63,67 @@ ai:
 
 省略 `enabledModels` 后，服务使用 Provider 模型模式。服务启动后，再到管理页搜索并选择要开放的模型。
 
-## 第二步：注入密钥并重启
+## 第二步：配置密钥并重启
 
-临时测试可以在启动命令前设置环境变量：
+密钥不能进入仓库，也不能被提交。动手之前，先确认 `config.yml` 和 `.env` 都被 Git 忽略并且没有被跟踪。下面每一行输出 `ok` 才能继续：
 
 ```bash
-OPENAI_API_KEY='sk-...' pnpm dev
+git check-ignore -q config.yml && ! git ls-files --error-unmatch config.yml >/dev/null 2>&1 && echo "config.yml ok" || echo "config.yml 未被忽略，停止"
+git check-ignore -q .env && ! git ls-files --error-unmatch .env >/dev/null 2>&1 && echo ".env ok" || echo ".env 未被忽略，停止"
 ```
 
-也可以把 `OPENAI_API_KEY=sk-...` 写入应用根目录的 `.env` 文件。启动脚本会读取它，再把值提供给 AI 配置同步器。不要把真实密钥提交到 Git。修改后重启开发服务，确保进程读到新的环境变量和配置。
+`config.example.yml` 会入库，所以无论用哪种方式，它都只写 `${OPENAI_API_KEY}`，不写真实的值。
+
+密钥可以放在三个地方，按推荐顺序排列：
+
+| 方式                        | 密钥在哪里               | `config.yml` 写什么 | 适用范围                                     |
+| --------------------------- | ------------------------ | ------------------- | -------------------------------------------- |
+| 推荐：系统环境变量          | 本机或部署环境的环境变量 | `${OPENAI_API_KEY}` | 开发和部署逻辑一致                           |
+| 其次：直接写入 `config.yml` | `config.yml`             | 密钥的值            | 开发和部署都可用，前提是 `config.yml` 不入库 |
+| 最后：`.env`                | 应用根目录的 `.env`      | `${OPENAI_API_KEY}` | **当前版本只有 `pnpm dev` 支持**             |
+
+下面的命令都要在你自己的终端里运行，只需把 `<your-key>` 换成真实密钥。不要把密钥发给 AI 助手，也不要让它代你执行这些命令，否则密钥会留在对话记录里。
+
+**系统环境变量。** 命令会先删掉同名的旧设置，再写入新的值：
+
+```bash
+# zsh（macOS 默认）
+sed -i.bak '/^export OPENAI_API_KEY=/d' ~/.zshrc && rm -f ~/.zshrc.bak && echo 'export OPENAI_API_KEY="<your-key>"' >> ~/.zshrc && source ~/.zshrc
+
+# bash
+sed -i.bak '/^export OPENAI_API_KEY=/d' ~/.bashrc && rm -f ~/.bashrc.bak && echo 'export OPENAI_API_KEY="<your-key>"' >> ~/.bashrc && source ~/.bashrc
+```
+
+```powershell
+# Windows：对之后新开的终端生效，当前终端不生效
+setx OPENAI_API_KEY "<your-key>"
+```
+
+`source` 只对执行它的那个终端生效。其他已经打开的终端和正在运行的服务仍然使用旧的环境，所以要重开一个终端，或者在那个终端里再执行一次 `source`，然后从这个终端重启服务。可以用下面的命令确认变量已经生效，它不会打印密钥本身：
+
+```bash
+[ -n "$OPENAI_API_KEY" ] && echo "OPENAI_API_KEY 已设置" || echo "OPENAI_API_KEY 未设置"
+```
+
+**直接写入 `config.yml`。** 先把 `apiKey` 写成占位标记 `apiKey: "REPLACE_WITH_OPENAI_API_KEY"`，再运行：
+
+```bash
+sed -i.bak 's|REPLACE_WITH_OPENAI_API_KEY|<your-key>|' config.yml && rm -f config.yml.bak
+```
+
+**`.env`。** 当前版本中，只有 `pnpm dev` 会把 `.env` 合并进服务进程的环境；构建后的服务（`pnpm start` 和部署环境）读不到它，`${OPENAI_API_KEY}` 会展开成空字符串。这个问题会在后续版本处理。
+
+```bash
+touch .env && sed -i.bak '/^OPENAI_API_KEY=/d' .env && rm -f .env.bak && echo 'OPENAI_API_KEY=<your-key>' >> .env
+```
+
+服务只在启动时读取环境变量、`config.yml` 和 `.env`。无论改的是哪一项，都要重启服务才会生效。
+
+:::warning 部署时单独配置
+
+`pnpm build` 的产物只包含 `dist/` 和 `config.example.yml`，不包含 `config.yml` 和 `.env`。部署环境要在 `dist/` 旁边单独配置自己的 `config.yml`。使用环境变量方式时，变量要设置在服务管理器启动进程的环境里，例如 systemd 的 `Environment=`、进程管理器的环境配置或容器的环境变量。服务不会读取登录 shell 的 `~/.zshrc`，所以终端里能读到的变量，服务进程里不一定有。首次启动前，请确认这两处都已配置好密钥。
+
+:::
 
 :::tip 为什么 `${OPENAI_API_KEY}` 可以使用
 

@@ -46,13 +46,13 @@ HTTP 服务使用 `url` 和可选 `headers`。旧服务只支持 Server-Sent Eve
 
 AI 员工插件会递归展开 MCP 配置中的 `${NAME}`。变量缺失时替换为空字符串，通常会在连接测试或认证阶段暴露错误。不要把 Token 直接提交到 YAML，也不要把 MCP 密钥放入浏览器可见的 `config.yml.client`。
 
-## 重载和诊断
+## 重启和诊断
 
-配置重载会同步新增、更新和删除的服务，并重建 MCP Client。打开 `/settings/ai` 的「MCP」Tab，可以启用服务并查看它发现的 Tool。
+服务重启后会同步新增、更新和删除的服务，并重建 MCP Client。打开 `/settings/ai` 的「MCP」Tab，可以启用服务并查看它发现的 Tool。
 
 ![MCP 服务和 Tool](https://static-docs.nocobase.com/20260914111142-ai-employee-mcp-services.png)
 
-管理页是只读连接视图。需要修改 URL、命令、参数或 Header 时，编辑 `config.yml` 后重载配置或重启服务。
+管理页是只读连接视图。需要修改 URL、命令、参数或 Header 时，编辑 `config.yml` 后重启服务。
 
 ## 安全建议
 

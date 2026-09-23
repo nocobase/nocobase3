@@ -12,7 +12,7 @@ keywords: 'MCP settings,MCP tools,ASK,ALLOW,stdio,http,sse'
 
 ## 启用或停用服务
 
-使用 Enabled 开关控制这个 MCP 服务是否参与运行。配置重载会重建 MCP Client；服务命令、URL 或认证 Header 要在 `config.yml` 中修改。
+使用 Enabled 开关控制这个 MCP 服务是否参与运行。服务重启会重建 MCP Client；服务命令、URL 或认证 Header 要在 `config.yml` 中修改。
 
 Transport 标签可能是：
 
@@ -35,11 +35,11 @@ Transport 标签可能是：
 | Ask   | 模型提出调用后暂停，等待用户确认 |
 | Allow | 满足其他运行时策略时直接调用     |
 
-远程服务的 Tool 实现不在 NocoBase 代码库内。除非是明确无副作用、可重复且数据范围可控的读取，否则保持 Ask。MCP Tool 权限仍不能替代远程服务自己的身份校验和授权。当前权限调整保存在运行进程内，配置重载和同一进程内的 Client 重建会保留，应用重启后则按 Tool 默认规则重新计算。
+远程服务的 Tool 实现不在 NocoBase 代码库内。除非是明确无副作用、可重复且数据范围可控的读取，否则保持 Ask。MCP Tool 权限仍不能替代远程服务自己的身份校验和授权。当前权限调整保存在运行进程内，服务重启后按 Tool 默认规则重新计算。
 
 ## 修改连接
 
-管理页不提供新增、编辑或删除。修改 `ai.mcpServers` 后重载应用配置，服务集合会同步，MCP Client 会重建；也可以通过重启应用走完整初始化流程。
+管理页不提供新增、编辑或删除。修改 `ai.mcpServers` 后重启服务，服务集合会同步，MCP Client 会重建。
 
 ## 相关链接
 
