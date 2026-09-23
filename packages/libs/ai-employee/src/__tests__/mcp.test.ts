@@ -168,7 +168,10 @@ describe('MCP loader test cases', () => {
       { logger },
     );
     await manager.registerMCP({
-      unreachable: { transport: 'http', url: 'http://127.0.0.1:1/mcp' },
+      unreachable: {
+        transport: 'http',
+        url: 'http://fake-user:fake-password@127.0.0.1:1/mcp/fake-path?token=fake-token',
+      },
     });
 
     await expect(manager.rebuildClient()).resolves.toBeUndefined();
@@ -177,6 +180,19 @@ describe('MCP loader test cases', () => {
       expect.objectContaining({ serverName: 'unreachable' }),
       expect.stringContaining('unreachable'),
     );
+    // The adapter quotes the URL; nothing but its origin may reach the log.
+    const logged = JSON.stringify([
+      ...logger.warn.mock.calls,
+      ...logger.error.mock.calls,
+    ]);
+    expect(logged).toContain('http://127.0.0.1:1');
+    for (const secret of [
+      'fake-token',
+      'fake-password',
+      'fake-user',
+      'fake-path',
+    ])
+      expect(logged).not.toContain(secret);
     expect((await manager.listMCPTools()).unreachable).toBeUndefined();
   });
 });

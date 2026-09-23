@@ -133,7 +133,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
       mcpServers: connections,
       onConnectionError: ({ serverName, error }) => {
         this.runtime.logger?.warn(
-          { err: error, serverName },
+          { serverName, reason: describeConnectionError(error) },
           `MCP server "${serverName}" could not be reached; its tools are unavailable`,
         );
       },
@@ -143,7 +143,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
       toolsMap = await this.client.initializeConnections();
     } catch (error) {
       this.runtime.logger?.error(
-        { err: error },
+        { reason: describeConnectionError(error) },
         'MCP servers could not be initialized; MCP tools are unavailable',
       );
       return;
@@ -373,4 +373,26 @@ export class DefaultMCPServerManager implements MCPServerManager {
 
 export function defineMCP(options: MCPOptions) {
   return options;
+}
+
+/**
+ * A connection failure, safe to log. The adapter's message quotes the server
+ * URL, and a URL can carry a token in its query, its path or its userinfo, so
+ * every URL is cut back to its origin and nothing else of the error is kept.
+ */
+function describeConnectionError(error: unknown): string {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'Unknown error';
+  return message.replace(/[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, (url) => {
+    try {
+      const { origin } = new URL(url);
+      return origin === 'null' ? '<url>' : origin;
+    } catch {
+      return '<url>';
+    }
+  });
 }
