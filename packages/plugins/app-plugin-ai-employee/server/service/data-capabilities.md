@@ -1,6 +1,6 @@
 # Actor-bound data services
 
-`createDataServices({ database, authorization, actor, timezone? })` returns the seven-method `DataServices` contract from `data-contracts.ts`. Tools reuse `<methodName>Schema` from `data-schemas.ts`; every service method parses its input again. The service captures the actor ID at creation, supplies only a user principal plus the authenticated subject to `AppAuthorization.for()`, and never grants privileges from `isRoot` or role strings.
+`createDataServices({ database, authorization, actor, timezone? })` returns the seven-method `DataServices` contract from `data-contracts.ts`. Tools reuse `<methodName>Schema` from `data-schemas.ts`; every service method parses its input again. The service captures the actor ID at creation, supplies a user principal, the authenticated subject, and the subjects `authz.subjects.resolveFor()` returns for that principal to `AppAuthorization.for()` — the same identity the request middleware builds — and never grants privileges from `isRoot` or role strings.
 
 ## Authorization and discovery
 
