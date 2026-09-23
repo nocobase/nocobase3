@@ -4,38 +4,45 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { isolateWorkspacePackages } from './smoke-registry-config.mjs';
-import { dialects, readMainConfig } from './local-registry-config.mjs';
+import { dialects, readMainConfig } from './smoke-database-config.mjs';
 
 const repo = path.resolve(import.meta.dirname, '..');
 const id = createHash('sha256').update(repo).digest('hex').slice(0, 12);
-const stateDir = path.join(os.tmpdir(), `nocobase-local-registry-${id}`);
+const stateDir = path.join(os.tmpdir(), `nocobase-unreleased-${id}`);
 const stateFile = path.join(stateDir, 'state.json');
-const container = `nocobase-local-registry-${id}`;
-const help = `Local published-package testing
+const container = `nocobase-unreleased-${id}`;
+const label = 'nocobase.unreleased';
+// Sessions prepared while these commands were named local-registry:*. Clean removes one so that a fresh session can
+// take the port it still holds.
+const legacyStateDir = path.join(os.tmpdir(), `nocobase-local-registry-${id}`);
+const legacyContainer = `nocobase-local-registry-${id}`;
+const legacyLabel = 'nocobase.local-registry';
+const help = `Test the unreleased checkout as published packages
 
-pnpm local-registry:prepare [--port 4873] [--reset]
-pnpm local-registry:create NAME [--template default|examples|hub] [--dialect sqlite]
+pnpm unreleased:prepare [--port 4873] [--reset]
+pnpm unreleased:create NAME [--template default|examples|hub] [--dialect sqlite]
   # --dialect only decides which configuration commands are printed afterwards
   [--output-dir /parent/directory] [--json] [--no-install]
-pnpm local-registry:verify [--template default|examples|hub] [--dialect sqlite]
+pnpm unreleased:smoke [--template default|examples|hub] [--dialect sqlite]
   [--config /absolute/test.yml] [--timeout 420] [--workdir /empty/directory]
-pnpm local-registry:stop
-eval "$(pnpm -s local-registry:env)"
+pnpm unreleased:clean
+eval "$(pnpm -s unreleased:env)"
 
-Prepare builds and publishes all workspace packages to a fresh loopback registry.
-Env prints the variables create and verify run with, as shell exports, so plain
+Prepare builds and publishes all workspace packages to a fresh local npm registry.
+Env prints the variables create and smoke run with, as shell exports, so plain
 pnpm and npm commands in the current shell — and an agent started from it — resolve
 the snapshot too, instead of the registry in your own pnpm and npm configuration.
-Use --reset to stop the previous session and clear its snapshot before preparing again.
-Verify runs test/dev/build/start and retains applications and logs outside the repository.
-Non-SQLite verification requires --config pointing to a dedicated test database;
-application migrations and seeds may modify it. Stop removes registry state, not test applications.
+Use --reset to remove the previous session and clear its snapshot before preparing again.
+Smoke runs test/dev/build/start and retains applications and logs outside the repository.
+A non-SQLite smoke test requires --config pointing to a dedicated test database;
+application migrations and seeds may modify it. Clean removes the registry and its
+caches, not test applications.
 `;
 
 export function parseArgs(argv) {
   const [action, ...args] = argv;
-  if (!['prepare', 'create', 'verify', 'env', 'stop'].includes(action))
-    throw new Error('Expected prepare, create, verify, env, or stop.');
+  if (!['prepare', 'create', 'smoke', 'env', 'clean'].includes(action))
+    throw new Error('Expected prepare, create, smoke, env, or clean.');
   const options = {
     action,
     port: 4873,
@@ -45,10 +52,10 @@ export function parseArgs(argv) {
   };
   const allowed = {
     prepare: ['port'],
-    verify: ['template', 'dialect', 'config', 'timeout', 'workdir'],
+    smoke: ['template', 'dialect', 'config', 'timeout', 'workdir'],
     create: ['template', 'dialect', 'output-dir'],
     env: [],
-    stop: [],
+    clean: [],
   };
   for (let i = 0; i < args.length; i++) {
     if (action === 'prepare' && args[i] === '--reset') {
@@ -91,9 +98,9 @@ export function parseArgs(argv) {
   if (!['default', 'examples', 'hub'].includes(options.template))
     throw new Error('Unknown template.');
   if (!dialects.includes(options.dialect)) throw new Error('Unknown dialect.');
-  if (action === 'verify' && options.dialect !== 'sqlite' && !options.config)
+  if (action === 'smoke' && options.dialect !== 'sqlite' && !options.config)
     throw new Error(
-      'Non-SQLite verification requires --config for a dedicated test database.',
+      'A non-SQLite smoke test requires --config for a dedicated test database.',
     );
   return options;
 }
@@ -158,7 +165,7 @@ export function registryEnvOverrides(state) {
 
 /**
  * `registryEnv` as commands a POSIX shell can evaluate, so that plain `pnpm` and `npm` in an interactive shell — and
- * an agent started from it — resolve exactly as `create` and `verify` do. `inherited` is the environment this process
+ * an agent started from it — resolve exactly as `create` and `smoke` do. `inherited` is the environment this process
  * received, which is the calling shell's plus whatever pnpm adds to run the script: the configuration variables
  * `registryEnv` drops are unset, which is harmless for the ones only pnpm set.
  */
@@ -168,7 +175,7 @@ export function formatShellEnv(state, inherited = process.env) {
     .filter((key) => INHERITED_CONFIG.test(key) && !(key in overrides))
     .sort();
   return [
-    `# Local registry ${state.registry} for ${state.repo}`,
+    `# Unreleased packages from ${state.repo} at ${state.registry}`,
     '# XDG_CONFIG_HOME moves for this shell too, so tools that keep their settings there (gh, for one) will not find',
     '# them here. Open a new shell to leave the session.',
     ...(unset.length ? [`unset ${unset.join(' ')}`] : []),
@@ -190,7 +197,7 @@ async function assertRegistryAvailable(state) {
     if (!response.ok) throw new Error('Registry is unavailable.');
   } catch {
     throw new Error(
-      'Local registry is unavailable. Run pnpm local-registry:stop and pnpm local-registry:prepare.',
+      'The local npm registry is unavailable. Run pnpm unreleased:clean and pnpm unreleased:prepare.',
     );
   }
 }
@@ -208,21 +215,21 @@ function assertRegistries(state, env, cwd = repo) {
         .replace(/\/$/, '');
       if (actual !== state.registry.replace(/\/$/, ''))
         throw new Error(
-          `${tool} ${key} does not point to the local registry; refusing to publish or install.`,
+          `${tool} ${key} does not point to the local npm registry; refusing to publish or install.`,
         );
     }
 }
 
 function readState() {
   if (!fs.existsSync(stateFile))
-    throw new Error('Run pnpm local-registry:prepare first.');
+    throw new Error('Run pnpm unreleased:prepare first.');
   const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
   if (
     state.repo !== repo ||
     state.container !== container ||
     !/^http:\/\/127\.0\.0\.1:\d+\/$/.test(state.registry)
   )
-    throw new Error('Invalid local registry state.');
+    throw new Error('Invalid unreleased session state.');
   return state;
 }
 
@@ -244,9 +251,12 @@ export function assertWorkdir(directory, root = repo) {
 }
 
 async function prepare(options) {
-  if (fs.existsSync(stateFile))
+  if (
+    fs.existsSync(stateFile) ||
+    fs.existsSync(path.join(legacyStateDir, 'state.json'))
+  )
     throw new Error(
-      'A local registry session already exists. Run pnpm local-registry:prepare --reset to prepare a fresh snapshot.',
+      'An unreleased session already exists. Run pnpm unreleased:prepare --reset to prepare a fresh snapshot.',
     );
   const packages = fs
     .globSync('packages/*/*/package.json', { cwd: repo })
@@ -269,7 +279,7 @@ async function prepare(options) {
         state.registry.replace(/\/$/, '')
     )
       throw new Error(
-        `${pkg.name} publishConfig.registry points outside the local registry.`,
+        `${pkg.name} publishConfig.registry points outside the local npm registry.`,
       );
   }
   fs.writeFileSync(stateFile, JSON.stringify(state), { mode: 0o600 });
@@ -287,7 +297,7 @@ async function prepare(options) {
     '--name',
     container,
     '--label',
-    `nocobase.local-registry=${id}`,
+    `${label}=${id}`,
     '-p',
     `127.0.0.1:${options.port}:4873`,
     '-v',
@@ -332,7 +342,7 @@ async function prepare(options) {
   );
   const { token } = await response.json();
   if (!response.ok || !token)
-    throw new Error('Local registry authentication failed.');
+    throw new Error('Local npm registry authentication failed.');
   fs.writeFileSync(
     state.npmrc,
     `registry=${state.registry}\n@nocobase:registry=${state.registry}\n//127.0.0.1:${options.port}/:_authToken=${token}\n`,
@@ -345,7 +355,7 @@ async function prepare(options) {
   });
   const env = registryEnv(state);
   assertRegistries(state, env);
-  console.log('Publishing the checkout to the isolated local registry...');
+  console.log('Publishing the checkout to the isolated local npm registry...');
   run('pnpm', ['changeset', 'publish', '--no-git-tag'], { env });
   // The repository is in prerelease mode. Explicitly expose this snapshot as latest for manual pnpm create.
   for (const pkg of packages)
@@ -372,14 +382,14 @@ try { createManually(process.argv.slice(2)); } catch (error) { console.error(err
     { mode: 0o600 },
   );
   console.log(`Ready: ${state.registry}
-For manual development: pnpm local-registry:create my-app
-For an automated check: pnpm local-registry:verify --template default
+For manual development: pnpm unreleased:create my-app
+For an automated check: pnpm unreleased:smoke --template default
 For manual testing, run outside the repository:
   node ${JSON.stringify(wrapper)} my-app --json
 The wrapper runs pnpm create with isolated configuration and snapshot versions.
 To make plain pnpm and npm in a shell resolve the snapshot, for example to test an agent Skill:
-  eval "$(pnpm -s local-registry:env)"
-Stop with: pnpm local-registry:stop`);
+  eval "$(pnpm -s unreleased:env)"
+Clean up with: pnpm unreleased:clean`);
 }
 
 export function createManually(args, cwd = process.cwd()) {
@@ -420,38 +430,31 @@ export function createManually(args, cwd = process.cwd()) {
   );
 }
 
-function stop() {
-  if (fs.existsSync(stateFile)) {
-    const state = readState();
-    const names = run(
-      'docker',
-      [
-        'ps',
-        '-a',
-        '--filter',
-        `name=^/${container}$`,
-        '--format',
-        '{{.Names}}',
-      ],
-      { capture: true },
+function removeOwnedContainer(name, labelKey) {
+  const names = run(
+    'docker',
+    ['ps', '-a', '--filter', `name=^/${name}$`, '--format', '{{.Names}}'],
+    { capture: true },
+  );
+  if (!names) return;
+  const owner = run(
+    'docker',
+    ['inspect', '--format', `{{index .Config.Labels "${labelKey}"}}`, name],
+    { capture: true },
+  );
+  if (owner !== id)
+    throw new Error(
+      'Refusing to remove a container not owned by this checkout.',
     );
-    if (names) {
-      const label = run(
-        'docker',
-        [
-          'inspect',
-          '--format',
-          '{{index .Config.Labels "nocobase.local-registry"}}',
-          state.container,
-        ],
-        { capture: true },
-      );
-      if (label !== id)
-        throw new Error(
-          'Refusing to remove a container not owned by this checkout.',
-        );
-      run('docker', ['rm', '-f', '-v', state.container]);
-    }
+  run('docker', ['rm', '-f', '-v', name]);
+}
+
+function clean() {
+  if (fs.existsSync(stateFile))
+    removeOwnedContainer(readState().container, label);
+  if (fs.existsSync(path.join(legacyStateDir, 'state.json'))) {
+    removeOwnedContainer(legacyContainer, legacyLabel);
+    fs.rmSync(legacyStateDir, { recursive: true, force: true });
   }
   // Keep the operation lock in place throughout reset and preparation.
   for (const entry of fs.readdirSync(stateDir)) {
@@ -459,7 +462,7 @@ function stop() {
       fs.rmSync(path.join(stateDir, entry), { recursive: true, force: true });
   }
   console.log(
-    'Local registry and isolated caches removed. Test applications and logs retained.',
+    'Local npm registry and isolated caches removed. Test applications and logs retained.',
   );
 }
 
@@ -480,18 +483,17 @@ async function main() {
     } catch {
       /* A previous operation was interrupted. */
     }
-    if (alive) throw new Error('Another local registry operation is running.');
+    if (alive) throw new Error('Another unreleased operation is running.');
     fs.unlinkSync(lock);
   }
   fs.writeFileSync(lock, String(process.pid), { flag: 'wx' });
   try {
     if (options.action === 'prepare') {
-      if (options.reset) stop();
+      if (options.reset) clean();
       await prepare(options);
     } else if (options.action === 'create') {
       const state = readState();
-      if (!state.ready)
-        throw new Error('Run pnpm local-registry:prepare first.');
+      if (!state.ready) throw new Error('Run pnpm unreleased:prepare first.');
       await assertRegistryAvailable(state);
       const parent = path.resolve(
         options['output-dir'] ?? path.join(repo, '..', 'nocobase-local-apps'),
@@ -526,17 +528,17 @@ async function main() {
           ].join('\n'),
         );
       }
-    } else if (options.action === 'verify') {
+    } else if (options.action === 'smoke') {
       const state = readState();
       if (!state.ready)
         throw new Error(
-          'Preparation did not complete. Stop and prepare again.',
+          'Preparation did not complete. Run pnpm unreleased:prepare --reset.',
         );
       if (options.config)
         readMainConfig(path.resolve(options.config), options.dialect);
       const directory = assertWorkdir(
         options.workdir ??
-          fs.mkdtempSync(path.join(os.tmpdir(), 'nocobase-registry-test-')),
+          fs.mkdtempSync(path.join(os.tmpdir(), 'nocobase-unreleased-smoke-')),
       );
       const env = registryEnv(state);
       assertRegistries(state, env);
@@ -564,13 +566,12 @@ async function main() {
       );
     } else if (options.action === 'env') {
       const state = readState();
-      if (!state.ready)
-        throw new Error('Run pnpm local-registry:prepare first.');
+      if (!state.ready) throw new Error('Run pnpm unreleased:prepare first.');
       await assertRegistryAvailable(state);
       // stdout carries only what the shell evaluates; everything meant for a person is a comment.
       console.log(formatShellEnv(state));
     } else {
-      stop();
+      clean();
     }
   } finally {
     fs.rmSync(lock, { force: true });
