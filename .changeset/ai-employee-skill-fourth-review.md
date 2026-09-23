@@ -24,3 +24,5 @@ The rest are contracts the Skill got wrong, each verified against the code:
 - The data tools have hard capacity limits, and `applyReactHookFormValues` is imported from the adapter path rather than the extension root.
 
 Three limitations that cannot be fixed from an application are now stated rather than left to be discovered after deployment: a built server does not read the application's `.env`, `ai/skills` is not copied into `dist/`, and every authenticated user can converse with every enabled employee because the boundary is each tool's own actor check.
+
+Separately, the built-in catalog is now an inventory rather than a list. All nineteen tools appear in six families with their scope, permission and execution side; all three Skills appear with the tools each one names and what its procedure is actually for; and a section in front of both explains how the two relate — that a Skill implements nothing, that a tool named by any Skill leaves every employee's base set until that Skill is loaded, and that this is what makes the choice between an employee's `tools` and a Skill's `tools` a real one rather than a matter of taste.

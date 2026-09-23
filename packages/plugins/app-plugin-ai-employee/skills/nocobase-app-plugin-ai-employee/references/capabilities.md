@@ -11,7 +11,10 @@ What an App can add to the AI Employee runtime, what is already there, and the `
 - [Writing business data from a tool](#writing-business-data-from-a-tool)
 - [Skills](#skills)
 - [Tool and Skill display i18n](#tool-and-skill-display-i18n)
-- [Built-in employee, tools, and skills](#built-in-employee-tools-and-skills)
+- [How Skills and Tools relate](#how-skills-and-tools-relate)
+- [Built-in Skills](#built-in-skills)
+- [Built-in Tools](#built-in-tools)
+- [Built-in employee](#built-in-employee)
 - [Making a collection visible to the data tools](#making-a-collection-visible-to-the-data-tools)
 - [Reaching outside the App](#reaching-outside-the-app)
 - [LLM services (`config.yml`)](#llm-services-configyml)
@@ -73,16 +76,7 @@ export default defineAIEmployee({
 
 `autoCall` is narrower than it reads, and in one case it does the opposite of what it sounds like. The runtime consults it only for `CUSTOM` tools; for `SPECIFIED` and `GENERAL` it is ignored entirely and automatic calling follows `defaultPermission === 'ALLOW'`. On a `CUSTOM` tool, `autoCall: true` is what makes the call automatic, so it overrides an `ASK` default rather than respecting it. Leave it out unless the tool is `CUSTOM` and skipping approval is the intent.
 
-`skills` and `tools` are the employee's declared capability set, but listing a tool is not always enough to reach it.
-
-**A tool named by any registered Skill is not a base tool for anyone.** The runtime removes every name that appears in any registered Skill's `tools` from the employee's base set — every Skill in the installation, not only the ones this employee has — and puts it back only once that Skill has actually been loaded into the conversation, via `getSkill`. `getSkill` itself is exempt.
-
-Two consequences worth planning around:
-
-- The seven data tools are named by the built-in `data-metadata` and `data-query` Skills, so listing `dataSourceQuery` in an employee's `tools` does not make it callable on the first turn. Those Skills are `GENERAL`, so the model can load them, but it costs a round trip and depends on the model choosing to.
-- If one App Skill names a tool, a _different_ employee that lists the same tool without that Skill never activates it, and nothing reports the dead reference. Give the second employee the Skill, or keep the tool out of every Skill's `tools` and let the employee list decide.
-
-A `GENERAL` tool no Skill names is available to every employee without being listed.
+`skills` and `tools` are the employee's declared capability set, but listing a tool is not always enough to reach it: a tool named by any registered Skill stays behind that Skill until the conversation loads it. Read [How Skills and Tools relate](#how-skills-and-tools-relate) before deciding which of the two lists a capability belongs in — the choice is not cosmetic, and the failure mode is a tool that never activates and never complains.
 
 The persisted employee record carries more than the definition does — `enabled`, `builtIn`, `deprecated`, `about`, `defaultPrompt`, `skillSettings`, `knowledgeBase`, model settings, roles. Those are administered in AI settings. Do not put them in the definition.
 
@@ -253,37 +247,103 @@ Register these through the owner's **client** locale contribution in `client/loc
 
 Translation is display-only. Stable names, Tool `definition.description`, schemas, Skill instruction bodies, persisted values, and anything else the model reads stay unchanged. A resource without a namespace, or a key without an entry, displays its source text. Catalogs sort by localized title with the stable `name` as tie-breaker, so switching locale must change both labels and order.
 
-## Built-in employee, tools, and skills
+## How Skills and Tools relate
 
-One built-in employee: `atlas`, a router that analyses a request and delegates to a specialist through the three sub-agent tools. Use it as-is; do not copy its definition into the App.
+They are two halves of one capability and neither works alone.
 
-Nineteen built-in tools:
+A **Tool** is code — an argument schema plus an `invoke` — and it is the only thing that can act. A **Skill** is Markdown: a procedure, plus a `tools` list naming tools that already exist. A Skill implements nothing and cannot define a tool.
 
-| Tool                      | Scope       | Typical use                                                         |
-| ------------------------- | ----------- | ------------------------------------------------------------------- |
-| `getDataSources`          | `SPECIFIED` | List the authorized named database connections                      |
-| `getCollectionNames`      | `SPECIFIED` | Find which collections the current user may read                    |
-| `getCollectionMetadata`   | `SPECIFIED` | Read a collection's accessible fields and relations before querying |
-| `searchFieldMetadata`     | `SPECIFIED` | Resolve a business term the user used to an actual field            |
-| `dataSourceQuery`         | `SPECIFIED` | Fetch detail rows under a bounded filter, sort, limit               |
-| `dataSourceCounting`      | `SPECIFIED` | Count rows in the same authorized scope as a detail query           |
-| `dataQuery`               | `SPECIFIED` | Server-side count/sum/avg/min/max, with optional grouping           |
-| `businessReportGenerator` | `SPECIFIED` | Assemble a validated Markdown report with inline charts             |
-| `chartGenerator`          | `GENERAL`   | Render a chart from data the agent already has                      |
-| `loadFrontendTool`        | `GENERAL`   | Read the manifest of browser tools the current page allows          |
-| `executeFrontendTool`     | `GENERAL`   | Run one allowlisted browser tool by its exact id                    |
-| `formFiller`              | `GENERAL`   | Fill a registered visible form; never submits or saves              |
-| `suggestions`             | `GENERAL`   | Offer the user selectable follow-up prompts                         |
-| `getSkill`                | `SPECIFIED` | Load a named Skill's instructions mid-conversation                  |
-| `knowledge-base-retrieve` | `SPECIFIED` | Retrieve passages from the employee's bound knowledge base          |
-| `subAgentWebSearch`       | `SPECIFIED` | Search the public web for current information                       |
-| `list-ai-employees`       | `SPECIFIED` | Discover which specialists exist, for delegation                    |
-| `get-ai-employee`         | `SPECIFIED` | Read one specialist's full profile before delegating                |
-| `dispatch-sub-agent-task` | `SPECIFIED` | Hand a task to a specialist and get its answer back                 |
+Four properties decide whether a given tool is reachable in a given turn:
 
-Three built-in Skills, all `GENERAL`, so every employee can load them: `data-metadata` (discover connections, collections, fields, relations), `data-query` (query records, counts, aggregates), `business-analysis-report` (build a report from freshly queried data).
+| Property            | Decides                   | Values                                                                              |
+| ------------------- | ------------------------- | ----------------------------------------------------------------------------------- |
+| `scope`             | who may reach it at all   | `GENERAL` every employee, `SPECIFIED` only when named, `CUSTOM` supplied per caller |
+| named by a Skill    | when it becomes reachable | gated behind that Skill being loaded, for everyone                                  |
+| `defaultPermission` | whether the user confirms | `ALLOW` runs, `ASK` asks; defaults to `ASK` when the tool declares none             |
+| `execution`         | where `invoke` runs       | `backend` in the server, `frontend` in the browser; defaults to `backend`           |
 
-Activate a `SPECIFIED` built-in by naming it in an employee's `tools` or a Skill's `tools`. Never import a built-in's implementation module.
+The second row is the one that surprises people. A tool named by **any** registered Skill leaves every employee's base set and comes back only for a conversation that has loaded that Skill, through `getSkill`. So a Skill is not merely documentation attached to tools — it is the gate in front of them, and putting a tool in a Skill takes it away from employees that only list it.
+
+That gating is deliberate: it keeps a large tool catalog out of the model's context until a procedure needs it, and it means the model reads the procedure and gains the tools in the same step. It also means three things when composing:
+
+- Bare `tools` on an employee suits a tool no Skill names — a single action with no procedure around it.
+- A Skill suits a set of tools used together in a known order, where the order matters as much as the tools.
+- Naming a tool in a Skill **and** expecting a different employee to reach it through `tools` alone does not work, and reports nothing.
+
+`getSkill` is exempt from its own rule, so it is always reachable and is what opens every other gate.
+
+## Built-in Skills
+
+Three, all `GENERAL`, so any employee can load any of them without being granted anything. They chain: a report loads the query Skill, which loads the metadata Skill.
+
+| Skill                      | What the procedure is for                                                                                     | Tools it names                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `data-metadata`            | Find the connection, collection and fields behind a business question before querying anything                | `getDataSources`, `getCollectionNames`, `getCollectionMetadata`, `searchFieldMetadata` |
+| `data-query`               | Answer factual questions about current records — details, counts, aggregates, grouped summaries               | `dataSourceQuery`, `dataSourceCounting`, `dataQuery`                                   |
+| `business-analysis-report` | Turn freshly queried data into a validated Markdown report with optional inline charts, with its caveats kept | `businessReportGenerator`, `getSkill`                                                  |
+
+Each body carries more than the tool list: `data-query` documents the supported filter, sort, pagination and grouping shape and the precision rules; `data-metadata` forbids probing around a denial; `business-analysis-report` requires checking the generator's `errors`/`warnings` before claiming a report was produced. That prose is the reason to reuse these rather than write equivalents.
+
+**These three account for all seven data tools plus `businessReportGenerator`.** Listing `dataSourceQuery` in an employee's `tools` therefore does not make it callable on the first turn; the model must load `data-query` first. Plan for that round trip, or accept that it depends on the model choosing to load the Skill.
+
+## Built-in Tools
+
+Nineteen, in six families. All are `backend` unless the table says otherwise, and none should ever be imported — activate them by name.
+
+**Data (7)** — `SPECIFIED`, `ALLOW`, gated behind `data-metadata` / `data-query`. Every one reads through an actor-bound service, so the current user's permissions apply, and all are bounded (see the capacity limits below).
+
+| Tool                    | What it does                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| `getDataSources`        | List the authorized named database connections                                        |
+| `getCollectionNames`    | List the collections the current user may read in one connection                      |
+| `getCollectionMetadata` | Read one collection's accessible fields and queryable relations                       |
+| `searchFieldMetadata`   | Resolve a business term to a real field, marking exact matches apart from candidates  |
+| `dataSourceQuery`       | Fetch detail rows under a flat AND filter, explicit fields, sort, limit, offset       |
+| `dataSourceCounting`    | Count rows in the same authorized scope as a detail query                             |
+| `dataQuery`             | Server-side count/sum/avg/min/max, with optional grouping over declared value domains |
+
+**Reporting (2)**
+
+| Tool                      | Scope       | Permission | What it does                                                                          |
+| ------------------------- | ----------- | ---------- | ------------------------------------------------------------------------------------- |
+| `businessReportGenerator` | `SPECIFIED` | `ALLOW`    | Validate and prepare a Markdown report for preview and export; gated behind its Skill |
+| `chartGenerator`          | `GENERAL`   | `ALLOW`    | Produce ECharts options from data the agent already holds; no Skill gates it          |
+
+**Browser (3)** — `GENERAL`, `ALLOW`, `execution: 'frontend'`. These run in the page and need the chat's page context; they do nothing on a server-only agent.
+
+| Tool                  | What it does                                                               |
+| --------------------- | -------------------------------------------------------------------------- |
+| `formFiller`          | Write values into a registered visible form. Never submits and never saves |
+| `loadFrontendTool`    | Read the input schema of one browser tool the current page offers          |
+| `executeFrontendTool` | Run one allowlisted browser tool by its exact `${contextId}:${name}` id    |
+
+**Conversation (2)**
+
+| Tool          | Scope       | Permission | What it does                                                                                         |
+| ------------- | ----------- | ---------- | ---------------------------------------------------------------------------------------------------- |
+| `getSkill`    | `SPECIFIED` | `ALLOW`    | Load a Skill's content and activate its tools for this conversation. Exempt from Skill gating        |
+| `suggestions` | `GENERAL`   | `ASK`      | Offer selectable follow-up prompts. The `ASK` is the interaction: the user's pick is the tool result |
+
+**Knowledge and web (2)**
+
+| Tool                      | Scope       | Permission | What it does                                                                                       |
+| ------------------------- | ----------- | ---------- | -------------------------------------------------------------------------------------------------- |
+| `knowledge-base-retrieve` | `SPECIFIED` | `ALLOW`    | Retrieve passages from the conversation employee's bound knowledge base. Needs the feature enabled |
+| `subAgentWebSearch`       | `SPECIFIED` | `ALLOW`    | Search the web, one provider call per query in parallel. Refuses when the provider cannot search   |
+
+**Sub-agents (3)** — `SPECIFIED`, `ALLOW`. Delegation between employees; role filtering applies here, unlike the chat employee list.
+
+| Tool                      | What it does                                                           |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `list-ai-employees`       | Lightweight profiles of the employees available for delegation         |
+| `get-ai-employee`         | One employee's full profile, before deciding to delegate               |
+| `dispatch-sub-agent-task` | Hand a task to another employee; returns its sub-session id and answer |
+
+## Built-in employee
+
+One: `atlas`, `sort: 0`. It is a router — it analyses a request, decides whether it can answer directly, and delegates to a specialist only when one is materially better suited, through the three sub-agent tools. Use it as-is; do not copy its definition into the App to modify it.
+
+Its `sort: 0` has a practical consequence: it is `employees[0]` for any application that does not give an employee a lower sort, and a chat without `defaultEmployee` opens on it.
 
 ## Making a collection visible to the data tools
 
