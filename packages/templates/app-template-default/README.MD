@@ -351,6 +351,14 @@ MIT
 
 ## Publish to an application Hub
 
+### Create a publishing key
+
+`HUB_API_KEY` is a Hub publishing key, created in Hub rather than in this application. Open **API Keys** in the Hub navigation (`<HUB_URL>/api-keys`); reaching that page requires `hub.app / manage-api-keys`, granted to `hub-administrator` and `hub-operator` by default. In **Create API Key**, select this application under **Applications**, or **All applications (including future apps)**, then grant the permissions the commands below need: **Upload release** for `pnpm run upload`, and both **Upload release** and **Deploy release** for `pnpm run upload --deploy` or `pnpm run deploy`.
+
+The plaintext key is shown once at creation; while the key stays active its creator can copy it again from the same page. Bound applications and granted permissions cannot be changed afterwards, so a key created without `Deploy release` has to be deleted and recreated rather than edited. A key never exceeds its creator's current permissions, so uploads fail if the creator later loses access to the bound application. See [Publish applications with Hub](https://docs.nocobase.com/deployment/hub-publishing) for the console walkthrough.
+
+### Upload and deploy
+
 The Default template includes `upload` and `deploy` scripts. Run `pnpm run upload` or `pnpm run deploy` from the App root; these forward all arguments to the `app upload` and `app deploy` commands of the application's own CLI, respectively. Use `pnpm run deploy` explicitly because `pnpm deploy` is also a pnpm built-in command. Existing applications need to add these scripts if they already have the publishing CLI but predate the shortcuts.
 
 ```bash

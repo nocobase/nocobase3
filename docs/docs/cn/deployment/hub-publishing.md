@@ -21,7 +21,7 @@ description: 通过页面或 CLI 上传、部署和更新业务应用。
 
 ### 1. 登录 Hub
 
-使用具有目标应用管理权限的账号登录 Hub，例如 `https://apps.example.com/hub/`。通过 CLI 发布时，还需配置发布 API Key，见下方[通过 CLI 部署](#通过-cli-部署)。
+使用具有目标应用管理权限的账号登录 Hub，例如 `https://apps.example.com/hub/`。通过 CLI 发布时，还需在 Hub 创建发布 API Key，见下方[创建发布 API Key](#创建发布-api-key)。
 
 ### 2. 创建应用
 
@@ -76,7 +76,25 @@ APP_BASE_PATH=/crm pnpm build --target linux-x64 --node-version 24 --tar
 
 ## 通过 CLI 部署
 
-在 Hub 创建发布 API Key，限定目标 App 和需要的上传、部署权限。API Key 的权限还受创建者当前权限和应用归属约束。凭证通过 CI secret 或本地受保护环境配置，避免放在命令参数、版本库或日志中。
+### 创建发布 API Key
+
+CLI 用的 `HUB_API_KEY` 在 Hub 中创建，不在业务应用中生成。打开 Hub 导航的「API Key」页（`<HUB_URL>/api-keys`，需要 `hub.app / manage-api-keys` 权限，默认授予 `hub-administrator` 和 `hub-operator`）。
+
+![Hub 的 API Key 页，右上角是创建入口，尚未创建任何 Key](https://static-docs.nocobase.com/20260923151656.png)
+
+点击「创建 API Key」：
+
+1. 在「应用」中勾选目标应用，或选择「所有应用（含未来新增）」；
+2. 在「权限范围」中按后续命令勾选：仅上传勾「上传版本」（Upload release），需要部署时同时勾上「部署版本」（Deploy release）；
+3. 按需设置过期时间，创建后复制密钥明文。
+
+未选择应用前，权限选项不可勾选，界面会提示先选应用。
+
+![创建 API Key 对话框：填写名称与过期时间，选择应用范围，再勾选上传版本和部署版本权限](https://static-docs.nocobase.com/20260923151943.png)
+
+明文只在创建时完整显示，密钥有效期内创建者可在同一页面再次复制。**绑定的应用和权限创建后不可修改**，勾错只能删除后重建。API Key 的权限还受创建者当前权限和应用归属约束：每次请求都会重新校验创建者的当前权限，创建者失去目标应用权限后，用该 Key 发起的上传和部署会被拒绝。凭证通过 CI secret 或本地受保护环境配置，避免放在命令参数、版本库或日志中。
+
+### 配置 CLI 环境变量
 
 在业务项目根目录的未入库 `.env` 或终端环境中设置：
 
@@ -86,7 +104,11 @@ HUB_APP_ID=crm
 HUB_API_KEY=REPLACE_WITH_PRIVATE_PUBLISHING_KEY
 ```
 
-CLI 配置优先级为显式参数、进程环境、App 根目录 `.env`；此发布配置不加载 `.env.local`。以下两组流程二选一。
+CLI 配置优先级为显式参数、进程环境、App 根目录 `.env`；此发布配置不加载 `.env.local`。
+
+### 上传与部署
+
+以下两组流程二选一。
 
 **上传后单独部署：**
 

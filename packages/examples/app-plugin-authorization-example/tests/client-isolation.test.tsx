@@ -12,10 +12,10 @@ import {
   AuthorizationClient,
   authorizationClientToken,
   useAuthorizationClient,
-} from '../client/index.js';
-import { useDefaultAccessClient } from '../../app-plugin-authz-default-access/client/api.js';
-import { useSharingRulesClient } from '../../app-plugin-authz-sharing-rules/client/api.js';
-import { useRestrictionRulesClient } from '../../app-plugin-authz-restriction-rules/client/api.js';
+} from '../../../plugins/app-plugin-authorization/client/index.js';
+import { useDefaultAccessClient } from '../../../plugins/app-plugin-authz-default-access/client/api.js';
+import { useSharingRulesClient } from '../../../plugins/app-plugin-authz-sharing-rules/client/api.js';
+import { useRestrictionRulesClient } from '../../../plugins/app-plugin-authz-restriction-rules/client/api.js';
 
 function application() {
   const request = vi.fn().mockResolvedValue({ data: [] });

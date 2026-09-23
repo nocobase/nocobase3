@@ -1,6 +1,50 @@
 import type { LocaleResource } from '@nocobase/i18n';
 
 const enUS = {
+  i18nExamples: {
+    title: 'Internationalization',
+    description:
+      'Explore plurals, missing translations and regional formats. Switch language from the account menu to see the results update.',
+    pluralTitle: 'Plurals',
+    pluralDescription:
+      'English uses different forms for one and other counts. Chinese uses the same wording for both.',
+    count: 'Item count',
+    countHint: 'Enter a non-negative safe integer or choose a preset.',
+    presets: 'Count presets',
+    invalidCount: 'Enter a valid non-negative safe integer.',
+    itemCount_one: '{{count}} item',
+    itemCount_other: '{{count}} items',
+    fallbackTitle: 'Missing translations',
+    fallbackDescription:
+      'Switch to Chinese: the English-only message falls back to English. The last two rows have no translation in either language.',
+    fallbackChain:
+      'Lookup order: current language ({{locale}}) → application default ({{defaultLocale}}) → en-US. Repeated languages are checked once.',
+    scenarios: {
+      translated: 'Available in both languages',
+      englishOnly: 'Available in English only',
+      withDefault: 'Missing, with defaultValue',
+      withoutDefault: 'Missing, without defaultValue',
+    },
+    scenario: 'Scenario / key',
+    result: 'Rendered result',
+    source: 'Source',
+    keySource: 'Key itself',
+    defaultValue: 'Translation unavailable.',
+    isolationNote:
+      'These deliberately incomplete resources use an isolated I18nRuntime with the current language and application default. The application’s own translations remain complete.',
+    loading: 'Loading fallback examples',
+    error: 'Unable to load the fallback examples.',
+    retry: 'Retry',
+    formatTitle: 'Regional formats',
+    formatDescription:
+      'Compare the same number, USD amount and UTC timestamp using Intl.NumberFormat and Intl.DateTimeFormat.',
+    region: 'Region',
+    number: 'Number',
+    currency: 'Currency (USD)',
+    date: 'Date and time (UTC)',
+    formatNote:
+      'Formatting changes presentation, not value: no currency conversion takes place. These regions do not add interface languages; the comparison stays fixed when you switch language.',
+  },
   notifications: { unreadLabel: 'Notifications, {{count}} unread' },
   overrides: {
     '@nocobase/app-plugin-notification-in-app': {
@@ -214,6 +258,11 @@ const enUS = {
     },
   },
   examples: {
+    i18n: {
+      title: 'Internationalization',
+      description:
+        'Try plural forms, missing-translation fallbacks and regional number, currency and date formats.',
+    },
     notifications: {
       title: 'Notifications',
       description:
@@ -419,6 +468,7 @@ const enUS = {
     signingOut: 'Signing out…',
   },
   navigation: {
+    i18nExamples: 'Internationalization',
     notifications: 'Notifications',
     numbers: 'Numeric types',
     externalCrm: 'External CRM',

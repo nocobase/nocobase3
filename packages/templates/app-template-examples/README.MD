@@ -29,6 +29,16 @@ The scaffolder creates an independent configuration and database. Never copy ano
 
 Article migration and seed sources create six articles on a fresh managed default connection. Every signed-in user can view, create, and edit all articles. Article pages and APIs do not participate in permission-set authorization. Other examples retain their plugins' authorization policies.
 
+## Internationalization example
+
+Open **Internationalization** from the homepage or sidebar (`/i18n-examples`, relative to the application's mount path). Like the other protected examples, this page requires sign-in and its page permission; administrators can explore it directly.
+
+Choose a count of 0, 1, 2 or 5, or enter a non-negative safe integer. Switch between English and Chinese from the account menu: English changes between `item` and `items`, Chinese keeps `个项目`, and the selected count survives the switch. The keys belong to the application in `client/locales/` and use `_one` and `_other` with `t('i18nExamples.itemCount', { count })`.
+
+The fallback table runs deliberately incomplete resources in a page-local `I18nRuntime`, following the current language → application default → `en-US` chain. Switch to Chinese to see the English-only message fall back; the source column reports the language actually used. A key absent from all resources displays `defaultValue` when provided and the key itself otherwise. These fixtures live in `client/pages/i18n-examples/demo.ts`; they do not delete application translations, weaken `AppResource`, register another language picker, or change global resources.
+
+The regional comparison formats the same number, USD amount and fixed UTC timestamp for `zh-CN`, `en-US` and `de-DE` using `Intl`. It performs no currency conversion and does not add German to the application's language list. This example covers regional formatting; it does not demonstrate RTL layout.
+
 ## Maintain this template
 
 Keep framework files aligned with Default and Hub: startup/build scripts, runtime composition mechanisms, shell, theme, CLI infrastructure and development guidance. Keep the examples homepage, article module, example plugin choices and sample data here. Existing Default installations retain their historical data; follow the [upgrade migration rules](.agents/skills/nocobase-app-upgrade/references/edge-cases.md#migrations) when removing example registrations.

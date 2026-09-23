@@ -1,18 +1,27 @@
-vi.mock('../../app-plugin-authz-restriction-rules/client/api.js', () => ({
-  useRestrictionRulesClient: () => mocks.authz,
-}));
-vi.mock('../../app-plugin-authz-sharing-rules/client/api.js', () => ({
-  useSharingRulesClient: () => mocks.authz,
-}));
-vi.mock('../../app-plugin-authz-default-access/client/api.js', () => ({
-  useDefaultAccessClient: () => mocks.authz,
-}));
+vi.mock(
+  '../../../plugins/app-plugin-authz-restriction-rules/client/api.js',
+  () => ({
+    useRestrictionRulesClient: () => mocks.authz,
+  }),
+);
+vi.mock(
+  '../../../plugins/app-plugin-authz-sharing-rules/client/api.js',
+  () => ({
+    useSharingRulesClient: () => mocks.authz,
+  }),
+);
+vi.mock(
+  '../../../plugins/app-plugin-authz-default-access/client/api.js',
+  () => ({
+    useDefaultAccessClient: () => mocks.authz,
+  }),
+);
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AuthorizationOptions } from '../client/authorization-client.js';
+import type { AuthorizationOptions } from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
 
 const mocks = vi.hoisted(() => ({
   authz: {
@@ -28,9 +37,12 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../client/use-authorization-client.js', () => ({
-  useAuthorizationClient: () => mocks.authz,
-}));
+vi.mock(
+  '../../../plugins/app-plugin-authorization/client/use-authorization-client.js',
+  () => ({
+    useAuthorizationClient: () => mocks.authz,
+  }),
+);
 vi.mock('@nocobase/app-client', () => ({
   useClientApplication: () => ({ runtime: { routes: [] } }),
 }));
@@ -40,10 +52,10 @@ vi.mock('@nocobase/i18n/client', async () => {
 });
 
 import enUS from './rule-locales.js';
-import DefaultAccessPage from '../../app-plugin-authz-default-access/client/pages/default-access-page.js';
-import PermissionSetsPage from '../client/pages/permission-sets-page.js';
-import RestrictionRulesPage from '../../app-plugin-authz-restriction-rules/client/pages/restriction-rules-page.js';
-import SharingRulesPage from '../../app-plugin-authz-sharing-rules/client/pages/sharing-rules-page.js';
+import DefaultAccessPage from '../../../plugins/app-plugin-authz-default-access/client/pages/default-access-page.js';
+import PermissionSetsPage from '../../../plugins/app-plugin-authorization/client/pages/permission-sets-page.js';
+import RestrictionRulesPage from '../../../plugins/app-plugin-authz-restriction-rules/client/pages/restriction-rules-page.js';
+import SharingRulesPage from '../../../plugins/app-plugin-authz-sharing-rules/client/pages/sharing-rules-page.js';
 
 const options: AuthorizationOptions = {
   plugins: [],
