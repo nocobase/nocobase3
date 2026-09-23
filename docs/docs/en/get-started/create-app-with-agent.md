@@ -29,7 +29,7 @@ pnpm --version
 
 `@nocobase/create-app` comes from the public npm. It downloads the template and installs the dependencies from `https://npm.nocobase.ai/` itself, and records that registry in the project's `.npmrc`, so do not change the user's pnpm configuration, for example with `pnpm config set @nocobase:registry`. `PNPM_CONFIG_MINIMUM_RELEASE_AGE=0` applies to this command and its child processes, allowing newly published versions. `--json` never prompts: it prints one JSON result on stdout, whose `nextCommands` are the configuration and startup commands to run next.
 
-The default template is a single application. For a Hub, add `--template=hub`. Do not switch to NocoBase 2 installation instructions when a package cannot be found.
+Do not switch to NocoBase 2 installation instructions when a package cannot be found.
 
 Wait for creation to finish and check project generation, dependency installation, and development guidance synchronization. Explain and resolve failed steps; an existing directory alone does not mean creation succeeded. Do not recreate the same project.
 
@@ -74,13 +74,13 @@ Start the development service from the application root using its project script
 pnpm dev
 ```
 
-A Hub runs `pnpm build` and then `pnpm start` instead, as its `nextCommands` say. Neither `pnpm dev` nor `pnpm start` exits, so run it in the background. Inspect the actual URL in its output and confirm that the page opens by requesting it, for example with `curl -I`, and expecting a successful response. Complete required installation or configuration before checking the sign-in page. A reachable installation page alone does not mean initialization is complete.
+`pnpm dev` does not exit, so run it in the background. Inspect the actual URL in its output and confirm that the page opens by requesting it, for example with `curl -I`, and expecting a successful response. Complete required installation or configuration before checking the sign-in page. A reachable installation page alone does not mean initialization is complete.
 
 Provide the user with:
 
 - The application directory and actual URL
 - The account to use for first sign-in and where to obtain its password
-- That the service started by the agent stops when the agent's session ends, and how to start it again with `pnpm dev` (or `pnpm start` for a Hub) in the application directory
+- That the service started by the agent stops when the agent's session ends, and how to start it again with `pnpm dev` in the application directory
 - Any remaining configuration tasks or startup errors
 
 If the template uses its initial administrator, the account is `admin@nocobase.com` with password `admin123`; confirm this against the generated project's account guidance before presenting it. If the user configured an administrator or connected an existing database, use the actual account information instead of assuming the defaults. Do not repeat user-defined passwords in the conversation.

@@ -36,7 +36,7 @@ Open the agent in an empty directory and ask for an application, for example:
 The Skill then:
 
 1. Runs `pnpm create @nocobase/app <name> --json` from the parent directory, so the files land in the directory you opened.
-2. Follows the `nextCommands` that creation returns: `pnpm config:init`, then `pnpm config:set` for any `requiredSettings` of a database other than SQLite, then `pnpm config:check`, and finally `pnpm dev` in the background, or `pnpm build` and `pnpm start` for a Hub created with `--template=hub`.
+2. Follows the `nextCommands` that creation returns: `pnpm config:init`, then `pnpm config:set` for any `requiredSettings` of a database other than SQLite, then `pnpm config:check`, and finally `pnpm dev` in the background.
 3. Reports the URL and the first sign-in account, and recommends starting a new session in the application directory, where the application's own Skills are loaded reliably. If you keep working in the same session, it reads the application's `AGENTS.md` and Skills directly instead.
 
 It never asks for a database password in the conversation. For a database other than SQLite it asks you to put the password in an environment variable, then reads it with `pnpm config:set --from-env`.
@@ -138,7 +138,6 @@ curl -s http://127.0.0.1:4873/@nocobase%2fcreate-app
 Worth covering when the Skill changes:
 
 - The default SQLite path, through to the page opening and the sign-in account being reported.
-- A Hub, created with `--template=hub` and started with `pnpm build` and `pnpm start`.
 - A database other than SQLite, with the password supplied through `--from-env`.
 - A directory that is not empty, which the Skill must refuse rather than overwrite.
 - A directory that already holds an application, where the Skill must hand over to that application's `AGENTS.md`.
