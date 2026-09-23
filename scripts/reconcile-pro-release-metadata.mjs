@@ -2,11 +2,7 @@ import { execFileSync } from 'node:child_process';
 import process from 'node:process';
 
 const SHA_PATTERN = /^[0-9a-f]{40,64}$/u;
-const generatedPaths = [
-  'pnpm-workspace.yaml',
-  'pnpm-lock.yaml',
-  'skills/nocobase-plugin-development',
-];
+const generatedPaths = ['pnpm-workspace.yaml', 'pnpm-lock.yaml'];
 
 function git(args, options = {}) {
   const output = execFileSync('git', args, {
@@ -79,21 +75,13 @@ export function reconcileReleaseMetadata({ metadataSource, ossSha }) {
     );
   }
 
-  for (const [script, args] of [
-    ['scripts/sync-workspace-config.mjs', ['--write']],
-    ['scripts/sync-development-skills.mjs', []],
-  ]) {
-    execFileSync(process.execPath, [script, ...args], { stdio: 'inherit' });
-  }
+  execFileSync(
+    process.execPath,
+    ['scripts/sync-workspace-config.mjs', '--write'],
+    { stdio: 'inherit' },
+  );
   git(
-    [
-      'add',
-      '--',
-      'pnpm-workspace.yaml',
-      'pnpm-lock.yaml',
-      'vendor/nocobase3',
-      'skills/nocobase-plugin-development',
-    ],
+    ['add', '--', 'pnpm-workspace.yaml', 'pnpm-lock.yaml', 'vendor/nocobase3'],
     {
       stdio: 'inherit',
     },
