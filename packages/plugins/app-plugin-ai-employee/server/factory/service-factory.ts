@@ -166,6 +166,10 @@ export class ServiceFactory {
       this.repositories.aiEmployees,
     );
     await this.llmServiceConfigSynchronizer.enqueue(initialization.llmServices);
+    // Before the sync, so it reconciles against what an administrator saved.
+    await this.ai.mcpServerManager.switchRepository(
+      this.repositories.aiMcpClients,
+    );
     await this.mcpServerService.syncConfiguredMCPServers(
       initialization.mcpServers,
     );

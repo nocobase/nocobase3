@@ -12,7 +12,7 @@ import { createMigrator, databaseManagerToken } from '@nocobase/db';
 import { createDriveManager } from '@nocobase/drive';
 import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type AIEmployeeConfig } from '../server/config.js';
 import {
@@ -222,6 +222,51 @@ describe('AIEmployeeProvider application config', () => {
     current = { llmServices: [] };
     await config.reload();
     await expect(manager.listLLMServices()).resolves.toHaveLength(2);
+  });
+
+  it('keeps an MCP server an administrator disabled disabled across a restart', async () => {
+    const deps = createTestAppDeps();
+    databases.push(deps.database);
+    await deps.database.connect();
+    await createMigrator({
+      database: deps.database,
+      packageName: '@nocobase/app-plugin-ai-employee',
+      directory: new URL('../database/migrations', import.meta.url).pathname,
+    }).latest();
+    const config = () => ({
+      ai: {
+        mcpServers: {
+          search: { transport: 'http', url: 'http://127.0.0.1:1/mcp' },
+        },
+      },
+    });
+    // Connecting is not what this checks; the server is never reachable here.
+    const offline = (container: ServiceContainer) =>
+      vi
+        .spyOn(
+          container.resolve(aiManagerToken).mcpServerManager,
+          'rebuildClient',
+        )
+        .mockResolvedValue(undefined);
+    const first = await createProvider(config, deps);
+    first.provider.register();
+    offline(first.container);
+    await first.provider.boot();
+    await first.container
+      .resolve(aiManagerToken)
+      .mcpServerManager.updateMCPEnabled('search', false);
+    await first.provider.shutdown();
+
+    const second = await createProvider(config, deps);
+    second.provider.register();
+    offline(second.container);
+    await second.provider.boot();
+
+    await expect(
+      second.container
+        .resolve(aiManagerToken)
+        .mcpServerManager.getMCP('search'),
+    ).resolves.toMatchObject({ enabled: false });
   });
 
   it('uses new config state after a removed service is added again', async () => {

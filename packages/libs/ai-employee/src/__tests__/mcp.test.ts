@@ -13,6 +13,7 @@ import path from 'path';
 import { AIManager } from '../manager/index.js';
 import { MCPLoader } from '../loader/mcp.js';
 import type { MCPServerManager } from '../manager/mcp-server/types.js';
+import { DefaultMCPServerManager } from '../manager/mcp-server/default.js';
 
 describe('MCP loader test cases', () => {
   const basePath = path.resolve(
@@ -115,5 +116,48 @@ describe('MCP loader test cases', () => {
     const updatedTools = await mcpServerManager.listMCPTools();
     expect(updatedTools.weather[0].permission).toBe('ALLOW');
     expect(updatedTools.weather[1].permission).toBe('ASK');
+  });
+
+  it('keeps a server an administrator disabled disabled when the config is synced again', async () => {
+    const server = {
+      transport: 'http' as const,
+      url: 'http://127.0.0.1:1/mcp',
+    };
+    await mcpServerManager.registerMCP({ search: server });
+    await mcpServerManager.updateMCPEnabled('search', false);
+
+    await mcpServerManager.registerMCP({
+      search: { ...server, url: 'http://127.0.0.1:2/mcp' },
+    });
+
+    const entry = await mcpServerManager.getMCP('search');
+    expect(entry?.enabled).toBe(false);
+    expect(entry?.url).toBe('http://127.0.0.1:2/mcp');
+  });
+
+  it('saves a tool permission on the server and loads it after a restart', async () => {
+    await mcpServerManager.registerMCP({
+      weather: { transport: 'http', url: 'http://127.0.0.1:1/mcp' },
+    });
+    const manager = mcpServerManager as any;
+    manager.toolsMap = {
+      weather: [{ name: 'setDefaultCity', description: 'Set default city' }],
+    };
+    await mcpServerManager.listMCPTools();
+
+    await mcpServerManager.updateMCPToolPermission(
+      'mcp-weather-setDefaultCity',
+      'ALLOW',
+    );
+
+    expect((await mcpServerManager.getMCP('weather'))?.toolPermissions).toEqual(
+      { setDefaultCity: 'ALLOW' },
+    );
+    // A new process: same stored rows, nothing in memory.
+    const restarted = new DefaultMCPServerManager(manager.repository);
+    await restarted.rebuildClient().catch(() => undefined);
+    (restarted as any).toolsMap = manager.toolsMap;
+    const tools = await restarted.listMCPTools();
+    expect(tools.weather?.[0]?.permission).toBe('ALLOW');
   });
 });

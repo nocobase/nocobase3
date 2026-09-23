@@ -35,9 +35,11 @@ export class DefaultMCPServerManager implements MCPServerManager {
   private client: MultiServerMCPClient | null = null;
   private toolsMap: Record<string, StructuredToolInterface[]> = {};
   private toolsPermissionMap: Record<string, Permission> = {};
+  // Which server and server-side tool name each exposed tool name stands for.
+  private toolOwners: Record<string, { server: string; tool: string }> = {};
 
   constructor(
-    private readonly repository: AIMCPRepository,
+    private repository: AIMCPRepository,
     _runtime: MCPRuntime = {},
   ) {}
 
@@ -47,10 +49,23 @@ export class DefaultMCPServerManager implements MCPServerManager {
     for (const [name, options] of Object.entries(registration)) {
       const value = this.normalizeEntry(name, options);
       const current = await this.repository.findOne({ filter: { name } });
-      if (current)
-        await this.repository.update({ filter: { name }, values: value });
-      else await this.repository.create({ values: value });
+      if (current) {
+        // The enable switch is the administrator's once the server exists.
+        const { enabled: _enabled, ...connection } = value;
+        await this.repository.update({ filter: { name }, values: connection });
+      } else await this.repository.create({ values: value });
     }
+  }
+
+  async switchRepository(repository: AIMCPRepository): Promise<void> {
+    if (repository === this.repository) return;
+    for (const entry of await this.repository.find({})) {
+      const existing = await repository.findOne({
+        filter: { name: entry.name },
+      });
+      if (!existing) await repository.create({ values: entry });
+    }
+    this.repository = repository;
   }
 
   async deleteMCP(name: string): Promise<void> {
@@ -89,9 +104,17 @@ export class DefaultMCPServerManager implements MCPServerManager {
       }
       this.client = null;
       this.toolsMap = {};
+      this.toolOwners = {};
     }
 
     const entries = await this.listMCP({ enabled: true });
+    for (const entry of entries) {
+      for (const [tool, permission] of Object.entries(
+        entry.toolPermissions ?? {},
+      )) {
+        this.toolsPermissionMap[`mcp-${entry.name}-${tool}`] = permission;
+      }
+    }
     if (entries.length === 0) return;
 
     const connections: Record<
@@ -109,7 +132,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
     for (const [serverName, tools] of Object.entries(toolsMap)) {
       this.toolsMap[serverName] = tools as StructuredToolInterface[];
       for (const tool of tools as StructuredToolInterface[]) {
-        const toolName = `mcp-${serverName}-${tool.name}`;
+        const toolName = this.exposeTool(serverName, tool.name);
         this.ensureToolPermission(toolName, tool.name);
       }
     }
@@ -136,6 +159,21 @@ export class DefaultMCPServerManager implements MCPServerManager {
     permission: Permission,
   ): Promise<void> {
     this.toolsPermissionMap[toolName] = permission;
+    const owner = this.toolOwners[toolName];
+    if (!owner) return;
+    const server = await this.repository.findOne({
+      filter: { name: owner.server },
+    });
+    if (!server) return;
+    await this.repository.update({
+      filter: { name: owner.server },
+      values: {
+        toolPermissions: {
+          ...(server.toolPermissions ?? {}),
+          [owner.tool]: permission,
+        },
+      },
+    });
   }
 
   async testConnection(options: MCPOptions): Promise<MCPTestResult> {
@@ -203,7 +241,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
     tools: StructuredToolInterface[],
   ): Promise<void> {
     for (const tool of tools) {
-      const toolName = `mcp-${serverName}-${tool.name}`;
+      const toolName = this.exposeTool(serverName, tool.name);
       this.ensureToolPermission(toolName, tool.name);
       const toolOptions: ToolsOptions = {
         scope: 'GENERAL',
@@ -231,6 +269,14 @@ export class DefaultMCPServerManager implements MCPServerManager {
     }
   }
 
+  // The name a server's tool is exposed under, remembering which server and
+  // server-side name it stands for so a permission change can be saved there.
+  private exposeTool(serverName: string, tool: string): string {
+    const toolName = `mcp-${serverName}-${tool}`;
+    this.toolOwners[toolName] = { server: serverName, tool };
+    return toolName;
+  }
+
   private ensureToolPermission(toolName: string, rawToolName: string): void {
     if (!(toolName in this.toolsPermissionMap)) {
       this.toolsPermissionMap[toolName] = rawToolName.startsWith('get')
@@ -246,7 +292,7 @@ export class DefaultMCPServerManager implements MCPServerManager {
       Object.entries(toolsMap).map(([serverName, tools]) => [
         serverName,
         tools.map((tool) => {
-          const toolName = `mcp-${serverName}-${tool.name}`;
+          const toolName = this.exposeTool(serverName, tool.name);
           this.ensureToolPermission(toolName, tool.name);
           return {
             name: toolName,
