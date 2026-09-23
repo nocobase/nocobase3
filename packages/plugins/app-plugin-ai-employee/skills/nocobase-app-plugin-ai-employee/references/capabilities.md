@@ -438,7 +438,7 @@ ai:
 
 Settle this with the user before writing any configuration. The goal is fixed: the key never enters the repository, never reaches a commit, and never enters the conversation transcript. Never ask the user to paste a key into the conversation and never write one yourself. Hand the user a command with a placeholder, and have them run it in their own terminal rather than through the agent, since a command the agent runs carries the key into its transcript.
 
-Your own shell may already hold the key. An agent's shell usually starts from the user's profile, so a variable the user set before this session is in its environment, and printing it prints the key. Never run `env`, `printenv`, `set`, `set -x`, `echo $OPENAI_API_KEY`, or `curl -v` against a provider — `google-genai` takes its key in the query string — and never print `~/.zshrc`, `~/.bashrc`, `.env`, or a `config.yml` that holds a value. Test whether a variable exists with `[ -n "$NAME" ]`, which prints nothing of it.
+Your own shell may already hold the key. An agent's shell usually starts from the user's profile, so a variable the user set before this session is in its environment, and printing it prints the key. Never run anything that prints the environment or a variable's value — listing the environment, tracing executed commands, echoing the variable, verbose HTTP output against a provider (`google-genai` takes its key in the query string) — and never print a shell profile, `.env`, or a `config.yml` that holds a value. When you need to know whether a variable exists, use a test that reports only set or missing.
 
 Offer the three places in this order, say why they rank this way, and let the user choose:
 
@@ -448,60 +448,39 @@ Offer the three places in this order, say why they rank this way, and let the us
 | 2               | `config.yml` itself, once it is confirmed ignored and untracked | the key's value             | development and a built server, but the agent sees the key every time it edits the file                   |
 | 3 — last resort | `.env`                                                          | `apiKey: ${OPENAI_API_KEY}` | **`pnpm dev` only** in this version — see [SKILL.md § Known gaps](../SKILL.md#known-gaps-in-this-version) |
 
-Whichever is chosen, check first that the files involved stay out of the repository. Each line prints `ok` or stops the work:
+Whichever is chosen, first confirm with git that each file involved — `config.yml`, and `.env` for option 3 — is both ignored and untracked, and stop if either is not. `config.example.yml` is committed, so it always carries `${OPENAI_API_KEY}` and never a value, whichever option the App uses. A key never goes under `config.yml`'s `client:` block, which is served to the browser.
 
-```bash
-git check-ignore -q config.yml && ! git ls-files --error-unmatch config.yml >/dev/null 2>&1 && echo "config.yml ok" || echo "config.yml NOT IGNORED — stop"
-git check-ignore -q .env && ! git ls-files --error-unmatch .env >/dev/null 2>&1 && echo ".env ok" || echo ".env NOT IGNORED — stop"   # option 3 only
-```
+#### Build the command for the user's environment
 
-`config.example.yml` is committed, so it always carries `${OPENAI_API_KEY}` and never a value, whichever option the App uses. A key never goes under `config.yml`'s `client:` block, which is served to the browser.
+There is no one right command. Which file sets a variable, how it is reloaded, and what syntax writes it depend on the user's operating system, their shell, how that shell is started, and where the server actually runs. Work those out before writing anything, and do not assume the environment you happen to be running in:
 
-Every command below saves the key in the shell history along with the rest of the line. A command that starts with a space is left out in zsh with `HIST_IGNORE_SPACE` set and in bash with `ignorespace` in `HISTCONTROL`; a user who has neither can make the same edit in an editor instead. The commands are POSIX shell; on Windows only option 1 has a command here, and options 2 and 3 are an edit in an editor.
+- **Establish the environment from facts that are not secret** — the operating system, the user's login shell, which startup files exist and whether they are symbolic links — without reading any file's contents. Then confirm with the user, because the terminal they will run the command in can differ from yours: another shell, a remote host, a container, WSL.
+- **Find where the server takes its environment from.** A server started from the user's terminal inherits that shell's environment, so the right file is the one that shell reads for the way it is started, which is not always the obvious one. A server started by a service manager, a container runtime, a process manager or a development container reads none of the user's shell files, and the variable belongs in that system's configuration instead.
+- **Prefer the mechanism the environment already has** for a persistent variable, such as a shell's own command for one or the operating system's user environment, over editing a file.
 
-**Option 1 — a system environment variable.** The server reads `process.env` wherever it runs, so the same `${NAME}` works in development and in a deployment; only the place that sets the variable differs. Give the user the line for their shell, with the variable name filled in and the value left as a placeholder. It creates the profile if there is none, writes through a profile that is a symbolic link rather than replacing it, keeps every other line, and replaces an earlier line for the same variable, so running it twice leaves one:
+Whatever the environment, the command you hand over must:
 
-```bash
-# zsh (macOS default)
-touch ~/.zshrc && k=$(grep -v '^export OPENAI_API_KEY=' ~/.zshrc); printf '%s\nexport OPENAI_API_KEY="%s"\n' "$k" '<your-key>' > ~/.zshrc && source ~/.zshrc
+- leave the value as a placeholder the user replaces;
+- create what it writes to if it does not exist yet;
+- replace an earlier entry for the same variable rather than add a second, so running it twice leaves one, and keep everything else in the file;
+- write through a file that is a symbolic link rather than replacing the link;
+- insert the value literally, whatever characters it contains;
+- print nothing of the value.
 
-# bash on Linux; on macOS, whose Terminal starts login shells, write ~/.bash_profile in place of ~/.bashrc
-touch ~/.bashrc && k=$(grep -v '^export OPENAI_API_KEY=' ~/.bashrc); printf '%s\nexport OPENAI_API_KEY="%s"\n' "$k" '<your-key>' > ~/.bashrc && source ~/.bashrc
-```
+Before handing it over, run it yourself against a throwaway copy of the target with a fake value, in the same shell when it is available to you, and confirm each of those properties — never with the real key. If you cannot verify a command for the user's environment, give them an instruction to add the line in an editor instead. Say that the command, key included, lands in the shell history, and how that shell can leave a command out of it, if it can.
 
-```powershell
-# Windows: applies to terminals opened afterwards, not the current one
-setx OPENAI_API_KEY "<your-key>"
-# then, in a new terminal
-if ($env:OPENAI_API_KEY) { 'OPENAI_API_KEY is set' } else { 'OPENAI_API_KEY is missing' }
-```
+Then give the user a check to run in a new terminal that reports whether the variable is set without printing it. A variable set during this session is in neither the agent's shell nor any process already running — including a `pnpm dev` the agent starts, which then expands `${OPENAI_API_KEY}` to an empty string. Either the user starts the server from their own terminal, or the agent session is restarted from a terminal that has the variable.
 
-Confirm the variable exists without printing it:
+**Option 2 — the value in `config.yml`.** Offer it only after git confirms `config.yml` is ignored and untracked, and only when the user accepts what it costs: the key is then in a file this Skill edits for `ai.mcpServers`, `ai.aiEmployee.storage`, `ai.skills.paths` and every later service change, and an agent reads a file before editing it, so the key enters the transcript each time. That is why this ranks second. Write the entry with a marker in place of the key, such as `apiKey: "REPLACE_WITH_OPENAI_API_KEY"`, and give the user a command for their environment that replaces the marker with the value literally, built and verified the same way; where no suitable tool is available, the replacement is an edit in an editor.
 
-```bash
-[ -n "$OPENAI_API_KEY" ] && echo "OPENAI_API_KEY is set" || echo "OPENAI_API_KEY is missing"
-```
-
-`source` updates only the terminal it runs in. Every other open terminal, and any process already running, keeps the environment it started with, and that includes the agent: a variable the user sets during this session is not in the agent's shell, so the check reports `missing` there, and a `pnpm dev` the agent starts expands `${OPENAI_API_KEY}` to an empty string. Either the user starts the server from their own terminal, or the agent session is restarted from a terminal that has the variable.
-
-**Option 2 — the value in `config.yml`.** Offer it only after the check above prints `config.yml ok`, and only when the user accepts what it costs: the key is then in a file this Skill edits for `ai.mcpServers`, `ai.aiEmployee.storage`, `ai.skills.paths` and every later service change, and an agent reads a file before editing it, so the key enters the transcript each time. That is why this ranks second. Write the entry with a marker in place of the key, `apiKey: "REPLACE_WITH_OPENAI_API_KEY"`, and give the user the command that swaps it for the real value — it inserts the key literally, whatever characters it contains:
-
-```bash
-KEY='<your-key>' perl -pi -e 's/REPLACE_WITH_OPENAI_API_KEY/$ENV{KEY}/g' config.yml
-```
-
-**Option 3 — `.env`.** Offer it only after the check above prints `.env ok`, and only when the user accepts that it works under `pnpm dev` alone. `pnpm dev` merges `.env` into the server's environment; a built server does not, so under `pnpm start` or in a deployment the placeholder expands to an empty string. Say that to the user rather than leaving it to be found on the server. Add the variable name, with no value, to `.env.example`, then give them the command, which, like the one for option 1, creates the file if needed and replaces an earlier line:
-
-```bash
-touch .env && k=$(grep -v '^OPENAI_API_KEY=' .env); printf '%s\nOPENAI_API_KEY=%s\n' "$k" '<your-key>' > .env
-```
+**Option 3 — `.env`.** Offer it only after git confirms `.env` is ignored and untracked, and only when the user accepts that it works under `pnpm dev` alone. `pnpm dev` merges `.env` into the server's environment; a built server does not, so under `pnpm start` or in a deployment the placeholder expands to an empty string. Say that to the user rather than leaving it to be found on the server. Add the variable name, with no value, to `.env.example`, then give them a command for their environment that sets `OPENAI_API_KEY=<value>` in `.env` with the same properties as option 1's.
 
 **A change takes effect on restart.** The server reads its environment, `config.yml` and `.env` when it starts, so after setting a variable, editing `config.yml`, or editing `.env`, restart it. `pnpm dev` restarts itself when `config.yml` or `.env` changes, and that restart reads both files again — but it keeps the environment `pnpm dev` was started with, so it never picks up a system variable set since. For option 1, stop `pnpm dev` completely and start it again from a terminal that has the variable.
 
 **Deployment is configured separately.** A deployment keeps its own `config.yml` beside `dist/`; `pnpm build` ships `dist/` and `config.example.yml`, never `config.yml`. It does write a `dist/.env`, but only for an allowlist of the framework's own keys — database, mail, cache — and an LLM key is not one of them, so an AI key never reaches a deployment that way. Tell the user to check two things before the first start there:
 
 - the deployment's `config.yml` has the `ai.llmServices` entry — it is not copied from the development machine;
-- with option 1, the variable is set where the service manager starts the process — a systemd `Environment=`, the process manager's env, the container's environment. A service does not read a login shell's `~/.zshrc`, so a variable that works in the user's terminal can still be missing from the service.
+- with option 1, the variable is set where the service manager starts the process — the service unit, the process manager's configuration, the container's environment. A service reads no user's shell profile, so a variable that works in the user's terminal can still be missing from the service.
 
 ### Choose models from the provider, never from memory
 
