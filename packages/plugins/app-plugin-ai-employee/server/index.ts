@@ -35,6 +35,7 @@ export {
   AIConversationsManager,
   aiConversationsManagerToken,
   type CreateAIConversationParams,
+  type CreatedAIConversation,
 } from './manager/ai-conversations-manager.js';
 export { agentServiceFactoryToken } from './agent/service/agent-service-factory.js';
 // The agent call contract a caller names when it holds a request or a result.
