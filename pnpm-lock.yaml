@@ -4491,15 +4491,6 @@ importers:
       '@nocobase/db':
         specifier: workspace:^
         version: link:../../libs/db
-      '@nocobase/db-mysql':
-        specifier: workspace:^
-        version: link:../../libs/db-mysql
-      '@nocobase/db-oracle':
-        specifier: workspace:^
-        version: link:../../libs/db-oracle
-      '@nocobase/db-postgres':
-        specifier: workspace:^
-        version: link:../../libs/db-postgres
       '@nocobase/db-sqlite':
         specifier: workspace:^
         version: link:../../libs/db-sqlite
