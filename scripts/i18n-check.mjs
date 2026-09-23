@@ -18,9 +18,10 @@ Options:
   --strict            Exit non-zero when a key is missing
   -h, --help          Show this help
 
-Every locales/ directory under packages/ is checked. A missing key is reported
-rather than treated as a failure: an untranslated string falls back to the
-source locale, so shipping before a translation lands is expected.`;
+Every locales/ directory under packages/ and ui-library/registry/ is checked.
+A missing key is reported rather than treated as a failure: an untranslated
+string falls back to the source locale, so shipping before a translation lands
+is expected.`;
 
 export function parseI18nCheckArgs(args) {
   const options = { help: false, source: SOURCE_LOCALE, strict: false };
@@ -94,8 +95,12 @@ export async function i18nCheck({
   source = SOURCE_LOCALE,
   strict = false,
 } = {}) {
-  const packagesDirectory = path.join(repoRoot, 'packages');
-  const directories = await collectLocaleDirectories(packagesDirectory);
+  // UI Library items ship their own locale files, which consumers merge into theirs, so they are checked alongside
+  // the packages.
+  const directories = [];
+  for (const root of ['packages', 'ui-library/registry']) {
+    await collectLocaleDirectories(path.join(repoRoot, root), directories);
+  }
   const reports = [];
 
   for (const directory of directories) {

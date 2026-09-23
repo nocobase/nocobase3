@@ -19,7 +19,7 @@ ui-library/
 ├── registry/
 │   └── auth/                   a group
 │       ├── registry.json       the group's items; file paths are relative to this directory
-│       └── auth-ui/            an item: its source files and README
+│       └── auth-ui/            an item: its source files, locales/, and README
 ├── website/                    the preview site (Vite and React)
 │   ├── app.tsx                 index page, and routing to each item's demo
 │   ├── components/ui/          shadcn primitives the preview and the items render with
@@ -44,14 +44,15 @@ These rules follow from where the files end up: in an application, compiled by V
 - **Reach a plugin only through its published exports**, such as `@nocobase/app-plugin-authentication/client/actions`. A consumer has the installed package and nothing else.
 - **Declare every package the item imports in `dependencies`, with a version range.** `shadcn add` installs exactly this list; nothing derives it from the imports. `react` is the one exception, since every consumer already has it. Take the floor of each range from what is published on `https://npm.nocobase.ai`, not from the workspace; see [Changing an item](#changing-an-item).
 - **Annotate every export.** Give functions a return type, props an interface, and exported constants a type. A plugin builds declarations with `isolatedDeclarations`, which rejects an inferred export. No check in this package enforces it, because the preview's shadcn copies do not satisfy it and `tsconfig.registry.json` therefore skips declaration checks, so review it, or install the item into a plugin as described in [Trying a build before merging](#trying-a-build-before-merging).
-- **Translate user-facing text.** Call `useTranslation()` from `@nocobase/i18n/client` without naming a namespace, so the item translates in whichever namespace renders it. Use a key under the item's prefix, such as `auth.signIn`, and pass the English wording as `defaultValue`, which is what renders wherever the key is missing. Keep the prop that lets a consumer replace the text, and list the keys in the item's README.
+- **Translate user-facing text.** Call `useTranslation()` from `@nocobase/i18n/client` without naming a namespace, so the item translates in whichever namespace renders it. Use a key under the item's prefix, such as `auth.signIn`, and pass the English wording as `defaultValue`, which is what renders wherever the key is missing. Keep the prop that lets a consumer replace the text.
+- **Put every key in the item's `locales/`.** `locales/en-US.ts` holds each key the components look up, with the same wording as its `defaultValue`, and exports its shape as a type; every other locale, such as `locales/zh-CN.ts`, is annotated with that type, so `typecheck` fails on a key one of them lacks or adds. List both files in `files` like any other source, and add a key to all of them in the same change that starts using it. Nothing checks that a key the components use appears in `en-US`, so review that. `registry/auth/auth-ui/locales/` is the model, and its README shows consumers how to merge the files into their own locale resources, which installing does not do.
 - **Style with the shared theme tokens.** Use the utilities in [theme-tokens.md](../packages/app/app-skills/skills/nocobase-app-development/references/theme-tokens.md) so the item follows the consumer's theme. `website/styles.css` loads the default template's theme, so the preview renders the tokens the way an application does.
 - **Install each item into one directory.** Give every file a `target` under `client/extensions/nocobase-<item>/`. That is where consumers find the item, and the directory they delete to remove it.
-- **Write `docs` and the README for different readers.** shadcn prints the item's `docs` after installing it, but does not install the README, which is not listed in `files`. Put what a consumer needs before using the item in `docs`, in a sentence or two. The README documents the item in this repository: its entry points, prerequisites, translation keys, and what a consumer is expected to customize.
+- **Write `docs` and the README for different readers.** shadcn prints the item's `docs` after installing it, but does not install the README, which is not listed in `files`. Put what a consumer needs before using the item in `docs`, in a sentence or two. The README documents the item in this repository: its entry points, prerequisites, how to merge its translations, and what a consumer is expected to customize.
 
 ## Adding an item
 
-1. Create the item's directory under its group, such as `registry/auth/<item>/`, with its source files and a `README.md`. For a new group, create `registry/<group>/registry.json` and add it to `include` in the root `registry.json`.
+1. Create the item's directory under its group, such as `registry/auth/<item>/`, with its source files, its `locales/`, and a `README.md`. For a new group, create `registry/<group>/registry.json` and add it to `include` in the root `registry.json`.
 2. Declare the item in the group's `registry.json`, where each `path` is relative to that file's directory:
 
    ```json

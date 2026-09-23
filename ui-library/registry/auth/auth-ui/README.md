@@ -37,4 +37,17 @@ The authentication plugin remains responsible for the auth client, session state
 
 ## Translations
 
-Every string goes through `useTranslation()` from `@nocobase/i18n/client` under an `auth.*` key with its English wording as `defaultValue`, so the item renders in English wherever a key is missing. The components name no namespace: the keys resolve in the namespace that renders them, which inside a plugin's route is the plugin's own with the application's as its fallback. The application templates ship the complete set in `client/locales/en-US.ts` and `client/locales/zh-CN.ts`, so an application created from a template already translates the item; anywhere else, copy the `auth.*` entries from there into the locale resources of the namespace that renders it. Explicit props such as `submitLabel` take precedence over the translated defaults.
+Every string goes through `useTranslation()` from `@nocobase/i18n/client` under an `auth.*` key with its English wording as `defaultValue`, so the item renders in English wherever a key is missing. The components name no namespace: the keys resolve in the namespace that renders them, which inside a plugin's route is the plugin's own with the application's as its fallback.
+
+The item ships its translations in `locales/en-US.ts` and `locales/zh-CN.ts`. Merge each into the matching locale file of that namespace, before your own keys so that yours can reword them:
+
+```ts
+import authUi from '../extensions/nocobase-auth-ui/locales/zh-CN.js';
+
+const zhCN: AppResource = {
+  ...authUi,
+  // the application's own keys
+};
+```
+
+Merge `en-US` too, since the other locales are typed from it. Installing the item does not do this for you: shadcn copies files and never edits your locale resources. The application templates currently keep the same keys directly in their own `client/locales/`. Explicit props such as `submitLabel` take precedence over the translated defaults.
