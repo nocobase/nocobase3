@@ -136,9 +136,6 @@
     "react-dom": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "@nocobase/app-plugin-authz-default-access": "workspace:*",
-    "@nocobase/app-plugin-authz-sharing-rules": "workspace:*",
-    "@nocobase/app-plugin-authz-restriction-rules": "workspace:*",
     "@nocobase/repository-input": "workspace:*"
   }
 }

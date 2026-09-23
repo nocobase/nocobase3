@@ -1,13 +1,22 @@
-vi.mock('../../app-plugin-authz-restriction-rules/client/api.js', () => ({
-  useRestrictionRulesClient: () => authz,
-}));
-vi.mock('../../app-plugin-authz-sharing-rules/client/api.js', () => ({
-  useSharingRulesClient: () => authz,
-}));
-vi.mock('../../app-plugin-authz-default-access/client/api.js', () => ({
-  useDefaultAccessClient: () => authz,
-}));
-import { selectOption } from './select-option.js';
+vi.mock(
+  '../../../plugins/app-plugin-authz-restriction-rules/client/api.js',
+  () => ({
+    useRestrictionRulesClient: () => authz,
+  }),
+);
+vi.mock(
+  '../../../plugins/app-plugin-authz-sharing-rules/client/api.js',
+  () => ({
+    useSharingRulesClient: () => authz,
+  }),
+);
+vi.mock(
+  '../../../plugins/app-plugin-authz-default-access/client/api.js',
+  () => ({
+    useDefaultAccessClient: () => authz,
+  }),
+);
+import { selectOption } from '../../../plugins/app-plugin-authorization/tests/select-option.js';
 // @vitest-environment jsdom
 import {
   fireEvent,
@@ -18,7 +27,7 @@ import {
 } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { AuthorizationOptions } from '../client/authorization-client.js';
+import type { AuthorizationOptions } from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
 const authz = vi.hoisted(() => ({
   can: vi.fn(async () => true),
   getPermissionsRevision: () => 0,
@@ -31,16 +40,19 @@ const authz = vi.hoisted(() => ({
   listSharingRules: vi.fn(),
   listSharingRecords: vi.fn(),
 }));
-vi.mock('../client/use-authorization-client.js', () => ({
-  useAuthorizationClient: () => authz,
-}));
+vi.mock(
+  '../../../plugins/app-plugin-authorization/client/use-authorization-client.js',
+  () => ({
+    useAuthorizationClient: () => authz,
+  }),
+);
 vi.mock('@nocobase/i18n/client', async () => {
   const { translate } = await import('./locale-harness.js');
   return { useTranslation: () => ({ t: translate }) };
 });
-import { DefaultAccessPanel } from '../../app-plugin-authz-default-access/client/pages/default-access-panel.js';
-import { RestrictionRulesPanel } from '../../app-plugin-authz-restriction-rules/client/pages/restriction-rules-panel.js';
-import { SharingRulesPanel } from '../../app-plugin-authz-sharing-rules/client/pages/sharing-rules-panel.js';
+import { DefaultAccessPanel } from '../../../plugins/app-plugin-authz-default-access/client/pages/default-access-panel.js';
+import { RestrictionRulesPanel } from '../../../plugins/app-plugin-authz-restriction-rules/client/pages/restriction-rules-panel.js';
+import { SharingRulesPanel } from '../../../plugins/app-plugin-authz-sharing-rules/client/pages/sharing-rules-panel.js';
 import en from './rule-locales.js';
 const resource = { type: 'database.collection', id: 'orders' };
 const options: AuthorizationOptions = {

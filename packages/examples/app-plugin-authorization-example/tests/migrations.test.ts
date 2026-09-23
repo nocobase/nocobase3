@@ -9,10 +9,10 @@ import {
 } from '@nocobase/db';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import permissionSets from '../database/migrations/202608210001_create_permission_set_tables.js';
-import defaultAccess from '../../app-plugin-authz-default-access/database/migrations/202608210002_create_default_access_rules.js';
-import sharingRules from '../../app-plugin-authz-sharing-rules/database/migrations/202608210003_create_sharing_rules.js';
-import restrictionRules from '../../app-plugin-authz-restriction-rules/database/migrations/202608210004_create_restriction_rules.js';
+import permissionSets from '../../../plugins/app-plugin-authorization/database/migrations/202608210001_create_permission_set_tables.js';
+import defaultAccess from '../../../plugins/app-plugin-authz-default-access/database/migrations/202608210002_create_default_access_rules.js';
+import sharingRules from '../../../plugins/app-plugin-authz-sharing-rules/database/migrations/202608210003_create_sharing_rules.js';
+import restrictionRules from '../../../plugins/app-plugin-authz-restriction-rules/database/migrations/202608210004_create_restriction_rules.js';
 
 interface SqliteClient {
   readonly schema: {
@@ -58,18 +58,21 @@ describe('authorization table migrations', () => {
 
   it('loads each plugin migration once on a fresh installation', async () => {
     const packages = [
-      ['@nocobase/app-plugin-authorization', '../database/migrations'],
+      [
+        '@nocobase/app-plugin-authorization',
+        '../../../plugins/app-plugin-authorization/database/migrations',
+      ],
       [
         '@nocobase/app-plugin-authz-default-access',
-        '../../app-plugin-authz-default-access/database/migrations',
+        '../../../plugins/app-plugin-authz-default-access/database/migrations',
       ],
       [
         '@nocobase/app-plugin-authz-sharing-rules',
-        '../../app-plugin-authz-sharing-rules/database/migrations',
+        '../../../plugins/app-plugin-authz-sharing-rules/database/migrations',
       ],
       [
         '@nocobase/app-plugin-authz-restriction-rules',
-        '../../app-plugin-authz-restriction-rules/database/migrations',
+        '../../../plugins/app-plugin-authz-restriction-rules/database/migrations',
       ],
     ] as const;
     const migrator = createMigrator({

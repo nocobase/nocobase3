@@ -1,16 +1,16 @@
-import { localizeOptions } from '../client/components/localized-options.js';
+import { localizeOptions } from '../../../plugins/app-plugin-authorization/client/components/localized-options.js';
 import type {
   AuthorizationOptions,
   LocalizedText,
-} from '../client/authorization-client.js';
-import en from '../locales/en-US.js';
-import zh from '../locales/zh-CN.js';
+} from '../../../plugins/app-plugin-authorization/client/authorization-client.js';
+import en from '../../../plugins/app-plugin-authorization/locales/en-US.js';
+import zh from '../../../plugins/app-plugin-authorization/locales/zh-CN.js';
 import { defaultAccess } from '@nocobase/app-plugin-authz-default-access/server';
 import { sharingRules } from '@nocobase/app-plugin-authz-sharing-rules/server';
 import { restrictionRules } from '@nocobase/app-plugin-authz-restriction-rules/server';
-import defaultAccessRoutes from '../../app-plugin-authz-default-access/server/routes.js';
-import sharingRulesRoutes from '../../app-plugin-authz-sharing-rules/server/routes.js';
-import restrictionRulesRoutes from '../../app-plugin-authz-restriction-rules/server/routes.js';
+import defaultAccessRoutes from '../../../plugins/app-plugin-authz-default-access/server/routes.js';
+import sharingRulesRoutes from '../../../plugins/app-plugin-authz-sharing-rules/server/routes.js';
+import restrictionRulesRoutes from '../../../plugins/app-plugin-authz-restriction-rules/server/routes.js';
 import {
   AuthorizationDeniedError,
   type AuthorizationScope,
@@ -31,16 +31,16 @@ import { ServiceContainer } from '@nocobase/service-provider';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { AUTHORIZATION_NAMESPACE } from '../shared.js';
-import { createAppAuthorization } from '../server/authorization.js';
+import { AUTHORIZATION_NAMESPACE } from '../../../plugins/app-plugin-authorization/shared.js';
+import { createAppAuthorization } from '../../../plugins/app-plugin-authorization/server/authorization.js';
 import { defineRecordAccess } from '@nocobase/authorization/core';
-import serverLocales from '../server/locales/index.js';
-import { apiRoutes } from '../server/routes/index.js';
+import serverLocales from '../../../plugins/app-plugin-authorization/server/locales/index.js';
+import { apiRoutes } from '../../../plugins/app-plugin-authorization/server/routes/index.js';
 import {
   authorizationToken,
   type AppAuthorizationService,
-} from '../server/tokens.js';
-import { createOrdersDatabase } from './orders-database.js';
+} from '../../../plugins/app-plugin-authorization/server/tokens.js';
+import { createOrdersDatabase } from '../../../plugins/app-plugin-authorization/tests/orders-database.js';
 
 let database: DatabaseManager;
 let connection: DatabaseConnection;
