@@ -12,6 +12,7 @@ Two different jobs: getting the App's own employees and tools into the runtime t
 - [`createAIEmployee()`](#createaiemployee)
 - [`createAgent()`](#createagent)
 - [Executing an agent](#executing-an-agent)
+- [Running unattended](#running-unattended)
 - [Replacing the context provider](#replacing-the-context-provider)
 - [Replacing persistence](#replacing-persistence)
 - [Security and lifecycle](#security-and-lifecycle)
@@ -213,7 +214,7 @@ abort(reason?: unknown): void;
 
 `AIMessageInput` is `{ role, content, createdAt?, toolCalls?, attachments?, workContext?, metadata? }`; `messageId` and `sessionId` are server-assigned, so omit them.
 
-`invoke()` reports the assistant turn it produced as `message`, in this package's own message shape rather than the underlying graph state. `message` is `null` when the execution produced no assistant content — which is what an interrupted turn awaiting a tool decision looks like.
+`invoke()` reports the assistant turn it produced as `message`, in this package's own message shape rather than the underlying graph state. `message` is `null` when the execution produced no assistant content. An interrupted turn is not that case: it **rejects** with an error named `GraphInterrupt`, which is passed through rather than wrapped, so it carries no `AgentServiceErrorCode`.
 
 When the integration needs data rather than prose, supply a Zod `responseFormat` and read `structuredResponse`:
 
@@ -232,6 +233,49 @@ Read the value from `structuredResponse`, never by parsing `message.content`. Ho
 Use `messageId` when forking from a persisted message, `userDecisions` only to resume an interrupt, and `signal` for cancellation from HTTP, a workflow, or a job. Consume `stream()` with `for await`, and do not hand-parse or persist stream events when the surrounding App service already owns that transport.
 
 Do not infer HTTP behavior from this return value: `sendMessages` with `stream: false` currently invokes internally but still responds over SSE without serializing the result. For external callers use the [HTTP walkthrough](api-reference.md#http-conversation-walkthrough); for an App-owned integration that genuinely needs the direct result, use this API.
+
+## Running unattended
+
+An agent driven from a job, a schedule, a workflow node, or any other caller with nobody watching differs from a chat in four ways. What the surrounding system is — how it schedules, where it writes its result — is its own concern and not this plugin's; what follows is only what this plugin requires of it.
+
+**Use `invoke()`, not `stream()`.** `stream()` is an async generator: the run advances only while something consumes it, so an unattended caller that forgets to drain it stalls holding an open conversation. `invoke()` runs the loop to completion and returns the result. Use `responseFormat` when the caller needs data rather than prose — it is simpler and more reliable than instructing the model to put its answer somewhere.
+
+**Pass an `AbortSignal` and own the cancellation.** `AgentRequest.signal` is merged with the service's own controller, so either can stop the run. Give it the signal the surrounding system already cancels with — a job timeout, a shutdown hook, a user cancelling upstream — rather than inventing a second timer. There is no built-in wall-clock limit; the only automatic stop is a graph recursion limit of 200 steps, which surfaces as its own error code. On abort the run rejects with `code: 'ABORTED'` and no assistant message is persisted, so an aborted attempt leaves nothing half-written to reason about.
+
+**Decide what an interrupt means before it happens.** A tool whose resolved permission is not automatic suspends the run to ask a person, and in an unattended run there is nobody to ask. `invoke()` then rejects with a `GraphInterrupt`, and the interrupt id and the pending actions are surfaced on the streaming path and persisted onto the tool message — neither reaches an `invoke()` caller. So the reliable arrangement is not to interrupt at all: activate only tools that run automatically, which for `SPECIFIED` and `GENERAL` means `defaultPermission: 'ALLOW'`, and for `CUSTOM` means `autoCall`. If a tool that asks is genuinely required, the caller is deciding on the user's behalf and should say so — resume with an explicit decision rather than a blanket approval:
+
+```ts
+await agent.resumeInvoke({
+  userDecisions: {
+    interruptId,
+    decisions: [{ type: 'approve' }], // or 'reject' with a message, or 'edit' with editedAction
+  },
+});
+```
+
+Approving whatever is pending, unconditionally, turns every `ASK` into an `ALLOW` without the tool or the employee saying so. If that is the intent, make it the tool's declared permission instead, where it is visible.
+
+**Give the run a way out, if it needs one.** Anything the agent should do _during_ the run — report progress, notify a channel, hand a partial result onward — is an ordinary backend tool: register it in code, declare what it needs on `dependencies`, and activate it by name for this agent. The model calls it like any other tool. This is for effects that must happen while the run is going; when all the caller wants is the answer at the end, `responseFormat` already delivers it and a tool adds a failure mode for nothing.
+
+### Failures a caller has to tell apart
+
+`AgentServiceError` carries a typed code, and an unattended caller needs it because retrying is its decision to make. `retryable` says whether a second attempt could plausibly differ:
+
+| Code                    | What happened                                     | `retryable` |
+| ----------------------- | ------------------------------------------------- | ----------- |
+| `GRAPH_RECURSION_ERROR` | The 200-step limit was reached                    | `true`      |
+| `EMPTY_RESPONSE`        | A stream produced nothing at all                  | `true`      |
+| `CONFIGURATION_ERROR`   | No usable model, LLM service, or provider         | `false`     |
+| `PROVIDER_ERROR`        | Anything else that failed, including the provider | `false`     |
+| `ABORTED`               | The signal fired; `aborted` is also set           | `false`     |
+
+The two retryable ones are retryable because a model is not deterministic: another attempt may take fewer steps or actually answer. The rest fail the same way the second time, so a caller that retries them burns an attempt and arrives at the same place.
+
+`AgentServiceErrorCode` also declares `MODEL_RESPONSE_ERROR` and `PERSISTENCE_ERROR`, which this package maps to HTTP statuses but never raises from the agent path. Handle them if switching exhaustively; do not wait for them.
+
+Read `rootMessage` rather than walking `cause`: it returns the deepest message in the chain, guarding against cycles, and it is the one worth logging — the wrapper's own message is usually the least specific thing available.
+
+A `GraphInterrupt` is none of these. It is not an `AgentServiceError` and has no code, so a caller matching on `code` misses it entirely — match the error `name`.
 
 ## Replacing the context provider
 
