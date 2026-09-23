@@ -1,5 +1,12 @@
 # @nocobase/dev-config
 
+## 0.1.0-beta.12
+
+### Patch Changes
+
+- 9e8fc3e: Export `createShadcnRegistryConfig(root)` from `@nocobase/dev-config/eslint`. It returns the shadcn/ui registry relaxations `createPortalConfig` applies to `client/`, scoped to another directory, so a package whose primitives live elsewhere applies the same list instead of copying it.
+- cde9a8e: Describe the monorepo's Skill links correctly in the comment on the ESLint Skills ignore patterns. The ignored paths are unchanged.
+
 ## 0.1.0-beta.11
 
 ### Patch Changes

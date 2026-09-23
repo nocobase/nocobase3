@@ -1,5 +1,26 @@
 # @nocobase/app-plugin-authz-default-access
 
+## 0.1.0-beta.2
+
+### Patch Changes
+
+- 808bf34: Remove the authorization workspace dependency cycle by keeping rule plugin dependencies one way and running cross-plugin coverage in the authorization example. Verify each rule plugin's management handler and migration in its own test suite.
+- Updated dependencies [cda1175]
+- Updated dependencies [e286e0d]
+- Updated dependencies [808bf34]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [4e58fe3]
+- Updated dependencies [80ef702]
+  - @nocobase/app-plugin-authentication@1.0.0-beta.21
+  - @nocobase/app-plugin-authorization@0.2.0-beta.18
+  - @nocobase/app-server@1.0.0-beta.25
+  - @nocobase/db@1.0.0-beta.15
+  - @nocobase/app-client@1.0.0-beta.19
+  - @nocobase/i18n@1.0.0-beta.4
+
 ## 0.1.0-beta.1
 
 ### Patch Changes
