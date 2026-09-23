@@ -5,7 +5,7 @@ const SHA_PATTERN = /^[0-9a-f]{40,64}$/u;
 const generatedPaths = [
   'pnpm-workspace.yaml',
   'pnpm-lock.yaml',
-  '.agents/skills/nocobase-plugin-development',
+  'skills/nocobase-plugin-development',
 ];
 
 function git(args, options = {}) {
@@ -92,7 +92,7 @@ export function reconcileReleaseMetadata({ metadataSource, ossSha }) {
       'pnpm-workspace.yaml',
       'pnpm-lock.yaml',
       'vendor/nocobase3',
-      '.agents/skills/nocobase-plugin-development',
+      'skills/nocobase-plugin-development',
     ],
     {
       stdio: 'inherit',

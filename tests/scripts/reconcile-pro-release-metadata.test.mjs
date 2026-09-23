@@ -53,27 +53,19 @@ test('reconciles diverged Pro gitlink, catalog, Skill, and lock metadata before 
     configure(oss);
     write(oss, 'package.json', '{"name":"oss"}\n');
     write(oss, 'pnpm-workspace.yaml', 'catalog: develop\n');
-    write(
-      oss,
-      '.agents/skills/nocobase-plugin-development/SKILL.md',
-      'develop\n',
-    );
+    write(oss, 'skills/nocobase-plugin-development/SKILL.md', 'develop\n');
     const ossDevelop = commit(oss, 'oss develop');
 
     git(oss, ['checkout', '-b', 'stable-old']);
     write(oss, 'pnpm-workspace.yaml', 'catalog: stable-old\n');
-    write(
-      oss,
-      '.agents/skills/nocobase-plugin-development/SKILL.md',
-      'stable-old\n',
-    );
+    write(oss, 'skills/nocobase-plugin-development/SKILL.md', 'stable-old\n');
     const ossStableOld = commit(oss, 'oss stable old');
 
     git(oss, ['checkout', '-b', 'main', ossDevelop]);
     write(oss, 'pnpm-workspace.yaml', 'catalog: promoted-main\n');
     write(
       oss,
-      '.agents/skills/nocobase-plugin-development/SKILL.md',
+      'skills/nocobase-plugin-development/SKILL.md',
       'promoted-main\n',
     );
     const ossMain = commit(oss, 'oss promoted main');
@@ -90,7 +82,7 @@ test('reconciles diverged Pro gitlink, catalog, Skill, and lock metadata before 
     write(
       pro,
       'scripts/sync-development-skills.mjs',
-      "import fs from 'node:fs'; fs.mkdirSync('.agents/skills/nocobase-plugin-development', { recursive: true }); fs.copyFileSync('vendor/nocobase3/.agents/skills/nocobase-plugin-development/SKILL.md', '.agents/skills/nocobase-plugin-development/SKILL.md');\n",
+      "import fs from 'node:fs'; fs.mkdirSync('skills/nocobase-plugin-development', { recursive: true }); fs.copyFileSync('vendor/nocobase3/skills/nocobase-plugin-development/SKILL.md', 'skills/nocobase-plugin-development/SKILL.md');\n",
     );
     git(pro, [
       '-c',
@@ -103,22 +95,14 @@ test('reconciles diverged Pro gitlink, catalog, Skill, and lock metadata before 
     git(path.join(pro, 'vendor/nocobase3'), ['checkout', ossDevelop]);
     write(pro, 'pnpm-workspace.yaml', 'catalog: develop\n');
     write(pro, 'pnpm-lock.yaml', 'lock: develop\n');
-    write(
-      pro,
-      '.agents/skills/nocobase-plugin-development/SKILL.md',
-      'develop\n',
-    );
+    write(pro, 'skills/nocobase-plugin-development/SKILL.md', 'develop\n');
     commit(pro, 'pro develop');
 
     git(pro, ['checkout', '-b', 'main']);
     git(path.join(pro, 'vendor/nocobase3'), ['checkout', ossStableOld]);
     write(pro, 'pnpm-workspace.yaml', 'catalog: stable-old\n');
     write(pro, 'pnpm-lock.yaml', 'lock: stable-old\n');
-    write(
-      pro,
-      '.agents/skills/nocobase-plugin-development/SKILL.md',
-      'stable-old\n',
-    );
+    write(pro, 'skills/nocobase-plugin-development/SKILL.md', 'stable-old\n');
     commit(pro, 'pro stable old');
 
     git(pro, ['checkout', 'develop']);
@@ -128,7 +112,7 @@ test('reconciles diverged Pro gitlink, catalog, Skill, and lock metadata before 
     write(pro, 'pnpm-lock.yaml', 'lock: promotion-candidate\n');
     write(
       pro,
-      '.agents/skills/nocobase-plugin-development/SKILL.md',
+      'skills/nocobase-plugin-development/SKILL.md',
       'promoted-main\n',
     );
     const candidate = commit(pro, 'promotion candidate');
@@ -177,7 +161,7 @@ test('reconciles diverged Pro gitlink, catalog, Skill, and lock metadata before 
     );
     assert.equal(
       readFileSync(
-        path.join(pro, '.agents/skills/nocobase-plugin-development/SKILL.md'),
+        path.join(pro, 'skills/nocobase-plugin-development/SKILL.md'),
         'utf8',
       ),
       'promoted-main\n',
