@@ -46,7 +46,7 @@ const seed: SeedDefinition = defineSeed({
       .insertInto('user')
       .values({
         id: userId,
-        name: username,
+        name: 'Super Admin',
         username: username.toLowerCase(),
         email: 'admin@nocobase.com',
         emailVerified: true,

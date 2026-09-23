@@ -2,6 +2,8 @@ import type { DatabaseConnection } from '@nocobase/db';
 import {
   APIError,
   betterAuth,
+  getBaseURL,
+  getOrigin,
   type BetterAuthOptions,
   type BetterAuthPlugin,
   type FilteredAPI,
@@ -165,7 +167,7 @@ export class Auth {
   }
 
   /** Protect writes authenticated by a browser cookie, including routes that skip normal session lookup. */
-  private async checkBusinessCsrf(
+  private async checkCookieWriteOrigin(
     context: Context,
   ): Promise<Response | undefined> {
     if (['GET', 'HEAD', 'OPTIONS'].includes(context.req.method)) return;
@@ -173,23 +175,38 @@ export class Auth {
     // Cookie-free API key requests have no ambient browser credential to forge.
     if (!context.req.header('cookie')) return;
 
+    const authContext = await this.auth.$context;
     const origin = context.req.header('origin');
-    const source = origin ?? context.req.header('referer');
+    const inferredBaseURL =
+      origin === 'null' &&
+      context.req.header('sec-fetch-site') === 'same-origin'
+        ? getBaseURL(
+            undefined,
+            authContext.options.basePath,
+            context.req.raw,
+            false,
+            authContext.options.advanced?.trustedProxyHeaders,
+          )
+        : undefined;
+    const source =
+      (inferredBaseURL ? getOrigin(inferredBaseURL) : undefined) ??
+      origin ??
+      context.req.header('referer');
     if (!source || source === 'null') {
       return context.json({ code: 'INVALID_CSRF_ORIGIN' }, 403);
     }
 
-    const authContext = await this.auth.$context;
     // Better Auth also accepts per-request trusted origins. Its static context contains the
     // configured base URL, static origins, plugin origins, and BETTER_AUTH_TRUSTED_ORIGINS.
-    const dynamicOrigins =
-      typeof this.options.trustedOrigins === 'function'
-        ? await this.options.trustedOrigins(context.req.raw)
-        : [];
+    const configuredOrigins = authContext.options.trustedOrigins;
+    const mergedOrigins =
+      typeof configuredOrigins === 'function'
+        ? await configuredOrigins(context.req.raw)
+        : (configuredOrigins ?? []);
     const requestAuthContext = Object.create(authContext) as typeof authContext;
     requestAuthContext.trustedOrigins = [
       ...authContext.trustedOrigins,
-      ...dynamicOrigins.filter(
+      ...mergedOrigins.filter(
         (origin): origin is string =>
           typeof origin === 'string' && Boolean(origin),
       ),
@@ -229,8 +246,8 @@ export class Auth {
 
   optional(options: AuthMiddlewareOptions = {}): MiddlewareHandler<AuthEnv> {
     return async (context, next) => {
-      const csrfFailure = await this.checkBusinessCsrf(context);
-      if (csrfFailure) return csrfFailure;
+      const originFailure = await this.checkCookieWriteOrigin(context);
+      if (originFailure) return originFailure;
       if (options.skip?.(context)) {
         await next();
         return;
@@ -252,8 +269,8 @@ export class Auth {
 
   required(options: AuthMiddlewareOptions = {}): MiddlewareHandler<AuthEnv> {
     return async (context, next) => {
-      const csrfFailure = await this.checkBusinessCsrf(context);
-      if (csrfFailure) return csrfFailure;
+      const originFailure = await this.checkCookieWriteOrigin(context);
+      if (originFailure) return originFailure;
       if (options.skip?.(context)) {
         await next();
         return;

@@ -240,6 +240,14 @@ describe('Authentication', () => {
       (await send('/api/private', { referer: 'http://localhost/app/page' }))
         .status,
     ).toBe(200);
+    expect(
+      (
+        await send('/api/private', {
+          origin: 'null',
+          'sec-fetch-site': 'same-origin',
+        })
+      ).status,
+    ).toBe(200);
     for (const headers of [
       {},
       { origin: 'null' },
@@ -263,12 +271,60 @@ describe('Authentication', () => {
     ).toBe(401);
   });
 
+  it('infers a null origin from trusted proxy headers when configured', async () => {
+    const proxyAuth = new Auth({
+      connection: database.connection(),
+      baseURL: 'https://app.example.com/api/auth',
+      secret: 'development-secret-at-least-32-characters',
+      advanced: { cookiePrefix: 'nocobase3', trustedProxyHeaders: true },
+      session: { storeSessionInDatabase: true },
+    });
+    const proxyRouter = new Hono<AuthEnv>();
+    proxyRouter.post('/write', proxyAuth.optional(), (context) =>
+      context.json({ ok: true }),
+    );
+    const headers = {
+      cookie,
+      origin: 'null',
+      'sec-fetch-site': 'same-origin',
+      'x-forwarded-host': 'app.example.com',
+      'x-forwarded-proto': 'https',
+    };
+
+    expect(
+      (
+        await proxyRouter.request('http://internal.example/write', {
+          method: 'POST',
+          headers,
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await proxyRouter.request('http://internal.example/write', {
+          method: 'POST',
+          headers: { ...headers, 'x-forwarded-host': 'evil.example' },
+        })
+      ).status,
+    ).toBe(403);
+  });
+
   it('accepts explicitly trusted origins, including dynamic patterns', async () => {
     const trustedAuth = new Auth({
       connection: database.connection(),
       baseURL: 'http://localhost/api/auth',
       secret: 'development-secret-at-least-32-characters',
       trustedOrigins: async () => ['https://*.example.com'],
+      plugins: [
+        {
+          id: 'test-trusted-origin',
+          init: () => ({
+            options: {
+              trustedOrigins: async () => ['https://plugin.example.net'],
+            },
+          }),
+        },
+      ],
       advanced: { cookiePrefix: 'nocobase3' },
       session: { storeSessionInDatabase: true },
     });
@@ -282,6 +338,11 @@ describe('Authentication', () => {
       headers: { cookie, origin: 'https://app.example.com' },
     });
     expect(allowed.status).toBe(200);
+    const pluginAllowed = await trustedRouter.request('/write', {
+      method: 'POST',
+      headers: { cookie, origin: 'https://plugin.example.net' },
+    });
+    expect(pluginAllowed.status).toBe(200);
     const denied = await trustedRouter.request('/write', {
       method: 'POST',
       headers: { cookie, origin: 'https://example.com.attacker.test' },
@@ -543,7 +604,7 @@ describe('Authentication seed', () => {
         .where('email', '=', 'admin@nocobase.com')
         .executeTakeFirst();
       expect(user).toMatchObject({
-        name: 'nocobase',
+        name: 'Super Admin',
         username: 'nocobase',
         email: 'admin@nocobase.com',
         emailVerified: true,
@@ -582,7 +643,7 @@ describe('Authentication seed', () => {
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
         user: {
-          name: 'nocobase',
+          name: 'Super Admin',
           username: 'nocobase',
           email: 'admin@nocobase.com',
         },
