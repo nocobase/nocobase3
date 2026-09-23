@@ -14,7 +14,7 @@ keywords: 'LLM Service,Provider models,custom models,Enabled,NocoBase'
 
 使用每行右侧的 Enabled 开关控制服务是否可供员工使用。切换失败时，页面会恢复原值并显示错误。
 
-修改 `config.yml` 后，同名服务会更新 Provider、标题和连接参数，但管理页保存的 Enabled 状态和模型列表会保留。新增服务使用配置中的初始值。
+修改 `config.yml` 并重启服务后，同名服务的 Provider、标题、连接参数、默认模型参数和排序会按配置重写，但管理页保存的 Enabled 状态和模型列表会保留。配置里省略的连接参数和默认模型参数会被重置，详见 [同步行为](../configuration/llm.md#同步行为)。新增服务使用配置中的初始值。
 
 ## 选择 Provider 模型
 

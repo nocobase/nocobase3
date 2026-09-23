@@ -12,10 +12,11 @@ keywords: 'AgentServiceFactory,AIConversationsManager,AgentService,createAIEmplo
 
 ## 公开入口
 
-从插件 Server barrel 只导入公开 Token 和会话管理器：
+从插件 Server barrel 只导入公开 Token、会话管理器和调用 Agent 用到的类型：
 
 ```ts
 import {
+  AgentServiceError,
   agentServiceFactoryToken,
   aiConversationsManagerToken,
 } from '@nocobase/app-plugin-ai-employee/server';
@@ -24,49 +25,42 @@ const conversations = container.resolve(aiConversationsManagerToken);
 const factory = container.resolve(agentServiceFactoryToken);
 ```
 
-不要从 `server/agent/*` deep import `AgentServiceFactory`、`AgentContextProvider`、`ConversationProvider` 或持久化实现。当前公开扩展面是 Container 中的 Factory Token；这些内部 Contract 用来解释架构，不代表应用可以从 Server barrel 直接导入。
+同一个入口还导出 `AgentRequest`、`AgentInvokeRequest`、`AgentInvokeResult`、`AgentInvokeInterrupt`、`AgentInterruptAction`、`AgentStreamEvent` 和 `AgentServiceErrorCode` 类型。不要从 `server/agent/*` deep import `AgentServiceFactory`、`AgentContextProvider`、`ConversationProvider` 或持久化实现。
 
 ## 调用一个 AI 员工
 
-为需要保留历史的服务端任务，先创建会话，再把 `sessionId` 交给 `createAIEmployee()`：
+为需要保留历史的服务端任务，先创建会话，再把 `sessionId` 放进 `state` 交给 `createAIEmployee()`：
 
 ```ts
 const conversation = await conversations.create({
   userId: actor.id,
   aiEmployee: { username: 'customer-success' },
   title: 'Customer follow-up',
-  from: 'main-agent',
 });
 
 const agent = await factory.createAIEmployee({
   username: 'customer-success',
-  sessionId: conversation.sessionId,
-  actor: {
-    id: actor.id,
-    roles: actor.roles,
-    isRoot: actor.isRoot,
-  },
-  from: 'main-agent',
+  state: { sessionId: conversation.sessionId },
+  actor,
+  runtime: { logger },
 });
 
-try {
-  const result = await agent.invoke({
-    userMessages: [
-      {
-        role: 'user',
-        content: 'Review the customer context and propose the next action.',
-      },
-    ],
-  });
-  // Consume the structured Agent result here.
-} finally {
-  agent.abort('request finished');
-}
+const { message, interrupt } = await agent.invoke({
+  userMessages: [
+    {
+      role: 'user',
+      content: 'Review the customer context and propose the next action.',
+    },
+  ],
+  signal,
+});
 ```
 
 `username` 必须是已经注册的员工。`sessionId` 是字符串，连接会话、消息、Tool 状态、分支和 Checkpoint；不要把它转换成 JavaScript `number`，也不要在不同用户之间复用。
 
-`actor` 决定这个调用以谁的身份读取业务资源。省略时 Factory 会创建 Root actor，因此应用代码不应依赖默认值处理来自用户的请求。
+`actor` 和 `runtime` 都是必填项。`actor` 决定这个调用以谁的身份读取业务资源，必须来自已认证的请求或可信的任务上下文，不能取自请求参数；Factory 不会再用 Root actor 补上缺省值。`runtime` 提供日志以及调用方的语言和请求头。
+
+`invoke()` 返回 `message`，即这一轮的助手消息；执行没有产生内容时为 `null`。有 Tool 在等待人工确认时，结果里会带 `interrupt`，这时 `message` 是发起这些调用的那一轮，而不是最终答案，所以先检查 `interrupt`。
 
 ## 创建固定 Agent
 
@@ -81,7 +75,8 @@ const conversation = await conversations.create({
 
 const agent = await factory.createAgent({
   sessionId: conversation.sessionId,
-  username: 'nightly-summary',
+  actor,
+  runtime: { logger },
   model: { llmService: 'gpt', model: 'gpt-5.6' },
   systemPrompt: 'Summarize only the records supplied by approved Tools.',
   skills: ['service-summary'],
@@ -93,7 +88,66 @@ const result = await agent.invoke({
 });
 ```
 
-`createAgent()` 不查找 Employee，也不接收 actor。它会解析模型、已注册 Tool 和 Skill 绑定的 Tool，并默认使用数据库会话持久化。它适合系统拥有的后台任务；需要按用户身份执行 Tool 时，使用 `createAIEmployee()` 或在调用前建立应用自己的受控授权边界。
+`createAgent()` 不查找 Employee，`sessionId`、`actor` 和 `runtime` 都是必填项。它会解析模型、已注册 Tool 和 Skill 绑定的 Tool，并默认使用数据库会话持久化。固定 Agent 没有员工的 Tool 预设，每个 Tool 是否需要确认由它自己的 `defaultPermission` 决定：`ALLOW` 直接执行，`ASK`（没有声明时也是 `ASK`）会像员工一样暂停，由 `invoke()` 返回 `interrupt`，再通过 `resumeInvoke()` 继续。
+
+## 无人值守运行
+
+从任务、定时器或工作流里运行 Agent 时，没有人在旁边确认。插件只提供 AI 能力，任务怎么调度、结果写到哪里由调用方决定；下面只是插件对调用方的要求。
+
+**用 `invoke()`，不用 `stream()`。** `stream()` 只有被消费时才会推进，无人消费就会停在一个打开的会话上。需要结构化结果时，传 Zod `responseFormat` 并读取 `structuredResponse`。
+
+**传入 `AbortSignal`，由调用方负责取消。** `signal` 会和服务自己的控制器合并，任何一方都能停止运行。用外部系统已有的取消信号，例如任务超时或关机钩子。除了 200 步的递归上限，没有内置的时长限制。abort 之后只有正在生成的那一轮助手消息会被丢弃：用户消息在运行开始时已经保存，之前各步的助手消息和 Tool 结果也已保存，执行过的 Tool 副作用已经发生。所以重试前先读会话，看运行进行到哪一步，并依赖 Tool 自身可以安全地重复调用。
+
+**事先决定中断怎么处理。** 最可靠的做法是让运行根本不会中断，也就是清楚它能用到的每一个 Tool：
+
+- `createAgent()` 只能用到它点名的 Tool 和 Skill 点名的 Tool，只点名 `defaultPermission: 'ALLOW'` 的 Tool 即可。
+- `createAIEmployee()` 还会带上所有 `GENERAL` Tool，其中有两个一定会中断：`suggestions` 需要确认，`formFiller` 要在浏览器里执行。用会话级的 `skillSettings` 列出这次运行允许使用的 Tool，就能把它们排除掉：
+
+```ts
+const agent = await factory.createAIEmployee({
+  username: 'customer-success',
+  state: { sessionId: conversation.sessionId },
+  actor,
+  runtime: { logger },
+  // 这次运行可以使用的全部 Tool，包括 Skill 会激活的 Tool
+  skillSettings: { toolsVersion: 1, tools: ['getSkill', 'dataQuery'] },
+});
+```
+
+这个列表只能在员工已有的 Tool 里做减法，不能添加员工没有的 Tool；它同时作用于基础 Tool 和 Skill 激活的 Tool。系统 Tool（`getSkill`、`subAgentWebSearch`、`knowledge-base-retrieve`、`aiEmployeeWorkflowTaskOutput`）不受它限制，但仍受各自的开关控制。`toolsVersion` 只影响空列表：有它时 `tools: []` 只保留系统 Tool，没有它时空列表等于不过滤。
+
+确实需要一个会确认的 Tool 时，调用方就是在替用户做决定，要按每个 action 明确给出决定，并且只给出 action 允许的决定：
+
+```ts
+const { interrupt } = await agent.invoke({ userMessages });
+if (interrupt) {
+  await agent.resumeInvoke({
+    userDecisions: {
+      interruptId: interrupt.id,
+      decisions: interrupt.actions.map((action) =>
+        action.toolCall?.name === 'draft-reply' &&
+        action.allowedDecisions?.includes('approve')
+          ? { type: 'approve' }
+          : { type: 'reject', message: 'Not allowed in an unattended run' },
+      ),
+    },
+  });
+}
+```
+
+action 只标识 Tool 调用（`toolCall.id` 和 `toolCall.name`），不带参数；需要按参数做决定时，从同一个结果的 `message.toolCalls` 里按 `id` 取。一个既没有恢复、也没有人处理的运行会一直保持暂停。不要往这个会话里直接发新的一轮，另开一个会话，或者恢复原来的那个。
+
+**区分失败类型。** 运行失败时抛出 `AgentServiceError`，调用方按 `code` 和 `retryable` 决定是否重试：
+
+| `code`                  | 含义                                | `retryable` |
+| ----------------------- | ----------------------------------- | ----------- |
+| `GRAPH_RECURSION_ERROR` | 达到 200 步上限                     | `true`      |
+| `EMPTY_RESPONSE`        | `stream()` 没有产生任何内容         | `true`      |
+| `CONFIGURATION_ERROR`   | 没有可用的模型、LLM 服务或 Provider | `false`     |
+| `PROVIDER_ERROR`        | 其他失败，包括 Provider 本身的错误  | `false`     |
+| `ABORTED`               | 取消信号触发，同时 `aborted` 为真   | `false`     |
+
+`EMPTY_RESPONSE` 只来自 `stream()`，`invoke()` 遇到同样情况时返回 `message: null`，需要自己检查。`PROVIDER_ERROR` 的 `retryable: false` 只表示不值得立即重试，因为 Provider 客户端已经重试过瞬时故障；隔几分钟、带退避的重试仍然可能成功。记录日志时读 `rootMessage`，它是错误链里最具体的那条消息。
 
 ## 流式执行和取消
 

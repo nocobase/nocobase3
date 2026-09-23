@@ -44,7 +44,7 @@ HTTP 服务使用 `url` 和可选 `headers`。旧服务只支持 Server-Sent Eve
 
 ## 环境变量
 
-AI 员工插件会递归展开 MCP 配置中的 `${NAME}`。变量缺失时替换为空字符串，通常会在连接测试或认证阶段暴露错误。不要把 Token 直接提交到 YAML，也不要把 MCP 密钥放入浏览器可见的 `config.yml.client`。
+AI 员工插件会递归展开 MCP 配置中的 `${NAME}`。变量缺失时替换为空字符串，通常会在连接测试或认证阶段暴露错误。不要把 Token 直接提交到 YAML，也不要把 MCP 密钥放进 `config.yml` 的 `client` 块，这个块会下发到浏览器。
 
 ## 重启和诊断
 

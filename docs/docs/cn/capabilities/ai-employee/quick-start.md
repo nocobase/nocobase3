@@ -84,44 +84,52 @@ git check-ignore -q .env && ! git ls-files --error-unmatch .env >/dev/null 2>&1 
 
 下面的命令都要在你自己的终端里运行，只需把 `<your-key>` 换成真实密钥。不要把密钥发给 AI 助手，也不要让它代你执行这些命令，否则密钥会留在对话记录里。
 
-**系统环境变量。** 命令会先删掉同名的旧设置，再写入新的值：
+这些命令连同密钥会被记进 shell 历史。zsh 设置了 `HIST_IGNORE_SPACE`、bash 的 `HISTCONTROL` 含 `ignorespace` 时，以空格开头的命令不会被记录；两者都没有设置的话，可以改用编辑器完成同样的修改。命令使用 POSIX shell 语法；Windows 下只有系统环境变量方式提供了命令，另外两种方式请用编辑器修改文件。
+
+**系统环境变量。** 下面的命令会在配置文件不存在时先创建它；配置文件是软链接时，直接写入链接指向的文件，不会替换链接本身；其他行原样保留，同名的旧设置会被替换，所以重复执行也只留下一行：
 
 ```bash
 # zsh（macOS 默认）
-sed -i.bak '/^export OPENAI_API_KEY=/d' ~/.zshrc && rm -f ~/.zshrc.bak && echo 'export OPENAI_API_KEY="<your-key>"' >> ~/.zshrc && source ~/.zshrc
+touch ~/.zshrc && k=$(grep -v '^export OPENAI_API_KEY=' ~/.zshrc); printf '%s\nexport OPENAI_API_KEY="%s"\n' "$k" '<your-key>' > ~/.zshrc && source ~/.zshrc
 
-# bash
-sed -i.bak '/^export OPENAI_API_KEY=/d' ~/.bashrc && rm -f ~/.bashrc.bak && echo 'export OPENAI_API_KEY="<your-key>"' >> ~/.bashrc && source ~/.bashrc
+# bash（Linux）；macOS 的终端启动的是登录 shell，请把 ~/.bashrc 换成 ~/.bash_profile
+touch ~/.bashrc && k=$(grep -v '^export OPENAI_API_KEY=' ~/.bashrc); printf '%s\nexport OPENAI_API_KEY="%s"\n' "$k" '<your-key>' > ~/.bashrc && source ~/.bashrc
 ```
 
 ```powershell
 # Windows：对之后新开的终端生效，当前终端不生效
 setx OPENAI_API_KEY "<your-key>"
+# 然后在新开的终端里确认
+if ($env:OPENAI_API_KEY) { 'OPENAI_API_KEY 已设置' } else { 'OPENAI_API_KEY 未设置' }
 ```
 
-`source` 只对执行它的那个终端生效。其他已经打开的终端和正在运行的服务仍然使用旧的环境，所以要重开一个终端，或者在那个终端里再执行一次 `source`，然后从这个终端重启服务。可以用下面的命令确认变量已经生效，它不会打印密钥本身：
+可以用下面的命令确认变量已经生效，它不会打印密钥本身：
 
 ```bash
 [ -n "$OPENAI_API_KEY" ] && echo "OPENAI_API_KEY 已设置" || echo "OPENAI_API_KEY 未设置"
 ```
 
-**直接写入 `config.yml`。** 先把 `apiKey` 写成占位标记 `apiKey: "REPLACE_WITH_OPENAI_API_KEY"`，再运行：
+`source` 只对执行它的那个终端生效。其他已经打开的终端和正在运行的进程仍然使用启动时的环境，AI 助手的终端也一样：在当前会话里新设的变量，AI 助手启动的 `pnpm dev` 读不到，`${OPENAI_API_KEY}` 会展开成空字符串。所以要么在你自己的终端里启动服务，要么从已经有这个变量的终端重新打开 AI 助手的会话。
+
+**直接写入 `config.yml`。** 先把 `apiKey` 写成占位标记 `apiKey: "REPLACE_WITH_OPENAI_API_KEY"`，再运行下面的命令。无论密钥里有什么字符，都会原样写入：
 
 ```bash
-sed -i.bak 's|REPLACE_WITH_OPENAI_API_KEY|<your-key>|' config.yml && rm -f config.yml.bak
+KEY='<your-key>' perl -pi -e 's/REPLACE_WITH_OPENAI_API_KEY/$ENV{KEY}/g' config.yml
 ```
 
-**`.env`。** 当前版本中，只有 `pnpm dev` 会把 `.env` 合并进服务进程的环境；构建后的服务（`pnpm start` 和部署环境）读不到它，`${OPENAI_API_KEY}` 会展开成空字符串。这个问题会在后续版本处理。
+选择这种方式意味着 AI 助手之后每次修改 `config.yml`（添加 MCP 服务、附件存储或其他 LLM 服务）都会读到密钥，密钥会因此进入对话记录，所以它排在第二位。
+
+**`.env`。** 当前版本中，只有 `pnpm dev` 会把 `.env` 合并进服务进程的环境；构建后的服务（`pnpm start` 和部署环境）读不到它，`${OPENAI_API_KEY}` 会展开成空字符串。这个问题会在后续版本处理。和系统环境变量方式一样，下面的命令会在需要时创建文件，并替换同名的旧设置：
 
 ```bash
-touch .env && sed -i.bak '/^OPENAI_API_KEY=/d' .env && rm -f .env.bak && echo 'OPENAI_API_KEY=<your-key>' >> .env
+touch .env && k=$(grep -v '^OPENAI_API_KEY=' .env); printf '%s\nOPENAI_API_KEY=%s\n' "$k" '<your-key>' > .env
 ```
 
-服务只在启动时读取环境变量、`config.yml` 和 `.env`。无论改的是哪一项，都要重启服务才会生效。
+服务只在启动时读取环境变量、`config.yml` 和 `.env`，无论改的是哪一项，都要重启服务才会生效。`pnpm dev` 在 `config.yml` 或 `.env` 变化时会自动重启，并重新读取这两个文件；但它沿用的是 `pnpm dev` 启动时的环境，拿不到之后新设的系统环境变量。使用系统环境变量方式时，要彻底停掉 `pnpm dev`，再从已经有这个变量的终端重新启动。
 
 :::warning 部署时单独配置
 
-`pnpm build` 的产物只包含 `dist/` 和 `config.example.yml`，不包含 `config.yml` 和 `.env`。部署环境要在 `dist/` 旁边单独配置自己的 `config.yml`。使用环境变量方式时，变量要设置在服务管理器启动进程的环境里，例如 systemd 的 `Environment=`、进程管理器的环境配置或容器的环境变量。服务不会读取登录 shell 的 `~/.zshrc`，所以终端里能读到的变量，服务进程里不一定有。首次启动前，请确认这两处都已配置好密钥。
+部署环境要在 `dist/` 旁边单独配置自己的 `config.yml`，`pnpm build` 的产物只包含 `dist/` 和 `config.example.yml`，不会带上 `config.yml`。构建会生成一个 `dist/.env`，但里面只有框架自身的白名单键（数据库、邮件、缓存等），不包含 LLM 密钥。使用环境变量方式时，变量要设置在服务管理器启动进程的环境里，例如 systemd 的 `Environment=`、进程管理器的环境配置或容器的环境变量。服务不会读取登录 shell 的 `~/.zshrc`，所以终端里能读到的变量，服务进程里不一定有。首次启动前，请确认这两处都已配置好密钥。
 
 :::
 
