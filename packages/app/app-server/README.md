@@ -222,7 +222,7 @@ const result = await orders.createOne({
 });
 ```
 
-Inside a NocoBase React component or custom Hook, obtain this client with `useApiClient()` from `@nocobase/app-client` instead of creating another instance. Non-React application client code can resolve `apiClientToken` through `app.services.resolve(apiClientToken)` or receive the client explicitly. These paths reuse the application's configured `api.baseURL`; the Repository calls are otherwise the same. See [frontend API usage](../app-skills/skills/nocobase-app-development/references/client-api.md) for examples. Server code accessing its own database uses `db.repository()` as described above.
+Inside a NocoBase React component or custom Hook, obtain this client with `useApiClient()` from `@nocobase/app-client` instead of creating another instance. Non-React application client code can resolve `apiClientToken` through `app.services.resolve(apiClientToken)` or receive the client explicitly. These paths reuse the application's configured `api.baseURL`; the Repository calls are otherwise the same. See [frontend API usage](../app-skills/skills/nocobase-app-development/references/frontend/api.md) for examples. Server code accessing its own database uses `db.repository()` as described above.
 
 Supported actions are `findMany`, `findOne`, `count`, `exists`, `createOne`,
 `updateOne`, `deleteOne`, `aggregate`, and `groupBy`. Unconfigured names and actions have no route.
