@@ -28,6 +28,7 @@ import { AIMCPServerService } from '../service/ai-mcp-server-service.js';
 import { AISkillService } from '../service/ai-skill-service.js';
 import { AIToolService } from '../service/ai-tool-service.js';
 import { AIFileService } from '../service/file-service.js';
+import { AIFileMetadataRepository } from '../repository/file-storage/ai-file-metadata-repository.js';
 import { LLMService } from '../service/llm-service.js';
 import { ModelService } from '../service/model-service.js';
 import { loadResources } from '../service/resource-loader.js';
@@ -110,6 +111,7 @@ export class ServiceFactory {
   public get fileService(): AIFileService {
     return (this.fileServiceValue ??= new AIFileService({
       fileStorage: this.managers.fileStorage,
+      fileMetadata: new AIFileMetadataRepository(this.repositories.aiFiles),
       snowflake: this.container.resolve(idGeneratorToken),
       apiBasePath: AI_API_BASE_PATH,
     }));

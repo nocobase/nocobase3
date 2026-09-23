@@ -1,6 +1,10 @@
 import { Readable } from 'node:stream';
 
-import type { FileMetadata, FileStorage } from '@nocobase/ai-employee';
+import type {
+  FileMetadata,
+  FileMetadataRepository,
+  FileStorage,
+} from '@nocobase/ai-employee';
 import type { IdGeneratorService } from '@nocobase/snowflake';
 
 import type { Actor } from '../types.js';
@@ -31,6 +35,11 @@ export interface AIFilePreviewResult {
 /** `aiFiles` domain service backed by metadata-aware file storage. */
 export interface AIFileServiceOptions {
   readonly fileStorage: FileStorage<AIFileEntity, AIFileMetadataCreateContext>;
+  /** The records behind `fileStorage`, read to authorize before any content is opened. */
+  readonly fileMetadata: FileMetadataRepository<
+    AIFileEntity,
+    AIFileMetadataCreateContext
+  >;
   readonly snowflake: IdGeneratorService;
   readonly apiBasePath: string;
 }
@@ -40,15 +49,21 @@ export class AIFileService {
     AIFileEntity,
     AIFileMetadataCreateContext
   >;
+  private readonly fileMetadata: FileMetadataRepository<
+    AIFileEntity,
+    AIFileMetadataCreateContext
+  >;
   private readonly snowflake: IdGeneratorService;
   private readonly apiBasePath: string;
 
   public constructor({
     fileStorage,
+    fileMetadata,
     snowflake,
     apiBasePath,
   }: AIFileServiceOptions) {
     this.fileStorage = fileStorage;
+    this.fileMetadata = fileMetadata;
     this.snowflake = snowflake;
     this.apiBasePath = apiBasePath;
   }
@@ -83,23 +98,26 @@ export class AIFileService {
     /** Whether this caller may read files others uploaded; asked only when needed. */
     canReadAnyFile?: () => Promise<boolean>;
   }): Promise<AIFilePreviewResult> {
-    let opened;
-    try {
-      opened = await this.fileStorage.open(id);
-    } catch {
-      throw notFoundError('file content not found');
-    }
-    if (!opened) throw notFoundError('file not found');
+    const metadata = await this.fileMetadata.findById(id);
+    if (!metadata) throw notFoundError('file not found');
 
-    const record = opened.metadata.entity;
+    const record = metadata.entity;
     // Only the uploader reads a file by default. Anyone else — including for a
     // file that records no uploader — needs what the conversation center needs,
-    // never a role name or root flag carried on the session.
+    // never a role name or root flag carried on the session. Decided before the
+    // content is opened, so a refused request reads nothing from storage.
     const ownFile =
       record.createdById != null &&
       String(record.createdById) === String(actor.id);
     if (!ownFile && !(await canReadAnyFile?.())) {
       throw forbiddenError('forbidden');
+    }
+
+    let opened;
+    try {
+      opened = await this.fileStorage.openMetadata(metadata);
+    } catch {
+      throw notFoundError('file content not found');
     }
 
     return {

@@ -30,6 +30,10 @@ const metadata: FileMetadata<AIFileEntity> = {
 
 const member = { id: 'user-1', roles: ['member'], isRoot: false } as const;
 
+function metadataOf(record: FileMetadata<AIFileEntity> | null) {
+  return { create: async () => metadata, findById: async () => record };
+}
+
 describe('AIFileService', () => {
   it('returns runtime preview URLs without persisting apiBasePath', async () => {
     let input: unknown;
@@ -50,6 +54,7 @@ describe('AIFileService', () => {
       };
     const service = new AIFileService({
       fileStorage: fileStorage,
+      fileMetadata: metadataOf(metadata),
       snowflake: { generate: () => '42' } as never,
       apiBasePath: '/runtime/api/ai',
     });
@@ -97,6 +102,7 @@ describe('AIFileService', () => {
       };
     const service = new AIFileService({
       fileStorage: fileStorage,
+      fileMetadata: metadataOf(metadata),
       snowflake: { generate: () => '42' } as never,
       apiBasePath: '/api/ai',
     });
@@ -132,6 +138,7 @@ describe('AIFileService', () => {
           openMetadata: opened,
           deleteObject: async () => undefined,
         } as FileStorage<AIFileEntity, AIFileMetadataCreateContext>,
+        fileMetadata: metadataOf({ ...metadata, entity }),
         snowflake: { generate: () => '42' } as never,
         apiBasePath: '/api/ai',
       });
@@ -166,5 +173,46 @@ describe('AIFileService', () => {
     await expect(
       ownerless.preview({ actor: member, id: '42', canReadAnyFile: granted }),
     ).resolves.toMatchObject({ filename: 'hello.txt' });
+  });
+
+  it('opens no content for a preview it refuses or cannot find', async () => {
+    const opened: string[] = [];
+    const serviceFor = (record: FileMetadata<AIFileEntity> | null) =>
+      new AIFileService({
+        fileStorage: {
+          disk: 'local',
+          write: async () => metadata,
+          open: async (id) => {
+            opened.push(String(id));
+            return null;
+          },
+          openMetadata: async (value) => {
+            opened.push(String(value.id));
+            return {
+              metadata: value,
+              stream: Readable.from([Buffer.from('hello')]),
+              contentType: 'text/plain',
+            };
+          },
+        },
+        fileMetadata: metadataOf(record),
+        snowflake: { generate: () => '42' } as never,
+        apiBasePath: '/api/ai',
+      });
+
+    await expect(
+      serviceFor(metadata).preview({
+        actor: { id: 'other', roles: [], isRoot: false },
+        id: '42',
+        canReadAnyFile: async () => false,
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN', status: 403 });
+    await expect(
+      serviceFor(null).preview({ actor: member, id: '42' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', status: 404 });
+    expect(opened).toEqual([]);
+
+    await serviceFor(metadata).preview({ actor: member, id: '42' });
+    expect(opened).toEqual(['42']);
   });
 });
