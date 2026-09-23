@@ -573,21 +573,28 @@ describe('Authentication seed', () => {
   });
 });
 
-describe('user administration search', () => {
-  async function setup() {
+describe('user administration list', () => {
+  async function setup(naming?: { readonly underscored: boolean }) {
     const database = createDatabaseManager({
       drivers: { sqlite },
       default: 'main',
-      connections: { main: { dialect: 'sqlite', filename: ':memory:' } },
+      connections: {
+        main: {
+          dialect: 'sqlite',
+          filename: ':memory:',
+          ...(naming ? { naming } : {}),
+        },
+      },
     });
     await migrateAuthentication(database);
     const connection = database.connection();
     const now = new Date();
-    for (const [id, name, email] of [
-      ['plain', 'Alice Smith', 'alice@example.com'],
-      ['percent', '100% Coverage', 'percent@example.com'],
-      ['underscore', 'a_c report', 'underscore@example.com'],
-      ['literal', 'abc report', 'literal@example.com'],
+    for (const [id, name, email, disabled] of [
+      ['plain', 'Alice Smith', 'alice@example.com', false],
+      ['percent', '100% Coverage', 'percent@example.com', false],
+      ['underscore', 'a_c report', 'underscore@example.com', false],
+      ['literal', 'abc report', 'literal@example.com', false],
+      ['inactive', 'Alice Retired', 'retired@example.com', true],
     ] as const) {
       await connection.query
         .insertInto('user')
@@ -596,6 +603,7 @@ describe('user administration search', () => {
           name,
           email,
           emailVerified: false,
+          ...(disabled ? { disabledAt: now } : {}),
           createdAt: now,
           updatedAt: now,
         })
@@ -624,10 +632,8 @@ describe('user administration search', () => {
       const underscore = await users.list({ search: 'a_c' });
       expect(underscore.total).toBe(1);
       expect(underscore.items.map(({ id }) => id)).toEqual(['underscore']);
-      await expect(users.list({ search: 'alice' })).resolves.toMatchObject({
-        total: 1,
-        items: [{ id: 'plain' }],
-      });
+      const alice = await users.list({ search: 'alice' });
+      expect(alice.items.map(({ id }) => id)).toEqual(['inactive', 'plain']);
     } finally {
       await database.destroy();
     }
@@ -636,15 +642,79 @@ describe('user administration search', () => {
   it('orders a page by creation time and breaks ties on id', async () => {
     const { database, users } = await setup();
     try {
-      const first = await users.list({ pageSize: 2 });
-      const second = await users.list({ page: 2, pageSize: 2 });
-      expect(first.total).toBe(4);
+      const first = await users.list({ pageSize: 3 });
+      const second = await users.list({ page: 2, pageSize: 3 });
+      expect(first.total).toBe(5);
       // Every row was inserted with the same timestamp, so only the tiebreaker
       // keeps the two pages from overlapping.
       expect([
         ...first.items.map(({ id }) => id),
         ...second.items.map(({ id }) => id),
-      ]).toEqual(['literal', 'percent', 'plain', 'underscore']);
+      ]).toEqual(['inactive', 'literal', 'percent', 'plain', 'underscore']);
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('filters by account status and by an explicit set of ids', async () => {
+    const { database, users } = await setup();
+    try {
+      await expect(users.list({ status: 'disabled' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'inactive' }],
+      });
+      expect((await users.list({ status: 'enabled' })).total).toBe(4);
+      const selected = await users.list({
+        userIds: ['plain', 'inactive', 'absent'],
+      });
+      expect(selected.items.map(({ id }) => id)).toEqual(['inactive', 'plain']);
+      // The id set and the other filters apply together.
+      await expect(
+        users.list({ userIds: ['plain', 'inactive'], status: 'enabled' }),
+      ).resolves.toMatchObject({ total: 1, items: [{ id: 'plain' }] });
+      await expect(
+        users.list({ userIds: ['plain', 'percent'], search: 'alice' }),
+      ).resolves.toMatchObject({ total: 1, items: [{ id: 'plain' }] });
+      await expect(users.list({ userIds: [] })).resolves.toMatchObject({
+        total: 0,
+        items: [],
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('hides a soft-deleted account from every filter', async () => {
+    const { database, users } = await setup();
+    try {
+      await users.remove('plain', 'operator');
+      expect((await users.list()).total).toBe(4);
+      await expect(users.list({ search: 'alice' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'inactive' }],
+      });
+      await expect(users.list({ userIds: ['plain'] })).resolves.toMatchObject({
+        total: 0,
+        items: [],
+      });
+    } finally {
+      await database.destroy();
+    }
+  });
+
+  it('resolves the same columns under a non-default naming strategy', async () => {
+    // The Repository resolves logical field names through the Collection,
+    // which is a different path from the one the Query API used.
+    const { database, users } = await setup({ underscored: false });
+    try {
+      await expect(users.list({ search: '%' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'percent', name: '100% Coverage' }],
+      });
+      await expect(users.list({ status: 'disabled' })).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: 'inactive' }],
+      });
     } finally {
       await database.destroy();
     }
