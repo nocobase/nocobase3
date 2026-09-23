@@ -38,13 +38,33 @@ export const AI_SETTINGS_ACTIONS: readonly string[] = [
   'ai:listProviderModels',
 ];
 
+declare module 'hono' {
+  interface ContextVariableMap {
+    /** Whether the signed-in user can open the AI settings page, checked once. */
+    canAccessAISettings: () => Promise<boolean>;
+  }
+}
+
+/** Answers `canAccessAISettings` for the rest of the request, on first use. */
+export function provideAISettingsAccess(): MiddlewareHandler<AuthorizationEnv> {
+  return async (context, next) => {
+    let permitted: Promise<boolean> | undefined;
+    context.set(
+      'canAccessAISettings',
+      () =>
+        (permitted ??= context.get('authz').can({
+          resource: { type: 'page', id: 'ai.settings' },
+          action: 'access',
+        })),
+    );
+    await next();
+  };
+}
+
 export function requireAISettingsAccess(): MiddlewareHandler<AuthorizationEnv> {
   return async (context, next) => {
-    const permitted = await context.get('authz').can({
-      resource: { type: 'page', id: 'ai.settings' },
-      action: 'access',
-    });
-    if (!permitted) throw forbiddenError('AI settings access is required');
+    if (!(await context.get('canAccessAISettings')()))
+      throw forbiddenError('AI settings access is required');
     await next();
   };
 }

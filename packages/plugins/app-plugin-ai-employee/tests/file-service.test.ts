@@ -116,4 +116,55 @@ describe('AIFileService', () => {
     expect(result.filename).toBe('hello.txt');
     await expect(new Response(result.stream).text()).resolves.toBe('hello');
   });
+
+  it("lets only AI settings access read another user's file or one with no uploader", async () => {
+    const storageFor = (entity: AIFileEntity) => {
+      const opened = async () => ({
+        metadata: { ...metadata, entity },
+        stream: Readable.from([Buffer.from('hello')]),
+        contentType: 'text/plain',
+      });
+      return new AIFileService({
+        fileStorage: {
+          disk: 'local',
+          write: async () => metadata,
+          open: opened,
+          openMetadata: opened,
+          deleteObject: async () => undefined,
+        } as FileStorage<AIFileEntity, AIFileMetadataCreateContext>,
+        snowflake: { generate: () => '42' } as never,
+        apiBasePath: '/api/ai',
+      });
+    };
+    const owned = storageFor(metadata.entity);
+    const ownerless = storageFor({
+      ...metadata.entity,
+      createdById: undefined,
+    });
+    const granted = async () => true;
+    const refused = async () => false;
+    const forbidden = { code: 'FORBIDDEN', status: 403 };
+
+    // A root flag on the session is not a grant.
+    await expect(
+      owned.preview({
+        actor: { id: 'other', roles: ['root'], isRoot: true },
+        id: '42',
+        canReadAnyFile: refused,
+      }),
+    ).rejects.toMatchObject(forbidden);
+    await expect(
+      owned.preview({
+        actor: { id: 'other', roles: [], isRoot: false },
+        id: '42',
+        canReadAnyFile: granted,
+      }),
+    ).resolves.toMatchObject({ filename: 'hello.txt' });
+    await expect(
+      ownerless.preview({ actor: member, id: '42', canReadAnyFile: refused }),
+    ).rejects.toMatchObject(forbidden);
+    await expect(
+      ownerless.preview({ actor: member, id: '42', canReadAnyFile: granted }),
+    ).resolves.toMatchObject({ filename: 'hello.txt' });
+  });
 });

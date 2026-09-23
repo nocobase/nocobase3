@@ -76,9 +76,12 @@ export class AIFileService {
   public async preview({
     actor,
     id,
+    canReadAnyFile,
   }: {
     actor: Actor;
     id: string;
+    /** Whether this caller may read files others uploaded; asked only when needed. */
+    canReadAnyFile?: () => Promise<boolean>;
   }): Promise<AIFilePreviewResult> {
     let opened;
     try {
@@ -89,11 +92,13 @@ export class AIFileService {
     if (!opened) throw notFoundError('file not found');
 
     const record = opened.metadata.entity;
-    if (
+    // Only the uploader reads a file by default. Anyone else — including for a
+    // file that records no uploader — needs what the conversation center needs,
+    // never a role name or root flag carried on the session.
+    const ownFile =
       record.createdById != null &&
-      String(record.createdById) !== String(actor.id) &&
-      !actor.isRoot
-    ) {
+      String(record.createdById) === String(actor.id);
+    if (!ownFile && !(await canReadAnyFile?.())) {
       throw forbiddenError('forbidden');
     }
 

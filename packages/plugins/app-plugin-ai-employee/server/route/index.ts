@@ -10,6 +10,7 @@ import { requireSkillsManagement } from './skills-management.js';
 import { requireToolsManagement } from './tools-management.js';
 import {
   AI_SETTINGS_ACTIONS,
+  provideAISettingsAccess,
   requireAISettingsAccess,
 } from './settings-access.js';
 import { createAIEmployeeRouter } from './ai-employees.js';
@@ -44,6 +45,7 @@ export function createAIEmployeeRoutes(
     '*',
     options.authentication.required(),
     options.authorization.middleware(),
+    provideAISettingsAccess(),
   );
   for (const path of [
     '/aiConversations:listAll',

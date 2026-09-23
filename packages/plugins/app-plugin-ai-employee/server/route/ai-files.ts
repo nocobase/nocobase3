@@ -19,6 +19,7 @@ export function createAIFilesRouter(app: Hono, services: ServiceFactory): void {
     const result = await services.fileService.preview({
       actor: context.var.currentUser,
       id: requiredString(context.req.query('id'), 'id'),
+      canReadAnyFile: context.var.canAccessAISettings,
     });
     return new Response(result.stream, {
       headers: {
