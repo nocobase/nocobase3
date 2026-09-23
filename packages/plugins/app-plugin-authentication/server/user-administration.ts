@@ -201,12 +201,16 @@ class DefaultUserAdministrationService implements UserAdministrationService {
     userId: string,
     input: UpdateAdministratedUserInput,
   ): Promise<AdministratedUser> {
-    await this.requireUser(userId);
+    const currentUser = await this.requireUser(userId);
     const context = await this.options.auth.administrationContext();
-    const username =
+    const requestedUsername =
       input.username === undefined
         ? undefined
         : (optionalUsername(input.username ?? undefined) ?? null);
+    const username =
+      requestedUsername === currentUser.username
+        ? undefined
+        : requestedUsername;
     const email =
       input.email === undefined ? undefined : normalizedEmail(input.email);
     await this.assertIdentityAvailable(
