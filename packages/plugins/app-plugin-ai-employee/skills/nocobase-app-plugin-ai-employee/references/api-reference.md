@@ -480,6 +480,8 @@ X-Accel-Buffering: no
 
 Do not call `response.json()` on this response. If invocation throws after the SSE response opens, the body instead contains an error frame such as `data: {"type":"error","body":"conversation not found"}` followed by two newlines; HTTP 200 alone does not prove execution succeeded. Prefer the normal streaming transport for chat. For this non-streaming execution example, wait for the response to close, inspect any SSE error frames, and read persisted history. Do not resend automatically if the request disconnects or the result is uncertain.
 
+An empty body also does not mean the run finished. A run that paused for a tool decision closes the same way, and history is where the difference shows: its tool calls are recorded as `interrupted` rather than completed, and the assistant turn carries the interrupt id. Answer them with [`updateUserDecision`](#post-aiconversationsupdateuserdecision) and continue with [`resumeToolCall`](#post-aiconversationsresumetoolcall) rather than treating the tool-calling turn as the reply.
+
 ### 6. Read persisted user and assistant messages
 
 ```bash

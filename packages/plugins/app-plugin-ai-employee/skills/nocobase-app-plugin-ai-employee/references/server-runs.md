@@ -264,6 +264,10 @@ if (interrupt) {
 
 Approving whatever is pending, unconditionally, turns every `ASK` into an `ALLOW` without the tool or the employee saying so. If that is the intent, make it the tool's declared permission instead, where it is visible.
 
+An action identifies its tool call — `toolCall.id` and `toolCall.name` — but does not carry the arguments. A caller that decides on what the tool was about to do, rather than on which tool it is, reads the arguments from `message.toolCalls` on the same result and joins them on `id`: `message` is the assistant turn that requested the paused calls.
+
+A run that is neither resumed nor revisited stays paused, with its calls recorded as `interrupted`. Do not send a new turn into that conversation: the chat route clears pending calls with `cancelToolCall()` before a new user turn, but `invoke()` does not. Start a new conversation instead, or resume the one that paused.
+
 **Give the run a way out, if it needs one.** Anything the agent should do _during_ the run — report progress, notify a channel, hand a partial result onward — is an ordinary backend tool: register it in code, declare what it needs on `dependencies`, and activate it by name for this agent. The model calls it like any other tool. This is for effects that must happen while the run is going; when all the caller wants is the answer at the end, `responseFormat` already delivers it and a tool adds a failure mode for nothing.
 
 ### Failures a caller has to tell apart
