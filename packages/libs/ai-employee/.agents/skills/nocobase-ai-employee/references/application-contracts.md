@@ -259,6 +259,7 @@ type AIEmployeeLLMServiceConfig = {
   provider: string;
   options?: Record<string, unknown>;
   enabledModels?: Array<{ label: string; value: string }>;
+  overrideEnabledModels?: boolean;
   modelOptions?: Record<string, unknown>;
   enabled?: boolean;
   sort?: number;
@@ -272,7 +273,8 @@ Configuration rules:
 - Duplicate names reject the whole snapshot.
 - `options` and `modelOptions` preserve provider-specific nested values.
 - `${ENV_NAME}` expands recursively after validation. A missing environment variable becomes an empty string.
-- Existing repository records preserve `enabled` and `enabledModels`; other definition fields come from config.
+- Existing repository records preserve `enabled` and `enabledModels`; other definition fields come from config. Both therefore reach a service only when its record is first created.
+- `overrideEnabledModels: true` opts one service out of that preservation for its model list, reapplying the configured `enabledModels` on every load. It defaults to `false` and never changes `enabled`.
 - New records use config `enabled` and `enabledModels`, or manager defaults when omitted.
 - Additions and updates occur before stale configured names are deleted.
 

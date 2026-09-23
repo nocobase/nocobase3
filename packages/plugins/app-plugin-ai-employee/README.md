@@ -33,11 +33,12 @@ ai:
       enabledModels:
         - label: GPT-4.1
           value: gpt-4.1
+      overrideEnabledModels: false
       enabled: true
       sort: 10
 ```
 
-The configured service name set is authoritative, including an empty array. Reloading the `ai` application-config namespace reconciles additions, structural updates, and removals without restarting the process or rescanning the AI resource directory, and existing records preserve the user-managed `enabled` and `enabledModels` values. Each configured `enabledModels` array is converted internally to custom mode; `mode` is not part of the application config contract. Environment references are expanded recursively after validation; missing variables become empty strings.
+The configured service name set is authoritative, including an empty array. Reloading the `ai` application-config namespace reconciles additions, structural updates, and removals without restarting the process or rescanning the AI resource directory, and existing records preserve the user-managed `enabled` and `enabledModels` values — so those two take effect from configuration only when a service record is first created. A service that sets `overrideEnabledModels: true` has its configured `enabledModels` reapplied on every load instead, overwriting what the settings page holds; the switch is per service, defaults to `false`, and governs the model list alone, leaving `enabled` with the administrator. Each configured `enabledModels` array is converted internally to custom mode; `mode` is not part of the application config contract. Environment references are expanded recursively after validation; missing variables become empty strings.
 
 `enabledModels` is the menu a service offers, not an access control boundary. It decides what the model selector and `ai:listAllEnabledModels` list, and which model `resolveModel()` falls back to when a caller names none; a service with an empty list offers nothing and disappears from the selector. It is not checked when a caller does name a model, so a request or a stored employee configuration naming an unlisted model still runs.
 

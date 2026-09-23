@@ -22,24 +22,28 @@ ai:
       enabledModels:
         - label: GPT-5.6
           value: gpt-5.6
+      overrideEnabledModels: false
       modelOptions:
         temperature: 0.2
       enabled: true
       sort: 10
 ```
 
-| 字段            | 是否必填 | 说明                                                  |
-| --------------- | -------- | ----------------------------------------------------- |
-| `name`          | 是       | 服务唯一标识，也是 `ModelRef.llmService` 的值         |
-| `provider`      | 是       | 内置 Provider 注册键                                  |
-| `title`         | 否       | 管理页显示名称                                        |
-| `options`       | 否       | Provider 连接参数，通常包含 `apiKey` 和可选 `baseURL` |
-| `enabledModels` | 否       | 自定义模式下开放的 `{ label, value }` 模型数组        |
-| `modelOptions`  | 否       | 传给模型客户端的默认参数                              |
-| `enabled`       | 否       | 新服务首次同步时的初始启用状态                        |
-| `sort`          | 否       | 管理页排序值                                          |
+| 字段                    | 是否必填 | 说明                                                  |
+| ----------------------- | -------- | ----------------------------------------------------- |
+| `name`                  | 是       | 服务唯一标识，也是 `ModelRef.llmService` 的值         |
+| `provider`              | 是       | 内置 Provider 注册键                                  |
+| `title`                 | 否       | 管理页显示名称                                        |
+| `options`               | 否       | Provider 连接参数，通常包含 `apiKey` 和可选 `baseURL` |
+| `enabledModels`         | 否       | 自定义模式下开放的 `{ label, value }` 模型数组        |
+| `overrideEnabledModels` | 否       | 是否每次重载都重新套用 `enabledModels`，默认 `false`  |
+| `modelOptions`          | 否       | 传给模型客户端的默认参数                              |
+| `enabled`               | 否       | 新服务首次同步时的初始启用状态                        |
+| `sort`                  | 否       | 管理页排序值                                          |
 
-省略 `enabledModels` 表示 Provider 模型模式，可以在管理页搜索 Provider 返回的模型。配置文件中的标准写法始终是数组，不要在 YAML 中写数据库使用的 `{ mode, models }` 结构。
+省略 `enabledModels` 表示 Provider 模型模式，可以在管理页搜索 Provider 返回的模型。不过在管理页勾选之前，这个服务一个可用模型都没有——它不会出现在模型选择器里，也不会出现在 `ai:listAllEnabledModels` 的返回里。如果希望应用启动后就能直接聊天，配置时就把 `enabledModels` 写上。
+
+配置文件中的标准写法始终是数组，不要在 YAML 中写数据库使用的 `{ mode, models }` 结构。
 
 ## 内置 Provider
 
@@ -77,9 +81,40 @@ NocoBase 不维护内置模型目录，`value` 是否可用完全取决于服务
 
 ## 同步行为
 
-配置重载时，`ai.llmServices` 的名称集合是权威集合：新增名称会创建服务，保留名称会更新 Provider、标题和连接结构，删除名称会移除相应配置服务。匹配到已有服务时，管理员在数据库中维护的 Enabled 状态和模型列表会保留，不会被每次重载覆盖。
+配置重载时，`ai.llmServices` 的名称集合是权威集合：新增名称会创建服务，保留名称会更新 Provider、标题、连接结构和排序，删除名称会移除相应配置服务。
 
-配置验证会在写数据库前完成。名称重复、字段类型错误或空 `name` / `provider` 会拒绝整份快照，避免只同步一半。
+**模型列表和 Enabled 状态不在更新范围内。** 它们被当作管理员的配置——匹配到已有服务时，以数据库里的值为准，`config.yml` 里的 `enabledModels` 和 `enabled` 会被忽略。所以这两个字段实际只在服务**第一次被创建**时生效。
+
+:::warning 注意
+
+如果第一次写错了模型 ID，之后改 `config.yml` 不会生效，也不会报错。这种情况要么去管理页改，要么给这个服务打开 `overrideEnabledModels`。
+
+:::
+
+### 让 config.yml 接管模型列表
+
+给单个服务加上 `overrideEnabledModels: true`，它的 `enabledModels` 就会在每次配置重载时重新套用：
+
+```yaml
+ai:
+  llmServices:
+    - name: gpt
+      provider: openai
+      overrideEnabledModels: true
+      enabledModels:
+        - label: GPT-5.6
+          value: gpt-5.6
+```
+
+这个开关按服务声明，默认 `false`，不写就是原来的行为。打开之后模型列表就以 `config.yml` 为准——管理页上对这个服务的模型改动会在下次重载时被覆盖，所以通常来说只在希望用配置文件管理模型清单时才打开。
+
+开关只管模型列表。管理员在管理页关掉的服务不会因为重新套用模型列表被打开，Enabled 状态仍然以数据库为准。
+
+另外，聊天框默认选中的是所有已启用服务按 `sort` 排序后的第一个模型。打开这个开关之后，`sort` 加上 `enabledModels` 的第一项就能决定默认模型；不打开的话，这个顺序取决于数据库里的现状。
+
+## 配置验证
+
+配置验证会在写数据库前完成。名称重复、字段类型错误、空 `name` / `provider`，或者 `overrideEnabledModels` 不是布尔值，都会拒绝整份快照，避免只同步一半。
 
 ## 相关链接
 
