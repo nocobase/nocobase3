@@ -2,15 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { formatHelp, parseInput } from '../src/lib/flags.ts';
 
 describe('parseInput', () => {
-  it('defaults to SQLite and accepts dialect and JSON flags', async () => {
+  it('installs and prompts by default, and accepts --json', async () => {
     expect((await parseInput(['crm'])).flags).toMatchObject({
-      dialect: 'sqlite',
       json: false,
       install: true,
     });
-    expect(
-      (await parseInput(['crm', '--dialect=mysql', '--json'])).flags,
-    ).toMatchObject({ dialect: 'mysql', json: true });
+    expect((await parseInput(['crm', '--json'])).flags).toMatchObject({
+      json: true,
+    });
+  });
+
+  /**
+   * Choosing a database is `config:init`'s job now, and it needs the driver installed first. Leaving the flag parsed
+   * but ignored would accept a command that silently did nothing about the database it named.
+   */
+  it('rejects the dialect flag, which creation no longer decides', async () => {
+    await expect(parseInput(['crm', '--dialect=postgres'])).rejects.toThrow();
   });
   /**
    * `pnpm create @nocobase/app crm --template=hub` forwards everything after the package name verbatim, so this is the
@@ -35,8 +42,7 @@ describe('parseInput', () => {
     expect(input.directory).toBeUndefined();
   });
 
-  /** Keep the old flag rejected; database selection now uses --dialect. */
-  it('rejects the removed dialect flag', async () => {
+  it('rejects the long-removed database flag', async () => {
     await expect(
       parseInput(['crm', '--db-dialect=postgres']),
     ).rejects.toThrow();

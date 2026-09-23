@@ -89,6 +89,8 @@
     "@nocobase/db": "workspace:^"
   },
   "dependencies": {
-    "@oclif/core": "catalog:"
+    "@clack/prompts": "catalog:",
+    "@oclif/core": "catalog:",
+    "yaml": "catalog:"
   }
 }

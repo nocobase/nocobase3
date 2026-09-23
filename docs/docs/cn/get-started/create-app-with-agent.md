@@ -46,9 +46,26 @@ pnpm config set @nocobase:registry https://npm.nocobase.ai/
 
 询问用户希望使用什么数据库，不在首次创建提示词中替用户指定。常见选项包括 SQLite、PostgreSQL 和 MySQL：SQLite 使用本地文件；PostgreSQL 和 MySQL 需要可连接的数据库服务。用户需要其他数据库时，依据当前项目的数据库指引核对对应驱动和连接方式。
 
-数据库类型由用户决定后，检查 `server/config/database.ts` 中已注册的驱动和 `config.yml` 的连接配置。使用其他数据库时，按项目指引安装对应驱动、注册并配置连接。配置文件中的方言名称不能代替驱动注册。保留已有业务数据，不通过删除数据库或配置文件来触发重新安装。
+数据库类型由用户决定后，在应用目录中完成配置。使用 SQLite 无需安装任何东西，模板已依赖它的驱动：
 
-让用户在本地配置或实际提供的安装界面中填写数据库密码，不要求将密码粘贴到聊天中，也不打印完整配置。若应用进入安装界面，按界面提供的字段继续操作，并遵循完成后的重启提示。不要假定所有生成项目都会出现相同的数据库选择或管理员设置界面，也不要自行编造 `install` 命令。
+```bash
+pnpm config:init --dialect sqlite --json
+```
+
+其他数据库需要先安装驱动，例如 `pnpm add @nocobase/db-postgres`，再用同样的命令指定该方言。`pnpm config:init` 不安装任何东西，驱动缺失时它不写入任何文件，只在结果里给出 `suggestedCommand`，也就是对应的 `pnpm add`；执行它之后重新运行 `config:init` 即可。配置文件中的方言名称不能代替驱动。结果里的 `requiredSettings` 列出还是占位值的连接字段，接着用 `config:set` 设置：
+
+```bash
+pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm --json
+pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD --json
+```
+
+请用户把密码放进环境变量，再用 `--from-env` 传入变量名。不要在对话里索要密码，不要把密码写在命令行上，也不要打印完整配置。然后检查配置，这一步会实际连一次数据库：
+
+```bash
+pnpm config:check --json
+```
+
+检查失败时，每个问题都附带可以直接执行的 `fix`。保留已有业务数据，不要通过删除数据库或配置文件来触发重新配置：对已配置的应用运行 `config:init` 会报告 `unchanged`，只有用户明确要求替换配置时才使用 `--force`。生成的应用没有安装页面，配置完成之前 `pnpm dev` 会拒绝启动。
 
 ## 五、启动并给出登录方式
 

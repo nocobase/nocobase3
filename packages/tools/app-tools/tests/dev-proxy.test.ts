@@ -645,6 +645,8 @@ async function runDevMode(
       ],
       DEPENDENCY_SETTLE_MS: 3000,
       acquireDevInstanceLock: () => ({ acquired: true, release: vi.fn() }),
+      // Configuration presence is covered on its own; here it only has to not stop the run.
+      assertConfigurationPresent: vi.fn(),
       resolveDevShutdownEnv: () => ({ APP_SHUTDOWN_TIMEOUT_MS: '4000' }),
       setTimeout,
       clearTimeout,

@@ -46,9 +46,26 @@ Confirm that the working directory is the application root. Read `AGENTS.md`, `p
 
 Ask which database the user wants; do not choose it for them in the initial creation prompt. Common options include SQLite, PostgreSQL, and MySQL. SQLite uses a local file; PostgreSQL and MySQL require a reachable database service. For other databases, consult the project's current database guidance for the driver and connection requirements.
 
-After the user chooses, inspect the registered drivers in `server/config/database.ts` and connection settings in `config.yml`. Install and register the appropriate driver and configure the connection following project guidance. A dialect name in configuration does not register a driver. Preserve existing business data; do not delete a database or configuration file to trigger installation again.
+After the user chooses, configure the application from its own directory. SQLite needs nothing installed, because the templates depend on its driver:
 
-Let the user enter database passwords in local configuration or an available installation interface. Do not require passwords in the conversation or print complete configuration files. If the application opens an installation interface, follow its actual fields and restart instructions. Do not assume all generated projects have identical database or administrator setup screens, or invent an `install` command.
+```bash
+pnpm config:init --dialect sqlite --json
+```
+
+Any other database needs its driver first, for example `pnpm add @nocobase/db-postgres`, and then the same command with that dialect. `pnpm config:init` installs nothing and writes nothing when the driver is missing: it returns a `suggestedCommand` with the `pnpm add` that supplies it, so run that and run `config:init` again. A dialect name in configuration does not supply a driver. Its result lists `requiredSettings` — the connection settings still at a placeholder — which you then set:
+
+```bash
+pnpm config:set database.connections.main.host=db.internal database.connections.main.username=crm --json
+pnpm config:set --from-env database.connections.main.password=CRM_DB_PASSWORD --json
+```
+
+Have the user put the password in an environment variable and pass its name with `--from-env`. Do not ask for passwords in the conversation, pass them on the command line, or print complete configuration files. Then verify the configuration, which also connects to the database:
+
+```bash
+pnpm config:check --json
+```
+
+A failed check lists each problem with a `fix` to run. Preserve existing business data; do not delete a database or configuration file to make configuration run again — `config:init` on a configured application reports it unchanged, and `--force` replaces it only when the user asks. Generated applications have no installation web page, and `pnpm dev` refuses to start until the application is configured.
 
 ## 5. Start the application and provide sign-in instructions
 

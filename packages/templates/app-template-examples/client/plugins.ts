@@ -11,7 +11,6 @@ import authorization from '@nocobase/app-plugin-authorization/client';
 import authorizationExample from '@nocobase/app-plugin-authorization-example/client';
 import users from '@nocobase/app-plugin-users/client';
 import databaseExplorer from '@nocobase/app-plugin-database-explorer/client';
-import install from '@nocobase/app-plugin-install/client';
 import notificationProvider from '@nocobase/app-plugin-notification-provider/client';
 import notificationInApp from '@nocobase/app-plugin-notification-in-app/client';
 import notificationExample from '@nocobase/app-plugin-notification-example/client';
@@ -39,7 +38,6 @@ const clientPlugins: AppClientPlugins = defineClientPlugins([
   databaseExplorer(),
   apiKeys({ path: '/api-keys' }),
   i18n(),
-  install(),
   notificationProvider(),
   notificationInApp(),
   notificationExample(),

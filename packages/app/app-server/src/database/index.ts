@@ -1,6 +1,10 @@
 export {
+  MissingDatabaseDriversError,
+  OFFICIAL_DIALECTS,
   resolveDatabaseConfig,
   type DatabaseConfigInput,
+  type MissingDatabaseDriver,
+  type OfficialDialect,
   type ResolvedDatabaseConfig,
 } from './resolve-config.js';
 export { defineAppDatabaseConfig } from './define-app-database-config.js';

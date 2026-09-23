@@ -3,7 +3,6 @@
 '@nocobase/app-template-default': minor
 '@nocobase/app-plugin-authentication': minor
 '@nocobase/app-plugin-file': patch
-'@nocobase/app-plugin-install': patch
 '@nocobase/app-plugin-notification': minor
 '@nocobase/app-plugin-service-provider-example': patch
 '@nocobase/app-plugin-workflow': minor

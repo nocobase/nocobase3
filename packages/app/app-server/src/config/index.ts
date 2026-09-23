@@ -14,6 +14,7 @@ export {
 } from './define-app-config.js';
 export type * from './app-config-types.js';
 export * from './context.js';
+export * from './not-configured.js';
 export * from './placeholder-secret.js';
 export * from './paths.js';
 export type * from './types.js';
