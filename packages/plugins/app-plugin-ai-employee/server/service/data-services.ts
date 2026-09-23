@@ -79,6 +79,9 @@ const scalarTypes = new Set([
   'datetimeTz',
 ]);
 
+/** The identity `for()` evaluates, as the authorization service declares it. */
+type ActorIdentity = Parameters<AppAuthorizationService['for']>[0];
+
 /** Bind identity once. Roles, root flags, resources, and scopes never come from tool arguments. */
 export function createDataServices(
   options: CreateDataServicesOptions,
@@ -93,6 +96,7 @@ export const dataServicesFactoryToken: ServiceToken<DataServicesFactory> =
 
 class ActorDataServices implements DataServices {
   private readonly authorization?: AppAuthorizationService;
+  private resolvedIdentity?: Promise<ActorIdentity>;
   private readonly principalId: string;
   private get timezone(): string {
     return this.options.timezone ?? 'UTC';
@@ -114,6 +118,25 @@ class ActorDataServices implements DataServices {
     )
       throw new DataAccessError();
     return this.authorization;
+  }
+
+  /**
+   * The identity an HTTP request would carry for this actor. A request gets its
+   * inherited subjects, such as team memberships, from the authorization
+   * middleware; a tool call has no request, so it resolves them the same way.
+   */
+  private identity(authz: AppAuthorizationService): Promise<ActorIdentity> {
+    this.resolvedIdentity ??= (async () => {
+      const principal = { type: 'user', id: this.principalId };
+      return {
+        principal,
+        subjects: [
+          { type: 'authenticated', id: '*' },
+          ...(await authz.subjects.resolveFor(principal)),
+        ],
+      };
+    })();
+    return this.resolvedIdentity;
   }
 
   private mappings(): Array<{ source: string; name: string }> {
@@ -158,10 +181,7 @@ class ActorDataServices implements DataServices {
     )
       throw new DataAccessError();
     const decision = await authz
-      .for({
-        principal: { type: 'user', id: this.principalId },
-        subjects: [{ type: 'authenticated', id: '*' }],
-      })
+      .for(await this.identity(authz))
       .authorize<DatabaseAuthorizationParams>({
         resource: { type: 'database.collection', id: resourceId },
         action: 'read',

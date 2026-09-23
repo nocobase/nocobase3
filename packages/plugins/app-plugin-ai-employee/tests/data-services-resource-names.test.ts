@@ -19,7 +19,10 @@ afterEach(async () => {
   await Promise.all(managers.splice(0).map((manager) => manager.destroy()));
 });
 
-async function build(resourceName: string) {
+/** Who the read grant is assigned to: the user directly, or a team the user belongs to. */
+type Grantee = 'user' | 'team';
+
+async function build(resourceName: string, grantee: Grantee = 'user') {
   const database = createDatabaseManager({
     drivers: { sqlite },
     default: 'main',
@@ -62,9 +65,20 @@ async function build(resourceName: string) {
       }),
     ],
   });
+  if (grantee === 'team') {
+    // A membership the authorization middleware would resolve for an HTTP request.
+    authorization.subjects.define('team', {
+      resolveFor: async (principal) =>
+        principal.type === 'user' && principal.id === 'alice' ? ['sales'] : [],
+      filterActive: async (ids) => ids,
+    });
+  }
   await authorization.permissionSets.assign({
     permissionSet: permission.key,
-    subject: { type: 'user', id: 'alice' },
+    subject:
+      grantee === 'team'
+        ? { type: 'team', id: 'sales' }
+        : { type: 'user', id: 'alice' },
   });
 
   return createDataServices({
@@ -100,5 +114,21 @@ describe('authorization resource names carry the connection', () => {
     await expect(
       service.dataSourceQuery({ collection: 'orders', fields: ['id'] }),
     ).rejects.toThrow('Data access denied or resource unavailable');
+  });
+});
+
+describe('inherited subjects', () => {
+  it('sees a collection granted to a team the user belongs to, as a request would', async () => {
+    const service = await build('main.orders', 'team');
+
+    expect(await service.getDataSources({})).toMatchObject({
+      items: [{ name: 'main' }],
+    });
+    expect(await service.getCollectionNames({})).toMatchObject({
+      items: [{ name: 'orders', title: 'Orders' }],
+    });
+    expect(
+      await service.dataSourceQuery({ collection: 'orders', fields: ['id'] }),
+    ).toMatchObject({ items: [{ id: 'a1' }] });
   });
 });
