@@ -24,7 +24,7 @@ keywords: 'NocoBase,AI Employee,defineAIEmployee,defineTools,SKILL.md'
 
 Employee 和 Tool 没有文件系统扫描。Skill 目录里也不定义 Tool——Skill 的 `tools` 只写已经在代码里注册好的 Tool 名称。所以动手的顺序是：先写 Tool 并注册，再写点名它的 Skill，最后在员工里引用 Skill。
 
-`AIResourceRegistrar` 按 Tool、MCP、Skill、Employee 的固定顺序注册，不过名称能不能解析并不取决于这个顺序：员工引用的 Skill 和 Tool 是在 Agent 运行时按名称查找的，不是在注册时检查的。所以应用员工可以引用任何地方注册的 Skill 和 Tool，包括插件在应用 Provider 运行之前就注册好的内置资源。写错的名称在注册时也不会报错，只会在运行时找不到。
+`AIResourceRegistrar` 按 Tool、Skill、Employee 的固定顺序注册（它不注册 MCP 服务，MCP 只在 `config.yml` 里定义），不过名称能不能解析并不取决于这个顺序：员工引用的 Skill 和 Tool 是在 Agent 运行时按名称查找的，不是在注册时检查的。所以应用员工可以引用任何地方注册的 Skill 和 Tool，包括插件在应用 Provider 运行之前就注册好的内置资源。写错的名称在注册时也不会报错，只会在运行时找不到。
 
 ## 推荐目录
 
