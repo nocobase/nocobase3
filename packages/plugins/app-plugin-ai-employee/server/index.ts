@@ -46,5 +46,9 @@ export type {
   AgentInvokeRequest,
   AgentInvokeResult,
   AgentRequest,
+  AgentServiceErrorCode,
   AgentStreamEvent,
 } from './agent/types.js';
+// A caller decides whether to retry from the code and `retryable`, so it needs
+// the class for `instanceof` and the code union to switch on.
+export { AgentServiceError } from './agent/types.js';
