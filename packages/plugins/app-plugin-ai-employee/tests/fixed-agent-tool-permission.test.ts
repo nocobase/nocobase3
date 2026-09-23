@@ -4,7 +4,10 @@ import type { ChatResult } from '@langchain/core/outputs';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { defineTools, type LLMProvider } from '@nocobase/ai-employee';
+import { fileURLToPath } from 'node:url';
+import { createMigrator } from '@nocobase/db';
 import { agentServiceFactoryToken } from '../server/agent/service/agent-service-factory.js';
+import { repositoryFactoryToken } from '../server/factory/repository-factory.js';
 import { createTestAIEmployeeFixture } from './app/test-context.js';
 import { MemoryConversationPersistence } from './memory-conversation-persistence.js';
 
@@ -146,5 +149,110 @@ describe('createAgent() tool permission', () => {
       type: 'text',
       content: 'Paris',
     });
+  });
+});
+
+describe('createAgent() under the default database persistence', () => {
+  it('pauses on a tool that asks and resumes from a newly created agent', async () => {
+    const fixture = createTestAIEmployeeFixture();
+    const database = fixture.deps.database;
+    await database.connect();
+    await database.builder().createCollection('user', (collection) => {
+      collection.string('id').notNull();
+      collection.primary('id');
+    });
+    await database.builder().createCollection('roles', (collection) => {
+      collection.string('name').notNull();
+      collection.boolean('allowNewAiEmployee').nullable();
+      collection.primary('name');
+    });
+    await createMigrator({
+      database,
+      packageName: '@nocobase/app-plugin-ai-employee',
+      directory: fileURLToPath(
+        new URL('../database/migrations', import.meta.url),
+      ),
+    }).latest();
+    const sessionId = 'db-fixed-ask';
+    await fixture.container
+      .resolve(repositoryFactoryToken)
+      .aiConversations.create({
+        values: { sessionId, category: 'chat', thread: 0, read: true },
+      });
+    const lookup = vi.fn(async () => ({ status: 'success', content: 'found' }));
+    await fixture.deps.ai.toolsManager.registerTools(
+      defineTools({
+        scope: 'CUSTOM',
+        defaultPermission: 'ASK',
+        definition: {
+          name: 'lookup',
+          description: 'Looks something up',
+          schema: z.object({ query: z.string() }),
+        },
+        invoke: lookup,
+      }),
+    );
+    // One script across both agents: the first asks for the tool, the second
+    // answers once the approved call has run.
+    const model = new ScriptedChatModel([
+      new AIMessage({
+        content: '',
+        tool_calls: [
+          { id: 'call-1', name: 'lookup', args: { query: 'capital' } },
+        ],
+      }),
+      new AIMessage('Paris'),
+    ]);
+    const provider = {
+      createModel: () => model,
+      resolveTools: (tools: unknown[]) => tools,
+      prepareStoredAssistantAdditionalKwargs: (
+        additionalKwargs?: Record<string, unknown>,
+      ) => additionalKwargs,
+    } as unknown as LLMProvider;
+    vi.spyOn(
+      fixture.deps.ai.llmProviderManager,
+      'resolveModel',
+    ).mockResolvedValue({ llmService: 'test-service', model: 'test-model' });
+    vi.spyOn(
+      fixture.deps.ai.llmProviderManager,
+      'getLLMService',
+    ).mockResolvedValue({
+      provider,
+      model: 'test-model',
+      service: { name: 'test-service', provider: 'test' },
+    } as never);
+    const create = () =>
+      fixture.container.resolve(agentServiceFactoryToken).createAgent({
+        sessionId,
+        actor: { id: 1, roles: [], isRoot: false },
+        runtime: {
+          logger: fixture.deps.logging.getLogger('ai-employee-test'),
+        },
+        tools: ['lookup'],
+      });
+
+    try {
+      const paused = await (await create()).invoke({ userMessages: question });
+      expect(lookup).not.toHaveBeenCalled();
+      expect(paused.interrupt?.id).toEqual(expect.any(String));
+
+      const resumed = await (
+        await create()
+      ).resumeInvoke({
+        userDecisions: {
+          interruptId: paused.interrupt?.id,
+          decisions: [{ type: 'approve' }],
+        },
+      });
+
+      expect(lookup).toHaveBeenCalledOnce();
+      expect(resumed.message?.content).toEqual({
+        type: 'text',
+        content: 'Paris',
+      });
+    } finally {
+      await database.destroy();
+    }
   });
 });
